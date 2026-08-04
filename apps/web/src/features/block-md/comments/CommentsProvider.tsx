@@ -17,6 +17,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   untrack,
   useContext,
   type VoidComponent,
@@ -35,6 +36,8 @@ import {
 } from './commentStore';
 import { commentThreadsResource, sortComments } from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
+
+const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
 
 function getHighlightThread(
   highlight: Mark
@@ -311,22 +314,50 @@ export const CommentsProvider: VoidComponent<{
     );
   });
 
-  // Navigate to comment from URL param once comments are loaded
+  const [targetRequest, setTargetRequest] = createSignal(0);
+  let pendingTargetCommentId: string | undefined;
+
   createEffect(() => {
-    if (!commentMarksInitializedSignal()) return;
-    const rawId = props.activeComment?.();
+    pendingTargetCommentId = props.activeComment?.();
+    setTargetRequest((request) => request + 1);
+  });
+
+  // Navigate to comment from URL param once comments are loaded.
+  // Keep this one-shot so a persistent `comment_id` does not steal focus from
+  // later user actions, like creating a new comment.
+  createEffect(() => {
+    targetRequest();
+    const rawId = pendingTargetCommentId;
     if (!rawId) return;
+
+    if (!commentMarksInitializedSignal()) return;
     const commentId = Number(rawId);
     if (isNaN(commentId)) return;
+
+    const commentThreads = commentThreadsData() ?? [];
+    const targetThread = commentThreads.find((thread) =>
+      thread.comments.some((comment) => comment.commentId === commentId)
+    );
+    const targetMetadata = targetThread?.thread.metadata as
+      | ThreadMetadata
+      | undefined;
+    if (targetMetadata?.markId?.startsWith(DISCUSSION_MARK_PREFIX)) {
+      activeCommentThreadSignal.set(null);
+      highlightedCommentIdSignal.set(null);
+      pendingTargetCommentId = undefined;
+      return;
+    }
+
     const comment = commentsStore.get[commentId];
     if (!comment) return;
-    activeCommentThreadSignal.set(comment.threadId);
     highlightedCommentIdSignal.set(commentId);
     const mark = marks[comment.anchorId];
     if (mark) {
       const firstEl = Object.values(mark.markNodes)[0];
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    activeCommentThreadSignal.set(comment.threadId);
+    pendingTargetCommentId = undefined;
   });
 
   autoRegister(

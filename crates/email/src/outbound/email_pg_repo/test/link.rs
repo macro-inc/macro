@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::{models::EmailBackfillStatus, ports::EmailUserRepo};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -118,7 +119,7 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
 
     let repo = EmailPgRepo::new(pool);
     let macro_id = MacroUserIdStr::parse_from_str("macro|alice@test.com")?;
-    let links = repo.inboxes_for_macro_id(macro_id).await?;
+    let links = repo.inboxes_for_macro_id(macro_id.clone()).await?;
 
     let emails: std::collections::HashSet<&str> =
         links.iter().map(|l| l.email_address.0.as_ref()).collect();
@@ -143,6 +144,89 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
         "unrelated inbox must be excluded"
     );
 
+    let detailed_emails = repo
+        .user_inbox_details(macro_id)
+        .await?
+        .into_iter()
+        .map(|inbox| inbox.email_address.0.as_ref().to_owned())
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(
+        detailed_emails,
+        emails.into_iter().map(str::to_owned).collect(),
+        "enriched inbox details must preserve owned and delegated scoping"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn user_inbox_details_maps_enriched_owned_inbox(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    sqlx::query!(
+        r#"
+        UPDATE email_links
+        SET needs_reauth = TRUE
+        WHERE id = $1
+        "#,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_settings (link_id, signature_on_replies_forwards, signature)
+        VALUES ($1, TRUE, '<p>Regards</p>')
+        "#,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, status)
+        VALUES ($1, $2, 'fa-user-1', 'InProgress')
+        "#,
+        Uuid::from_u128(901),
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_contacts (id, link_id, email_address, sfs_photo_url)
+        VALUES ($1, $2, 'USER1@test.com', 'https://example.com/inbox.png')
+        "#,
+        Uuid::from_u128(902),
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = EmailPgRepo::new(pool)
+        .user_inbox_details(MacroUserIdStr::parse_from_str("macro|user1@test.com")?)
+        .await?;
+
+    assert_eq!(details.len(), 1);
+    let inbox = &details[0];
+    assert_eq!(inbox.id, link_id);
+    assert_eq!(inbox.email_address.0.as_ref(), "user1@test.com");
+    assert_eq!(inbox.provider, UserProvider::Gmail);
+    assert!(inbox.is_sync_active);
+    assert!(inbox.needs_reauth);
+    assert!(inbox.is_primary);
+    assert_eq!(
+        inbox.latest_backfill_status,
+        Some(EmailBackfillStatus::InProgress)
+    );
+    assert!(inbox.settings.signature_on_replies_forwards);
+    assert_eq!(inbox.settings.signature.as_deref(), Some("<p>Regards</p>"));
+    assert_eq!(
+        inbox.photo_url.as_deref(),
+        Some("https://example.com/inbox.png")
+    );
     Ok(())
 }
 

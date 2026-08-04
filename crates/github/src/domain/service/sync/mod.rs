@@ -15,7 +15,7 @@ use crate::domain::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
         GithubPullRequestDetails, GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId,
-        TeamTaskReference, ValidatedGithubWebhookEvent,
+        ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -29,7 +29,10 @@ use hmac::{Hmac, Mac};
 use macro_env_var::maybe_env_vars;
 use notification::domain::service::NotificationIngress;
 use sha2::Sha256;
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use subtle::ConstantTimeEq;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -645,13 +648,46 @@ impl<
                     .resolve_team_task_references(&installation_id, &team_task_refs)
                     .await
                 {
-                    Ok(mut resolved_team_task_ids) => {
+                    Ok(resolutions) => {
+                        // Team slugs are not unique, so a reference can match
+                        // tasks in several of the installation's teams. Only
+                        // link references that resolve in exactly one team;
+                        // an ambiguous reference must not fan out links to
+                        // other teams' tasks.
+                        let mut by_reference: HashMap<
+                            TeamTaskReference,
+                            Vec<ResolvedTeamTaskReference>,
+                        > = HashMap::new();
+                        for resolution in resolutions {
+                            by_reference
+                                .entry(resolution.reference.clone())
+                                .or_default()
+                                .push(resolution);
+                        }
+
+                        let mut resolved_team_task_id_count = 0;
+                        for (reference, resolutions) in by_reference {
+                            if resolutions.len() > 1 {
+                                tracing::warn!(
+                                    team_slug = %reference.team_slug,
+                                    team_task_id = reference.team_task_id,
+                                    team_ids = ?resolutions
+                                        .iter()
+                                        .map(|r| r.team_id)
+                                        .collect::<Vec<_>>(),
+                                    "team task reference matched tasks in multiple teams, skipping ambiguous reference"
+                                );
+                                continue;
+                            }
+                            resolved_team_task_id_count += resolutions.len();
+                            task_ids.extend(resolutions.into_iter().map(|r| r.task_id));
+                        }
+
                         tracing::trace!(
                             team_task_ref_count = team_task_refs.len(),
-                            resolved_team_task_id_count = resolved_team_task_ids.len(),
+                            resolved_team_task_id_count,
                             "resolved team task references from webhook text"
                         );
-                        task_ids.append(&mut resolved_team_task_ids);
                     }
                     Err(e) => {
                         tracing::error!(
@@ -945,6 +981,7 @@ impl<
             }
             GithubWebhookEventType::Installation => match action {
                 Some("created") => self.handle_installation_created(webhook_event).await,
+                Some("deleted") => self.handle_installation_deleted(webhook_event).await,
                 _ => {
                     tracing::debug!(action, "skipping unhandled installation action");
                     Ok(())

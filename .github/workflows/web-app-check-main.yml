@@ -12,7 +12,7 @@ name: Web App Pr Checks
     - main
 jobs:
   path-check:
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       api_changed: ${{ steps.filter.outputs.api_changed }}
@@ -116,12 +116,15 @@ jobs:
     - name: Check Collaboration Package Types
       run: bun run type-check
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   biome-check:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -142,12 +145,15 @@ jobs:
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   tailwind:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -166,12 +172,15 @@ jobs:
     - name: Check Tailwind Classes
       run: just check-tailwind
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -190,12 +199,15 @@ jobs:
     - name: Test
       run: bunx vitest
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   cycles:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -214,12 +226,15 @@ jobs:
     - name: Collaboration Package Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   build:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -236,6 +251,9 @@ jobs:
     - name: Build
       run: just build-dev
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   status-check:
     needs:
     - path-check
@@ -247,7 +265,7 @@ jobs:
     - build
     if: always()
     name: Web App Status Check
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-tiny-no-cache
     steps:
     - name: Check job results
       run: |

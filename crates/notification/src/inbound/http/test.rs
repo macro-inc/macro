@@ -166,6 +166,7 @@ impl NotificationReader for AuthenticationTestService {
 
     fn unregister_device(
         &self,
+        _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
     ) -> impl Future<Output = Result<(), Report>> + Send {
@@ -647,6 +648,7 @@ impl NotificationReader for PresignedTestService {
 
     fn unregister_device(
         &self,
+        _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
     ) -> impl Future<Output = Result<(), Report>> + Send {

@@ -5,6 +5,36 @@ export type ClientOptions = {
 };
 
 /**
+ * Filters for canonical calendar-event entities.
+ */
+export type CalendarEventFilters = {
+    /**
+     * Attendee email addresses.
+     */
+    attendees?: Array<string>;
+    /**
+     * Canonical event ids.
+     */
+    calendar_event_ids?: Array<string>;
+    /**
+     * Include master events ending after this instant.
+     */
+    ends_after?: string | null;
+    /**
+     * Organizer email addresses.
+     */
+    organizers?: Array<string>;
+    /**
+     * Include master events starting before this instant.
+     */
+    starts_before?: string | null;
+    /**
+     * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
+     */
+    statuses?: Array<string>;
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -1019,6 +1049,10 @@ export type EmptyResponse = {
  */
 export type EntityFilters = {
     /**
+     * the bundled [CalendarEventFilters]
+     */
+    calendar_event_filters?: CalendarEventFilters;
+    /**
      * the bundled [CallFilters]
      */
     call_filters?: CallFilters;
@@ -1087,7 +1121,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.

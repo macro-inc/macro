@@ -5513,6 +5513,7 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 fn mock_empty_ast() -> EntityFilterAst {
     EntityFilterAst {
         document_filter: None,
+        calendar_event_filter: None,
         project_filter: None,
         chat_filter: None,
         email_filter: item_filters::ast::EmailFilterAst::default(),

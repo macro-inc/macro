@@ -64,6 +64,19 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths(), solidPlugin()],
+        ssr: {
+          resolve: {
+            conditions: ['browser', 'development'],
+          },
+        },
+        test: {
+          environment: 'jsdom',
+          include: ['src/lib/urql-solid/**/*.{test,spec}.{ts,tsx}'],
+          name: 'urql-solid',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',

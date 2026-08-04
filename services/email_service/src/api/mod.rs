@@ -9,6 +9,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Routes
 mod health;
 
+mod calendar_watch;
 mod email;
 
 // Misc
@@ -52,4 +53,5 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/internal", internal::router())
+        .nest("/calendar", calendar_watch::router())
 }

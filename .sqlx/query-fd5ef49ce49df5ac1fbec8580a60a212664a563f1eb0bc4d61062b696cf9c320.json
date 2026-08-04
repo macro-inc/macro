@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendars\n            SET is_deleted = NOT (id = ANY($2::uuid[])),\n                sync_token = CASE\n                    WHEN id = ANY($2::uuid[]) THEN sync_token\n                    ELSE NULL\n                END,\n                materialized_starts_at = CASE\n                    WHEN id = ANY($2::uuid[]) THEN materialized_starts_at\n                    ELSE NULL\n                END,\n                materialized_ends_at = CASE\n                    WHEN id = ANY($2::uuid[]) THEN materialized_ends_at\n                    ELSE NULL\n                END,\n                materialized_start_date = CASE\n                    WHEN id = ANY($2::uuid[]) THEN materialized_start_date\n                    ELSE NULL\n                END,\n                materialized_end_date = CASE\n                    WHEN id = ANY($2::uuid[]) THEN materialized_end_date\n                    ELSE NULL\n                END,\n                updated_at = now()\n            WHERE account_id = $1\n              AND is_deleted IS DISTINCT FROM NOT (id = ANY($2::uuid[]))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd5ef49ce49df5ac1fbec8580a60a212664a563f1eb0bc4d61062b696cf9c320"
+}

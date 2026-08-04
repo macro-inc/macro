@@ -12,6 +12,7 @@ import {
   SearchHighlightTermsProvider,
 } from '@channel/Message';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
+import { useChannelBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
@@ -233,6 +234,9 @@ export function Channel(props: ChannelProps) {
   });
 
   const participants = useChannelParticipants(() => props.channelId);
+  const channelBotMentionUsers = useChannelBotMentionUsers(
+    () => props.channelId
+  );
 
   const activity = useChannelActivity(props.channelId);
 
@@ -834,6 +838,7 @@ export function Channel(props: ChannelProps) {
                             placeholder: 'Message channel',
                           }}
                           participants={participants.users}
+                          bots={channelBotMentionUsers}
                           attachmentTracker={attachmentTracker}
                           persistenceKey={makeInputValuePersistenceKey({
                             channelId: props.channelId,

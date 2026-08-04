@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_backfill_completion_outbox (id, backfill_job_id)\n        VALUES ($1, $2)\n        ON CONFLICT (backfill_job_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "082330c6e5e21b0489318427748337823c860eb9306a9c0a9eddff8ff42c2214"
+}

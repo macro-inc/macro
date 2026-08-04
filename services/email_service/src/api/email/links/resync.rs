@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Json, Response};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -100,15 +100,12 @@ pub async fn resync_link_handler(
         .enqueue_email_backfill_message(ps_message)
         .await
     {
-        if let Err(update_err) = email_db_client::backfill::job::update::update_backfill_job_status(
+        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
             &ctx.db,
             backfill_job.id,
-            BackfillJobStatus::Failed,
         )
         .await
-        {
-            tracing::error!(error=?update_err, backfill_id=%backfill_job.id, "failed to mark backfill job failed");
-        }
+        .context("failed to persist backfill publication failure")?;
 
         return Err(e.context("failed to enqueue backfill message").into());
     }

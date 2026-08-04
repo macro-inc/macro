@@ -1226,7 +1226,13 @@ where
             .get_participants(channel_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        match (info.channel_type, participants.len()) {
+        // Bots can be channel participants; only user participants count
+        // toward the minimum-membership guard.
+        let user_participant_count = participants
+            .iter()
+            .filter(|participant| MacroUserIdStr::try_from(participant.user_id.as_str()).is_ok())
+            .count();
+        match (info.channel_type, user_participant_count) {
             (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
                 return Err(ChannelMutationErr::BadRequest(
                     "cannot leave channel with only 2 participants".to_string(),

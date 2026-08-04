@@ -11,11 +11,15 @@ use crate::workflows::{
     vars,
 };
 
-/// All the real web jobs share one mid-size Namespace profile with a dedicated
-/// cache tag, so the frontend's Nix/Bun/Cargo state lives on its own volume.
-/// The `gen-api` Rust objects use [`vars::WEB_SCCACHE_NAME`] through Namespace's
-/// official remote sccache.
+/// Frontend-only jobs share one small Namespace profile with a dedicated cache
+/// tag, so their Nix/Bun state lives on its own volume.
 fn web_runner() -> String {
+    runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
+}
+
+/// Typechecking can compile the Rust binaries used by `gen-api`, so retain the
+/// mid-size profile while sharing the web CI cache volume and remote sccache.
+fn typecheck_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
@@ -48,7 +52,7 @@ pub fn web_app_check_main() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output("api_changed", "${{ steps.filter.outputs.api_changed }}")
         .add_step(checkout("Checkout Repo", false))
@@ -62,7 +66,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'",
         ))
         .name("Typecheck")
-        .runs_on(web_runner())
+        .runs_on(typecheck_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(true))
         .add_step(steps::setup_nix())
@@ -75,6 +79,7 @@ fn typescript() -> Job {
         .add_step(show_sccache_stats())
         .add_step(check_types())
         .add_step(check_collaboration_types())
+        .add_step(steps::teardown_nix())
 }
 
 fn biome_check() -> Job {
@@ -85,6 +90,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
+        .add_step(steps::teardown_nix())
 }
 
 fn tailwind() -> Job {
@@ -94,6 +100,7 @@ fn tailwind() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_tailwind_classes())
+        .add_step(steps::teardown_nix())
 }
 
 fn test() -> Job {
@@ -103,6 +110,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
+        .add_step(steps::teardown_nix())
 }
 
 fn cycles() -> Job {
@@ -113,6 +121,7 @@ fn cycles() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
         .add_step(collaboration_cycles_import_check())
+        .add_step(steps::teardown_nix())
 }
 
 fn build() -> Job {
@@ -122,6 +131,7 @@ fn build() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(run_build())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -139,7 +149,7 @@ fn status_check() -> Job {
             "cycles".to_string(),
             "build".to_string(),
         ])
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_step(check_job_results())
 }
 

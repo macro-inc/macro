@@ -206,26 +206,9 @@ pub trait ShaCounterPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// Port for publishing project search and document-deletion work.
+/// Port for publishing document search-removal and deletion work.
+// TODO: Remove this port and its SQS adapter after the documents migration.
 pub trait ProjectSearchIndexer: Send + Sync + 'static {
-    /// Enqueue projects for indexing.
-    fn upsert_projects(
-        &self,
-        project_ids: Vec<String>,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    /// Remove projects from the search index.
-    fn remove_projects(
-        &self,
-        project_ids: Vec<String>,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    /// Remove chats from the search index.
-    fn remove_chats(
-        &self,
-        chat_ids: Vec<String>,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
-
     /// Remove documents from the search index.
     fn remove_documents(
         &self,

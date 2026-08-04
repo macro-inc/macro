@@ -130,12 +130,16 @@ pub trait NotificationReader: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Unregister a device from push notifications.
+    /// Unregister the user's device from push notifications.
     ///
-    /// Deletes the device registration from the database (by token + type),
-    /// then deletes the SNS endpoint.
+    /// Deletes the user's device registrations matching the token + type, then
+    /// best-effort deletes the associated SNS endpoints (an SNS failure does
+    /// not fail the call — the DB rows are already gone). Succeeds when
+    /// nothing matched, so logout can call this without checking prior
+    /// registration state.
     fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
@@ -747,7 +751,11 @@ where
         };
 
         // Get endpoint if exists, otherwise create new one
-        let endpoint = match self.repository.get_device_endpoint(device_token).await {
+        let endpoint = match self
+            .repository
+            .get_device_endpoint(device_token, device_type)
+            .await
+        {
             Ok(Some(endpoint)) => endpoint,
             _ => {
                 self.sns_endpoint
@@ -787,21 +795,51 @@ where
             .upsert_device(user_id, device_token, &endpoint, device_type)
             .await?;
 
+        // A device token must map to a single registration. When SNS minted a
+        // different endpoint for this token in the past (e.g. under another
+        // user), those rows would keep receiving that user's notifications on
+        // this device — remove them and their SNS endpoints.
+        let stale_endpoints = self
+            .repository
+            .delete_stale_devices_by_token(device_token, device_type, &endpoint)
+            .await?;
+        for stale_endpoint in stale_endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&stale_endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %stale_endpoint, "failed to delete stale SNS endpoint");
+                });
+        }
+
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn unregister_device(
         &self,
+        user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
     ) -> Result<(), Report> {
-        let endpoint = self
+        let endpoints = self
             .repository
-            .delete_device_by_token(device_token, device_type)
+            .delete_user_devices_by_token(user_id, device_token, device_type)
             .await?;
 
-        self.sns_endpoint.delete_endpoint(&endpoint).await?;
+        // The DB rows are gone, so the unregistration has already succeeded;
+        // SNS endpoint deletion is best-effort cleanup and must not fail the
+        // call or abort the remaining endpoints.
+        for endpoint in endpoints {
+            let _ = self
+                .sns_endpoint
+                .delete_endpoint(&endpoint)
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(error=?e, endpoint = %endpoint, "failed to delete SNS endpoint during unregister");
+                });
+        }
 
         Ok(())
     }

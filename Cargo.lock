@@ -818,7 +818,7 @@ version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "event-listener-strategy",
  "pin-project-lite",
 ]
@@ -875,7 +875,7 @@ dependencies = [
  "async-task",
  "blocking",
  "cfg-if",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-lite 2.6.1",
  "rustix 1.1.4",
 ]
@@ -1086,6 +1086,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "base64 0.22.1",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -2443,7 +2444,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2510,6 +2511,32 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "calendar_events"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "futures",
+ "icalendar",
+ "macro_authorization",
+ "macro_db_migrator",
+ "models_pagination",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -2844,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -3503,7 +3530,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e75b2483e97a5a7da73ac68a05b629f9c53cff58d8ed1c77866079e18b00dba5"
 dependencies = [
  "digest 0.10.7",
- "spin 0.10.0",
+ "spin 0.10.1",
 ]
 
 [[package]]
@@ -3995,7 +4022,9 @@ dependencies = [
  "aws-sdk-sqs",
  "aws-smithy-types",
  "aws_lambda_events",
+ "chat",
  "chrono",
+ "documents",
  "futures",
  "lambda_runtime",
  "macro_aws_config",
@@ -4003,9 +4032,12 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_queues",
+ "macro_user_id",
  "macro_uuid",
  "model",
+ "projects",
  "serde",
  "serde_json",
  "sqlx",
@@ -4392,6 +4424,7 @@ dependencies = [
  "bytes",
  "bzip2",
  "cal",
+ "calendar_events",
  "call",
  "channel_bots",
  "channels",
@@ -4629,6 +4662,7 @@ dependencies = [
  "macro_event_topics",
  "macro_service_urls",
  "macro_sync_service_jwt",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -4904,7 +4938,6 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
- "email_db_client",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -5064,6 +5097,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bytes",
+ "calendar_events",
  "chrono",
  "cloudfront_sign",
  "connection_gateway_client",
@@ -5119,6 +5153,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.13.4",
+ "rootcause",
  "s3_client",
  "schemars 1.2.1",
  "scraper",
@@ -5458,11 +5493,10 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "event-listener"
-version = "5.4.1"
+version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
+checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
- "concurrent-queue",
  "parking",
  "pin-project-lite",
 ]
@@ -5473,7 +5507,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "pin-project-lite",
 ]
 
@@ -5658,7 +5692,7 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -6241,6 +6275,7 @@ dependencies = [
  "chrono",
  "email",
  "entity_access",
+ "futures",
  "macro_user_id",
  "tokio",
  "tracing",
@@ -6345,6 +6380,7 @@ dependencies = [
  "filter_ast",
  "futures",
  "graphql_common",
+ "graphql_email",
  "graphql_permission",
  "item_filters",
  "macro_authorization",
@@ -6640,7 +6676,7 @@ dependencies = [
  "hash32 0.2.1",
  "rustc_version",
  "serde",
- "spin 0.9.8",
+ "spin 0.9.9",
  "stable_deref_trait",
 ]
 
@@ -7131,6 +7167,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "icalendar"
+version = "0.17.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3478c3b7a2411366daf20457373174bff6cfbc1089333038b1f95594d23d985"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "iso8601",
+ "nom 8.0.0",
+ "nom-language",
+ "rrule",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -7634,6 +7686,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
+name = "iso8601"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d00640a3a46595e984f1b124b21d56506a5844dc799f831dde9b05cb2f6c51"
+dependencies = [
+ "nom 8.0.0",
+]
+
+[[package]]
 name = "item_filters"
 version = "0.1.0"
 dependencies = [
@@ -7958,7 +8019,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -9681,7 +9742,7 @@ dependencies = [
  "httparse",
  "memchr",
  "mime",
- "spin 0.9.8",
+ "spin 0.9.9",
  "version_check",
 ]
 
@@ -9846,6 +9907,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "nom-language"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
+dependencies = [
+ "nom 8.0.0",
 ]
 
 [[package]]
@@ -11412,11 +11482,13 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "aws-sdk-s3",
+ "aws-sdk-sqs",
  "axum",
  "axum-extra",
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "documents",
  "dotenvy",
  "dynamodb_client",
  "entity_access",
@@ -12431,6 +12503,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rrule"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "log",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "rs-libreoffice-bindings"
 version = "0.0.7"
 source = "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc"
@@ -12884,10 +12969,13 @@ dependencies = [
  "axum",
  "call",
  "channels",
+ "chat",
  "chrono",
  "comms_db_client",
  "document_sub_type",
+ "documents",
  "doppler-config",
+ "email",
  "email_db_client",
  "ensure_exists",
  "futures",
@@ -12920,6 +13008,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
+ "projects",
  "properties",
  "rdkafka",
  "rootcause",
@@ -13013,17 +13102,13 @@ name = "search_upload_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-sdk-sqs",
  "aws_lambda_events",
  "document_storage_service_client",
  "lambda_runtime",
- "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
- "macro_queues",
  "macro_service_urls",
  "s3_key",
- "sqs_client",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -13868,18 +13953,18 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.9.8"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
 dependencies = [
  "lock_api",
 ]
 
 [[package]]
 name = "spin"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 
 [[package]]
 name = "spki"
@@ -13916,7 +14001,7 @@ dependencies = [
  "crc",
  "crossbeam-queue",
  "either",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-core",
  "futures-intrusive",
  "futures-io",
@@ -16029,6 +16114,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "bot_id",
  "channel_sender",
  "channels",
  "chrono",
@@ -16698,7 +16784,7 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "concurrent-queue",
+ "chrono-tz",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16710,7 +16796,7 @@ dependencies = [
  "either",
  "elliptic-curve",
  "errno",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "fastrand 2.4.1",
  "flate2",
  "foldhash 0.2.0",
@@ -16764,6 +16850,7 @@ dependencies = [
  "rand 0.8.6",
  "rand 0.9.4",
  "redis",
+ "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",
@@ -16788,7 +16875,7 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
- "spin 0.9.8",
+ "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",
  "stable_deref_trait",

@@ -1184,6 +1184,16 @@ export const storageServiceClient = {
     });
   },
 
+  async getDocumentByTeamSlug(params: { slug: string; signal?: AbortSignal }) {
+    return (
+      await dssFetch<{
+        data: GetDocumentResponseData;
+      }>(`/documents/slug/${encodeURIComponent(params.slug)}`, {
+        signal: params.signal,
+      })
+    ).map((result) => result.data);
+  },
+
   async createDocument(request: CreateDocumentRequest) {
     const result = await fetchWithToken<
       CreateDocumentResponse,

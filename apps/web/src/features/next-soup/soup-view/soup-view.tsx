@@ -42,10 +42,6 @@ import { useIsNewInboxEnabled } from '@app/features/next-soup/soup-view/use-is-n
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
-import {
-  CompanyDisplayMenu,
-  CompanyViewsMenu,
-} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
@@ -67,7 +63,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -532,10 +528,13 @@ export const SoupView = (props: SoupViewProps) => {
       <div class="flex flex-col w-full">
         <SplitHeaderLeft>
           <div
-            class={cn('h-full flex gap-3 items-center', {
-              'shrink-0': !narrowSearchExpanded(),
-              'flex-1 min-w-0': narrowSearchExpanded(),
-            })}
+            class={cn(
+              'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
+              {
+                'shrink-0': !narrowSearchExpanded(),
+                'flex-1 min-w-0': narrowSearchExpanded(),
+              }
+            )}
           >
             <Show when={!isMobile() && !narrowSearchExpanded()}>
               <div class="flex items-center gap-1">
@@ -561,12 +560,17 @@ export const SoupView = (props: SoupViewProps) => {
                 <CollapsibleHeaderItem
                   id="tabs"
                   priority={1}
-                  expanded={() => props.customTabs ?? <SoupViewTabs />}
-                  collapsed={() =>
-                    props.customTabs ?? <CollapsedSoupViewTabs />
-                  }
                   containerClass="h-full"
-                />
+                >
+                  {(isCollapsed) => (
+                    <Show
+                      when={!isCollapsed()}
+                      fallback={props.customTabs ?? <CollapsedSoupViewTabs />}
+                    >
+                      {props.customTabs ?? <SoupViewTabs />}
+                    </Show>
+                  )}
+                </CollapsibleHeaderItem>
               </Show>
             </Show>
             <Show
@@ -582,12 +586,6 @@ export const SoupView = (props: SoupViewProps) => {
         </SplitHeaderLeft>
         <Show when={!isMobile()}>
           <SplitHeaderRight>
-            <Show
-              when={!narrowSearchExpanded() && isComponentListView('companies')}
-            >
-              <CompanyViewsMenu />
-              <CompanyDisplayMenu />
-            </Show>
             <Show
               when={
                 !narrowSearchExpanded() &&
@@ -631,29 +629,34 @@ export const SoupView = (props: SoupViewProps) => {
                     setSearchIsCollapsed(isCollapsed);
                     if (!isCollapsed) setNarrowSearchExpanded(false);
                   }}
-                  expanded={() => (
-                    <Layer depth={2}>
-                      <div class="w-60 ml-2">
-                        <SoupSearchbar
-                          variant="secondary"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
-                    </Layer>
+                >
+                  {(isCollapsed) => (
+                    <Show
+                      when={!isCollapsed()}
+                      fallback={
+                        <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
+                          <Button
+                            variant="base"
+                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                            onClick={() => setNarrowSearchExpanded(true)}
+                            depth={2}
+                          >
+                            <SearchIcon class="size-4 touch:size-6" />
+                          </Button>
+                        </Tooltip>
+                      }
+                    >
+                      <Layer depth={2}>
+                        <div class="w-60 ml-2">
+                          <SoupSearchbar
+                            variant="secondary"
+                            initialValue={props.initialSearchText}
+                          />
+                        </div>
+                      </Layer>
+                    </Show>
                   )}
-                  collapsed={() => (
-                    <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
-                      <Button
-                        variant="base"
-                        class="p-1 size-7 rounded-lg ml-2 bg-surface"
-                        onClick={() => setNarrowSearchExpanded(true)}
-                        depth={2}
-                      >
-                        <SearchIcon class="size-4 touch:size-6" />
-                      </Button>
-                    </Tooltip>
-                  )}
-                />
+                </CollapsibleHeaderItem>
               </Show>
             </Show>
           </SplitHeaderRight>
@@ -930,15 +933,22 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     // Plain click while engaged as a Controller previews into the Viewer;
-    // shift+click falls through to open a fresh split instead. Non-member
-    // channels flow through to openEntityInSplitFromUnifiedList, which shows the
-    // Viewer's Join prompt when previewing and otherwise no-ops.
+    // opt+click opens in place of the whole Preview Pair (the Viewer closes and
+    // the content replaces this list); shift+click falls through to open a
+    // fresh split instead. Non-member channels flow through to
+    // openEntityInSplitFromUnifiedList, which shows the Viewer's Join prompt
+    // when previewing and otherwise no-ops.
     if (
       panel.handle.isControllerSplit() &&
       type === 'entity' &&
       !event.shiftKey
     ) {
-      if (preventDuplicatePreviewEntityOpen(entity, panel.handle)) return;
+      if (
+        !event.altKey &&
+        preventDuplicatePreviewEntityOpen(entity, panel.handle)
+      ) {
+        return;
+      }
 
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
@@ -949,6 +959,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       await openEntityInSplitFromUnifiedList(entity, {
         location,
         splitHandle: panel.handle,
+        replacePreview: event.altKey,
         referredFrom: currentView(),
       });
       return;

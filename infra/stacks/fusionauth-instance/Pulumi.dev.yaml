@@ -15,6 +15,7 @@ config:
   fusionauth-instance:fusionauth-google-gmail-idp-id: b99932ac-bce5-4f1d-99a1-e64760aae811
   fusionauth-instance:google-client-id-secret-key: google-client-id-dev
   fusionauth-instance:google-client-secret-secret-key: google-client-secret-dev
+  fusionauth-instance:enable-google-calendar: true 
   fusionauth:host: https://fusionauth-dev.macro.com
   fusionauth:apiKey:
     secure: AAABAGgKVJijjzcGu5lYU2bdn90Xhj6JcMl0mfKwaLTvNccxRKljjFRHrLaXY63ZLseAxo39MMakTB8SyYbebCvHBDv/zkCV5tnFjx4UBZozo4ABYRLgoQ==

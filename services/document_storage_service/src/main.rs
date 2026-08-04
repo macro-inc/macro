@@ -20,6 +20,7 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::inbound::axum_router::CalendarRouterState;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -382,12 +383,7 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone())
-        .with_search_indexer(Arc::new(
-            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
-                sqs_client.clone(),
-            ),
-        )),
+        .with_event_broker(macro_event_broker.clone()),
     );
 
     // Create the channel list service used by soup.
@@ -470,7 +466,7 @@ async fn main() -> anyhow::Result<()> {
         DynamoBulkUploadAdapter::new(dynamodb_client.clone()),
         ShaCountAdapter::new(Redis::new(redis_client.clone())),
         entity_access_management_service.clone(),
-        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone())),
+        SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone()), macro_event_broker.clone()),
         if cfg!(feature = "local") {
             Some(uuid::uuid!("d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"))
         } else {
@@ -479,28 +475,21 @@ async fn main() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
-    let document_service = Arc::new(
-        DocumentServiceImpl::new(
-            document_repo,
-            cloudfront_config,
-            sync_service_client.as_ref().clone(),
-            s3_upload_adapter,
-            TaskPropertiesAdapter {
-                system_properties: system_properties_service.clone(),
-                properties: properties_service.clone(),
-                entity_access_service: entity_access_service.clone(),
-            },
-            connection_service,
-            entity_access_management_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-            macro_event_broker.clone(),
-        )
-        .with_search_indexer(Arc::new(
-            crate::service::document_search_indexer::SqsDocumentSearchIndexer::new(
-                sqs_client.clone(),
-            ),
-        )),
-    );
+    let document_service = Arc::new(DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.as_ref().clone(),
+        s3_upload_adapter,
+        TaskPropertiesAdapter {
+            system_properties: system_properties_service.clone(),
+            properties: properties_service.clone(),
+            entity_access_service: entity_access_service.clone(),
+        },
+        connection_service,
+        entity_access_management_service.clone(),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker.clone(),
+    ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
         db.clone(),
@@ -993,6 +982,12 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+    let calendar_state = CalendarRouterState::new(
+        Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+        )),
+        authorization_state.clone(),
+    );
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
@@ -1010,6 +1005,7 @@ async fn main() -> anyhow::Result<()> {
                 db.clone(),
                 redis_sha_client.clone(),
                 sqs_client.clone(),
+                macro_event_broker.clone(),
             )),
         ));
 
@@ -1044,6 +1040,7 @@ async fn main() -> anyhow::Result<()> {
         s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
+        macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
@@ -1058,6 +1055,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         channel_list_state,
         entity_access_service: entity_access_service.clone(),
+        calendar_state,
         projects_state: ProjectRouterState {
             service: project_service,
             access_service: entity_access_service.clone(),

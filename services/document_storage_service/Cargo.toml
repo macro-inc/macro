@@ -48,6 +48,7 @@ axum-extra = { workspace = true }
 base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
 bytes = { workspace = true }
+calendar_events = { path = "../../crates/calendar_events", features = ["inbound", "postgres"] }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }

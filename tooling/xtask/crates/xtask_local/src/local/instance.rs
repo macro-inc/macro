@@ -94,6 +94,8 @@ pub enum Port {
     Unfurl = 8095,
     ImageProxy = 8097,
     Kafka = 9092,
+    SdkWebhookSsh = 8788,
+    SdkWebhookHostReceiver = 8789,
 }
 
 impl Port {

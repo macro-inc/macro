@@ -140,6 +140,7 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
+        calendar_events::inbound::axum_router::list_occurrences,
 
         // activity
         activity::get_recent_activity::get_recent_activity_handler,
@@ -248,6 +249,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
@@ -418,6 +420,9 @@ use utoipa::OpenApi;
             DocumentPermissionsTokenRequest,
             ExportDocumentResponse,
             SyncServiceVersionID,
+            calendar_events::inbound::axum_router::CalendarOccurrenceItem,
+            calendar_events::inbound::axum_router::CalendarOccurrenceResponse,
+            calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
             SoupDocument<SoupPropertiesField>,

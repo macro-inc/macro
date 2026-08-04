@@ -554,3 +554,12 @@ export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
   (DEV_MODE_ENV ? true : undefined);
+
+// Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
+// that re-runs Google consent for inboxes connected before the calendar
+// scope existed. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_CALENDAR_UI.
+export const ENABLE_CALENDAR_UI_FLAG = 'enable-calendar-ui';
+export const ENABLE_CALENDAR_UI_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CALENDAR_UI') ??
+  (DEV_MODE_ENV ? true : undefined);

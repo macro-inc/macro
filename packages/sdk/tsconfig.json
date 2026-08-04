@@ -12,6 +12,12 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["*.ts", "scripts/**/*.ts", "generated/**/*.ts", "src/**/*.ts"],
+  "include": [
+    "*.ts",
+    "scripts/**/*.ts",
+    "generated/**/*.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './calendarEventFilters';
+export * from './calendarEventFiltersEndsAfter';
+export * from './calendarEventFiltersStartsBefore';
 export * from './callFilters';
 export * from './callFiltersAttended';
 export * from './callFiltersStatus';

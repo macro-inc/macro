@@ -254,6 +254,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Team
             | EntityType::Channel
             | EntityType::ChannelMessage
+            | EntityType::CalendarEvent
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
@@ -318,6 +319,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Team
             | EntityType::Channel
             | EntityType::ChannelMessage
+            | EntityType::CalendarEvent
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact

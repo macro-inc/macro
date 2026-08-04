@@ -59,6 +59,7 @@ fn deploy() -> Job {
         .add_step(validate_bucket_name())
         .add_step(deploy_to_s3())
         .add_step(comment_on_pr())
+        .add_step(steps::teardown_nix())
 }
 
 fn checkout() -> Step<Use> {

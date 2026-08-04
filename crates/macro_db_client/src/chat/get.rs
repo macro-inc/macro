@@ -258,6 +258,9 @@ pub struct ChatMessageInfo {
     pub name: String,
     pub content: String,
     pub role: String,
+    pub owner_user_id: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
@@ -277,7 +280,10 @@ pub async fn get_chat_message_info(
             m.content as "content",
             c.name as "name",
             m.role as "role",
-            c."deletedAt"::timestamptz as "deleted_at"
+            c."deletedAt"::timestamptz as "deleted_at",
+            c."userId" as "owner_user_id",
+            m."createdAt" as "created_at",
+            m."updatedAt" as "updated_at"
         FROM
             "ChatMessage" m
         JOIN
@@ -300,6 +306,9 @@ pub async fn get_chat_message_info(
         name: row.name,
         content,
         role: row.role,
+        owner_user_id: row.owner_user_id,
+        created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+        updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
         deleted_at: row.deleted_at,
     }))
 }

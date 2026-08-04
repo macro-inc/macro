@@ -508,7 +508,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 
 /**
  * Error response body.
@@ -2320,6 +2320,20 @@ export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackEr
 export type McpAuthCallbackResponses = {
     /**
      * OAuth flow completed successfully
+     */
+    200: unknown;
+};
+
+export type McpOauthClientMetadataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/mcp/servers/auth/client-metadata';
+};
+
+export type McpOauthClientMetadataResponses = {
+    /**
+     * Macro OAuth client metadata document
      */
     200: unknown;
 };

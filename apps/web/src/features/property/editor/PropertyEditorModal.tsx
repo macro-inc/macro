@@ -20,6 +20,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
+import { useDocTags } from '@property/tags';
 import { TagDot } from '@property/tags/TagDot';
 import {
   TagEditorDialog,
@@ -36,13 +37,13 @@ import {
   toPropertyApiValue,
 } from '@property/utils';
 import {
-  useAddEntityPropertyOptionMutation,
+  useBulkUpdateEntityPropertyOptionsMutation,
   useEntityPropertiesQuery,
-  useRemoveEntityPropertyOptionMutation,
 } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
@@ -117,6 +118,7 @@ type TagOptionItem = {
 };
 
 type EntityTagIdsByDefinition = Map<string, Map<string, string[]>>;
+type DocTags = ReturnType<typeof useDocTags>;
 
 function tagOptionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
@@ -174,6 +176,22 @@ function getTagIds(
   definitionId: string
 ) {
   return byEntity.get(entityId)?.get(definitionId) ?? [];
+}
+
+function docTagIdsByDefinition(
+  entityId: string,
+  docTags: DocTags
+): EntityTagIdsByDefinition {
+  const byDefinition = new Map<string, string[]>();
+  for (const tag of docTags.appliedTags()) {
+    const current = byDefinition.get(tag.propertyDefinitionId) ?? [];
+    byDefinition.set(tag.propertyDefinitionId, [...current, tag.optionId]);
+  }
+  return new Map([[entityId, byDefinition]]);
+}
+
+function tagAssignmentEntityType(entity: EntityData): EntityType {
+  return getEntityType({ kind: 'entity', id: entity.id, data: entity });
 }
 
 function canAssignTags(entity: EntityData): boolean {
@@ -515,59 +533,69 @@ function TagAssignmentEditor(props: {
 }) {
   const tagsQuery = useTagsQuery();
   const currentTeamQuery = useCurrentTeamQuery();
-  const addOption = useAddEntityPropertyOptionMutation();
-  const removeOption = useRemoveEntityPropertyOptionMutation();
+  // Multi-entity tag edits keep their optimistic state in this editor. The
+  // mutation variables still carry each entity id for the API and invalidation.
+  const tagAssignmentMutationScope = `property-editor-tags:${props.entities
+    .map((entity) => entity.id)
+    .sort()
+    .join(':')}`;
+  const updateTagOptions = useBulkUpdateEntityPropertyOptionsMutation(
+    tagAssignmentMutationScope
+  );
   const [tagEditorMode, setTagEditorMode] =
     createSignal<TagEditorDialogMode | null>(null);
   const [tagEditorOpen, setTagEditorOpen] = createControlledOpenSignal(false, {
     id: 'property-tag-edit',
   });
-  const singleEntity = () =>
+  const singleEntityForDocTags =
     props.entities.length === 1 ? props.entities[0] : undefined;
-  const entityPropertiesQuery = useEntityPropertiesQuery(
-    () => {
-      const entity = singleEntity();
-      return entity ? macroEntityToPropertyEntityType(entity) : 'DOCUMENT';
-    },
-    () => singleEntity()?.id ?? '',
-    false
-  );
-  const currentEntityTagIds = () =>
-    entityTagIdsByDefinition(
-      props.entities,
-      singleEntity() && entityPropertiesQuery.data
-        ? {
-            entityId: singleEntity()!.id,
-            properties: entityPropertiesQuery.data,
-          }
-        : undefined
-    );
+  const singleDocTags = singleEntityForDocTags
+    ? useDocTags(
+        singleEntityForDocTags.id,
+        tagAssignmentEntityType(singleEntityForDocTags)
+      )
+    : undefined;
+  const singleDocTagsSource = () =>
+    props.entities.length === 1 &&
+    props.entities[0]?.id === singleEntityForDocTags?.id
+      ? singleDocTags
+      : undefined;
+  const currentEntityTagIds = () => {
+    const docTags = singleDocTagsSource();
+    if (docTags && singleEntityForDocTags) {
+      return docTagIdsByDefinition(singleEntityForDocTags.id, docTags);
+    }
+    return entityTagIdsByDefinition(props.entities);
+  };
   const initialEntityTagIds = currentEntityTagIds();
   const [orderedTagIds, setOrderedTagIds] =
     createSignal<EntityTagIdsByDefinition>(initialEntityTagIds);
   const [localTagIds, setLocalTagIds] =
     createSignal<EntityTagIdsByDefinition>(initialEntityTagIds);
-  const [hasEditedTags, setHasEditedTags] = createSignal(false);
+  const [openOrderFrozen, setOpenOrderFrozen] = createSignal(false);
   let syncedEntityIds = props.entities.map((entity) => entity.id).join('\0');
 
   createEffect(() => {
     props.setPlaceholder('Change or add tags...');
   });
 
+  createEffect(() => {
+    const docTags = singleDocTagsSource();
+    if (!docTags || openOrderFrozen()) return;
+
+    const nextTagIds = currentEntityTagIds();
+    setOrderedTagIds(nextTagIds);
+    setLocalTagIds(nextTagIds);
+  });
+
   createEffect(
     on(
-      () => ({
-        entityIds: props.entities.map((entity) => entity.id).join('\0'),
-        properties: entityPropertiesQuery.data,
-      }),
-      ({ entityIds }) => {
-        const entityIdsChanged = entityIds !== syncedEntityIds;
-        if (entityIdsChanged) {
-          syncedEntityIds = entityIds;
-          setHasEditedTags(false);
-        }
-        if (hasEditedTags() && !entityIdsChanged) return;
+      () => props.entities.map((entity) => entity.id).join('\0'),
+      (entityIds) => {
+        if (entityIds === syncedEntityIds) return;
 
+        syncedEntityIds = entityIds;
+        setOpenOrderFrozen(false);
         const nextTagIds = currentEntityTagIds();
         setOrderedTagIds(nextTagIds);
         setLocalTagIds(nextTagIds);
@@ -599,6 +627,9 @@ function TagAssignmentEditor(props: {
   });
 
   const isFullyApplied = (item: TagOptionItem) => {
+    const docTags = singleDocTagsSource();
+    if (docTags) return docTags.isApplied(item.option.id);
+
     if (props.entities.length === 0) return false;
     return props.entities.every((entity) =>
       getTagIds(localTagIds(), entity.id, item.definition.id).includes(
@@ -642,15 +673,15 @@ function TagAssignmentEditor(props: {
   const showCreateRow = () =>
     createLabel().length > 0 && !exactTagMatchExists();
   const hasSearch = () => createLabel().length > 0;
-  const hasAnyAppliedTags = () => {
-    for (const byDefinition of localTagIds().values()) {
+  const hadAnyAppliedTagsWhenOpened = () => {
+    for (const byDefinition of orderedTagIds().values()) {
       for (const optionIds of byDefinition.values()) {
         if (optionIds.length > 0) return true;
       }
     }
     return false;
   };
-  const showClearAllRow = () => hasAnyAppliedTags();
+  const showClearAllRow = () => hadAnyAppliedTagsWhenOpened();
   const showClearAllAtTop = () => showClearAllRow() && !hasSearch();
   const showClearAllAtBottom = () => showClearAllRow() && hasSearch();
   const itemRowIndex = (index: number) => index + (showClearAllAtTop() ? 1 : 0);
@@ -705,14 +736,34 @@ function TagAssignmentEditor(props: {
   ) => {
     const remove = isFullyApplied(item);
     const shouldClose = !event?.shiftKey;
+    const docTags = singleDocTagsSource();
+    setOpenOrderFrozen(true);
+
+    if (docTags) {
+      const selectedIds = new Set(
+        docTags.appliedTags().map((tag) => tag.optionId)
+      );
+      if (remove) selectedIds.delete(item.option.id);
+      else selectedIds.add(item.option.id);
+
+      const update = docTags.setTagSelection(selectedIds);
+      if (shouldClose) closePropertyEditor();
+
+      try {
+        await update;
+      } catch (error) {
+        console.error('Failed to update tags', error);
+      }
+      return;
+    }
+
     const previousTagIds = localTagIds();
-    setHasEditedTags(true);
     updateLocalOption(item, remove);
 
     try {
       const update = Promise.all(
         props.entities.map(async (entity) => {
-          const entityType = macroEntityToPropertyEntityType(entity);
+          const entityType = tagAssignmentEntityType(entity);
           const current = getTagIds(
             previousTagIds,
             entity.id,
@@ -723,17 +774,20 @@ function TagAssignmentEditor(props: {
           if (remove && !hasOption) return;
           if (!remove && hasOption) return;
 
-          const optimisticOptionIds = remove
+          const nextOptionIds = remove
             ? current.filter((id) => id !== item.option.id)
             : [...current, item.option.id];
-          const mutation = remove ? removeOption : addOption;
 
-          await mutation.mutateAsync({
+          await updateTagOptions.mutateAsync({
             entityId: entity.id,
             entityType,
-            property: tagDefinitionDomain(item.definition),
-            optionId: item.option.id,
-            optimisticOptionIds,
+            properties: [
+              {
+                property: tagDefinitionDomain(item.definition),
+                currentOptionIds: current,
+                nextOptionIds,
+              },
+            ],
           });
         })
       );
@@ -776,8 +830,22 @@ function TagAssignmentEditor(props: {
     if (!showClearAllRow()) return;
 
     const shouldClose = !event?.shiftKey;
+    const docTags = singleDocTagsSource();
+    setOpenOrderFrozen(true);
+
+    if (docTags) {
+      const update = docTags.setTagSelection(new Set());
+      if (shouldClose) closePropertyEditor();
+
+      try {
+        await update;
+      } catch (error) {
+        console.error('Failed to clear tags', error);
+      }
+      return;
+    }
+
     const previousTagIds = localTagIds();
-    setHasEditedTags(true);
     setLocalTagIds(
       new Map(
         props.entities.map((entity) => [entity.id, new Map<string, string[]>()])
@@ -785,26 +853,34 @@ function TagAssignmentEditor(props: {
     );
 
     try {
-      const updates: Promise<void>[] = [];
+      const updates: Promise<unknown>[] = [];
       for (const entity of props.entities) {
-        const entityType = macroEntityToPropertyEntityType(entity);
+        const entityType = tagAssignmentEntityType(entity);
         const byDefinition = previousTagIds.get(entity.id) ?? new Map();
+        const properties = [...byDefinition].flatMap(
+          ([definitionId, optionIds]) => {
+            if (optionIds.length === 0) return [];
+            const definition = tagDefinitionsById().get(definitionId);
+            if (!definition) return [];
 
-        for (const [definitionId, optionIds] of byDefinition) {
-          const definition = tagDefinitionsById().get(definitionId);
-          if (!definition) continue;
-
-          for (const optionId of optionIds) {
-            updates.push(
-              removeOption.mutateAsync({
-                entityId: entity.id,
-                entityType,
+            return [
+              {
                 property: tagDefinitionDomain(definition),
-                optionId,
-                optimisticOptionIds: [],
-              })
-            );
+                currentOptionIds: optionIds,
+                nextOptionIds: [],
+              },
+            ];
           }
+        );
+
+        if (properties.length > 0) {
+          updates.push(
+            updateTagOptions.mutateAsync({
+              entityId: entity.id,
+              entityType,
+              properties,
+            })
+          );
         }
       }
 
@@ -819,11 +895,24 @@ function TagAssignmentEditor(props: {
   };
 
   const applyCreatedTag = async (
+    scope: TagScope,
     definition: PropertyDefinitionDetailResponse,
     optionId: string
   ) => {
+    const docTags = singleDocTagsSource();
+    setOpenOrderFrozen(true);
+
+    if (docTags) {
+      try {
+        await docTags.applyTag(scope, optionId);
+        closePropertyEditor();
+      } catch (error) {
+        console.error('Failed to apply created tag', error);
+      }
+      return;
+    }
+
     const previousTagIds = localTagIds();
-    setHasEditedTags(true);
     setLocalTagIds((prev) => {
       const next = new Map(prev);
       for (const entity of props.entities) {
@@ -841,16 +930,20 @@ function TagAssignmentEditor(props: {
     try {
       await Promise.all(
         props.entities.map(async (entity) => {
-          const entityType = macroEntityToPropertyEntityType(entity);
+          const entityType = tagAssignmentEntityType(entity);
           const current = getTagIds(previousTagIds, entity.id, definition.id);
           if (current.includes(optionId)) return;
 
-          await addOption.mutateAsync({
+          await updateTagOptions.mutateAsync({
             entityId: entity.id,
             entityType,
-            property: tagDefinitionDomain(definition),
-            optionId,
-            optimisticOptionIds: [...current, optionId],
+            properties: [
+              {
+                property: tagDefinitionDomain(definition),
+                currentOptionIds: current,
+                nextOptionIds: [...current, optionId],
+              },
+            ],
           });
         })
       );
@@ -1015,7 +1108,11 @@ function TagAssignmentEditor(props: {
         onCreateSuccess={async (result) => {
           const definition = result.tagSet.definition;
           if (!definition) return;
-          await applyCreatedTag(definition, result.option.id);
+          await applyCreatedTag(
+            result.tagSet.scope,
+            definition,
+            result.option.id
+          );
         }}
         onClose={() => {
           setTagEditorOpen(false, false);

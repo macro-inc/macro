@@ -1414,6 +1414,18 @@
         }
       }
     },
+    "/mcp/servers/auth/client-metadata": {
+      "get": {
+        "tags": ["mcp"],
+        "summary": "Return Macro's public OAuth Client ID Metadata Document.",
+        "operationId": "mcp_oauth_client_metadata",
+        "responses": {
+          "200": {
+            "description": "Macro OAuth client metadata document"
+          }
+        }
+      }
+    },
     "/mcp/servers/auth/start": {
       "post": {
         "tags": ["mcp"],
@@ -2608,6 +2620,7 @@
           "document",
           "project",
           "email_thread",
+          "calendar_event",
           "team",
           "call",
           "foreign_entity",

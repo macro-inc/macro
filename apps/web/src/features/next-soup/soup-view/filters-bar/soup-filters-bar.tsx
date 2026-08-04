@@ -4,7 +4,12 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
+import {
+  CompanyDisplayMenu,
+  CompanyViewsMenu,
+} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { CollapsibleToolbarItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import {
   SplitToolbarLeft,
@@ -35,6 +40,10 @@ export function SoupFiltersBar(props: {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'search';
   });
+  const isCompaniesView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'companies';
+  });
   const isTagView = createMemo(() => props.variant === 'tag');
 
   // The new inbox hides sort (it's fixed to updated_at for this view).
@@ -50,39 +59,65 @@ export function SoupFiltersBar(props: {
     );
   });
 
+  const CollapsibleGroup = () => (
+    <CollapsibleToolbarItem id="soup-toolbar-group" priority={0}>
+      {(isCollapsed) => <SoupViewContextGroup hideLabel={isCollapsed()} />}
+    </CollapsibleToolbarItem>
+  );
+
+  const CollapsibleFilter = () => (
+    <CollapsibleToolbarItem id="soup-toolbar-filter" priority={1}>
+      {(isCollapsed) => (
+        <UnifiedFilterDropdown
+          open={filterDropdownOpen}
+          onOpenChange={setFilterDropdownOpen}
+          hideLabel={isCollapsed()}
+        />
+      )}
+    </CollapsibleToolbarItem>
+  );
+
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
-        <div class="flex items-start gap-1 min-w-0 flex-1">
-          <Show
-            when={!isSearchView() && !isTagView()}
-            fallback={
-              <Show when={isTagView()} fallback={<SearchFiltersRow />}>
-                <Show when={!isNewInbox()}>
-                  <SoupViewContextSort />
-                </Show>
-                <SoupViewContextGroup />
+        <Show
+          when={!isSearchView() && !isTagView()}
+          fallback={
+            <Show when={isTagView()} fallback={<SearchFiltersRow />}>
+              <Show when={!isNewInbox()}>
+                <SoupViewContextSort />
               </Show>
-            }
-          >
-            <Show when={!isNewInbox()}>
-              <SoupViewContextSort />
+              <CollapsibleGroup />
             </Show>
-            <SoupViewContextGroup />
-            <UnifiedFilterDropdown
-              open={filterDropdownOpen}
-              onOpenChange={setFilterDropdownOpen}
-            />
+          }
+        >
+          <Show when={!isNewInbox()}>
+            <SoupViewContextSort />
           </Show>
-        </div>
+          <CollapsibleGroup />
+          <CollapsibleFilter />
+          <Show when={isCompaniesView()}>
+            <CompanyDisplayMenu />
+          </Show>
+        </Show>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <PreviewButton
-          disabled={!props.hasPreviewItems}
-          disabledLabel="No items to preview"
-          onEngage={props.onPreviewEngage}
-          onOpenChange={props.onPreviewOpenChange}
-        />
+        <Show when={isCompaniesView()}>
+          <CollapsibleToolbarItem id="soup-toolbar-views" priority={2}>
+            {(isCollapsed) => <CompanyViewsMenu hideLabel={isCollapsed()} />}
+          </CollapsibleToolbarItem>
+        </Show>
+        <CollapsibleToolbarItem id="soup-toolbar-preview" priority={3}>
+          {(isCollapsed) => (
+            <PreviewButton
+              disabled={!props.hasPreviewItems}
+              disabledLabel="No items to preview"
+              onEngage={props.onPreviewEngage}
+              onOpenChange={props.onPreviewOpenChange}
+              hideLabel={isCollapsed()}
+            />
+          )}
+        </CollapsibleToolbarItem>
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
       <Show when={!isSearchView() && !isTagView()}>

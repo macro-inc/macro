@@ -56,6 +56,37 @@ impl<
             .await
     }
 
+    /// Handle `installation` events with action `deleted`.
+    ///
+    /// Removes the installation's source associations and recorded installer
+    /// so the installation is no longer used for PR backfills or retroactive
+    /// association when a github link is created later. Idempotent: GitHub
+    /// retries webhooks, so deleting an already-removed installation succeeds.
+    #[tracing::instrument(skip(self, event), err)]
+    pub(crate) async fn handle_installation_deleted(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+    ) -> Result<(), GithubError> {
+        let installation_id = event
+            .installation_id()
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("missing installation.id")))?
+            .to_string();
+
+        tracing::info!(installation_id, "processing installation deleted event");
+
+        self.repo
+            .delete_installation_sources(&installation_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        self.repo
+            .delete_installation_installer(&installation_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        Ok(())
+    }
+
     /// Compute the Macro sources (teams or users) for every Macro user linked
     /// to the given GitHub user. Returns an empty list when no link exists.
     pub(crate) async fn sources_for_github_user(

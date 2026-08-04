@@ -142,6 +142,7 @@ fn deploy() -> Job {
         .add_step(dump_boot_timings())
         .add_step(publish_template_volume())
         .add_step(comment_preview_url())
+        .add_step(steps::teardown_nix())
 }
 
 /// When the machine never passes its health check, the answer is inside the

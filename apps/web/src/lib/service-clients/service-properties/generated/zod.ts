@@ -19,6 +19,7 @@ export const listPropertiesQueryParams = zod.object({
     .describe('Whether to include property options in the response'),
   for_entity_type: zod
     .enum([
+      'CALENDAR_EVENT',
       'CALL_RECORD',
       'CHANNEL',
       'CHAT',
@@ -94,6 +95,7 @@ export const listPropertiesResponseItem = zod
             zod.null(),
             zod
               .enum([
+                'CALENDAR_EVENT',
                 'CALL_RECORD',
                 'CHANNEL',
                 'CHAT',
@@ -173,6 +175,7 @@ export const listPropertiesResponseItem = zod
                 zod.null(),
                 zod
                   .enum([
+                    'CALENDAR_EVENT',
                     'CALL_RECORD',
                     'CHANNEL',
                     'CHAT',
@@ -298,6 +301,7 @@ export const createPropertyDefinitionBody = zod
                 zod.null(),
                 zod
                   .enum([
+                    'CALENDAR_EVENT',
                     'CALL_RECORD',
                     'CHANNEL',
                     'CHAT',
@@ -401,6 +405,7 @@ export const getPropertyDefinitionResponse = zod
         zod.null(),
         zod
           .enum([
+            'CALENDAR_EVENT',
             'CALL_RECORD',
             'CHANNEL',
             'CHAT',
@@ -689,6 +694,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                     zod.null(),
                     zod
                       .enum([
+                        'CALENDAR_EVENT',
                         'CALL_RECORD',
                         'CHANNEL',
                         'CHAT',
@@ -755,6 +761,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                 entity_id: zod.string(),
                 entity_type: zod
                   .enum([
+                    'CALENDAR_EVENT',
                     'CALL_RECORD',
                     'CHANNEL',
                     'CHAT',
@@ -850,6 +857,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                                 entity_id: zod.string(),
                                 entity_type: zod
                                   .enum([
+                                    'CALENDAR_EVENT',
                                     'CALL_RECORD',
                                     'CHANNEL',
                                     'CHAT',
@@ -999,6 +1007,7 @@ export const getEntityPropertiesResponse = zod
                   zod.null(),
                   zod
                     .enum([
+                      'CALENDAR_EVENT',
                       'CALL_RECORD',
                       'CHANNEL',
                       'CHAT',
@@ -1065,6 +1074,7 @@ export const getEntityPropertiesResponse = zod
               entity_id: zod.string(),
               entity_type: zod
                 .enum([
+                  'CALENDAR_EVENT',
                   'CALL_RECORD',
                   'CHANNEL',
                   'CHAT',
@@ -1160,6 +1170,7 @@ export const getEntityPropertiesResponse = zod
                               entity_id: zod.string(),
                               entity_type: zod
                                 .enum([
+                                  'CALENDAR_EVENT',
                                   'CALL_RECORD',
                                   'CHANNEL',
                                   'CHAT',
@@ -1367,6 +1378,7 @@ export const setEntityPropertyBody = zod
                     entity_id: zod.string(),
                     entity_type: zod
                       .enum([
+                        'CALENDAR_EVENT',
                         'CALL_RECORD',
                         'CHANNEL',
                         'CHAT',
@@ -1401,6 +1413,7 @@ export const setEntityPropertyBody = zod
                       entity_id: zod.string(),
                       entity_type: zod
                         .enum([
+                          'CALENDAR_EVENT',
                           'CALL_RECORD',
                           'CHANNEL',
                           'CHAT',
@@ -1684,6 +1697,7 @@ export const listTagsResponseItem = zod
                   zod.null(),
                   zod
                     .enum([
+                      'CALENDAR_EVENT',
                       'CALL_RECORD',
                       'CHANNEL',
                       'CHAT',
@@ -1824,6 +1838,7 @@ export const ensureTagSetResponse = zod
                   zod.null(),
                   zod
                     .enum([
+                      'CALENDAR_EVENT',
                       'CALL_RECORD',
                       'CHANNEL',
                       'CHAT',

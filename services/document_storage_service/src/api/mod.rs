@@ -203,6 +203,9 @@ fn api_router(state: ApiContext) -> Router {
             channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
+        .merge(calendar_events::inbound::axum_router::calendar_router(
+            state.calendar_state.clone(),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),

@@ -203,6 +203,26 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     displayPriority: 4,
   }).withGroup(group);
 
+  // opt+enter - Open in place of the whole Preview Pair
+  registerHotkey({
+    hotkey: ['opt+enter'],
+    scopeId,
+    description: 'Open to replace preview',
+    condition: () =>
+      splitHandle.isControllerSplit() && soup.focus.id() !== undefined,
+    keyDownHandler: () => {
+      const entity = soup.focus.item();
+      if (!entity) return false;
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+        replacePreview: true,
+        referredFrom: currentView(),
+      });
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
+
   // x - Toggle select item
   registerHotkey({
     hotkey: ['x'],

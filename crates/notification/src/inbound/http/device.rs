@@ -52,23 +52,27 @@ async fn register_device<S: NotificationReader, Auth: MacroAuthorizationService>
     Ok(Json(()))
 }
 
-/// Unregister a device from push notifications.
-#[tracing::instrument(skip(state, _macro_user, req))]
+/// Unregister the calling user's device from push notifications.
+#[tracing::instrument(skip(state, user, req))]
 async fn unregister_device<S: NotificationReader, Auth: MacroAuthorizationService>(
     State(state): State<NotificationRouterState<S, Auth>>,
-    _macro_user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<DeviceRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     state
         .inner
-        .unregister_device(&req.token, &req.device_type)
+        .unregister_device(
+            user.authorization.user.macro_user_id,
+            &req.token,
+            &req.device_type,
+        )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to unregister device");
             (
-                StatusCode::NOT_FOUND,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    message: "device not found".into(),
+                    message: "unable to unregister device".into(),
                 }),
             )
         })?;

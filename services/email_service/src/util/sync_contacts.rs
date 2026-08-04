@@ -1,24 +1,33 @@
 use crate::convert::map_person_to_contact;
+use crate::pubsub::util::publish_email_event;
 use anyhow::{Context, anyhow};
+use email::domain::events::{
+    EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
+};
 use futures::{StreamExt, stream};
 use gmail_client::GmailClient;
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::contact::Contact;
 use models_email::service::link::Link;
 use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::sync_token::SyncTokens;
 use sqlx::PgPool;
 use sqs_client::SQS;
-use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::email::EmailThreadBatchMessage;
 use std::collections::HashSet;
 use std::time::Instant;
+use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Syncs user's contacts with gmail
-pub async fn sync_contacts(
+pub async fn sync_contacts<B: MacroEventBroker>(
     link: &Link,
     db: &PgPool,
     gmail_client: &GmailClient,
     sqs_client: &SQS,
+    macro_event_broker: &B,
     gmail_access_token: &str,
 ) -> anyhow::Result<()> {
     // 1. Get existing sync tokens from our DB
@@ -37,7 +46,7 @@ pub async fn sync_contacts(
 
     // 3. If we received any new/updated contacts, process and store them.
     if !new_contacts.is_empty() {
-        process_and_store_contacts(db, sqs_client, link, new_contacts).await?;
+        process_and_store_contacts(db, sqs_client, macro_event_broker, link, new_contacts).await?;
     }
 
     // 4. Store the new sync tokens in our DB
@@ -129,9 +138,10 @@ async fn fetch_new_contacts_from_google(
 }
 
 /// Handles processing (SFS uploads) and database storage for a list of contacts.
-async fn process_and_store_contacts(
+async fn process_and_store_contacts<B: MacroEventBroker>(
     db: &PgPool,
     sqs_client: &SQS,
+    macro_event_broker: &B,
     link: &Link,
     contacts: Vec<Contact>,
 ) -> anyhow::Result<()> {
@@ -177,7 +187,8 @@ async fn process_and_store_contacts(
     );
 
     if !changed_contact_ids.is_empty() {
-        reindex_threads_for_changed_contacts(db, sqs_client, link, &changed_contact_ids).await;
+        reindex_threads_for_changed_contacts(db, macro_event_broker, link, &changed_contact_ids)
+            .await;
     }
 
     if cfg!(not(feature = "sfs_map")) {
@@ -215,12 +226,12 @@ async fn process_and_store_contacts(
 
 const REINDEX_BATCH_SIZE: usize = 50;
 
-#[tracing::instrument(skip(db, sqs_client, link, changed_contact_ids))]
-async fn reindex_threads_for_changed_contacts(
+#[tracing::instrument(skip(db, macro_event_broker, link, changed_contact_ids))]
+async fn reindex_threads_for_changed_contacts<B: MacroEventBroker>(
     db: &PgPool,
-    sqs_client: &SQS,
+    macro_event_broker: &B,
     link: &Link,
-    changed_contact_ids: &[uuid::Uuid],
+    changed_contact_ids: &[Uuid],
 ) {
     let thread_ids = match email_db_client::threads::get::get_thread_ids_by_contact_ids(
         db,
@@ -239,8 +250,6 @@ async fn reindex_threads_for_changed_contacts(
         return;
     }
 
-    let macro_user_id = link.macro_id.to_string();
-
     tracing::info!(
         num_threads = thread_ids.len(),
         num_changed_contacts = changed_contact_ids.len(),
@@ -248,21 +257,24 @@ async fn reindex_threads_for_changed_contacts(
         "Re-indexing threads for contacts with name changes"
     );
 
-    let messages: Vec<SearchQueueMessage> = thread_ids
-        .chunks(REINDEX_BATCH_SIZE)
-        .map(|chunk| {
-            SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
-                thread_ids: chunk.iter().map(|id| id.to_string()).collect(),
-                macro_user_id: macro_user_id.clone(),
-                index_override: None,
-            })
-        })
-        .collect();
+    publish_thread_reindex_batches(macro_event_broker, link.id, &link.macro_id, &thread_ids);
+}
 
-    if let Err(e) = sqs_client
-        .bulk_send_message_to_search_event_queue(messages)
-        .await
-    {
-        tracing::error!(error=?e, link_id=%link.id, "Failed to enqueue search re-index messages for contact name changes");
+fn publish_thread_reindex_batches<B: MacroEventBroker>(
+    macro_event_broker: &B,
+    link_id: Uuid,
+    owner: &MacroUserIdStr<'static>,
+    thread_ids: &[Uuid],
+) {
+    for thread_ids in thread_ids.chunks(REINDEX_BATCH_SIZE) {
+        publish_email_event(
+            macro_event_broker,
+            &EmailMacroEvent::threads_reindex_requested(ThreadsReindexRequestedMetadata {
+                link_id,
+                owner: owner.clone(),
+                thread_ids: thread_ids.to_vec(),
+                reason: ThreadsReindexReason::ContactsChanged,
+            }),
+        );
     }
 }

@@ -46,7 +46,12 @@ import { propertiesKeys } from './keys';
 function toPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
 ): PropertyTargetEntityType {
-  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+  if (entityType === 'TASK') return 'DOCUMENT';
+  if (entityType === 'CALENDAR_EVENT') {
+    // Not a property target yet; surface a real error instead of a bad request.
+    throw new Error('calendar events do not support properties');
+  }
+  return entityType;
 }
 
 export function useEntityPropertiesQuery(
@@ -126,6 +131,7 @@ function optimisticUpdateSoupEntityProperties(
     current.tag === 'channel' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
+    current.tag === 'calendarEvent' ||
     !current.data.properties
   ) {
     return undefined;
@@ -861,6 +867,10 @@ export function useBulkSaveEntityPropertiesMutation(
   >
 ) {
   return useMutation(() => ({
+    // The normalized GraphQL cache owns its durable offline queue. TanStack's
+    // default `online` mode would pause before `mutationFn`, preventing the
+    // optimistic layer from ever reaching the SharedWorker.
+    networkMode: ENABLE_GRAPHQL_SOUP() ? 'always' : 'online',
     mutationFn: async (vars: BulkSaveEntityPropertiesParams): Promise<void> => {
       const usesGraphqlSoup = ENABLE_GRAPHQL_SOUP();
       const save = async (

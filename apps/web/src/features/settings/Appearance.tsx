@@ -410,7 +410,7 @@ function InterfaceThemeSelect(props: {
                 }}
                 placeholder="Filter themes…"
                 spellcheck={false}
-                class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
+                class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2.5 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
               />
             </div>
 

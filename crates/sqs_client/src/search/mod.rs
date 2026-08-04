@@ -3,10 +3,10 @@ use crate::{
     search::{
         call::{CallRecordMessage, RemoveCallRecord},
         channel::ChannelMessageUpdate,
-        chat::{ChatMessage, RemoveChatMessage},
-        document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
-        email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
-        project::{RemoveProject, UpsertProject},
+        chat::ChatMessage,
+        document::SearchExtractorMessage,
+        email::EmailThreadBatchMessage,
+        project::UpsertProject,
     },
 };
 use anyhow::Context;
@@ -70,18 +70,11 @@ pub enum Operation {
 pub enum SearchQueueMessage {
     // Document
     ExtractDocumentText(SearchExtractorMessage),
-    RemoveDocument(DocumentId),
     ExtractSync(SearchExtractorMessage),
-    UpdateDocumentProperties(DocumentPropertiesUpdate),
-    UpdateDocumentName(DocumentId),
     // Chat
+    /// SQS backfill work-queue contract for reconciling a chat message.
     ChatMessage(ChatMessage),
-    RemoveChatMessage(RemoveChatMessage),
-    // Email
-    ExtractEmailMessage(EmailMessage),
-    RemoveEmailMessage(EmailMessage),
-    ExtractEmailThreadMessage(EmailThreadMessage),
-    RemoveEmailLink(EmailLinkMessage),
+    // Email backfills
     ExtractEmailThreadBatch(EmailThreadBatchMessage),
     // Channel
     ChannelMessageUpdate(ChannelMessageUpdate),
@@ -90,7 +83,6 @@ pub enum SearchQueueMessage {
     RemoveCallRecord(RemoveCallRecord),
     // Project
     UpsertProject(UpsertProject),
-    RemoveProject(RemoveProject),
 
     // User
     RemoveUserProfile(String),
@@ -100,20 +92,12 @@ impl PrimaryId for SearchQueueMessage {
     fn id(&self) -> String {
         match self {
             SearchQueueMessage::ExtractDocumentText(message) => message.document_id.clone(),
-            SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
-            SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
-            SearchQueueMessage::UpdateDocumentName(message) => message.document_id.clone(),
-            SearchQueueMessage::ChatMessage(message) => message.message_id.clone(), // needs
-            // to be the message id to ensure it's unique for batch
-            SearchQueueMessage::RemoveChatMessage(message) => message.chat_id.clone(),
-            SearchQueueMessage::ExtractEmailMessage(message)
-            | SearchQueueMessage::RemoveEmailMessage(message) => message.message_id.clone(),
-            SearchQueueMessage::ExtractEmailThreadMessage(message) => message.thread_id.clone(),
+            // The message id keeps entries unique within an SQS batch.
+            SearchQueueMessage::ChatMessage(message) => message.message_id.clone(),
             SearchQueueMessage::ExtractEmailThreadBatch(message) => {
                 message.thread_ids.first().cloned().unwrap_or_default()
             }
-            SearchQueueMessage::RemoveEmailLink(message) => message.link_id.clone(),
             SearchQueueMessage::ChannelMessageUpdate(message) => message.message_id.clone(),
             SearchQueueMessage::CallRecord(message) => message.call_id.clone(),
             SearchQueueMessage::RemoveCallRecord(message) => format!(
@@ -122,7 +106,6 @@ impl PrimaryId for SearchQueueMessage {
                 message.call_id.clone().unwrap_or_default()
             ),
             SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
-            SearchQueueMessage::RemoveProject(message) => message.project_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -134,19 +117,11 @@ impl SearchQueueMessage {
         match self {
             // Document
             SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
-            SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::UpdateDocumentName(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveChatMessage(_) => Operation::Remove,
-            // Email
-            SearchQueueMessage::ExtractEmailMessage(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveEmailMessage(_) => Operation::Remove,
-            SearchQueueMessage::ExtractEmailThreadMessage(_) => Operation::ExtractText,
+            // Email backfills
             SearchQueueMessage::ExtractEmailThreadBatch(_) => Operation::ExtractText,
-            SearchQueueMessage::RemoveEmailLink(_) => Operation::Remove,
             // Channels
             SearchQueueMessage::ChannelMessageUpdate(_) => Operation::ExtractText,
             // Calls
@@ -154,7 +129,6 @@ impl SearchQueueMessage {
             SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
             // Projects
             SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
-            SearchQueueMessage::RemoveProject(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }
@@ -229,32 +203,4 @@ pub async fn bulk_enqueue_search_text_extractor(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::search::document::DocumentId;
-
-    #[test]
-    fn update_document_name_maps_to_update_metadata() {
-        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
-            document_id: "doc-1".to_string(),
-        });
-
-        assert!(matches!(message.operation(), Operation::UpdateMetadata));
-        assert_eq!(message.id(), "doc-1");
-    }
-
-    #[test]
-    fn update_document_name_round_trips() {
-        let message = SearchQueueMessage::UpdateDocumentName(DocumentId {
-            document_id: "doc-1".to_string(),
-        });
-
-        let serialized = serde_json::to_string(&message).unwrap();
-        let deserialized: SearchQueueMessage = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(message, deserialized);
-    }
 }

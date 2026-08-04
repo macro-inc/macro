@@ -22,6 +22,8 @@ pub enum GraphqlSoupEntityType {
     CrmCompany,
     /// Foreign entity.
     ForeignEntity,
+    /// Calendar event entity.
+    CalendarEvent,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -41,6 +43,8 @@ pub enum GraphqlEntityType {
     ChannelMessage,
     /// Call entity.
     Call,
+    /// Calendar event entity.
+    CalendarEvent,
     /// CRM company entity.
     CrmCompany,
     /// Foreign entity.
@@ -76,6 +80,7 @@ impl GraphqlSoupEntityType {
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
+            EntityType::CalendarEvent => Self::CalendarEvent,
             _ => return None,
         })
     }
@@ -92,6 +97,7 @@ impl GraphqlSoupEntityType {
             Self::Call => EntityType::Call,
             Self::CrmCompany => EntityType::CrmCompany,
             Self::ForeignEntity => EntityType::ForeignEntity,
+            Self::CalendarEvent => EntityType::CalendarEvent,
         }
     }
 }
@@ -107,6 +113,7 @@ impl GraphqlEntityType {
             EntityType::Channel => Self::Channel,
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
+            EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::User => Self::User,
@@ -124,6 +131,7 @@ impl GraphqlEntityType {
     /// Convert this GraphQL entity type into the canonical model type.
     pub fn into_model(self) -> EntityType {
         match self {
+            Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Document => EntityType::Document,
             Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,

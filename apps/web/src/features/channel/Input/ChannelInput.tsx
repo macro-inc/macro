@@ -14,6 +14,7 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
+import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -65,6 +66,8 @@ export type ChannelInputProps = InputCallbacks & {
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
   participants?: Accessor<IUser[]>;
+  /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
+  bots?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
@@ -230,13 +233,16 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // Macro AI is mentionable in every channel. It is surfaced through the same
-  // `@`-mention typeahead as participants and re-tagged as a bot at send time.
+  // Macro AI is mentionable in every channel, and any bot added to the
+  // channel is mentionable too. Both are surfaced through the same
+  // `@`-mention typeahead as participants and re-tagged as bot mentions at
+  // send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const base = props.participants?.() ?? [];
-    return base.some((user) => isMacroAiId(user.id))
-      ? base
-      : [macroAiMentionUser(), ...base];
+    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    if (!base.some((user) => isMacroAiId(user.id))) {
+      base.unshift(macroAiMentionUser());
+    }
+    return uniqueByKey(base, (user) => user.id);
   };
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({

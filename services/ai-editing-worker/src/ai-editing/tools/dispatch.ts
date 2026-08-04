@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import type { coder } from '../agents';
@@ -227,6 +228,12 @@ export type DispatchToolOptions = {
   onCoderResult?: (codes: CoderRunCode[]) => void;
   /** Called after each dispatch call with the edit's timing trace. */
   onEditTrace?: (edit: DispatchEditTrace) => void;
+  /** Resolves the parent for each `edit.dispatch` span at launch time — the
+   *  supervisor turn that issued the call. Passed explicitly, and as a
+   *  function, because coders launch from AI SDK stream callbacks: the
+   *  ambient context is not trustworthy there, and the parent changes
+   *  from one turn to the next. */
+  parentSpan?: () => Span | undefined;
 };
 
 export const DispatchEditSchema = z.object({
@@ -271,34 +278,57 @@ export function createDispatchTool(opts: DispatchToolOptions) {
   async function runEdit(
     edit: DispatchEdit,
     trace: DispatchEditTrace,
-    childModel: LanguageModel
+    childModel: LanguageModel,
+    span: Span
   ): Promise<CoderRun> {
-    // Serialized at launch time so an edit launched early sees whatever earlier
-    // coders have already applied.
-    const xml = serializeWithXml(session);
-    const context = xmlWindow(
-      xml,
-      computeContextRange(xml, edit.editing_instruction)
-    );
-    const writer = await makeWriter();
-    const { doc, awarenessSource } = writer;
     try {
-      return await runTask(session, edit.editing_instruction, childModel, {
-        doc,
-        awarenessSource,
-        context,
-        request,
-        params,
-        typingAnimations,
-        sleep,
-        signal,
-        runner,
-        onOps,
-        onRunCode: () => trace.runCodeAt.push(Date.now()),
-      });
+      // Serialized at launch time so an edit launched early sees whatever earlier
+      // coders have already applied.
+      const xml = serializeWithXml(session);
+      const range = computeContextRange(xml, edit.editing_instruction);
+      const context = xmlWindow(xml, range);
+      span.setAttr('context.source', range.source);
+      span.setAttr('context.lines', range.endLine - range.startLine + 1);
+      const borrowStartedAt = Date.now();
+      const writer = await makeWriter();
+      span.setAttr('writer.wait_ms', Date.now() - borrowStartedAt);
+      const { doc, awarenessSource } = writer;
+      try {
+        const result = await runTask(
+          session,
+          edit.editing_instruction,
+          childModel,
+          {
+            doc,
+            awarenessSource,
+            context,
+            request,
+            params,
+            typingAnimations,
+            sleep,
+            signal,
+            runner,
+            onOps,
+            onRunCode: () => trace.runCodeAt.push(Date.now()),
+            span,
+          }
+        );
+        span.setAttr(
+          'gen_ai.request.model',
+          (childModel as { modelId: string }).modelId
+        );
+        span.setAttr('run_code.count', trace.runCodeAt.length);
+        span.setAttr('coder.blocked', findBlocked(result) !== null);
+        return result;
+      } finally {
+        trace.coderFinishedAt = Date.now();
+        writer.release();
+      }
+    } catch (e) {
+      span.error(e);
+      throw e;
     } finally {
-      trace.coderFinishedAt = Date.now();
-      writer.release();
+      span.end();
     }
   }
 
@@ -316,8 +346,21 @@ export function createDispatchTool(opts: DispatchToolOptions) {
       coderFinishedAt: 0,
       runCodeAt: [],
     };
+    // runEdit ends the span in its finally, so streamed runs that reject
+    // before `execute` joins them still close it.
+    const parent = opts.parentSpan?.();
+    const span = parent
+      ? parent.span('edit.dispatch')
+      : Telemetry.span('edit.dispatch');
+    span.setAttr('dispatch.tool_call_id', toolCallId);
+    span.setAttr('dispatch.streamed', streamed);
+    span.setAttr('instruction.chars', edit.editing_instruction.length);
     const model = makeChildModel();
-    const entry: EditRun = { run: runEdit(edit, trace, model), trace, model };
+    const entry: EditRun = {
+      run: runEdit(edit, trace, model, span),
+      trace,
+      model,
+    };
     // A streamed run can reject before `execute` awaits it; keep that rejection
     // for the join instead of letting it escape as an unhandled rejection.
     entry.run.catch(() => {});

@@ -103,7 +103,6 @@ async fn main() -> anyhow::Result<()> {
     let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let ai_projection_queue = macro_queues::AiProjectionQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
@@ -111,7 +110,6 @@ async fn main() -> anyhow::Result<()> {
         .chat_delete_queue(&chat_delete_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .gmail_ops_queue(&gmail_ops_queue)
-        .search_event_queue(&search_event_queue)
         .ai_projection_queue(&ai_projection_queue);
 
     let internal_api_key = config.internal_api_key.to_string();
@@ -586,18 +584,19 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_redirect_uri = format!(
-        "{}/mcp/servers/auth/callback",
-        DocumentCognitionServiceUrl::new()?,
+    let mcp_public_url = DocumentCognitionServiceUrl::new()?;
+    let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
+        format!("{mcp_public_url}/mcp/servers/auth/client-metadata"),
+        format!("{mcp_public_url}/mcp/servers/auth/callback"),
     );
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
     let mcp_pre_registered =
         mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
-    let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+    let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
-        mcp_redirect_uri,
+        mcp_client_metadata.clone(),
         mcp_pre_registered,
     );
     // The moment a connector finishes OAuth, reconcile onboarding for that
@@ -620,6 +619,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
+        mcp_client_metadata,
     )
     .with_auth_completed_hook(mcp_auth_hook);
 

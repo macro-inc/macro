@@ -10,23 +10,27 @@ aws-sdk-sqs = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 aws-smithy-types = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+chat = { path = "../../crates/chat", default-features = false }
 chrono = { workspace = true }
+documents = { path = "../../crates/documents", default-features = false }
 futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_queues = { path = "../../crates/macro_queues" }
+macro_user_id = { path = "../../crates/macro_user_id", default-features = false }
 macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
+projects = { path = "../../crates/projects", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "chat",
   "document",
-  "search",
 ] }
 tokio = { workspace = true }
 tracing = { workspace = true }

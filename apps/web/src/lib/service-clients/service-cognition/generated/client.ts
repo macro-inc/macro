@@ -1718,6 +1718,46 @@ export const mcpAuthCallback = async (
 };
 
 /**
+ * @summary Return Macro's public OAuth Client ID Metadata Document.
+ */
+export type mcpOauthClientMetadataResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type mcpOauthClientMetadataResponseSuccess =
+  mcpOauthClientMetadataResponse200 & {
+    headers: Headers;
+  };
+
+export type mcpOauthClientMetadataResponse =
+  mcpOauthClientMetadataResponseSuccess;
+
+export const getMcpOauthClientMetadataUrl = () => {
+  return `/mcp/servers/auth/client-metadata`;
+};
+
+export const mcpOauthClientMetadata = async (
+  options?: RequestInit
+): Promise<mcpOauthClientMetadataResponse> => {
+  const res = await fetch(getMcpOauthClientMetadataUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mcpOauthClientMetadataResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mcpOauthClientMetadataResponse;
+};
+
+/**
  * @summary Start the OAuth authorization flow for an MCP server.
  */
 export type startMcpAuthResponse200 = {

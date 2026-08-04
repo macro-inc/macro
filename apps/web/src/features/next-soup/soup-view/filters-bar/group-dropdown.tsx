@@ -4,7 +4,7 @@ import type {
 } from '@app/features/next-soup/soup-view/group-options';
 import StackSimpleIcon from '@phosphor/stack-simple.svg';
 import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
-import { type Component, For } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 
 interface GroupDropdownProps {
   value: () => GroupOptionId;
@@ -12,6 +12,7 @@ interface GroupDropdownProps {
   options: GroupOption[];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  hideLabel?: boolean;
 }
 
 export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
@@ -22,9 +23,15 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
       placement="bottom-start"
     >
       <Tooltip label="Group">
-        <Dropdown.Trigger depth={2} class="bg-surface">
+        <Dropdown.Trigger
+          depth={2}
+          class="bg-surface"
+          aria-label={props.hideLabel ? 'Group' : undefined}
+        >
           <StackSimpleIcon />
-          <span>Group</span>
+          <Show when={!props.hideLabel}>
+            <span>Group</span>
+          </Show>
         </Dropdown.Trigger>
       </Tooltip>
       <Dropdown.Content class="shadow-menu">

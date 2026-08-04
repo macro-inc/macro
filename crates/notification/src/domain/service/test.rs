@@ -393,7 +393,11 @@ impl NotificationRepository for MockRepository {
         Ok(())
     }
 
-    async fn get_device_endpoint(&self, _device_token: &str) -> Result<Option<String>, Report> {
+    async fn get_device_endpoint(
+        &self,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
         Ok(None)
     }
 
@@ -407,12 +411,22 @@ impl NotificationRepository for MockRepository {
         Ok(())
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _device_token: &str,
+        _device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         _device_token: &str,
         _device_type: &DeviceType,
-    ) -> Result<String, Report> {
-        Ok(String::new())
+        _active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
     }
 
     async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
@@ -617,8 +631,14 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self).delete_all_user_notifications(user_id).await
     }
 
-    async fn get_device_endpoint(&self, device_token: &str) -> Result<Option<String>, Report> {
-        (**self).get_device_endpoint(device_token).await
+    async fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Option<String>, Report> {
+        (**self)
+            .get_device_endpoint(device_token, device_type)
+            .await
     }
 
     async fn upsert_device(
@@ -633,13 +653,25 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
             .await
     }
 
-    async fn delete_device_by_token(
+    async fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> Result<Vec<String>, Report> {
+        (**self)
+            .delete_user_devices_by_token(user_id, device_token, device_type)
+            .await
+    }
+
+    async fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> Result<String, Report> {
+        active_endpoint: &str,
+    ) -> Result<Vec<String>, Report> {
         (**self)
-            .delete_device_by_token(device_token, device_type)
+            .delete_stale_devices_by_token(device_token, device_type, active_endpoint)
             .await
     }
 
