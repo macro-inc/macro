@@ -245,15 +245,18 @@ dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
  "anyhow",
+ "axum",
  "bots",
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-tungstenite 0.28.0",
  "workspace-hack",
 ]
 
