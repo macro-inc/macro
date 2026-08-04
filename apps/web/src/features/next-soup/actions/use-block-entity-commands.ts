@@ -315,21 +315,20 @@ export const useBlockEntityCommands = () => {
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Copy entity id (command menu only, no keybinding)
+    // Copy entity id (command menu only, no keybinding). Deliberately not
+    // gated on getEntity(): a block is keyed by its entity id, and Quick
+    // Access — a recents cache built from history, channels, contacts,
+    // companies and snippets — has no entry for entity types it never indexes
+    // (emails, calls) or for an item created moments ago. Requiring the entity
+    // hid Copy ID on exactly those blocks, and since it has no keybinding the
+    // command menu is the only way to reach it.
     registerHotkey({
       hotkeyToken: TOKENS.entity.action.copyEntityId,
       scopeId,
       description: 'Copy ID',
       keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!copyEntityIdAction.canExecute(entity)) return false;
-        copyEntityIdAction.execute([entity]);
+        copyEntityIdAction.executeById(blockId);
         return true;
-      },
-      condition: () => {
-        const entity = getEntity();
-        return entity !== undefined && copyEntityIdAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
