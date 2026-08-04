@@ -204,7 +204,7 @@ function CalendarViewContent() {
   return (
     <FullCalendar.Root
       plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
-      initialView="dayGridMonth"
+      initialView="timeGridWeek"
       height="100%"
       expandRows
       fixedWeekCount={false}

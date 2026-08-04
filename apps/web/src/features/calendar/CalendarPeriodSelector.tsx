@@ -33,7 +33,7 @@ export function CalendarPeriodSelector() {
   );
 
   const activeView = createMemo(
-    () => calendar.dateInfo()?.view.type ?? 'dayGridMonth'
+    () => calendar.dateInfo()?.view.type ?? 'timeGridWeek'
   );
 
   const highlightedRange = createMemo(() => {
@@ -83,7 +83,7 @@ export function CalendarPeriodSelector() {
         class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
       >
         {CALENDAR_VIEWS.find((view) => view.value === activeView())?.label ??
-          'Month'}
+          'Week'}
         <CaretDownIcon class="size-3 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
