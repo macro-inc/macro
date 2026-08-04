@@ -261,6 +261,18 @@ describe('Channel input task mode', () => {
     expect(screen.getByTestId('task-composer')).toBeTruthy();
   });
 
+  it('enters task mode from clicks on the switch pill itself, not just the control', async () => {
+    const user = userEvent.setup();
+    render(() => <ChannelInput input={baseInput} onSendTask={() => {}} />);
+
+    // The pill (Kobalte switch root) is the label's parent; clicking its
+    // padding must toggle just like clicking the control or label.
+    const pill = screen.getByText('Task').parentElement as HTMLElement;
+    await user.click(pill);
+
+    expect(screen.getByTestId('task-composer')).toBeTruthy();
+  });
+
   it('restores a persisted task mode on remount', async () => {
     const user = userEvent.setup();
     const taskPersistence = {

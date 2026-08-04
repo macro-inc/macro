@@ -57,6 +57,14 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     local.onChange?.(checked);
   };
 
+  // Kobalte's switch root is an inert div — only the control and the label
+  // toggle. Forward clicks that land on the root itself (its padding/gap) to
+  // the hidden input so the whole component is one hit target.
+  const handleRootClick = (event: MouseEvent) => {
+    if (event.target !== event.currentTarget) return;
+    (event.currentTarget as HTMLElement).querySelector('input')?.click();
+  };
+
   onCleanup(() => {
     if (stretchTimeout) clearTimeout(stretchTimeout);
   });
@@ -68,6 +76,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       onChange={handleChange}
       disabled={local.disabled}
       checked={local.checked}
+      onClick={handleRootClick}
       {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
