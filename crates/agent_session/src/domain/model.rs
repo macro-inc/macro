@@ -106,6 +106,11 @@ pub enum ChannelSession {
     /// The message arrived in the session's dedicated agent channel.
     InSessionChannel(AgentSession),
     /// A bot was addressed from a thread inside a dedicated agent channel.
+    ///
+    /// This means that:
+    /// - You are in a dedicated agent channel
+    /// - The message is in a thread
+    /// - The bot is mentioned in the thread
     ThreadInDedicatedChannel {
         /// Session that owns the dedicated channel.
         dedicated_channel_agent_session: AgentSession,

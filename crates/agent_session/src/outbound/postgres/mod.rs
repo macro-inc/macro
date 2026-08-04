@@ -232,12 +232,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 session.status, session.status_event_name, session.created_at, session.modified_at
             FROM agent_session session
             WHERE
-                session.channel_id = $1 -- short circuit if it is the dedicated agent channel
+                session.channel_id = $1 -- it is the dedicated agent channel
                 OR (
                     -- otherwise, if it's in a thread and literally mentions the bot
                     session.thread_id = $2
                     AND session.bot_id = $3
                 )
+                -- we collect both!
             ORDER BY (session.channel_id = $1) DESC, session.created_at DESC
             LIMIT 2
             "#,
