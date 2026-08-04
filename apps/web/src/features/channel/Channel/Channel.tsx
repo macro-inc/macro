@@ -50,7 +50,6 @@ import {
   isMissingChannelMessageError,
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
-import { ChannelTypeEnum } from '@service-storage/client';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -63,6 +62,7 @@ import {
 import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
+import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {
   type Accessor,
