@@ -1,11 +1,11 @@
-use super::{
+use super::WebhookServiceImpl;
+use crate::domain::{
     models::{
         CreateWebhookOutcome, CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest,
         ValidateWebhookResponse, Webhook, WebhookEndpointSchemePolicy, WebhookFilter,
         WebhookFilters, WebhookScope, WebhookStatus, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
-    service::WebhookServiceImpl,
 };
 use chrono::Utc;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, NoopMacroEventBroker};

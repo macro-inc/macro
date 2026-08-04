@@ -1,5 +1,8 @@
 //! Axum router for webhook APIs.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     models::{
         CreateWebhookRequest, CreateWebhookResponse, ListWebhooksResponse, PatchWebhookRequest,

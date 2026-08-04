@@ -1,4 +1,4 @@
-use super::axum_router::{WebhookRouterState, webhook_router};
+use super::{WebhookRouterState, webhook_router};
 use crate::domain::{
     models::{
         CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,

@@ -1,5 +1,8 @@
 //! Webhook service implementation.
 
+#[cfg(test)]
+mod test;
+
 use super::{
     events::{
         WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata,
