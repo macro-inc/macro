@@ -39,8 +39,8 @@ use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
     EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
-    ViewReceipt,
+    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope,
+    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -320,6 +320,78 @@ where
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(PropertiesErr::NotFound)
+    }
+
+    /// Resolve the personal tag definition that owns `option_id`, rejecting
+    /// options the caller does not own and options that are not labels.
+    async fn owned_personal_tag_option(
+        &self,
+        option_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(PropertyOption, PropertyDefinition), PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let option = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        let definition = self
+            .repository
+            .get_tag_definition(PropertyDefinitionOwner::User(user_id))
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        if option.property_definition_id != definition.id {
+            return Err(PropertiesErr::OptionNotFound);
+        }
+
+        Ok((option, definition))
+    }
+
+    /// Provision the team tag set the caller is sharing a label into.
+    async fn target_team_tag_definition(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<PropertyDefinition, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let team_id = team_id_from_receipt(team).ok_or(PropertiesErr::TeamMembershipRequired)?;
+        let result = self
+            .repository
+            .get_or_create_tag_definition(PropertyDefinitionOwner::Team(team_id))
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if result.created {
+            self.publish_property_event(Self::property_created_event(&result.definition, user_id));
+        }
+
+        Ok(result.definition)
+    }
+
+    /// Publish one entity-property event per entity the remap rewrote, so the
+    /// search index and Soup rebuild those entities from the committed rows.
+    fn publish_tag_remap_events(&self, remap: &TagRemapOutcome, actor: &MacroUserIdStr<'_>) {
+        for mutation in &remap.mutations {
+            self.publish_property_event(PropertyMacroEvent::entity_property_updated(
+                EntityPropertyUpdatedMetadata {
+                    entity_property_id: mutation.property.id,
+                    entity_id: mutation.property.entity_id.clone(),
+                    entity_type: mutation.property.entity_type,
+                    property_definition_id: mutation.property.property_definition_id,
+                    actor_user_id: Some(actor.clone().into_owned()),
+                    value: mutation.value.clone(),
+                    updated_at: mutation.property.updated_at,
+                },
+            ));
+        }
     }
 
     /// Resolve a tag set's options. A missing definition yields an empty set.
@@ -1319,6 +1391,87 @@ where
         }
 
         self.build_tag_set(scope, Some(result.definition)).await
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn promote_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let (_, source_definition) = self.owned_personal_tag_option(option_id, user_id).await?;
+        let target_definition = self.target_team_tag_definition(user_id, team).await?;
+
+        let outcome = self
+            .repository
+            .promote_tag_option(option_id, source_definition.id, target_definition.id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let remap = match outcome {
+            TagPromotionOutcome::Promoted(remap) => remap,
+            TagPromotionOutcome::Conflict(conflict) => {
+                tracing::info!(
+                    conflicting_option_id = %conflict.id,
+                    "team already has a label with that name"
+                );
+                return Err(PropertiesErr::ConflictingTeamLabel(Box::new(conflict)));
+            }
+        };
+
+        tracing::info!(
+            entities_retagged = remap.mutations.len(),
+            "promoted personal label to the team tag set"
+        );
+
+        // The option keeps its id, so this reports the same label now hanging
+        // off the team definition rather than a newly created one.
+        self.publish_property_event(Self::property_option_updated_event(&remap.option, user_id));
+        self.publish_tag_remap_events(&remap, user_id);
+
+        Ok(remap.option)
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn merge_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+        target_option_id: Uuid,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        if option_id == target_option_id {
+            return Err(PropertiesErr::Validation(
+                "cannot merge a label into itself".to_string(),
+            ));
+        }
+
+        let (source_option, source_definition) =
+            self.owned_personal_tag_option(option_id, user_id).await?;
+        let target_definition = self.target_team_tag_definition(user_id, team).await?;
+
+        let remap = self
+            .repository
+            .merge_tag_option(
+                option_id,
+                source_definition.id,
+                target_option_id,
+                target_definition.id,
+            )
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        tracing::info!(
+            entities_retagged = remap.mutations.len(),
+            "merged personal label into an existing team label"
+        );
+
+        self.publish_property_event(Self::property_option_deleted_event(&source_option, user_id));
+        self.publish_tag_remap_events(&remap, user_id);
+
+        Ok(remap.option)
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]

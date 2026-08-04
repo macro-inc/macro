@@ -13,7 +13,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { PropertiedEntity, PropertyOptionDelta } from '../entity';
 import { PropertyDefinition } from './property-definition';
-import { PropertyOption } from './property-option';
+import { PropertyOption, TagNameConflictError } from './property-option';
 
 export type {
   BulkEntityPropertiesRequest,
@@ -26,7 +26,7 @@ export type {
   TagSetResponse,
 };
 
-export { PropertyDefinition, PropertyOption };
+export { PropertyDefinition, PropertyOption, TagNameConflictError };
 
 /**
  * Property definitions and tag sets. Entity-level reads and writes live on

@@ -67,9 +67,22 @@ enum AccessCall {
 #[derive(Clone, Debug, Default)]
 struct FakeEntityAccessService {
     calls: Arc<Mutex<Vec<AccessCall>>>,
+    team: Option<UserTeamInfo>,
 }
 
 impl FakeEntityAccessService {
+    /// A service whose caller belongs to `team_id`, for the endpoints that
+    /// require team membership.
+    fn on_team(team_id: Uuid) -> Self {
+        Self {
+            calls: Arc::default(),
+            team: Some(UserTeamInfo {
+                team_id,
+                role: TeamRole::Member,
+            }),
+        }
+    }
+
     fn calls(&self) -> Vec<AccessCall> {
         self.calls.lock().expect("calls lock poisoned").clone()
     }
@@ -200,7 +213,7 @@ impl EntityAccessService for FakeEntityAccessService {
         self.record(AccessCall::UserTeam {
             user_id: user_id.as_ref().to_string(),
         });
-        Ok(None)
+        Ok(self.team)
     }
 }
 
@@ -568,4 +581,235 @@ async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
     assert_eq!(results[1]["entity_id"], "doc-granted");
     assert_eq!(results[1]["status"], "applied");
     assert_eq!(results[1]["option_ids"], serde_json::json!([option_id]));
+}
+
+/// A tag definition owned by `owner`, for the promote/merge endpoint tests.
+fn tag_def(
+    id: Uuid,
+    owner: models_properties::PropertyOwner,
+) -> models_properties::service::property_definition::PropertyDefinition {
+    models_properties::service::property_definition::PropertyDefinition {
+        id,
+        owner,
+        display_name: "Tags".to_string(),
+        data_type: models_properties::DataType::Tag,
+        is_multi_select: true,
+        specific_entity_type: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        is_system: false,
+        is_metadata: false,
+    }
+}
+
+fn tag_option(
+    id: Uuid,
+    property_definition_id: Uuid,
+    value: &str,
+    color: &str,
+) -> models_properties::service::property_option::PropertyOption {
+    models_properties::service::property_option::PropertyOption {
+        id,
+        property_definition_id,
+        display_order: 0,
+        value: models_properties::service::property_option::PropertyOptionValue::String(
+            value.to_string(),
+        ),
+        color: Some(color.to_string()),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+/// Wire a mock repo up to the reads promote makes before it writes.
+fn tag_promotion_repo(
+    personal_definition_id: Uuid,
+    team_definition_id: Uuid,
+    option_id: Uuid,
+) -> MockPropertiesRepo {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_option().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(tag_option(
+                option_id,
+                personal_definition_id,
+                "Urgent",
+                "#ff0000",
+            )))
+        })
+    });
+    repo.expect_get_tag_definition().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(tag_def(
+                personal_definition_id,
+                models_properties::PropertyOwner::User {
+                    user_id: VALID_USER_ID.to_string(),
+                },
+            )))
+        })
+    });
+    repo.expect_get_or_create_tag_definition()
+        .returning(move |_| {
+            Box::pin(async move {
+                Ok(crate::domain::model::GetOrCreateTagDefinitionResult {
+                    definition: tag_def(
+                        team_definition_id,
+                        models_properties::PropertyOwner::Team {
+                            team_id: Uuid::from_u128(0x7EA3),
+                        },
+                    ),
+                    created: false,
+                })
+            })
+        });
+    repo
+}
+
+fn json_post(uri: &str, body: serde_json::Value) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+#[tokio::test]
+async fn promote_tag_conflict_returns_the_team_label_the_caller_can_merge_into() {
+    let personal_definition_id = Uuid::from_u128(0x9001);
+    let team_definition_id = Uuid::from_u128(0x9002);
+    let option_id = Uuid::from_u128(0x9003);
+    let conflict_id = Uuid::from_u128(0x9004);
+
+    let mut repo = tag_promotion_repo(personal_definition_id, team_definition_id, option_id);
+    repo.expect_promote_tag_option().returning(move |_, _, _| {
+        Box::pin(async move {
+            Ok(crate::domain::model::TagPromotionOutcome::Conflict(
+                tag_option(conflict_id, team_definition_id, "urgent", "#00ff00"),
+            ))
+        })
+    });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    let router = properties_router(
+        service,
+        FakeEntityAccessService::on_team(Uuid::from_u128(0x7EA3)),
+    );
+
+    let response = router
+        .oneshot(json_post(
+            "/tags/promote",
+            serde_json::json!({ "option_id": option_id }),
+        ))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    // The front end prompts with this label, then confirms via /tags/merge.
+    let json: serde_json::Value =
+        serde_json::from_str(&response_body(response).await).expect("json body");
+    assert_eq!(json["conflicting_option"]["id"], conflict_id.to_string());
+    assert_eq!(
+        json["conflicting_option"]["value"],
+        serde_json::json!({"type": "string", "value": "urgent"})
+    );
+    assert_eq!(json["conflicting_option"]["color"], "#00ff00");
+    assert!(json["message"].is_string());
+}
+
+#[tokio::test]
+async fn promote_tag_returns_the_label_hanging_off_the_team_definition() {
+    let personal_definition_id = Uuid::from_u128(0x9101);
+    let team_definition_id = Uuid::from_u128(0x9102);
+    let option_id = Uuid::from_u128(0x9103);
+
+    let mut repo = tag_promotion_repo(personal_definition_id, team_definition_id, option_id);
+    repo.expect_promote_tag_option().returning(move |_, _, _| {
+        Box::pin(async move {
+            Ok(crate::domain::model::TagPromotionOutcome::Promoted(
+                crate::domain::model::TagRemapOutcome {
+                    option: tag_option(option_id, team_definition_id, "Urgent", "#ff0000"),
+                    mutations: Vec::new(),
+                },
+            ))
+        })
+    });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    let router = properties_router(
+        service,
+        FakeEntityAccessService::on_team(Uuid::from_u128(0x7EA3)),
+    );
+
+    let response = router
+        .oneshot(json_post(
+            "/tags/promote",
+            serde_json::json!({ "option_id": option_id }),
+        ))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&response_body(response).await).expect("json body");
+    assert_eq!(json["id"], option_id.to_string());
+    assert_eq!(
+        json["propertyDefinitionId"],
+        team_definition_id.to_string(),
+        "the option id survives, the owning definition is the team's"
+    );
+}
+
+#[tokio::test]
+async fn promote_tag_without_a_team_is_forbidden() {
+    let personal_definition_id = Uuid::from_u128(0x9201);
+    let option_id = Uuid::from_u128(0x9202);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_option().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(tag_option(
+                option_id,
+                personal_definition_id,
+                "Urgent",
+                "#ff0000",
+            )))
+        })
+    });
+    repo.expect_get_tag_definition().returning(move |_| {
+        Box::pin(async move {
+            Ok(Some(tag_def(
+                personal_definition_id,
+                models_properties::PropertyOwner::User {
+                    user_id: VALID_USER_ID.to_string(),
+                },
+            )))
+        })
+    });
+    repo.expect_promote_tag_option().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+    let router = properties_router(service, FakeEntityAccessService::default());
+
+    let response = router
+        .oneshot(json_post(
+            "/tags/promote",
+            serde_json::json!({ "option_id": option_id }),
+        ))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }

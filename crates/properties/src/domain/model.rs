@@ -186,6 +186,28 @@ pub struct TagSet {
     pub options: Vec<PropertyOption>,
 }
 
+/// The persisted result of moving a personal label into a team tag set.
+#[derive(Debug, Clone)]
+pub struct TagRemapOutcome {
+    /// The team-owned option the label resolves to after the remap.
+    pub option: PropertyOption,
+    /// One post-commit snapshot per entity whose team tag value was rewritten,
+    /// used to publish the entity-property events that drive search and Soup.
+    pub mutations: Vec<EntityPropertyMutationSnapshot>,
+}
+
+/// Result of promoting a personal label into the caller's team tag set.
+#[derive(Debug, Clone)]
+pub enum TagPromotionOutcome {
+    /// The label moved to the team tag set, keeping its option id so every
+    /// entity already carrying it keeps resolving to the same label.
+    Promoted(TagRemapOutcome),
+    /// The team already has a label with that name (compared case-insensitively
+    /// on the trimmed value). Carries that team label so the caller can offer to
+    /// merge into it instead.
+    Conflict(PropertyOption),
+}
+
 /// One property's requested option changes in a bulk selection update.
 ///
 /// The change is expressed as a delta (options to add, options to remove) rather
