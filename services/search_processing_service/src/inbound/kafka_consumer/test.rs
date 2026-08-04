@@ -1956,12 +1956,7 @@ fn production_channel_and_retry_bounds_match_the_delivery_contract() {
     assert_eq!(sender.max_capacity(), 128);
     assert_eq!(
         processing_retry_strategy().collect::<Vec<_>>(),
-        [
-            Duration::from_secs(1),
-            Duration::from_secs(2),
-            Duration::from_secs(4),
-            Duration::from_secs(8),
-        ]
+        [Duration::from_secs(1), Duration::from_secs(2)]
     );
 }
 
@@ -1988,11 +1983,11 @@ async fn processing_retries_until_success() {
 }
 
 #[tokio::test]
-async fn processing_is_dropped_after_exactly_five_failed_attempts() {
+async fn processing_is_dropped_after_exactly_three_failed_attempts() {
     let attempts = Arc::new(AtomicU32::new(0));
     let operation_attempts = Arc::clone(&attempts);
 
-    retry_processing_with_strategy(std::iter::repeat_n(Duration::ZERO, 4), move |_| {
+    retry_processing_with_strategy(std::iter::repeat_n(Duration::ZERO, 2), move |_| {
         let operation_attempts = Arc::clone(&operation_attempts);
         async move {
             operation_attempts.fetch_add(1, Ordering::SeqCst);

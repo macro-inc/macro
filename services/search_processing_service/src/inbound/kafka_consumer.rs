@@ -78,7 +78,7 @@ const CHANNEL_CAPACITY: usize = 128;
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// Total processing attempts before an event is dropped.
-const MAX_PROCESSING_ATTEMPTS: u32 = 5;
+const MAX_PROCESSING_ATTEMPTS: u32 = 3;
 /// Delay before the first retry; each later delay doubles.
 const PROCESSING_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 

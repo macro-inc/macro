@@ -22,6 +22,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
+import { useGithubLinkStatusQuery } from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -811,6 +812,7 @@ function TeamManagement(props: {
 
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
+  const githubLink = useGithubLinkStatusQuery();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -1307,15 +1309,29 @@ function TeamManagement(props: {
               title="GitHub App"
               description="Connect your team's repositories for pull request sync."
             >
-              <a
-                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              {/* The install callback rejects users without a linked GitHub
+                  account, so don't offer the flow until they've connected one
+                  in their personal settings. */}
+              <Show
+                when={githubLink.data?.status === 'linked'}
+                fallback={
+                  <span class="text-xs text-ink-muted">
+                    {githubLink.isLoading
+                      ? 'Loading…'
+                      : 'Connect your GitHub account first'}
+                  </span>
+                }
               >
-                Configure app
-                <ArrowUpRightIcon class="size-3.5 opacity-70" />
-              </a>
+                <a
+                  href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+                >
+                  Configure app
+                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
+                </a>
+              </Show>
             </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
