@@ -8,12 +8,8 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
+import { openPropertyEditor } from '../editor/state/propertyEditor';
 import type { Property, PropertyApiValues } from '../types';
-
-// Specific modal state types with proper typing
-interface PropertySelectorModalState {
-  isOpen: boolean;
-}
 
 interface DatePickerModalState {
   property: Property & { valueType: 'DATE' };
@@ -23,6 +19,7 @@ interface DatePickerModalState {
 interface CreatePropertyModalState {
   isOpen: boolean;
   autoPinOnCreate?: boolean;
+  initialName?: string;
 }
 
 export interface PropertySaveHandler {
@@ -44,13 +41,11 @@ interface PropertiesContextValue {
   saveHandler: PropertySaveHandler;
 
   // Specific modal state accessors
-  propertySelectorModal: Accessor<PropertySelectorModalState | null>;
   datePickerModal: Accessor<DatePickerModalState | null>;
   createPropertyModal: Accessor<CreatePropertyModalState | null>;
 
   // Specific modal actions
   openPropertySelector: () => void;
-  closePropertySelector: () => void;
 
   openDatePicker: (
     property: Property & { valueType: 'DATE' },
@@ -58,7 +53,7 @@ interface PropertiesContextValue {
   ) => void;
   closeDatePicker: () => void;
 
-  openCreateProperty: (autoPinOnCreate?: boolean) => void;
+  openCreateProperty: (autoPinOnCreate?: boolean, initialName?: string) => void;
   closeCreateProperty: () => void;
 
   // Convenience function to close all modals
@@ -66,6 +61,7 @@ interface PropertiesContextValue {
 }
 
 interface PropertiesProviderProps extends ParentProps {
+  entityId?: string;
   entityType: EntityType;
   canEdit: boolean;
   documentName?: string;
@@ -83,8 +79,6 @@ const PropertiesContext = createContext<PropertiesContextValue>();
 
 export function PropertiesProvider(props: PropertiesProviderProps) {
   // Modal state signals
-  const [propertySelectorModal, setPropertySelectorModal] =
-    createSignal<PropertySelectorModalState | null>(null);
   const [datePickerModal, setDatePickerModal] =
     createSignal<DatePickerModalState | null>(null);
   const [createPropertyModal, setCreatePropertyModal] =
@@ -92,11 +86,18 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
 
   // Property Selector actions
   const openPropertySelector = () => {
-    setPropertySelectorModal({ isOpen: true });
-  };
-
-  const closePropertySelector = () => {
-    setPropertySelectorModal(null);
+    if (!props.canEdit) return;
+    if (!props.entityId) return;
+    openPropertyEditor(
+      [
+        {
+          id: props.entityId,
+          name: props.documentName ?? 'Entity',
+          entityType: props.entityType,
+        },
+      ],
+      'selector'
+    );
   };
 
   // Date Picker actions
@@ -112,8 +113,11 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   };
 
   // Create Property actions
-  const openCreateProperty = (autoPinOnCreate?: boolean) => {
-    setCreatePropertyModal({ isOpen: true, autoPinOnCreate });
+  const openCreateProperty = (
+    autoPinOnCreate?: boolean,
+    initialName?: string
+  ) => {
+    setCreatePropertyModal({ isOpen: true, autoPinOnCreate, initialName });
   };
 
   const closeCreateProperty = () => {
@@ -122,7 +126,6 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
 
   // Convenience function to close all modals
   const closeAllModals = () => {
-    setPropertySelectorModal(null);
     setDatePickerModal(null);
     setCreatePropertyModal(null);
   };
@@ -131,9 +134,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   // Use capture phase listener to intercept before hotkey system's capture phase handlers
   createEffect(() => {
     const isAnyModalOpen =
-      propertySelectorModal() !== null ||
-      datePickerModal() !== null ||
-      createPropertyModal() !== null;
+      datePickerModal() !== null || createPropertyModal() !== null;
 
     let handleKeyDown: (e: KeyboardEvent) => void;
 
@@ -174,12 +175,10 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     pinnedPropertyIds: props.pinnedPropertyIds,
     saveHandler: props.saveHandler,
     // Specific modal state
-    propertySelectorModal,
     datePickerModal,
     createPropertyModal,
     // Specific modal actions
     openPropertySelector,
-    closePropertySelector,
     openDatePicker,
     closeDatePicker,
     openCreateProperty,
@@ -202,4 +201,8 @@ export function usePropertiesContext() {
     );
   }
   return context;
+}
+
+export function useMaybePropertiesContext() {
+  return useContext(PropertiesContext);
 }

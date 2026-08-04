@@ -1,16 +1,25 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createStore, reconcile } from 'solid-js/store';
 
 type PropertyEditorMode = 'selector' | 'direct' | 'tag';
+
+export type PropertyEditorEntity =
+  | EntityData
+  | {
+      id: string;
+      name: string;
+      entityType: EntityType;
+    };
 
 export const [propertyEditorOpen, setPropertyEditorOpen] =
   createControlledOpenSignal(false, { id: 'property-edit' });
 
 interface PropertyEditorState {
   mode: PropertyEditorMode;
-  selectedEntities: EntityData[];
+  selectedEntities: PropertyEditorEntity[];
   targetProperty?: Property | PropertyDefinitionDomain;
 }
 
@@ -27,7 +36,7 @@ const [state, setState] = createStore<PropertyEditorState>({
 let restoreFocusAfterClose: PropertyEditorOpenOptions['restoreFocus'];
 
 export function openPropertyEditor(
-  entities: EntityData[],
+  entities: PropertyEditorEntity[],
   mode: PropertyEditorMode = 'selector',
   targetProperty?: Property | PropertyDefinitionDomain,
   options?: PropertyEditorOpenOptions

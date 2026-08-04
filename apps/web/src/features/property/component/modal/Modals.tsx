@@ -1,21 +1,13 @@
-import {
-  type Component,
-  createEffect,
-  createMemo,
-  createSignal,
-} from 'solid-js';
+import { type Component, createEffect, createSignal } from 'solid-js';
 import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { CreatePropertyModal } from './CreatePropertyModal';
-import { SelectPropertyModal } from './SelectPropertyModal';
 
 export const Modals: Component = () => {
   const {
     onPropertyAdded,
     properties,
-    propertySelectorModal,
     createPropertyModal,
-    closePropertySelector,
     closeCreateProperty,
     onPropertyPinned,
   } = usePropertiesContext();
@@ -39,10 +31,6 @@ export const Modals: Component = () => {
     }
   });
 
-  const existingPropertyIds = createMemo(() => {
-    return properties().map((prop) => prop.propertyDefinitionId);
-  });
-
   const handlePropertyCreated = (propertyDefinitionId?: string) => {
     if (propertyDefinitionId) {
       onPropertyAdded([propertyDefinitionId]);
@@ -54,25 +42,16 @@ export const Modals: Component = () => {
   };
 
   return (
-    <>
-      <Show when={propertySelectorModal()}>
-        <SelectPropertyModal
+    <Show when={createPropertyModal()}>
+      {(state) => (
+        <CreatePropertyModal
           isOpen={true}
-          onClose={closePropertySelector}
-          existingPropertyIds={existingPropertyIds}
+          onClose={closeCreateProperty}
+          onPropertyCreated={handlePropertyCreated}
+          autoPinOnCreate={state().autoPinOnCreate}
+          initialName={state().initialName}
         />
-      </Show>
-
-      <Show when={createPropertyModal()}>
-        {(state) => (
-          <CreatePropertyModal
-            isOpen={true}
-            onClose={closeCreateProperty}
-            onPropertyCreated={handlePropertyCreated}
-            autoPinOnCreate={state().autoPinOnCreate}
-          />
-        )}
-      </Show>
-    </>
+      )}
+    </Show>
   );
 };

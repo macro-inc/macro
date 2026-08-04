@@ -15,6 +15,7 @@ import PencilIcon from '@phosphor/pencil-simple.svg';
 import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
+import { CreatePropertyModal } from '@property/component/modal/CreatePropertyModal';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
@@ -35,7 +36,9 @@ import {
   macroEntityToPropertyEntityType,
   PropertyDataTypeIcon,
   toPropertyApiValue,
+  toPropertyDefinitionDomain,
 } from '@property/utils';
+import { fetchPropertyDefinitionWithOptions } from '@queries/properties/definitions';
 import {
   useBulkUpdateEntityPropertyOptionsMutation,
   useEntityPropertiesQuery,
@@ -44,6 +47,7 @@ import { useTagsQuery } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
@@ -54,6 +58,7 @@ import {
   CommandMenuSearchInput,
   CommandMenuShell,
   cn,
+  createCommandListController,
   Dialog,
   Hotkey,
 } from '@ui';
@@ -78,6 +83,7 @@ import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import {
   closePropertyEditor,
+  type PropertyEditorEntity,
   propertyEditorOpen,
   propertyEditorState,
   setPropertyEditorMode,
@@ -141,7 +147,7 @@ function tagDefinitionDomain(
 }
 
 function entityTagIdsByDefinition(
-  entities: EntityData[],
+  entities: PropertyEditorEntity[],
   fetchedProperties?: { entityId: string; properties: Property[] }
 ): EntityTagIdsByDefinition {
   const byEntity = new Map<string, Map<string, string[]>>();
@@ -190,17 +196,22 @@ function docTagIdsByDefinition(
   return new Map([[entityId, byDefinition]]);
 }
 
-function tagAssignmentEntityType(entity: EntityData): EntityType {
-  return getEntityType({ kind: 'entity', id: entity.id, data: entity });
+function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
+  if ('entityType' in entity) return entity.entityType;
+  return macroEntityToPropertyEntityType(entity);
 }
 
-function canAssignTags(entity: EntityData): boolean {
+function canAssignTags(entity: PropertyEditorEntity): boolean {
   try {
-    macroEntityToPropertyEntityType(entity);
+    propertyEditorEntityType(entity);
     return true;
   } catch {
     return false;
   }
+}
+
+function propertyEditorEntityName(entity: PropertyEditorEntity): string {
+  return entity.name || 'Entity';
 }
 
 export function PropertyEditorModal() {
@@ -209,6 +220,8 @@ export function PropertyEditorModal() {
   const [searchValue, setSearchValue] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [inputType, setInputType] = createSignal<'text' | 'number'>('text');
+  const [createPropertyInitialName, setCreatePropertyInitialName] =
+    createSignal<string | null>(null);
 
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
@@ -222,13 +235,49 @@ export function PropertyEditorModal() {
     // Snapshot before closing — closing resets selectedEntities.
     const count = selectedEntities.length;
     const message = `Set ${targetProperty.displayName} for ${
-      count === 1 ? selectedEntities[0].name : count + ' entities'
+      count === 1
+        ? propertyEditorEntityName(selectedEntities[0])
+        : count + ' entities'
     }`;
 
     saveProperties(selectedEntities, targetProperty, value).then((success) => {
       if (success) toast.success(message);
     });
     closePropertyEditor();
+  };
+
+  const openCreateProperty = (initialName: string) => {
+    setCreatePropertyInitialName(initialName);
+  };
+
+  const handlePropertyCreated = async (
+    _propertyDefinitionId?: string,
+    propertyDefinition?: PropertyDefinition
+  ) => {
+    setCreatePropertyInitialName(null);
+    if (!propertyDefinition) return;
+
+    try {
+      const propertyWithOptions = await fetchPropertyDefinitionWithOptions(
+        propertyDefinition.id
+      );
+
+      if (propertyWithOptions && 'definition' in propertyWithOptions) {
+        setPropertyEditorMode('direct');
+        setPropertyEditorTarget(
+          toPropertyDefinitionDomain(
+            propertyWithOptions.definition,
+            propertyWithOptions.property_options
+          )
+        );
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to fetch created property options', error);
+    }
+
+    setPropertyEditorMode('direct');
+    setPropertyEditorTarget(toPropertyDefinitionDomain(propertyDefinition));
   };
 
   const { dispose: disposeHotkey } = registerHotkey({
@@ -292,6 +341,7 @@ export function PropertyEditorModal() {
                   setFocusedIndex={setSelectedIndex}
                   setFocusedIndexFromMouse={setSelectedIndexFromMouse}
                   setKeybindings={keybindings}
+                  onCreateProperty={openCreateProperty}
                 />
               </div>
             </Match>
@@ -323,6 +373,17 @@ export function PropertyEditorModal() {
           </Switch>
         </CommandMenuShell.Body>
       </CommandMenuShell>
+      <Show when={createPropertyInitialName()}>
+        {(initialName) => (
+          <CreatePropertyModal
+            isOpen
+            initialName={initialName()}
+            autoPinOnCreate={false}
+            onClose={() => setCreatePropertyInitialName(null)}
+            onPropertyCreated={handlePropertyCreated}
+          />
+        )}
+      </Show>
     </Dialog>
   );
 }
@@ -366,6 +427,7 @@ function PropertyList(props: {
   setFocusedIndex: Setter<number>;
   setFocusedIndexFromMouse: (index: number) => void;
   setKeybindings: (navAction: ListNavActions) => void;
+  onCreateProperty: (initialName: string) => void;
 }) {
   const properties = useAllProperties();
   let containerRef: HTMLDivElement | undefined;
@@ -383,9 +445,16 @@ function PropertyList(props: {
       (!query || 'tags'.includes(query) || 'label'.includes(query))
     );
   });
+  const createPropertyName = () => props.searchTerm.trim();
+  const showCreatePropertyOption = () => createPropertyName().length > 0;
+  const tagsRowOffset = () => (showCreatePropertyOption() ? 1 : 0);
+  const propertyRowOffset = () =>
+    tagsRowOffset() + (showTagAssignmentOption() ? 1 : 0);
 
   const rowCount = () =>
-    filteredProperties().length + (showTagAssignmentOption() ? 1 : 0);
+    filteredProperties().length +
+    (showTagAssignmentOption() ? 1 : 0) +
+    (showCreatePropertyOption() ? 1 : 0);
 
   createEffect(() => {
     props.searchTerm;
@@ -404,15 +473,21 @@ function PropertyList(props: {
       props.setFocusedIndex((prev) => (prev - 1 + len) % len);
     },
     select: () => {
-      if (showTagAssignmentOption() && props.focusedIndex() === 0) {
+      if (showCreatePropertyOption() && props.focusedIndex() === 0) {
+        props.onCreateProperty(createPropertyName());
+        return;
+      }
+
+      if (
+        showTagAssignmentOption() &&
+        props.focusedIndex() === tagsRowOffset()
+      ) {
         setPropertyEditorMode('tag');
         return;
       }
 
       const focusedProperty =
-        filteredProperties()[
-          props.focusedIndex() - (showTagAssignmentOption() ? 1 : 0)
-        ];
+        filteredProperties()[props.focusedIndex() - propertyRowOffset()];
       if (focusedProperty) {
         setProperty(focusedProperty);
       }
@@ -422,9 +497,11 @@ function PropertyList(props: {
   createEffect(() => {
     const index = props.focusedIndex();
     const elem = document.getElementById(
-      showTagAssignmentOption() && index === 0
-        ? 'property-editor-option-tags'
-        : `property-editor-option-${index}`
+      showCreatePropertyOption() && index === 0
+        ? 'property-editor-option-create'
+        : showTagAssignmentOption() && index === tagsRowOffset()
+          ? 'property-editor-option-tags'
+          : `property-editor-option-${index}`
     );
     if (elem) {
       elem.scrollIntoView({ block: 'nearest' });
@@ -451,12 +528,28 @@ function PropertyList(props: {
         ref={containerRef}
         class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2"
       >
+        <Show when={showCreatePropertyOption()}>
+          <ListItem
+            id="property-editor-option-create"
+            isSelected={selector(0)}
+            onClick={() => props.onCreateProperty(createPropertyName())}
+            onMouseEnter={() => props.setFocusedIndexFromMouse(0)}
+            class="scroll-m-2"
+          >
+            <PencilIcon class="size-4 text-ink-muted opacity-50" />
+            <div class="flex-1 text-left flex">
+              <p class="text-sm font-medium">
+                Create property "{createPropertyName()}"
+              </p>
+            </div>
+          </ListItem>
+        </Show>
         <Show when={showTagAssignmentOption()}>
           <ListItem
             id="property-editor-option-tags"
-            isSelected={selector(0)}
+            isSelected={selector(tagsRowOffset())}
             onClick={() => setPropertyEditorMode('tag')}
-            onMouseEnter={() => props.setFocusedIndexFromMouse(0)}
+            onMouseEnter={() => props.setFocusedIndexFromMouse(tagsRowOffset())}
             class="scroll-m-2"
           >
             <TagIcon class="size-4 text-ink-muted opacity-50" />
@@ -468,15 +561,11 @@ function PropertyList(props: {
         <For each={filteredProperties()}>
           {(property, index) => (
             <ListItem
-              id={`property-editor-option-${index() + (showTagAssignmentOption() ? 1 : 0)}`}
-              isSelected={selector(
-                index() + (showTagAssignmentOption() ? 1 : 0)
-              )}
+              id={`property-editor-option-${index() + propertyRowOffset()}`}
+              isSelected={selector(index() + propertyRowOffset())}
               onClick={() => setProperty(property)}
               onMouseEnter={() =>
-                props.setFocusedIndexFromMouse(
-                  index() + (showTagAssignmentOption() ? 1 : 0)
-                )
+                props.setFocusedIndexFromMouse(index() + propertyRowOffset())
               }
               class="scroll-m-2"
             >
@@ -492,7 +581,7 @@ function PropertyList(props: {
   );
 }
 
-function EditingEntityPreview(props: { entities: EntityData[] }) {
+function EditingEntityPreview(props: { entities: PropertyEditorEntity[] }) {
   const displayEntities = () => props.entities.slice(0, 2);
   const remainingCount = () => Math.max(0, props.entities.length - 2);
   return (
@@ -508,7 +597,12 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
                 }
               )}
             >
-              <InlineEntity entity={entity} />
+              <Show
+                when={!('entityType' in entity)}
+                fallback={propertyEditorEntityName(entity)}
+              >
+                <InlineEntity entity={entity as EntityData} />
+              </Show>
             </div>
           );
         }}
@@ -523,7 +617,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
 }
 
 function TagAssignmentEditor(props: {
-  entities: EntityData[];
+  entities: PropertyEditorEntity[];
   searchValue: Accessor<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
@@ -552,7 +646,7 @@ function TagAssignmentEditor(props: {
   const singleDocTags = singleEntityForDocTags
     ? useDocTags(
         singleEntityForDocTags.id,
-        tagAssignmentEntityType(singleEntityForDocTags)
+        propertyEditorEntityType(singleEntityForDocTags)
       )
     : undefined;
   const singleDocTagsSource = () =>
@@ -763,7 +857,7 @@ function TagAssignmentEditor(props: {
     try {
       const update = Promise.all(
         props.entities.map(async (entity) => {
-          const entityType = tagAssignmentEntityType(entity);
+          const entityType = propertyEditorEntityType(entity);
           const current = getTagIds(
             previousTagIds,
             entity.id,
@@ -855,7 +949,7 @@ function TagAssignmentEditor(props: {
     try {
       const updates: Promise<unknown>[] = [];
       for (const entity of props.entities) {
-        const entityType = tagAssignmentEntityType(entity);
+        const entityType = propertyEditorEntityType(entity);
         const byDefinition = previousTagIds.get(entity.id) ?? new Map();
         const properties = [...byDefinition].flatMap(
           ([definitionId, optionIds]) => {
@@ -930,7 +1024,7 @@ function TagAssignmentEditor(props: {
     try {
       await Promise.all(
         props.entities.map(async (entity) => {
-          const entityType = tagAssignmentEntityType(entity);
+          const entityType = propertyEditorEntityType(entity);
           const current = getTagIds(previousTagIds, entity.id, definition.id);
           if (current.includes(optionId)) return;
 
@@ -1240,19 +1334,31 @@ function SelectPropertyEditor(props: {
     return !props.searchValue().trim() && filteredOptions().length <= 9;
   });
 
+  const listController = createCommandListController({
+    items: filteredOptions,
+    selectedIndex: props.selectedIndex,
+    setSelectedIndex: props.setSelectedIndex,
+    onSelect: (option) => props.onSubmit(option.id),
+  });
+
   props.setKeybindings({
     select: () => {
-      const selected = filteredOptions()[props.selectedIndex()];
-      props.onSubmit(selected.id);
+      listController.selectSelected();
     },
     next: () => {
-      const len = filteredOptions().length;
-      props.setSelectedIndex((prev) => (prev + 1) % len);
+      listController.selectNext();
     },
     previous: () => {
-      const len = filteredOptions().length;
-      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+      listController.selectPrevious();
     },
+  });
+
+  createEffect(() => {
+    const index = listController.selectedIndex();
+    if (!listController.shouldScrollSelectedIntoView()) return;
+
+    const elem = document.getElementById(`property-value-option-${index}`);
+    elem?.scrollIntoView({ block: 'nearest' });
   });
 
   const selector = createSelector(props.selectedIndex);
@@ -1273,7 +1379,9 @@ function SelectPropertyEditor(props: {
               id={`property-value-option-${index()}`}
               isSelected={selector(index())}
               onClick={() => props.onSubmit(option.id)}
-              onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+              onMouseEnter={() =>
+                listController.setSelectedIndexFromPointer(index())
+              }
               class="scroll-m-2"
             >
               <PropertyValueIcon optionId={option.id} />
@@ -1463,7 +1571,7 @@ function DirectEditPropertyEditor(props: {
   const entityPropertiesQuery = useEntityPropertiesQuery(
     () => {
       const entity = singleEntity();
-      return entity ? macroEntityToPropertyEntityType(entity) : 'DOCUMENT';
+      return entity ? propertyEditorEntityType(entity) : 'DOCUMENT';
     },
     () => singleEntity()?.id ?? '',
     false

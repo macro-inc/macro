@@ -1,9 +1,8 @@
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import SlidersIcon from '@phosphor/sliders-horizontal.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
@@ -13,9 +12,11 @@ import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { CreatePropertyScope } from '@service-properties/generated/schemas/createPropertyScope';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { Button, CommandMenuShell, cn, Dialog, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -23,7 +24,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { usePropertiesContext } from '../../context/PropertiesContext';
+import { useMaybePropertiesContext } from '../../context/PropertiesContext';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
@@ -44,16 +45,29 @@ type Option<T> = {
 type OptionInputProps<T extends string | number> = {
   options: () => Option<T>[];
   type: 'string' | 'number';
-  onAdd: () => string;
   onRemove: (id: string) => void;
   onUpdate: (id: string, value: T) => void;
   placeholder?: string;
 };
 
-function EditorRow(props: { label: string; children: JSX.Element }) {
+function EditorRow(props: {
+  label: string;
+  children: JSX.Element;
+  align?: 'center' | 'start';
+}) {
   return (
-    <div class="flex min-h-12 items-center gap-5 px-4 py-3">
-      <div class="w-22 shrink-0 text-xs font-medium text-ink-extra-muted">
+    <div
+      class={cn(
+        'flex min-h-12 gap-5 px-4 py-3',
+        props.align === 'start' ? 'items-start' : 'items-center'
+      )}
+    >
+      <div
+        class={cn(
+          'w-22 shrink-0 text-xs font-medium text-ink-extra-muted',
+          props.align === 'start' && 'pt-2'
+        )}
+      >
         {props.label}
       </div>
       <div class="min-w-0 flex-1">{props.children}</div>
@@ -64,26 +78,28 @@ function EditorRow(props: { label: string; children: JSX.Element }) {
 const inputClass =
   'h-9 min-w-0 w-full flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent';
 
+const hasOptionValue = (value: string | number) =>
+  typeof value === 'string' ? value.trim() !== '' : !isNaN(value);
+
 const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
   const handleKeyDown = (
     e: KeyboardEvent,
-    _optionId: string,
+    optionId: string,
     currentValue: string | number
   ) => {
     if (e.key === 'Enter') {
       e.preventDefault();
 
-      const hasValue =
-        props.type === 'string'
-          ? !!(currentValue as string).trim()
-          : props.type === 'number';
-
-      if (hasValue) {
-        const newOptionId = props.onAdd();
+      if (hasOptionValue(currentValue)) {
+        const currentIndex = props
+          .options()
+          .findIndex((option) => option.id === optionId);
+        const nextOptionId = props.options()[currentIndex + 1]?.id;
+        if (!nextOptionId) return;
 
         setTimeout(() => {
           const newInput = document.querySelector(
-            `input[data-option-id="${newOptionId}"]`
+            `input[data-option-id="${nextOptionId}"]`
           ) as HTMLInputElement;
           if (newInput) {
             newInput.focus();
@@ -105,7 +121,9 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
                 const value =
                   props.type === 'string'
                     ? e.currentTarget.value
-                    : Number(e.currentTarget.value);
+                    : e.currentTarget.value === ''
+                      ? ''
+                      : Number(e.currentTarget.value);
                 props.onUpdate(option().id, value as string | number);
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
@@ -125,11 +143,6 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
           </div>
         )}
       </Index>
-      <Show when={props.options().length === 0}>
-        <div class="py-4 text-center text-sm text-ink-muted">
-          No options added yet
-        </div>
-      </Show>
     </div>
   );
 };
@@ -137,27 +150,35 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
 interface CreatePropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPropertyCreated?: (propertyDefinitionId?: string) => void;
+  onPropertyCreated?: (
+    propertyDefinitionId?: string,
+    propertyDefinition?: PropertyDefinition
+  ) => void;
   autoPinOnCreate?: boolean;
+  initialName?: string;
+  entityId?: string;
+  entityType?: EntityType;
 }
 
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   props
 ) => {
-  const blockId = useBlockId();
-  const { entityType } = usePropertiesContext();
+  const context = useMaybePropertiesContext();
+  const blockId = useMaybeBlockId();
+  const entityId = () => props.entityId ?? blockId;
+  const entityType = () => props.entityType ?? context?.entityType;
 
   const [newPropertyName, setNewPropertyName] = createSignal('');
   const [selectedDataType, setSelectedDataType] =
     createSignal<DataTypeValue>('string');
   const [propertyScope, setPropertyScope] =
-    createSignal<CreatePropertyScope>('user');
+    createSignal<CreatePropertyScope>('team');
   const [isMultiSelect, setIsMultiSelect] = createSignal(false);
   const [newStringOptions, setNewStringOptions] = createSignal<
     Array<{ id: string; value: string; display_order: number }>
   >([]);
   const [newNumberOptions, setNewNumberOptions] = createSignal<
-    Array<{ id: string; value: number; display_order: number }>
+    Array<{ id: string; value: number | ''; display_order: number }>
   >([]);
   const [error, setError] = createSignal<string | null>(null);
 
@@ -167,17 +188,17 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   const createPropertyMutation = useCreatePropertyDefinitionMutation({
     onSuccess: async (propertyDefinition) => {
       // Add the property to the current entity if autoPinOnCreate is true
-      if (props.autoPinOnCreate && blockId) {
+      if (props.autoPinOnCreate && entityId() && entityType()) {
         try {
           await addMutation.mutateAsync({
-            entityId: blockId,
-            entityType,
+            entityId: entityId()!,
+            entityType: entityType()!,
             propertyDefinitionId: propertyDefinition.id,
           });
 
           resetCreateForm();
           // Pass the property definition ID so parent can pin it after refresh
-          props.onPropertyCreated?.(propertyDefinition.id);
+          props.onPropertyCreated?.(propertyDefinition.id, propertyDefinition);
           props.onClose();
         } catch (error) {
           console.error('Failed to add property to entity', error);
@@ -185,7 +206,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         }
       } else {
         resetCreateForm();
-        props.onPropertyCreated?.();
+        props.onPropertyCreated?.(propertyDefinition.id, propertyDefinition);
         props.onClose();
       }
     },
@@ -194,40 +215,44 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     },
   });
 
-  // Unified option management helpers
-  type Option<T> = { id: string; value: T; display_order: number };
+  createEffect(() => {
+    if (props.isOpen) {
+      setNewPropertyName(props.initialName ?? '');
+    }
+  });
 
-  const addOption = <T extends string | number>(
-    options: () => Option<T>[],
-    setOptions: (options: Option<T>[]) => void,
-    defaultValue: T
-  ): string => {
-    const newOption: Option<T> = {
-      id: crypto.randomUUID(),
-      value: defaultValue,
-      display_order: options().length,
-    };
-    setOptions([...options(), newOption]);
-    return newOption.id;
-  };
+  const createOption = <T extends string | number>(
+    value: T,
+    displayOrder: number
+  ): Option<T> => ({
+    id: crypto.randomUUID(),
+    value,
+    display_order: displayOrder,
+  });
 
   const removeOption = <T extends string | number>(
     options: () => Option<T>[],
     setOptions: (options: Option<T>[]) => void,
-    optionId: string
+    optionId: string,
+    defaultValue: T
   ) => {
-    setOptions(options().filter((opt) => opt.id !== optionId));
+    const nextOptions = options()
+      .filter((opt) => opt.id !== optionId)
+      .map((option, index) => ({ ...option, display_order: index }));
+    setOptions(ensureTrailingEmptyOption(nextOptions, defaultValue));
   };
 
   const updateOption = <T extends string | number>(
     options: () => Option<T>[],
     setOptions: (options: Option<T>[]) => void,
     optionId: string,
-    value: T
+    value: T,
+    defaultValue: T
   ) => {
-    setOptions(
-      options().map((opt) => (opt.id === optionId ? { ...opt, value } : opt))
+    const nextOptions = options().map((opt) =>
+      opt.id === optionId ? { ...opt, value } : opt
     );
+    setOptions(ensureTrailingEmptyOption(nextOptions, defaultValue));
   };
 
   const hasDuplicateOptions = <T extends string | number>(
@@ -240,6 +265,18 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       typeof v === 'string' ? v !== '' : !isNaN(v)
     );
     return new Set(nonEmptyValues).size !== nonEmptyValues.length;
+  };
+
+  const ensureTrailingEmptyOption = <T extends string | number>(
+    options: Option<T>[],
+    defaultValue: T
+  ): Option<T>[] => {
+    if (options.length === 0) return [createOption(defaultValue, 0)];
+
+    const lastOption = options[options.length - 1];
+    if (!lastOption || !hasOptionValue(lastOption.value)) return options;
+
+    return [...options, createOption(defaultValue, options.length)];
   };
 
   let propertyNameInputRef!: HTMLInputElement;
@@ -328,9 +365,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       case 'select_number':
         // Filter out empty options and deduplicate
         const numberOptions = newNumberOptions()
-          .filter((opt) => !isNaN(opt.value))
+          .filter((opt) => opt.value !== '' && !isNaN(opt.value))
           .map((opt, idx) => ({
-            value: opt.value,
+            value: Number(opt.value),
             display_order: idx,
           }));
 
@@ -353,6 +390,27 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       default:
         throw new Error(`Unknown data type: ${type}`);
     }
+  };
+
+  const hasOptionsForCurrentType = () => {
+    const { type } = parseDataTypeValue(selectedDataType());
+    if (type === 'select_string') {
+      return newStringOptions().some((opt) => opt.value.trim() !== '');
+    }
+    if (type === 'select_number') {
+      return newNumberOptions().some(
+        (opt) => opt.value !== '' && !isNaN(opt.value)
+      );
+    }
+    return true;
+  };
+
+  const resetOptionsForType = (dataType: DataTypeValue) => {
+    const { type } = parseDataTypeValue(dataType);
+    setNewStringOptions(type === 'select_string' ? [createOption('', 0)] : []);
+    setNewNumberOptions(
+      type === 'select_number' ? [createOption<number | ''>('', 0)] : []
+    );
   };
 
   const handleCreateProperty = () => {
@@ -380,7 +438,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     if (
       (selectedDataType() === 'select_string' ||
         selectedDataType() === 'select_number') &&
-      getOptionsForCurrentType().length === 0
+      !hasOptionsForCurrentType()
     ) {
       setError(ERROR_MESSAGES.VALIDATION_MIN_OPTIONS);
       return;
@@ -406,7 +464,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   const resetCreateForm = () => {
     setNewPropertyName('');
     setSelectedDataType('string');
-    setPropertyScope('user');
+    setPropertyScope('team');
     setIsMultiSelect(false);
     setNewStringOptions([]);
     setNewNumberOptions([]);
@@ -427,11 +485,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     const { type } = parseDataTypeValue(selectedDataType());
     return type === 'select_string' || type === 'select_number';
   });
-
-  const getOptionsForCurrentType = () => {
-    const { type } = parseDataTypeValue(selectedDataType());
-    return type === 'select_string' ? newStringOptions() : newNumberOptions();
-  };
 
   usePropertyNameFocus(
     () => propertyNameInputRef,
@@ -454,16 +507,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       event.preventDefault();
       if (canSubmit()) handleCreateProperty();
     }
-  };
-
-  const addCurrentOption = () => {
-    const { type } = parseDataTypeValue(selectedDataType());
-    if (type === 'select_string') {
-      addOption(newStringOptions, setNewStringOptions, '');
-      return;
-    }
-
-    addOption(newNumberOptions, setNewNumberOptions, 0);
   };
 
   return (
@@ -534,8 +577,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                           class="justify-between"
                           onSelect={() => {
                             setSelectedDataType(option.value);
-                            setNewStringOptions([]);
-                            setNewNumberOptions([]);
+                            resetOptionsForType(option.value);
                             setIsMultiSelect(false);
                           }}
                         >
@@ -556,8 +598,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 <TabsInset
                   depth={0}
                   list={[
-                    { value: 'user', label: 'Personal' },
                     { value: 'team', label: 'Team' },
+                    { value: 'user', label: 'Personal' },
                   ]}
                   value={selectedPropertyScope()}
                   onChange={(value) => {
@@ -584,33 +626,20 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             </Show>
 
             <Show when={shouldShowOptions()}>
-              <EditorRow label="Options">
-                <div class="space-y-3">
-                  <div class="flex justify-end">
-                    <Button
-                      variant="base"
-                      size="sm"
-                      class="rounded-lg"
-                      onClick={addCurrentOption}
-                    >
-                      <PlusIcon />
-                      Add option
-                    </Button>
-                  </div>
+              <EditorRow label="Options" align="start">
+                <div>
                   <Show
                     when={selectedDataType() === 'select_string'}
                     fallback={
                       <OptionInput
                         options={newNumberOptions}
                         type="number"
-                        onAdd={() =>
-                          addOption(newNumberOptions, setNewNumberOptions, 0)
-                        }
                         onRemove={(id) =>
                           removeOption(
                             newNumberOptions,
                             setNewNumberOptions,
-                            id
+                            id,
+                            ''
                           )
                         }
                         onUpdate={(id, value) =>
@@ -618,7 +647,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                             newNumberOptions,
                             setNewNumberOptions,
                             id,
-                            value as number
+                            value as number | '',
+                            ''
                           )
                         }
                         placeholder="Number"
@@ -628,18 +658,21 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     <OptionInput
                       options={newStringOptions}
                       type="string"
-                      onAdd={() =>
-                        addOption(newStringOptions, setNewStringOptions, '')
-                      }
                       onRemove={(id) =>
-                        removeOption(newStringOptions, setNewStringOptions, id)
+                        removeOption(
+                          newStringOptions,
+                          setNewStringOptions,
+                          id,
+                          ''
+                        )
                       }
                       onUpdate={(id, value) =>
                         updateOption(
                           newStringOptions,
                           setNewStringOptions,
                           id,
-                          value as string
+                          value as string,
+                          ''
                         )
                       }
                       placeholder="Option value"

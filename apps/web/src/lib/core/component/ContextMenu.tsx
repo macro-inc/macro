@@ -143,9 +143,7 @@ export function MenuItem(props: MenuItemProps) {
     <MenuItemWrapper
       class={cn(
         MENU_ITEM_CLASS,
-        props.disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/5 hover-transition-bg',
+        props.disabled && 'opacity-50 cursor-not-allowed',
         props.class
       )}
       onClick={props.onClick}
@@ -234,9 +232,7 @@ export function SubTrigger(props: {
     <ContextMenu.SubTrigger
       class={cn(
         MENU_ITEM_CLASS,
-        props.disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/5 hover-transition-bg'
+        props.disabled && 'opacity-50 cursor-not-allowed'
       )}
       disabled={props.disabled}
     >

@@ -250,6 +250,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     >
       <div class="text-xs">
         <PropertiesProvider
+          entityId={props.entityId}
           entityType={props.entityType}
           canEdit={props.canEdit}
           documentName={props.documentName}
