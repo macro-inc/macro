@@ -16,10 +16,12 @@ async fn persist_complete_grant(pool: &PgPool, link_id: Uuid, grant_version: i64
     let scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
     sqlx::query!(
         r#"
-        UPDATE email_links
-        SET google_granted_scopes = $2,
-            google_grant_version = $3
-        WHERE id = $1
+        INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (link_id) DO UPDATE
+        SET granted_scopes = EXCLUDED.granted_scopes,
+            grant_version = EXCLUDED.grant_version,
+            updated_at = now()
         "#,
         link_id,
         &scopes,
@@ -160,6 +162,113 @@ fn timed_upsert(
             },
         ],
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_grant_writes_mirror_without_regressing_side_table_state(pool: PgPool) {
+    let link_id = insert_link(&pool, "macro|calendar-trigger@example.com").await;
+    let newer_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+
+    sqlx::query!(
+        r#"
+        UPDATE email_links
+        SET google_granted_scopes = $2,
+            google_grant_version = 2
+        WHERE id = $1
+        "#,
+        link_id,
+        &newer_scopes,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mirrored = sqlx::query!(
+        r#"
+        SELECT granted_scopes, grant_version
+        FROM email_link_google_scopes
+        WHERE link_id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(mirrored.granted_scopes, newer_scopes);
+    assert_eq!(mirrored.grant_version, 2);
+
+    let older_scopes = vec!["https://www.googleapis.com/auth/gmail.modify".to_string()];
+    sqlx::query!(
+        r#"
+        UPDATE email_links
+        SET google_granted_scopes = $2,
+            google_grant_version = 1
+        WHERE id = $1
+        "#,
+        link_id,
+        &older_scopes,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let retained = sqlx::query!(
+        r#"
+        SELECT granted_scopes, grant_version
+        FROM email_link_google_scopes
+        WHERE link_id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(retained.granted_scopes, newer_scopes);
+    assert_eq!(retained.grant_version, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn applying_grant_recreates_missing_side_table_state_from_version_zero(pool: PgPool) {
+    let link_id = insert_link(&pool, "macro|calendar-missing-grant@example.com").await;
+    sqlx::query!(
+        "DELETE FROM email_link_google_scopes WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let grant = PgCalendarRepository::new(pool.clone())
+        .apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    assert!(grant.changed);
+    assert_eq!(grant.grant_version, 1);
+
+    let persisted = sqlx::query!(
+        r#"
+        SELECT
+            l.google_granted_scopes AS "legacy_scopes!",
+            l.google_grant_version AS "legacy_version!",
+            g.granted_scopes AS "side_scopes!",
+            g.grant_version AS "side_version!"
+        FROM email_links l
+        JOIN email_link_google_scopes g ON g.link_id = l.id
+        WHERE l.id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let expected = complete_grant();
+    assert_eq!(
+        GoogleScopeSet::from_scopes(persisted.legacy_scopes),
+        expected
+    );
+    assert_eq!(GoogleScopeSet::from_scopes(persisted.side_scopes), expected);
+    assert_eq!(persisted.legacy_version, 1);
+    assert_eq!(persisted.side_version, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
