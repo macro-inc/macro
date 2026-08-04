@@ -20,6 +20,8 @@ function calendarEvent(durationMinutes: number): CalendarEvent {
     eventId: 'event-1',
     occurrenceKey: 'occurrence-1',
     isReadOnly: false,
+    attendees: [],
+    recurrenceLines: [],
     title: 'Planning',
     start: start.toISOString(),
     end: new Date(start.getTime() + durationMinutes * 60 * 1000).toISOString(),
