@@ -227,6 +227,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "mockall",
  "serde",
  "serde_json",
  "sqlx",
