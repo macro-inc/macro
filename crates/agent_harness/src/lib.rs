@@ -16,9 +16,11 @@
 // adapters hold are written but never read. Comes out as they land.
 #![allow(dead_code)]
 
+/// The session use case and the ports it needs.
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
+/// Test doubles for the ports.
 pub mod testing;
 
 /// Choose the TLS backend for this process.

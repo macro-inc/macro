@@ -1,10 +1,10 @@
 //! Outbound adapters: the concrete providers, stores, and carriers the domain
 //! ports are satisfied by.
 
-pub mod channel_reply;
-pub mod daytona;
-pub mod namespace;
-pub mod sidecar_pump;
+// pub mod channel_reply;
+// pub mod daytona;
+// pub mod namespace;
+// pub mod sidecar_pump;
 
 /// Give credential newtypes their constructor and their one escape hatch.
 ///
@@ -12,6 +12,7 @@ pub mod sidecar_pump;
 /// `Display`, so a secret cannot reach a log or an error message without an
 /// explicit `expose()` - and every `expose()` call site is then a place worth
 /// looking at.
+#[allow(unused_macros)]
 macro_rules! secret {
     ($($name:ident),* $(,)?) => {
         $(
@@ -34,4 +35,5 @@ macro_rules! secret {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use secret;
