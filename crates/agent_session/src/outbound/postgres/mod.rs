@@ -6,7 +6,8 @@ mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, Message, SessionStatus,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
+    Message, SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -115,7 +116,18 @@ impl TryFrom<AgentSessionRow> for AgentSession {
 }
 
 impl AgentSessionRepo for PgAgentSessionRepo {
-    async fn create(&self, owner_id: MacroUserIdStr<'static>, session: AgentSession) -> Result<()> {
+    async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
+        let CreateAgentSessionParams {
+            id,
+            owner_id,
+            bot_id,
+            thread_id,
+            originating_message_id,
+            model,
+            harness,
+            repo_url,
+        } = params;
+        let new_channel_id = macro_uuid::generate_uuid_v7();
         let mut transaction = self
             .pool
             .begin()
@@ -127,7 +139,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             INSERT INTO comms_channels (id, name, channel_type, owner_id, kind)
             VALUES ($1, NULL, 'private', $2, 'agent')
             "#,
-            session.channel_id,
+            new_channel_id,
             owner_id.as_ref(),
         )
         .execute(&mut *transaction)
@@ -139,37 +151,39 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             INSERT INTO comms_channel_participants (channel_id, role, user_id)
             VALUES ($1, 'owner', $2)
             "#,
-            session.channel_id,
+            new_channel_id,
             owner_id.as_ref(),
         )
         .execute(&mut *transaction)
         .await
         .context("failed to create agent channel owner")?;
 
-        let (status, status_event_name) = status_columns(&session.status);
-        sqlx::query!(
+        let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
+        let row = sqlx::query_as!(
+            AgentSessionRow,
             r#"
             INSERT INTO agent_session (
                 id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
+                repo_url, acp_session_id, status, status_event_name
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING
+                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
+                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             "#,
-            session.id.as_uuid(),
-            session.channel_id,
-            session.thread_id,
-            session.originating_message_id,
-            session.bot_id.as_uuid(),
-            session.model,
-            session.harness,
-            session.repo_url,
-            session.acp_session_id,
+            id.as_uuid(),
+            new_channel_id,
+            thread_id,
+            originating_message_id,
+            bot_id.as_uuid(),
+            model,
+            harness,
+            repo_url,
+            None::<String>,
             status,
             status_event_name,
-            session.created_at,
-            session.modified_at,
         )
-        .execute(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to create agent session")?;
 
@@ -178,7 +192,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .await
             .context("commit agent session create")?;
 
-        Ok(())
+        Ok(row.try_into()?)
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
@@ -208,7 +222,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         bot_id: Option<BotId>,
     ) -> Result<ChannelSession> {
         let bot_id = bot_id.map(BotId::as_uuid);
-        let row = sqlx::query_as!(
+        let rows = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
@@ -218,33 +232,54 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 session.status, session.status_event_name, session.created_at, session.modified_at
             FROM agent_session session
             WHERE
-                session.channel_id = $1
+                session.channel_id = $1 -- short circuit if it is the dedicated agent channel
                 OR (
+                    -- otherwise, if it's in a thread and literally mentions the bot
                     session.thread_id = $2
                     AND session.bot_id = $3
                 )
             ORDER BY (session.channel_id = $1) DESC, session.created_at DESC
-            LIMIT 1
+            LIMIT 2
             "#,
             channel_id,
             thread_id,
             bot_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await
         .context("failed to find agent session for channel context")?;
 
-        let Some(row) = row else {
-            return Ok(ChannelSession::None);
-        };
+        let mut dedicated_channel_agent_session = None;
+        let mut subthread_agent_session = None;
+        for row in rows {
+            let is_dedicated_channel = row.channel_id == channel_id;
+            let is_subthread = thread_id.is_some()
+                && bot_id.is_some()
+                && row.thread_id == thread_id
+                && Some(row.bot_id) == bot_id;
+            let session = AgentSession::try_from(row)?;
 
-        let in_session_channel = row.channel_id == channel_id;
-        let session = row.try_into()?;
-        Ok(if in_session_channel {
-            ChannelSession::InSessionChannel(session)
-        } else {
-            ChannelSession::CreatedFromThread(session)
-        })
+            if is_dedicated_channel {
+                dedicated_channel_agent_session = Some(session.clone());
+            }
+            if is_subthread && !is_dedicated_channel && subthread_agent_session.is_none() {
+                subthread_agent_session = Some(session);
+            }
+        }
+
+        Ok(
+            match (dedicated_channel_agent_session, subthread_agent_session) {
+                (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {
+                    ChannelSession::ThreadInDedicatedChannel {
+                        dedicated_channel_agent_session,
+                        subthread_agent_session,
+                    }
+                }
+                (Some(session), None) => ChannelSession::InSessionChannel(session),
+                (None, Some(session)) => ChannelSession::CreatedFromThread(session),
+                (None, None) => ChannelSession::None,
+            },
+        )
     }
 
     async fn update(&self, session: AgentSession) -> Result<()> {

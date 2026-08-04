@@ -49,6 +49,27 @@ pub enum SessionStatus {
     Disconnected,
 }
 
+/// Caller-provided values required to create an agent session.
+#[derive(Debug, Clone)]
+pub struct CreateAgentSessionParams {
+    /// Caller-minted session id, available before persistence.
+    pub id: AgentSessionId,
+    /// User who owns the dedicated agent channel.
+    pub owner_id: MacroUserIdStr<'static>,
+    /// Bot running the agent.
+    pub bot_id: BotId,
+    /// Root message identifying the originating thread, if any.
+    pub thread_id: Option<Uuid>,
+    /// Exact message that invoked the bot, if any.
+    pub originating_message_id: Option<Uuid>,
+    /// Model slug.
+    pub model: String,
+    /// Harness slug.
+    pub harness: String,
+    /// Repository the agent works with.
+    pub repo_url: String,
+}
+
 /// A running or historical agent coding session.
 #[derive(Debug, Clone)]
 pub struct AgentSession {
@@ -84,6 +105,13 @@ pub enum ChannelSession {
     CreatedFromThread(AgentSession),
     /// The message arrived in the session's dedicated agent channel.
     InSessionChannel(AgentSession),
+    /// A bot was addressed from a thread inside a dedicated agent channel.
+    ThreadInDedicatedChannel {
+        /// Session that owns the dedicated channel.
+        dedicated_channel_agent_session: AgentSession,
+        /// Session associated with the addressed bot and thread.
+        subthread_agent_session: AgentSession,
+    },
 }
 
 /// One logical protocol message with its direction.

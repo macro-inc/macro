@@ -43,8 +43,8 @@ CREATE TABLE agent_session (
 CREATE INDEX agent_session_bot_id_idx
     ON agent_session (bot_id);
 
-CREATE INDEX agent_session_thread_id_idx
-    ON agent_session (thread_id)
+CREATE UNIQUE INDEX agent_session_thread_bot_unique
+    ON agent_session (thread_id, bot_id)
     WHERE thread_id IS NOT NULL;
 
 CREATE TABLE agent_session_log (

@@ -1,5 +1,4 @@
 use bots::domain::models::BotId;
-use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::error::Result;
@@ -10,13 +9,11 @@ use super::model::*;
 /// and a repo whose futures are not `Send` cannot be used there.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionRepo: Send + Sync + 'static {
-    /// Atomically persist a new agent session, its dedicated agent channel,
-    /// and the channel owner's participant row. The caller mints both ids.
+    /// Atomically persist a new agent session with its dedicated channel and owner participant.
     fn create(
         &self,
-        owner_id: MacroUserIdStr<'static>,
-        session: AgentSession,
-    ) -> impl Future<Output = Result<()>> + Send;
+        params: CreateAgentSessionParams,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
@@ -25,6 +22,9 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     ///
     /// ```text
     /// find_for_channel(channel_id, thread_id, bot_id)
+    ///     |
+    ///     +-- one session owns channel_id and another matches thread_id + bot_id
+    ///     |       -> ThreadInDedicatedChannel { both sessions }
     ///     |
     ///     +-- session.channel_id == channel_id
     ///     |       -> InSessionChannel
