@@ -93,6 +93,55 @@ pub fn setup_nix() -> Step<Use> {
     )
 }
 
+/// [`setup_nix`] with the private S3 binary cache configured as a substituter,
+/// so a /nix cache-volume miss degrades to a download instead of a rebuild.
+/// Only for jobs with access to the AWS secrets (deploy pipeline — never
+/// PR-triggered jobs). No-ops back to plain [`setup_nix`] behavior while the
+/// `NIX_CACHE_*` repo variables are unset.
+pub fn setup_nix_with_cache() -> Step<Use> {
+    setup_nix()
+        .add_with(("nix-cache-url", vars::NIX_CACHE_URL))
+        .add_with(("nix-cache-public-key", vars::NIX_CACHE_PUBLIC_KEY))
+        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
+        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
+}
+
+/// Push built store paths to the private S3 binary cache, signing on upload —
+/// the `cachix watch-store` role. `targets` lands in the step's `TARGETS` env
+/// (space-separated flake refs or store paths; GH expressions fine) and is
+/// word-split on purpose. Skips silently while the cache vars/secret are
+/// unset, and never fails the job: the cache is an optimization, and the paths
+/// were already handed off via Namespace artifacts.
+pub fn push_nix_cache(targets: &str) -> Step<Run> {
+    Step::new("Push to nix cache")
+        .run(indoc::indoc! {r#"
+            set -uo pipefail
+            if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+              echo "nix cache not configured; skipping push"
+              exit 0
+            fi
+            key="$RUNNER_TEMP/nix-cache-signing-key"
+            printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+            sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+            # shellcheck disable=SC2086 # TARGETS is a list on purpose
+            nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+              || echo "::warning::nix cache push failed (non-fatal)"
+            rm -f "$key"
+        "#})
+        .shell("bash")
+        .add_env(Env::new("TARGETS", targets))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new(
+            "NIX_CACHE_SIGNING_KEY",
+            vars::NIX_CACHE_SIGNING_KEY,
+        ))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
+}
+
 /// Enter the repo's Nix dev shell (toolchain, mold, just, the sccache binary,
 /// and `RUSTC_WRAPPER=sccache`) without selecting an sccache provider or
 /// configuring an external Nix binary cache. Jobs that compile Rust can follow

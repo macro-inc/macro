@@ -21,6 +21,7 @@ secret!(DOPPLER_TOKEN);
 secret!(FLY_API_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
 secret!(SEGMENT_WRITE_KEY);
@@ -29,6 +30,19 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 /// Cloudflare account id. A repo *variable* (not a secret), matching the
 /// hand-written `deploy-lexical-service.yml`.
 pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
+
+/// S3 nix binary cache store URL, a repo *variable* — e.g.
+/// `s3://macro-nix-cache?region=us-east-1`. The substituter role Cachix used
+/// to play: any /nix cache-volume miss becomes a signed-narinfo download
+/// instead of a from-source rebuild. Empty/unset disables all nix-cache
+/// wiring (setup skips the substituter config; push steps no-op), so the
+/// workflows are safe to run before the bucket exists.
+pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
+
+/// Public counterpart of [`NIX_CACHE_SIGNING_KEY`], a repo *variable* — e.g.
+/// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
+/// paths verify.
+pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
