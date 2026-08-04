@@ -986,12 +986,7 @@ impl<
                 Ok(())
             }
             GithubWebhookEventType::Installation => match action {
-                Some("created") => {
-                    tracing::info!(
-                        "GitHub-initiated installation association is unsupported; use the authenticated setup flow"
-                    );
-                    Ok(())
-                }
+                Some("created") => self.handle_installation_created(webhook_event).await,
                 Some("deleted") => self.handle_installation_deleted(webhook_event).await,
                 _ => {
                     tracing::debug!(action, "skipping unhandled installation action");
@@ -1059,14 +1054,18 @@ impl<
         .map_err(|_| GithubError::InvalidInstallationState)?;
         let setup_action = GithubInstallationSetupAction::try_from(setup_action)?;
 
-        if setup_action == GithubInstallationSetupAction::Request {
-            return Ok(());
-        }
-
         let code = code.ok_or(GithubError::MissingInstallationSetupField("code"))?;
-        let installation_id = installation_id.ok_or(GithubError::MissingInstallationSetupField(
-            "installation_id",
-        ))?;
+        // A request callback carries no installation_id: the installation only
+        // comes into existence when an org admin approves.
+        let installation_id = match setup_action {
+            GithubInstallationSetupAction::Request => None,
+            GithubInstallationSetupAction::Install | GithubInstallationSetupAction::Update => Some(
+                installation_id.ok_or(GithubError::MissingInstallationSetupField(
+                    "installation_id",
+                ))?,
+            ),
+        };
+
         let access_token = self
             .client
             .exchange_setup_code(
@@ -1075,6 +1074,27 @@ impl<
                 code,
             )
             .await?;
+
+        let source = match state.team_id {
+            Some(team_id) => GithubAppInstallationSource::Team(team_id),
+            None => GithubAppInstallationSource::User(state.macro_user_id.into()),
+        };
+
+        let Some(installation_id) = installation_id else {
+            // Park the requested source keyed by the requester's GitHub
+            // identity so the installation.created webhook can complete the
+            // association once an org admin approves.
+            let requester = self
+                .client
+                .get_authenticated_user(access_token.as_str())
+                .await?;
+            return self
+                .repo
+                .upsert_installation_request(&requester.id.to_string(), &source)
+                .await
+                .map_err(|error| GithubError::Internal(error.into()));
+        };
+
         let installations = self
             .client
             .list_user_installations(access_token.as_str())
@@ -1086,10 +1106,6 @@ impl<
             return Err(GithubError::InstallationNotOwned);
         }
 
-        let source = match state.team_id {
-            Some(team_id) => GithubAppInstallationSource::Team(team_id),
-            None => GithubAppInstallationSource::User(state.macro_user_id.into()),
-        };
         self.associate_installation_with_sources(installation_id, &[source])
             .await
     }

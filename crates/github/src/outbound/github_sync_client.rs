@@ -8,9 +8,9 @@ use super::pull_request_metadata::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubError, GithubInstallationAccessToken,
-        GithubPullRequestDetails, GithubSetupAccessToken, GithubUserInstallation,
-        GithubUserInstallationsPage,
+        EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
+        GithubInstallationAccessToken, GithubPullRequestDetails, GithubSetupAccessToken,
+        GithubUserInstallation, GithubUserInstallationsPage,
     },
     ports::GithubSyncClient,
 };
@@ -185,6 +185,38 @@ impl GithubSyncClient for GithubSyncClientImpl {
                 ))
             })?;
         }
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn get_authenticated_user(
+        &self,
+        access_token: &str,
+    ) -> Result<GithubAuthenticatedUser, GithubError> {
+        let response = self
+            .client
+            .get(format!("{}/user", self.api_base_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .map_err(|_| {
+                GithubError::Internal(anyhow::anyhow!("GitHub authenticated user request failed"))
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "GitHub authenticated user request failed with status {status}"
+            )));
+        }
+
+        response.json().await.map_err(|_| {
+            GithubError::Internal(anyhow::anyhow!(
+                "GitHub authenticated user request returned a malformed response"
+            ))
+        })
     }
 
     #[tracing::instrument(skip(self, jwt), err)]

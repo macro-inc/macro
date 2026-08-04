@@ -5,7 +5,7 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
+    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
     GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
     GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
     ValidatedGithubWebhookEvent,
@@ -108,6 +108,28 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         installation_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Records the Macro source a GitHub user asked to sync when requesting an
+    /// org install that awaits admin approval. Replaces any earlier pending
+    /// request by the same GitHub user (latest intent wins).
+    fn upsert_installation_request(
+        &self,
+        github_user_id: &str,
+        source: &GithubAppInstallationSource,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Returns the pending installation request source for a GitHub user, if any.
+    fn get_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<Option<GithubAppInstallationSource>, Self::Err>> + Send;
+
+    /// Deletes a GitHub user's pending installation request.
+    /// Deleting a missing request is a no-op (idempotent).
+    fn delete_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Client interface for making GitHub sync API calls.
@@ -128,6 +150,12 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         &self,
         access_token: &str,
     ) -> impl Future<Output = Result<Vec<GithubUserInstallation>, GithubError>> + Send;
+
+    /// Fetches the GitHub user behind a user access token.
+    fn get_authenticated_user(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<GithubAuthenticatedUser, GithubError>> + Send;
 
     /// Generates an installation access token for a given GitHub App installation.
     fn generate_installation_access_token(

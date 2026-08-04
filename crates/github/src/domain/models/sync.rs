@@ -81,6 +81,13 @@ pub struct GithubUserInstallation {
     pub id: u64,
 }
 
+/// The GitHub user behind an OAuth user access token.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct GithubAuthenticatedUser {
+    /// GitHub's stable numeric user identifier.
+    pub id: u64,
+}
+
 /// One page of installations visible to an authenticated GitHub user.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GithubUserInstallationsPage {
@@ -329,6 +336,22 @@ impl ValidatedGithubWebhookEvent {
         self.payload
             .get("sender")
             .and_then(|s| s.get("id"))
+            .and_then(|v| v.as_u64())
+            .map(|id| id.to_string())
+    }
+
+    /// Extract the requester's GitHub user ID from the webhook payload.
+    ///
+    /// `requester` is only present on `installation` events created by an
+    /// org admin approving another user's installation request; it identifies
+    /// the user who originally requested the install (the `sender` is the
+    /// approving admin). Uses the numeric `requester.id` rather than
+    /// `requester.login` because GitHub usernames can change but user IDs are
+    /// stable.
+    pub fn requester_github_user_id(&self) -> Option<String> {
+        self.payload
+            .get("requester")
+            .and_then(|r| r.get("id"))
             .and_then(|v| v.as_u64())
             .map(|id| id.to_string())
     }

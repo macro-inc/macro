@@ -906,3 +906,78 @@ async fn test_delete_installation_sources_missing_installation_is_noop(pool: Poo
     repo.delete_installation_sources("missing").await.unwrap();
     repo.delete_installation_sources("missing").await.unwrap();
 }
+
+// ---------------------------------------------------------------------------
+// installation requests
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_installation_request_roundtrip(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+    let team_id: Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+
+    assert_eq!(repo.get_installation_request("777").await.unwrap(), None);
+
+    repo.upsert_installation_request("777", &GithubAppInstallationSource::Team(team_id))
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get_installation_request("777").await.unwrap(),
+        Some(GithubAppInstallationSource::Team(team_id))
+    );
+
+    repo.delete_installation_request("777").await.unwrap();
+    assert_eq!(repo.get_installation_request("777").await.unwrap(), None);
+    // Deleting a missing request is a no-op.
+    repo.delete_installation_request("777").await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_upsert_installation_request_replaces_earlier_request(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+    let first_team: Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+
+    repo.upsert_installation_request("777", &GithubAppInstallationSource::Team(first_team))
+        .await
+        .unwrap();
+    repo.upsert_installation_request(
+        "777",
+        &GithubAppInstallationSource::User("macro|user@user.com".to_string()),
+    )
+    .await
+    .unwrap();
+
+    // The latest request wins; requests by other users are untouched.
+    assert_eq!(
+        repo.get_installation_request("777").await.unwrap(),
+        Some(GithubAppInstallationSource::User(
+            "macro|user@user.com".to_string()
+        ))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_installation_requests_are_scoped_by_github_user(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+    let team_id: Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+
+    repo.upsert_installation_request("777", &GithubAppInstallationSource::Team(team_id))
+        .await
+        .unwrap();
+    repo.upsert_installation_request(
+        "888",
+        &GithubAppInstallationSource::User("macro|user@user.com".to_string()),
+    )
+    .await
+    .unwrap();
+
+    repo.delete_installation_request("777").await.unwrap();
+
+    assert_eq!(repo.get_installation_request("777").await.unwrap(), None);
+    assert_eq!(
+        repo.get_installation_request("888").await.unwrap(),
+        Some(GithubAppInstallationSource::User(
+            "macro|user@user.com".to_string()
+        ))
+    );
+}

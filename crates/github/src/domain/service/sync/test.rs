@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
-        GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
+        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
+        GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
         GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus,
         GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
         TeamTaskReference, ValidatedGithubWebhookEvent,
@@ -45,6 +45,9 @@ use super::*;
 
 /// UUID that corresponds to the short ID `2BuyvtY3aeEvHx4uG8iD51`.
 const KNOWN_TASK_UUID: &str = "0d0dc589-f301-43f1-8b11-4ab448ca4bb4";
+
+/// GitHub user id returned by [`StubSyncClient::get_authenticated_user`].
+const TEST_GITHUB_USER_ID: u64 = 987654;
 
 /// SAFETY: This is used for testing only
 /// Minimal RSA private key used only for test JWT signing.
@@ -322,6 +325,8 @@ struct StubSyncRepo {
     installation_source_rows: Mutex<HashMap<String, HashSet<GithubAppInstallationSource>>>,
     /// Recorded installation source upserts: (installation_id, sources).
     installation_sources: Mutex<Vec<(String, Vec<GithubAppInstallationSource>)>>,
+    /// Pending installation requests keyed by requester github user id.
+    installation_requests: Mutex<HashMap<String, GithubAppInstallationSource>>,
 }
 
 impl StubSyncRepo {
@@ -335,6 +340,7 @@ impl StubSyncRepo {
             team_members: Mutex::new(HashMap::new()),
             installation_source_rows: Mutex::new(HashMap::new()),
             installation_sources: Mutex::new(Vec::new()),
+            installation_requests: Mutex::new(HashMap::new()),
         }
     }
 
@@ -414,6 +420,22 @@ impl StubSyncRepo {
 
     fn installation_sources(&self) -> Vec<(String, Vec<GithubAppInstallationSource>)> {
         self.installation_sources.lock().unwrap().clone()
+    }
+
+    fn with_installation_request(
+        self,
+        github_user_id: &str,
+        source: GithubAppInstallationSource,
+    ) -> Self {
+        self.installation_requests
+            .lock()
+            .unwrap()
+            .insert(github_user_id.to_string(), source);
+        self
+    }
+
+    fn installation_requests(&self) -> HashMap<String, GithubAppInstallationSource> {
+        self.installation_requests.lock().unwrap().clone()
     }
 }
 
@@ -584,6 +606,38 @@ impl GithubSyncRepo for StubSyncRepo {
             .remove(installation_id);
         Ok(())
     }
+
+    async fn upsert_installation_request(
+        &self,
+        github_user_id: &str,
+        source: &GithubAppInstallationSource,
+    ) -> Result<(), Self::Err> {
+        self.installation_requests
+            .lock()
+            .unwrap()
+            .insert(github_user_id.to_string(), source.clone());
+        Ok(())
+    }
+
+    async fn get_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Option<GithubAppInstallationSource>, Self::Err> {
+        Ok(self
+            .installation_requests
+            .lock()
+            .unwrap()
+            .get(github_user_id)
+            .cloned())
+    }
+
+    async fn delete_installation_request(&self, github_user_id: &str) -> Result<(), Self::Err> {
+        self.installation_requests
+            .lock()
+            .unwrap()
+            .remove(github_user_id);
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -631,8 +685,11 @@ struct StubSyncClient {
     setup_code_exchange_calls: Mutex<Vec<(String, String, String)>>,
     user_installation_list_calls: Mutex<Vec<String>>,
     user_installations: Mutex<Vec<GithubUserInstallation>>,
+    authenticated_user_calls: Mutex<Vec<String>>,
+    authenticated_user_id: Mutex<u64>,
     fail_setup_code_exchange: Mutex<bool>,
     fail_user_installation_list: Mutex<bool>,
+    fail_get_authenticated_user: Mutex<bool>,
     pr_comments: Mutex<Vec<PrCommentCall>>,
     pull_request_details: Mutex<HashMap<String, GithubPullRequestDetails>>,
     pull_request_details_calls: Mutex<Vec<PullRequestDetailsCall>>,
@@ -646,8 +703,11 @@ impl StubSyncClient {
             setup_code_exchange_calls: Mutex::new(Vec::new()),
             user_installation_list_calls: Mutex::new(Vec::new()),
             user_installations: Mutex::new(Vec::new()),
+            authenticated_user_calls: Mutex::new(Vec::new()),
+            authenticated_user_id: Mutex::new(TEST_GITHUB_USER_ID),
             fail_setup_code_exchange: Mutex::new(false),
             fail_user_installation_list: Mutex::new(false),
+            fail_get_authenticated_user: Mutex::new(false),
             pr_comments: Mutex::new(Vec::new()),
             pull_request_details: Mutex::new(HashMap::new()),
             pull_request_details_calls: Mutex::new(Vec::new()),
@@ -669,6 +729,14 @@ impl StubSyncClient {
 
     fn fail_user_installation_list(&self) {
         *self.fail_user_installation_list.lock().unwrap() = true;
+    }
+
+    fn fail_get_authenticated_user(&self) {
+        *self.fail_get_authenticated_user.lock().unwrap() = true;
+    }
+
+    fn authenticated_user_calls(&self) -> Vec<String> {
+        self.authenticated_user_calls.lock().unwrap().clone()
     }
 
     fn setup_code_exchange_calls(&self) -> Vec<(String, String, String)> {
@@ -743,6 +811,24 @@ impl GithubSyncClient for StubSyncClient {
             return Err(GithubError::Internal(anyhow::anyhow!("listing failed")));
         }
         Ok(self.user_installations.lock().unwrap().clone())
+    }
+
+    async fn get_authenticated_user(
+        &self,
+        access_token: &str,
+    ) -> Result<GithubAuthenticatedUser, GithubError> {
+        self.authenticated_user_calls
+            .lock()
+            .unwrap()
+            .push(access_token.to_string());
+        if *self.fail_get_authenticated_user.lock().unwrap() {
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "authenticated user lookup failed"
+            )));
+        }
+        Ok(GithubAuthenticatedUser {
+            id: *self.authenticated_user_id.lock().unwrap(),
+        })
     }
 
     async fn generate_installation_access_token(
@@ -3945,8 +4031,29 @@ fn installation_created_event(sender_id: u64, installation_id: u64) -> Validated
     )
 }
 
+/// An `installation.created` event emitted when an org admin approves another
+/// user's installation request: the `sender` is the approving admin and the
+/// `requester` is who originally asked.
+fn approved_installation_created_event(
+    requester_id: u64,
+    installation_id: u64,
+) -> ValidatedGithubWebhookEvent {
+    ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "installation": { "id": installation_id },
+            "sender": { "login": "org-admin", "id": 111 },
+            "requester": { "login": "org-member", "id": requester_id }
+        }),
+    )
+}
+
 #[tokio::test]
-async fn installation_created_is_noop() {
+async fn installation_created_without_requester_is_noop() {
+    // Direct installs are associated by the authenticated setup callback, not
+    // the webhook, and the sender must never be used as an association
+    // heuristic.
     let service = make_sync_service();
     let event = installation_created_event(12345, 99999);
 
@@ -3957,6 +4064,68 @@ async fn installation_created_is_noop() {
     assert!(service.client.user_installation_list_calls().is_empty());
     assert!(service.client.list_open_pull_requests_calls().is_empty());
     assert!(service.foreign_entity_service.foreign_entities().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_with_requester_associates_pending_request_source() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_request("12345", GithubAppInstallationSource::Team(team_id));
+    let service = make_sync_service_with_repo(repo);
+    let event = approved_installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.repo.installation_sources(),
+        vec![(
+            "99999".to_string(),
+            vec![GithubAppInstallationSource::Team(team_id)]
+        )]
+    );
+    // The pending request is consumed once the association lands.
+    assert!(service.repo.installation_requests().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_with_unknown_requester_is_noop() {
+    let service = make_sync_service();
+    let event = approved_installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_sources().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_redelivery_after_association_is_noop() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_request("12345", GithubAppInstallationSource::Team(team_id));
+    let service = make_sync_service_with_repo(repo);
+    let event = approved_installation_created_event(12345, 99999);
+
+    // GitHub retries webhooks: a redelivery after the pending request was
+    // consumed must succeed without re-associating.
+    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(service.repo.installation_sources().len(), 1);
+}
+
+#[tokio::test]
+async fn installation_created_missing_installation_id_errors() {
+    let service = make_sync_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "installation".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "sender": { "login": "org-admin", "id": 111 },
+            "requester": { "login": "org-member", "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap_err();
 }
 
 // ---------------------------------------------------------------------------
@@ -5330,26 +5499,136 @@ async fn complete_installation_setup_accepts_installation_from_complete_paginate
 }
 
 #[tokio::test]
-async fn complete_installation_setup_verifies_request_state_then_no_ops() {
+async fn complete_installation_setup_request_parks_team_pending_request() {
+    let team_id = uuid::Uuid::new_v4();
     let service = make_sync_service();
     service
         .complete_installation_setup(
-            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
-            None,
+            &installation_setup_state(Some(team_id), chrono::Utc::now().timestamp() + 60),
+            Some("request-code"),
             None,
             "request",
         )
         .await
         .unwrap();
-    assert!(service.client.setup_code_exchange_calls().is_empty());
+
+    // No installation exists until an org admin approves, so nothing is
+    // associated yet...
     assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.user_installation_list_calls().is_empty());
+    // ...but the requested source is parked, keyed by the requester's GitHub
+    // identity, for the installation.created webhook to complete.
+    assert_eq!(
+        service.repo.installation_requests(),
+        HashMap::from([(
+            TEST_GITHUB_USER_ID.to_string(),
+            GithubAppInstallationSource::Team(team_id)
+        )])
+    );
+    assert_eq!(
+        service.client.authenticated_user_calls(),
+        vec!["test-user-token".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn complete_installation_setup_request_parks_personal_pending_request() {
+    let service = make_sync_service();
+    service
+        .complete_installation_setup(
+            &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+            Some("request-code"),
+            None,
+            "request",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.repo.installation_requests(),
+        HashMap::from([(
+            TEST_GITHUB_USER_ID.to_string(),
+            GithubAppInstallationSource::User(installation_setup_user().into())
+        )])
+    );
+}
+
+#[tokio::test]
+async fn complete_installation_setup_request_rejects_invalid_state_and_missing_code() {
+    let service = make_sync_service();
 
     assert!(matches!(
         service
-            .complete_installation_setup("invalid", None, None, "request")
+            .complete_installation_setup("invalid", Some("code"), None, "request")
             .await,
         Err(GithubError::InvalidInstallationState)
     ));
+
+    assert!(matches!(
+        service
+            .complete_installation_setup(
+                &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+                None,
+                None,
+                "request",
+            )
+            .await,
+        Err(GithubError::MissingInstallationSetupField("code"))
+    ));
+
+    assert!(service.client.setup_code_exchange_calls().is_empty());
+    assert!(service.repo.installation_requests().is_empty());
+}
+
+#[tokio::test]
+async fn complete_installation_setup_request_fails_closed_on_identity_failure() {
+    let service = make_sync_service();
+    service.client.fail_get_authenticated_user();
+
+    assert!(
+        service
+            .complete_installation_setup(
+                &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+                Some("request-code"),
+                None,
+                "request",
+            )
+            .await
+            .is_err()
+    );
+    assert!(service.repo.installation_requests().is_empty());
+}
+
+#[tokio::test]
+async fn requested_install_is_associated_after_admin_approval() {
+    let team_id = uuid::Uuid::new_v4();
+    let service = make_sync_service();
+
+    // A team member requests the org install: no installation exists yet.
+    service
+        .complete_installation_setup(
+            &installation_setup_state(Some(team_id), chrono::Utc::now().timestamp() + 60),
+            Some("request-code"),
+            None,
+            "request",
+        )
+        .await
+        .unwrap();
+    assert!(service.repo.installation_sources().is_empty());
+
+    // Days later an org admin approves, which creates the installation and
+    // emits installation.created with the original requester.
+    let event = approved_installation_created_event(TEST_GITHUB_USER_ID, 555);
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.repo.installation_sources(),
+        vec![(
+            "555".to_string(),
+            vec![GithubAppInstallationSource::Team(team_id)]
+        )]
+    );
+    assert!(service.repo.installation_requests().is_empty());
 }
 
 #[tokio::test]
