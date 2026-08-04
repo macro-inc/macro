@@ -264,82 +264,87 @@ export function TaskComposer(props: {
   );
 
   return (
+    // Compact edges matching the message face (content at px-3/pt-2, footer
+    // mirroring Input.Footer's h-8 p-2 mb-2), with roomier gap-4 spacing
+    // between title, description, and property pills.
     <div
-      class="relative flex flex-col gap-4 p-4"
+      class="relative flex flex-col"
       tabIndex={-1}
       ref={setContainerRef}
       data-input-task-composer
     >
-      <div class="shrink-0 flex gap-2 items-center px-2">
-        <Show when={tagLayoutMode() === 'title'}>
-          <InlineTagsPill
-            docTags={composerTags}
-            showPlaceholder
-            class="shrink-0"
+      <div class="flex flex-col gap-4 px-3 pt-2">
+        <div class="shrink-0 flex gap-2 items-center">
+          <Show when={tagLayoutMode() === 'title'}>
+            <InlineTagsPill
+              docTags={composerTags}
+              showPlaceholder
+              class="shrink-0"
+            />
+          </Show>
+          <ComposeTaskTitleEditor
+            value={title}
+            onChange={setTitle}
+            disabled={isCreating}
+            bodyEditor={bodyEditor}
+            containerRef={containerRef}
+            onUserInput={() => {}}
+            onTagSelected={(tag) => {
+              setTagLayoutMode('title');
+              void composerTags.applyTag(tag.scope, tag.optionId);
+            }}
+            onDeleteTagsAtStart={deleteTitleTagsAtStart}
+            ref={(el) => {
+              titleEditorRoot = el;
+            }}
           />
-        </Show>
-        <ComposeTaskTitleEditor
-          value={title}
-          onChange={setTitle}
-          disabled={isCreating}
-          bodyEditor={bodyEditor}
-          containerRef={containerRef}
-          onUserInput={() => {}}
-          onTagSelected={(tag) => {
-            setTagLayoutMode('title');
-            void composerTags.applyTag(tag.scope, tag.optionId);
-          }}
-          onDeleteTagsAtStart={deleteTitleTagsAtStart}
-          ref={(el) => {
-            titleEditorRoot = el;
-          }}
-        />
+        </div>
+
+        <div class="overflow-y-auto scrollbar-hidden min-h-24 max-h-[calc(30*var(--dvh,1dvh))]">
+          <Scroll>
+            <MarkdownShell
+              config={editorConfig}
+              initialState={restoredDraft?.editorState}
+              initialValue={
+                restoredDraft?.editorState
+                  ? undefined
+                  : restoredDraft?.content || undefined
+              }
+              placeholder="Add description, type @ to insert or / for commands"
+              class="text-sm"
+            />
+          </Scroll>
+        </div>
+
+        <Suspense fallback={<div class="h-7" />}>
+          <PropertiesProvider
+            entityType="TASK"
+            canEdit={true}
+            properties={properties}
+            onRefresh={() => {}}
+            onPropertyAdded={() => {}}
+            onPropertyDeleted={() => {}}
+            saveHandler={saveHandler}
+          >
+            <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
+              <For each={properties()}>
+                {(property) => (
+                  <InlinePropertyValue
+                    property={property}
+                    emptyLabel={property.displayName}
+                  />
+                )}
+              </For>
+              <Show when={tagLayoutMode() === 'bottom'}>
+                <InlineTagsPill docTags={composerTags} showPlaceholder />
+              </Show>
+            </div>
+            <Modals />
+          </PropertiesProvider>
+        </Suspense>
       </div>
 
-      <div class="overflow-y-auto scrollbar-hidden min-h-24 max-h-[calc(30*var(--dvh,1dvh))] px-2">
-        <Scroll>
-          <MarkdownShell
-            config={editorConfig}
-            initialState={restoredDraft?.editorState}
-            initialValue={
-              restoredDraft?.editorState
-                ? undefined
-                : restoredDraft?.content || undefined
-            }
-            placeholder="Add description, type @ to insert or / for commands"
-            class="text-sm"
-          />
-        </Scroll>
-      </div>
-
-      <Suspense fallback={<div class="h-7" />}>
-        <PropertiesProvider
-          entityType="TASK"
-          canEdit={true}
-          properties={properties}
-          onRefresh={() => {}}
-          onPropertyAdded={() => {}}
-          onPropertyDeleted={() => {}}
-          saveHandler={saveHandler}
-        >
-          <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm px-2">
-            <For each={properties()}>
-              {(property) => (
-                <InlinePropertyValue
-                  property={property}
-                  emptyLabel={property.displayName}
-                />
-              )}
-            </For>
-            <Show when={tagLayoutMode() === 'bottom'}>
-              <InlineTagsPill docTags={composerTags} showPlaceholder />
-            </Show>
-          </div>
-          <Modals />
-        </PropertiesProvider>
-      </Suspense>
-
-      <div class="shrink-0 flex justify-between items-center gap-2">
+      <div class="shrink-0 flex h-8 w-full flex-row justify-between items-center p-2 mb-2 space-x-2">
         <div class="flex items-center gap-2">
           <input
             ref={(el) => {
