@@ -14,6 +14,15 @@ const CALENDAR_OCCURRENCE_PAGE_SIZE = 2000;
 const CALENDAR_SYNC_POLL_INTERVAL = 5000;
 const CALENDAR_STALE_TIME = 60_000;
 
+export interface CalendarOccurrencesQueryInput {
+  userId: string | undefined;
+  range: CalendarOccurrenceQueryRange | undefined;
+}
+
+export interface CalendarOccurrencesQueryOptions {
+  enabled?: boolean;
+}
+
 export interface CalendarOccurrencesData {
   items: CalendarOccurrenceItem[];
   syncStatus: CalendarOccurrenceResponse['syncStatus'];
@@ -87,25 +96,25 @@ export async function fetchCalendarOccurrences(
 }
 
 export function useCalendarOccurrencesQuery(
-  userId: Accessor<string | undefined>,
-  range: Accessor<CalendarOccurrenceQueryRange | undefined>
+  input: Accessor<CalendarOccurrencesQueryInput>,
+  options?: Accessor<CalendarOccurrencesQueryOptions>
 ) {
   return useQuery(() => {
-    const currentUserId = userId();
-    const currentRange = range();
+    const { userId, range } = input();
 
     return {
-      queryKey: calendarKeys.occurrences(currentUserId ?? '', currentRange)
-        .queryKey,
+      queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
       queryFn: ({ signal }) => {
-        if (!currentRange) {
+        if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
         }
 
-        return fetchCalendarOccurrences(currentRange, signal);
+        return fetchCalendarOccurrences(range, signal);
       },
-      enabled: Boolean(currentUserId) && currentRange !== undefined,
+      enabled:
+        Boolean(userId) && range !== undefined && options?.().enabled !== false,
       staleTime: CALENDAR_STALE_TIME,
+      placeholderData: (p) => p,
       refetchOnWindowFocus: true,
       refetchInterval: (query) =>
         query.state.data?.syncStatus === CalendarSyncStatus.syncing

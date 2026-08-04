@@ -51,16 +51,18 @@ export const [CalendarViewContextProvider, useCalendarView] =
       createSignal<HTMLElement>();
     const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
 
-    const supportedVisibleRange = createMemo(() => {
+    const isVisibleRangeSupported = createMemo(() => {
       const range = visibleRange();
-      return range && isCalendarRangeSupported(range) ? range : undefined;
+      return range !== undefined && isCalendarRangeSupported(range);
     });
     const occurrencesQuery = useCalendarOccurrencesQuery(
-      userId,
-      supportedVisibleRange
+      () => ({ userId: userId(), range: visibleRange() }),
+      () => ({ enabled: isVisibleRangeSupported() })
     );
     const events = createMemo(() =>
-      (occurrencesQuery.data?.items ?? []).map(mapCalendarOccurrence)
+      isVisibleRangeSupported()
+        ? (occurrencesQuery.data?.items ?? []).map(mapCalendarOccurrence)
+        : []
     );
     const visibleEvents = createMemo(() =>
       events().filter((event) =>
@@ -79,7 +81,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
     );
     const isLoading = () =>
       visibleRange() === undefined ||
-      (supportedVisibleRange() !== undefined && occurrencesQuery.isPending);
+      (isVisibleRangeSupported() && occurrencesQuery.isPending);
     const isSyncing = () =>
       occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
