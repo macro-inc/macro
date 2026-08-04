@@ -19,7 +19,7 @@
 
 .calendar-view-content {
 	box-sizing: border-box;
-	padding: 0 1.25rem 1.25rem;
+	padding: 0.5rem;
 }
 
 .calendar-view .fc {
@@ -60,7 +60,7 @@
 }
 
 .calendar-view .fc .fc-col-header-cell {
-	background: var(--color-panel);
+	background: transparent;
 	border-width: 0;
 }
 
@@ -69,10 +69,6 @@
 	font-size: 0.875rem;
 	font-weight: 400;
 	padding: 0.375rem 0.25rem;
-}
-
-.calendar-view .fc .fc-dayGridMonth-view .fc-col-header-cell-cushion {
-	text-transform: uppercase;
 }
 
 .calendar-view .fc .fc-timegrid .fc-col-header-cell {
@@ -90,7 +86,6 @@
 .calendar-view .fc .fc-timegrid .calendar-day-header-weekday {
 	font-size: 0.875rem;
 	font-weight: 400;
-	text-transform: uppercase;
 }
 
 .calendar-view .fc .fc-timegrid .calendar-day-header-date {
@@ -134,6 +129,7 @@
 	justify-content: center;
 	margin: 0.25rem;
 	padding: 0;
+	border: 1px solid var(--color-accent);
 	border-radius: 0.375rem;
 	background: var(--color-accent);
 	color: var(--color-surface);
@@ -159,10 +155,19 @@
 }
 
 .calendar-view .fc .fc-timegrid .calendar-day-header-date-selected {
+	border: 1px solid var(--color-accent);
 	border-radius: 0.375rem;
 	background: var(--color-accent);
 	color: var(--color-surface);
 	font-weight: 600;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-col-header-cell.fc-day-today
+	.calendar-day-header-date-selected {
+	border-color: var(--color-accent);
 }
 
 .calendar-view .fc .fc-day-other .fc-daygrid-day-number {
@@ -455,11 +460,6 @@
 }
 
 @container calendar-view (max-width: 700px) {
-	.calendar-view-content {
-		padding-left: 0.75rem;
-		padding-right: 0.75rem;
-	}
-
 	.calendar-view .fc .fc-daygrid-day-number {
 		padding: 0.375rem;
 	}
@@ -467,7 +467,7 @@
 
 @media (max-width: 639px) {
 	html[data-touch-device="true"] .calendar-view-content {
-		padding-top: var(--mobile-content-inset-top, 0px);
-		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.75rem);
+		padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.5rem);
+		padding-bottom: calc(var(--mobile-content-inset-bottom, 0px) + 0.5rem);
 	}
 }

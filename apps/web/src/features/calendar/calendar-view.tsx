@@ -1,4 +1,9 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
@@ -250,7 +255,7 @@ function ResponsiveCalendarHost(props: ResponsiveCalendarHostProps) {
           setElement(calendarElement);
           props.onNarrowDayHeadersChange(calendarElement.clientWidth < 520);
         }}
-        class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl bg-surface"
+        class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl"
       />
     </Layer>
   );
@@ -597,8 +602,8 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
     <div class="flex shrink-0 items-center gap-1">
       <Button
         variant="ghost"
-        size="icon-md"
-        class="rounded-lg [&_svg]:size-4!"
+        size="icon-sm"
+        class="size-7 rounded-lg [&_svg]:size-4!"
         label="Previous period"
         onClick={() => calendar.api()?.prev()}
       >
@@ -606,8 +611,8 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
       </Button>
       <Button
         variant="ghost"
-        size="icon-md"
-        class="rounded-lg [&_svg]:size-4!"
+        size="icon-sm"
+        class="size-7 rounded-lg [&_svg]:size-4!"
         label="Next period"
         onClick={() => calendar.api()?.next()}
       >
@@ -659,6 +664,71 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
     setViewDropdownOpen(false);
   };
 
+  const renderPeriodSelector = () => (
+    <Dropdown
+      open={viewDropdownOpen()}
+      onOpenChange={setViewDropdownOpen}
+      placement="bottom-end"
+    >
+      <Dropdown.Trigger
+        depth={2}
+        aria-label="Choose calendar view"
+        class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
+      >
+        {CALENDAR_VIEW_TABS.find((view) => view.value === activeView())
+          ?.label ?? 'Month'}
+        <CaretDownIcon class="size-3 text-ink-muted" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-36">
+        <Dropdown.Group>
+          <Dropdown.RadioGroup value={activeView()} onChange={changeView}>
+            <For each={CALENDAR_VIEW_TABS}>
+              {(view) => (
+                <Dropdown.RadioItem closeOnSelect value={view.value}>
+                  <span class="flex-1">{view.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
+        <Show when={isNarrow()}>
+          <Dropdown.Group>
+            <Dropdown.Sub
+              onOpenChange={(open) => {
+                if (open) syncCustomDatePicker();
+              }}
+            >
+              <Dropdown.SubTrigger>
+                <CalendarIcon class="size-3.5 text-ink-muted" />
+                <span class="flex-1">Custom date…</span>
+                <CaretRightIcon class="size-3 text-ink-muted" />
+              </Dropdown.SubTrigger>
+              <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
+                <Dropdown.Group class="p-3">
+                  <MiniCalendar
+                    required
+                    fixedWeeks
+                    startOfWeek={props.weekStartsOn}
+                    value={currentDate()}
+                    month={customDateMonth()}
+                    focusedDay={customDateFocusedDay()}
+                    highlightedRange={miniCalendarHighlightedRange()}
+                    onMonthChange={navigateCustomDateMonth}
+                    onFocusedDayChange={setCustomDateFocusedDay}
+                    onValueChange={selectCustomDate}
+                  />
+                </Dropdown.Group>
+              </Dropdown.SubContent>
+            </Dropdown.Sub>
+          </Dropdown.Group>
+        </Show>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+
   const changeNarrowSourceVisibility = (sourceId: string, visible: boolean) => {
     props.onCloseEvent();
     props.onSourceVisibilityChange(sourceId, visible);
@@ -688,6 +758,47 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
 
   return (
     <>
+      <SplitHeaderLeft>
+        <HeaderIsland class="shrink">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="min-w-0 truncate text-base font-semibold text-ink">
+              {dateTitle()}
+            </span>
+            <Show when={!isTodayVisible()}>
+              <Button
+                variant="active"
+                size="sm"
+                class="h-7 rounded-lg px-3"
+                depth={2}
+                label="Go to today"
+                onClick={() => calendar.api()?.today()}
+              >
+                Today
+              </Button>
+            </Show>
+          </div>
+        </HeaderIsland>
+      </SplitHeaderLeft>
+      <SplitHeaderRight>
+        <HeaderIsland class="px-1">
+          <div class="flex items-center gap-1">
+            {renderPeriodSelector()}
+            {renderPeriodNavigation()}
+            <CalendarSettingsDropdown
+              sources={props.sources}
+              showCalendarVisibility={isNarrow()}
+              showWeekends={props.showWeekends}
+              timeFormat={props.timeFormat}
+              weekStartsOn={props.weekStartsOn}
+              isSourceVisible={props.isSourceVisible}
+              onShowWeekendsChange={changeShowWeekends}
+              onSourceVisibilityChange={changeNarrowSourceVisibility}
+              onTimeFormatChange={changeTimeFormat}
+              onWeekStartsOnChange={changeWeekStartsOn}
+            />
+          </div>
+        </HeaderIsland>
+      </SplitHeaderRight>
       <CalendarSidePanelSections
         currentDate={currentDate()}
         focusedDay={miniCalendarFocusedDay()}
@@ -732,111 +843,8 @@ function CalendarWorkspace(props: CalendarWorkspaceProps) {
           </Show>
         )}
       </Show>
-      <main class="calendar-view flex size-full min-h-0 bg-surface">
-        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col gap-3">
-          <div class="flex min-w-0 items-center gap-3">
-            <div class="flex shrink-0 items-center gap-1">
-              <Button
-                variant={isTodayVisible() ? 'base' : 'active'}
-                size="md"
-                class={
-                  isTodayVisible()
-                    ? 'rounded-lg bg-surface px-3'
-                    : 'rounded-lg px-3'
-                }
-                depth={2}
-                label="Go to today"
-                onClick={() => calendar.api()?.today()}
-              >
-                Today
-              </Button>
-              {renderPeriodNavigation()}
-            </div>
-            <div class="min-w-0 flex-1 truncate text-xl font-bold leading-tight tracking-tight text-ink">
-              {dateTitle()}
-            </div>
-            <div class="ml-auto flex shrink-0 items-center gap-1">
-              <Dropdown
-                open={viewDropdownOpen()}
-                onOpenChange={setViewDropdownOpen}
-                placement="bottom-end"
-              >
-                <Dropdown.Trigger
-                  depth={2}
-                  aria-label="Choose calendar view"
-                  class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
-                >
-                  {CALENDAR_VIEW_TABS.find(
-                    (view) => view.value === activeView()
-                  )?.label ?? 'Month'}
-                  <CaretDownIcon class="size-3 text-ink-muted" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="min-w-36">
-                  <Dropdown.Group>
-                    <Dropdown.RadioGroup
-                      value={activeView()}
-                      onChange={changeView}
-                    >
-                      <For each={CALENDAR_VIEW_TABS}>
-                        {(view) => (
-                          <Dropdown.RadioItem closeOnSelect value={view.value}>
-                            <span class="flex-1">{view.label}</span>
-                            <Dropdown.ItemIndicator>
-                              <CheckIcon class="size-3.5 text-accent" />
-                            </Dropdown.ItemIndicator>
-                          </Dropdown.RadioItem>
-                        )}
-                      </For>
-                    </Dropdown.RadioGroup>
-                  </Dropdown.Group>
-                  <Show when={isNarrow()}>
-                    <Dropdown.Group>
-                      <Dropdown.Sub
-                        onOpenChange={(open) => {
-                          if (open) syncCustomDatePicker();
-                        }}
-                      >
-                        <Dropdown.SubTrigger>
-                          <CalendarIcon class="size-3.5 text-ink-muted" />
-                          <span class="flex-1">Custom date…</span>
-                          <CaretRightIcon class="size-3 text-ink-muted" />
-                        </Dropdown.SubTrigger>
-                        <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
-                          <Dropdown.Group class="p-3">
-                            <MiniCalendar
-                              required
-                              fixedWeeks
-                              startOfWeek={props.weekStartsOn}
-                              value={currentDate()}
-                              month={customDateMonth()}
-                              focusedDay={customDateFocusedDay()}
-                              highlightedRange={miniCalendarHighlightedRange()}
-                              onMonthChange={navigateCustomDateMonth}
-                              onFocusedDayChange={setCustomDateFocusedDay}
-                              onValueChange={selectCustomDate}
-                            />
-                          </Dropdown.Group>
-                        </Dropdown.SubContent>
-                      </Dropdown.Sub>
-                    </Dropdown.Group>
-                  </Show>
-                </Dropdown.Content>
-              </Dropdown>
-
-              <CalendarSettingsDropdown
-                sources={props.sources}
-                showCalendarVisibility={isNarrow()}
-                showWeekends={props.showWeekends}
-                timeFormat={props.timeFormat}
-                weekStartsOn={props.weekStartsOn}
-                isSourceVisible={props.isSourceVisible}
-                onShowWeekendsChange={changeShowWeekends}
-                onSourceVisibilityChange={changeNarrowSourceVisibility}
-                onTimeFormatChange={changeTimeFormat}
-                onWeekStartsOnChange={changeWeekStartsOn}
-              />
-            </div>
-          </div>
+      <main class="calendar-view flex size-full min-h-0">
+        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
           <ResponsiveCalendarHost
             onNarrowDayHeadersChange={props.onNarrowDayHeadersChange}
           />
