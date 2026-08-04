@@ -195,6 +195,7 @@ export function CalendarView() {
 
 function CalendarViewContent() {
   const calendarView = useCalendarView();
+
   const handleDatesSet = ({ end, start }: DatesSetArg) => {
     calendarView.updateVisibleRange(start, end);
   };
@@ -272,7 +273,12 @@ function CalendarViewContent() {
           if (!event) return null;
 
           return (
-            <CalendarEventContent event={event} renderProps={renderProps} />
+            <CalendarEventContent
+              event={event}
+              renderProps={renderProps}
+              isSelected={calendarView.eventState.selectedEventId === event.id}
+              timeFormat={calendarView.displaySettings.timeFormat}
+            />
           );
         }}
       </FullCalendar.EventContent>
