@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM comms_channels\n            WHERE id = (SELECT channel_id FROM agent_session WHERE id = $1)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "130d6856de5ab8dd2a52f910678fd24425935fe420655baa78815766669a13fc"
+}

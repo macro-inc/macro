@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET thread_id = $2,\n                originating_message_id = $3,\n                bot_id = $4,\n                model = $5,\n                harness = $6,\n                repo_url = $7,\n                acp_session_id = $8,\n                status = $9,\n                status_event_name = $10,\n                modified_at = $11\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1cc225b42ca20df2c7e36c60a5d15e6686ecc419ebaf8879e130f2d76fd6adaf"
+}

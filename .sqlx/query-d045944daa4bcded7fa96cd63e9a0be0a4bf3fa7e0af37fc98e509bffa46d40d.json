@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, created_from_thread_id, thread_id, bot_id, model, harness,\n                repo_url, acp_session_id, status, status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE\n                (thread_id = $2 AND ($1::uuid IS NULL OR bot_id = $1))\n                OR ($1::uuid IS NOT NULL AND bot_id = $1 AND created_from_thread_id = $2)\n            ORDER BY (thread_id = $2) DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,\n                repo_url, acp_session_id, status, status_event_name, created_at, modified_at\n            FROM agent_session\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "created_from_thread_id",
+        "name": "channel_id",
         "type_info": "Uuid"
       },
       {
@@ -20,60 +20,65 @@
       },
       {
         "ordinal": 3,
-        "name": "bot_id",
+        "name": "originating_message_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 4,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "model",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "harness",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "repo_url",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "acp_session_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "status_event_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "modified_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
     "nullable": [
       false,
-      true,
       false,
+      true,
+      true,
       false,
       false,
       false,
@@ -85,5 +90,5 @@
       false
     ]
   },
-  "hash": "c4bc8c94d68308c8eb2c0a0fb839f7a1880a50636bfb3990a67cebec258087c6"
+  "hash": "d045944daa4bcded7fa96cd63e9a0be0a4bf3fa7e0af37fc98e509bffa46d40d"
 }

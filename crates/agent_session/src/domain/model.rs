@@ -40,12 +40,12 @@ impl std::fmt::Display for AgentSessionId {
 
 #[derive(Debug, Clone, Default)]
 pub enum SessionStatus {
-    /// No status updates received
+    /// No status updates received.
     #[default]
     NoMessages,
-    /// EventRecieved from container
+    /// The latest status received from the container.
     Event(SystemEvent),
-    /// A session disconnected without sending a clsoed event
+    /// The session disconnected without sending a closed event.
     Disconnected,
 }
 
@@ -54,10 +54,12 @@ pub enum SessionStatus {
 pub struct AgentSession {
     /// id of the agent session
     pub id: AgentSessionId,
-    /// if this was created by `@` in a thread
-    pub created_from_thread_id: Option<Uuid>,
-    /// the thread id of the comms thread
-    pub thread_id: Uuid,
+    /// The dedicated channel created for this session.
+    pub channel_id: Uuid,
+    /// The root message where the bot was originally invoked, if any.
+    pub thread_id: Option<Uuid>,
+    /// The exact message that originally invoked the bot, if any.
+    pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent
     pub bot_id: BotId,
     /// model slug - TODO: probably a better type here
@@ -73,20 +75,15 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
-/// One bot's session, and how the thread of an incoming channel message
-/// relates to it.
-///
-/// Multiple bots can each have a session associated with the same thread. This
-/// identifies a matching session and whether the thread is the one it was
-/// created from or the session's own thread.
+/// How an incoming channel context relates to an agent session.
 #[derive(Debug, Clone)]
-pub enum ThreadSession {
-    /// No session matched the thread lookup.
+pub enum ChannelSession {
+    /// No session matched the channel context.
     None,
-    /// The bot's session, created from the thread the message is in.
-    CreatedFromThisThread(AgentSession),
-    /// The message arrived inside the session's own thread.
-    InSessionThread(AgentSession),
+    /// The bot's session was created from the incoming thread.
+    CreatedFromThread(AgentSession),
+    /// The message arrived in the session's dedicated agent channel.
+    InSessionChannel(AgentSession),
 }
 
 /// One logical protocol message with its direction.
