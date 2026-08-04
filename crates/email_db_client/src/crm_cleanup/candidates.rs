@@ -4,7 +4,14 @@ use sqlx::types::Uuid;
 
 /// Upserts one cleanup candidate per email for the link. The unique index on
 /// `(link_id, contact_email)` dedupes repeat deletes into a single pending row.
-/// Returns the number of rows actually inserted.
+///
+/// A repeat delete refreshes `created_at` rather than being ignored: the
+/// lister treats that timestamp as a settling clock for asynchronous CRM
+/// populate, and each new deletion implies a new message that may have its own
+/// populate still in flight. Keeping the original timestamp would let the
+/// clock expire while that populate is pending.
+///
+/// Returns the number of rows recorded (inserted or refreshed).
 #[tracing::instrument(skip(pool, contact_emails), err)]
 pub async fn insert_candidates(
     pool: &PgPool,
@@ -19,7 +26,7 @@ pub async fn insert_candidates(
         r#"
         INSERT INTO crm_cleanup_candidates (link_id, contact_email)
         SELECT $1, unnest($2::text[])
-        ON CONFLICT (link_id, contact_email) DO NOTHING
+        ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at = now()
         "#,
         link_id,
         contact_emails
