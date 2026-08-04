@@ -344,7 +344,7 @@ export function Channel(props: ChannelProps) {
 
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
-  const { popoverSplit } = useSplitLayout();
+  const { popoverSplit, openWithSplit } = useSplitLayout();
 
   // Placeholder name: a 1:1 DM named "First Last" shortens to the first
   // name; channels (and group DMs like "A, B") keep their full name.
@@ -621,22 +621,43 @@ export function Channel(props: ChannelProps) {
   const onSendTask: ChannelInputProps['onSendTask'] = (task) => {
     const senderId = userId();
     if (!senderId) return;
-    sendMessageMutation.mutate({
-      channelID: props.channelId,
-      senderId,
-      optimisticId: crypto.randomUUID(),
-      message: {
-        content: buildMentionMarkdownString({
-          type: 'document',
-          documentId: task.documentId,
-          documentName: task.title,
-          blockName: 'task',
-        }),
-        mentions: [{ entity_type: 'document', entity_id: task.documentId }],
-        attachments: [],
+    sendMessageMutation.mutate(
+      {
+        channelID: props.channelId,
+        senderId,
+        optimisticId: crypto.randomUUID(),
+        message: {
+          content: buildMentionMarkdownString({
+            type: 'document',
+            documentId: task.documentId,
+            documentName: task.title,
+            blockName: 'task',
+          }),
+          mentions: [{ entity_type: 'document', entity_id: task.documentId }],
+          attachments: [],
+        },
+        optimisticAttachments: [],
       },
-      optimisticAttachments: [],
-    });
+      {
+        // The task itself was created before this send, so don't restore the
+        // composer (retrying there would create a duplicate) — point at the
+        // task instead.
+        onError: () => {
+          toast.failure('Task created, but sharing it to the channel failed', {
+            actions: [
+              {
+                label: 'Open task',
+                onClick: () =>
+                  openWithSplit(
+                    { type: 'task', id: task.documentId },
+                    { referredFrom: null }
+                  ),
+              },
+            ],
+          });
+        },
+      }
+    );
   };
 
   const isChannelReady = () => {

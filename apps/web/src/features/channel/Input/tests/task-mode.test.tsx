@@ -4,6 +4,7 @@
 
 import { render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -127,7 +128,29 @@ vi.mock(
         selection: undefined,
         _internal: {},
       };
-      const builder: any = {
+      type BuilderMock = Record<
+        | 'namespace'
+        | 'withMentions'
+        | 'withEmojis'
+        | 'withActions'
+        | 'withLinks'
+        | 'withHistory'
+        | 'withCode'
+        | 'withFilePaste'
+        | 'withRestoreFocus'
+        | 'withSelectionData'
+        | 'withFloatingFormatMenu'
+        | 'use'
+        | 'onChange'
+        | 'onEnter',
+        () => BuilderMock
+      > & {
+        buildHandle: () => typeof handle;
+        controls: typeof controls;
+        lexical: typeof lexical;
+        selection: undefined;
+      };
+      const builder: BuilderMock = {
         namespace: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
@@ -188,10 +211,10 @@ vi.mock('../TaskComposer', () => ({
       title: string;
       content: string;
     }) => void;
-    modeSwitch?: unknown;
+    modeSwitch?: JSX.Element;
   }) => (
     <div data-testid="task-composer">
-      {props.modeSwitch as any}
+      {props.modeSwitch}
       <button
         type="button"
         data-testid="task-composer-send"

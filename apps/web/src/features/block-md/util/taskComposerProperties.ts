@@ -13,12 +13,11 @@ import type {
   PropertyApiValues,
   PropertyOption,
 } from '@property/types';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useTagsQuery } from '@queries/properties/tags';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
-import { useQuery } from '@tanstack/solid-query';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
 /** Props shown in the composer (Linear-style left-to-right order). */
@@ -150,25 +149,9 @@ export function createTaskComposerProperties(args: {
     Record<string, PropertyApiValues>
   >(args.initialValues);
 
-  const systemPropertiesQuery = useQuery(() => ({
-    queryKey: ['compose-task', 'system-properties'],
-    queryFn: async () => {
-      const result = await propertiesServiceClient.listProperties({
-        scope: 'system',
-        include_options: true,
-      });
-      if (result.isErr()) {
-        throw new Error('Failed to fetch system properties');
-      }
-      const data = result.value;
-      return data;
-    },
-    staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this
-    retry: 1,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    placeholderData: (prev) => prev,
+  const systemPropertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'system',
+    includeOptions: true,
   }));
   const tagsQuery = useTagsQuery();
 
