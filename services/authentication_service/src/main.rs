@@ -408,6 +408,7 @@ async fn main() -> anyhow::Result<()> {
             sqs_client,
             environment: config.environment,
             rate_limit_service: rate_limit,
+            calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {

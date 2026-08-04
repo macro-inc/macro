@@ -128,7 +128,11 @@ pub async fn init_gmail_link_handler(
         return Err(InitGmailLinkError::TooManyInProgressLinks);
     }
 
-    let authorization_scopes = format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter());
+    let authorization_scopes = if ctx.calendar_scope_enabled {
+        format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter())
+    } else {
+        GMAIL_SCOPES.to_string()
+    };
     let requested_google_scopes: Vec<String> = authorization_scopes
         .split_ascii_whitespace()
         .map(ToOwned::to_owned)
