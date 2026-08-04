@@ -1165,7 +1165,7 @@
     "/mobile-welcome-email": {
       "post": {
         "tags": ["mobile_welcome_email"],
-        "summary": "Sends a mobile welcome email to the given address, if it hasn't already been sent\nand the email is not blocked.",
+        "summary": "Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome\nemail inviting them to register on desktop. No-ops if the address was already\nenrolled, and rejects blocked addresses.",
         "operationId": "send_mobile_welcome_email",
         "requestBody": {
           "content": {
@@ -4326,7 +4326,7 @@
         "properties": {
           "sent": {
             "type": "boolean",
-            "description": "Whether the email was sent (false if it was already sent previously)"
+            "description": "Whether the lead was enrolled (false if they were already enrolled previously)"
           }
         }
       },

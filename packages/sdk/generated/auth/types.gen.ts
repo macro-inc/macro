@@ -672,7 +672,7 @@ export type SendMobileWelcomeEmailRequest = {
 
 export type SendMobileWelcomeEmailResponse = {
     /**
-     * Whether the email was sent (false if it was already sent previously)
+     * Whether the lead was enrolled (false if they were already enrolled previously)
      */
     sent: boolean;
 };
