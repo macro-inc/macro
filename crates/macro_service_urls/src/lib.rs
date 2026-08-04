@@ -537,7 +537,8 @@ service_url! {
             prod: "wss://connection-gateway.macro.com",
         },
         /// Agent proxy WebSocket URL (the shared runtime endpoint external
-        /// agent runtimes dial; see `crates/agent_proxy`).
+        /// agent runtimes dial). Unused: its service is gone, and the URL
+        /// stays only until the deployed stack behind it is torn down.
         pub AgentProxyWebsocketUrl {
             local: "ws://localhost:8091",
             dev: "wss://agent-proxy-dev.macro.com",
