@@ -2823,7 +2823,7 @@ async fn github_pr_status_changed_edited_does_not_notify() {
 
 #[tokio::test]
 async fn authenticated_installation_setup_backfill_does_not_notify() {
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     service.client.set_user_installations(&[12345]);
     service
         .client
@@ -5222,6 +5222,19 @@ fn installation_setup_user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|setup@example.com".to_string()).unwrap()
 }
 
+/// Repo where the setup user has linked the stub client's GitHub account,
+/// which `complete_installation_setup` requires of whoever finishes the flow.
+fn installation_setup_repo() -> StubSyncRepo {
+    StubSyncRepo::new().with_github_link(
+        &TEST_GITHUB_USER_ID.to_string(),
+        installation_setup_user().as_ref(),
+    )
+}
+
+fn make_setup_sync_service() -> TestGithubSyncService {
+    make_sync_service_with_repo(installation_setup_repo())
+}
+
 fn installation_setup_state(team_id: Option<uuid::Uuid>, exp: i64) -> String {
     sign_installation_state(
         &InstallationState {
@@ -5313,7 +5326,7 @@ async fn begin_installation_setup_rejects_non_member() {
 #[tokio::test]
 async fn complete_installation_setup_associates_team_personal_and_update_sources() {
     let team_id = uuid::Uuid::new_v4();
-    let team_service = make_sync_service();
+    let team_service = make_setup_sync_service();
     team_service.client.set_user_installations(&[41]);
     team_service
         .complete_installation_setup(
@@ -5332,7 +5345,7 @@ async fn complete_installation_setup_associates_team_personal_and_update_sources
         )]
     );
 
-    let personal_service = make_sync_service();
+    let personal_service = make_setup_sync_service();
     personal_service.client.set_user_installations(&[42]);
     personal_service
         .complete_installation_setup(
@@ -5371,7 +5384,7 @@ async fn update_associates_an_existing_installation_with_one_new_source() {
     let existing_team = uuid::Uuid::new_v4();
     let requested_team = uuid::Uuid::new_v4();
     let service =
-        make_sync_service_with_repo(StubSyncRepo::new().with_installation_sources(
+        make_sync_service_with_repo(installation_setup_repo().with_installation_sources(
             "43",
             vec![GithubAppInstallationSource::Team(existing_team)],
         ));
@@ -5434,7 +5447,7 @@ async fn complete_installation_setup_rejects_expired_and_tampered_state() {
 
 #[tokio::test]
 async fn complete_installation_setup_rejects_foreign_installation() {
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     service.client.set_user_installations(&[1, 2]);
     let result = service
         .complete_installation_setup(
@@ -5451,7 +5464,7 @@ async fn complete_installation_setup_rejects_foreign_installation() {
 
 #[tokio::test]
 async fn complete_installation_setup_fails_closed_on_exchange_or_listing_failure() {
-    let exchange_service = make_sync_service();
+    let exchange_service = make_setup_sync_service();
     exchange_service.client.fail_setup_code_exchange();
     let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
     assert!(
@@ -5468,7 +5481,7 @@ async fn complete_installation_setup_fails_closed_on_exchange_or_listing_failure
     );
     assert!(exchange_service.repo.installation_sources().is_empty());
 
-    let listing_service = make_sync_service();
+    let listing_service = make_setup_sync_service();
     listing_service.client.fail_user_installation_list();
     assert!(
         listing_service
@@ -5481,7 +5494,7 @@ async fn complete_installation_setup_fails_closed_on_exchange_or_listing_failure
 
 #[tokio::test]
 async fn complete_installation_setup_accepts_installation_from_complete_paginated_result() {
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     let installation_ids: Vec<u64> = (1..=150).collect();
     service.client.set_user_installations(&installation_ids);
 
@@ -5501,7 +5514,7 @@ async fn complete_installation_setup_accepts_installation_from_complete_paginate
 #[tokio::test]
 async fn complete_installation_setup_request_parks_team_pending_request() {
     let team_id = uuid::Uuid::new_v4();
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     service
         .complete_installation_setup(
             &installation_setup_state(Some(team_id), chrono::Utc::now().timestamp() + 60),
@@ -5533,7 +5546,7 @@ async fn complete_installation_setup_request_parks_team_pending_request() {
 
 #[tokio::test]
 async fn complete_installation_setup_request_parks_personal_pending_request() {
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     service
         .complete_installation_setup(
             &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
@@ -5582,7 +5595,7 @@ async fn complete_installation_setup_request_rejects_invalid_state_and_missing_c
 
 #[tokio::test]
 async fn complete_installation_setup_request_fails_closed_on_identity_failure() {
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
     service.client.fail_get_authenticated_user();
 
     assert!(
@@ -5602,7 +5615,7 @@ async fn complete_installation_setup_request_fails_closed_on_identity_failure() 
 #[tokio::test]
 async fn requested_install_is_associated_after_admin_approval() {
     let team_id = uuid::Uuid::new_v4();
-    let service = make_sync_service();
+    let service = make_setup_sync_service();
 
     // A team member requests the org install: no installation exists yet.
     service
@@ -5659,8 +5672,58 @@ async fn complete_installation_setup_rejects_missing_fields_and_unknown_action()
 }
 
 #[tokio::test]
-async fn repeated_installation_association_is_idempotent() {
+async fn complete_installation_setup_rejects_unlinked_completer() {
+    // A signed state alone must not be honored: whoever finishes the flow has
+    // to be linked to the Macro user the state was minted for, or a leaked or
+    // attacker-minted state could bind an installation to a foreign source.
     let service = make_sync_service();
+    service.client.set_user_installations(&[9]);
+    let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
+
+    assert!(matches!(
+        service
+            .complete_installation_setup(&state, Some("code"), Some(9), "install")
+            .await,
+        Err(GithubError::SetupUserNotLinked)
+    ));
+    assert!(matches!(
+        service
+            .complete_installation_setup(&state, Some("code"), None, "request")
+            .await,
+        Err(GithubError::SetupUserNotLinked)
+    ));
+
+    assert!(service.repo.installation_sources().is_empty());
+    assert!(service.repo.installation_requests().is_empty());
+    // The identity check happens before the ownership listing.
+    assert!(service.client.user_installation_list_calls().is_empty());
+}
+
+#[tokio::test]
+async fn complete_installation_setup_rejects_completer_linked_to_other_user() {
+    let service = make_sync_service_with_repo(StubSyncRepo::new().with_github_link(
+        &TEST_GITHUB_USER_ID.to_string(),
+        "macro|someone-else@example.com",
+    ));
+    service.client.set_user_installations(&[9]);
+
+    assert!(matches!(
+        service
+            .complete_installation_setup(
+                &installation_setup_state(None, chrono::Utc::now().timestamp() + 60),
+                Some("code"),
+                Some(9),
+                "install",
+            )
+            .await,
+        Err(GithubError::SetupUserNotLinked)
+    ));
+    assert!(service.repo.installation_sources().is_empty());
+}
+
+#[tokio::test]
+async fn repeated_installation_association_is_idempotent() {
+    let service = make_setup_sync_service();
     service.client.set_user_installations(&[77]);
     let state = installation_setup_state(None, chrono::Utc::now().timestamp() + 60);
 

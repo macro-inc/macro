@@ -221,7 +221,9 @@ pub trait GithubSyncService: Send + Sync + 'static {
         }
     }
 
-    /// Completes an installation setup callback after verifying its state and ownership.
+    /// Completes an installation setup callback after verifying its state,
+    /// that the completing GitHub account is linked to the state's Macro user,
+    /// and (for install/update) that the account owns the installation.
     fn complete_installation_setup(
         &self,
         _state: &str,

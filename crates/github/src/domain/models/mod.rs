@@ -57,4 +57,8 @@ pub enum GithubError {
     /// The installation is not visible to the GitHub user who completed setup.
     #[error("GitHub installation is not owned by the setup user")]
     InstallationNotOwned,
+    /// The GitHub account completing setup is not linked to the Macro user the
+    /// setup state was minted for.
+    #[error("GitHub account is not linked to the Macro user who started setup")]
+    SetupUserNotLinked,
 }

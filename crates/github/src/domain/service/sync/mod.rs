@@ -1075,6 +1075,31 @@ impl<
             )
             .await?;
 
+        // The state is a bearer token carried through GitHub in a URL, so it
+        // must not be honored on signature and expiry alone: require the
+        // GitHub account completing the flow to be linked to the Macro user
+        // the state was minted for. This stops a leaked or attacker-minted
+        // state from binding someone else's installation to a foreign source.
+        let github_user_id = self
+            .client
+            .get_authenticated_user(access_token.as_str())
+            .await?
+            .id
+            .to_string();
+        let links = self
+            .repo
+            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&github_user_id))
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+        let completer_is_state_user = links.get(&github_user_id).is_some_and(|macro_ids| {
+            macro_ids
+                .iter()
+                .any(|id| id == state.macro_user_id.as_ref())
+        });
+        if !completer_is_state_user {
+            return Err(GithubError::SetupUserNotLinked);
+        }
+
         let source = match state.team_id {
             Some(team_id) => GithubAppInstallationSource::Team(team_id),
             None => GithubAppInstallationSource::User(state.macro_user_id.into()),
@@ -1084,13 +1109,9 @@ impl<
             // Park the requested source keyed by the requester's GitHub
             // identity so the installation.created webhook can complete the
             // association once an org admin approves.
-            let requester = self
-                .client
-                .get_authenticated_user(access_token.as_str())
-                .await?;
             return self
                 .repo
-                .upsert_installation_request(&requester.id.to_string(), &source)
+                .upsert_installation_request(&github_user_id, &source)
                 .await
                 .map_err(|error| GithubError::Internal(error.into()));
         };
