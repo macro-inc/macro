@@ -497,7 +497,9 @@ export function ChannelInput(props: ChannelInputProps) {
               singleLine
             />
           )}
-          placeholder={inputState.view().placeholder}
+          // Read through the reactive prop — the view freezes the input at
+          // mount, but the placeholder can update (e.g. channel name loads).
+          placeholder={props.input.placeholder}
           attachmentCount={inputState.view().attachments?.length ?? 0}
           pending={inputState.view().hasPendingAttachments}
           disabled={!hasSendableInputContent(inputState.view())}
@@ -579,7 +581,7 @@ export function ChannelInput(props: ChannelInputProps) {
                     <Input.Editor>
                       <MarkdownShell
                         config={markdownEditor}
-                        placeholder={inputState.view().placeholder}
+                        placeholder={props.input.placeholder}
                         initialValue={inputState.view().value}
                         autofocus={
                           !isMobile() &&

@@ -859,7 +859,7 @@ export function Channel(props: ChannelProps) {
                           input={{
                             mode: 'channel',
                             id: `channel-input-${props.channelId}`,
-                            placeholder: 'Message channel',
+                            placeholder: `Message ${channelName() ?? 'channel'}, type @ to share or / for commands`,
                           }}
                           participants={participants.users}
                           bots={channelBotMentionUsers}
