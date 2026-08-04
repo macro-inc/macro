@@ -1,0 +1,1 @@
+DROP INDEX agent_session_created_from_thread_id_idx;

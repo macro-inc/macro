@@ -5,20 +5,36 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
-pub struct UninitializedSession;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct AgentSessionId(Uuid);
 
 impl AgentSessionId {
-    /// Wrap an existing UUID as an agent session id.
-    pub fn new_from_uuid(id: Uuid) -> Self {
+    #[cfg(any(test, feature = "test-utils"))]
+    pub const TEST_A: Self = Self(Uuid::from_u128(0xA));
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub const TEST_B: Self = Self(Uuid::from_u128(0xB));
+
+    /// Mint a fresh session id, backed by a UUIDv7.
+    #[expect(clippy::new_without_default, reason = "each call mints a distinct id")]
+    pub fn new() -> Self {
+        Self(macro_uuid::generate_uuid_v7())
+    }
+
+    pub(crate) fn new_from_uuid(id: Uuid) -> Self {
         Self(id)
     }
 
     /// The underlying UUID.
     pub fn as_uuid(&self) -> Uuid {
         self.0
+    }
+}
+
+impl std::fmt::Display for AgentSessionId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
@@ -35,9 +51,9 @@ pub enum SessionStatus {
 
 /// A running or historical agent coding session.
 #[derive(Debug, Clone)]
-pub struct AgentSession<SessionId> {
+pub struct AgentSession {
     /// id of the agent session
-    pub id: SessionId,
+    pub id: AgentSessionId,
     /// if this was created by `@` in a thread
     pub created_from_thread_id: Option<Uuid>,
     /// the thread id of the comms thread
@@ -55,6 +71,23 @@ pub struct AgentSession<SessionId> {
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+/// One bot's session, and how the thread of an incoming channel message
+/// relates to it.
+///
+/// A session is scoped to one bot in one thread, and a message can relate to
+/// it two different ways: posted in the thread the session was *created from*,
+/// or posted inside the session's own thread. Callers act differently on each,
+/// so one lookup answers both rather than making them ask twice.
+#[derive(Debug, Clone)]
+pub enum ThreadSession {
+    /// No session for this bot in this thread.
+    None,
+    /// The bot's session, created from the thread the message is in.
+    CreatedFromThisThread(AgentSession),
+    /// The message arrived inside the session's own thread.
+    InSessionThread(AgentSession),
 }
 
 /// One logical protocol message with its direction.

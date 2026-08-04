@@ -6,7 +6,7 @@ mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Message, SessionStatus, UninitializedSession,
+    AgentSession, AgentSessionId, AgentSessionLog, Message, SessionStatus, ThreadSession,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -94,7 +94,7 @@ struct AgentSessionRow {
     modified_at: DateTime<Utc>,
 }
 
-impl TryFrom<AgentSessionRow> for AgentSession<AgentSessionId> {
+impl TryFrom<AgentSessionRow> for AgentSession {
     type Error = anyhow::Error;
 
     fn try_from(row: AgentSessionRow) -> anyhow::Result<Self> {
@@ -116,8 +116,7 @@ impl TryFrom<AgentSessionRow> for AgentSession<AgentSessionId> {
 }
 
 impl AgentSessionRepo for PgAgentSessionRepo {
-    async fn create(&self, session: AgentSession<UninitializedSession>) -> Result<AgentSessionId> {
-        let id = AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    async fn create(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
         sqlx::query!(
             r#"
@@ -127,7 +126,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
-            id.as_uuid(),
+            session.id.as_uuid(),
             session.created_from_thread_id,
             session.thread_id,
             session.bot_id.as_uuid(),
@@ -144,10 +143,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to create agent session")?;
 
-        Ok(id)
+        Ok(())
     }
 
-    async fn get(&self, id: AgentSessionId) -> Result<AgentSession<AgentSessionId>> {
+    async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -167,7 +166,40 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
-    async fn update(&self, session: AgentSession<AgentSessionId>) -> Result<()> {
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<(BotId, ThreadSession)>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, created_from_thread_id, thread_id, bot_id, model, harness,
+                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
+            FROM agent_session
+            WHERE created_from_thread_id = $1 OR thread_id = $1
+            "#,
+            thread_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to find agent sessions for thread")?;
+
+        rows.into_iter()
+            .map(|row| {
+                // The session's own thread wins when both columns match: a
+                // message there is always for the agent.
+                let in_session_thread = row.thread_id == thread_id;
+                let session: AgentSession = row.try_into()?;
+                let bot_id = session.bot_id;
+                let thread_session = if in_session_thread {
+                    ThreadSession::InSessionThread(session)
+                } else {
+                    ThreadSession::CreatedFromThisThread(session)
+                };
+                Ok((bot_id, thread_session))
+            })
+            .collect()
+    }
+
+    async fn update(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
         let result = sqlx::query!(
             r#"

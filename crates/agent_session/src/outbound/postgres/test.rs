@@ -31,10 +31,10 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
     bot.id
 }
 
-fn new_session(bot_id: BotId, thread_id: Uuid) -> AgentSession<UninitializedSession> {
+fn new_session(bot_id: BotId, thread_id: Uuid) -> AgentSession {
     let now = Utc::now();
     AgentSession {
-        id: UninitializedSession,
+        id: AgentSessionId::new(),
         created_from_thread_id: None,
         thread_id,
         bot_id,
@@ -46,6 +46,15 @@ fn new_session(bot_id: BotId, thread_id: Uuid) -> AgentSession<UninitializedSess
         created_at: now,
         modified_at: now,
     }
+}
+
+/// Create `session`, returning the caller-minted id for convenience.
+async fn create_session(repo: &PgAgentSessionRepo, session: AgentSession) -> AgentSessionId {
+    let id = session.id;
+    AgentSessionRepo::create(repo, session)
+        .await
+        .expect("create agent session");
+    id
 }
 
 fn acp_notification() -> AcpMessage {
@@ -61,9 +70,7 @@ async fn create_and_get_round_trips(pool: PgPool) {
     let bot_id = create_test_bot(&pool).await;
     let thread_id = macro_uuid::generate_uuid_v7();
 
-    let id = AgentSessionRepo::create(&repo, new_session(bot_id, thread_id))
-        .await
-        .expect("create agent session");
+    let id = create_session(&repo, new_session(bot_id, thread_id)).await;
 
     let session = repo.get(id).await.expect("get agent session");
     assert_eq!(session.id, id);
@@ -77,9 +84,7 @@ async fn update_persists_event_status(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let thread_id = macro_uuid::generate_uuid_v7();
-    let id = AgentSessionRepo::create(&repo, new_session(bot_id, thread_id))
-        .await
-        .expect("create agent session");
+    let id = create_session(&repo, new_session(bot_id, thread_id)).await;
 
     let mut session = repo.get(id).await.expect("get agent session");
     session.status = SessionStatus::Event(SystemEvent::AcpReady);
@@ -97,7 +102,7 @@ async fn update_persists_event_status(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
-    let missing = AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let missing = AgentSessionId::new();
 
     assert!(repo.get(missing).await.is_err());
 }
@@ -107,9 +112,7 @@ async fn delete_removes_session(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let thread_id = macro_uuid::generate_uuid_v7();
-    let id = AgentSessionRepo::create(&repo, new_session(bot_id, thread_id))
-        .await
-        .expect("create agent session");
+    let id = create_session(&repo, new_session(bot_id, thread_id)).await;
 
     repo.delete(id).await.expect("delete agent session");
 
@@ -121,9 +124,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let thread_id = macro_uuid::generate_uuid_v7();
-    let session_id = AgentSessionRepo::create(&repo, new_session(bot_id, thread_id))
-        .await
-        .expect("create agent session");
+    let session_id = create_session(&repo, new_session(bot_id, thread_id)).await;
 
     let user = user_id("macro|agent-session-log-test@example.com");
 
@@ -170,4 +171,57 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
         logs[1].content,
         Message::ToRuntime(ToRuntimeMessage::Acp(_))
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_all_for_thread_distinguishes_both_thread_columns(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_a = create_test_bot(&pool).await;
+    let bot_b = create_test_bot(&pool).await;
+    let thread = macro_uuid::generate_uuid_v7();
+
+    // bot_a's session lives in `thread` (its dedicated thread).
+    let session_a = create_session(&repo, new_session(bot_a, thread)).await;
+
+    // bot_b's session was created *from* `thread` but lives elsewhere.
+    let mut from_thread = new_session(bot_b, macro_uuid::generate_uuid_v7());
+    from_thread.created_from_thread_id = Some(thread);
+    let session_b = create_session(&repo, from_thread).await;
+
+    // Unrelated session in some other thread never appears.
+    create_session(&repo, new_session(bot_a, macro_uuid::generate_uuid_v7())).await;
+
+    let mut found = repo
+        .find_all_for_thread(thread)
+        .await
+        .expect("find sessions for thread");
+    found.sort_by_key(|(bot, _)| *bot != bot_a);
+
+    assert_eq!(found.len(), 2);
+    let (found_bot_a, in_thread) = &found[0];
+    assert_eq!(*found_bot_a, bot_a);
+    let ThreadSession::InSessionThread(session) = in_thread else {
+        panic!("expected the dedicated-thread session, got {in_thread:?}");
+    };
+    assert_eq!(session.id, session_a);
+
+    let (found_bot_b, from_this_thread) = &found[1];
+    assert_eq!(*found_bot_b, bot_b);
+    let ThreadSession::CreatedFromThisThread(session) = from_this_thread else {
+        panic!("expected the created-from session, got {from_this_thread:?}");
+    };
+    assert_eq!(session.id, session_b);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_all_for_thread_returns_nothing_for_unknown_thread(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    create_session(&repo, new_session(bot, macro_uuid::generate_uuid_v7())).await;
+
+    let found = repo
+        .find_all_for_thread(macro_uuid::generate_uuid_v7())
+        .await
+        .expect("find sessions for unknown thread");
+    assert!(found.is_empty());
 }

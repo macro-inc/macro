@@ -3,9 +3,13 @@ name = "agent_session"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-utils = ["dep:mockall"]
+
 [dependencies]
 
 macro_uuid = { path = "../macro_uuid" }
+mockall = { workspace = true, optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 bots = { path = "../bots"}
 macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
