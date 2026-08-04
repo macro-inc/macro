@@ -31,25 +31,10 @@ async fn body_json(response: Response) -> serde_json::Value {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn trigger_created_zero_grant_is_unrecorded(pool: PgPool) {
-    let link_id = insert_email_link(&pool).await;
-    let grant_version = sqlx::query_scalar!(
-        "SELECT grant_version FROM email_link_google_scopes WHERE link_id = $1",
-        link_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    assert_eq!(grant_version, 0);
-    assert!(has_unrecorded_google_grant(&pool, link_id).await);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn missing_side_table_state_is_unrecorded(pool: PgPool) {
+async fn zero_grant_is_unrecorded(pool: PgPool) {
     let link_id = insert_email_link(&pool).await;
     sqlx::query!(
-        "DELETE FROM email_link_google_scopes WHERE link_id = $1",
+        "INSERT INTO email_link_google_scopes (link_id) VALUES ($1)",
         link_id,
     )
     .execute(&pool)
@@ -60,10 +45,17 @@ async fn missing_side_table_state_is_unrecorded(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_side_table_state_is_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+
+    assert!(has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn recorded_side_table_grant_is_not_unrecorded(pool: PgPool) {
     let link_id = insert_email_link(&pool).await;
     sqlx::query!(
-        "UPDATE email_link_google_scopes SET grant_version = 1 WHERE link_id = $1",
+        "INSERT INTO email_link_google_scopes (link_id, grant_version) VALUES ($1, 1)",
         link_id,
     )
     .execute(&pool)

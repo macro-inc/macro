@@ -165,69 +165,6 @@ fn timed_upsert(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_grant_writes_mirror_without_regressing_side_table_state(pool: PgPool) {
-    let link_id = insert_link(&pool, "macro|calendar-trigger@example.com").await;
-    let newer_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
-
-    sqlx::query!(
-        r#"
-        UPDATE email_links
-        SET google_granted_scopes = $2,
-            google_grant_version = 2
-        WHERE id = $1
-        "#,
-        link_id,
-        &newer_scopes,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let mirrored = sqlx::query!(
-        r#"
-        SELECT granted_scopes, grant_version
-        FROM email_link_google_scopes
-        WHERE link_id = $1
-        "#,
-        link_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(mirrored.granted_scopes, newer_scopes);
-    assert_eq!(mirrored.grant_version, 2);
-
-    let older_scopes = vec!["https://www.googleapis.com/auth/gmail.modify".to_string()];
-    sqlx::query!(
-        r#"
-        UPDATE email_links
-        SET google_granted_scopes = $2,
-            google_grant_version = 1
-        WHERE id = $1
-        "#,
-        link_id,
-        &older_scopes,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let retained = sqlx::query!(
-        r#"
-        SELECT granted_scopes, grant_version
-        FROM email_link_google_scopes
-        WHERE link_id = $1
-        "#,
-        link_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(retained.granted_scopes, newer_scopes);
-    assert_eq!(retained.grant_version, 2);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn applying_grant_recreates_missing_side_table_state_from_version_zero(pool: PgPool) {
     let link_id = insert_link(&pool, "macro|calendar-missing-grant@example.com").await;
     let sentinel_updated_at = Utc.with_ymd_and_hms(2020, 1, 2, 3, 4, 5).unwrap();
@@ -257,9 +194,7 @@ async fn applying_grant_recreates_missing_side_table_state_from_version_zero(poo
     let persisted = sqlx::query!(
         r#"
         SELECT
-            l.google_granted_scopes AS "legacy_scopes!",
-            l.google_grant_version AS "legacy_version!",
-            l.updated_at AS "legacy_updated_at!",
+            l.updated_at AS "link_updated_at!",
             g.granted_scopes AS "side_scopes!",
             g.grant_version AS "side_version!"
         FROM email_links l
@@ -271,9 +206,7 @@ async fn applying_grant_recreates_missing_side_table_state_from_version_zero(poo
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(persisted.legacy_scopes.is_empty());
-    assert_eq!(persisted.legacy_version, 0);
-    assert_eq!(persisted.legacy_updated_at, sentinel_updated_at);
+    assert_eq!(persisted.link_updated_at, sentinel_updated_at);
     assert_eq!(
         GoogleScopeSet::from_scopes(persisted.side_scopes),
         complete_grant()
