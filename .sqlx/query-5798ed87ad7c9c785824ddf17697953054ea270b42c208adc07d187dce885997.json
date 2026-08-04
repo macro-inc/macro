@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM crm_cleanup_candidates c\n        USING UNNEST($1::uuid[], $2::text[]) AS p(link_id, contact_email)\n        WHERE c.link_id = p.link_id AND c.contact_email = p.contact_email\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5798ed87ad7c9c785824ddf17697953054ea270b42c208adc07d187dce885997"
+}

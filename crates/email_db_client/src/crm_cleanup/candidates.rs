@@ -59,6 +59,36 @@ pub async fn list_candidates_page(
     Ok(candidates)
 }
 
+/// Claims (deletes) a batch of candidate rows in one statement. Used by the
+/// lister to retire pairs that have nothing to tear down, instead of spending
+/// one `ProcessCandidate` message each to reach the same conclusion.
+///
+/// Same semantics as [`claim_candidate`], just set-based: a delete landing
+/// concurrently re-inserts a fresh row that the next run picks up. Returns the
+/// number of rows removed.
+#[tracing::instrument(skip(pool, pairs), fields(pair_count = pairs.len()), err)]
+pub async fn claim_candidates(pool: &PgPool, pairs: &[(Uuid, String)]) -> anyhow::Result<u64> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+
+    let (link_ids, contact_emails): (Vec<Uuid>, Vec<String>) = pairs.iter().cloned().unzip();
+
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM crm_cleanup_candidates c
+        USING UNNEST($1::uuid[], $2::text[]) AS p(link_id, contact_email)
+        WHERE c.link_id = p.link_id AND c.contact_email = p.contact_email
+        "#,
+        &link_ids,
+        &contact_emails,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 /// Claims (deletes) the candidate row for a pair. Returns `true` when the row
 /// existed. Claiming happens before the depopulate check so a message delete
 /// that lands mid-processing re-inserts a fresh row for the next run instead
