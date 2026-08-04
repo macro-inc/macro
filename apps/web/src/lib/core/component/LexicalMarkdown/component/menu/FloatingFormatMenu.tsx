@@ -205,7 +205,10 @@ export function FloatingFormatMenu(props: {
     editor.dispatchCommand(NODE_TRANSFORM, isActive ? 'paragraph' : transform);
   };
 
-  const handleLink = () => {
+  const handleLink = (e?: MouseEvent | KeyboardEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
     if (selection()?.hasLinks) {
       editor.dispatchCommand(UNLINK_COMMAND, undefined);
       setTimeout(() => {
