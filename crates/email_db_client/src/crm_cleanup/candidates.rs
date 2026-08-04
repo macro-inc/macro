@@ -43,7 +43,7 @@ pub async fn list_candidates_page(
     let candidates = sqlx::query_as!(
         CrmCleanupCandidate,
         r#"
-        SELECT id, link_id, contact_email
+        SELECT id, link_id, contact_email, created_at
         FROM crm_cleanup_candidates
         WHERE id > $1 AND id <= $2
         ORDER BY id

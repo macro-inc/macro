@@ -11,6 +11,16 @@ use uuid::Uuid;
 /// Candidates dispatched per ListCandidates message.
 const CANDIDATE_PAGE_SIZE: i64 = 200;
 
+/// A candidate younger than this is never pruned on a negative source lookup,
+/// only dispatched. Populate is enqueued asynchronously and is always queued
+/// *before* the deletion that records the candidate, so a row this old means
+/// populate has had at least this long to commit its `crm_contact_sources`
+/// row. Without the guard, a populate still in flight at 08:00 could land
+/// right after the lookup missed, leaving a CRM row whose candidate we already
+/// pruned. Candidates accumulate over 24h, so in practice this exempts almost
+/// nothing.
+const PRUNE_MIN_AGE: chrono::TimeDelta = chrono::TimeDelta::hours(6);
+
 /// Dispatches one keyset page of cleanup candidates as `ProcessCandidate`
 /// messages, then re-enqueues itself with the new cursor. Mirrors the
 /// backfill `list_threads` pattern: each page is its own SQS message, so a
@@ -74,6 +84,15 @@ pub async fn list_candidates(
         .map(|c| (c.link_id, c.contact_email.clone()))
         .collect();
 
+    // Pairs too young to prune safely — see PRUNE_MIN_AGE. Dispatched
+    // unconditionally, which is exactly the pre-filter behaviour.
+    let prune_cutoff = chrono::Utc::now() - PRUNE_MIN_AGE;
+    let too_young: HashSet<(Uuid, String)> = page
+        .iter()
+        .filter(|c| c.created_at > prune_cutoff)
+        .map(|c| (c.link_id, c.contact_email.clone()))
+        .collect();
+
     let actionable: HashSet<(Uuid, String)> = ctx
         .crm_service
         .link_contact_pairs_with_sources(&pairs)
@@ -91,17 +110,23 @@ pub async fn list_candidates(
     // The repo lowercases the emails it echoes back, so compare on the same
     // footing — candidate rows are already normalized on insert, but a stray
     // mixed-case row must not silently fall out of the actionable set.
-    let (to_dispatch, to_prune): (Vec<_>, Vec<_>) = pairs
-        .into_iter()
-        .partition(|(link_id, email)| actionable.contains(&(*link_id, email.to_ascii_lowercase())));
+    let (to_dispatch, to_prune): (Vec<_>, Vec<_>) = pairs.into_iter().partition(|pair| {
+        let (link_id, email) = pair;
+        actionable.contains(&(*link_id, email.to_ascii_lowercase())) || too_young.contains(pair)
+    });
 
     // Nothing to tear down for these: retire them here rather than spending a
-    // ProcessCandidate message each to reach the same conclusion.
+    // ProcessCandidate message each to reach the same conclusion. Runs before
+    // any dispatch, so a failure retries the whole page cleanly.
     if !to_prune.is_empty() {
         let pruned = candidates::claim_candidates(&ctx.db, &to_prune)
             .await
-            .inspect_err(|e| tracing::error!(error = ?e, "Failed to prune crm cleanup candidates"))
-            .unwrap_or(0);
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to prune crm cleanup candidates"),
+                })
+            })?;
         tracing::info!(
             job_id = %job_id,
             pruned,
