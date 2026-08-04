@@ -30,10 +30,13 @@ import {
   DocumentMentionNode,
   type GroupMentionInfo,
   GroupMentionNode,
+  HISTORIC_TAG,
   InlineSearchNode,
   InlineSearchNodesType,
   type PullRequestMentionInfo,
   PullRequestMentionNode,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type SnapshotNodeInfo,
   type ThemeMentionInfo,
   type UserMentionInfo,
@@ -663,7 +666,7 @@ function registerMentionsPlugin(
             // they don't get recorded into the undo stack. This was breaking the predictability
             // of undo with document mentions. This hacks around that by using the an undocumented
             // "historic" tag from the LexicalHistoryPlugin.
-            tag: 'historic',
+            tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
             discrete: true,
           }
         );
