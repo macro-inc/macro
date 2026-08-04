@@ -18,6 +18,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// Find how a thread relates to a bot's agent session, if one exists.
+    ///
+    /// ```text
+    /// session.thread_id == thread_id              -> InSessionThread
+    /// session.created_from_thread_id == thread_id -> CreatedFromThisThread
+    /// no session for this bot and thread          -> None
+    /// ```
     fn find_for_thread(
         &self,
         bot_id: BotId,
