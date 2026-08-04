@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
         ),
+        config.calendar_sync_enabled,
         worker_cancellation_token.clone(),
     ));
     let macro_event_broker = MacroEventBrokerService::new(
@@ -358,6 +359,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 false,
                 cancellation_token,
             )
@@ -402,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 true,
                 cancellation_token,
             )
@@ -500,6 +503,7 @@ async fn main() -> anyhow::Result<()> {
                 crm_service_backfill,
                 macro_event_broker_backfill,
                 config.notifications_enabled,
+                config.calendar_sync_enabled,
                 cancellation_token,
             )
             .await;

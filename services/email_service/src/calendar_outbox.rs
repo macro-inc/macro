@@ -42,6 +42,7 @@ pub async fn run<R>(
     db: PgPool,
     sqs: SQS,
     scheduler: GoogleCalendarSyncScheduler<R>,
+    calendar_sync_enabled: bool,
     cancellation_token: tokio_util::sync::CancellationToken,
 ) where
     R: GoogleCalendarSyncRepository,
@@ -50,19 +51,24 @@ pub async fn run<R>(
         if cancellation_token.is_cancelled() {
             return;
         }
-        scheduler
-            .run_once(Utc::now())
-            .await
-            .inspect_err(|error| {
-                tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
-            })
-            .ok();
-        drain_calendar(&db, &sqs)
-            .await
-            .inspect_err(|error| {
-                tracing::error!(error = ?error, "failed to publish calendar backfill outbox");
-            })
-            .ok();
+        // With calendar sync disabled, outbox rows keep accumulating
+        // unpublished and due syncs never re-arm — enabling the flag later
+        // resumes everything without a migration.
+        if calendar_sync_enabled {
+            scheduler
+                .run_once(Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
+                })
+                .ok();
+            drain_calendar(&db, &sqs)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, "failed to publish calendar backfill outbox");
+                })
+                .ok();
+        }
         drain_email_init(&db, &sqs)
             .await
             .inspect_err(|error| {
@@ -151,6 +157,24 @@ fn to_email_completion_message(row: &EmailCompletionOutboxRow) -> Option<Backfil
             payload: FinalizeBackfillPayload {},
         }),
     })
+}
+
+/// Return a calendar backfill delivery to the outbox so the drain republishes
+/// it once calendar sync is enabled again. Deliveries received while the
+/// switch is off would otherwise be acked and lost.
+#[tracing::instrument(skip(db), err)]
+pub async fn republish_calendar_job(db: &PgPool, backfill_job_id: Uuid) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE calendar_sync_outbox
+        SET published_at = NULL
+        WHERE backfill_job_id = $1
+        "#,
+        backfill_job_id,
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }
 
 #[tracing::instrument(skip(db, sqs), err)]

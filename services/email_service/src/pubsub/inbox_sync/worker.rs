@@ -34,6 +34,7 @@ pub async fn run_worker(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
+    calendar_sync_enabled: bool,
     retry_worker: bool,
 ) {
     run_worker_with_cancellation(
@@ -52,6 +53,7 @@ pub async fn run_worker(
         crm_service,
         macro_event_broker,
         notifications_enabled,
+        calendar_sync_enabled,
         retry_worker,
         CancellationToken::new(),
     )
@@ -78,6 +80,7 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
+    calendar_sync_enabled: bool,
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {
@@ -99,6 +102,7 @@ pub async fn run_worker_with_cancellation(
         crm_service,
         macro_event_broker,
         notifications_enabled,
+        calendar_sync_enabled,
         retry_worker,
         calendar_backfills,
     };
