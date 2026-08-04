@@ -1,20 +1,26 @@
 import { useBlockId } from '@core/block';
+import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import SlidersIcon from '@phosphor/sliders-horizontal.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { useCurrentTeamQuery } from '@queries/team/teams';
+import type { CreatePropertyScope } from '@service-properties/generated/schemas/createPropertyScope';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
-import { Button, Dialog, Dropdown, SegmentedControl, Surface } from '@ui';
+import { Button, CommandMenuShell, cn, Dialog, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
   createMemo,
   createSignal,
   For,
   Index,
+  type JSX,
   Show,
 } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
@@ -43,6 +49,20 @@ type OptionInputProps<T extends string | number> = {
   onUpdate: (id: string, value: T) => void;
   placeholder?: string;
 };
+
+function EditorRow(props: { label: string; children: JSX.Element }) {
+  return (
+    <div class="flex min-h-12 items-center gap-5 px-4 py-3">
+      <div class="w-22 shrink-0 text-xs font-medium text-ink-extra-muted">
+        {props.label}
+      </div>
+      <div class="min-w-0 flex-1">{props.children}</div>
+    </div>
+  );
+}
+
+const inputClass =
+  'h-9 min-w-0 w-full flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent';
 
 const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
   const handleKeyDown = (
@@ -74,7 +94,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
   };
 
   return (
-    <div class="space-y-2 max-h-40 overflow-y-auto">
+    <div class="max-h-40 space-y-2 overflow-y-auto">
       <Index each={props.options()}>
         {(option) => (
           <div class="flex items-center gap-2">
@@ -90,21 +110,23 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class="flex-1 p-1.5 border border-edge-muted text-sm rounded-sm bg-surface placeholder:text-ink-placeholder"
+              class={inputClass}
               data-option-id={option().id}
             />
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              label="Remove option"
               onClick={() => props.onRemove(option().id)}
-              class="text-failure-ink hover:text-failure-ink text-md px-1"
+              class="shrink-0 rounded-lg text-failure-ink"
             >
-              ×
-            </button>
+              <XIcon />
+            </Button>
           </div>
         )}
       </Index>
       <Show when={props.options().length === 0}>
-        <div class="text-center py-4 text-ink-muted text-sm">
+        <div class="py-4 text-center text-sm text-ink-muted">
           No options added yet
         </div>
       </Show>
@@ -128,6 +150,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   const [newPropertyName, setNewPropertyName] = createSignal('');
   const [selectedDataType, setSelectedDataType] =
     createSignal<DataTypeValue>('string');
+  const [propertyScope, setPropertyScope] =
+    createSignal<CreatePropertyScope>('user');
   const [isMultiSelect, setIsMultiSelect] = createSignal(false);
   const [newStringOptions, setNewStringOptions] = createSignal<
     Array<{ id: string; value: string; display_order: number }>
@@ -138,6 +162,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   const [error, setError] = createSignal<string | null>(null);
 
   const addMutation = useAddEntityPropertyMutation();
+  const currentTeamQuery = useCurrentTeamQuery();
 
   const createPropertyMutation = useCreatePropertyDefinitionMutation({
     onSuccess: async (propertyDefinition) => {
@@ -229,6 +254,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     );
     return option?.label ?? 'Select type';
   });
+  const hasTeam = () => Boolean(currentTeamQuery.data?.team);
+  const selectedPropertyScope = (): CreatePropertyScope =>
+    propertyScope() === 'team' && hasTeam() ? 'team' : 'user';
 
   // Helper to parse selected value back to type and specificType
   const parseDataTypeValue = (
@@ -367,7 +395,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     setError(null);
 
     const bodyData = {
-      scope: 'user' as const,
+      scope: selectedPropertyScope(),
       display_name: newPropertyName().trim(),
       data_type: buildDataType(),
     };
@@ -378,6 +406,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   const resetCreateForm = () => {
     setNewPropertyName('');
     setSelectedDataType('string');
+    setPropertyScope('user');
     setIsMultiSelect(false);
     setNewStringOptions([]);
     setNewNumberOptions([]);
@@ -409,124 +438,163 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     () => props.isOpen
   );
 
+  const pending = () =>
+    createPropertyMutation.isPending || addMutation.isPending;
+
+  const canSubmit = () => newPropertyName().trim().length > 0 && !pending();
+
+  const close = () => {
+    if (pending()) return;
+    resetCreateForm();
+    props.onClose();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      if (canSubmit()) handleCreateProperty();
+    }
+  };
+
+  const addCurrentOption = () => {
+    const { type } = parseDataTypeValue(selectedDataType());
+    if (type === 'select_string') {
+      addOption(newStringOptions, setNewStringOptions, '');
+      return;
+    }
+
+    addOption(newNumberOptions, setNewNumberOptions, 0);
+  };
+
   return (
     <Dialog
       open={props.isOpen}
       onOpenChange={(open) => {
-        if (!open) props.onClose();
+        if (!open) close();
       }}
     >
-      <Surface depth={2} class="*:max-h-[75vh] rounded-xl">
-        <div class="flex flex-col text-sm">
-          <div class="flex items-center justify-between gap-2 bg-surface px-2 h-10 border-b border-edge-muted shrink-0">
-            <Dialog.Title class="pl-2 text-sm font-medium">
-              Create New Property
-            </Dialog.Title>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => props.onClose()}
-            >
-              <XIcon />
-            </Button>
-          </div>
+      <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
+        <CommandMenuShell.Header class="my-0 h-13 gap-3 border-b-0 px-4">
+          <span class="text-ink-muted">
+            <SlidersIcon class="size-3.5" />
+          </span>
+          <Dialog.Title
+            as="span"
+            class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-extra-muted"
+          >
+            Create property
+          </Dialog.Title>
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-sm"
+            disabled={pending()}
+            label="Close"
+          >
+            <XIcon />
+          </Dialog.CloseButton>
+        </CommandMenuShell.Header>
 
-          <div class="min-h-0 overflow-y-auto scrollbar-hidden p-4">
-            <div class="space-y-3">
-              <Show when={error()}>
-                <div class="text-failure-ink text-sm p-2 bg-failure-bg">
-                  {error()}
-                </div>
-              </Show>
+        <CommandMenuShell.Body>
+          <div class="bg-surface">
+            <Show when={error()}>
+              <div class="mx-4 mb-1 rounded-md bg-failure-bg px-3 py-2 text-sm text-failure-ink">
+                {error()}
+              </div>
+            </Show>
 
-              <div>
-                <label
-                  for="property-name"
-                  class="block text-xs font-medium text-ink mb-1"
-                >
-                  Property Name
-                </label>
-                <input
-                  id="property-name"
-                  ref={propertyNameInputRef}
-                  type="text"
-                  value={newPropertyName()}
-                  onInput={(e) => setNewPropertyName(e.currentTarget.value)}
-                  placeholder="Enter property name"
-                  class="w-full p-1.5 border border-edge-muted text-sm rounded-sm bg-surface placeholder:text-ink-placeholder"
+            <EditorRow label="Name">
+              <input
+                id="property-name"
+                ref={propertyNameInputRef}
+                type="text"
+                value={newPropertyName()}
+                onInput={(e) => setNewPropertyName(e.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && canSubmit()) {
+                    handleCreateProperty();
+                  }
+                }}
+                placeholder="Property name"
+                class={inputClass}
+              />
+            </EditorRow>
+
+            <EditorRow label="Type">
+              <Dropdown>
+                <Dropdown.Trigger class="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-edge-muted bg-surface px-3 text-left text-sm text-ink outline-none hover:bg-hover focus-visible:border-accent">
+                  <span class="truncate">{selectedDataTypeLabel()}</span>
+                  <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+                </Dropdown.Trigger>
+                <Dropdown.Content class="max-h-64 min-w-56 overflow-y-auto">
+                  <Dropdown.Group>
+                    <For each={dataTypeDropdownOptions}>
+                      {(option) => (
+                        <Dropdown.Item
+                          class="justify-between"
+                          onSelect={() => {
+                            setSelectedDataType(option.value);
+                            setNewStringOptions([]);
+                            setNewNumberOptions([]);
+                            setIsMultiSelect(false);
+                          }}
+                        >
+                          <span>{option.label}</span>
+                          <Show when={option.value === selectedDataType()}>
+                            <CheckIcon class="size-3 shrink-0" />
+                          </Show>
+                        </Dropdown.Item>
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+            </EditorRow>
+
+            <Show when={hasTeam()}>
+              <EditorRow label="Owner">
+                <TabsInset
+                  depth={0}
+                  list={[
+                    { value: 'user', label: 'Personal' },
+                    { value: 'team', label: 'Team' },
+                  ]}
+                  value={selectedPropertyScope()}
+                  onChange={(value) => {
+                    if (value === 'user' || value === 'team') {
+                      setPropertyScope(value);
+                    }
+                  }}
                 />
-              </div>
+              </EditorRow>
+            </Show>
 
-              <div>
-                <label class="block text-xs font-medium text-ink mb-1">
-                  Data Type
-                </label>
-                <Dropdown>
-                  <Dropdown.Trigger class="w-full p-1.5 border border-edge-muted bg-surface text-sm text-ink text-left flex items-center gap-2 hover:bg-hover rounded-sm justify-between">
-                    <span class="truncate">{selectedDataTypeLabel()}</span>
-                    <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Content class="max-h-64 overflow-y-auto min-w-48">
-                    <Dropdown.Group>
-                      <For each={dataTypeDropdownOptions}>
-                        {(option) => (
-                          <Dropdown.Item
-                            class="justify-between"
-                            onSelect={() => {
-                              setSelectedDataType(option.value);
-                              setNewStringOptions([]);
-                              setNewNumberOptions([]);
-                              setIsMultiSelect(false);
-                            }}
-                          >
-                            <span>{option.label}</span>
-                            <Show when={option.value === selectedDataType()}>
-                              <CheckIcon class="size-3 shrink-0" />
-                            </Show>
-                          </Dropdown.Item>
-                        )}
-                      </For>
-                    </Dropdown.Group>
-                  </Dropdown.Content>
-                </Dropdown>
-              </div>
+            <Show when={shouldShowMultiSelect()}>
+              <EditorRow label="Selection">
+                <TabsInset
+                  depth={0}
+                  list={[
+                    { value: 'single', label: 'Single' },
+                    { value: 'multi', label: 'Multi' },
+                  ]}
+                  value={isMultiSelect() ? 'multi' : 'single'}
+                  onChange={(value) => setIsMultiSelect(value === 'multi')}
+                />
+              </EditorRow>
+            </Show>
 
-              <Show when={shouldShowMultiSelect()}>
-                <div>
-                  <label class="block text-xs font-medium text-ink mb-1">
-                    Selection Type
-                  </label>
-                  <SegmentedControl
-                    value={isMultiSelect() ? 'multi' : 'single'}
-                    onChange={(v) => setIsMultiSelect(v === 'multi')}
-                    options={[
-                      { value: 'single', label: 'Single Select' },
-                      { value: 'multi', label: 'Multi Select' },
-                    ]}
-                  />
-                </div>
-              </Show>
-
-              <Show when={shouldShowOptions()}>
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <label class="block text-xs font-medium text-ink">
-                      Options
-                    </label>
+            <Show when={shouldShowOptions()}>
+              <EditorRow label="Options">
+                <div class="space-y-3">
+                  <div class="flex justify-end">
                     <Button
                       variant="base"
                       size="sm"
-                      class="rounded-xs"
-                      onClick={() => {
-                        const { type } = parseDataTypeValue(selectedDataType());
-                        if (type === 'select_string') {
-                          addOption(newStringOptions, setNewStringOptions, '');
-                        } else {
-                          addOption(newNumberOptions, setNewNumberOptions, 0);
-                        }
-                      }}
+                      class="rounded-lg"
+                      onClick={addCurrentOption}
                     >
-                      + Add Option
+                      <PlusIcon />
+                      Add option
                     </Button>
                   </div>
                   <Show
@@ -553,7 +621,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                             value as number
                           )
                         }
-                        placeholder="Enter number"
+                        placeholder="Number"
                       />
                     }
                   >
@@ -574,51 +642,51 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                           value as string
                         )
                       }
-                      placeholder="Enter option value"
+                      placeholder="Option value"
                     />
                   </Show>
                 </div>
-              </Show>
-            </div>
+              </EditorRow>
+            </Show>
           </div>
+        </CommandMenuShell.Body>
 
-          <div class="flex items-center justify-end gap-2 px-2 py-1.5 border-t border-edge-muted shrink-0">
+        <CommandMenuShell.Footer class="gap-2 border-t-0 py-3">
+          <div class="ml-auto flex items-center gap-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
-              onClick={() => {
-                resetCreateForm();
-                props.onClose();
-              }}
-              disabled={createPropertyMutation.isPending}
+              size="sm"
+              class="rounded-lg"
+              onClick={close}
+              disabled={pending()}
             >
               Cancel
             </Button>
             <Button
-              variant="base"
-              class="rounded-xs"
+              variant={canSubmit() ? 'active' : 'ghost'}
+              depth={3}
+              class={cn('gap-3 rounded-lg border-0', pending() && 'gap-1.5')}
               onClick={handleCreateProperty}
-              disabled={
-                !newPropertyName().trim() || createPropertyMutation.isPending
-              }
+              disabled={!canSubmit()}
             >
               <Show
-                when={!createPropertyMutation.isPending}
+                when={!pending()}
                 fallback={
-                  <div class="flex items-center gap-1.5">
-                    <div class="size-3 animate-spin">
+                  <>
+                    <span class="size-3 animate-spin">
                       <LoadingSpinner />
-                    </div>
-                    Creating...
-                  </div>
+                    </span>
+                    Creating
+                  </>
                 }
               >
-                Create Property
+                Create
+                <Hotkey shortcut="cmd+enter" theme="current" />
               </Show>
             </Button>
           </div>
-        </div>
-      </Surface>
+        </CommandMenuShell.Footer>
+      </CommandMenuShell>
     </Dialog>
   );
 };
