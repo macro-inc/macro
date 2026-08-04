@@ -690,6 +690,7 @@ fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
             created_at: now,
             updated_at: now,
             deleted_at: None,
+            has_agent: false,
         },
         token: BotToken {
             id: Uuid::new_v4(),

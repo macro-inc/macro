@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE bots\n            SET name = COALESCE($2, name),\n                handle = COALESCE($3, handle),\n                description = COALESCE($4, description),\n                avatar_url = COALESCE($5, avatar_url),\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at\n            ",
+  "query": "\n            UPDATE bots\n            SET name = COALESCE($2, name),\n                handle = COALESCE($3, handle),\n                description = COALESCE($4, description),\n                avatar_url = COALESCE($5, avatar_url),\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
   "describe": {
     "columns": [
       {
@@ -62,6 +62,11 @@
         "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "has_agent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -85,8 +90,9 @@
       true,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "e1aae69a066a831096b61a7318b753897d59e28cedd21e439c20ff09268a831a"
+  "hash": "2193ea6a085a6ca908e4f050ff8772232065f9ea07d8c413853fe3f391a2b02f"
 }

@@ -2378,6 +2378,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mockall",
  "model-error-response",
  "rand 0.9.4",
  "rootcause",
