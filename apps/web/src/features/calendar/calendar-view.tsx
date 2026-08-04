@@ -38,6 +38,7 @@ import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
+  formatCompactCalendarTime,
 } from './time-format';
 import { useCalendarTimeGridHoverIndicator } from './useCalendarTimeGridHoverIndicator';
 import './calendar.css';
@@ -267,6 +268,17 @@ function CalendarViewContent() {
         }}
       </FullCalendar.DayHeaderContent>
 
+      <FullCalendar.SlotLabelContent>
+        {({ date, text }) =>
+          calendarView.useNarrowDayHeaders()
+            ? formatCompactCalendarTime(
+                date,
+                calendarView.displaySettings.timeFormat
+              )
+            : text
+        }
+      </FullCalendar.SlotLabelContent>
+
       <FullCalendar.EventContent>
         {(renderProps) => {
           const event = calendarView.eventsById().get(renderProps.event.id);
@@ -278,6 +290,7 @@ function CalendarViewContent() {
               renderProps={renderProps}
               isSelected={calendarView.eventState.selectedEventId === event.id}
               timeFormat={calendarView.displaySettings.timeFormat}
+              isNarrow={calendarView.useNarrowDayHeaders()}
             />
           );
         }}

@@ -5,7 +5,10 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it } from 'vitest';
-import { formatCalendarTime } from '../time-format';
+import {
+  formatCompactCalendarTime,
+  formatCompactCalendarTimeRange,
+} from '../time-format';
 import { CalendarEventContent } from './EventContent';
 import type { CalendarEvent } from './types';
 
@@ -48,7 +51,9 @@ describe('CalendarEventContent', () => {
       />
     ));
 
-    expect(screen.getByText(formatCalendarTime(start, '12-hour'))).toBeTruthy();
+    expect(
+      screen.getByText(formatCompactCalendarTime(start, '12-hour'))
+    ).toBeTruthy();
     expect(screen.queryByText('9:00 AM - 9:15 AM')).toBeNull();
   });
 
@@ -62,6 +67,14 @@ describe('CalendarEventContent', () => {
       />
     ));
 
-    expect(screen.getByText('9:00 AM - 9:30 AM')).toBeTruthy();
+    expect(
+      screen.getByText(
+        formatCompactCalendarTimeRange(
+          start,
+          new Date(start.getTime() + 30 * 60 * 1000),
+          '12-hour'
+        )
+      )
+    ).toBeTruthy();
   });
 });

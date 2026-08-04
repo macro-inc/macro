@@ -1,6 +1,9 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import { Show } from 'solid-js';
-import { formatCalendarTime } from '../time-format';
+import {
+  formatCompactCalendarTime,
+  formatCompactCalendarTimeRange,
+} from '../time-format';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 interface CalendarEventContentProps {
@@ -8,6 +11,7 @@ interface CalendarEventContentProps {
   renderProps: EventContentArg;
   isSelected: boolean;
   timeFormat: CalendarTimeFormat;
+  isNarrow?: boolean;
 }
 
 const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
@@ -30,11 +34,18 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
     );
   };
   const timeText = () => {
-    const start = props.renderProps.event.start;
+    if (props.isNarrow || props.event.allDay) return undefined;
 
-    return usesSingleLineLayout() && start
-      ? formatCalendarTime(start, props.timeFormat)
-      : props.renderProps.timeText;
+    const start = new Date(props.event.start);
+    const end = new Date(props.event.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return props.renderProps.timeText;
+    }
+
+    const formattedStart = formatCompactCalendarTime(start, props.timeFormat);
+    if (isCompact() || usesSingleLineLayout()) return formattedStart;
+
+    return formatCompactCalendarTimeRange(start, end, props.timeFormat);
   };
 
   return (
@@ -55,7 +66,13 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
             isCompact() || usesSingleLineLayout(),
         }}
       >
-        <span class="calendar-event-title shrink-0 truncate font-semibold leading-tight">
+        <span
+          class="calendar-event-title shrink-0 font-semibold leading-tight"
+          classList={{
+            truncate: !props.isNarrow,
+            'whitespace-nowrap': props.isNarrow,
+          }}
+        >
           {props.event.title}
         </span>
         <Show when={timeText()}>
