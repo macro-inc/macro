@@ -1,10 +1,16 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type {
+  ComposeSkillProps,
+  ComposeSkillSuccess,
+} from '@block-md/component/ComposeSkill';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { Surface } from '@ui';
+import PlusIcon from '@phosphor/plus.svg';
+import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -94,10 +100,12 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     setSelectedIndex(0);
   });
 
+  // Selectable rows: every skill plus the trailing "New skill" row.
+  const itemCount = () => skills().length + 1;
+
   createEffect(() => {
-    const count = skills().length;
-    if (count > 0 && selectedIndex() >= count) {
-      setSelectedIndex(count - 1);
+    if (selectedIndex() >= itemCount()) {
+      setSelectedIndex(itemCount() - 1);
     }
   });
 
@@ -121,17 +129,36 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     insertSkill(item);
   };
 
+  const { popoverSplit } = useSplitLayout();
+
+  /**
+   * Opens the skill composer dialog; when the skill is created there, its
+   * mention is inserted at the cursor so the AI picks it up.
+   */
+  const createNewSkill = () => {
+    props.editor.dispatchCommand(REMOVE_SKILL_SEARCH_COMMAND, undefined);
+    setMenuOpen(false);
+    const onSuccess = ({ documentId, title }: ComposeSkillSuccess) => {
+      props.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+        documentId,
+        documentName: title,
+        blockName: 'skill',
+      });
+    };
+    popoverSplit({
+      type: 'component',
+      id: 'skill-compose',
+      params: { onSuccess } satisfies ComposeSkillProps,
+    });
+  };
+
   useMenuKeyboardNavigation({
     isActive: menuOpen,
     onUp: () => {
-      const items = skills();
-      if (items.length === 0) return;
-      setSelectedIndex((selectedIndex() - 1 + items.length) % items.length);
+      setSelectedIndex((selectedIndex() - 1 + itemCount()) % itemCount());
     },
     onDown: () => {
-      const items = skills();
-      if (items.length === 0) return;
-      setSelectedIndex((selectedIndex() + 1) % items.length);
+      setSelectedIndex((selectedIndex() + 1) % itemCount());
     },
     onLeft: () => {
       // block horizontal arrows
@@ -144,7 +171,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
       if (selectedItem) {
         itemAction(selectedItem);
       } else {
-        closeMenu();
+        void createNewSkill();
       }
     },
     onClose: closeMenu,
@@ -234,6 +261,33 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                 </For>
               </div>
             </Show>
+            <div class="mt-1 pt-1 border-t border-edge">
+              <div
+                on:mouseup={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                on:mousedown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                on:click={(e) => {
+                  void createNewSkill();
+                  e.stopPropagation();
+                }}
+                on:mousemove={() => setSelectedIndexFromMouse(skills().length)}
+                class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
+                  'bg-ink/5': selectedIndex() === skills().length,
+                })}
+              >
+                <div class="mr-2 flex items-center">
+                  <PlusIcon class="size-4 text-ink-muted" />
+                </div>
+                <span class="text-ink text-xs sm:text-sm font-medium">
+                  New skill
+                </span>
+              </div>
+            </div>
           </Surface>
         </div>
       </ScopedPortal>

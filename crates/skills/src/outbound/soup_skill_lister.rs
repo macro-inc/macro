@@ -80,7 +80,10 @@ impl<S: SoupService> SkillLister for SoupSkillLister<S> {
             .soup
             .get_user_soup(
                 SoupRequest {
-                    soup_type: SoupType::UnExpanded,
+                    // Expanded includes documents reachable via project access, and
+                    // is the only soup type that supports AST item filters (the
+                    // unexpanded repo path rejects them as not implemented).
+                    soup_type: SoupType::Expanded,
                     limit,
                     cursor: SoupQuery::new_sort_simple(
                         SimpleSortMethod::UpdatedAt,
