@@ -67,7 +67,7 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
         }}
       >
         <span
-          class="calendar-event-title shrink-0 font-semibold leading-tight"
+          class="calendar-event-title max-w-full shrink-0 font-semibold leading-tight"
           classList={{
             truncate: !props.isNarrow,
             'whitespace-nowrap': props.isNarrow,

@@ -247,13 +247,6 @@
 .calendar-view
 	.fc
 	.calendar-event-content-layout-single-line
-	.calendar-event-title {
-	flex-shrink: 1;
-}
-
-.calendar-view
-	.fc
-	.calendar-event-content-layout-single-line
 	.calendar-event-time {
 	margin-top: 0;
 }
