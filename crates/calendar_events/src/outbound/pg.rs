@@ -374,21 +374,6 @@ impl CalendarRepository for PgCalendarRepository {
         let granted_scopes = scopes.clone().into_vec();
         sqlx::query!(
             r#"
-            UPDATE email_links
-            SET google_granted_scopes = $2,
-                google_grant_version = $3,
-                updated_at = now()
-            WHERE id = $1
-            "#,
-            email_link_id,
-            &granted_scopes,
-            grant_version,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(report)?;
-        sqlx::query!(
-            r#"
             INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)
             VALUES ($1, $2, $3)
             ON CONFLICT (link_id) DO UPDATE

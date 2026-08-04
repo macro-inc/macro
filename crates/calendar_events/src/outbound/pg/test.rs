@@ -230,6 +230,15 @@ async fn legacy_grant_writes_mirror_without_regressing_side_table_state(pool: Pg
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn applying_grant_recreates_missing_side_table_state_from_version_zero(pool: PgPool) {
     let link_id = insert_link(&pool, "macro|calendar-missing-grant@example.com").await;
+    let sentinel_updated_at = Utc.with_ymd_and_hms(2020, 1, 2, 3, 4, 5).unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET updated_at = $2 WHERE id = $1",
+        link_id,
+        sentinel_updated_at,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!(
         "DELETE FROM email_link_google_scopes WHERE link_id = $1",
         link_id,
@@ -250,6 +259,7 @@ async fn applying_grant_recreates_missing_side_table_state_from_version_zero(poo
         SELECT
             l.google_granted_scopes AS "legacy_scopes!",
             l.google_grant_version AS "legacy_version!",
+            l.updated_at AS "legacy_updated_at!",
             g.granted_scopes AS "side_scopes!",
             g.grant_version AS "side_version!"
         FROM email_links l
@@ -261,13 +271,13 @@ async fn applying_grant_recreates_missing_side_table_state_from_version_zero(poo
     .fetch_one(&pool)
     .await
     .unwrap();
-    let expected = complete_grant();
+    assert!(persisted.legacy_scopes.is_empty());
+    assert_eq!(persisted.legacy_version, 0);
+    assert_eq!(persisted.legacy_updated_at, sentinel_updated_at);
     assert_eq!(
-        GoogleScopeSet::from_scopes(persisted.legacy_scopes),
-        expected
+        GoogleScopeSet::from_scopes(persisted.side_scopes),
+        complete_grant()
     );
-    assert_eq!(GoogleScopeSet::from_scopes(persisted.side_scopes), expected);
-    assert_eq!(persisted.legacy_version, 1);
     assert_eq!(persisted.side_version, 1);
 }
 
