@@ -198,7 +198,10 @@ fn app_redirect() -> Redirect {
 
 fn team_settings_redirect() -> Redirect {
     let app_url = AppServiceUrl::unwrap_new();
-    let destination = format!("{}/settings/team", app_url.as_str().trim_end_matches('/'));
+    let destination = format!(
+        "{}/app/settings/connections",
+        app_url.as_str().trim_end_matches('/')
+    );
     Redirect::temporary(&destination)
 }
 

@@ -408,7 +408,10 @@ async fn successful_callbacks_redirect_to_the_matching_destination() {
     );
     assert_eq!(
         team.headers().get("location").unwrap().to_str().unwrap(),
-        format!("{}/settings/team", app_url().trim_end_matches('/'))
+        format!(
+            "{}/app/settings/connections",
+            app_url().trim_end_matches('/')
+        )
     );
 }
 
