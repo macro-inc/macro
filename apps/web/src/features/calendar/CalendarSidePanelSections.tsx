@@ -120,18 +120,20 @@ function CalendarSourcesSidePanelSection() {
   const calendarView = useCalendarView();
 
   return (
-    <SidePanel.Section
-      id="calendar-controls"
-      title="Calendars"
-      order={20}
-      defaultOpen
-    >
-      <CalendarControls
-        sources={calendarView.sources()}
-        isVisible={calendarView.isSourceVisible}
-        onVisibilityChange={calendarView.setSourceVisibility}
-      />
-    </SidePanel.Section>
+    <Show when={calendarView.sources().length > 1}>
+      <SidePanel.Section
+        id="calendar-controls"
+        title="Calendars"
+        order={20}
+        defaultOpen
+      >
+        <CalendarControls
+          sources={calendarView.sources()}
+          isVisible={calendarView.isSourceVisible}
+          onVisibilityChange={calendarView.setSourceVisibility}
+        />
+      </SidePanel.Section>
+    </Show>
   );
 }
 

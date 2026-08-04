@@ -187,14 +187,8 @@ export function CalendarView() {
 
 function CalendarViewContent() {
   const calendarView = useCalendarView();
-  let visibleRangeKey: string | undefined;
-
-  const handleDatesSet = ({ end, start, view }: DatesSetArg) => {
-    const nextRangeKey = `${view.type}:${start.toISOString()}:${end.toISOString()}`;
-    if (visibleRangeKey !== undefined && visibleRangeKey !== nextRangeKey) {
-      calendarView.closeEventDetails();
-    }
-    visibleRangeKey = nextRangeKey;
+  const handleDatesSet = ({ end, start }: DatesSetArg) => {
+    calendarView.updateVisibleRange(start, end);
   };
 
   return (
@@ -218,14 +212,7 @@ function CalendarViewContent() {
       eventTimeFormat={
         CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
       }
-      eventStartEditable
-      eventDurationEditable
-      eventResizableFromStart
       events={calendarView.fullCalendarEvents()}
-      eventDragStart={calendarView.closeEventDetails}
-      eventDrop={calendarView.updateEventDates}
-      eventResizeStart={calendarView.closeEventDetails}
-      eventResize={calendarView.updateEventDates}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         calendarView.selectEvent(event.id, el);

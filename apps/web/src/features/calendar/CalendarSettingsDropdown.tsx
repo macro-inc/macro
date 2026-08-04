@@ -23,12 +23,14 @@ const TIME_FORMAT_OPTIONS: Array<{
   { value: '24-hour', label: '24-hour' },
 ];
 
-/** Calendar display settings with source visibility on narrow layouts. */
+/** Calendar display settings. */
 export function CalendarSettingsDropdown() {
   const calendarView = useCalendarView();
   const sidePanel = useSidePanel();
 
-  const showCalendarVisibility = () => sidePanel?.isNarrow() ?? false;
+  const showCalendarVisibility = () =>
+    (sidePanel?.isNarrow() ?? false) && calendarView.sources().length > 1;
+
   const weekStartLabel = createMemo(
     () =>
       WEEK_START_OPTIONS.find(

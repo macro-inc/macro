@@ -14,10 +14,18 @@ export interface CalendarSource {
   color: string;
 }
 
-/** Calendar-owned event data, independent from FullCalendar. */
+/** Calendar occurrence data, independent from FullCalendar. */
 export interface CalendarEvent {
-  /** Stable event identifier. */
+  /** Stable identifier for this rendered occurrence. */
   id: string;
+  /** Stable canonical calendar event identifier. */
+  eventId: string;
+  /** Stable key for this occurrence within its event. */
+  occurrenceKey: string;
+  /** Provider recurrence identifier, when applicable. */
+  recurrenceId?: string;
+  /** Whether the canonical event source is read-only. */
+  isReadOnly: boolean;
   /** Event title. */
   title: string;
   /** ISO timestamp or local date string for all-day events. */
