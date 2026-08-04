@@ -50,6 +50,7 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
 
+#[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionLogRepo {
     /// Append a new log entry to a session's history.
     fn create(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
