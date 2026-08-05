@@ -54,6 +54,25 @@ export function plural(singular: string, length: number, suffix = 's') {
   return `${singular}${suffix}`;
 }
 
+/** Formats an integer as an English ordinal, such as `1st` or `23rd`. */
+export function formatOrdinal(value: number) {
+  const integer = Math.trunc(value);
+  const absolute = Math.abs(integer);
+  const tens = absolute % 100;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? 'th'
+      : absolute % 10 === 1
+        ? 'st'
+        : absolute % 10 === 2
+          ? 'nd'
+          : absolute % 10 === 3
+            ? 'rd'
+            : 'th';
+
+  return `${integer < 0 ? '-' : ''}${absolute}${suffix}`;
+}
+
 /**
  * Regex pattern to match emoji-only strings.
  * Uses alternation to match:
