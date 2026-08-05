@@ -17,6 +17,21 @@ async fn remove_message_labels(pool: &Pool<Postgres>, message_id: Uuid) -> Resul
     Ok(())
 }
 
+async fn attachment_is_claimed(pool: &Pool<Postgres>, attachment_id: Uuid) -> Result<bool> {
+    let claimed_at = sqlx::query_scalar!(
+        r#"
+        SELECT upload_claimed_at
+        FROM email_attachments
+        WHERE id = $1
+        "#,
+        attachment_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(claimed_at.is_some())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -424,12 +439,11 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
         scripts("fetch_insertable_attachments_for_new_email")
     )
 )]
-async fn insertable_attachments_condition_5_previously_contacted(
+async fn insertable_attachments_condition_5_contacted_participant_claims(
     pool: Pool<Postgres>,
 ) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test condition 4: user has previously contacted a thread participant
     let message_provider_id = "target-msg-401";
     let res = new_email_document_atts(
         &pool,
@@ -438,8 +452,6 @@ async fn insertable_attachments_condition_5_previously_contacted(
     )
     .await?;
 
-    // Should return 1 attachment (previously_contacted_doc.pdf)
-    // This should be found by the second query (condition 4)
     assert_eq!(res.len(), 1);
     assert_eq!(
         res[0].filename,
@@ -448,12 +460,26 @@ async fn insertable_attachments_condition_5_previously_contacted(
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-401");
 
-    let second_res = new_email_document_atts(
-        &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
     )
-    .await?;
+)]
+async fn insertable_attachments_condition_5_repeated_invocation_does_not_reclaim(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let first_res = new_email_document_atts(&pool, link_id, "target-msg-401").await?;
+    let second_res = new_email_document_atts(&pool, link_id, "target-msg-401").await?;
+
+    assert_eq!(first_res.len(), 1);
     assert!(second_res.is_empty());
 
     Ok(())
@@ -466,20 +492,82 @@ async fn insertable_attachments_condition_5_previously_contacted(
         scripts("fetch_insertable_attachments_for_new_email")
     )
 )]
-async fn insertable_attachments_no_conditions_met(pool: Pool<Postgres>) -> Result<()> {
+async fn insertable_attachments_condition_5_never_contacted_participant_does_not_claim(
+    pool: Pool<Postgres>,
+) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test control case: no conditions met
-    let message_provider_id = "target-msg-601";
     let res = new_email_document_atts(
         &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-601",
     )
     .await?;
 
-    // Should return 0 attachments
-    assert_eq!(res.len(), 0);
+    assert!(res.is_empty());
+    assert!(
+        !attachment_is_claimed(
+            &pool,
+            Uuid::parse_str("00000000-0000-0000-0000-0000006a0601")?
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_condition_5_self_is_only_contacted_participant(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-1101",
+    )
+    .await?;
+
+    assert!(res.is_empty());
+    assert!(
+        !attachment_is_claimed(
+            &pool,
+            Uuid::parse_str("00000000-0000-0000-0000-000000aa1101")?
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_condition_5_missing_self_contact_allows_contacted_participant(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000002a")?,
+        "target-msg-1301",
+    )
+    .await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename.as_deref(), Some("missing_self_contact.pdf"));
 
     Ok(())
 }

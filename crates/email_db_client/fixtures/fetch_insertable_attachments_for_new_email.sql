@@ -20,6 +20,11 @@ INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provid
 VALUES ('00000000-0000-0000-0000-00000000001a', 'macro|user@macro.com', '00000000-0000-0000-0000-00000000001a',
         'user@macro.com', 'GMAIL', true, NOW(), NOW());
 
+-- Link B intentionally has no email_contacts row for its own address.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000002a', 'macro|missing-self@example.net', '00000000-0000-0000-0000-00000000002a',
+        'missing-self@example.net', 'GMAIL', true, NOW(), NOW());
+
 ------------------------------------------------------------
 -- Labels
 ------------------------------------------------------------
@@ -88,6 +93,20 @@ VALUES ('00000000-0000-0000-0000-0000000c0007',
         'Foo@MACRO.com',
         NOW(), NOW());
 
+-- The link owner's contact row, used to ensure self does not satisfy condition 5.
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0008',
+        '00000000-0000-0000-0000-00000000001a',
+        'user@macro.com',
+        NOW(), NOW());
+
+-- A real contacted participant on Link B, which intentionally has no self-contact row.
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0009',
+        '00000000-0000-0000-0000-00000000002a',
+        'contacted@external.net',
+        NOW(), NOW());
+
 ------------------------------------------------------------
 -- Threads
 ------------------------------------------------------------
@@ -150,6 +169,21 @@ VALUES ('00000000-0000-0000-0000-000000000109',
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000110',
         '00000000-0000-0000-0000-00000000001a',
+        false, false, NOW(), NOW());
+
+-- Thread 11: Self is the only contacted participant.
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000111',
+        '00000000-0000-0000-0000-00000000001a',
+        false, false, NOW(), NOW());
+
+-- Threads 12 and 13 establish and test contact on a link without a self-contact row.
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000112',
+        '00000000-0000-0000-0000-00000000002a',
+        false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-000000000113',
+        '00000000-0000-0000-0000-00000000002a',
         false, false, NOW(), NOW());
 
 ------------------------------------------------------------
@@ -420,6 +454,70 @@ VALUES ('00000000-0000-0000-0000-000000aa1001',
         'mixed_case_domain_doc.pdf',
         'application/pdf',
         NOW());
+
+------------------------------------------------------------
+-- Thread 11: Only self has previously been contacted
+------------------------------------------------------------
+
+-- Establish a sent-message recipient record for self.
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e1101',
+        '00000000-0000-0000-0000-000000000105',
+        '00000000-0000-0000-0000-00000000001a',
+        'self-contact-history', TRUE, NULL, '2025-01-01 11:00:00 +00:00',
+        false, false, false, false, NOW(), NOW());
+
+INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+VALUES ('00000000-0000-0000-0000-0000000e1101',
+        '00000000-0000-0000-0000-0000000c0008',
+        'TO');
+
+-- The target has an uncontacted sender and self as a recipient.
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e1102',
+        '00000000-0000-0000-0000-000000000111',
+        '00000000-0000-0000-0000-00000000001a',
+        'target-msg-1101', FALSE, '00000000-0000-0000-0000-0000000c0004', '2025-01-02 19:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+
+INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+VALUES ('00000000-0000-0000-0000-0000000e1102',
+        '00000000-0000-0000-0000-0000000c0008',
+        'TO');
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-000000aa1101',
+        '00000000-0000-0000-0000-0000000e1102',
+        'provider-att-1101', 'self_only_contacted.pdf', 'application/pdf', NOW());
+
+------------------------------------------------------------
+-- Link B: Real contacted participant without a self-contact row
+------------------------------------------------------------
+
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e1201',
+        '00000000-0000-0000-0000-000000000112',
+        '00000000-0000-0000-0000-00000000002a',
+        'missing-self-history', TRUE, NULL, '2025-01-01 12:00:00 +00:00',
+        false, false, false, false, NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000e1301',
+        '00000000-0000-0000-0000-000000000113',
+        '00000000-0000-0000-0000-00000000002a',
+        'target-msg-1301', FALSE, '00000000-0000-0000-0000-0000000c0009', '2025-01-02 20:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+
+INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+VALUES ('00000000-0000-0000-0000-0000000e1201',
+        '00000000-0000-0000-0000-0000000c0009',
+        'TO');
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-000000aa1301',
+        '00000000-0000-0000-0000-0000000e1301',
+        'provider-att-1301', 'missing_self_contact.pdf', 'application/pdf', NOW());
 
 -- Macro user for the User table foreign key
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)

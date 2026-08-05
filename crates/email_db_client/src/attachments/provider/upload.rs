@@ -424,35 +424,29 @@ pub async fn new_email_document_atts(
         r#"
         WITH
         message_info AS (
-            SELECT m.thread_id, l.email_address as user_email, m.link_id
-            FROM email_messages m
-            JOIN email_threads t ON m.thread_id = t.id
-            JOIN email_links l ON t.link_id = l.id
-            WHERE m.link_id = $2
-                AND m.provider_id = $1
+            SELECT thread_id
+            FROM email_messages
+            WHERE link_id = $2
+                AND provider_id = $1
         ),
-        previously_contacted_emails AS (
-            SELECT DISTINCT ec.email_address
-            FROM email_messages em
-            JOIN email_message_recipients emr ON em.id = emr.message_id
-            JOIN email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = (SELECT link_id FROM message_info)
-                AND em.is_sent = true
-                AND ec.email_address != (SELECT user_email FROM message_info)
+        self_contact AS (
+            SELECT c.id
+            FROM email_links l
+            JOIN email_contacts c
+                ON c.link_id = l.id
+                AND c.email_address = l.email_address
+            WHERE l.id = $2
         ),
-        thread_participants AS (
-            SELECT DISTINCT ec.email_address
+        participants AS (
+            SELECT em.from_contact_id AS contact_id
             FROM email_messages em
-            JOIN email_contacts ec ON em.from_contact_id = ec.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
-                AND ec.email_address != (SELECT user_email FROM message_info)
+                AND em.from_contact_id IS NOT NULL
             UNION
-            SELECT DISTINCT ec.email_address
+            SELECT emr.contact_id
             FROM email_messages em
-            JOIN email_message_recipients emr ON em.id = emr.message_id
-            JOIN email_contacts ec ON emr.contact_id = ec.id
+            JOIN email_message_recipients emr ON emr.message_id = em.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
-                AND ec.email_address != (SELECT user_email FROM message_info)
         ),
         claimed AS (
             UPDATE email_attachments
@@ -470,8 +464,16 @@ pub async fn new_email_document_atts(
                     {}
                     AND EXISTS (
                         SELECT 1
-                        FROM thread_participants tp
-                        INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
+                        FROM participants p
+                        WHERE p.contact_id IS DISTINCT FROM (SELECT id FROM self_contact)
+                            AND EXISTS (
+                                SELECT 1
+                                FROM email_message_recipients emr
+                                JOIN email_messages sent_message ON sent_message.id = emr.message_id
+                                WHERE emr.contact_id = p.contact_id
+                                    AND sent_message.link_id = $2
+                                    AND sent_message.is_sent = true
+                            )
                     )
             )
             RETURNING id
