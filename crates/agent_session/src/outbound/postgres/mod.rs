@@ -6,7 +6,8 @@ mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Message, SessionStatus, UninitializedSession,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
+    Message, SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -32,17 +33,15 @@ impl PgAgentSessionRepo {
 
 /// The wire name for a [`SessionStatus`] and, for `SessionStatus::Event`, the
 /// system event name to store alongside it.
-fn status_columns(status: &SessionStatus) -> (&'static str, Option<String>) {
-    match status {
-        SessionStatus::NoMessages => ("no_messages", None),
-        SessionStatus::Event(event) => ("event", Some(event.as_str().to_owned())),
-        SessionStatus::Disconnected => ("disconnected", None),
-    }
+fn status_columns(status: &SessionStatus) -> (&str, Option<String>) {
+    let event_name = match status {
+        SessionStatus::Event(event) => Some(event.as_str().to_owned()),
+        SessionStatus::NoMessages | SessionStatus::Disconnected => None,
+    };
+    (status.as_ref(), event_name)
 }
 
-/// Reverse of [`status_columns`]. Event names round-trip through
-/// [`SystemEvent`]'s own (de)serialization rather than duplicating its wire
-/// format here.
+/// Reverse of [`status_columns`].
 fn parse_status(status: &str, event_name: Option<String>) -> anyhow::Result<SessionStatus> {
     match status {
         "no_messages" => Ok(SessionStatus::NoMessages),
@@ -81,8 +80,9 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
 
 struct AgentSessionRow {
     id: Uuid,
-    created_from_thread_id: Option<Uuid>,
-    thread_id: Uuid,
+    channel_id: Uuid,
+    thread_id: Option<Uuid>,
+    originating_message_id: Option<Uuid>,
     bot_id: Uuid,
     model: String,
     harness: String,
@@ -94,15 +94,16 @@ struct AgentSessionRow {
     modified_at: DateTime<Utc>,
 }
 
-impl TryFrom<AgentSessionRow> for AgentSession<AgentSessionId> {
+impl TryFrom<AgentSessionRow> for AgentSession {
     type Error = anyhow::Error;
 
     fn try_from(row: AgentSessionRow) -> anyhow::Result<Self> {
         let status = parse_status(&row.status, row.status_event_name)?;
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
-            created_from_thread_id: row.created_from_thread_id,
+            channel_id: row.channel_id,
             thread_id: row.thread_id,
+            originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
             model: row.model,
             harness: row.harness,
@@ -116,43 +117,91 @@ impl TryFrom<AgentSessionRow> for AgentSession<AgentSessionId> {
 }
 
 impl AgentSessionRepo for PgAgentSessionRepo {
-    async fn create(&self, session: AgentSession<UninitializedSession>) -> Result<AgentSessionId> {
-        let id = AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7());
-        let (status, status_event_name) = status_columns(&session.status);
+    async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
+        let CreateAgentSessionParams {
+            id,
+            owner_id,
+            bot_id,
+            thread_id,
+            originating_message_id,
+            model,
+            harness,
+            repo_url,
+        } = params;
+        let new_channel_id = macro_uuid::generate_uuid_v7();
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session create")?;
+
         sqlx::query!(
             r#"
+            INSERT INTO comms_channels (id, name, channel_type, owner_id, kind)
+            VALUES ($1, NULL, 'private', $2, 'agent')
+            "#,
+            new_channel_id,
+            owner_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to create agent channel")?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, role, user_id)
+            VALUES ($1, 'owner', $2)
+            "#,
+            new_channel_id,
+            owner_id.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to create agent channel owner")?;
+
+        let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
+        let row = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
             INSERT INTO agent_session (
-                id, created_from_thread_id, thread_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
+                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
+                repo_url, acp_session_id, status, status_event_name
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING
+                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
+                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             "#,
             id.as_uuid(),
-            session.created_from_thread_id,
-            session.thread_id,
-            session.bot_id.as_uuid(),
-            session.model,
-            session.harness,
-            session.repo_url,
-            session.acp_session_id,
+            new_channel_id,
+            thread_id,
+            originating_message_id,
+            bot_id.as_uuid(),
+            model,
+            harness,
+            repo_url,
+            None::<String>,
             status,
             status_event_name,
-            session.created_at,
-            session.modified_at,
         )
-        .execute(&self.pool)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to create agent session")?;
 
-        Ok(id)
+        transaction
+            .commit()
+            .await
+            .context("commit agent session create")?;
+
+        Ok(row.try_into()?)
     }
 
-    async fn get(&self, id: AgentSessionId) -> Result<AgentSession<AgentSessionId>> {
+    async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
-                id, created_from_thread_id, thread_id, bot_id, model, harness,
+                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
                 repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             FROM agent_session
             WHERE id = $1
@@ -167,13 +216,84 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
-    async fn update(&self, session: AgentSession<AgentSessionId>) -> Result<()> {
+    async fn find_for_channel(
+        &self,
+        channel_id: Uuid,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> Result<ChannelSession> {
+        let bot_id = bot_id.map(BotId::as_uuid);
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                session.id, session.channel_id, session.thread_id,
+                session.originating_message_id, session.bot_id,
+                session.model, session.harness, session.repo_url, session.acp_session_id,
+                session.status, session.status_event_name, session.created_at, session.modified_at
+            FROM agent_session session
+            WHERE
+                session.channel_id = $1 -- it is the dedicated agent channel
+                OR (
+                    -- otherwise, if it's in a thread and literally mentions the bot
+                    session.thread_id = $2
+                    AND session.bot_id = $3
+                )
+                -- we collect both!
+            ORDER BY (session.channel_id = $1) DESC, session.created_at DESC
+            LIMIT 3
+            "#,
+            channel_id,
+            thread_id,
+            bot_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to find agent session for channel context")?;
+
+        let sessions = rows
+            .into_iter()
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let matches_subthread = |session: &AgentSession| {
+            thread_id.is_some()
+                && bot_id.is_some()
+                && session.thread_id == thread_id
+                && Some(session.bot_id.as_uuid()) == bot_id
+        };
+
+        Ok(match sessions.as_slice() {
+            [] => ChannelSession::None,
+            [session] if session.channel_id == channel_id => {
+                ChannelSession::InDedicatedChannel(session.clone())
+            }
+            [session] if matches_subthread(session) => {
+                ChannelSession::CreatedFromThread(session.clone())
+            }
+            [dedicated_channel_agent_session, subthread_agent_session]
+                if dedicated_channel_agent_session.channel_id == channel_id
+                    && matches_subthread(subthread_agent_session) =>
+            {
+                ChannelSession::ThreadInDedicatedChannel {
+                    dedicated_channel_agent_session: dedicated_channel_agent_session.clone(),
+                    subthread_agent_session: subthread_agent_session.clone(),
+                }
+            }
+            _ => {
+                return Err(
+                    anyhow::anyhow!("agent sessions violated channel lookup invariants").into(),
+                );
+            }
+        })
+    }
+
+    async fn update(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
         let result = sqlx::query!(
             r#"
             UPDATE agent_session
-            SET created_from_thread_id = $2,
-                thread_id = $3,
+            SET thread_id = $2,
+                originating_message_id = $3,
                 bot_id = $4,
                 model = $5,
                 harness = $6,
@@ -185,8 +305,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             WHERE id = $1
             "#,
             session.id.as_uuid(),
-            session.created_from_thread_id,
             session.thread_id,
+            session.originating_message_id,
             session.bot_id.as_uuid(),
             session.model,
             session.harness,
@@ -208,10 +328,16 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
-        sqlx::query!(r#"DELETE FROM agent_session WHERE id = $1"#, id.as_uuid(),)
-            .execute(&self.pool)
-            .await
-            .context("failed to delete agent session")?;
+        sqlx::query!(
+            r#"
+            DELETE FROM comms_channels
+            WHERE id = (SELECT channel_id FROM agent_session WHERE id = $1)
+            "#,
+            id.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to delete agent session channel")?;
 
         Ok(())
     }
