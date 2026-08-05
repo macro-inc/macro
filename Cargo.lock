@@ -143,6 +143,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -241,6 +242,7 @@ dependencies = [
  "axum",
  "bots",
  "chrono",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
@@ -252,6 +254,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -4564,6 +4568,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "ai_tools",
  "ai_usage",
  "analytics_client",

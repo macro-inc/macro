@@ -12,6 +12,9 @@ use crate::{
     },
     service::s3::S3,
 };
+use agent_session::domain::service::AgentSessionServiceImpl;
+use agent_session::inbound::axum_router::AgentSessionRouterState;
+use agent_session::outbound::postgres::PgAgentSessionRepo;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -296,6 +299,11 @@ async fn main() -> anyhow::Result<()> {
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+
+    let agent_session_state = AgentSessionRouterState::new(
+        AgentSessionServiceImpl::new(PgAgentSessionRepo::new(db.clone())),
+        authorization_state.clone(),
+    );
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -1101,6 +1109,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },
+        agent_session_state,
     };
 
     #[cfg(feature = "delete_document_worker")]
