@@ -38,8 +38,12 @@ export function TeamInviteAcceptance() {
 
   // If the invite is gone but the user already belongs to a team (e.g. a
   // domain auto-join consumed the invite between clicking the link and
-  // landing here), show that instead of "Invite Not Found".
-  const currentTeamQuery = useCurrentTeamQuery();
+  // landing here), show that instead of "Invite Not Found". Only fetched
+  // once the invite lookup has settled without a match — a valid invite
+  // never waits on (or triggers) this request.
+  const currentTeamQuery = useCurrentTeamQuery(
+    () => !!userInfo()?.authenticated && invitesQuery.isSuccess && !invite()
+  );
   const currentTeamName = createMemo(() => currentTeamQuery.data?.team.name);
 
   const joinMutation = useJoinTeamMutation({
@@ -76,7 +80,7 @@ export function TeamInviteAcceptance() {
     () =>
       invitesQuery.isLoading ||
       teamQuery.isLoading ||
-      currentTeamQuery.isLoading
+      (!invite() && currentTeamQuery.isLoading)
   );
 
   return (
