@@ -1,4 +1,5 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { emailToMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
@@ -17,7 +18,7 @@ import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Button } from '@ui';
-import { type Accessor, createMemo, For, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -173,6 +174,21 @@ function CalendarAttendeeList(props: { attendees: CalendarAttendee[] }) {
     <For each={sortedAttendees()}>
       {(item) => <CalendarAttendeeItem item={item} />}
     </For>
+  );
+}
+
+function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLDivElement>();
+
+  return (
+    <div class="relative min-w-0 flex-1">
+      <div ref={setScrollContainer} class="max-h-40 overflow-y-auto pr-4">
+        <div class="flex flex-col gap-3">
+          <CalendarAttendeeList attendees={props.attendees} />
+        </div>
+      </div>
+      <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+    </div>
   );
 }
 
@@ -368,27 +384,38 @@ export function EventDetails(props: {
           </div>
         </div>
       </div>
-
-      <Show when={props.event.attendees.length > 0}>
-        <Collapsible defaultOpen class="mt-4 text-xs text-ink-muted">
-          <Collapsible.Trigger class="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-hover hover:text-ink">
-            <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
-            <span>
-              {props.event.attendees.length}{' '}
-              {plural('attendee', props.event.attendees.length)}
-            </span>
-            <CaretDownIcon
-              aria-hidden="true"
-              class="ml-auto size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
-            />
-          </Collapsible.Trigger>
-          <Collapsible.Content class="data-closed:hidden">
-            <div class="ml-7 mt-3 flex max-h-40 min-w-0 flex-col gap-1.5 overflow-y-auto">
-              <CalendarAttendeeList attendees={props.event.attendees} />
-            </div>
-          </Collapsible.Content>
-        </Collapsible>
-      </Show>
     </div>
+  );
+}
+
+/** Displays attendees in a full-width collapsible popover section. */
+export function EventAttendeesSection(props: {
+  attendees: CalendarAttendee[];
+}) {
+  return (
+    <Show when={props.attendees.length > 0}>
+      <Collapsible
+        defaultOpen
+        class="border-edge-muted border-t text-xs text-ink-muted"
+      >
+        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-hover hover:text-ink">
+          <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
+          <span>
+            {props.attendees.length}{' '}
+            {plural('attendee', props.attendees.length)}
+          </span>
+          <CaretDownIcon
+            aria-hidden="true"
+            class="ml-auto size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
+          />
+        </Collapsible.Trigger>
+        <Collapsible.Content class="data-closed:hidden">
+          <div class="flex gap-3 pb-3 pl-4 pt-1.5">
+            <span aria-hidden="true" class="size-4 shrink-0" />
+            <ScrollableAttendeeList attendees={props.attendees} />
+          </div>
+        </Collapsible.Content>
+      </Collapsible>
+    </Show>
   );
 }

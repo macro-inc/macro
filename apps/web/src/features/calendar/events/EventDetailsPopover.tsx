@@ -2,7 +2,7 @@ import { Popover } from '@kobalte/core/popover';
 import CloseIcon from '@phosphor/x.svg';
 import { Button, Layer } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { EventDetails } from './EventDetails';
+import { EventAttendeesSection, EventDetails } from './EventDetails';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 interface SelectedEventDetailsPopoverProps {
@@ -71,9 +71,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="relative w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] rounded-xl bg-surface p-3 text-ink shadow-menu ring ring-edge-muted">
+            <div class="relative w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
-              <EventDetails event={props.event} timeFormat={props.timeFormat} />
+              <div class="p-3">
+                <EventDetails
+                  event={props.event}
+                  timeFormat={props.timeFormat}
+                />
+              </div>
+              <EventAttendeesSection attendees={props.event.attendees} />
               <Popover.CloseButton
                 as={Button}
                 aria-label="Close event details"

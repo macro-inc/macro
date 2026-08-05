@@ -345,44 +345,6 @@
 	border-top-color: transparent;
 }
 
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::before,
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::after {
-	position: absolute;
-	right: 0;
-	left: 0;
-	z-index: 5;
-	height: 1.5rem;
-	pointer-events: none;
-	content: "";
-}
-
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::before {
-	top: 0;
-	background: linear-gradient(
-		to bottom,
-		color-mix(in oklch, var(--color-surface) 75%, transparent),
-		transparent
-	);
-	opacity: 0;
-	transition: opacity 150ms ease-out;
-}
-
-.calendar-view
-	.fc
-	.fc-timegrid
-	.fc-scroller-harness-liquid[data-scrolled-from-top]::before {
-	opacity: 1;
-}
-
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::after {
-	bottom: 0;
-	background: linear-gradient(
-		to top,
-		color-mix(in oklch, var(--color-surface) 75%, transparent),
-		transparent
-	);
-}
-
 .calendar-view .fc .fc-timegrid-axis-cushion,
 .calendar-view .fc .fc-timegrid-slot-label-cushion {
 	color: var(--color-ink-extra-muted);

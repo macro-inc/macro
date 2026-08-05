@@ -5,6 +5,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -22,6 +23,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { CalendarDataStatus } from './CalendarDataStatus';
 import { CalendarPeriodSelector } from './CalendarPeriodSelector';
 import { CalendarRangeUnavailableBanner } from './CalendarRangeUnavailableBanner';
@@ -92,34 +94,75 @@ function getLocalScrollTime() {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 }
 
-function useCalendarScrollFades(
-  calendarElement: Accessor<HTMLElement | undefined>
-) {
+interface CalendarScrollTarget {
+  scrollElement: HTMLElement;
+  fadeContainer: HTMLElement;
+}
+
+function CalendarScrollIndicators(props: {
+  calendarElement: Accessor<HTMLElement | undefined>;
+}) {
+  const [target, setTarget] = createSignal<CalendarScrollTarget>();
+
   createEffect(
-    on(calendarElement, (element) => {
-      if (!element) return;
+    on(props.calendarElement, (element) => {
+      if (!element) {
+        setTarget(undefined);
+        return;
+      }
 
-      const handleCalendarScroll = (event: Event) => {
-        const scroller = event.target;
-        if (!(scroller instanceof HTMLElement)) return;
-
-        const harness = scroller.closest<HTMLElement>(
-          '.fc-scroller-harness-liquid'
+      let updateFrame: number | undefined;
+      const updateScrollElements = () => {
+        const scrollElement = element.querySelector<HTMLElement>(
+          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
         );
-        if (!harness || scroller.parentElement !== harness) return;
-
-        harness.toggleAttribute(
-          'data-scrolled-from-top',
-          scroller.scrollTop > 1
-        );
+        const fadeContainer = scrollElement?.parentElement;
+        setTarget((current) => {
+          if (!scrollElement || !fadeContainer) return undefined;
+          return current?.scrollElement === scrollElement &&
+            current.fadeContainer === fadeContainer
+            ? current
+            : { scrollElement, fadeContainer };
+        });
+      };
+      const scheduleScrollElementUpdate = () => {
+        if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
+        updateFrame = requestAnimationFrame(() => {
+          updateFrame = undefined;
+          updateScrollElements();
+        });
       };
 
-      element.addEventListener('scroll', handleCalendarScroll, true);
+      const mutationObserver = new MutationObserver(
+        scheduleScrollElementUpdate
+      );
+      mutationObserver.observe(element, { childList: true, subtree: true });
+      scheduleScrollElementUpdate();
 
       onCleanup(() => {
-        element.removeEventListener('scroll', handleCalendarScroll, true);
+        mutationObserver.disconnect();
+        if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       });
     })
+  );
+
+  return (
+    <Show keyed when={target()}>
+      {(scrollTarget) => (
+        <Portal
+          mount={scrollTarget.fadeContainer}
+          ref={(container) => {
+            container.style.display = 'contents';
+          }}
+        >
+          <ScrollIndicators
+            scrollRef={() => scrollTarget.scrollElement}
+            appearance="gradient"
+            class="h-6"
+          />
+        </Portal>
+      )}
+    </Show>
   );
 }
 
@@ -129,7 +172,6 @@ function ResponsiveCalendarHost() {
   const [element, setElement] = createSignal<HTMLDivElement>();
 
   useCalendarTimeGridHoverIndicator(element);
-  useCalendarScrollFades(element);
 
   createEffect(
     on(
@@ -178,6 +220,7 @@ function ResponsiveCalendarHost() {
             }}
             class="calendar-view-host min-w-0 min-h-0 flex-1 overflow-hidden rounded-xl"
           />
+          <CalendarScrollIndicators calendarElement={element} />
           <CalendarDataStatus />
         </div>
       </div>
