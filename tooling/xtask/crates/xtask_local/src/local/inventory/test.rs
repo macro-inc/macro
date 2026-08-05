@@ -11,8 +11,8 @@ fn local_binaries_are_unique_and_complete() {
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
     assert!(bins.contains(&"search_processing_service"));
-    assert!(bins.contains(&"agent_proxy_service"));
     assert!(bins.contains(&"agent_trigger_service"));
+    assert!(bins.contains(&"agent_harness_service"));
     let mut sorted = bins.clone();
     sorted.dedup();
     assert_eq!(sorted.len(), bins.len(), "binaries must be deduplicated");

@@ -11,7 +11,19 @@ path = "src/main.rs"
 [dependencies]
 agent_harness = { path = "../../crates/agent_harness" }
 agent_session = { path = "../../crates/agent_session" }
+agent_trigger = { path = "../../crates/agent_trigger" }
+aws-sdk-sqs = { workspace = true }
+bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+contacts = { path = "../../crates/contacts" }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+notification = { path = "../../crates/notification" }
+rdkafka = { workspace = true }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }

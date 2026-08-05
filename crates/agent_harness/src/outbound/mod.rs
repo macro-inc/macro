@@ -1,10 +1,10 @@
 //! Outbound adapters: the concrete providers, stores, and carriers the domain
 //! ports are satisfied by.
 
-// pub mod channel_reply;
-// pub mod daytona;
+pub mod channel_announcer;
+pub mod daytona;
 // pub mod namespace;
-// pub mod sidecar_pump;
+pub mod sidecar;
 
 /// Give credential newtypes their constructor and their one escape hatch.
 ///

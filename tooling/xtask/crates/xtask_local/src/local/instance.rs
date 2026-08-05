@@ -98,6 +98,9 @@ pub enum Port {
     SdkWebhookHostReceiver = 8789,
     // Appended (not slotted by number) so existing per-instance port offsets,
     // which come from declaration order, stay stable.
+    /// Retired with agent_proxy_service; kept (in place, at the end) because
+    /// per-instance port offsets come from declaration order, and removing a
+    /// variant would shift every one declared after it.
     AgentProxy = 8091,
 }
 

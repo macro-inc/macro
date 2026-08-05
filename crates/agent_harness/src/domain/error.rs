@@ -33,4 +33,7 @@ pub enum HarnessError {
     /// Reading or writing the session's persistent state failed.
     #[error(transparent)]
     Session(#[from] AgentSessionError),
+    /// The session link could not be posted back to the mention's thread.
+    #[error("failed to announce the agent session")]
+    Announce(#[source] anyhow::Error),
 }

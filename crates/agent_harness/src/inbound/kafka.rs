@@ -1,186 +1,103 @@
-//! Kafka consumer: every channel message, filtered down to the ones that
-//! mention us.
+//! Translate `macro.agent_sessions` events into harness commands.
 //!
-//! Scaffolding only - every operation is `todo!()`.
-//!
-//! The trigger is not an API call. The harness subscribes to `macro.channels`
-//! and watches every message posted in every channel, so the filter in
-//! [`crate::domain::mentions`] runs before anything expensive happens. A bad
-//! predicate here spawns a Daytona sandbox and an agent_proxy chat for the
-//! entire firehose, which is why the mention check is domain logic with its own
-//! tests rather than an `if` in the poll loop.
-//!
-//! `ChannelMessagePostedMetadata` already carries `mentions`, `content`,
-//! `thread_id`, and `sender`, so recognising a mention needs no database
-//! lookup and no second subscription to `macro.mentions`.
-//!
-//! Offsets: the group starts at the newest offset, so the harness only ever
-//! sees messages posted after it comes up. Starting at `earliest` would answer
-//! every historical mention of the bot id - one sandbox and one chat per hit.
-//!
-//! Delivery is at-least-once, and both side effects (a sandbox, a chat) are
-//! expensive and user-visible, so the worker must dedupe on
-//! [`BotMention::message_id`] before acting. Redis is already a dependency;
-//! `crates/task_dedup` exists if that proves too thin.
-//!
-//! `services/search_processing_service/src/inbound/kafka_consumer.rs` is the
-//! reference for the parts this skeleton leaves out: bounded sequential
-//! handoff, commit-after-handoff, committing malformed records so they cannot
-//! wedge a partition, and bounded in-process retries.
+//! The trigger service already did the hard part - watching the channel
+//! firehose, matching mentions to sessions, dropping the bot's own messages -
+//! so this adapter only routes: is this event for our bot, and is it an open
+//! or a forward? Pure translation, no IO; the consumer loop lives in the
+//! service binary.
 
-use std::sync::Arc;
-use std::time::Duration;
-
-use agent_session::domain::ports::AgentSessionRepo;
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
-use channels::domain::side_effects::ChannelBotTrigger;
-use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::{
-    KafkaConsumerAdapter, MacroEvent, MacroEventCollection, MacroEventConsumerService, MessageParts,
+use agent_trigger::domain::broker_events::{
+    AgentSessionTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
-use rootcause::prelude::ResultExt as _;
+use bot_id::BotId;
+use channels::domain::broker_events::ChannelMessagePostedMetadata;
+use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::handler::MentionHandler;
-use crate::domain::ports::{ChannelReplier, RuntimeAttachments, SandboxProvider};
+use crate::domain::service::{ForwardMessage, MentionOrigin, OpenSession};
 
-/// Consumer group owning this harness's channel-message offsets.
-pub struct AgentHarnessConsumerGroup;
+#[cfg(test)]
+mod test;
 
-impl GroupName for AgentHarnessConsumerGroup {
-    const GROUP_NAME: &'static str = "agent-harness";
+/// A trigger event translated into the harness's vocabulary.
+#[derive(Debug, Clone)]
+pub enum HarnessCommand {
+    /// Open a new session.
+    Open(OpenSession),
+    /// Feed a session that already exists.
+    Forward(ForwardMessage),
 }
 
-macro_event_broker::declare_topics!(
-    HarnessMacroEvent:
-        ChannelMacroEvent,
-);
-
-/// The grouped Kafka adapter this harness polls through.
-pub type HarnessKafkaAdapter = KafkaConsumerAdapter<AgentHarnessConsumerGroup, HarnessMacroEvent>;
-
-/// The typed consumer the poll loop receives from.
-pub type HarnessKafkaConsumer = MacroEventConsumerService<HarnessMacroEvent, HarnessKafkaAdapter>;
-
-/// How long to wait before polling again after a receive error, so a broker
-/// outage does not spin.
-const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
-
-/// Build the consumer: join the group and subscribe to every declared topic.
-///
-/// Offsets follow the group, so the very first run of a new group starts at the
-/// newest offset and later runs resume from the last commit.
-pub fn consumer(brokers: &str) -> Result<HarnessKafkaConsumer, rootcause::Report> {
-    let consumer = KafkaEventConsumer::<AgentHarnessConsumerGroup>::from_env(brokers)?;
-    let consumer = KafkaConsumerAdapter::<AgentHarnessConsumerGroup, ()>::new(consumer)
-        .subscribe::<HarnessMacroEvent>()
-        .context("failed to subscribe to agent harness event topics")?;
-    Ok(MacroEventConsumerService::new(consumer))
+/// Why an event yielded no command. Only for logging - none of these are
+/// errors, and the consumer commits the offset either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Skipped {
+    /// The event belongs to a different bot's deployment.
+    ForeignBot,
+    /// The sender is not a user, so there is nobody to own the session.
+    NotFromUser,
+    /// An event shape this harness does not recognise yet - the trigger's
+    /// vocabulary is non-exhaustive on purpose, and unknown shapes are
+    /// skipped rather than wedging the partition.
+    Unrecognized,
 }
 
-/// Poll `macro.channels` forever, logging every message.
-///
-/// The handler is threaded through but deliberately not called yet:
-/// [`crate::domain::mentions::mentions_harness`] is still `todo!()`, so
-/// filtering would panic on the first message. Until it lands this proves the
-/// group joins, the topic is subscribed, and payloads decode.
-///
-/// It does not commit offsets either - so a restart re-reads whatever was
-/// uncommitted, which for a log-only loop is what you want.
-pub async fn run<Provider, Attach, Sessions, Replier>(
-    _handler: Arc<MentionHandler<Provider, Attach, Sessions, Replier>>,
-    consumer: HarnessKafkaConsumer,
-) -> anyhow::Result<()>
-where
-    Provider: SandboxProvider,
-    Attach: RuntimeAttachments,
-    Sessions: AgentSessionRepo,
-    Replier: ChannelReplier,
-{
-    tracing::info!(
-        topics = ?HarnessMacroEvent::topics(),
-        group = AgentHarnessConsumerGroup::GROUP_NAME,
-        "agent harness listening for channel events"
-    );
-
-    loop {
-        let message = match consumer.recv().await {
-            Ok(message) => message,
-            Err(error) => {
-                tracing::error!(error = ?error, "kafka receive failed");
-                tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY).await;
-                continue;
+/// Route one trigger event: a command for `our_bot`, or a reason it was
+/// skipped.
+pub fn command_for(
+    event: AgentSessionTopicEvent,
+    our_bot: BotId,
+) -> Result<HarnessCommand, Skipped> {
+    match event {
+        AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+            if mentioned.bot_id != our_bot {
+                return Err(Skipped::ForeignBot);
             }
-        };
-
-        let topic = message.inner().topic().to_owned();
-        let key = message.inner().key().map(str::to_owned);
-
-        match message.decode_payload() {
-            Ok(HarnessMacroEvent::ChannelMacroEvent(event)) => {
-                log_channel_event(&topic, key.as_deref(), &event);
-            }
-            Err(error) => {
-                tracing::warn!(
-                    %topic,
-                    ?key,
-                    error = ?error,
-                    "undecodable record; skipping"
-                );
-            }
+            let origin = origin_of(&mentioned.message).ok_or(Skipped::NotFromUser)?;
+            Ok(HarnessCommand::Open(OpenSession {
+                bot_id: mentioned.bot_id,
+                origin,
+            }))
         }
+        AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+            ChannelEventMetadata {
+                bot_id,
+                session_id,
+                kind: _,
+                message,
+            },
+        )) => {
+            if bot_id != our_bot {
+                return Err(Skipped::ForeignBot);
+            }
+            Ok(HarnessCommand::Forward(ForwardMessage {
+                session_id,
+                sender: sender_of(&message),
+                content: message.content,
+            }))
+        }
+        // Both event enums are non-exhaustive: the trigger may grow new
+        // session sources before this harness learns them.
+        _ => Err(Skipped::Unrecognized),
     }
 }
 
-/// Log one decoded channel event, naming the variant so the interesting ones
-/// stand out from channel lifecycle noise.
-fn log_channel_event(topic: &str, key: Option<&str>, event: &ChannelMacroEvent) {
-    let envelope = event.event();
-    let variant = match &envelope.event {
-        ChannelTopicEvent::Created(_) => "channel.created",
-        ChannelTopicEvent::Updated(_) => "channel.updated",
-        ChannelTopicEvent::Deleted(_) => "channel.deleted",
-        ChannelTopicEvent::MessagePosted(_) => "channel.message_posted",
-        ChannelTopicEvent::MessagePatched(_) => "channel.message_patched",
-        ChannelTopicEvent::MessageDeleted(_) => "channel.message_deleted",
-        ChannelTopicEvent::MessageAttachmentCreated(_) => "channel.message_attachment_created",
-        ChannelTopicEvent::MessageAttachmentRemoved(_) => "channel.message_attachment_removed",
-        ChannelTopicEvent::ParticipantAdded(_) => "channel.participant_added",
-        ChannelTopicEvent::ParticipantRemoved(_) => "channel.participant_removed",
-    };
-
-    // Message bodies and mentions are the whole point of the smoke test, so a
-    // posted message gets its own line with the fields the handler will read.
-    if let ChannelTopicEvent::MessagePosted(posted) = &envelope.event {
-        tracing::info!(
-            %topic,
-            ?key,
-            event = variant,
-            channel_id = %posted.channel_id,
-            message_id = %posted.message_id,
-            thread_id = ?posted.thread_id,
-            mentions = ?posted.mentions,
-            content = %posted.content,
-            "message posted"
-        );
-        return;
-    }
-
-    tracing::info!(%topic, ?key, event = variant, "channel event");
+/// The mention as domain vocabulary, when a user sent it.
+fn origin_of(message: &ChannelMessagePostedMetadata) -> Option<MentionOrigin> {
+    let sender = sender_of(message)?;
+    Some(MentionOrigin {
+        channel_id: message.channel_id,
+        // A top-level mention roots its own thread; a mention inside a thread
+        // answers into that thread.
+        thread_id: message.thread_id.unwrap_or(message.message_id),
+        message_id: message.message_id,
+        sender,
+        content: message.content.clone(),
+    })
 }
 
-/// Map a posted-message event onto `channels`' own [`ChannelBotTrigger`], the
-/// same value the in-process side-effect path produces.
-///
-/// `channels::domain::side_effects::bot_mention_ids` does the matching, so the
-/// `bot|<uuid>` form and the user-tagged-bot quirk stay owned by `channels`
-/// instead of being reimplemented here.
-///
-/// Returns `None` for anything that is not a posted message, which is most of
-/// the topic.
-#[expect(
-    dead_code,
-    reason = "wired up once the loop dispatches instead of logging"
-)]
-fn to_trigger(_event: &ChannelMacroEvent) -> Option<ChannelBotTrigger> {
-    todo!("match MessagePosted, build MutatedMessage, bot_ids via bot_mention_ids")
+/// The message's author, when it is a user. Bot senders yield `None`: another
+/// bot cannot own an agent session, and the trigger already drops our own
+/// messages.
+fn sender_of(message: &ChannelMessagePostedMetadata) -> Option<MacroUserIdStr<'static>> {
+    message.sender.as_user().cloned()
 }

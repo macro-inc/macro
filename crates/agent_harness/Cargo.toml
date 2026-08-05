@@ -8,9 +8,11 @@ version = "0.1.0"
 agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
+agent_trigger = { path = "../agent_trigger" }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }
 futures = { workspace = true }
@@ -33,4 +35,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 agent_session = { path = "../agent_session", features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 mockall = { workspace = true }

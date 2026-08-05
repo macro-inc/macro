@@ -183,6 +183,12 @@ impl MockContainerManager {
         self.lock().get(&session).cloned()
     }
 
+    /// Every session a container has been spawned for.
+    #[must_use]
+    pub fn sessions(&self) -> Vec<AgentSessionId> {
+        self.lock().keys().copied().collect()
+    }
+
     /// How many sandboxes have been booted.
     #[must_use]
     pub fn spawned(&self) -> usize {

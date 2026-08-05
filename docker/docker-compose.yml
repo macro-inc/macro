@@ -296,36 +296,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # agent_proxy_service (Port 8091: user-facing HTTP API and the shared
-  # agent-runtime WebSocket endpoint, every session dials in and is
-  # disambiguated by `?id=`)
-  # Proxy for external coding agents - MacroDB + connection gateway
-  # ============================================================================
-  agent_proxy_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/agent_proxy_service"]
-    ports:
-      - "8091:8080"
-    environment:
-      # In-network gateway address; the local default (http://localhost:8082)
-      # would point at this container itself.
-      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
-    depends_on:
-      - postgres
-      - connection_gateway
-    networks:
-      databases:
-      services:
-        aliases:
-          - agent-proxy-service
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # agent_trigger_service (portless local worker)
   # Channel messages -> agent session trigger events
   # ============================================================================
@@ -336,6 +306,28 @@ services:
     depends_on:
       - postgres
       - kafka
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
+  # agent_harness_service (portless local worker)
+  # Agent session trigger events -> sandboxed coding agent sessions.
+  # Starts credential-less (and warns); arm it with
+  # `DAYTONA_API_KEY=... GITHUB_TOKEN=... just run_local`.
+  # ============================================================================
+  agent_harness_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_harness_service"]
+    restart: on-failure
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - kafka
+      - connection_gateway
     networks:
       - databases
       - services

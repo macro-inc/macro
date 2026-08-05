@@ -21,7 +21,6 @@ struct PortMap {
 pub fn write(instance: &Instance) -> Result<PathBuf> {
     let url = |port| format!("http://localhost:{}", instance.port(port));
     let hosts = BTreeMap::from([
-        ("agent-proxy", url(Port::AgentProxy)),
         ("auth", url(Port::Auth)),
         ("cognition", url(Port::DocCognition)),
         ("connection", url(Port::ConnGateway)),
