@@ -13,8 +13,13 @@ test-utils = ["dep:mockall"]
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+axum = { workspace = true }
 bots = { path = "../bots"}
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
+utoipa = { workspace = true }
 sqlx = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
@@ -22,6 +27,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
+tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

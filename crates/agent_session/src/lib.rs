@@ -1,4 +1,5 @@
 pub mod domain;
+pub mod inbound;
 pub mod outbound;
 
 /// In-memory port implementations for tests.
