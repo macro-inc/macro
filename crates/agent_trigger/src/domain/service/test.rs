@@ -10,7 +10,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use crate::domain::broker_events::{AgentSessionTopicEvent, ChannelKind, NewSessionMetadata};
+use crate::domain::broker_events::{
+    AgentSessionTopicEvent, ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
+};
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|trigger-service-test@macro.com")
@@ -86,7 +88,9 @@ async fn evaluates_a_dedicated_channel_without_a_mentioned_bot() {
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 1);
-    let AgentSessionTopicEvent::ChannelEvent(metadata) = &events[0].event().event else {
+    let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
+        &events[0].event().event
+    else {
         panic!("expected a channel event");
     };
     assert_eq!(metadata.bot_id, BotId::TEST_A);
@@ -118,7 +122,7 @@ async fn evaluates_every_mentioned_agent_bot() {
     let mut event_bots: Vec<_> = events
         .iter()
         .map(|event| match &event.event().event {
-            AgentSessionTopicEvent::New(NewSessionMetadata::Mentioned(mentioned)) => {
+            AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
                 mentioned.bot_id
             }
             other => panic!("expected a new-session event, got {other:?}"),
@@ -150,7 +154,7 @@ async fn evaluates_a_repeated_bot_mention_once() {
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 1);
-    let AgentSessionTopicEvent::New(NewSessionMetadata::Mentioned(mentioned)) =
+    let AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
         &events[0].event().event
     else {
         panic!("expected a new-session event");
@@ -206,7 +210,9 @@ async fn deduplicates_a_dedicated_session_found_for_multiple_mentions() {
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 1);
-    let AgentSessionTopicEvent::ChannelEvent(metadata) = &events[0].event().event else {
+    let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
+        &events[0].event().event
+    else {
         panic!("expected a channel event");
     };
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);

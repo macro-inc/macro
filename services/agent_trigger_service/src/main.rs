@@ -11,7 +11,7 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use config::Config;
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBroker as _,
     MacroEventBrokerService, MacroEventCollection as _, MacroEventConsumerService,
@@ -83,11 +83,10 @@ async fn main() -> anyhow::Result<()> {
         "agent trigger service listening"
     );
 
-    let mut shutdown = std::pin::pin!(tokio::signal::ctrl_c());
+    let mut shutdown = std::pin::pin!(shutdown_signal());
     loop {
         tokio::select! {
-            result = &mut shutdown => {
-                result.context("failed to listen for ctrl-c")?;
+            () = &mut shutdown => {
                 tracing::info!("agent trigger service shutting down");
                 break;
             }

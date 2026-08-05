@@ -7,7 +7,7 @@ use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::{
     AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
-    NewSessionMetadata,
+    NewAgentSessionEvent,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
@@ -96,11 +96,15 @@ pub fn yield_event(
     };
 
     if !has_agent {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::BotHasNoAgent { bot_id: session_bot });
+        return AgentSessionEventDecision::NoEvent(NoEventReason::BotHasNoAgent {
+            bot_id: session_bot,
+        });
     }
 
     if is_own_message(session_bot, posted) {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::OwnMessage { bot_id: session_bot });
+        return AgentSessionEventDecision::NoEvent(NoEventReason::OwnMessage {
+            bot_id: session_bot,
+        });
     }
 
     let mentioned = bot_mention_ids(&posted.mentions).contains(&session_bot);
@@ -115,7 +119,7 @@ pub fn yield_event(
         }
         (ChannelSession::None, true) => {
             return AgentSessionEventDecision::Event(AgentSessionMacroEvent::new_session(
-                NewSessionMetadata::Mentioned(AgentBotMentionedEvent {
+                NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
                     bot_id: session_bot,
                     message: posted.clone(),
                 }),
@@ -151,7 +155,7 @@ pub fn yield_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::broker_events::AgentSessionTopicEvent;
+    use crate::domain::broker_events::{AgentSessionTopicEvent, ExistingAgentSessionEvent};
     use agent_session::domain::model::{AgentSession, AgentSessionId, SessionStatus};
     use channel_sender::ChannelSender;
     use channels::domain::models::{ChannelType, SimpleMention};
@@ -272,7 +276,7 @@ mod tests {
             .expect("opens a session");
         assert!(matches!(
             &event.event().event,
-            AgentSessionTopicEvent::New(NewSessionMetadata::Mentioned(_))
+            AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(_))
         ));
     }
 
@@ -283,7 +287,7 @@ mod tests {
         let event = yield_event(&posted, &ChannelSession::None, Some(BotId::TEST_A), true)
             .into_event()
             .expect("opens a session");
-        let AgentSessionTopicEvent::New(NewSessionMetadata::Mentioned(mentioned)) =
+        let AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
             &event.event().event
         else {
             panic!("expected a mention-opened session");
@@ -301,7 +305,7 @@ mod tests {
         let event = yield_event(&posted, &ChannelSession::None, Some(BotId::TEST_A), true)
             .into_event()
             .expect("opens a session");
-        let AgentSessionTopicEvent::New(NewSessionMetadata::Mentioned(mentioned)) =
+        let AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
             &event.event().event
         else {
             panic!("expected a mention-opened session");
@@ -351,7 +355,9 @@ mod tests {
         )
         .into_event()
         .expect("feeds the session");
-        let AgentSessionTopicEvent::ChannelEvent(channel_event) = &event.event().event else {
+        let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
+            &event.event().event
+        else {
             panic!("expected a channel event");
         };
         assert_eq!(channel_event.kind, ChannelKind::DedicatedChannel);
@@ -372,7 +378,9 @@ mod tests {
         )
         .into_event()
         .expect("feeds the session");
-        let AgentSessionTopicEvent::ChannelEvent(channel_event) = &event.event().event else {
+        let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
+            &event.event().event
+        else {
             panic!("expected a channel event");
         };
         assert_eq!(channel_event.kind, ChannelKind::MentionThread);
