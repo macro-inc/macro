@@ -37,14 +37,15 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{FoldSession, LogRepo};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, Meta, RequestId, Response, SessionNotification, SessionUpdate, ToolCall,
-    ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolKind,
+    ContentBlock, Meta, RequestId, Response, SessionUpdate, ToolCall, ToolCallContent,
+    ToolCallStatus, ToolCallUpdate, ToolKind,
 };
 use agent_client_protocol::{RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -73,11 +74,7 @@ fn step(mut state: State, entry: AgentSessionLog) -> State {
         Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
             // A user's prompt opens a turn.
             RawJsonRpcMessage::Request(request) if &*request.method == "session/prompt" => {
-                state.begin_turn(
-                    &request.id,
-                    params_value(request.params.as_ref()),
-                    entry.user_id.clone(),
-                );
+                state.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone());
             }
             // The user's answer to a permission request.
             RawJsonRpcMessage::Response(Response::Result { id, result }) => {
@@ -95,13 +92,13 @@ fn step(mut state: State, entry: AgentSessionLog) -> State {
             RawJsonRpcMessage::Notification(notification)
                 if &*notification.method == "session/update" =>
             {
-                state.apply_session_update(params_value(notification.params.as_ref()));
+                state.apply_session_update(notification.params.as_ref());
             }
             // The agent asking to proceed.
             RawJsonRpcMessage::Request(request)
                 if &*request.method == "session/request_permission" =>
             {
-                state.request_permission(&request.id, params_value(request.params.as_ref()));
+                state.request_permission(&request.id, request.params.as_ref());
             }
             // The response to `session/prompt` closes the turn.
             RawJsonRpcMessage::Response(Response::Result { id, result }) => {
@@ -177,7 +174,7 @@ impl State {
     fn begin_turn(
         &mut self,
         prompt_id: &RequestId,
-        params: Option<serde_json::Value>,
+        params: Option<&RawJsonRpcParams>,
         user_id: Option<MacroUserIdStr<'static>>,
     ) {
         // A second prompt without an intervening response means the previous
@@ -187,14 +184,12 @@ impl State {
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
 
-        let text = params
-            .as_ref()
-            .and_then(|params| params.get("prompt"))
+        let text = param(params, "prompt")
             .and_then(|prompt| prompt.as_array())
             .map(|blocks| {
                 blocks
                     .iter()
-                    .filter_map(|block| serde_json::from_value::<ContentBlock>(block.clone()).ok())
+                    .filter_map(|block| ContentBlock::deserialize(block).ok())
                     .filter_map(content_block_text)
                     .collect::<Vec<_>>()
                     .join("")
@@ -245,8 +240,12 @@ impl State {
     }
 
     /// Handle a `session/update`.
-    fn apply_session_update(&mut self, params: Option<serde_json::Value>) {
-        let Some(params) = params else {
+    fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) {
+        // Only the `update` field is folded; the rest of the notification
+        // (session id, meta) carries nothing renderable. Borrowed out of the
+        // params rather than cloning them - `session/update` is the bulk of
+        // any log, so this is the fold's hot path.
+        let Some(update_value) = param(params, "update") else {
             self.warn(FoldError::Unknown {
                 kind: "<missing params>".to_owned(),
             });
@@ -255,19 +254,18 @@ impl State {
 
         // Keep the wire name before decoding, so an unmodelled variant can be
         // named in the anomaly even though `SessionUpdate` is non-exhaustive.
-        let wire_kind = params
-            .get("update")
-            .and_then(|update| update.get("sessionUpdate"))
+        let wire_kind = update_value
+            .get("sessionUpdate")
             .and_then(|kind| kind.as_str())
             .unwrap_or("<missing>")
             .to_owned();
 
-        let Ok(notification) = serde_json::from_value::<SessionNotification>(params) else {
+        let Ok(update) = SessionUpdate::deserialize(update_value) else {
             self.warn(FoldError::Unknown { kind: wire_kind });
             return;
         };
 
-        match notification.update {
+        match update {
             // Prose from the agent. Chunks are appended to the open text part
             // rather than each becoming a part of its own.
             SessionUpdate::AgentMessageChunk(chunk) => {
@@ -383,11 +381,8 @@ impl State {
 
     /// Handle a `session/request_permission`: add a permission part and record
     /// the request id so its response can be matched.
-    fn request_permission(&mut self, request_id: &RequestId, params: Option<serde_json::Value>) {
-        let Some(params) = params else { return };
-
-        let Some(tool_call) = params
-            .get("toolCall")
+    fn request_permission(&mut self, request_id: &RequestId, params: Option<&RawJsonRpcParams>) {
+        let Some(tool_call) = param(params, "toolCall")
             .and_then(|call| call.get("toolCallId"))
             .and_then(|id| id.as_str())
             .map(|id| ToolUseId(id.to_owned()))
@@ -395,8 +390,7 @@ impl State {
             return;
         };
 
-        let options = params
-            .get("options")
+        let options = param(params, "options")
             .and_then(|options| options.as_array())
             .map(|options| {
                 options
@@ -662,10 +656,14 @@ fn stop_reason(wire: &str) -> StopReason {
     }
 }
 
-/// JSON-RPC params as a plain value, so handlers can decode selectively.
-fn params_value(params: Option<&RawJsonRpcParams>) -> Option<serde_json::Value> {
+/// A named JSON-RPC param, borrowed. `None` for positional params - every
+/// frame this fold reads carries an object.
+fn param<'params>(
+    params: Option<&'params RawJsonRpcParams>,
+    key: &str,
+) -> Option<&'params serde_json::Value> {
     match params? {
-        RawJsonRpcParams::Object(map) => Some(serde_json::Value::Object(map.clone())),
-        RawJsonRpcParams::Array(values) => Some(serde_json::Value::Array(values.clone())),
+        RawJsonRpcParams::Object(map) => map.get(key),
+        RawJsonRpcParams::Array(_) => None,
     }
 }
