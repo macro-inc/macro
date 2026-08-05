@@ -40,10 +40,11 @@ export function SearchAskAiButton() {
       variant="ghost"
       size="sm"
       depth={2}
-      class="shrink-0 gap-1.5 rounded-full border border-edge-muted px-2.5 bg-surface"
+      tooltip="Ask AI"
+      class="shrink-0 h-7 mobile:h-9 gap-1.5 rounded-lg px-2"
       onClick={askAi}
     >
-      <span class="text-xs font-medium">Ask AI</span>
+      <span class="font-medium">Ask AI</span>
       <Hotkey shortcut={askAiHotkey.hotkey()} theme="subtle" />
     </Button>
   );
