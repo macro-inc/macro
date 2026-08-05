@@ -62,6 +62,17 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         <Layer depth={3}>
           <Popover.Content
             class="z-modal max-w-[calc(100vw-2rem)] outline-none"
+            onInteractOutside={(event) => {
+              // FullCalendar selects on click (pointer release), so dismissing on
+              // pointer down would briefly close the popover before reopening it.
+              const target = event.detail.originalEvent.target;
+              if (
+                target instanceof Element &&
+                target.closest('.fc-event') !== null
+              ) {
+                event.preventDefault();
+              }
+            }}
             onCloseAutoFocus={(event) => {
               const shouldRestoreFocus = !event.defaultPrevented;
               event.preventDefault();
