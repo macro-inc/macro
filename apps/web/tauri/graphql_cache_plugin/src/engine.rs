@@ -232,6 +232,7 @@ impl EngineHandle {
         query: String,
         operation_name: Option<String>,
         path: Vec<String>,
+        variable_filters: Vec<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<Vec<CachedQueryInstance>, String> {
         self.inner
             .lock()
@@ -241,6 +242,7 @@ impl EngineHandle {
                 query,
                 operation_name,
                 path,
+                variable_filters,
             })
             .await
             .map_err(|error| error.to_string())

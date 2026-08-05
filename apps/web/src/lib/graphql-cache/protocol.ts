@@ -14,6 +14,9 @@ export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
+/** Recursive partial-variable object used to limit query inspection work. */
+export type QueryVariableFilter = Record<string, unknown>;
+
 /** Opaque exclusive cursor for deterministic normalized-record scans. */
 export type RecordCursor = string;
 
@@ -218,6 +221,8 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       /** Response-key field path from the query root. */
       path: Array<{ field: string }>;
+      /** OR-ed recursive partial matches applied before result materialization. */
+      variableFilters?: QueryVariableFilter[];
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */

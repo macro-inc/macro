@@ -205,6 +205,9 @@ describe('createTauriCacheHost', () => {
         'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
       operationName: 'Views',
       path: [{ field: 'user' }, { field: 'groupSoup' }],
+      variableFilters: [
+        { input: { initial: { groupBy: { field: 'PROPERTY' } } } },
+      ],
     };
 
     await expect(host.inspectQuery(request)).resolves.toEqual(instances);

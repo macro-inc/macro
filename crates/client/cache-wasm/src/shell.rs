@@ -376,15 +376,19 @@ impl CacheEngine {
         query: String,
         operation_name: Option<String>,
         path: JsValue,
+        variable_filters: JsValue,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
             let path: Vec<JsInspectionPathSegment> =
                 serde_wasm_bindgen::from_value(path).map_err(err_js)?;
+            let variable_filters: Vec<serde_json::Map<String, serde_json::Value>> =
+                serde_wasm_bindgen::from_value(variable_filters).map_err(err_js)?;
             let inspection = QueryInspection {
                 query,
                 operation_name,
                 path: path.into_iter().map(|segment| segment.field).collect(),
+                variable_filters,
             };
             let instances = engine
                 .lock()

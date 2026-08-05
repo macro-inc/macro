@@ -182,12 +182,14 @@ pub async fn graphql_cache_inspect_query(
     query: String,
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
+    variable_filters: Option<Vec<serde_json::Map<String, serde_json::Value>>>,
 ) -> Result<Vec<CachedQueryInstance>, String> {
     engine_handle(&state)?
         .inspect_query(
             query,
             operation_name,
             path.into_iter().map(|segment| segment.field).collect(),
+            variable_filters.unwrap_or_default(),
         )
         .await
 }

@@ -236,6 +236,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         query: args.query,
         operationName: args.operationName,
         path: args.path,
+        variableFilters: args.variableFilters,
       })) as CachedQueryInstanceWire[];
     },
 

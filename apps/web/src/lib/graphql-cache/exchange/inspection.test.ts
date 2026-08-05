@@ -19,11 +19,20 @@ const input = {
 };
 
 describe('typed generated query inspection', () => {
-  it('serializes only the document, operation name, and field path', async () => {
+  it('serializes the document, field path, and typed variable filters', async () => {
     const inspectQuery = async (request: unknown) => {
       expect(request).toMatchObject({
         operationName: 'GroupSoupMembership',
         path: [{ field: 'user' }, { field: 'groupSoup' }],
+        variableFilters: [
+          {
+            input: {
+              initial: {
+                groupBy: { propertyDefinitionId: 'status-def' },
+              },
+            },
+          },
+        ],
       });
       expect(request).not.toHaveProperty('variables');
       expect(request).not.toHaveProperty('entityKey');
@@ -43,7 +52,18 @@ describe('typed generated query inspection', () => {
 
     const result = await inspect(
       host,
-      selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
+      selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup'),
+      {
+        variableFilters: [
+          {
+            input: {
+              initial: {
+                groupBy: { propertyDefinitionId: 'status-def' },
+              },
+            },
+          },
+        ],
+      }
     );
 
     expect(result).toHaveLength(2);
@@ -61,7 +81,11 @@ describe('typed generated query inspection', () => {
       // @ts-expect-error Lists cannot be traversed by v1 inspection paths.
       selected.field('bins').field('length');
 
-      const results = await inspect(host, selected);
+      const results = await inspect(host, selected, {
+        variableFilters: [{ input: { initial: { limit: 20 } } }],
+      });
+      // @ts-expect-error Filters are typed from the generated operation variables.
+      inspect(host, selected, { variableFilters: [{ missing: true }] });
       expectTypeOf(
         results[0]!.variables
       ).toEqualTypeOf<GroupSoupMembershipQueryVariables>();

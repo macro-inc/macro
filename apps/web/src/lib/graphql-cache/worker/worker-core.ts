@@ -242,7 +242,8 @@ export class CacheWorkerCore {
         return await this.requireEngine().inspectQuery(
           request.query,
           request.operationName,
-          request.path
+          request.path,
+          request.variableFilters ?? []
         );
       })
       .with({ kind: 'claim-next-mutation' }, async (request) => {

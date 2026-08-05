@@ -46,6 +46,7 @@ export type {
   CacheResponse,
   MutationSettlement,
   OptimisticWriteResult,
+  QueryVariableFilter,
   ReadRecordsArgs,
   ReadResult,
   RecordCursor,

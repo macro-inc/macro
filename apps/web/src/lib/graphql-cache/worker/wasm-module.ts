@@ -55,7 +55,8 @@ export interface CacheEngine {
   inspectQuery(
     query: string,
     operationName: string | undefined,
-    path: Array<{ field: string }>
+    path: Array<{ field: string }>,
+    variableFilters: Array<Record<string, unknown>>
   ): Promise<CachedQueryInstanceWire[]>;
   claimNextMutation(
     owner: string,

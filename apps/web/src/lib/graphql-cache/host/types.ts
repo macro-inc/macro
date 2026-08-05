@@ -14,6 +14,7 @@ import type {
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
   QueryRevalidationWire,
+  QueryVariableFilter,
   ReadRecordsArgs,
   ReadResult,
   SelectedRecordPageWire,
@@ -35,6 +36,8 @@ export interface InspectQueryArgs {
   operationName?: string;
   /** Response-key field path from the query root. */
   path: Array<{ field: string }>;
+  /** OR-ed recursive partial matches applied before result materialization. */
+  variableFilters?: QueryVariableFilter[];
 }
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
