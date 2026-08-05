@@ -1,6 +1,6 @@
 use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
-    ATTACHMENT_WHITELISTED_DOMAINS,
+    ATTACHMENT_WHITELISTED_DOMAINS, DOCUMENT_MIME_TYPES, OCTET_STREAM_DOCUMENT_EXTENSIONS,
 };
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
@@ -225,7 +225,16 @@ async fn message_has_unclaimed_document_attachment(
     link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<bool> {
-    let query = format!(
+    let document_mime_types = DOCUMENT_MIME_TYPES
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+    let octet_stream_document_extensions = OCTET_STREAM_DOCUMENT_EXTENSIONS
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+
+    let has_candidate = sqlx::query_scalar!(
         r#"
         SELECT EXISTS (
             SELECT 1
@@ -237,19 +246,22 @@ async fn message_has_unclaimed_document_attachment(
                 AND de.email_attachment_id IS NULL
                 AND a.upload_claimed_at IS NULL
                 AND a.filename IS NOT NULL
-                {}
-        )
+                AND (
+                    a.mime_type = ANY($3::text[])
+                    OR (
+                        a.mime_type = 'application/octet-stream'
+                        AND UPPER(SUBSTRING(a.filename FROM '\.([^.]+)$')) = ANY($4::text[])
+                    )
+                )
+        ) AS "has_candidate!"
         "#,
-        ATTACHMENT_MIME_TYPE_FILTERS
-    );
-
-    // The attachment filter is generated from a trusted allowlist, so this query must remain
-    // dynamic. Runtime values are passed only as bind parameters.
-    let has_candidate = sqlx::query_scalar::<_, bool>(&query)
-        .bind(message_provider_id)
-        .bind(link_id)
-        .fetch_one(db)
-        .await?;
+        message_provider_id,
+        link_id,
+        document_mime_types.as_slice(),
+        octet_stream_document_extensions.as_slice(),
+    )
+    .fetch_one(db)
+    .await?;
 
     Ok(has_candidate)
 }
