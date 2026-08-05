@@ -45,12 +45,23 @@ where
 
     tracing::trace!("sending message to {} connections", connections.len());
 
-    let (local_connections, remote_connections): (Vec<_>, Vec<_>) =
-        connections.iter().partition(|connection| {
+    let local_connections: Vec<&StoredConnectionEntity> = connections
+        .iter()
+        .filter(|connection| {
             api_context
                 .connection_manager
                 .has_connection(&connection.connection_id)
-        });
+        })
+        .collect();
+
+    let remote_connections: Vec<&StoredConnectionEntity> = connections
+        .iter()
+        .filter(|connection| {
+            !api_context
+                .connection_manager
+                .has_connection(&connection.connection_id)
+        })
+        .collect();
 
     Ok(send_messages_to_connections(
         api_context,
