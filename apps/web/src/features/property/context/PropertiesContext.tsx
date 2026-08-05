@@ -39,6 +39,7 @@ interface PropertiesContextValue {
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
   addProperty?: (propertyDefinitionId: string) => Promise<void>;
+  removeProperty?: (propertyId: string) => Promise<void>;
   saveHandler: PropertySaveHandler;
 
   // Specific modal state accessors
@@ -74,6 +75,7 @@ interface PropertiesProviderProps extends ParentProps {
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
   addProperty?: (propertyDefinitionId: string) => Promise<void>;
+  removeProperty?: (propertyId: string) => Promise<void>;
   saveHandler: PropertySaveHandler;
 }
 
@@ -202,6 +204,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     onPropertyUnpinned: props.onPropertyUnpinned,
     pinnedPropertyIds: props.pinnedPropertyIds,
     addProperty: props.addProperty,
+    removeProperty: props.removeProperty,
     saveHandler: props.saveHandler,
     // Specific modal state
     datePickerModal,
