@@ -6,9 +6,7 @@ const MAX_REASONABLE_MILLIS: i64 = MAX_REASONABLE_SECONDS * 1000;
 /// An epoch-milliseconds timestamp, serialized as a raw `i64` for OpenSearch
 /// date fields mapped with `format: epoch_millis`.
 ///
-/// Zero and negative values are valid; they index as 1970 and sort oldest.
-/// Only implausibly future values are rejected, since sorts are descending and
-/// one would pin itself to the top of every page.
+/// Zero and negative values are valid. Values past year 3000 are rejected.
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 pub struct EpochMillis(i64);
 
@@ -26,8 +24,6 @@ impl EpochMillis {
     }
 
     /// The timestamp, or `None` if it is rejected.
-    ///
-    /// For ingestion paths where one row's bad date must not fail its batch.
     pub fn plausible(millis: i64) -> Option<Self> {
         Self::new(millis).ok()
     }
