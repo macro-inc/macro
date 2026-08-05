@@ -1,19 +1,29 @@
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
+import { emailToMacroId, useDisplayName } from '@core/user';
+import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
+import { Collapsible } from '@kobalte/core/collapsible';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import UserIcon from '@phosphor/user.svg';
+import QuestionMarkIcon from '@phosphor/question-mark.svg';
+import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
+import PersonIcon from '@phosphor/user.svg';
 import UsersIcon from '@phosphor/users.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
+import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
+import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Button } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { type Accessor, createMemo, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
 } from '../time-format';
+import { formatRecurrenceDescription } from './recurrence-description';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
 const formatDate = new Intl.DateTimeFormat(undefined, {
@@ -25,14 +35,146 @@ const formatShortDate = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
 });
-const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const isDateOnly = (value: string) => DATE_ONLY_REGEX.test(value);
 
 const ATTENDEE_RESPONSE = {
-  accepted: { label: 'Accepted', class: 'text-success' },
-  declined: { label: 'Declined', class: 'text-failure' },
-  tentative: { label: 'Tentative', class: 'text-warning' },
-  needs_action: { label: 'No response', class: 'text-ink-extra-muted' },
-} satisfies Record<AttendeeResponseStatus, { label: string; class: string }>;
+  accepted: {
+    label: 'Accepted',
+    class: 'text-success',
+    icon: CheckIcon,
+  },
+  declined: {
+    label: 'Declined',
+    class: 'text-failure',
+    icon: XIcon,
+  },
+  tentative: {
+    label: 'Tentative',
+    class: 'text-warning',
+    icon: QuestionMarkIcon,
+  },
+} satisfies Record<
+  Exclude<AttendeeResponseStatus, 'needs_action'>,
+  { label: string; class: string; icon: typeof CheckIcon }
+>;
+
+function isUsableDisplayName(value: string, email: string) {
+  return value !== '' && value !== email && !value.includes('@');
+}
+
+interface ResolvedCalendarAttendee {
+  attendee: CalendarAttendee;
+  displayName: Accessor<string>;
+  iconProps: UserIconProps;
+}
+
+const compareAttendeeNames = new Intl.Collator(undefined, {
+  sensitivity: 'base',
+}).compare;
+
+function resolveCalendarAttendee(
+  attendee: CalendarAttendee
+): ResolvedCalendarAttendee {
+  const macroId = emailToMacroId(attendee.email);
+  const [macroDisplayName] = useDisplayName(macroId);
+  const iconProps: UserIconProps = macroId
+    ? { id: macroId }
+    : { email: attendee.email };
+  const displayName = () => {
+    const macroName = macroDisplayName().trim();
+    return isUsableDisplayName(macroName, attendee.email)
+      ? macroName
+      : attendee.email;
+  };
+
+  return { attendee, displayName, iconProps };
+}
+
+function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
+  const response =
+    props.item.attendee.responseStatus === 'needs_action'
+      ? undefined
+      : ATTENDEE_RESPONSE[props.item.attendee.responseStatus];
+  const hasSecondaryLabel =
+    props.item.attendee.isOrganizer || props.item.attendee.isOptional;
+
+  return (
+    <div class="flex min-w-0 items-center gap-3">
+      <UserIcon
+        {...props.item.iconProps}
+        isDeleted={false}
+        size="md"
+        suppressClick
+        showTooltip={false}
+      />
+      <div class="min-w-0 flex-1">
+        <div class="min-w-0">
+          <span class="block select-text truncate text-ink-muted">
+            {props.item.displayName()}
+            <Show when={props.item.attendee.isSelf}> (you)</Show>
+          </span>
+        </div>
+        <Show when={hasSecondaryLabel}>
+          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+            <Show when={props.item.attendee.isOrganizer}>
+              <span>Organizer</span>
+            </Show>
+            <Show when={props.item.attendee.isOptional}>
+              <span>Optional</span>
+            </Show>
+          </div>
+        </Show>
+        <Show when={props.item.attendee.comment}>
+          {(comment) => (
+            <div class="line-clamp-2 select-text text-xxs italic text-ink-extra-muted">
+              {comment()}
+            </div>
+          )}
+        </Show>
+      </div>
+      <Show when={response}>
+        {(attendeeResponse) => (
+          <span
+            role="img"
+            aria-label={attendeeResponse().label}
+            title={attendeeResponse().label}
+            class={`shrink-0 ${attendeeResponse().class}`}
+          >
+            <Dynamic
+              component={attendeeResponse().icon}
+              aria-hidden="true"
+              class="size-3.5"
+            />
+          </span>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+function CalendarAttendeeList(props: { attendees: CalendarAttendee[] }) {
+  const attendees = props.attendees.map(resolveCalendarAttendee);
+  const sortedAttendees = createMemo(() =>
+    attendees
+      .map((item) => ({ item, name: item.displayName() }))
+      .toSorted(
+        (first, second) =>
+          compareAttendeeNames(first.name, second.name) ||
+          compareAttendeeNames(
+            first.item.attendee.email,
+            second.item.attendee.email
+          )
+      )
+      .map(({ item }) => item)
+  );
+
+  return (
+    <For each={sortedAttendees()}>
+      {(item) => <CalendarAttendeeItem item={item} />}
+    </For>
+  );
+}
 
 function parseCalendarDate(value: string) {
   if (!isDateOnly(value)) return new Date(value);
@@ -88,9 +230,7 @@ function findOrganizer(event: CalendarEvent) {
     organizerAttendee?.displayName ??
     event.organizerEmail ??
     organizerAttendee?.email;
-  const email = event.organizerEmail ?? organizerAttendee?.email;
-
-  return name ? { name, email } : undefined;
+  return name;
 }
 
 function formatOriginalTimeZone(
@@ -123,190 +263,132 @@ export function EventDetails(props: {
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
-  const isRecurring = () =>
-    props.event.recurrenceLines.length > 0 ||
-    props.event.recurrenceId !== undefined;
+  const recurrenceDescription = createMemo(() => {
+    const description = formatRecurrenceDescription(
+      props.event.recurrenceLines
+    );
+    if (description) return description;
+
+    return props.event.recurrenceLines.length > 0 ||
+      props.event.recurrenceId !== undefined
+      ? 'Recurring event'
+      : undefined;
+  });
 
   return (
     <div class="min-w-0 p-1 text-ink">
-      <div class="flex items-start gap-2">
-        <div
+      <div class="flex items-start gap-3">
+        <span
           aria-hidden="true"
-          class="mt-1 size-2.5 shrink-0 rounded-sm"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+          class="mt-0.5 flex size-4 shrink-0 items-center justify-center"
+        >
+          <span
+            class="size-2.5 rounded-sm"
+            style={{ 'background-color': props.event.calendar.color }}
+          />
+        </span>
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-semibold leading-snug text-ink">
-            {props.event.title}
+          <div class="flex flex-col gap-1 pr-8">
+            <div class="select-text text-base font-semibold leading-snug text-ink">
+              {props.event.title}
+            </div>
+            <div class="select-text text-xs text-ink-muted">
+              {formatEventSchedule(props.event, props.timeFormat)}
+            </div>
+            <Show when={recurrenceDescription()}>
+              {(description) => (
+                <div class="select-text text-xs text-ink-extra-muted">
+                  {description()}
+                </div>
+              )}
+            </Show>
           </div>
 
-          <Show when={conferenceUrl()}>
-            {(url) => (
-              <Button
-                fullWidth
-                variant="cta"
-                size="sm"
-                class="mt-3 h-7 rounded-lg"
-                label="Join meeting"
-                onClick={() => openExternalUrl(url())}
-              >
-                <VideoCameraIcon class="size-3.5" />
-                Join meeting
-              </Button>
-            )}
-          </Show>
-
-          <div class="mt-3 flex flex-col gap-2 text-xs text-ink-muted">
-            <div class="flex items-start gap-2">
-              <Show
-                when={props.event.allDay}
-                fallback={
-                  <ClockIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-                }
-              >
-                <CalendarIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-              </Show>
-              <span>{formatEventSchedule(props.event, props.timeFormat)}</span>
-            </div>
-
+          <div class="mt-5 flex flex-col gap-3 text-xs text-ink-muted">
+            <Show when={conferenceUrl()}>
+              {(url) => (
+                <div class="-ml-7 flex items-center gap-3">
+                  <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                  <Button
+                    fullWidth
+                    variant="cta"
+                    size="sm"
+                    class="h-8 rounded-lg"
+                    label="Join meeting"
+                    onClick={() => openExternalUrl(url())}
+                  >
+                    Join meeting
+                    <ArrowSquareOutIcon class="size-3.5" />
+                  </Button>
+                </div>
+              )}
+            </Show>
             <Show when={originalTimeZone()}>
               {(timeZone) => (
-                <div class="flex items-start gap-2">
-                  <GlobeIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-                  <span>{timeZone()}</span>
+                <div class="-ml-7 flex items-start gap-3">
+                  <GlobeIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                  <span class="select-text">{timeZone()}</span>
                 </div>
               )}
             </Show>
 
-            <Show when={isRecurring()}>
-              <div class="flex items-start gap-2">
-                <RepeatIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-                <span>Recurring event</span>
-              </div>
-            </Show>
-
             <Show when={props.event.location}>
               {(location) => (
-                <div class="flex items-start gap-2">
-                  <MapPinIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-                  <span>{location()}</span>
+                <div class="-ml-7 flex items-start gap-3">
+                  <MapPinIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                  <span class="select-text">{location()}</span>
+                </div>
+              )}
+            </Show>
+
+            <Show when={props.event.description}>
+              {(description) => (
+                <div class="-ml-7 flex items-start gap-3">
+                  <TextAlignLeftIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                  <p class="select-text leading-relaxed text-ink-muted">
+                    {description()}
+                  </p>
                 </div>
               )}
             </Show>
 
             <Show when={organizer()}>
               {(eventOrganizer) => (
-                <div class="flex items-start gap-2">
-                  <UserIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
+                <div class="-ml-7 flex items-start gap-3">
+                  <PersonIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
                   <div class="min-w-0">
-                    <div class="text-[0.6875rem] text-ink-extra-muted">
-                      Organizer
+                    <div class="text-xxs text-ink-extra-muted">Organizer</div>
+                    <div class="select-text truncate text-ink-muted">
+                      {eventOrganizer()}
                     </div>
-                    <div class="truncate text-ink-muted">
-                      {eventOrganizer().name}
-                    </div>
-                    <Show
-                      when={
-                        eventOrganizer().email &&
-                        eventOrganizer().email !== eventOrganizer().name
-                      }
-                    >
-                      <div class="truncate text-[0.6875rem] text-ink-extra-muted">
-                        {eventOrganizer().email}
-                      </div>
-                    </Show>
                   </div>
                 </div>
               )}
             </Show>
-
-            <Show when={props.event.attendees.length > 0}>
-              <div class="flex items-start gap-2">
-                <UsersIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
-                <div class="min-w-0 flex-1">
-                  <div>
-                    {props.event.attendees.length}{' '}
-                    {props.event.attendees.length === 1
-                      ? 'attendee'
-                      : 'attendees'}
-                  </div>
-                  <div class="mt-1.5 flex max-h-40 flex-col gap-1.5 overflow-y-auto pr-1">
-                    <For each={props.event.attendees}>
-                      {(attendee) => {
-                        const response =
-                          ATTENDEE_RESPONSE[attendee.responseStatus];
-                        const name = attendee.displayName ?? attendee.email;
-
-                        return (
-                          <div class="flex min-w-0 items-start gap-2">
-                            <div class="min-w-0 flex-1">
-                              <div class="flex min-w-0 items-center gap-1">
-                                <span class="truncate text-ink-muted">
-                                  {name}
-                                  <Show when={attendee.isSelf}> (you)</Show>
-                                </span>
-                                <Show when={attendee.isOrganizer}>
-                                  <span class="shrink-0 text-[0.625rem] text-ink-extra-muted">
-                                    Organizer
-                                  </span>
-                                </Show>
-                                <Show when={attendee.isOptional}>
-                                  <span class="shrink-0 text-[0.625rem] text-ink-extra-muted">
-                                    Optional
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show
-                                when={
-                                  attendee.displayName &&
-                                  attendee.displayName !== attendee.email
-                                }
-                              >
-                                <div class="truncate text-[0.6875rem] text-ink-extra-muted">
-                                  {attendee.email}
-                                </div>
-                              </Show>
-                              <Show when={attendee.comment}>
-                                {(comment) => (
-                                  <div class="line-clamp-2 text-[0.6875rem] italic text-ink-extra-muted">
-                                    {comment()}
-                                  </div>
-                                )}
-                              </Show>
-                            </div>
-                            <span
-                              class={`shrink-0 text-[0.6875rem] ${response.class}`}
-                            >
-                              {response.label}
-                            </span>
-                          </div>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </div>
-              </div>
-            </Show>
-
-            <div class="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                class="size-2 shrink-0 rounded-sm"
-                style={{ 'background-color': props.event.calendar.color }}
-              />
-              <span>{props.event.calendar.name}</span>
-            </div>
           </div>
-
-          <Show when={props.event.description}>
-            {(description) => (
-              <p class="mt-3 border-t border-edge-muted pt-3 text-xs leading-relaxed text-ink-muted">
-                {description()}
-              </p>
-            )}
-          </Show>
         </div>
       </div>
+
+      <Show when={props.event.attendees.length > 0}>
+        <Collapsible defaultOpen class="mt-4 text-xs text-ink-muted">
+          <Collapsible.Trigger class="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-hover hover:text-ink">
+            <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
+            <span>
+              {props.event.attendees.length}{' '}
+              {plural('attendee', props.event.attendees.length)}
+            </span>
+            <CaretDownIcon
+              aria-hidden="true"
+              class="ml-auto size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
+            />
+          </Collapsible.Trigger>
+          <Collapsible.Content class="data-closed:hidden">
+            <div class="ml-7 mt-3 flex max-h-40 min-w-0 flex-col gap-1.5 overflow-y-auto">
+              <CalendarAttendeeList attendees={props.event.attendees} />
+            </div>
+          </Collapsible.Content>
+        </Collapsible>
+      </Show>
     </div>
   );
 }

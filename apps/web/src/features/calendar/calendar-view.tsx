@@ -1,4 +1,4 @@
-import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
@@ -32,7 +32,7 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 import { CalendarEventContent } from './events/EventContent';
-import { EventDetailsPopover } from './events/EventDetailsPopover';
+import { SelectedEventDetailsPopover } from './events/EventDetailsPopover';
 import type { CalendarTimeFormat } from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import {
@@ -353,13 +353,11 @@ function createLocalToday() {
 
 function CalendarWorkspace() {
   const panel = useSplitPanelOrThrow();
-  const sidePanel = useSidePanel();
   const calendar = useFullCalendar();
   const calendarView = useCalendarView();
   const initialDate = new Date();
   const today = createLocalToday();
 
-  const isNarrow = () => sidePanel?.isNarrow() ?? false;
   const currentDate = createMemo(
     () => calendar.dateInfo()?.view.calendar.getDate() ?? initialDate
   );
@@ -390,7 +388,7 @@ function CalendarWorkspace() {
               <Button
                 variant="active"
                 size="sm"
-                class="h-7 rounded-lg px-3"
+                class="rounded-lg px-3"
                 depth={2}
                 label="Go to today"
                 onClick={() => calendar.api()?.today()}
@@ -410,7 +408,7 @@ function CalendarWorkspace() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="size-7 rounded-lg [&_svg]:size-4!"
+                class="rounded-lg"
                 label="Previous period"
                 onClick={() => calendar.api()?.prev()}
               >
@@ -419,7 +417,7 @@ function CalendarWorkspace() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="size-7 rounded-lg [&_svg]:size-4!"
+                class="rounded-lg"
                 label="Next period"
                 onClick={() => calendar.api()?.next()}
               >
@@ -433,19 +431,12 @@ function CalendarWorkspace() {
 
       <CalendarSidePanelSections />
 
-      <Show when={isNarrow() ? calendarView.selectedEvent() : undefined}>
-        {(event) => (
-          <EventDetailsPopover
-            anchor={calendarView.selectedEventAnchor()}
-            event={event()}
-            open={calendarView.selectedEventAnchor() !== undefined}
-            timeFormat={calendarView.displaySettings.timeFormat}
-            onOpenChange={(open) => {
-              if (!open) calendarView.closeEventDetails();
-            }}
-          />
-        )}
-      </Show>
+      <SelectedEventDetailsPopover
+        anchor={calendarView.selectedEventAnchor}
+        event={calendarView.selectedEvent}
+        timeFormat={() => calendarView.displaySettings.timeFormat}
+        onClose={calendarView.closeEventDetails}
+      />
 
       <main class="calendar-view flex size-full min-h-0">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">

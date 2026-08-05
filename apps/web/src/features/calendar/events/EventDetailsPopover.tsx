@@ -1,30 +1,57 @@
 import { Popover } from '@kobalte/core/popover';
 import CloseIcon from '@phosphor/x.svg';
-import { Layer } from '@ui';
-import { createEffect } from 'solid-js';
+import { Button, Layer } from '@ui';
+import { type Accessor, createMemo, Show } from 'solid-js';
 import { EventDetails } from './EventDetails';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
+interface SelectedEventDetailsPopoverProps {
+  anchor: Accessor<HTMLElement | undefined>;
+  event: Accessor<CalendarEvent | undefined>;
+  timeFormat: Accessor<CalendarTimeFormat>;
+  onClose: () => void;
+}
+
+/** Renders selected event details without retaining stale narrowing accessors. */
+export function SelectedEventDetailsPopover(
+  props: SelectedEventDetailsPopoverProps
+) {
+  const selection = createMemo(() => {
+    const event = props.event();
+    const anchor = props.anchor();
+
+    return event && anchor ? { anchor, event } : undefined;
+  });
+
+  return (
+    <Show keyed when={selection()}>
+      {(selected) => (
+        <EventDetailsPopover
+          anchor={selected.anchor}
+          event={selected.event}
+          timeFormat={props.timeFormat()}
+          onOpenChange={(open) => {
+            if (!open) props.onClose();
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
 interface EventDetailsPopoverProps {
-  anchor: HTMLElement | undefined;
+  anchor: HTMLElement;
   event: CalendarEvent;
-  open: boolean;
   timeFormat: CalendarTimeFormat;
   onOpenChange: (open: boolean) => void;
 }
 
-/** Anchors read-only event details to a rendered event on narrow layouts. */
-export function EventDetailsPopover(props: EventDetailsPopoverProps) {
-  let lastAnchor: HTMLElement | undefined;
-
-  createEffect(() => {
-    if (props.anchor) lastAnchor = props.anchor;
-  });
-
+/** Anchors read-only event details to a rendered calendar event. */
+function EventDetailsPopover(props: EventDetailsPopoverProps) {
   return (
     <Popover
       anchorRef={() => props.anchor}
-      open={props.open}
+      open
       onOpenChange={props.onOpenChange}
       placement="right-start"
       gutter={8}
@@ -38,20 +65,23 @@ export function EventDetailsPopover(props: EventDetailsPopoverProps) {
             onCloseAutoFocus={(event) => {
               const shouldRestoreFocus = !event.defaultPrevented;
               event.preventDefault();
-              if (shouldRestoreFocus && lastAnchor?.isConnected) {
-                lastAnchor.focus();
+              if (shouldRestoreFocus && props.anchor.isConnected) {
+                props.anchor.focus();
               }
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="relative w-80 max-w-full rounded-xl bg-surface p-3 pr-10 text-ink shadow-menu ring ring-edge-muted">
+            <div class="relative w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] rounded-xl bg-surface p-3 text-ink shadow-menu ring ring-edge-muted">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <EventDetails event={props.event} timeFormat={props.timeFormat} />
               <Popover.CloseButton
+                as={Button}
                 aria-label="Close event details"
-                class="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent"
+                variant="ghost"
+                size="icon-sm"
+                class="absolute right-2 top-2 rounded-md text-ink-muted"
               >
-                <CloseIcon class="size-3.5" />
+                <CloseIcon class="size-3" />
               </Popover.CloseButton>
             </div>
           </Popover.Content>

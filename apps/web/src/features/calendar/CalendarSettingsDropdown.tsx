@@ -70,7 +70,7 @@ export function CalendarSettingsDropdown() {
       <Dropdown.Trigger
         variant="ghost"
         size="icon-sm"
-        class="h-7 w-7 shrink-0 rounded-lg"
+        class="shrink-0 rounded-lg"
         label="Calendar settings"
       >
         <GearIcon class="size-3.5" />

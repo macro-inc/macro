@@ -26,6 +26,8 @@ export interface CalendarEvent {
   occurrenceKey: string;
   /** Provider recurrence identifier, when applicable. */
   recurrenceId?: string;
+  /** Whether this materialized occurrence was cancelled. */
+  isCancelled: boolean;
   /** Whether the canonical event source is read-only. */
   isReadOnly: boolean;
   /** Direct conference join URL, when available. */

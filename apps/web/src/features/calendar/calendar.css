@@ -477,7 +477,7 @@
 	overflow: visible;
 	border: 0;
 	background: transparent;
-	transform: translateY(-50%);
+	transform: translateY(calc(-50% + 0.5px));
 }
 
 .calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-axis {
@@ -523,7 +523,7 @@
 	position: absolute;
 	top: 0;
 	right: 100%;
-	transform: translateY(-50%);
+	transform: translateY(calc(-50% + 0.5px));
 }
 
 .calendar-view

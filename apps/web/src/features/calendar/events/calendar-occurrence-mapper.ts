@@ -26,6 +26,7 @@ export function mapCalendarOccurrence(
     occurrenceKey: occurrence.occurrenceKey,
     recurrenceId: occurrence.recurrenceId ?? undefined,
     recurrenceLines: event.recurrenceLines ?? [],
+    isCancelled: occurrence.isCancelled,
     isReadOnly: event.isReadOnly,
     conferenceUrl: event.conferenceUrl ?? undefined,
     organizerName: event.organizerName ?? undefined,

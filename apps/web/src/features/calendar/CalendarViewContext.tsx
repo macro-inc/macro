@@ -6,7 +6,7 @@ import {
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { createEffect, createMemo, createSignal, on } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { isCalendarRangeSupported } from './calendar-supported-range';
 import {
@@ -86,8 +86,10 @@ export const [CalendarViewContextProvider, useCalendarView] =
       occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
     const closeEventDetails = () => {
-      setEventState('selectedEventId', undefined);
-      setSelectedEventAnchor(undefined);
+      batch(() => {
+        setEventState('selectedEventId', undefined);
+        setSelectedEventAnchor(undefined);
+      });
     };
 
     createEffect(
@@ -138,8 +140,10 @@ export const [CalendarViewContextProvider, useCalendarView] =
     };
 
     const selectEvent = (eventId: string, anchor: HTMLElement) => {
-      setEventState('selectedEventId', eventId);
-      setSelectedEventAnchor(anchor);
+      batch(() => {
+        setEventState('selectedEventId', eventId);
+        setSelectedEventAnchor(anchor);
+      });
     };
 
     return {

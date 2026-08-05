@@ -31,6 +31,7 @@ const item = (time: CalendarOccurrenceItem['occurrence']['time']) =>
     occurrence: {
       occurrenceKey: '2026-08-04T14:00:00+00:00',
       recurrenceId: 'recurrence-1',
+      isCancelled: true,
       time,
     },
   }) as CalendarOccurrenceItem;
@@ -53,6 +54,7 @@ describe('mapCalendarOccurrence', () => {
       start: '2026-08-04T15:00:00Z',
       end: '2026-08-04T16:00:00Z',
       allDay: false,
+      isCancelled: true,
       isReadOnly: true,
       conferenceUrl: 'https://meet.example.com/planning',
       organizerName: 'Alex Rivera',

@@ -80,7 +80,8 @@ export function CalendarPeriodSelector() {
       <Dropdown.Trigger
         depth={2}
         aria-label="Choose calendar view"
-        class="h-7 shrink-0 gap-1 rounded-lg border-edge-muted bg-panel px-2 text-xs font-medium text-ink"
+        size="sm"
+        class="shrink-0 gap-1 rounded-lg border-edge-muted bg-panel text-xs font-medium text-ink"
       >
         {CALENDAR_VIEWS.find((view) => view.value === activeView())?.label ??
           'Week'}

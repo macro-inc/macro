@@ -1,61 +1,9 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
-import CloseIcon from '@phosphor/x.svg';
-import { Button, Calendar as MiniCalendar } from '@ui';
+import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { useCalendarView } from './CalendarViewContext';
 import { CalendarControls } from './events/CalendarControls';
-import { EventDetails } from './events/EventDetails';
 import { useFullCalendar } from './fullcalendar-solid';
-
-function CalendarEventSidePanelSection() {
-  const calendarView = useCalendarView();
-  const sidePanel = useSidePanel();
-
-  createEffect(
-    on(
-      () => [calendarView.selectedEvent()?.id, sidePanel?.isNarrow()] as const,
-      ([eventId, isNarrow]) => {
-        if (!eventId || !sidePanel || isNarrow) return;
-
-        sidePanel.setIsOpen(true);
-        if (!sidePanel.openSectionIds().includes('calendar-event')) {
-          sidePanel.setOpenSectionIds([
-            ...sidePanel.openSectionIds(),
-            'calendar-event',
-          ]);
-        }
-      }
-    )
-  );
-
-  return (
-    <Show when={calendarView.selectedEvent()}>
-      {(event) => (
-        <SidePanel.Section
-          id="calendar-event"
-          title="Event"
-          order={0}
-          defaultOpen
-          actions={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Close event details"
-              onClick={calendarView.closeEventDetails}
-            >
-              <CloseIcon class="size-3.5" />
-            </Button>
-          }
-        >
-          <EventDetails
-            event={event()}
-            timeFormat={calendarView.displaySettings.timeFormat}
-          />
-        </SidePanel.Section>
-      )}
-    </Show>
-  );
-}
 
 function CalendarMiniCalendarSidePanelSection() {
   const calendarView = useCalendarView();
@@ -143,7 +91,6 @@ export function CalendarSidePanelSections() {
 
   return (
     <Show when={!sidePanel?.isNarrow()}>
-      <CalendarEventSidePanelSection />
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
     </Show>

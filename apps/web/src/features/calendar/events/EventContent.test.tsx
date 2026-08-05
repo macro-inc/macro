@@ -20,6 +20,7 @@ function calendarEvent(durationMinutes: number): CalendarEvent {
     eventId: 'event-1',
     occurrenceKey: 'occurrence-1',
     isReadOnly: false,
+    isCancelled: false,
     attendees: [],
     recurrenceLines: [],
     title: 'Planning',
