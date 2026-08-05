@@ -215,6 +215,12 @@ fn api_router(state: ApiContext) -> Router {
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
         )
+        .nest(
+            "/agent-session",
+            agent_session::inbound::axum_router::agent_session_router(
+                state.agent_session_state.clone(),
+            ),
+        )
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))

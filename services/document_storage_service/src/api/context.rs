@@ -1,3 +1,6 @@
+use agent_session::domain::service::AgentSessionServiceImpl;
+use agent_session::inbound::axum_router::AgentSessionRouterState;
+use agent_session::outbound::postgres::PgAgentSessionRepo;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
@@ -458,6 +461,11 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
+/// Type alias for the agent session router state: the domain service backed
+/// by the Postgres repo, which serves both the session and log ports.
+pub(crate) type DssAgentSessionState =
+    AgentSessionRouterState<AgentSessionServiceImpl<PgAgentSessionRepo>, AuthorizationService>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -509,6 +517,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub agent_session_state: DssAgentSessionState,
 }
 
 env_var! {

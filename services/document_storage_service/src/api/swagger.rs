@@ -217,6 +217,13 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_soup_ast_handler,
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
+        // agent sessions
+        agent_session::inbound::axum_router::create_agent_session_handler,
+        agent_session::inbound::axum_router::get_agent_session_handler,
+        agent_session::inbound::axum_router::update_agent_session_handler,
+        agent_session::inbound::axum_router::delete_agent_session_handler,
+        agent_session::inbound::axum_router::append_event_handler,
+
         // channel list (comms hex)
         channels::inbound::list_router::get_channels_handler,
 
@@ -505,6 +512,10 @@ use utoipa::OpenApi;
             ApiAttachmentGenericReference,
             ChannelMessageFilters,
             channels::domain::models::ChannelType,
+            agent_session::inbound::axum_router::CreateAgentSessionRequest,
+            agent_session::inbound::axum_router::UpdateAgentSessionRequest,
+            agent_session::inbound::axum_router::AgentSessionResponse,
+            agent_session::inbound::axum_router::SessionStatusDto,
             channels::domain::models::GetOrCreateAction,
             channels::domain::models::TypingAction,
             channels::domain::models::ReactionAction,
