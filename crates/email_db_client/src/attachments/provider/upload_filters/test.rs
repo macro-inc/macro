@@ -121,3 +121,25 @@ fn media_filter_is_case_sensitive_and_rejects_other_types() {
     assert!(!attachment_is_media("application/pdf"));
     assert!(!attachment_is_media("text/plain"));
 }
+
+#[test]
+fn every_whitelisted_domain_appears_once_in_the_generated_predicate() {
+    for domain in ATTACHMENT_WHITELIST_DOMAINS {
+        let quoted_domain = format!("'{domain}'");
+        assert_eq!(
+            ATTACHMENT_WHITELISTED_DOMAINS
+                .match_indices(&quoted_domain)
+                .count(),
+            1,
+            "expected {domain} to appear exactly once"
+        );
+    }
+}
+
+#[test]
+fn whitelist_predicate_uses_exact_case_insensitive_domains() {
+    assert!(
+        ATTACHMENT_WHITELISTED_DOMAINS.contains("LOWER(SPLIT_PART(c.email_address, '@', 2)) IN (")
+    );
+    assert!(!ATTACHMENT_WHITELISTED_DOMAINS.contains("LIKE '%@"));
+}
