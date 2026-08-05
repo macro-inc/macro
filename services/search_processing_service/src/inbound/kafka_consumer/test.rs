@@ -12,13 +12,14 @@ use ::chat::domain::events::{
     ChatTopicEvent, ChatUpdatedMetadata,
 };
 use ::email::domain::events::{
-    EmailEventOrigin, EmailTopicEvent, LinkConnectedMetadata, LinkDisconnectReason,
-    LinkDisconnectedMetadata, LinkReauthRequiredMetadata, MessageDeletedMetadata,
-    MessageDraftSyncedMetadata, MessageReceivedMetadata, MessageSendCancelledMetadata,
-    MessageSendQueuedMetadata, MessageSentMetadata, SendCancelReason, ThreadArchivedMetadata,
-    ThreadBackfilledMetadata, ThreadLabelsUpdatedMetadata, ThreadProjectChangedMetadata,
-    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
-    ThreadsReindexReason, ThreadsReindexRequestedMetadata,
+    EmailEventOrigin, EmailMacroEvent, EmailTopicEvent, LinkConnectedMetadata,
+    LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
+    MessageDeletedMetadata, MessageDraftSyncedMetadata, MessageReceivedMetadata,
+    MessageSendCancelledMetadata, MessageSendQueuedMetadata, MessageSentMetadata, SendCancelReason,
+    ThreadArchivedMetadata, ThreadBackfilledMetadata, ThreadLabelsUpdatedMetadata,
+    ThreadProjectChangedMetadata, ThreadReadMetadata, ThreadSpamChangedMetadata,
+    ThreadStarredMetadata, ThreadTrashedMetadata, ThreadsReindexReason,
+    ThreadsReindexRequestedMetadata,
 };
 use channels::domain::{
     broker_events::{
@@ -116,6 +117,27 @@ impl MessageParts for TestMessage {
 
 fn channel_sender() -> ChannelSender<'static> {
     ChannelSender::try_from("macro|owner@example.com".to_string()).expect("valid channel sender")
+}
+
+/// Builds a [`WorkerPool`] whose worker channels are captured as receivers.
+fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver<ReceivedEvent>>) {
+    let (senders, receivers) = (0..workers).map(|_| mpsc::channel(capacity)).unzip();
+    (WorkerPool::new(senders), receivers)
+}
+
+fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
+    ReceivedEvent {
+        event: DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+            EMAIL_LINK_ID.to_string(),
+            EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                thread_id,
+            }),
+        )),
+        partition: 0,
+        offset,
+    }
 }
 
 fn user_id() -> MacroUserIdStr<'static> {
@@ -1658,17 +1680,17 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         Event::with_schema_version(draft_email_event(false), 2),
     );
     let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 7, 62);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
-        handoff_decoded(&sender, malformed).await,
+        pool.handoff(malformed).await,
         HandoffOutcome::MalformedRecord(EventBrokerError::Serialization(_))
     ));
     assert!(matches!(
-        handoff_decoded(&sender, missing_key).await,
+        pool.handoff(missing_key).await,
         HandoffOutcome::MalformedRecord(EventBrokerError::MissingMessageKey)
     ));
-    match handoff_decoded(&sender, unsupported).await {
+    match pool.handoff(unsupported).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
             expected,
@@ -1681,7 +1703,7 @@ async fn malformed_missing_key_and_unsupported_email_messages_are_commit_safe() 
         outcome => panic!("expected malformed email record, got {outcome:?}"),
     }
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1694,10 +1716,10 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         payload: Some(b"not json".to_vec()),
     };
     let malformed = attach_event_coordinates(DeclaredMacroEvent::decode(&malformed), 5, 40);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
-        handoff_decoded(&sender, malformed).await,
+        pool.handoff(malformed).await,
         HandoffOutcome::MalformedRecord(EventBrokerError::Serialization(_))
     ));
 
@@ -1711,7 +1733,7 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
         Event::with_schema_version(unsupported_event, 2),
     );
     let unsupported = attach_event_coordinates(DeclaredMacroEvent::decode(&unsupported), 5, 41);
-    match handoff_decoded(&sender, unsupported).await {
+    match pool.handoff(unsupported).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
             expected,
@@ -1725,7 +1747,7 @@ async fn malformed_and_unsupported_chat_messages_are_commit_safe() {
     }
 
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1745,9 +1767,9 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         Event::with_schema_version(event, 2),
     );
     let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 4, 30);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
-    match handoff_decoded(&sender, decoded).await {
+    match pool.handoff(decoded).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
             expected,
@@ -1760,7 +1782,7 @@ async fn unsupported_project_schema_message_is_commit_safe() {
         outcome => panic!("expected malformed project record, got {outcome:?}"),
     }
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1778,9 +1800,9 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         Event::with_schema_version(event, 2),
     );
     let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 6, 50);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
-    match handoff_decoded(&sender, decoded).await {
+    match pool.handoff(decoded).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
             expected,
@@ -1793,7 +1815,7 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         outcome => panic!("expected malformed property record, got {outcome:?}"),
     }
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1810,9 +1832,9 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         Event::with_schema_version(event, 2),
     );
     let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 2, 20);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
-    match handoff_decoded(&sender, decoded).await {
+    match pool.handoff(decoded).await {
         HandoffOutcome::MalformedRecord(EventBrokerError::UnsupportedSchemaVersion {
             topic,
             expected,
@@ -1825,7 +1847,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
         outcome => panic!("expected malformed channel record, got {outcome:?}"),
     }
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1871,15 +1893,15 @@ async fn malformed_missing_key_and_unsupported_schema_messages_are_commit_safe()
         })
     ));
 
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
     for decoded in [malformed, missing_key, unsupported] {
         assert!(matches!(
-            handoff_decoded(&sender, decoded).await,
+            pool.handoff(decoded).await,
             HandoffOutcome::MalformedRecord(_)
         ));
     }
     assert!(matches!(
-        receiver.try_recv(),
+        receivers[0].try_recv(),
         Err(mpsc::error::TryRecvError::Empty)
     ));
 }
@@ -1893,14 +1915,14 @@ async fn successful_handoff_carries_event_partition_and_offset() {
         Event::new(event.clone()),
     );
     let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
 
     assert!(matches!(
-        handoff_decoded(&sender, decoded).await,
+        pool.handoff(decoded).await,
         HandoffOutcome::HandedOff
     ));
 
-    let received = receiver.recv().await.expect("handed-off event");
+    let received = receivers[0].recv().await.expect("handed-off event");
     assert_eq!(received.partition, 3);
     assert_eq!(received.offset, 42);
     let DeclaredMacroEvent::CallMacroEvent(received_event) = received.event else {
@@ -1917,43 +1939,150 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
         Event::new(archived_event()),
     );
     let decoded = attach_event_coordinates(DeclaredMacroEvent::decode(&message), 3, 42);
-    let (sender, receiver) = mpsc::channel(1);
-    drop(receiver);
+    let (pool, receivers) = test_pool(1, 1);
+    drop(receivers);
 
     assert!(matches!(
-        handoff_decoded(&sender, decoded).await,
+        pool.handoff(decoded).await,
         HandoffOutcome::WorkerClosed
     ));
 }
 
 #[tokio::test]
 async fn bounded_handoff_blocks_when_full_and_preserves_order() {
-    let (sender, mut receiver) = mpsc::channel(1);
+    let (pool, mut receivers) = test_pool(1, 1);
+    let first = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
+    let second = received_thread_backfilled_event(EMAIL_THREAD_ID, 2);
+
     assert!(matches!(
-        handoff_decoded(&sender, Ok::<_, ()>(1)).await,
+        pool.handoff(Ok::<_, EventBrokerError>(first)).await,
         HandoffOutcome::HandedOff
     ));
 
     let blocked_handoff =
-        tokio::spawn(async move { handoff_decoded(&sender, Ok::<_, ()>(2)).await });
+        tokio::spawn(async move { pool.handoff(Ok::<_, EventBrokerError>(second)).await });
     tokio::task::yield_now().await;
     assert!(
         !blocked_handoff.is_finished(),
         "handoff must wait while the bounded channel is full"
     );
 
-    assert_eq!(receiver.recv().await, Some(1));
+    assert_eq!(receivers[0].recv().await.expect("first event").offset, 1);
     assert!(matches!(
         blocked_handoff.await.expect("handoff task did not panic"),
         HandoffOutcome::HandedOff
     ));
-    assert_eq!(receiver.recv().await, Some(2));
+    assert_eq!(receivers[0].recv().await.expect("second event").offset, 2);
+}
+
+#[tokio::test]
+async fn events_with_the_same_ordering_key_stay_on_one_worker_in_order() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    for offset in 0..8 {
+        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, offset);
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(event)).await,
+            HandoffOutcome::HandedOff
+        ));
+    }
+    drop(pool);
+
+    let mut busy_workers = 0;
+    for receiver in &mut receivers {
+        let mut offsets = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            offsets.push(event.offset);
+        }
+        if offsets.is_empty() {
+            continue;
+        }
+        busy_workers += 1;
+        assert_eq!(offsets, (0..8).collect::<Vec<_>>());
+    }
+    assert_eq!(busy_workers, 1, "one key must map to exactly one worker");
+}
+
+#[tokio::test]
+async fn events_with_distinct_ordering_keys_spread_across_workers() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, 128);
+    for index in 0..100 {
+        let thread_id = Uuid::from_u128(1_000 + index);
+        let event = received_thread_backfilled_event(thread_id, index as i64);
+        assert!(matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(event)).await,
+            HandoffOutcome::HandedOff
+        ));
+    }
+    drop(pool);
+
+    let busy_workers = receivers
+        .iter_mut()
+        .map(|receiver| receiver.try_recv().is_ok())
+        .filter(|received| *received)
+        .count();
+    assert!(
+        busy_workers > 1,
+        "distinct ordering keys must spread across workers, got {busy_workers}"
+    );
 }
 
 #[test]
-fn production_channel_and_retry_bounds_match_the_delivery_contract() {
-    let (sender, _receiver) = mpsc::channel::<ReceivedEvent>(CHANNEL_CAPACITY);
-    assert_eq!(sender.max_capacity(), 128);
+fn email_events_shard_by_thread_and_link_scoped_events_by_producer_key() {
+    let thread_scoped = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        received_email_event(false),
+    ));
+    assert_eq!(ordering_key(&thread_scoped), EMAIL_THREAD_ID.to_string());
+
+    let link_scoped = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::LinkDisconnected(LinkDisconnectedMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            email_address: "owner@example.com".to_string(),
+            reason: LinkDisconnectReason::ManuallyDisabled,
+        }),
+    ));
+    assert_eq!(ordering_key(&link_scoped), EMAIL_LINK_ID.to_string());
+
+    let multi_thread = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_ids: vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
+            reason: ThreadsReindexReason::ContactsChanged,
+        }),
+    ));
+    assert_eq!(ordering_key(&multi_thread), EMAIL_LINK_ID.to_string());
+}
+
+#[test]
+fn non_email_events_shard_by_their_producer_key() {
+    let message = encoded_message(
+        MacroCallsTopic::TOPIC_STR,
+        CALL_ID,
+        Event::new(archived_event()),
+    );
+    let call = DeclaredMacroEvent::decode(&message).expect("decodable call event");
+    assert_eq!(ordering_key(&call), CALL_ID.to_string());
+
+    let message = encoded_message(
+        MacroDocumentsTopic::TOPIC_STR,
+        DOCUMENT_ID,
+        Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        })),
+    );
+    let document = DeclaredMacroEvent::decode(&message).expect("decodable document event");
+    assert_eq!(ordering_key(&document), DOCUMENT_ID);
+}
+
+#[test]
+fn production_worker_pool_and_retry_bounds_match_the_delivery_contract() {
+    assert_eq!(WORKER_COUNT, 10);
+    let (sender, _receiver) = mpsc::channel::<ReceivedEvent>(WORKER_CHANNEL_CAPACITY);
+    assert_eq!(sender.max_capacity(), 16);
     assert_eq!(
         processing_retry_strategy().collect::<Vec<_>>(),
         [Duration::from_secs(1), Duration::from_secs(2)]

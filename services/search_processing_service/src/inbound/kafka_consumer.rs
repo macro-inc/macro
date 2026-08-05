@@ -1,10 +1,13 @@
 //! Kafka consumer for broker events that update the search index.
 //!
-//! The poll loop hands decoded events to one bounded, sequential worker and
-//! commits each offset immediately after that handoff. Malformed records are
-//! committed without a handoff so they cannot wedge a partition. Processing is
-//! retried in-process; exhausted events are logged and dropped because their
-//! offsets are already committed.
+//! The poll loop shards each decoded event by its ordering key onto one of a
+//! fixed pool of bounded, sequential workers and commits the offset
+//! immediately after that handoff. Events sharing an ordering key — the
+//! entity whose search documents they mutate — stay on one worker in
+//! partition order; unrelated events process in parallel. Malformed records
+//! are committed without a handoff so they cannot wedge a partition.
+//! Processing is retried in-process; exhausted events are logged and dropped
+//! because their offsets are already committed.
 //!
 //! Per-entity event mapping and processing live in the [`call`], [`channel`],
 //! [`chat`], [`document`], [`email`], [`project`], and [`property`] submodules;
@@ -23,7 +26,13 @@ mod property;
 #[cfg(test)]
 mod test;
 
-use std::{future::Future, time::Duration};
+use std::{
+    borrow::Cow,
+    collections::hash_map::DefaultHasher,
+    future::Future,
+    hash::{Hash as _, Hasher as _},
+    time::Duration,
+};
 
 use ::call::domain::events::CallMacroEvent;
 use ::chat::domain::events::ChatMacroEvent;
@@ -31,7 +40,9 @@ use ::email::domain::events::EmailMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
-use macro_event_broker::{KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService};
+use macro_event_broker::{
+    KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
+};
 use projects::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 use rdkafka::{
@@ -39,12 +50,16 @@ use rdkafka::{
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use self::{
-    call::process_call_event, channel::process_channel_event, chat::process_chat_event,
-    document::process_document_event, email::process_email_event, project::process_project_event,
+    call::process_call_event,
+    channel::process_channel_event,
+    chat::process_chat_event,
+    document::process_document_event,
+    email::{email_ordering_key, process_email_event},
+    project::process_project_event,
     property::process_property_event,
 };
 
@@ -73,8 +88,16 @@ macro_event_broker::declare_topics!(
         PropertyMacroEvent,
 );
 
-/// Maximum number of decoded events waiting for the sequential worker.
-const CHANNEL_CAPACITY: usize = 128;
+/// Number of sequential workers events are sharded across by ordering key.
+///
+/// Each in-flight event holds a database connection and an OpenSearch
+/// request, so this also bounds the consumer's downstream concurrency.
+const WORKER_COUNT: usize = 10;
+/// Maximum number of decoded events waiting for each sequential worker.
+///
+/// Offsets are committed at handoff, so `WORKER_COUNT * WORKER_CHANNEL_CAPACITY`
+/// also bounds how many committed-but-unprocessed events a crash can drop.
+const WORKER_CHANNEL_CAPACITY: usize = 16;
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// Total processing attempts before an event is dropped.
@@ -143,18 +166,75 @@ where
     retry_processing_with_strategy(processing_retry_strategy(), operation).await
 }
 
-async fn handoff_decoded<T, E>(
-    sender: &mpsc::Sender<T>,
-    decoded: Result<T, E>,
-) -> HandoffOutcome<E> {
-    let event = match decoded {
-        Ok(event) => event,
-        Err(error) => return HandoffOutcome::MalformedRecord(error),
-    };
+/// Sharding key that serializes all events mutating the same search documents.
+///
+/// Every topic's producer key is already the entity its index actions target
+/// (call, channel, chat, document, project, or property-entity id), except
+/// email events, which are produced with a link-scoped key and instead shard
+/// by thread so one inbox's backlog can spread across the worker pool.
+fn ordering_key(event: &DeclaredMacroEvent) -> Cow<'_, str> {
+    match event {
+        DeclaredMacroEvent::CallMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::ChannelMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::ChatMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::DocumentMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::EmailMacroEvent(event) => email_ordering_key(event),
+        DeclaredMacroEvent::ProjectMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::PropertyMacroEvent(event) => Cow::Borrowed(event.key()),
+    }
+}
 
-    match sender.send(event).await {
-        Ok(()) => HandoffOutcome::HandedOff,
-        Err(_) => HandoffOutcome::WorkerClosed,
+/// Fixed pool of sequential workers, sharded by [`ordering_key`].
+///
+/// Events with the same ordering key always land on the same worker's FIFO
+/// channel, so they process in handoff (partition) order; events with
+/// different keys may process concurrently.
+struct WorkerPool {
+    senders: Vec<mpsc::Sender<ReceivedEvent>>,
+}
+
+impl WorkerPool {
+    fn new(senders: Vec<mpsc::Sender<ReceivedEvent>>) -> Self {
+        assert!(
+            !senders.is_empty(),
+            "worker pool requires at least one worker"
+        );
+        Self { senders }
+    }
+
+    /// Spawns [`WORKER_COUNT`] workers sharing `context` and returns their
+    /// join handles alongside the pool. Dropping the pool closes every worker
+    /// channel, letting the workers drain and exit.
+    fn spawn(context: &KafkaProcessingContext) -> (Self, Vec<JoinHandle<()>>) {
+        let (senders, workers) = (0..WORKER_COUNT)
+            .map(|_| {
+                let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
+                (
+                    sender,
+                    tokio::spawn(run_event_worker(context.clone(), receiver)),
+                )
+            })
+            .unzip();
+        (Self::new(senders), workers)
+    }
+
+    fn shard_index(&self, key: &str) -> usize {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        (hasher.finish() % self.senders.len() as u64) as usize
+    }
+
+    async fn handoff<E>(&self, decoded: Result<ReceivedEvent, E>) -> HandoffOutcome<E> {
+        let event = match decoded {
+            Ok(event) => event,
+            Err(error) => return HandoffOutcome::MalformedRecord(error),
+        };
+
+        let shard = self.shard_index(ordering_key(&event.event).as_ref());
+        match self.senders[shard].send(event).await {
+            Ok(()) => HandoffOutcome::HandedOff,
+            Err(_) => HandoffOutcome::WorkerClosed,
+        }
     }
 }
 
@@ -241,7 +321,7 @@ fn commit_logged(consumer: &SearchProcessingKafkaConsumer, message: &BorrowedMes
 
 async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
-    events: mpsc::Sender<ReceivedEvent>,
+    workers: WorkerPool,
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let mut shutdown = std::pin::pin!(shutdown);
@@ -266,7 +346,7 @@ async fn poll_events(
                     kafka_message.offset(),
                 );
 
-                match handoff_decoded(&events, decoded).await {
+                match workers.handoff(decoded).await {
                     HandoffOutcome::HandedOff => {}
                     HandoffOutcome::MalformedRecord(error) => tracing::error!(
                         error = ?error,
@@ -301,12 +381,13 @@ async fn poll_events(
     Ok(())
 }
 
-/// Runs the bounded broker event poll-loop/worker pair until `shutdown` resolves.
+/// Runs the bounded broker event poll loop and worker pool until `shutdown`
+/// resolves.
 ///
 /// The caller is responsible for supervising this function. A closed worker
 /// channel returns an error without committing the current Kafka message. On
-/// normal shutdown the sender is dropped and all buffered events are processed
-/// before this function returns.
+/// normal shutdown the senders are dropped and all buffered events are
+/// processed before this function returns.
 #[tracing::instrument(skip(context, shutdown), fields(brokers), err)]
 pub(crate) async fn run_event_consumer(
     brokers: &str,
@@ -324,12 +405,21 @@ pub(crate) async fn run_event_consumer(
         "search processing event consumer listening"
     );
 
-    let (events_tx, events_rx) = mpsc::channel(CHANNEL_CAPACITY);
-    let worker = tokio::spawn(run_event_worker(context, events_rx));
-    let poll_result = poll_events(&consumer, events_tx, shutdown).await;
-    let worker_result = worker.await;
+    let (pool, workers) = WorkerPool::spawn(&context);
+    // Passing the pool by value drops every sender when polling stops, which
+    // closes the worker channels so the workers drain and exit.
+    let poll_result = poll_events(&consumer, pool, shutdown).await;
+
+    let mut worker_failure = None;
+    for worker in workers {
+        if let Err(error) = worker.await {
+            worker_failure = Some(error);
+        }
+    }
 
     poll_result?;
-    worker_result.map_err(|error| rootcause::report!(error))?;
+    if let Some(error) = worker_failure {
+        Err(rootcause::report!(error))?;
+    }
     Ok(())
 }
