@@ -28,15 +28,15 @@ vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlSoupPage: mapGraphqlSoupPageMock,
 }));
 
-vi.mock('./graphql-ast', () => ({
+vi.mock('./ast', () => ({
   makeGraphqlSoupInput: vi.fn(() => ({ initial: { limit: 50 } })),
 }));
 
-vi.mock('./transform-utils', () => ({
+vi.mock('../transform-utils', () => ({
   mapSoupPageToEntityList: mapSoupPageToEntityListMock,
 }));
 
-import { useReactiveSoupAstItemsQuery } from './reactive-items';
+import { createGraphqlSoupAstItemsQuery } from './items';
 
 type FakeExecution = {
   next(data: unknown): void;
@@ -75,7 +75,7 @@ function makeFakeClient(): {
   };
 }
 
-describe('useReactiveSoupAstItemsQuery', () => {
+describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -89,7 +89,7 @@ describe('useReactiveSoupAstItemsQuery', () => {
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
 
     createRoot((dispose) => {
-      const query = useReactiveSoupAstItemsQuery(
+      const query = createGraphqlSoupAstItemsQuery(
         () => ({ params: {}, body: {} }) as never,
         () => ({ enabled: true })
       );

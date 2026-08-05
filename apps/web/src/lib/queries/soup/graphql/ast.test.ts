@@ -7,7 +7,7 @@ import {
   makeGraphqlGroupedSoupContinuationInput,
   makeGraphqlGroupedSoupInput,
   makeGraphqlSoupInput,
-} from './graphql-ast';
+} from './ast';
 
 const UPDATED_AT = '2026-01-01T00:00:00.000Z';
 
@@ -209,6 +209,50 @@ describe('makeGraphqlSoupInput', () => {
     expect(() =>
       makeInput({
         include: { fileAssoc: ['assoc:pdf'] },
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
+  it('throws for REST-only top-level filters instead of silently widening the query', () => {
+    for (const body of [
+      { calf: { l: { id: 'event-1' } } },
+      { eca: ['person@example.com'] },
+      { ecd: ['example.com'] },
+    ]) {
+      expect(() =>
+        makeGraphqlSoupInput({
+          params: { limit: 100, sort_method: 'updated_at' },
+          body: body as never,
+        })
+      ).toThrow('Unsupported GraphQL Soup AST');
+    }
+  });
+
+  it('rejects REST-only top-level filters for grouped queries too', () => {
+    expect(() =>
+      makeGraphqlGroupedSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { ecd: ['example.com'] } as never,
+        groupBy: { type: 'entity_type' },
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
+  it('rejects email views for grouped queries instead of dropping them', () => {
+    expect(() =>
+      makeGraphqlGroupedSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { emailView: 'inbox' } as never,
+        groupBy: { type: 'entity_type' },
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
+  it('rejects unknown email views instead of using the GraphQL default', () => {
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { emailView: 'unknown' } as never,
       })
     ).toThrow('Unsupported GraphQL Soup AST');
   });

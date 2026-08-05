@@ -4,6 +4,7 @@
  * rows and group membership without a TanStack invalidation round-trip.
  */
 
+import { createUrqlQuery } from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
 import {
   makeGroupComparator,
@@ -22,24 +23,23 @@ import {
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createComputed, createMemo, on } from 'solid-js';
-import { createUrqlQuery } from '../../urql-solid';
-import { makeGraphqlGroupedSoupInput } from './graphql-ast';
-import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from './items';
-import type { ReactiveSoupAstItemsQuery } from './reactive-items';
-import { mapSoupPageToEntityList } from './transform-utils';
+import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
+import { mapSoupPageToEntityList } from '../transform-utils';
+import { makeGraphqlGroupedSoupInput } from './ast';
+import type { GraphqlSoupAstItemsQuery } from './items';
 
-export type ReactiveGroupedSoupAstItemsQueryArgs = {
+export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
   groupBy: GroupByField | undefined;
 };
 
-export type ReactiveGroupedSoupAstItemsQueryOptions = {
+export type GraphqlGroupedSoupAstItemsQueryOptions = {
   enabled: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
-function mapReactiveGroupedSoupData(
+function mapGraphqlGroupedSoupData(
   data: GroupSoupQuery,
   groupBy: GroupByField,
   options: Parameters<typeof mapSoupPageToEntityList>[1]
@@ -77,11 +77,11 @@ function mapReactiveGroupedSoupData(
   };
 }
 
-/** Creates the live parent operation that discovers grouped Soup bins. */
-export function useReactiveGroupedSoupAstItemsQuery(
-  args: Accessor<ReactiveGroupedSoupAstItemsQueryArgs>,
-  options: Accessor<ReactiveGroupedSoupAstItemsQueryOptions>
-): ReactiveSoupAstItemsQuery {
+/** Creates the live urql parent query for a grouped Soup AST request. */
+export function createGraphqlGroupedSoupAstItemsQuery(
+  args: Accessor<GraphqlGroupedSoupAstItemsQueryArgs>,
+  options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
+): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
@@ -89,7 +89,7 @@ export function useReactiveGroupedSoupAstItemsQuery(
     try {
       return makeGraphqlGroupedSoupInput({ params, body, groupBy });
     } catch {
-      // Unsupported GraphQL Soup AST — consumers fall back to TanStack/REST.
+      // Unsupported GraphQL Soup AST — the public facade falls back to REST.
       return undefined;
     }
   });
@@ -110,7 +110,7 @@ export function useReactiveGroupedSoupAstItemsQuery(
       requestPolicy: 'cache-and-network' as const,
       keepPreviousData: false,
       select: (data: GroupSoupQuery) =>
-        mapReactiveGroupedSoupData(data, groupBy!, {
+        mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
           showSupportedForeignEntities:
             queryOptions.showSupportedForeignEntities,
@@ -141,11 +141,12 @@ export function useReactiveGroupedSoupAstItemsQuery(
     data: () => query.data,
     error,
     isSupported,
+    isEnabled: () => query.isEnabled,
     isLoading: () => query.isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => false,
     hasNextPage: () => false,
-    fetchNextPage: () => undefined,
+    fetchNextPage: async () => undefined,
     resetToInitialPage: () => undefined,
     refresh: async () => {
       if (input() === undefined) return;

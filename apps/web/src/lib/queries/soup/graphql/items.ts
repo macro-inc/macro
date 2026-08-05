@@ -1,13 +1,10 @@
 /*
- * Reactive urql-backed Soup items: the flagged alternative to the TanStack
- * `useSoupAstItemsQuery` path. Every loaded page remains subscribed to its
- * normalized GraphQL cache operation so cache writes update the list directly.
- *
- * Scope matches the GraphQL transport: flat views whose filter AST has a
- * GraphQL translation. Consumers check `isSupported` and fall back to the
- * TanStack path otherwise.
+ * Reactive urql-backed Soup items. Every loaded page remains subscribed to
+ * its normalized GraphQL cache operation so cache writes update the list
+ * directly. The public REST/GraphQL facade lives in ../items.ts.
  */
 
+import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
@@ -22,42 +19,43 @@ import {
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createComputed, createMemo, on } from 'solid-js';
-import { createUrqlInfiniteQuery } from '../../urql-solid';
-import { makeGraphqlSoupInput } from './graphql-ast';
-import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from './items';
-import { mapSoupPageToEntityList } from './transform-utils';
+import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
+import { mapSoupPageToEntityList } from '../transform-utils';
+import { makeGraphqlSoupInput } from './ast';
 
-export type ReactiveSoupAstItemsQueryArgs = {
+export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
 };
 
-export type ReactiveSoupAstItemsQueryOptions = {
+export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
-export type ReactiveSoupAstItemsQuery = {
+export type GraphqlSoupAstItemsQuery = {
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
   /** False when the filter AST has no GraphQL translation. */
   isSupported: Accessor<boolean>;
+  isEnabled: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
-  fetchNextPage: () => void;
+  fetchNextPage: () => Promise<void>;
   /** Discards loaded continuation pages while retaining the initial page. */
   resetToInitialPage: () => void;
   /** Refetches the currently loaded page chain from the network. */
   refresh: () => Promise<void>;
 };
 
-export function useReactiveSoupAstItemsQuery(
-  args: Accessor<ReactiveSoupAstItemsQueryArgs>,
-  options: Accessor<ReactiveSoupAstItemsQueryOptions>
-): ReactiveSoupAstItemsQuery {
+/** Creates the live urql query for a flat Soup AST request. */
+export function createGraphqlSoupAstItemsQuery(
+  args: Accessor<GraphqlSoupAstItemsQueryArgs>,
+  options: Accessor<GraphqlSoupAstItemsQueryOptions>
+): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   const inputForCursor = (
@@ -67,7 +65,7 @@ export function useReactiveSoupAstItemsQuery(
     try {
       return makeGraphqlSoupInput({ params, body, cursor });
     } catch {
-      // Unsupported GraphQL Soup AST — consumers fall back to TanStack.
+      // Unsupported GraphQL Soup AST — the public facade falls back to REST.
       return undefined;
     }
   };
@@ -126,12 +124,13 @@ export function useReactiveSoupAstItemsQuery(
     data: () => query.data,
     error,
     isSupported,
+    isEnabled: () => query.isEnabled,
     isLoading: () => query.isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
     hasNextPage: () => query.hasNextPage,
-    fetchNextPage: () => {
-      void query.fetchNextPage();
+    fetchNextPage: async () => {
+      await query.fetchNextPage();
     },
     resetToInitialPage: query.resetToInitialPage,
     refresh: async () => {

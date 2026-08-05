@@ -37,8 +37,8 @@ type GraphqlExprInput<TLiteral> =
   | { not: GraphqlExprInput<TLiteral> }
   | { literal: TLiteral };
 
-import type { GroupByField } from './grouped/types';
-import type { SoupAstBody, SoupParams } from './items';
+import type { GroupByField } from '../grouped/types';
+import type { SoupAstBody, SoupParams } from '../items';
 
 type RestAst =
   | { '&': [RestAst, RestAst] }
@@ -59,6 +59,10 @@ type TargetAstKey =
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
+  /** Calendar, CRM-address, and CRM-domain filters are REST-only today. */
+  calf?: unknown;
+  eca?: string[];
+  ecd?: string[];
   emailView?: 'inbox' | 'drafts' | 'sent' | 'all';
 };
 
@@ -489,10 +493,29 @@ function mapEmailView(
       return 'ALL';
     case undefined:
       return undefined;
+    default:
+      return unsupported(`email view ${view}`);
+  }
+}
+
+function assertGraphqlCompatibleBody(body: AstBody): void {
+  if (body.calf !== undefined) {
+    unsupported('calendar filters are not supported by GraphQL Soup yet');
+  }
+  if (body.eca !== undefined) {
+    unsupported(
+      'CRM-scoped email address filters are not supported by GraphQL Soup yet'
+    );
+  }
+  if (body.ecd !== undefined) {
+    unsupported(
+      'CRM-scoped email domain filters are not supported by GraphQL Soup yet'
+    );
   }
 }
 
 function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
+  assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
 
   if (body.df)
@@ -532,6 +555,7 @@ export function makeGraphqlSoupInput(args: {
   cursor?: string | null;
 }): GraphqlSoupInput {
   const body = args.body as AstBody;
+  assertGraphqlCompatibleBody(body);
   const emailView = mapEmailView(body.emailView);
 
   if (args.cursor != null) {
@@ -576,12 +600,18 @@ export function makeGraphqlGroupedSoupInput(args: {
   body: SoupAstBody;
   groupBy: GroupByField;
 }): GraphqlGroupedSoupInput {
+  const body = args.body as AstBody;
+  assertGraphqlCompatibleBody(body);
+  if (body.emailView !== undefined) {
+    unsupported('email views are not supported by grouped GraphQL Soup yet');
+  }
+
   return {
     initial: {
       groupBy: makeGraphqlGroupByInput(args.groupBy),
       limit: args.params.limit ?? undefined,
       sortMethod: mapSortMethod(args.params.sort_method),
-      filters: makeGraphqlFilters(args.body as AstBody),
+      filters: makeGraphqlFilters(body),
     },
   };
 }

@@ -3,7 +3,7 @@ import type { EntityData } from '@entity';
 import {
   makeGraphqlGroupedSoupContinuationInput,
   makeGraphqlGroupedSoupInput,
-} from '@queries/soup/graphql-ast';
+} from '@queries/soup/graphql/ast';
 import { registerGroupedSoupContinuation } from '@queries/soup/grouped/graphql-operation-registry';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import type {

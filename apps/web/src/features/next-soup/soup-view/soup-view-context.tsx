@@ -49,8 +49,6 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -77,12 +75,9 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import { useReactiveGroupedSoupAstItemsQuery } from '@queries/soup/reactive-grouped-items';
-import { useReactiveSoupAstItemsQuery } from '@queries/soup/reactive-items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
-import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
-import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
   batch,
@@ -295,9 +290,6 @@ export const SoupViewContextProvider: FlowComponent<
   const queryClient = useQueryClient();
   const [filterPersistenceEnabled] = useSoupFilterPersistence();
 
-  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
   const panel = useSplitPanelOrThrow();
 
   const activeListView = createMemo<ListView | undefined>(() => {
@@ -379,28 +371,8 @@ export const SoupViewContextProvider: FlowComponent<
   onCleanup(predicatesCaptorTeardown);
 
   const resetToInitialPage = () => {
-    const groupBy = serverGroupByField();
-
-    reactiveItemsQuery.resetToInitialPage();
-    reactiveGroupedItemsQuery.resetToInitialPage();
+    itemsQuery.resetToInitialPage();
     groupQueries.resetToInitialPage();
-
-    queryClient.setQueryData(
-      soupKeys.astItems({
-        params: soupParams(),
-        body: soupBody(),
-        groupBy,
-        transport: reactiveActive() ? 'graphql' : undefined,
-      }).queryKey,
-      (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
-        if (!prev) return;
-        if ('pages' in prev) {
-          prev.pages.splice(1, prev.pages.length);
-          return prev;
-        }
-        return prev;
-      }
-    );
   };
 
   // Keep filters per list view and tab so refreshing or returning to a tab
@@ -941,65 +913,18 @@ export const SoupViewContextProvider: FlowComponent<
     );
   };
 
-  // Reactive urql path (same `enable-graphql-soup` flag as the transport):
-  // flat and server-grouped GraphQL views retain live operation sources, so
-  // normalized-cache pushes update every loaded page directly. Unsupported
-  // ASTs and REST transport continue through the TanStack fallback.
-  const reactiveEligible = () => useGraphqlSoupFF().enabled;
-
-  const reactiveItemsQuery = useReactiveSoupAstItemsQuery(
-    () => ({ params: soupParams(), body: soupBody() }),
-    () => ({
-      enabled:
-        enabled() &&
-        !search.isSearching() &&
-        reactiveEligible() &&
-        !serverGroupByField(),
-      showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
-    })
-  );
-  const reactiveGroupedItemsQuery = useReactiveGroupedSoupAstItemsQuery(
+  // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
+  // implementation keeps loaded pages subscribed to the normalized cache.
+  const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
       body: soupBody(),
       groupBy: serverGroupByField(),
     }),
-    () => ({
-      enabled:
-        enabled() &&
-        !search.isSearching() &&
-        reactiveEligible() &&
-        serverGroupByField() !== undefined,
-      showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
-    })
-  );
-
-  const reactiveFlatActive = () =>
-    reactiveEligible() &&
-    !serverGroupByField() &&
-    reactiveItemsQuery.isSupported();
-  const reactiveGroupedActive = () =>
-    reactiveEligible() &&
-    serverGroupByField() !== undefined &&
-    reactiveGroupedItemsQuery.isSupported();
-  const reactiveActive = () => reactiveFlatActive() || reactiveGroupedActive();
-  const activeReactiveItemsQuery = () =>
-    reactiveGroupedActive() ? reactiveGroupedItemsQuery : reactiveItemsQuery;
-
-  const itemsQuery = useSoupAstItemsQuery(
-    () => {
-      const groupBy = serverGroupByField();
-      return {
-        params: soupParams(),
-        body: soupBody(),
-        groupBy,
-        transport: reactiveActive() ? 'graphql' : undefined,
-      };
-    },
     () => {
       const view = activeListView();
       return {
-        enabled: enabled() && !search.isSearching() && !reactiveActive(),
+        enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
@@ -1008,45 +933,21 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  // Reading `.data` on a query with no data yet suspends the nearest
-  // <Suspense> until the fetch settles. Branch on the loading state first
-  // so a cold initial soup call leaves the view shell rendered and only
-  // the list region waits on data.
+  // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
+  // Read loading first so REST fallback leaves the view shell rendered.
   const itemsQueryData = () =>
     itemsQuery.isLoading ? undefined : itemsQuery.data;
 
-  /** Unified reactive-GraphQL or TanStack fallback Soup surface. */
   const itemsSource = {
-    data: () =>
-      reactiveActive() ? activeReactiveItemsQuery().data() : itemsQueryData(),
-    isLoading: () =>
-      reactiveActive()
-        ? activeReactiveItemsQuery().isLoading()
-        : itemsQuery.isLoading,
-    isFetching: () =>
-      reactiveActive()
-        ? activeReactiveItemsQuery().isFetching()
-        : itemsQuery.isFetching,
-    isPlaceholderData: () =>
-      reactiveActive() ? false : itemsQuery.isPlaceholderData,
-    isFetchingNextPage: () =>
-      reactiveActive()
-        ? activeReactiveItemsQuery().isFetchingNextPage()
-        : itemsQuery.isFetchingNextPage,
-    isEnabled: () =>
-      reactiveActive()
-        ? enabled() && !search.isSearching()
-        : itemsQuery.isEnabled,
-    hasNextPage: () =>
-      reactiveActive()
-        ? activeReactiveItemsQuery().hasNextPage()
-        : itemsQuery.hasNextPage,
+    data: itemsQueryData,
+    isLoading: () => itemsQuery.isLoading,
+    isFetching: () => itemsQuery.isFetching,
+    isPlaceholderData: () => itemsQuery.isPlaceholderData,
+    isFetchingNextPage: () => itemsQuery.isFetchingNextPage,
+    isEnabled: () => itemsQuery.isEnabled,
+    hasNextPage: () => itemsQuery.hasNextPage,
     fetchNextPage: () => {
-      if (reactiveActive()) {
-        activeReactiveItemsQuery().fetchNextPage();
-      } else {
-        itemsQuery.fetchNextPage();
-      }
+      void itemsQuery.fetchNextPage();
     },
   };
 
@@ -1167,7 +1068,8 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
-    graphqlReactive: reactiveGroupedActive,
+    graphqlReactive: () =>
+      itemsQuery.transport === 'graphql' && serverGroupByField() !== undefined,
     queryOptions: () => {
       const view = activeListView();
       return {
@@ -1504,10 +1406,9 @@ export const SoupViewContextProvider: FlowComponent<
             // instead of retracting as if the refresh succeeded.
             { throwOnError: true }
           ),
-          // The reactive urql page refetches from the network directly;
-          // it is outside the TanStack cache the invalidation reaches.
-          reactiveActive()
-            ? activeReactiveItemsQuery().refresh()
+          // urql pages are outside the TanStack cache invalidation above.
+          itemsQuery.transport === 'graphql'
+            ? itemsQuery.refresh()
             : Promise.resolve(),
           invalidateUserNotifications(),
         ]);
