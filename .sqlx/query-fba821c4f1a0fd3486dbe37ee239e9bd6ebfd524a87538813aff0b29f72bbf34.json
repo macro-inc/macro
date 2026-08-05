@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                session.id, session.channel_id, session.thread_id,\n                session.originating_message_id, session.bot_id,\n                session.model, session.harness, session.repo_url, session.acp_session_id,\n                session.status, session.status_event_name, session.created_at, session.modified_at\n            FROM agent_session session\n            WHERE\n                session.channel_id = $1 -- short circuit if it is the dedicated agent channel\n                OR (\n                    -- otherwise, if it's in a thread and literally mentions the bot\n                    session.thread_id = $2\n                    AND session.bot_id = $3\n                )\n            ORDER BY (session.channel_id = $1) DESC, session.created_at DESC\n            LIMIT 2\n            ",
+  "query": "\n            SELECT\n                session.id, session.channel_id, session.thread_id,\n                session.originating_message_id, session.bot_id,\n                session.model, session.harness, session.repo_url, session.acp_session_id,\n                session.status, session.status_event_name, session.created_at, session.modified_at\n            FROM agent_session session\n            WHERE\n                session.channel_id = $1 -- it is the dedicated agent channel\n                OR (\n                    -- otherwise, if it's in a thread and literally mentions the bot\n                    session.thread_id = $2\n                    AND session.bot_id = $3\n                )\n                -- we collect both!\n            ORDER BY (session.channel_id = $1) DESC, session.created_at DESC\n            LIMIT 3\n            ",
   "describe": {
     "columns": [
       {
@@ -92,5 +92,5 @@
       false
     ]
   },
-  "hash": "137131d567b218ad00f5d65c63b9d9a9bdb3525654a0d8e20991edd8cc65e60a"
+  "hash": "fba821c4f1a0fd3486dbe37ee239e9bd6ebfd524a87538813aff0b29f72bbf34"
 }

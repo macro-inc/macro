@@ -240,7 +240,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 )
                 -- we collect both!
             ORDER BY (session.channel_id = $1) DESC, session.created_at DESC
-            LIMIT 2
+            LIMIT 3
             "#,
             channel_id,
             thread_id,
@@ -249,6 +249,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .fetch_all(&self.pool)
         .await
         .context("failed to find agent session for channel context")?;
+
+        if rows.len() > 2 {
+            return Err(anyhow::anyhow!(
+                "multiple agent sessions matched the same channel context"
+            )
+            .into());
+        }
 
         let mut dedicated_channel_agent_session = None;
         let mut subthread_agent_session = None;
