@@ -401,9 +401,17 @@ export type NotificationItemType =
   | 'task'
   | 'github';
 /**
+ * The kind of entity to move.
+ */
+export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
+/**
  * Direction for reading more messages around a cursor.
  */
 export type PageDirection = 'older' | 'newer';
+/**
+ * The kind of an item inside a project.
+ */
+export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
  * Position of a channel message.
  */
@@ -1228,6 +1236,10 @@ export interface CreateDocument {
    * Whether this document is a task. Only applies to md documents.
    */
   isTask?: boolean;
+  /**
+   * The id of the project (shown as a folder in the app UI) to create the document in. Requires edit access to the project. Omit to create the document at the top level of the user's files.
+   */
+  projectId?: string | null;
 }
 /**
  * The read content response
@@ -1305,6 +1317,32 @@ export interface ImportEntityView {
   label: string;
   source: ImportSource;
   status: ImportStatus;
+}
+/**
+ * Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
+ */
+export interface CreateProject {
+  /**
+   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The name of the project.
+   */
+  projectName: string;
+}
+/**
+ * The create project response.
+ */
+export interface CreateProjectResponse {
+  /**
+   * The id of the created project.
+   */
+  projectId: string;
+  /**
+   * The name of the created project.
+   */
+  projectName: string;
 }
 /**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
@@ -2526,6 +2564,33 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
+ * Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it.
+ */
+export interface MoveToProject {
+  /**
+   * The id of the entity to move.
+   */
+  entityId: string;
+  entityType: MoveableEntityType;
+  /**
+   * The id of the destination project. Omit to move the entity out of its current project to the top level.
+   */
+  projectId?: string | null;
+}
+/**
+ * The move to project response.
+ */
+export interface MoveToProjectResponse {
+  /**
+   * A human-readable result message.
+   */
+  message: string;
+  /**
+   * Whether the move succeeded.
+   */
+  success: boolean;
+}
+/**
  * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
@@ -2547,6 +2612,28 @@ export interface NameSearch {
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
+}
+/**
+ * A single item inside a project.
+ */
+export interface ProjectItem {
+  /**
+   * The file type, for documents (e.g. md, pdf, docx).
+   */
+  fileType?: string | null;
+  /**
+   * The id of the item.
+   */
+  id: string;
+  itemType: ProjectItemType;
+  /**
+   * The display name of the item.
+   */
+  name: string;
+  /**
+   * When the item was last updated.
+   */
+  updatedAt?: string | null;
 }
 /**
  * Metadata for a project fetched from the database
@@ -3288,6 +3375,36 @@ export interface ReadMetadata {
 export interface ReadMetadataResponse {
   documentMetadata: ReadDocumentMetadata;
   userAccessLevel: AccessLevel;
+}
+/**
+ * List the direct contents of a project (shown as a folder in the app UI): its documents, AI chats, and nested projects. Requires view access to the project. Email threads filed into the project are not included.
+ */
+export interface ReadProject {
+  /**
+   * The id of the project to read.
+   */
+  projectId: string;
+}
+/**
+ * The read project response.
+ */
+export interface ReadProjectResponse {
+  /**
+   * The project's direct children in display order.
+   */
+  items: ProjectItem[];
+  /**
+   * The id of the parent project, if this project is nested.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The id of the project.
+   */
+  projectId: string;
+  /**
+   * The name of the project.
+   */
+  projectName: string;
 }
 export interface ReadResponse {
   content: ReadThreadReadContent;

@@ -296,22 +296,23 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service.clone(),
     );
 
+    let user_email_service = Arc::new(
+        email::domain::service::EmailServiceImpl::new(
+            email::outbound::EmailPgRepo::new(pool.clone()),
+            frecency::domain::services::FrecencyQueryServiceImpl::new(
+                frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
+            ),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            email::domain::service::EmailServiceImpl::new(
-                email::outbound::EmailPgRepo::new(pool.clone()),
-                frecency::domain::services::FrecencyQueryServiceImpl::new(
-                    frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
-                ),
-                sqs_client.clone(),
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(pool.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
     );
@@ -342,6 +343,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -358,6 +368,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
         ),
+        project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),

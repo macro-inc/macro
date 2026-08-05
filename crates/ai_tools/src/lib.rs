@@ -27,6 +27,7 @@ use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use import::inbound::toolset::import_toolset;
 use notification::inbound::ai_tool::notification_toolset;
+use projects::inbound::toolset::project_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
@@ -52,11 +53,12 @@ pub use tool_context::{
     ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
     ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolImportService,
     ToolImportToolContext, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
-    ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
-    ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_crm_tool_context, build_properties_service, build_properties_tool_context,
+    ToolNotificationToolContext, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
+    ToolPropertiesToolContext, ToolServiceContext, ToolSoupService, ToolSystemPropertiesService,
+    ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_crm_tool_context,
+    build_project_tool_context, build_properties_service, build_properties_tool_context,
     build_task_properties_adapter, build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
@@ -83,6 +85,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())

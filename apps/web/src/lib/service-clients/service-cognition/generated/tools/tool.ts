@@ -28,6 +28,10 @@ type ToolParserMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateProject: {
+    call: types.CreateProject;
+    response: types.CreateProjectResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
@@ -85,6 +89,10 @@ type ToolParserMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MoveToProject: {
+    call: types.MoveToProject;
+    response: types.MoveToProjectResponse;
+  };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
     call: types.ReadCallRecord;
@@ -108,6 +116,7 @@ type ToolParserMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameDocument: {
     call: types.RenameDocument;
@@ -160,6 +169,10 @@ const toolParserMap = {
   CreateImportEntity: {
     call: schemas.CreateImportEntity,
     response: schemas.CreateImportEntityResponse,
+  },
+  CreateProject: {
+    call: schemas.CreateProject,
+    response: schemas.CreateProjectResponse,
   },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
   DeleteImportEntity: {
@@ -227,6 +240,10 @@ const toolParserMap = {
     call: schemas.MarkNotificationsSeen,
     response: schemas.MarkNotificationsResponse,
   },
+  MoveToProject: {
+    call: schemas.MoveToProject,
+    response: schemas.MoveToProjectResponse,
+  },
   NameSearch: {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
@@ -255,6 +272,10 @@ const toolParserMap = {
   ReadMetadata: {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
+  },
+  ReadProject: {
+    call: schemas.ReadProject,
+    response: schemas.ReadProjectResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   RenameDocument: {
@@ -320,6 +341,10 @@ type ToolDataMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateProject: {
+    call: types.CreateProject;
+    response: types.CreateProjectResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
@@ -377,6 +402,10 @@ type ToolDataMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MoveToProject: {
+    call: types.MoveToProject;
+    response: types.MoveToProjectResponse;
+  };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
     call: types.ReadCallRecord;
@@ -400,6 +429,7 @@ type ToolDataMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameDocument: {
     call: types.RenameDocument;

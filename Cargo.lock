@@ -288,6 +288,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "notification",
+ "projects",
  "prompt",
  "properties",
  "rand 0.9.4",
@@ -11485,8 +11486,10 @@ dependencies = [
 name = "projects"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
  "async-recursion",
+ "async-trait",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
@@ -11524,6 +11527,7 @@ dependencies = [
  "rdkafka",
  "rootcause",
  "s3_key",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
