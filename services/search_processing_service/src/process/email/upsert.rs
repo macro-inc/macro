@@ -75,8 +75,7 @@ pub async fn process_upsert_message(
 
     let updated_at_millis = message_info
         .internal_date_ts
-        .map(|date| EpochMillis::new(date.timestamp_millis()))
-        .transpose()?
+        .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
         .unwrap_or(now_millis);
 
     // A full index overwrites the doc, so thread properties must ride along
@@ -145,8 +144,7 @@ pub async fn process_upsert_message(
         updated_at_millis,
         sent_at_millis: message_info
             .internal_date_ts
-            .map(|date| EpochMillis::new(date.timestamp_millis()))
-            .transpose()?,
+            .and_then(|date| EpochMillis::plausible(date.timestamp_millis())),
         properties,
     };
 
@@ -215,12 +213,10 @@ pub async fn process_upsert_thread_message(
                 .context("expected content for upsertable email message")?;
             let sent_at_millis = message
                 .internal_date_ts
-                .map(|date| EpochMillis::new(date.timestamp_millis()))
-                .transpose()?;
+                .and_then(|date| EpochMillis::plausible(date.timestamp_millis()));
             let updated_at_millis = message
                 .internal_date_ts
-                .map(|date| EpochMillis::new(date.timestamp_millis()))
-                .transpose()?
+                .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
                 .unwrap_or(now_millis);
 
             upsert_email_message_args.push(UpsertEmailArgs {
@@ -345,12 +341,10 @@ pub async fn process_upsert_thread_batch_message(
             .context("expected content for upsertable email message")?;
         let sent_at_millis = message
             .internal_date_ts
-            .map(|date| EpochMillis::new(date.timestamp_millis()))
-            .transpose()?;
+            .and_then(|date| EpochMillis::plausible(date.timestamp_millis()));
         let updated_at_millis = message
             .internal_date_ts
-            .map(|date| EpochMillis::new(date.timestamp_millis()))
-            .transpose()?
+            .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
             .unwrap_or(now_millis);
 
         upsert_email_message_args.push(UpsertEmailArgs {

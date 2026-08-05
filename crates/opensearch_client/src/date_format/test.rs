@@ -19,6 +19,45 @@ fn test_epoch_millis_seconds() {
 }
 
 #[test]
+fn test_epoch_millis_zero_reads_as_missing_not_seconds() {
+    // prod has ~3.4k email messages with internal_date_ts at exactly epoch 0;
+    // calling that "in seconds" sent us hunting a unit bug that didn't exist.
+    let result = EpochMillis::new(0);
+    assert!(result.is_err());
+    if let Err(OpensearchClientError::ValidationFailed { details }) = result {
+        assert!(details.contains("at or before the Unix epoch"));
+        assert!(!details.contains("appears to be in seconds"));
+    }
+}
+
+#[test]
+fn test_epoch_millis_negative_reads_as_missing() {
+    // 1969-12-31 23:59:59, the earliest internal_date_ts on prod.
+    let result = EpochMillis::new(-1000);
+    assert!(result.is_err());
+    if let Err(OpensearchClientError::ValidationFailed { details }) = result {
+        assert!(details.contains("at or before the Unix epoch"));
+    }
+}
+
+#[test]
+fn test_plausible_drops_bad_values_instead_of_erroring() {
+    assert!(EpochMillis::plausible(0).is_none());
+    assert!(EpochMillis::plausible(-1000).is_none());
+    assert!(EpochMillis::plausible(1704067200).is_none()); // seconds
+    assert!(EpochMillis::plausible(32503680000001).is_none()); // past year 3000
+}
+
+#[test]
+fn test_plausible_keeps_valid_values() {
+    let millis = 1704067200123;
+    assert_eq!(
+        EpochMillis::plausible(millis).map(|e| e.get()),
+        Some(millis)
+    );
+}
+
+#[test]
 fn test_epoch_millis_too_far_future() {
     let too_far = 32503680000001; // Just after year 3000 in millis
     let result = EpochMillis::new(too_far);
