@@ -153,16 +153,16 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
 
         for property in imported {
             let descriptor = ImportedPropertyDescriptor::of(&property.value);
-            let definition = self
-                .find_or_create_definition(
-                    user,
-                    document_id,
-                    property,
-                    &descriptor,
-                    &mut definitions,
-                    &system_definitions,
-                )
-                .await;
+            let definition = find_or_create_definition(
+                self.properties.as_ref(),
+                user,
+                document_id,
+                property,
+                &descriptor,
+                &mut definitions,
+                &system_definitions,
+            )
+            .await;
             let Some(definition) = definition else {
                 continue;
             };
@@ -193,77 +193,6 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 );
             }
         }
-    }
-
-    async fn find_or_create_definition(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        document_id: &str,
-        property: &ImportedDocumentProperty,
-        descriptor: &ImportedPropertyDescriptor,
-        definitions: &mut Vec<PropertyDefinition>,
-        system_definitions: &[PropertyDefinition],
-    ) -> Option<PropertyDefinition> {
-        if let Some(definition) = find_definition_by_name(definitions, &property.name).cloned() {
-            if descriptor.matches(&definition) {
-                return Some(definition);
-            }
-            tracing::warn!(
-                document_id,
-                property = %property.name,
-                is_system = definition.is_system,
-                "skipping imported property whose existing Macro definition has a different type"
-            );
-            return None;
-        }
-
-        if let Some(definition) = find_definition_by_name(system_definitions, &property.name) {
-            tracing::warn!(
-                document_id,
-                property = %property.name,
-                property_definition_id = %definition.id,
-                "skipping imported property whose name is reserved by an inapplicable system property"
-            );
-            return None;
-        }
-
-        let request = CreatePropertyDefinitionRequest {
-            scope: CreatePropertyScope::User,
-            display_name: property.name.clone(),
-            data_type: descriptor.definition_type.clone(),
-        };
-        let definition = match self
-            .properties
-            .create_property_definition(user, None, &request)
-            .await
-        {
-            Ok(definition) => definition,
-            Err(error) => {
-                // Concurrent imports may race to create the same definition.
-                let recovered = self
-                    .properties
-                    .list_property_definitions(None, Some(user), true, Some(EntityType::Document))
-                    .await
-                    .ok()
-                    .and_then(|definitions| {
-                        find_definition_by_name(&definitions, &property.name)
-                            .filter(|definition| descriptor.matches(definition))
-                            .cloned()
-                    });
-                let Some(definition) = recovered else {
-                    tracing::warn!(
-                        document_id,
-                        property = %property.name,
-                        error = ?error,
-                        "failed to create imported document property"
-                    );
-                    return None;
-                };
-                definition
-            }
-        };
-        definitions.push(definition.clone());
-        Some(definition)
     }
 
     async fn property_value(
@@ -437,6 +366,124 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
             }
         }
     }
+}
+
+#[async_trait::async_trait]
+trait ImportedPropertyDefinitions: Send + Sync {
+    type Error: std::fmt::Debug + Send;
+
+    async fn create_imported_definition(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        request: &CreatePropertyDefinitionRequest,
+    ) -> Result<PropertyDefinition, Self::Error>;
+
+    async fn list_imported_definitions(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PropertyDefinition>, Self::Error>;
+}
+
+#[async_trait::async_trait]
+impl<P: PropertiesService> ImportedPropertyDefinitions for P {
+    type Error = properties::PropertiesErr;
+
+    async fn create_imported_definition(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        request: &CreatePropertyDefinitionRequest,
+    ) -> Result<PropertyDefinition, Self::Error> {
+        PropertiesService::create_property_definition(self, user, None, request).await
+    }
+
+    async fn list_imported_definitions(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PropertyDefinition>, Self::Error> {
+        PropertiesService::list_property_definitions(
+            self,
+            None,
+            Some(user),
+            true,
+            Some(EntityType::Document),
+        )
+        .await
+    }
+}
+
+async fn find_or_create_definition<P: ImportedPropertyDefinitions>(
+    properties: &P,
+    user: &MacroUserIdStr<'static>,
+    document_id: &str,
+    property: &ImportedDocumentProperty,
+    descriptor: &ImportedPropertyDescriptor,
+    definitions: &mut Vec<PropertyDefinition>,
+    system_definitions: &[PropertyDefinition],
+) -> Option<PropertyDefinition> {
+    if let Some(definition) = definitions
+        .iter()
+        .find(|definition| {
+            definition.display_name.eq_ignore_ascii_case(&property.name)
+                && descriptor.matches(definition)
+        })
+        .cloned()
+    {
+        return Some(definition);
+    }
+
+    if let Some(definition) = find_definition_by_name(definitions, &property.name) {
+        tracing::warn!(
+            document_id,
+            property = %property.name,
+            is_system = definition.is_system,
+            "skipping imported property whose existing Macro definition has a different type"
+        );
+        return None;
+    }
+
+    if let Some(definition) = find_definition_by_name(system_definitions, &property.name) {
+        tracing::warn!(
+            document_id,
+            property = %property.name,
+            property_definition_id = %definition.id,
+            "skipping imported property whose name is reserved by an inapplicable system property"
+        );
+        return None;
+    }
+
+    let request = CreatePropertyDefinitionRequest {
+        scope: CreatePropertyScope::User,
+        display_name: property.name.clone(),
+        data_type: descriptor.definition_type.clone(),
+    };
+    let definition = match properties.create_imported_definition(user, &request).await {
+        Ok(definition) => definition,
+        Err(error) => {
+            // Concurrent imports may race to create the same definition.
+            let recovered = properties
+                .list_imported_definitions(user)
+                .await
+                .ok()
+                .and_then(|definitions| {
+                    definitions.into_iter().find(|definition| {
+                        definition.display_name.eq_ignore_ascii_case(&property.name)
+                            && descriptor.matches(definition)
+                    })
+                });
+            let Some(definition) = recovered else {
+                tracing::warn!(
+                    document_id,
+                    property = %property.name,
+                    error = ?error,
+                    "failed to create imported document property"
+                );
+                return None;
+            };
+            definition
+        }
+    };
+    definitions.push(definition.clone());
+    Some(definition)
 }
 
 #[derive(Debug, Clone, PartialEq)]
