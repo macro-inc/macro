@@ -420,40 +420,99 @@ async fn find_or_create_definition<P: ImportedPropertyDefinitions>(
     definitions: &mut Vec<PropertyDefinition>,
     system_definitions: &[PropertyDefinition],
 ) -> Option<PropertyDefinition> {
+    match resolve_existing_definition(&property.name, descriptor, definitions, system_definitions) {
+        ExistingDefinitionResolution::Reuse(definition) => Some(definition),
+        ExistingDefinitionResolution::Create => {
+            create_or_recover_definition(
+                properties,
+                user,
+                document_id,
+                &property.name,
+                descriptor,
+                definitions,
+            )
+            .await
+        }
+        ExistingDefinitionResolution::Conflict(conflict) => {
+            log_definition_conflict(document_id, &property.name, conflict);
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+enum DefinitionConflict {
+    IncompatibleExisting { is_system: bool },
+    ReservedSystem { definition_id: Uuid },
+}
+
+#[derive(Debug)]
+enum ExistingDefinitionResolution {
+    Reuse(PropertyDefinition),
+    Create,
+    Conflict(DefinitionConflict),
+}
+
+fn resolve_existing_definition(
+    property_name: &str,
+    descriptor: &ImportedPropertyDescriptor,
+    definitions: &[PropertyDefinition],
+    system_definitions: &[PropertyDefinition],
+) -> ExistingDefinitionResolution {
     if let Some(definition) = definitions
         .iter()
         .find(|definition| {
-            definition.display_name.eq_ignore_ascii_case(&property.name)
+            definition.display_name.eq_ignore_ascii_case(property_name)
                 && descriptor.matches(definition)
         })
         .cloned()
     {
-        return Some(definition);
+        return ExistingDefinitionResolution::Reuse(definition);
     }
 
-    if let Some(definition) = find_definition_by_name(definitions, &property.name) {
-        tracing::warn!(
+    if let Some(definition) = find_definition_by_name(definitions, property_name) {
+        return ExistingDefinitionResolution::Conflict(DefinitionConflict::IncompatibleExisting {
+            is_system: definition.is_system,
+        });
+    }
+
+    if let Some(definition) = find_definition_by_name(system_definitions, property_name) {
+        return ExistingDefinitionResolution::Conflict(DefinitionConflict::ReservedSystem {
+            definition_id: definition.id,
+        });
+    }
+
+    ExistingDefinitionResolution::Create
+}
+
+fn log_definition_conflict(document_id: &str, property_name: &str, conflict: DefinitionConflict) {
+    match conflict {
+        DefinitionConflict::IncompatibleExisting { is_system } => tracing::warn!(
             document_id,
-            property = %property.name,
-            is_system = definition.is_system,
+            property = %property_name,
+            is_system,
             "skipping imported property whose existing Macro definition has a different type"
-        );
-        return None;
-    }
-
-    if let Some(definition) = find_definition_by_name(system_definitions, &property.name) {
-        tracing::warn!(
+        ),
+        DefinitionConflict::ReservedSystem { definition_id } => tracing::warn!(
             document_id,
-            property = %property.name,
-            property_definition_id = %definition.id,
+            property = %property_name,
+            property_definition_id = %definition_id,
             "skipping imported property whose name is reserved by an inapplicable system property"
-        );
-        return None;
+        ),
     }
+}
 
+async fn create_or_recover_definition<P: ImportedPropertyDefinitions>(
+    properties: &P,
+    user: &MacroUserIdStr<'static>,
+    document_id: &str,
+    property_name: &str,
+    descriptor: &ImportedPropertyDescriptor,
+    definitions: &mut Vec<PropertyDefinition>,
+) -> Option<PropertyDefinition> {
     let request = CreatePropertyDefinitionRequest {
         scope: CreatePropertyScope::User,
-        display_name: property.name.clone(),
+        display_name: property_name.to_string(),
         data_type: descriptor.definition_type.clone(),
     };
     let definition = match properties.create_imported_definition(user, &request).await {
@@ -466,14 +525,14 @@ async fn find_or_create_definition<P: ImportedPropertyDefinitions>(
                 .ok()
                 .and_then(|definitions| {
                     definitions.into_iter().find(|definition| {
-                        definition.display_name.eq_ignore_ascii_case(&property.name)
+                        definition.display_name.eq_ignore_ascii_case(property_name)
                             && descriptor.matches(definition)
                     })
                 });
             let Some(definition) = recovered else {
                 tracing::warn!(
                     document_id,
-                    property = %property.name,
+                    property = %property_name,
                     error = ?error,
                     "failed to create imported document property"
                 );

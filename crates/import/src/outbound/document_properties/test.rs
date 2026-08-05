@@ -33,40 +33,37 @@ fn descriptor_uses_declared_source_cardinality() {
     );
 }
 
-#[tokio::test]
-async fn resolver_prefers_compatible_system_definition_after_incompatible_custom_definition() {
+#[test]
+fn resolver_prefers_compatible_system_definition_after_incompatible_custom_definition() {
     let mut incompatible_custom = system_definition();
     incompatible_custom.id = Uuid::from_u128(1);
     incompatible_custom.owner = PropertyOwner::User {
-        user_id: user().to_string(),
+        user_id: "macro|import-test@example.com".to_string(),
     };
     incompatible_custom.data_type = DataType::String;
     incompatible_custom.is_system = false;
 
     let compatible_system = system_definition();
-    let mut definitions = vec![incompatible_custom, compatible_system.clone()];
+    let definitions = vec![incompatible_custom, compatible_system.clone()];
     let property = select_property();
     let descriptor = ImportedPropertyDescriptor::of(&property.value);
 
-    let resolved = find_or_create_definition(
-        &TestPropertiesService,
-        &user(),
-        "document-id",
-        &property,
+    let resolution = resolve_existing_definition(
+        &property.name,
         &descriptor,
-        &mut definitions,
+        &definitions,
         std::slice::from_ref(&compatible_system),
-    )
-    .await
-    .expect("compatible system definition should be reused");
+    );
+    let ExistingDefinitionResolution::Reuse(resolved) = resolution else {
+        panic!("compatible system definition should be reused");
+    };
 
     assert_eq!(resolved.id, compatible_system.id);
     assert!(resolved.is_system);
-    assert_eq!(definitions.len(), 2);
 }
 
-#[tokio::test]
-async fn resolver_rejects_incompatible_reserved_system_definition_without_creating() {
+#[test]
+fn resolver_rejects_incompatible_reserved_system_definition() {
     let system_definition = system_definition();
     let property = ImportedDocumentProperty {
         name: "status".to_string(),
@@ -75,47 +72,36 @@ async fn resolver_rejects_incompatible_reserved_system_definition_without_creati
         },
     };
     let descriptor = ImportedPropertyDescriptor::of(&property.value);
-    let mut definitions = Vec::new();
 
-    let resolved = find_or_create_definition(
-        &TestPropertiesService,
-        &user(),
-        "document-id",
-        &property,
+    let resolution = resolve_existing_definition(
+        &property.name,
         &descriptor,
-        &mut definitions,
+        &[],
         std::slice::from_ref(&system_definition),
-    )
-    .await;
+    );
 
-    assert!(resolved.is_none());
-    assert!(definitions.is_empty());
+    assert!(matches!(
+        resolution,
+        ExistingDefinitionResolution::Conflict(DefinitionConflict::ReservedSystem {
+            definition_id
+        })
+            if definition_id == system_definition.id
+    ));
 }
 
-struct TestPropertiesService;
+#[test]
+fn resolver_allows_creation_for_unreserved_name() {
+    let property = ImportedDocumentProperty {
+        name: "Priority".to_string(),
+        value: ImportedDocumentPropertyValue::String {
+            value: "High".to_string(),
+        },
+    };
+    let descriptor = ImportedPropertyDescriptor::of(&property.value);
 
-#[async_trait::async_trait]
-impl ImportedPropertyDefinitions for TestPropertiesService {
-    type Error = std::convert::Infallible;
+    let resolution = resolve_existing_definition(&property.name, &descriptor, &[], &[]);
 
-    async fn create_imported_definition(
-        &self,
-        _user: &MacroUserIdStr<'_>,
-        _request: &CreatePropertyDefinitionRequest,
-    ) -> Result<PropertyDefinition, Self::Error> {
-        panic!("resolver should not create a property definition")
-    }
-
-    async fn list_imported_definitions(
-        &self,
-        _user: &MacroUserIdStr<'_>,
-    ) -> Result<Vec<PropertyDefinition>, Self::Error> {
-        panic!("resolver should not reload property definitions")
-    }
-}
-
-fn user() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str("macro|import-test@example.com").expect("valid user id")
+    assert!(matches!(resolution, ExistingDefinitionResolution::Create));
 }
 
 fn select_property() -> ImportedDocumentProperty {
