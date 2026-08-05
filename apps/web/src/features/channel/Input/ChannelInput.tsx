@@ -30,9 +30,11 @@ import {
   type Accessor,
   createSignal,
   type JSX,
+  lazy,
   Match,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { isMacroAiId, macroAiMentionUser } from '../macroAi';
@@ -45,7 +47,7 @@ import { createTypingTracker } from './create-typing-tracker';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
 import { createMentionsTracker } from './mentions-tracker';
-import { TaskComposer, type TaskComposerSendPayload } from './TaskComposer';
+import type { TaskComposerSendPayload } from './TaskComposer';
 import { TaskModeSwitch } from './TaskModeSwitch';
 import type {
   EntityMentionInsertCoordinates,
@@ -64,6 +66,15 @@ import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import type { InputTaskPersistence } from './utils/persistence';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
+
+// Keep the task/property/entity-heavy composer out of ChannelInput's eager
+// module graph. ChannelInput is also pulled into StaticMarkdown through thread
+// rendering, so importing TaskComposer eagerly creates an @entity cycle.
+const TaskComposer = lazy(() =>
+  import('./TaskComposer').then((module) => ({
+    default: module.TaskComposer,
+  }))
+);
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -631,22 +642,24 @@ export function ChannelInput(props: ChannelInputProps) {
                 )}
                 data-input-face="task"
               >
-                <TaskComposer
-                  active={isTaskMode()}
-                  autofocus={
-                    taskModeRestored
-                      ? !isMobile() && (props.autofocus ?? true)
-                      : true
-                  }
-                  draftPersistenceKey={props.taskPersistence?.draftKey}
-                  modeSwitch={
-                    <TaskModeSwitch
-                      checked={true}
-                      onChange={() => setTaskMode(false)}
-                    />
-                  }
-                  onSend={onTaskComposerSend}
-                />
+                <Suspense>
+                  <TaskComposer
+                    active={isTaskMode()}
+                    autofocus={
+                      taskModeRestored
+                        ? !isMobile() && (props.autofocus ?? true)
+                        : true
+                    }
+                    draftPersistenceKey={props.taskPersistence?.draftKey}
+                    modeSwitch={
+                      <TaskModeSwitch
+                        checked={true}
+                        onChange={() => setTaskMode(false)}
+                      />
+                    }
+                    onSend={onTaskComposerSend}
+                  />
+                </Suspense>
               </div>
             </Show>
           </div>
