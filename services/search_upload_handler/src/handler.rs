@@ -32,7 +32,10 @@ pub async fn handler(
         }
     };
 
-    if document_key.is_temp() || document_key.is_bom_part() {
+    if document_key.is_temp()
+        || document_key.is_bom_part()
+        || document_key.is_sync_service_snapshot()
+    {
         tracing::trace!("skipping non-document key");
         return Ok(());
     }
