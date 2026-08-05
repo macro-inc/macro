@@ -276,6 +276,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
+  hideMenuOnEscape?: boolean;
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -573,6 +574,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const onInputChange = (next: string) => {
     setInputValue(next);
+    if (next.length > 0) {
+      setIsOpen(true);
+    }
 
     // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
     // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
@@ -779,6 +783,17 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
+                      if (
+                        e.key === 'Escape' &&
+                        props.hideMenuOnEscape &&
+                        context.isOpen()
+                      ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(false);
+                        return;
+                      }
+
                       if (e.key === 'Tab' && context.isOpen()) {
                         e.preventDefault();
                         e.stopPropagation();

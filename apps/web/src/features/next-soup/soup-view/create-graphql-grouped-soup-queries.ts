@@ -102,7 +102,7 @@ function groupPage(
   };
 }
 
-/** Creates live initial and continuation GroupSoup observers for visible bins. */
+/** Derives initial bins from the live parent and observes loaded continuations. */
 export function createGraphqlGroupedSoupQueries(
   args: CreateGraphqlGroupedSoupQueriesArgs
 ): {
@@ -167,49 +167,105 @@ export function createGraphqlGroupedSoupQueries(
       const getConfig = createMemo(
         () => configs().find((config) => config.key === key) ?? initialConfig
       );
+      const [continuationRevision, setContinuationRevision] = createSignal(0);
+      const [isFetchingFirstPage, setIsFetchingFirstPage] = createSignal(false);
 
-      const query = createUrqlInfiniteQuery<
-        GroupSoupQuery,
-        GroupSoupQueryVariables,
-        string | null,
-        GroupQueryData
-      >(() => {
-        const config = getConfig();
-        return {
-          query: GroupSoupDocument,
-          client: getGraphqlSoupClient(),
-          initialPageParam: null,
-          variables: (cursor) => {
-            if (cursor === null) return { input: config.initialInput };
-            const input = makeGraphqlGroupedSoupContinuationInput({
-              groupBy: config.field,
-              groupKey: config.key,
-              cursor,
-            });
-            registerGroupedSoupContinuation(config.initialInput, input);
-            return { input };
-          },
-          getNextPageParam: (lastPage) =>
-            groupPage(lastPage, config.group)?.group.nextCursor,
-          select: ({ pages }) => ({
-            entities: pages.flatMap((page) => {
-              const selected = groupPage(page, config.group);
-              return selected
-                ? mapItems(
-                    selected.items,
-                    selected.group.itemIds,
-                    config.itemFilter
-                  )
-                : [];
-            }),
-          }),
-          enabled: config.enabled,
-          requestPolicy: 'cache-first',
-          keepPreviousData: false,
-        };
-      });
+      const createContinuationQuery = (firstCursor: string) => {
+        let continuationDispose: (() => void) | undefined;
 
-      const initialData = (): GroupQueryData | undefined => {
+        return createRoot((continuationRootDispose) => {
+          continuationDispose = continuationRootDispose;
+          const [activated, setActivated] = createSignal(false);
+          let initialPageDidSettle = false;
+          let settleInitialPage = () => undefined;
+          const initialPageSettled = new Promise<void>((resolve) => {
+            settleInitialPage = () => {
+              if (initialPageDidSettle) return;
+              initialPageDidSettle = true;
+              resolve();
+            };
+          });
+
+          const query = createUrqlInfiniteQuery<
+            GroupSoupQuery,
+            GroupSoupQueryVariables,
+            string,
+            GroupQueryData
+          >(() => {
+            const config = getConfig();
+            return {
+              query: GroupSoupDocument,
+              client: getGraphqlSoupClient(),
+              initialPageParam: firstCursor,
+              variables: (cursor) => {
+                const input = makeGraphqlGroupedSoupContinuationInput({
+                  groupBy: config.field,
+                  groupKey: config.key,
+                  cursor,
+                });
+                registerGroupedSoupContinuation(config.initialInput, input);
+                return { input };
+              },
+              getNextPageParam: (lastPage) =>
+                groupPage(lastPage, config.group)?.group.nextCursor,
+              select: ({ pages }) => ({
+                entities: pages.flatMap((page) => {
+                  const selected = groupPage(page, config.group);
+                  return selected
+                    ? mapItems(
+                        selected.items,
+                        selected.group.itemIds,
+                        config.itemFilter
+                      )
+                    : [];
+                }),
+              }),
+              enabled: activated() && config.enabled,
+              requestPolicy: 'cache-first',
+              keepPreviousData: false,
+            };
+          });
+
+          createComputed(() => {
+            if (!activated()) return;
+            if (
+              !getConfig().enabled ||
+              (query.isFetched && !query.isFetching)
+            ) {
+              settleInitialPage();
+            }
+          });
+          onCleanup(settleInitialPage);
+
+          return {
+            firstCursor,
+            query,
+            activate: () => {
+              setActivated(true);
+              return initialPageSettled;
+            },
+            dispose: () => continuationDispose?.(),
+          };
+        });
+      };
+
+      let continuation: ReturnType<typeof createContinuationQuery> | undefined;
+      let firstPagePromise: Promise<void> | undefined;
+
+      const getContinuation = () => {
+        continuationRevision();
+        return continuation;
+      };
+
+      const disposeContinuation = () => {
+        continuation?.dispose();
+        continuation = undefined;
+        firstPagePromise = undefined;
+        setIsFetchingFirstPage(false);
+        setContinuationRevision((value) => value + 1);
+      };
+
+      const initialData = createMemo<GroupQueryData | undefined>(() => {
         const config = getConfig();
         const initialPage = args.initialPage();
         if (!initialPage) return;
@@ -224,21 +280,79 @@ export function createGraphqlGroupedSoupQueries(
             config.itemFilter
           ),
         };
+      });
+
+      const data = createMemo<GroupQueryData | undefined>(() => {
+        const initial = initialData();
+        if (!initial) return;
+        const continued = getContinuation()?.query.data;
+        if (!continued) return initial;
+        return { entities: [...initial.entities, ...continued.entities] };
+      });
+
+      const trackFirstPage = (action: Promise<unknown>): Promise<void> => {
+        setIsFetchingFirstPage(true);
+        const tracked = action
+          .then(() => undefined)
+          .finally(() => {
+            if (firstPagePromise !== tracked) return;
+            firstPagePromise = undefined;
+            setIsFetchingFirstPage(false);
+          });
+        firstPagePromise = tracked;
+        return tracked;
       };
+
+      const startContinuation = async (cursor: string): Promise<void> => {
+        continuation = createContinuationQuery(cursor);
+        setContinuationRevision((value) => value + 1);
+        await trackFirstPage(continuation.activate());
+      };
+
+      const fetchNextPage = async (): Promise<void> => {
+        const config = getConfig();
+        if (!config.enabled) return;
+        if (firstPagePromise) return firstPagePromise;
+
+        let current = getContinuation();
+        if (!current) {
+          const cursor = config.group.nextCursor;
+          if (cursor === null) return;
+          await startContinuation(cursor);
+          return;
+        }
+
+        if (current.query.data === undefined) {
+          const cursor = getConfig().group.nextCursor;
+          if (cursor === null) return;
+          if (cursor !== current.firstCursor) {
+            disposeContinuation();
+            await startContinuation(cursor);
+            return;
+          }
+          await trackFirstPage(current.query.refetch());
+          return;
+        }
+
+        await current.query.fetchNextPage();
+      };
+
+      onCleanup(disposeContinuation);
 
       return {
         key,
-        data: () => query.data ?? initialData(),
-        hasNextPage: () =>
-          query.data === undefined
-            ? (getConfig().group.nextCursor ?? null) !== null
-            : query.hasNextPage,
-        isFetchingNextPage: () => query.isFetchingNextPage,
-        fetchNextPage: async () => {
-          if (query.data === undefined) await query.refetch();
-          await query.fetchNextPage();
+        data,
+        hasNextPage: () => {
+          const current = getContinuation();
+          return current?.query.data === undefined
+            ? getConfig().group.nextCursor !== null
+            : current.query.hasNextPage;
         },
-        resetToInitialPage: query.resetToInitialPage,
+        isFetchingNextPage: () =>
+          isFetchingFirstPage() ||
+          (getContinuation()?.query.isFetchingNextPage ?? false),
+        fetchNextPage,
+        resetToInitialPage: disposeContinuation,
       };
     });
 

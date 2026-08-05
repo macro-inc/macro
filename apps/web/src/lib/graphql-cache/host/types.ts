@@ -7,6 +7,7 @@
 
 import type {
   CachedQueryInstanceWire,
+  CacheReadPriority,
   ClaimedMutation,
   MutationClaim,
   MutationSettlement,
@@ -25,6 +26,8 @@ export interface CacheReadArgs {
   query: string;
   operationName?: string;
   variables?: Record<string, unknown>;
+  /** Prioritizes a pushed, user-visible refresh over incidental reads. */
+  priority?: CacheReadPriority;
 }
 
 export interface InspectQueryArgs {
@@ -34,7 +37,7 @@ export interface InspectQueryArgs {
   path: Array<{ field: string }>;
 }
 
-export interface CacheWriteArgs extends CacheReadArgs {
+export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;

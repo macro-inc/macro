@@ -1,6 +1,6 @@
 use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
-    ATTACHMENT_WHITELISTED_DOMAINS,
+    ATTACHMENT_WHITELISTED_DOMAINS, DOCUMENT_MIME_TYPES, OCTET_STREAM_DOCUMENT_EXTENSIONS,
 };
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
@@ -220,6 +220,52 @@ pub async fn fetch_job_attachments_for_backfill(
     Ok(attachments)
 }
 
+async fn message_has_unclaimed_document_attachment(
+    db: &Pool<Postgres>,
+    link_id: Uuid,
+    message_provider_id: &str,
+) -> anyhow::Result<bool> {
+    let document_mime_types = DOCUMENT_MIME_TYPES
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+    let octet_stream_document_extensions = OCTET_STREAM_DOCUMENT_EXTENSIONS
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+
+    let has_candidate = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM email_attachments a
+            JOIN email_messages m ON a.message_id = m.id
+            LEFT JOIN document_email de ON de.email_attachment_id = a.id
+            WHERE m.link_id = $2
+                AND m.provider_id = $1
+                AND de.email_attachment_id IS NULL
+                AND a.upload_claimed_at IS NULL
+                AND a.filename IS NOT NULL
+                AND (
+                    a.mime_type = ANY($3::text[])
+                    OR (
+                        a.mime_type = 'application/octet-stream'
+                        AND UPPER(SUBSTRING(a.filename FROM '\.([^.]+)$')) = ANY($4::text[])
+                    )
+                )
+        ) AS "has_candidate!"
+        "#,
+        message_provider_id,
+        link_id,
+        document_mime_types.as_slice(),
+        octet_stream_document_extensions.as_slice(),
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(has_candidate)
+}
+
 /// Fetch and atomically claim attachments for a specific message to upload to Macro.
 /// This is called when a new email is inserted for a user. Attachments for the message
 /// should be uploaded if any message in the message's thread meets any of the following criteria:
@@ -243,6 +289,10 @@ pub async fn new_email_document_atts(
     link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+    if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
+        return Ok(Vec::new());
+    }
+
     // query for conditions 1-4: claim attachments atomically and return metadata
     let query1 = format!(
         r#"

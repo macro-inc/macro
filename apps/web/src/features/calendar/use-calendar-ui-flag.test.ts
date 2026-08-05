@@ -21,24 +21,38 @@ vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_CALENDAR_UI_OVERRIDE: undefined,
   ENABLE_CALENDAR_PROMPT_MOBILE_FLAG: 'enable-calendar-prompt-mobile',
   ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE: undefined,
+  ENABLE_CALENDAR_PROMPT_WEB_FLAG: 'enable-calendar-prompt-web',
+  ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE: undefined,
 }));
 
 import { useCalendarPromptAllowed } from './use-calendar-ui-flag';
 
 describe('useCalendarPromptAllowed', () => {
-  function allowed(state: { mobile: boolean; mobileFlag?: boolean }): boolean {
+  function allowed(state: {
+    mobile: boolean;
+    mobileFlag?: boolean;
+    webFlag?: boolean;
+  }): boolean {
     mocks.mobile = state.mobile;
-    mocks.flags = { 'enable-calendar-prompt-mobile': !!state.mobileFlag };
+    mocks.flags = {
+      'enable-calendar-prompt-mobile': !!state.mobileFlag,
+      'enable-calendar-prompt-web': !!state.webFlag,
+    };
     return useCalendarPromptAllowed()();
   }
 
-  it('allows the prompt on desktop regardless of the mobile flag', () => {
-    expect(allowed({ mobile: false })).toBe(true);
-    expect(allowed({ mobile: false, mobileFlag: true })).toBe(true);
+  it('suppresses the prompt on desktop while the web flag is off', () => {
+    expect(allowed({ mobile: false })).toBe(false);
+    expect(allowed({ mobile: false, mobileFlag: true })).toBe(false);
+  });
+
+  it('allows the prompt on desktop once the web flag is turned on', () => {
+    expect(allowed({ mobile: false, webFlag: true })).toBe(true);
   });
 
   it('suppresses the prompt on mobile while the flag is off', () => {
     expect(allowed({ mobile: true })).toBe(false);
+    expect(allowed({ mobile: true, webFlag: true })).toBe(false);
   });
 
   it('allows the prompt on mobile once the flag is turned on', () => {

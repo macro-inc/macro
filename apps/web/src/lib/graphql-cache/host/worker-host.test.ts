@@ -77,6 +77,52 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('forwards user-visible read priority to the worker', async () => {
+    const requests: Array<{ id?: number; kind: string; priority?: string }> =
+      [];
+    class FakeSharedWorker {
+      port = {
+        onmessage: null as ((event: MessageEvent) => void) | null,
+        start() {},
+        close() {},
+        postMessage: (request: {
+          id?: number;
+          kind: string;
+          priority?: string;
+        }) => {
+          requests.push(request);
+          if (request.id === undefined) return;
+          queueMicrotask(() => {
+            this.port.onmessage?.({
+              data: {
+                id: request.id,
+                ok: true,
+                result:
+                  request.kind === 'read'
+                    ? { kind: 'hit', data: { soup: true } }
+                    : null,
+              },
+            } as MessageEvent);
+          });
+        },
+      };
+    }
+    vi.stubGlobal('SharedWorker', FakeSharedWorker);
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+
+    await expect(
+      host.readQuery({
+        opKey: 7,
+        query: 'query GroupSoup { groupSoup }',
+        priority: 'user-visible',
+      })
+    ).resolves.toEqual({ kind: 'hit', data: { soup: true } });
+    expect(requests).toContainEqual(
+      expect.objectContaining({ kind: 'read', priority: 'user-visible' })
+    );
+    host.dispose();
+  });
+
   it('delivers queued mutation settlements pushed by the worker', async () => {
     let push: (message: unknown) => void = () => {
       throw new Error('worker not initialized');

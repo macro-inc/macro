@@ -4,6 +4,10 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
+  TaskModeChannelInput,
+  type TaskModeChannelInputProps,
+} from '@channel/Input/TaskModeChannelInput';
+import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
   makeTaskPersistence,
@@ -77,7 +81,6 @@ import {
   Switch,
 } from 'solid-js';
 import {
-  ChannelInput,
   createInputAttachmentTracker,
   type InputHandle,
   type InputSnapshot,
@@ -618,7 +621,7 @@ export function Channel(props: ChannelProps) {
 
   // Task mode: post the freshly created task into the channel as a message
   // carrying a task mention.
-  const onSendTask: ChannelInputProps['onSendTask'] = (task) => {
+  const onSendTask: TaskModeChannelInputProps['onSendTask'] = (task) => {
     const senderId = userId();
     if (!senderId) return;
     sendMessageMutation.mutate(
@@ -895,7 +898,7 @@ export function Channel(props: ChannelProps) {
                         )}
                       </Match>
                       <Match when={true}>
-                        <ChannelInput
+                        <TaskModeChannelInput
                           autofocus={props.autofocus}
                           collapsible
                           input={{

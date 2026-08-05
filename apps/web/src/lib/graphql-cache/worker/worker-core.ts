@@ -19,12 +19,68 @@ type PortLike = {
   postMessage(msg: unknown): void;
 };
 
+type RequestWaiter = {
+  resolve: (value: unknown) => void;
+  reject: (error: unknown) => void;
+};
+
+type QueuedEngineRequest = {
+  request: CacheRequest;
+  priority: number;
+  readSignature?: string;
+  waiters: RequestWaiter[];
+};
+
+const NORMAL_READ_PRIORITY = 0;
+const USER_VISIBLE_READ_PRIORITY = 1;
+const CACHE_WRITE_PRIORITY = 2;
+
+/** Reads may reorder while they overlap, but never across lifecycle barriers. */
+function isOrderingBarrier(request: CacheRequest): boolean {
+  return (
+    request.kind === 'init' ||
+    request.kind === 'teardown' ||
+    request.kind === 'clear'
+  );
+}
+
+function requestPriority(request: CacheRequest): number {
+  if (request.kind === 'read') {
+    return request.priority === 'user-visible'
+      ? USER_VISIBLE_READ_PRIORITY
+      : NORMAL_READ_PRIORITY;
+  }
+  if (
+    request.kind === 'write' ||
+    request.kind === 'begin-optimistic-write' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'rollback-optimistic-write' ||
+    request.kind === 'invalidate' ||
+    request.kind === 'delete-records'
+  ) {
+    return CACHE_WRITE_PRIORITY;
+  }
+  return NORMAL_READ_PRIORITY;
+}
+
+/** Exact active-operation reads can share one denormalization/storage pass. */
+function readSignature(request: CacheRequest): string | undefined {
+  if (request.kind !== 'read' || request.opId === undefined) return;
+  return JSON.stringify([
+    request.opId,
+    request.query,
+    request.operationName ?? null,
+    request.variables ?? null,
+  ]);
+}
+
 export class CacheWorkerCore {
   private engine: CacheEngine | undefined;
   private initPromise: Promise<void> | undefined;
   private scope: string | undefined;
-  /** Serializes engine calls (defense in depth; the engine also locks). */
-  private queue: Promise<unknown> = Promise.resolve();
+  /** Serializes engine calls while allowing safe read prioritization. */
+  private readonly queue: QueuedEngineRequest[] = [];
+  private running = false;
   private readonly ports = new Set<PortLike>();
 
   addPort(port: PortLike): void {
@@ -38,7 +94,7 @@ export class CacheWorkerCore {
   async handleRequest(port: PortLike, request: CacheRequest): Promise<void> {
     const respond = (response: CacheResponse) => port.postMessage(response);
     try {
-      const result = await this.enqueue(() => this.dispatch(request));
+      const result = await this.enqueue(request);
       respond({ id: request.id, ok: true, result });
     } catch (error) {
       respond({
@@ -49,10 +105,83 @@ export class CacheWorkerCore {
     }
   }
 
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(task, task);
-    this.queue = next.catch(() => undefined);
-    return next;
+  private enqueue(request: CacheRequest): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const priority = requestPriority(request);
+      const signature = readSignature(request);
+
+      // Coalesce only within the current lifecycle segment. In particular, a
+      // remount after teardown must perform a fresh read to re-register deps.
+      if (signature !== undefined) {
+        let segmentStart = 0;
+        for (let i = this.queue.length - 1; i >= 0; i -= 1) {
+          const queued = this.queue[i];
+          if (queued && isOrderingBarrier(queued.request)) {
+            segmentStart = i + 1;
+            break;
+          }
+        }
+        const duplicate = this.queue
+          .slice(segmentStart)
+          .find((queued) => queued.readSignature === signature);
+        if (duplicate) {
+          duplicate.priority = Math.max(duplicate.priority, priority);
+          duplicate.waiters.push({ resolve, reject });
+          this.drain();
+          return;
+        }
+      }
+
+      this.queue.push({
+        request,
+        priority,
+        readSignature: signature,
+        waiters: [{ resolve, reject }],
+      });
+      this.drain();
+    });
+  }
+
+  /**
+   * Runs the highest-priority request before the next lifecycle barrier.
+   * Cache-view writes retain FIFO order with each other; overlapping reads
+   * may observe the newer state, which is linearizable and avoids stale work.
+   */
+  private drain(): void {
+    if (this.running || this.queue.length === 0) return;
+
+    let segmentEnd = this.queue.findIndex((queued) =>
+      isOrderingBarrier(queued.request)
+    );
+    if (segmentEnd === -1) segmentEnd = this.queue.length;
+
+    let index = 0;
+    if (segmentEnd > 0) {
+      for (let i = 1; i < segmentEnd; i += 1) {
+        const candidate = this.queue[i];
+        const selected = this.queue[index];
+        if (candidate && selected && candidate.priority > selected.priority) {
+          index = i;
+        }
+      }
+    }
+
+    const [queued] = this.queue.splice(index, 1);
+    if (!queued) return;
+    this.running = true;
+    void this.dispatch(queued.request)
+      .then(
+        (result) => {
+          for (const waiter of queued.waiters) waiter.resolve(result);
+        },
+        (error) => {
+          for (const waiter of queued.waiters) waiter.reject(error);
+        }
+      )
+      .finally(() => {
+        this.running = false;
+        this.drain();
+      });
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {

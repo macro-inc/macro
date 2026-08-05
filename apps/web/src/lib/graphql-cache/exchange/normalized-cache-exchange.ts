@@ -71,6 +71,8 @@ import {
  * carries its own transaction.
  */
 const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
+/** Marks dependency-pushed reads as latency-sensitive worker work. */
+const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
@@ -319,6 +321,7 @@ export function normalizedCacheExchange(
           makeOperation(op.kind, op, {
             ...op.context,
             requestPolicy: 'cache-first',
+            [AFFECTED_READ_CONTEXT_KEY]: true,
           })
         );
       }
@@ -489,6 +492,10 @@ export function normalizedCacheExchange(
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
+            priority:
+              op.context[AFFECTED_READ_CONTEXT_KEY] === true
+                ? 'user-visible'
+                : undefined,
           });
           if (read.kind === 'hit') {
             const stale = policy === 'cache-and-network';

@@ -17,6 +17,9 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email_db_client::attachments::provider::upload_filters::{
+    attachment_is_document, attachment_is_media,
+};
 use email_db_client::threads;
 use email_utils::dedupe_emails;
 use filter_ast::Expr;
@@ -31,7 +34,9 @@ use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
+use models_email::service::attachment::{
+    Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
+};
 use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use notification::domain::models::SendNotificationRequestBuilder;
@@ -116,7 +121,7 @@ pub async fn upsert_message(
     let calendar_payload = message_resource.payload.clone();
 
     // Map Gmail resource to service model (IDs are generated in the parse function)
-    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
+    let mut message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
         ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::GmailApiFailed,
             source: e.context("Failed to map message resource to service".to_string()),
@@ -229,7 +234,7 @@ pub async fn upsert_message(
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
     if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
-        process_and_insert_message(ctx, link.id, *thread_db_id, message)
+        process_and_insert_message(ctx, link.id, *thread_db_id, &mut message)
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
@@ -354,7 +359,7 @@ pub async fn upsert_message(
         &gmail_access_token,
         link,
         payload,
-        message_attachment_count,
+        &message.attachments,
     )
     .await?;
 
@@ -399,30 +404,50 @@ pub async fn upsert_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, gmail_access_token))]
+#[tracing::instrument(skip(ctx, gmail_access_token, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
     gmail_access_token: &str,
     link: &link::Link,
     payload: &UpsertMessagePayload,
-    message_attachment_count: usize,
+    attachments: &[Attachment],
 ) -> result::Result<(), ProcessingError> {
-    if cfg!(not(feature = "attachment_upload")) || message_attachment_count == 0 {
+    if cfg!(not(feature = "attachment_upload")) {
+        return Ok(());
+    }
+
+    // Keep this parsed-attachment gate at least as permissive as the database claim filters.
+    let eligibility = attachment_upload_eligibility(attachments);
+    if !eligibility.documents && !eligibility.media {
         return Ok(());
     }
 
     // upload attachments to Macro
     let (document_atts, media_atts) = tokio::try_join!(
-        email_db_client::attachments::provider::upload::new_email_document_atts(
-            &ctx.db,
-            link.id,
-            &payload.provider_message_id,
-        ),
-        email_db_client::attachments::provider::upload::new_email_media_atts(
-            &ctx.db,
-            link.id,
-            &payload.provider_message_id,
-        )
+        async {
+            if eligibility.documents {
+                email_db_client::attachments::provider::upload::new_email_document_atts(
+                    &ctx.db,
+                    link.id,
+                    &payload.provider_message_id,
+                )
+                .await
+            } else {
+                Ok(Vec::<AttachmentUploadMetadata>::new())
+            }
+        },
+        async {
+            if eligibility.media {
+                email_db_client::attachments::provider::upload::new_email_media_atts(
+                    &ctx.db,
+                    link.id,
+                    &payload.provider_message_id,
+                )
+                .await
+            } else {
+                Ok(Vec::<AttachmentUploadMetadata>::new())
+            }
+        }
     )
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
@@ -498,6 +523,27 @@ async fn handle_attachment_upload(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AttachmentUploadEligibility {
+    documents: bool,
+    media: bool,
+}
+
+fn attachment_upload_eligibility(attachments: &[Attachment]) -> AttachmentUploadEligibility {
+    let mut eligibility = AttachmentUploadEligibility::default();
+
+    for attachment in attachments {
+        let Some(mime_type) = attachment.mime_type.as_deref() else {
+            continue;
+        };
+
+        eligibility.documents |= attachment_is_document(mime_type, attachment.filename.as_deref());
+        eligibility.media |= attachment_is_media(mime_type);
+    }
+
+    eligibility
 }
 
 #[tracing::instrument(skip(ctx, link, recipient_emails, sender_email))]
@@ -619,14 +665,14 @@ async fn process_and_insert_message(
     ctx: &PubSubContext,
     link_id: Uuid,
     thread_db_id: Uuid,
-    mut message: Message,
+    message: &mut Message,
 ) -> anyhow::Result<()> {
-    process_message_pre_insert(&mut message).await;
+    process_message_pre_insert(message).await;
 
     email_db_client::messages::insert::insert_message(
         &ctx.db,
         thread_db_id,
-        &mut message,
+        message,
         link_id,
         true,
     )

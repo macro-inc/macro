@@ -576,3 +576,23 @@ export const ENABLE_CALENDAR_PROMPT_MOBILE_FLAG =
 export const ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_CALENDAR_PROMPT_MOBILE'
 );
+
+// The "Enable calendar" prompt on desktop/web, the counterpart to
+// `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
+// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
+// "Enable calendar" button, so nothing becomes unreachable while this is off.
+// Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
+export const ENABLE_CALENDAR_PROMPT_WEB_FLAG = 'enable-calendar-prompt-web';
+export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_CALENDAR_PROMPT_WEB'
+);
+
+// Sharing a personal tag with the team: the "Share with team" action on
+// personal tags in Settings › Tags, and the prompt that merges into an
+// existing team label when the names collide. The backend endpoints ship
+// ungated, so flipping this off only hides the entry point. PostHog-gated
+// with a dev-mode default; override with VITE_ENABLE_TAG_TEAM_SHARING.
+export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
+export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
+  (DEV_MODE_ENV ? true : undefined);
