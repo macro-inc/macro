@@ -404,7 +404,7 @@ pub async fn upsert_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, gmail_access_token, attachments))]
+#[tracing::instrument(skip(ctx, gmail_access_token, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
     gmail_access_token: &str,
