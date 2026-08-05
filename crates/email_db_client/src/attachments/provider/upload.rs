@@ -58,9 +58,8 @@ pub async fn thread_document_atts_for_backfill(
                         OR (
                             -- condition 3
                             c.email_address IS NOT NULL
-                            AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
-                                LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
-                            RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
+                            AND LOWER(SPLIT_PART(c.email_address, '@', 2)) =
+                                LOWER(SPLIT_PART(link.email_address, '@', 2))
                         )
                         -- whitelisted domain check injected below
                         {}
@@ -324,9 +323,8 @@ pub async fn new_email_document_atts(
                                 OR l.name = 'IMPORTANT'
                                 OR (
                                     c.email_address IS NOT NULL
-                                    AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
-                                        LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
-                                    RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
+                                    AND LOWER(SPLIT_PART(c.email_address, '@', 2)) =
+                                        LOWER(SPLIT_PART(link.email_address, '@', 2))
                                 )
                                 {}
                             )

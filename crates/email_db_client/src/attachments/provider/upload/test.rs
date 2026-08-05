@@ -72,6 +72,48 @@ async fn thread_attachments_for_backfill_condition_3(pool: Pool<Postgres>) -> Re
         scripts("fetch_thread_attachments_for_backfill")
     )
 )]
+async fn thread_attachments_for_backfill_rejects_domain_suffix(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000106")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
+async fn thread_attachments_for_backfill_matches_domain_case_insensitively(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000107")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(
+        res[0].filename,
+        Some("mixed_case_domain_doc.pdf".to_string())
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
 // should return empty when no messages match any condition
 async fn thread_attachments_for_backfill_no_matching_messages(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
@@ -221,6 +263,56 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
     assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-301");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_rejects_domain_suffix(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-901",
+    )
+    .await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_matches_domain_case_insensitively(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-1001",
+    )
+    .await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(
+        res[0].filename,
+        Some("mixed_case_domain_doc.pdf".to_string())
+    );
 
     Ok(())
 }
