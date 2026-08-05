@@ -227,6 +227,35 @@ describe('createSoupState', () => {
         dispose();
       });
     });
+
+    it('preserves focus on the same duplicate row after reconciliation', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+        const entity = createTestEntity('duplicate');
+        const groups = [
+          createTestGroup('first', 1),
+          createTestGroup('second', 1),
+        ];
+        const buildRows = () =>
+          groups.map((group, index) =>
+            state.buildRow({
+              id: entity.id,
+              index,
+              original: entity,
+              group,
+            })
+          );
+
+        state.setRows(buildRows());
+        state.focus.setIndex(1);
+        state.setRows(buildRows());
+
+        expect(state.focus.index()).toBe(1);
+        expect(state.focus.row()?.group?.key).toBe('second');
+
+        dispose();
+      });
+    });
   });
 
   describe('items', () => {

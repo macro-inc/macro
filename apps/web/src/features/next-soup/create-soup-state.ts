@@ -104,9 +104,9 @@ export const createSoupState = <TId extends string = FilterID>(
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
   // Tracked by index (not id) so a row id duplicated across groups highlights
-  // only one occurrence. lastFocusedRowId follows that row across setRows.
+  // only one occurrence. The identity key follows that row across setRows.
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
-  let lastFocusedRowId: string | undefined;
+  let lastFocusedRowIdentityKey: string | undefined;
 
   const [activeGroupId, setActiveGroupId] = createSignal<string | undefined>();
 
@@ -186,12 +186,12 @@ export const createSoupState = <TId extends string = FilterID>(
     batch(() => {
       setRowStore(reconcile(newRows, { key: 'identityKey', merge: true }));
 
-      if (lastFocusedRowId) {
+      if (lastFocusedRowIdentityKey) {
         const nextIndex = rowStore.findIndex(
-          (row) => row.id === lastFocusedRowId
+          (row) => row.identityKey === lastFocusedRowIdentityKey
         );
         setFocusedIndex(nextIndex);
-        if (nextIndex < 0) lastFocusedRowId = undefined;
+        if (nextIndex < 0) lastFocusedRowIdentityKey = undefined;
       }
     });
   };
@@ -241,7 +241,7 @@ export const createSoupState = <TId extends string = FilterID>(
 
     if (result) {
       setFocusedIndex(result.index);
-      lastFocusedRowId = result.row.id;
+      lastFocusedRowIdentityKey = result.row.identityKey;
     }
 
     return result;
@@ -340,7 +340,7 @@ export const createSoupState = <TId extends string = FilterID>(
 
   const clearFocus = () => {
     setFocusedIndex(-1);
-    lastFocusedRowId = undefined;
+    lastFocusedRowIdentityKey = undefined;
   };
 
   return {
@@ -374,13 +374,13 @@ export const createSoupState = <TId extends string = FilterID>(
         const idx = indexOf(id);
         if (idx < 0) return;
         setFocusedIndex(idx);
-        lastFocusedRowId = id;
+        lastFocusedRowIdentityKey = rows()[idx].identityKey;
       },
       setIndex: (index: number) => {
         const row = rows()[index];
         if (!row) return;
         setFocusedIndex(index);
-        lastFocusedRowId = row.id;
+        lastFocusedRowIdentityKey = row.identityKey;
       },
     },
 
