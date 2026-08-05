@@ -52,7 +52,7 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 ///
 /// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
 /// rejected (historical bare-UUID content is normalized by migration).
-fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+pub fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
