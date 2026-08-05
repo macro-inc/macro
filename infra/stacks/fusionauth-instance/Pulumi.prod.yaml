@@ -16,5 +16,6 @@ config:
   fusionauth-instance:google-client-id-secret-key: google-client-id-prod
   fusionauth-instance:google-client-secret-secret-key: google-client-secret-prod
   fusionauth:host: https://auth.macro.com
+  fusionauth-instance:enable-google-calendar: false 
   fusionauth:apiKey:
     secure: AAABANOJD8AOmyME2/j2t2nmudnPjYIszfItHGubEm2ZmKaErrrrqRydP7udMstGDgi0inuUCRj819+S1tXXVZF0E7BP9bL1cTxmhf0+nMbO6CHkdyRycQ==

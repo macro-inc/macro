@@ -56,7 +56,7 @@ fn rust_ci_job() -> Job {
         .add_step(checkout())
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix_dev_shell())
+        .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
 }
 
@@ -64,6 +64,7 @@ fn dependency_check() -> Job {
     rust_ci_job()
         .add_step(install_checker())
         .add_step(run_checker())
+        .add_step(steps::teardown_nix())
 }
 
 /// The workspace-hack crate pins every third-party dep to its union feature
@@ -75,7 +76,9 @@ fn dependency_check() -> Job {
 /// lock-pinned engine in tooling/xtask; this job rejects
 /// drift. Regenerate locally with `just hakari` from the repository root.
 fn hakari_and_dep_closures() -> Job {
-    rust_ci_job().add_step(deps_check())
+    rust_ci_job()
+        .add_step(deps_check())
+        .add_step(steps::teardown_nix())
 }
 
 fn checkout() -> Step<Use> {

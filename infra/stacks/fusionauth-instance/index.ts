@@ -385,6 +385,27 @@ new FusionAuthIdpOpenIdConnect(
   }
 );
 
+const enableGoogleCalendarIntegration = config.requireBoolean(
+  'enable-google-calendar'
+);
+const GOOGLE_CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar'];
+
+const GOOGLE_GMAIL_OAUTH_SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/contacts.other.readonly',
+  'https://www.googleapis.com/auth/gmail.settings.basic',
+];
+
+let googleOauth2Scope = GOOGLE_GMAIL_OAUTH_SCOPES.join(' ');
+
+if (enableGoogleCalendarIntegration) {
+  googleOauth2Scope = `${googleOauth2Scope} ${GOOGLE_CALENDAR_SCOPES.join(' ')}`;
+}
+
 // The google gmail identity provider
 new FusionAuthIdpOpenIdConnect(
   'google-gmail-idp',
@@ -400,8 +421,7 @@ new FusionAuthIdpOpenIdConnect(
     oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
     oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
     buttonText: 'GoogleGmail',
-    oauth2Scope:
-      'openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic',
+    oauth2Scope: googleOauth2Scope,
     oauth2UniqueIdClaim: 'sub',
     linkingStrategy: 'LinkByEmail',
     debug: stack !== 'prod',

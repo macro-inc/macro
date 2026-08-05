@@ -56,7 +56,6 @@ pub fn deploy_cloud_storage_on_push() -> Workflow {
                 ))
                 .add_path(xtask_paths::repo_glob!(".github/actions/setup-nix/**"))
                 .add_path(xtask_paths::repo_glob!(".github/actions/teardown-nix/**"))
-                .add_path(xtask_paths::repo_glob!(".github/actions/setup-cachix/**"))
                 .add_path(xtask_paths::repo_glob!(
                     ".github/actions/migrate-cloud-storage-db/**"
                 ))
@@ -90,7 +89,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
             DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         "#})?,
     );
     Ok(())

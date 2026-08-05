@@ -9,6 +9,7 @@ members = [
   "crates/bot_id",
   "crates/bots",
   "crates/broadcast",
+  "crates/calendar_events",
   "crates/channel_bots",
   "crates/client/cache-core",
   "crates/client/cache-idb",
@@ -155,6 +156,7 @@ hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
+icalendar = { version = "0.17.12", features = ["chrono-tz", "recurrence"] }
 indexmap = "2"
 inquire = "0.7"
 itertools = "0.14"

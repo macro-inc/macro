@@ -69,12 +69,13 @@ fn check() -> Job {
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix_dev_shell())
+        .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(validate_doppler_configs())
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// cargo nextest against postgres + redis service containers.
@@ -92,12 +93,13 @@ fn test() -> Job {
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix_dev_shell())
+        .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -145,7 +147,9 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'static_assets/**'
                   - 'flake.nix'
                   - 'flake.lock'
-                  - '.github/actions/setup-cachix/**'
+                  - '.github/actions/setup-nix/**'
+                  - '.github/actions/setup-nix-dev-shell/**'
+                  - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
                   - '.github/services-config.json'
                   - '.github/scripts/build-cloud-storage-lambdas.sh'

@@ -24,12 +24,35 @@ async fn set_linked_email_then_get(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let pre = get_in_progress_user_link(&pool, &link_id).await?;
     assert_eq!(pre.macro_user_id, macro_user_id);
     assert!(pre.linked_email.is_none());
+    assert!(pre.requested_google_scopes.is_empty());
+    assert!(pre.granted_google_scopes.is_empty());
 
     set_linked_email(&pool, &link_id, "linked@example.com").await?;
 
     let post = get_in_progress_user_link(&pool, &link_id).await?;
     assert_eq!(post.macro_user_id, macro_user_id);
     assert_eq!(post.linked_email.as_deref(), Some("linked@example.com"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn google_link_records_requested_and_granted_scopes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let macro_user_id = macro_uuid::generate_uuid_v7();
+    insert_macro_user(&pool, macro_user_id).await?;
+    let requested = vec!["gmail".to_string(), "calendar".to_string()];
+    let granted = vec!["gmail".to_string()];
+
+    let link_id =
+        create_in_progress_google_link(&pool, &macro_user_id.to_string(), &requested).await?;
+    set_linked_google_grant(&pool, &link_id, "linked@example.com", &granted).await?;
+
+    let link = get_in_progress_user_link(&pool, &link_id).await?;
+    assert_eq!(link.requested_google_scopes, requested);
+    assert_eq!(link.granted_google_scopes, granted);
+    assert_eq!(link.linked_email.as_deref(), Some("linked@example.com"));
 
     Ok(())
 }

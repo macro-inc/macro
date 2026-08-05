@@ -425,7 +425,7 @@ function PreviewPropertyPill(props: {
       <Layer depth={2}>
         <div
           class={cn(
-            'inline-flex items-center gap-1.5 min-w-0 max-w-full ring ring-edge-muted',
+            'inline-flex items-center gap-1.5 min-w-0 max-w-full border border-edge-muted',
             'px-2 py-1 leading-tight text-left rounded-full bg-surface'
           )}
         >

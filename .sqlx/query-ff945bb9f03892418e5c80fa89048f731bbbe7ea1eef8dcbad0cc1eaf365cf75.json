@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_links\n            SET google_granted_scopes = $2,\n                google_grant_version = $3,\n                updated_at = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff945bb9f03892418e5c80fa89048f731bbbe7ea1eef8dcbad0cc1eaf365cf75"
+}

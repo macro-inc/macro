@@ -87,6 +87,61 @@ impl RedisClient {
     }
 }
 
+/// Google Calendar's per-user quota is 600 queries per minute; cap our
+/// background sync at half of it so interactive calendar features keep room.
+const CALENDAR_RATE_LIMIT_QUERIES: u32 = 300;
+
+impl RedisClient {
+    /// Checks if a Google Calendar API request is rate-limited, using the
+    /// same atomic sliding-window Lua script as the Gmail limiter but with a
+    /// calendar-specific key and Calendar's flat one-query-per-request cost.
+    pub async fn is_calendar_rate_limited(&self, email_link_id: Uuid) -> bool {
+        let mut con = match self.inner.get_multiplexed_async_connection().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to get Redis connection for calendar rate limiting link {}: {}",
+                    email_link_id,
+                    e
+                );
+                return false;
+            }
+        };
+
+        let redis_key = format!("calendar-ratelimit:log:{}", email_link_id);
+        let now_micros = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_micros() as u64;
+        let cost = 1u32;
+        let member_id = format!("{}:{}", cost, Uuid::new_v4());
+        let script = Script::new(get_rate_limit_script_with_usage());
+
+        let (is_limited, _current_units): (i32, u32) = match script
+            .key(&redis_key)
+            .arg(CALENDAR_RATE_LIMIT_QUERIES)
+            .arg(self.rate_limit_secs * 1_000_000)
+            .arg(now_micros)
+            .arg(cost)
+            .arg(&member_id)
+            .invoke_async(&mut con)
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to execute calendar rate limit script for link {}: {}",
+                    email_link_id,
+                    e
+                );
+                return false;
+            }
+        };
+
+        is_limited == 1
+    }
+}
+
 /// Returns the raw Lua script for an atomic, cost-based sliding window rate limiter.
 ///
 /// The script is designed to be executed atomically on the Redis server. It tracks the

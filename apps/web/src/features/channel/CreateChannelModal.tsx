@@ -227,7 +227,7 @@ export function CreateChannelModal() {
                         ({teamMembers().length})
                       </span>
                     </div>
-                    <div class="relative max-h-56 rounded-lg ring ring-edge-muted">
+                    <div class="relative max-h-56 rounded-lg border border-edge-muted">
                       <div
                         ref={setTeamListScrollRef}
                         class="scrollbar-hidden max-h-56 overflow-y-auto"

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_kind, source_updated_at, normalized_payload\n        FROM calendar_event_sources\n        WHERE event_id = $1\n        ORDER BY\n            CASE source_kind WHEN 'google' THEN 0 ELSE 1 END,\n            source_sequence DESC,\n            source_updated_at DESC,\n            last_seen_at DESC,\n            id DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "normalized_payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c7eb1a0ad7368e30d78b27d81884e96846e1fdf6adf018274c3df850a7592d2c"
+}

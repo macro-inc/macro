@@ -12,6 +12,10 @@ use cal::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::{
+    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
+    outbound::pg::PgCalendarRepository,
+};
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -190,6 +194,12 @@ pub(crate) type PropertiesHandlerState =
 
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+
+/// Calendar occurrence query service.
+pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
+
+/// Calendar occurrence router state.
+pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
@@ -469,6 +479,7 @@ pub(crate) struct ApiContext {
     /// Legacy channel list router state.
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
+    pub calendar_state: DssCalendarState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,

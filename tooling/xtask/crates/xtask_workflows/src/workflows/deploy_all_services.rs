@@ -105,8 +105,6 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
-              CACHIX_AUTH_TOKEN:
-                required: true
         "#})?,
     );
     Ok(())
@@ -147,8 +145,7 @@ fn set_matrix() -> Step<Run> {
 /// Warm one shared dep closure onto the /nix sticky disk. The two warm jobs
 /// run in parallel and each build matrix depends only on its own warm job, so
 /// a slow lambda-closure warm never blocks binary builds and vice versa. The
-/// /nix cache volume is an optimization; Cachix is the consistency backstop
-/// either way.
+/// /nix cache volume is provided by Namespace's native Nix integration.
 fn warm_job(
     name: &str,
     gate_output: &str,
@@ -166,14 +163,13 @@ fn warm_job(
         .add_step(steps::checkout_v4())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
-        .add_step(steps::nix_build_watched(build_step_name, targets, done_msg))
+        .add_step(steps::nix_build(build_step_name, targets, done_msg))
         .add_step(steps::teardown_nix())
 }
 
 /// Base for the per-service build matrix jobs: clones the warm /nix cache
 /// volume populated by the matching warm job, so only each service's own
-/// crate compiles (cold volume -> Cachix substitution). No max-parallel:
+/// crate compiles. No max-parallel:
 /// runners autoscale, so all services build concurrently.
 fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
     Job::default()
@@ -193,7 +189,6 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_cachix())
 }
 
 fn build_service_binaries() -> Job {
@@ -211,7 +206,8 @@ fn build_service_binaries() -> Job {
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
-    let script = steps::with_cachix_watch(indoc::indoc! {r#"
+    let script = indoc::indoc! {r#"
+        set -euo pipefail
         mkdir -p prebuilt
         nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
@@ -223,7 +219,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
         tar -C prebuilt -czf prebuilt-binaries.tar.gz .
         # Receipt: the deploy job logs the same hash on read.
         echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-    "#});
+    "#};
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
@@ -233,7 +229,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// Each handler is a crane + cargo-zigbuild nix package. This job builds all
 /// of a service's handlers via `nix build .#deploy-lambda-<name>`, cloning the
 /// warm lambda /nix disk committed by warm-lambdas. Unchanged handlers are
-/// pure cache hits (substituted from the disk/Cachix, no recompile).
+/// pure cache hits from the Namespace Nix volume (no recompile).
 fn build_lambda_artifacts() -> Job {
     build_job(
         "Build ${{ matrix.service }} Lambda artifacts",

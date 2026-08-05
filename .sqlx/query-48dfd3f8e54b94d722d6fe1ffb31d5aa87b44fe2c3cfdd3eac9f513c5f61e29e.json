@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT account.email_link_id\n            FROM calendars calendar\n            JOIN calendar_accounts account ON account.id = calendar.account_id\n            WHERE calendar.watch_channel_id = $1\n              AND calendar.watch_resource_id = $2\n              AND NOT calendar.is_deleted\n              AND account.sync_status <> 'disabled'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "48dfd3f8e54b94d722d6fe1ffb31d5aa87b44fe2c3cfdd3eac9f513c5f61e29e"
+}

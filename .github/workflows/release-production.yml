@@ -22,7 +22,6 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   deploy-sync-service:
     name: Deploy Sync Service
@@ -69,6 +68,9 @@ jobs:
           name: web-app-prod-build
           path: apps/web/dist
           retention-days: 7
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   deploy:
     name: Deploy Web App
@@ -123,6 +125,9 @@ jobs:
           DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
           DATADOG_SITE: us5.datadoghq.com
           DATADOG_API_HOST: api.us5.datadoghq.com
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
 
   upload:
     name: Upload Release Artifacts

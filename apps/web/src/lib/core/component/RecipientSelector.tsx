@@ -614,7 +614,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring ring-edge',
+          !props.hideBorder && 'border border-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
@@ -855,7 +855,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge"
+              class="z-modal-content border border-edge bg-surface translate-y-1 p-2 rounded-xl shadow-lg shadow-drop-shadow"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

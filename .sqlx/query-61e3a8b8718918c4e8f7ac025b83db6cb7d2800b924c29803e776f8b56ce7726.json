@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendars (\n            id, account_id, provider_calendar_id, name, description,\n            time_zone, color, access_role, is_primary, is_selected\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ON CONFLICT (account_id, provider_calendar_id) DO UPDATE SET\n            name = EXCLUDED.name,\n            description = EXCLUDED.description,\n            time_zone = EXCLUDED.time_zone,\n            color = EXCLUDED.color,\n            access_role = EXCLUDED.access_role,\n            is_primary = EXCLUDED.is_primary,\n            is_selected = EXCLUDED.is_selected,\n            is_deleted = false,\n            updated_at = now()\n        RETURNING\n            id,\n            sync_token,\n            materialized_starts_at,\n            materialized_ends_at,\n            materialized_start_date,\n            materialized_end_date,\n            synced_at,\n            watch_expires_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "materialized_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "materialized_ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "materialized_start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "materialized_end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "synced_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "watch_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "61e3a8b8718918c4e8f7ac025b83db6cb7d2800b924c29803e776f8b56ce7726"
+}

@@ -3,12 +3,15 @@ use crate::pubsub::backfill::increment_counters::{
 };
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
+use calendar_events::domain::{
+    models::{CalendarBackfillFailureDisposition, CalendarBackfillJobKey},
+    service::GoogleCalendarBackfillRunError,
+};
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
-    JobScopedPayload,
+    BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::pubsub::DetailedError;
+use models_email::email::service::pubsub::{DetailedError, FailureReason, LinkManagerMessage};
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
 
@@ -27,18 +30,91 @@ pub async fn handle_non_retryable_error(
     );
 
     match &data.backfill_operation {
-        BackfillOperation::Init(scope) => mark_job_failed(ctx, scope.job_id).await,
-        BackfillOperation::ListThreads(scope) => mark_job_failed(ctx, scope.job_id).await,
+        BackfillOperation::Init(scope) => mark_job_failed(ctx, scope.job_id).await?,
+        BackfillOperation::ListThreads(scope) => mark_job_failed(ctx, scope.job_id).await?,
         BackfillOperation::BackfillThread(scope) => {
-            handle_thread_failure(ctx, scope.link_id, scope.job_id).await;
+            handle_thread_failure(ctx, scope.link_id, scope.job_id).await?;
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
-            handle_thread_failure(ctx, scope.link_id, scope.job_id).await;
+            handle_thread_failure(ctx, scope.link_id, scope.job_id).await?;
         }
         BackfillOperation::BackfillMessage(scope) => {
-            handle_message_failure(ctx, scope).await;
+            handle_message_failure(ctx, scope).await?;
         }
         BackfillOperation::BackfillAttachment(_) => {}
+        BackfillOperation::FinalizeBackfill(scope) => {
+            // The message is about to be deleted; without republishing the
+            // completion-outbox row, the backfill would finish silently
+            // missing attachment fan-out, contacts sync, and the final
+            // refresh event. Deterministic failures resurface via the DLQ.
+            sqlx::query!(
+                r#"
+                UPDATE email_backfill_completion_outbox
+                SET published_at = NULL
+                WHERE backfill_job_id = $1
+                "#,
+                scope.job_id,
+            )
+            .execute(&ctx.db)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, job_id = %scope.job_id, "failed to republish completion outbox after terminal finalize failure");
+            })
+            .ok();
+        }
+        BackfillOperation::CalendarGoogleBackfill(scope) => {
+            let coordinator_reauth_transitioned = coordinator_reauth_edge(&e.source);
+            let prelease_reauth_transitioned = if coordinator_reauth_transitioned.is_none() {
+                let disposition = if e.reason == FailureReason::AccessTokenFetchFailed {
+                    CalendarBackfillFailureDisposition::ReauthRequired
+                } else {
+                    CalendarBackfillFailureDisposition::Permanent
+                };
+                ctx.calendar_backfills
+                    .google_failure
+                    .fail_unclaimed(
+                        CalendarBackfillJobKey {
+                            job_id: scope.payload.calendar_job_id,
+                            email_link_id: scope.link_id,
+                        },
+                        disposition,
+                        &format!("{:#}", e.source),
+                    )
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?
+                    .link_reauth_transitioned
+            } else {
+                false
+            };
+            if coordinator_reauth_transitioned == Some(true) || prelease_reauth_transitioned {
+                ctx.sqs_client
+                    .enqueue_link_manager_notification(LinkManagerMessage::NotifyReauthRequired {
+                        link_id: scope.link_id,
+                    })
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error=?error,
+                            link_id=%scope.link_id,
+                            "Failed to enqueue reauth notification after calendar backfill failure"
+                        );
+                    })
+                    .ok();
+            }
+        }
+        BackfillOperation::CalendarEmailIcsBackfill(scope) => {
+            ctx.calendar_backfills
+                .email_ics
+                .fail_terminal(
+                    CalendarBackfillJobKey {
+                        job_id: scope.payload.calendar_job_id,
+                        email_link_id: scope.link_id,
+                    },
+                    &format!("{:#}", e.source),
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        }
         // Best-effort side seed — a failure must not fail the backfill job.
         BackfillOperation::SeedSentContact(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
@@ -51,23 +127,34 @@ pub async fn handle_non_retryable_error(
     Ok(())
 }
 
-async fn mark_job_failed(ctx: &PubSubContext, job_id: Uuid) {
-    if let Err(db_err) = email_db_client::backfill::job::update::update_backfill_job_status(
-        &ctx.db,
-        job_id,
-        BackfillJobStatus::Failed,
-    )
-    .await
-    {
-        tracing::error!(
-            error = %db_err,
-            job_id = %job_id,
-            "Failed to update backfill job status to Failed"
-        );
-        return;
-    }
+fn coordinator_reauth_edge(error: &anyhow::Error) -> Option<bool> {
+    error.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<GoogleCalendarBackfillRunError>()
+            .map(|error| {
+                matches!(
+                    error,
+                    GoogleCalendarBackfillRunError::ReauthRequired {
+                        link_reauth_transitioned: true,
+                        ..
+                    }
+                )
+            })
+    })
+}
 
-    notify_job_failed(ctx, job_id).await;
+#[tracing::instrument(skip(ctx), err)]
+async fn mark_job_failed(ctx: &PubSubContext, job_id: Uuid) -> anyhow::Result<()> {
+    let transitioned =
+        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
+            &ctx.db, job_id,
+        )
+        .await?;
+
+    if transitioned {
+        notify_job_failed(ctx, job_id).await;
+    }
+    Ok(())
 }
 
 /// Resolves the failed job's link and signals the failure over the connection
@@ -95,6 +182,9 @@ async fn notify_job_failed(ctx: &PubSubContext, job_id: Uuid) {
         .await;
     }
 }
+
+#[cfg(test)]
+mod test;
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
 #[tracing::instrument(
@@ -140,6 +230,24 @@ pub async fn handle_retryable_error(
                 "Retryable error backfilling attachment"
             )
         }
+        BackfillOperation::FinalizeBackfill(scope) => {
+            tracing::debug!(
+                job_id = %scope.job_id,
+                "Retryable error finalizing completed backfill"
+            )
+        }
+        BackfillOperation::CalendarGoogleBackfill(scope) => {
+            tracing::debug!(
+                calendar_job_id = %scope.payload.calendar_job_id,
+                "Retryable error backfilling Google Calendar"
+            )
+        }
+        BackfillOperation::CalendarEmailIcsBackfill(scope) => {
+            tracing::debug!(
+                calendar_job_id = %scope.payload.calendar_job_id,
+                "Retryable error scheduling email calendar extraction"
+            )
+        }
         BackfillOperation::SeedSentContact(scope) => {
             tracing::debug!(
                 message_id = %scope.payload.message_provider_id,
@@ -175,7 +283,11 @@ pub async fn handle_retryable_error(
 }
 
 #[tracing::instrument(skip(ctx))]
-async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid) {
+async fn handle_thread_failure(
+    ctx: &PubSubContext,
+    link_id: Uuid,
+    job_id: Uuid,
+) -> anyhow::Result<()> {
     let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
         Ok(Some(link)) => link,
         Ok(None) => {
@@ -189,8 +301,8 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
                 job_id = job_id.to_string(),
                 "Link not found in handle_thread_failure; marking backfill job failed"
             );
-            mark_job_failed(ctx, job_id).await;
-            return;
+            mark_job_failed(ctx, job_id).await?;
+            return Ok(());
         }
         Err(db_err) => {
             tracing::error!(
@@ -198,8 +310,8 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
                 job_id = job_id.to_string(),
                 "Failed to fetch link in handle_thread_failure; marking backfill job failed"
             );
-            mark_job_failed(ctx, job_id).await;
-            return;
+            mark_job_failed(ctx, job_id).await?;
+            return Ok(());
         }
     };
 
@@ -210,13 +322,14 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
             "Failed to check if job is completed in handle thread failure"
         );
     }
+    Ok(())
 }
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handle_message_failure(
     ctx: &PubSubContext,
     scope: &JobScopedPayload<BackfillMessagePayload>,
-) {
+) -> anyhow::Result<()> {
     let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, scope.link_id).await {
         Ok(Some(link)) => link,
         Ok(None) => {
@@ -229,8 +342,8 @@ pub async fn handle_message_failure(
                 job_id = scope.job_id.to_string(),
                 "Link not found in handle_message_failure; marking backfill job failed"
             );
-            mark_job_failed(ctx, scope.job_id).await;
-            return;
+            mark_job_failed(ctx, scope.job_id).await?;
+            return Ok(());
         }
         Err(db_err) => {
             tracing::error!(
@@ -238,8 +351,8 @@ pub async fn handle_message_failure(
                 job_id = scope.job_id.to_string(),
                 "Failed to fetch link in handle_message_failure; marking backfill job failed"
             );
-            mark_job_failed(ctx, scope.job_id).await;
-            return;
+            mark_job_failed(ctx, scope.job_id).await?;
+            return Ok(());
         }
     };
 
@@ -250,4 +363,5 @@ pub async fn handle_message_failure(
             "Failed to check if thread is completed in handle message failure"
         );
     }
+    Ok(())
 }

@@ -779,6 +779,97 @@
         }
       }
     },
+    "/calendar-events": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Return calendar occurrences visible to the authenticated requester.",
+        "operationId": "list_occurrences",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive UTC viewport start.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive UTC viewport end.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Inclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Exclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of occurrences, from 1 through 2,000.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2000,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation cursor returned by the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Calendar occurrences in the requested viewport",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported calendar viewport"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -11823,6 +11914,11 @@
           }
         }
       },
+      "AttendeeResponseStatus": {
+        "type": "string",
+        "description": "RSVP state for an attendee.",
+        "enum": ["needs_action", "accepted", "declined", "tentative"]
+      },
       "BTreeMap": {
         "type": "object",
         "additionalProperties": {
@@ -12178,6 +12274,225 @@
             "minimum": 0
           }
         }
+      },
+      "CalendarAttendee": {
+        "type": "object",
+        "description": "An attendee on a calendar event.",
+        "required": [
+          "email",
+          "responseStatus",
+          "isOrganizer",
+          "isOptional",
+          "isSelf"
+        ],
+        "properties": {
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Optional attendee comment."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Provider display name."
+          },
+          "email": {
+            "type": "string",
+            "description": "Normalized email address."
+          },
+          "isOptional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          },
+          "isOrganizer": {
+            "type": "boolean",
+            "description": "Whether this attendee is the organizer."
+          },
+          "isSelf": {
+            "type": "boolean",
+            "description": "Whether this attendee represents the connected account."
+          },
+          "responseStatus": {
+            "$ref": "#/components/schemas/AttendeeResponseStatus",
+            "description": "RSVP state."
+          }
+        }
+      },
+      "CalendarEvent": {
+        "type": "object",
+        "description": "A stable, first-class Macro calendar event entity.",
+        "required": [
+          "id",
+          "ownerId",
+          "icalUid",
+          "title",
+          "status",
+          "visibility",
+          "transparency",
+          "time",
+          "recurrenceLines",
+          "sequence",
+          "isReadOnly",
+          "attendees",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees, keyed by email during persistence."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct join URL when known."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity creation time."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "icalUid": {
+            "type": "string",
+            "description": "RFC 5545 UID used to reconcile provider and email sources."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro entity identifier."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the current user can edit the canonical source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user who owns this event entity."
+          },
+          "recurrenceLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Provider/iCalendar sequence number.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus",
+            "description": "Event status."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Timed or all-day shape."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarOccurrence": {
+        "type": "object",
+        "description": "A materialized recurrence instance optimized for range queries.",
+        "required": ["eventId", "occurrenceKey", "time", "isCancelled"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning event entity."
+          },
+          "isCancelled": {
+            "type": "boolean",
+            "description": "Whether the instance was cancelled."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable key within the event."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Provider recurrence identifier, when applicable."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Instance time."
+          }
+        }
+      },
+      "CalendarOccurrenceItem": {
+        "type": "object",
+        "description": "One materialized occurrence paired with its stable calendar event entity.",
+        "required": ["event", "occurrence"],
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/CalendarEvent"
+          },
+          "occurrence": {
+            "$ref": "#/components/schemas/CalendarOccurrence"
+          }
+        }
+      },
+      "CalendarOccurrenceResponse": {
+        "type": "object",
+        "description": "Paginated calendar occurrence viewport response.",
+        "required": ["items", "hasMore", "syncStatus"],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarOccurrenceItem"
+            }
+          },
+          "nextCursor": {
+            "type": ["string", "null"]
+          },
+          "syncStatus": {
+            "$ref": "#/components/schemas/CalendarSyncStatus",
+            "description": "Aggregate ingestion state; clients render a skeleton while `syncing`."
+          }
+        }
+      },
+      "CalendarSyncStatus": {
+        "type": "string",
+        "description": "Aggregate ingestion state across every calendar account visible to a\nrequester, letting clients render progressively while sources build.",
+        "enum": ["syncing", "ready"]
       },
       "CallActiveResponse": {
         "type": "object",
@@ -16625,6 +16940,72 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "EventStatus": {
+        "type": "string",
+        "description": "Canonical event status.",
+        "enum": ["confirmed", "tentative", "cancelled"]
+      },
+      "EventTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An event with absolute instants.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end instant."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start instant."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time-zone identifier, when supplied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An all-day event using RFC 5545's exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive local end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive local start date."
+              }
+            }
+          }
+        ],
+        "description": "The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema."
+      },
+      "EventTransparency": {
+        "type": "string",
+        "description": "Whether an event blocks availability.",
+        "enum": ["opaque", "transparent"]
+      },
+      "EventVisibility": {
+        "type": "string",
+        "description": "Visibility of event details.",
+        "enum": ["default", "public", "private", "confidential"]
       },
       "ExcludeDefaultViewRequest": {
         "type": "object",

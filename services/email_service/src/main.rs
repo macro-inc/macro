@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
+use calendar_events::{domain::service::CalendarService, outbound::pg::PgCalendarRepository};
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
@@ -182,6 +183,7 @@ async fn main() -> anyhow::Result<()> {
         redis_conn,
         auth_service_client.clone(),
     ));
+    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
     let api_result = api::setup_and_serve(ApiContext {
         db,
         internal_api_key: config.internal_api_key.clone(),
@@ -201,6 +203,7 @@ async fn main() -> anyhow::Result<()> {
         email_thread_state,
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
+        calendar_service,
     })
     .await;
 

@@ -328,7 +328,7 @@ function AddPinnedPropertyButton() {
       type="button"
       onClick={openPropertySelector}
       class={cn(
-        'inline-flex items-center gap-1.5 m-px ring ring-edge-muted bg-surface',
+        'inline-flex items-center gap-1.5 m-px border border-edge-muted bg-surface',
         'px-2 py-1 leading-tight rounded-full text-ink-muted',
         'hover:bg-hover hover:text-ink transition-colors'
       )}

@@ -79,6 +79,7 @@ fn typescript() -> Job {
         .add_step(show_sccache_stats())
         .add_step(check_types())
         .add_step(check_collaboration_types())
+        .add_step(steps::teardown_nix())
 }
 
 fn biome_check() -> Job {
@@ -89,6 +90,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
+        .add_step(steps::teardown_nix())
 }
 
 fn tailwind() -> Job {
@@ -98,6 +100,7 @@ fn tailwind() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_tailwind_classes())
+        .add_step(steps::teardown_nix())
 }
 
 fn test() -> Job {
@@ -107,6 +110,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
+        .add_step(steps::teardown_nix())
 }
 
 fn cycles() -> Job {
@@ -117,6 +121,7 @@ fn cycles() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
         .add_step(collaboration_cycles_import_check())
+        .add_step(steps::teardown_nix())
 }
 
 fn build() -> Job {
@@ -126,6 +131,7 @@ fn build() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(run_build())
+        .add_step(steps::teardown_nix())
 }
 
 /// Always-run collector used as the required status check. Its name must stay
