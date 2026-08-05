@@ -209,6 +209,11 @@ export const useApplyPreset = () => {
         soup.predicates.set(nextClientFilters);
       }
       soup.grouping.setActiveGroupId(preset.groupBy);
+      // Only override the active sort when the tab preset asks for a specific
+      // one; otherwise the view keeps its persisted/default sort.
+      if (preset.sort) {
+        soup.sort.setAll(preset.sort as Parameters<typeof soup.sort.setAll>[0]);
+      }
     });
 
     // The new tab replaces the dataset wholesale, and row focus only follows

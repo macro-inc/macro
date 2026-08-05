@@ -17,3 +17,13 @@ describe('mail view presets', () => {
     }
   });
 });
+
+describe('tasks view presets', () => {
+  const ctx = { userId: 'user-1', isTeamAdmin: false };
+
+  it('shows the Created tab as a flat list sorted by date created', () => {
+    const preset = getViewPreset('tasks', 'created-by-me', ctx);
+    expect(preset?.groupBy).toBeUndefined();
+    expect(preset?.sort).toEqual(['created_at']);
+  });
+});

@@ -24,6 +24,13 @@ type SoupFiltersPreset = {
    * `entity_type`, `project`, or `property:<definition-id>`).
    */
   groupBy?: string;
+  /**
+   * Initial sort to apply when this tab is selected (ordered by priority).
+   * Uses the same ids as `soup.sort.setAll` (e.g. `created_at`,
+   * `updated_at`). Only set when the tab wants a sort other than the view's
+   * persisted/default sort.
+   */
+  sort?: string[];
 };
 
 // Tab preset configuration types
@@ -366,7 +373,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             and: ['task', 'owned-entity'],
             or: [...OPEN_TASK_STATUS_FILTER_IDS],
           },
-          groupBy: `property:${SYSTEM_PROPERTY_IDS.STATUS}`,
+          // Created tasks are shown as a flat list sorted by date created
+          // rather than grouped by status.
+          sort: ['created_at'],
         };
       },
       all: () => ({
