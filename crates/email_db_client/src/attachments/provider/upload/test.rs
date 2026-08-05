@@ -2,6 +2,21 @@ use super::*;
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
+
+async fn remove_message_labels(pool: &Pool<Postgres>, message_id: Uuid) -> Result<()> {
+    sqlx::query!(
+        r#"
+        DELETE FROM email_message_labels
+        WHERE message_id = $1
+        "#,
+        message_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -41,6 +56,32 @@ async fn thread_attachments_for_backfill_condition_2(pool: Pool<Postgres>) -> Re
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
+async fn thread_attachments_for_backfill_requires_important_label(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    remove_message_labels(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-0000002a0201")?,
+    )
+    .await?;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000102")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert!(res.is_empty());
 
     Ok(())
 }
@@ -235,6 +276,34 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
     assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-201");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_require_important_label(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    remove_message_labels(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-0000000e0201")?,
+    )
+    .await?;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-201",
+    )
+    .await?;
+
+    assert!(res.is_empty());
 
     Ok(())
 }
@@ -485,21 +554,46 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 async fn insertable_attachments_thread_exists_logic(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test that attachments are returned when ANY message in the thread meets conditions
-    // Even if the specific target message doesn't meet the condition itself
+    let target_message_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0202")?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (
+            id, provider_id, thread_id, link_id, from_contact_id, internal_date_ts
+        )
+        VALUES (
+            $1,
+            'other-msg-202',
+            '00000000-0000-0000-0000-000000000102',
+            '00000000-0000-0000-0000-00000000001a',
+            '00000000-0000-0000-0000-0000000c0002',
+            NOW()
+        )
+        "#,
+        target_message_id
+    )
+    .execute(&pool)
+    .await?;
 
-    // target-msg-202 is in Thread 2, which contains target-msg-201 with IMPORTANT label
-    let message_provider_id = "other-msg-202";
+    sqlx::query!(
+        r#"
+        UPDATE email_attachments
+        SET message_id = $1
+        WHERE message_id = '00000000-0000-0000-0000-0000000e0201'
+        "#,
+        target_message_id
+    )
+    .execute(&pool)
+    .await?;
+
     let res = new_email_document_atts(
         &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "other-msg-202",
     )
     .await?;
 
-    // Should return 0 because other-msg-202 has no attachments
-    // But the EXISTS clause should still evaluate to true due to target-msg-201 having IMPORTANT
-    assert_eq!(res.len(), 0);
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
 
     Ok(())
 }

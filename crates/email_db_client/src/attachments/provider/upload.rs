@@ -25,6 +25,22 @@ pub async fn thread_document_atts_for_backfill(
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     let query = format!(
         r#"
+        WITH
+        thread_info AS MATERIALIZED (
+            SELECT
+                t.id AS thread_id,
+                t.link_id,
+                LOWER(SPLIT_PART(link.email_address, '@', 2)) AS user_domain
+            FROM email_threads t
+            JOIN email_links link ON link.id = t.link_id
+            WHERE t.id = $1
+        ),
+        important_label AS MATERIALIZED (
+            SELECT l.id
+            FROM email_labels l
+            JOIN thread_info ti ON l.link_id = ti.link_id
+            WHERE l.name = 'IMPORTANT'
+        )
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -39,31 +55,39 @@ pub async fn thread_document_atts_for_backfill(
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        JOIN thread_info ti ON m.thread_id = ti.thread_id
         WHERE m.thread_id = $1
             AND a.filename IS NOT NULL
             -- attachment mime type filters injected below
             {}
-            AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
-                SELECT 1
-                FROM email_messages m2
-                LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
-                LEFT JOIN email_labels l ON ml.label_id = l.id
-                LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
-                JOIN email_threads t ON m2.thread_id = t.id
-                JOIN email_links link ON t.link_id = link.id
-                WHERE m2.thread_id = $1
-                    AND (
-                        m2.is_sent = true -- condition 1
-                        OR l.name = 'IMPORTANT' -- condition 2
-                        OR (
-                            -- condition 3
-                            c.email_address IS NOT NULL
-                            AND LOWER(SPLIT_PART(c.email_address, '@', 2)) =
-                                LOWER(SPLIT_PART(link.email_address, '@', 2))
+            AND (
+                -- condition 1: the thread contains a sent message
+                EXISTS (
+                    SELECT 1
+                    FROM email_messages sent_message
+                    WHERE sent_message.thread_id = ti.thread_id
+                        AND sent_message.is_sent = true
+                )
+                -- condition 2: the thread contains a message with the link's IMPORTANT label
+                OR EXISTS (
+                    SELECT 1
+                    FROM important_label il
+                    JOIN email_message_labels ml ON ml.label_id = il.id
+                    JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
+                    WHERE labeled_message.thread_id = ti.thread_id
+                )
+                -- conditions 3 and 4 share one sender pass
+                OR EXISTS (
+                    SELECT 1
+                    FROM email_messages sender_message
+                    JOIN email_contacts c ON c.id = sender_message.from_contact_id
+                    WHERE sender_message.thread_id = ti.thread_id
+                        AND (
+                            LOWER(SPLIT_PART(c.email_address, '@', 2)) = ti.user_domain
+                            -- whitelisted domain check injected below
+                            {}
                         )
-                        -- whitelisted domain check injected below
-                        {}
-                    )
+                )
             )
         ORDER BY a.id
         "#,
@@ -295,13 +319,32 @@ pub async fn new_email_document_atts(
     // query for conditions 1-4: claim attachments atomically and return metadata
     let query1 = format!(
         r#"
-        WITH claimed AS (
+        WITH
+        thread_info AS MATERIALIZED (
+            SELECT
+                t.id AS thread_id,
+                t.link_id,
+                LOWER(SPLIT_PART(link.email_address, '@', 2)) AS user_domain
+            FROM email_messages target_message
+            JOIN email_threads t ON t.id = target_message.thread_id
+            JOIN email_links link ON link.id = t.link_id
+            WHERE target_message.link_id = $2
+                AND target_message.provider_id = $1
+        ),
+        important_label AS MATERIALIZED (
+            SELECT l.id
+            FROM email_labels l
+            JOIN thread_info ti ON l.link_id = ti.link_id
+            WHERE l.name = 'IMPORTANT'
+        ),
+        claimed AS (
             UPDATE email_attachments
             SET upload_claimed_at = NOW()
             WHERE id IN (
                 SELECT a.id
                 FROM email_attachments a
                 JOIN email_messages m ON a.message_id = m.id
+                JOIN thread_info ti ON m.thread_id = ti.thread_id
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
                 WHERE m.link_id = $2
                     AND m.provider_id = $1
@@ -309,25 +352,33 @@ pub async fn new_email_document_atts(
                     {}
                     AND de.email_attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
-                    AND EXISTS (
-                        SELECT 1
-                        FROM email_messages m2
-                        LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
-                        LEFT JOIN email_labels l ON ml.label_id = l.id
-                        LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
-                        JOIN email_threads t ON m2.thread_id = t.id
-                        JOIN email_links link ON t.link_id = link.id
-                        WHERE m2.thread_id = m.thread_id
-                            AND (
-                                m2.is_sent = true
-                                OR l.name = 'IMPORTANT'
-                                OR (
-                                    c.email_address IS NOT NULL
-                                    AND LOWER(SPLIT_PART(c.email_address, '@', 2)) =
-                                        LOWER(SPLIT_PART(link.email_address, '@', 2))
+                    AND (
+                        -- condition 1: the thread contains a sent message
+                        EXISTS (
+                            SELECT 1
+                            FROM email_messages sent_message
+                            WHERE sent_message.thread_id = ti.thread_id
+                                AND sent_message.is_sent = true
+                        )
+                        -- condition 2: the thread contains a message with the link's IMPORTANT label
+                        OR EXISTS (
+                            SELECT 1
+                            FROM important_label il
+                            JOIN email_message_labels ml ON ml.label_id = il.id
+                            JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
+                            WHERE labeled_message.thread_id = ti.thread_id
+                        )
+                        -- conditions 3 and 4 share one sender pass
+                        OR EXISTS (
+                            SELECT 1
+                            FROM email_messages sender_message
+                            JOIN email_contacts c ON c.id = sender_message.from_contact_id
+                            WHERE sender_message.thread_id = ti.thread_id
+                                AND (
+                                    LOWER(SPLIT_PART(c.email_address, '@', 2)) = ti.user_domain
+                                    {}
                                 )
-                                {}
-                            )
+                        )
                     )
             )
             RETURNING id
