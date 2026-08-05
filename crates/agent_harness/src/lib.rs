@@ -1,16 +1,14 @@
-//! The agent harness: one sandboxed coding agent session per request.
+//! The agent harness: sandboxed coding-agent session orchestration.
 //!
-//! The harness provisions a sandbox (today: Daytona, running the opencode
-//! image under the service's `container/`), splices the sandbox harness's ACP
-//! stream into agent_proxy's runtime link, and exposes an HTTP router for
-//! starting and destroying sessions. It never speaks ACP itself: agent_proxy
-//! owns the handshake, and every frame is relayed verbatim.
+//! The harness persists a session, provisions or resumes its container, drives
+//! the ACP handshake, and keeps one actor per active session so actions remain
+//! ordered. Inactive sessions are restored through the container port on their
+//! next action.
 //!
-//! Ports and adapters. [`domain`] owns the session use case and the ports it
-//! needs; [`inbound`] is the HTTP trigger; [`outbound`] is Daytona plus the
-//! Redis carrier for the upstream link. Nothing here reads the environment or
-//! constructs its own adapters - that is the binary's job, in
-//! `services/agent_harness_service`.
+//! Ports and adapters. [`domain`] owns lifecycle policy and the ports it needs;
+//! [`inbound`] translates external commands; [`outbound`] hosts concrete
+//! container transports. Nothing here reads the environment or constructs its
+//! own adapters - that is the binary's job in `services/agent_harness_service`.
 #![deny(missing_docs)]
 // Every implementation below the ports is still `todo!()`, so the fields the
 // adapters hold are written but never read. Comes out as they land.

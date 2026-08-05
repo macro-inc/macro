@@ -4,7 +4,8 @@ mod manager;
 mod session;
 
 pub use manager::AgentSessionManager;
-pub use session::{AgentSession, SessionStatus};
+#[cfg(test)]
+pub use session::SessionStatus;
 
 #[cfg(test)]
 mod tests;

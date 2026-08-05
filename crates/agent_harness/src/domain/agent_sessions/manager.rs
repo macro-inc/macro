@@ -12,7 +12,7 @@ use crate::domain::error::Result;
 /// Knows nothing about containers: a session's row has to exist before anything
 /// can be provisioned for it, since the link is named after the session. So
 /// whoever provisions calls [`Self::create`], sets up a link for `record.id`,
-/// then hands it to [`Self::attach`].
+/// then hands it to [`Self::plug`].
 pub struct AgentSessionManager<Sessions, Logs> {
     sessions: Sessions,
     logs: Logs,

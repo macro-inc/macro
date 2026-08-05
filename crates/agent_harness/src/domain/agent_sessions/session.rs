@@ -130,10 +130,21 @@ where
 
     /// Handle one inbound message. `false` once the connector's stream ends.
     pub async fn step(&mut self) -> Result<bool> {
-        let Some(message) = self.connector.recv().await? else {
+        let Some(message) = self.recv().await? else {
             self.state = SessionState::Dead;
             return Ok(false);
         };
+        self.handle_inbound(message).await?;
+        Ok(true)
+    }
+
+    /// Wait for one message from the connected agent runtime.
+    pub async fn recv(&self) -> Result<Option<ToServerMessage>> {
+        Ok(self.connector.recv().await?)
+    }
+
+    /// Apply one message received from the connected agent runtime.
+    pub async fn handle_inbound(&mut self, message: ToServerMessage) -> Result<()> {
         self.log(None, Message::ToServer(message.clone())).await?;
 
         match message {
@@ -143,7 +154,7 @@ where
             ToServerMessage::Acp(AcpMessage(frame)) => self.on_frame(frame).await?,
             _ => {}
         }
-        Ok(true)
+        Ok(())
     }
 
     /// `step` until the connector's stream ends.

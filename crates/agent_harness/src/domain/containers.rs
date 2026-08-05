@@ -42,7 +42,7 @@ impl std::fmt::Display for ContainerId {
 }
 
 /// An [`AgentConnector`] that is a sandbox we provisioned.
-pub trait Container: AgentConnector {
+pub trait Container: AgentConnector + Clone {
     /// Which sandbox this is, for reattaching to it later.
     fn container_id(&self) -> &ContainerId;
 }

@@ -1,6 +1,7 @@
 //! In-memory container and provisioner test doubles.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
@@ -166,6 +167,7 @@ impl Container for ContainerMock {
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
+    resumes: Arc<AtomicUsize>,
 }
 
 impl MockContainerManager {
@@ -187,6 +189,12 @@ impl MockContainerManager {
         self.lock().len()
     }
 
+    /// How many times an existing sandbox was requested.
+    #[must_use]
+    pub fn resumed(&self) -> usize {
+        self.resumes.load(Ordering::Relaxed)
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<AgentSessionId, ContainerMock>> {
         self.containers
             .lock()
@@ -204,6 +212,7 @@ impl ContainerManager for MockContainerManager {
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {
+        self.resumes.fetch_add(1, Ordering::Relaxed);
         self.container(session).ok_or_else(|| {
             HarnessError::Container(format!("no sandbox was ever spawned for {session}"))
         })
