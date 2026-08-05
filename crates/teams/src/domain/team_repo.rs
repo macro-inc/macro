@@ -292,9 +292,10 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, TeamError>> + Send;
 
-    /// Adds the user directly to the team as a member (no invite involved),
-    /// bumping the team's seat count. Returns None when the user is already
-    /// on the team.
+    /// Adds the user directly to the team as a member without requiring an
+    /// invite, removes any pending invite for that user and team, and bumps
+    /// the team's seat count. Returns None when the user is already on the
+    /// team.
     ///
     /// NOTE: this only touches team membership — billing, roles, and
     /// channel membership are handled by the service (see
