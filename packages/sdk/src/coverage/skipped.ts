@@ -189,6 +189,8 @@ export const notificationBacklog =
 
 export const propertiesExcluded = [
   'ensureTagSet',
+  'mergeTag',
+  'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const propertiesBacklog =
