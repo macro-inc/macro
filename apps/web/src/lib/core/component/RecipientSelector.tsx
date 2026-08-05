@@ -783,10 +783,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
-                      if (e.key === 'Escape' && props.hideMenuOnEscape) {
+                      if (
+                        e.key === 'Escape' &&
+                        props.hideMenuOnEscape &&
+                        context.isOpen()
+                      ) {
                         e.preventDefault();
                         e.stopPropagation();
-                        e.stopImmediatePropagation();
                         setIsOpen(false);
                         return;
                       }
