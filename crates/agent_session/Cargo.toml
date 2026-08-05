@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [features]
+# Mock and in-memory port implementations, for crates that test against this one.
 test-utils = ["dep:mockall"]
 
 [dependencies]

@@ -31,3 +31,4 @@ infra/local/generated/
 **/target/
 **/ai_tools/schemas/
 .pi/outputs/
+**/.webhook.json
