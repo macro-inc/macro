@@ -92,7 +92,7 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 .find_or_create_string_option(
                     user,
                     document_id,
-                    definition.id,
+                    &definition,
                     &mut options,
                     label,
                     Some(imported_tag_color(index)),
@@ -130,12 +130,23 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
 
         let mut definitions = match self
             .properties
-            .list_property_definitions(None, Some(user), false, Some(EntityType::Document))
+            .list_property_definitions(None, Some(user), true, Some(EntityType::Document))
             .await
         {
             Ok(definitions) => definitions,
             Err(error) => {
                 tracing::warn!(document_id, error = ?error, "failed to list imported document properties");
+                return;
+            }
+        };
+        let system_definitions = match self
+            .properties
+            .list_property_definitions(None, None, true, None)
+            .await
+        {
+            Ok(definitions) => definitions,
+            Err(error) => {
+                tracing::warn!(document_id, error = ?error, "failed to list system properties for import");
                 return;
             }
         };
@@ -149,6 +160,7 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                     property,
                     &descriptor,
                     &mut definitions,
+                    &system_definitions,
                 )
                 .await;
             let Some(definition) = definition else {
@@ -190,19 +202,27 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
         property: &ImportedDocumentProperty,
         descriptor: &ImportedPropertyDescriptor,
         definitions: &mut Vec<PropertyDefinition>,
+        system_definitions: &[PropertyDefinition],
     ) -> Option<PropertyDefinition> {
-        if let Some(definition) = definitions
-            .iter()
-            .find(|definition| definition.display_name.eq_ignore_ascii_case(&property.name))
-            .cloned()
-        {
+        if let Some(definition) = find_definition_by_name(definitions, &property.name).cloned() {
             if descriptor.matches(&definition) {
                 return Some(definition);
             }
             tracing::warn!(
                 document_id,
                 property = %property.name,
+                is_system = definition.is_system,
                 "skipping imported property whose existing Macro definition has a different type"
+            );
+            return None;
+        }
+
+        if let Some(definition) = find_definition_by_name(system_definitions, &property.name) {
+            tracing::warn!(
+                document_id,
+                property = %property.name,
+                property_definition_id = %definition.id,
+                "skipping imported property whose name is reserved by an inapplicable system property"
             );
             return None;
         }
@@ -222,14 +242,13 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 // Concurrent imports may race to create the same definition.
                 let recovered = self
                     .properties
-                    .list_property_definitions(None, Some(user), false, Some(EntityType::Document))
+                    .list_property_definitions(None, Some(user), true, Some(EntityType::Document))
                     .await
                     .ok()
                     .and_then(|definitions| {
-                        definitions.into_iter().find(|definition| {
-                            definition.display_name.eq_ignore_ascii_case(&property.name)
-                                && descriptor.matches(definition)
-                        })
+                        find_definition_by_name(&definitions, &property.name)
+                            .filter(|definition| descriptor.matches(definition))
+                            .cloned()
                     });
                 let Some(definition) = recovered else {
                     tracing::warn!(
@@ -330,7 +349,7 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 .find_or_create_string_option(
                     user,
                     document_id,
-                    definition.id,
+                    definition,
                     &mut options,
                     value,
                     None,
@@ -357,13 +376,24 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
         &self,
         user: &MacroUserIdStr<'static>,
         document_id: &str,
-        definition_id: Uuid,
+        definition: &PropertyDefinition,
         options: &mut Vec<PropertyOption>,
         label: &str,
         color: Option<&str>,
     ) -> Option<Uuid> {
         if let Some(option) = find_string_option(options, label) {
             return Some(option.id);
+        }
+
+        if definition.is_system {
+            tracing::warn!(
+                document_id,
+                property_definition_id = %definition.id,
+                property = %definition.display_name,
+                label,
+                "skipping imported value absent from system property options"
+            );
+            return None;
         }
 
         let request = AddPropertyOptionRequest::SelectString {
@@ -375,7 +405,7 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
         };
         match self
             .properties
-            .add_property_option(user, None, definition_id, &request)
+            .add_property_option(user, None, definition.id, &request)
             .await
         {
             Ok(option) => {
@@ -387,7 +417,7 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 // A concurrent import may have created the option first.
                 let recovered = self
                     .properties
-                    .get_property_options(definition_id, user, None)
+                    .get_property_options(definition.id, user, None)
                     .await
                     .ok()
                     .and_then(|fresh| find_string_option(&fresh, label).cloned());
@@ -457,6 +487,15 @@ fn find_string_option<'a>(
             PropertyOptionValue::String(value) if value.eq_ignore_ascii_case(label)
         )
     })
+}
+
+fn find_definition_by_name<'a>(
+    definitions: &'a [PropertyDefinition],
+    name: &str,
+) -> Option<&'a PropertyDefinition> {
+    definitions
+        .iter()
+        .find(|definition| definition.display_name.eq_ignore_ascii_case(name))
 }
 
 fn imported_tag_color(index: usize) -> &'static str {
