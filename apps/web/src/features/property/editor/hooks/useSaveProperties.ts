@@ -1,3 +1,4 @@
+import { isTaskEntity } from '@entity';
 import type { PropertyEditorEntity } from '@property/editor/state/propertyEditor';
 import type {
   Property,
@@ -9,6 +10,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 
 function propertyEditorEntityType(entity: PropertyEditorEntity) {
   if ('entityType' in entity) return entity.entityType;
+  if (isTaskEntity(entity)) return 'TASK';
   return macroEntityToPropertyEntityType(entity);
 }
 

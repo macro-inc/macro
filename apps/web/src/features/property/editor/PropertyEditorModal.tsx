@@ -9,7 +9,7 @@ import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
-import { type EntityData, InlineEntity } from '@entity';
+import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
@@ -54,7 +54,7 @@ import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   CommandMenuEmptyState,
-  CommandMenuListItem,
+  CommandMenuList,
   CommandMenuSearchInput,
   CommandMenuShell,
   cn,
@@ -66,10 +66,8 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSelector,
   createSignal,
   For,
-  type JSX,
   Match,
   on,
   onCleanup,
@@ -90,32 +88,6 @@ import {
   setPropertyEditorTarget,
   togglePropertyEditor,
 } from './state/propertyEditor';
-
-/* Styled wrapper for list items in each menu. */
-function ListItem(props: {
-  id: string;
-  isSelected: boolean;
-  as?: 'button' | 'div';
-  disabled?: boolean;
-  onClick: (event: MouseEvent) => void;
-  onMouseEnter: () => void;
-  children: JSX.Element;
-  class?: string;
-}) {
-  return (
-    <CommandMenuListItem
-      as={props.as}
-      id={props.id}
-      selected={props.isSelected}
-      disabled={props.disabled}
-      onClick={props.onClick}
-      onMouseMove={props.onMouseEnter}
-      class={props.class}
-    >
-      {props.children}
-    </CommandMenuListItem>
-  );
-}
 
 type TagOptionItem = {
   scope: TagScope;
@@ -198,6 +170,7 @@ function docTagIdsByDefinition(
 
 function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   if ('entityType' in entity) return entity.entityType;
+  if (isTaskEntity(entity)) return 'TASK';
   return macroEntityToPropertyEntityType(entity);
 }
 
@@ -300,10 +273,6 @@ export function PropertyEditorModal() {
     })
   );
 
-  const setSelectedIndexFromMouse = (index: number) => {
-    setSelectedIndex(index);
-  };
-
   const keybindings = useListKeyBindings(() => dialogRef());
 
   return (
@@ -339,7 +308,6 @@ export function PropertyEditorModal() {
                   searchTerm={searchValue()}
                   focusedIndex={selectedIndex}
                   setFocusedIndex={setSelectedIndex}
-                  setFocusedIndexFromMouse={setSelectedIndexFromMouse}
                   setKeybindings={keybindings}
                   onCreateProperty={openCreateProperty}
                 />
@@ -352,7 +320,6 @@ export function PropertyEditorModal() {
                 setSearchValue={setSearchValue}
                 selectedIndex={selectedIndex}
                 setSelectedIndex={setSelectedIndex}
-                setSelectedIndexFromMouse={setSelectedIndexFromMouse}
                 setKeybindings={keybindings}
                 setPlaceholder={setPlaceholder}
                 setInputType={setInputType}
@@ -365,7 +332,6 @@ export function PropertyEditorModal() {
                 searchValue={searchValue}
                 selectedIndex={selectedIndex}
                 setSelectedIndex={setSelectedIndex}
-                setSelectedIndexFromMouse={setSelectedIndexFromMouse}
                 setKeybindings={keybindings}
                 setPlaceholder={setPlaceholder}
               />
@@ -425,12 +391,10 @@ function PropertyList(props: {
   searchTerm: string;
   focusedIndex: Accessor<number>;
   setFocusedIndex: Setter<number>;
-  setFocusedIndexFromMouse: (index: number) => void;
   setKeybindings: (navAction: ListNavActions) => void;
   onCreateProperty: (initialName: string) => void;
 }) {
   const properties = useAllProperties();
-  let containerRef: HTMLDivElement | undefined;
 
   const { filteredProperties } = usePropertySelection(
     () => [],
@@ -447,65 +411,38 @@ function PropertyList(props: {
   });
   const createPropertyName = () => props.searchTerm.trim();
   const showCreatePropertyOption = () => createPropertyName().length > 0;
-  const tagsRowOffset = () => (showCreatePropertyOption() ? 1 : 0);
-  const propertyRowOffset = () =>
-    tagsRowOffset() + (showTagAssignmentOption() ? 1 : 0);
 
   const rowCount = () =>
     filteredProperties().length +
     (showTagAssignmentOption() ? 1 : 0) +
     (showCreatePropertyOption() ? 1 : 0);
 
+  type PropertyListRow =
+    | { type: 'create'; name: string }
+    | { type: 'tags' }
+    | { type: 'property'; property: Property | PropertyDefinitionDomain };
+
+  const rows = createMemo(() => {
+    const nextRows: PropertyListRow[] = [];
+
+    if (showCreatePropertyOption()) {
+      nextRows.push({ type: 'create', name: createPropertyName() });
+    }
+
+    if (showTagAssignmentOption()) {
+      nextRows.push({ type: 'tags' });
+    }
+
+    for (const property of filteredProperties()) {
+      nextRows.push({ type: 'property', property });
+    }
+
+    return nextRows;
+  });
+
   createEffect(() => {
     props.searchTerm;
     props.setFocusedIndex(0);
-  });
-
-  props.setKeybindings({
-    next: () => {
-      const len = rowCount();
-      if (len === 0) return;
-      props.setFocusedIndex((prev) => (prev + 1) % len);
-    },
-    previous: () => {
-      const len = rowCount();
-      if (len === 0) return;
-      props.setFocusedIndex((prev) => (prev - 1 + len) % len);
-    },
-    select: () => {
-      if (showCreatePropertyOption() && props.focusedIndex() === 0) {
-        props.onCreateProperty(createPropertyName());
-        return;
-      }
-
-      if (
-        showTagAssignmentOption() &&
-        props.focusedIndex() === tagsRowOffset()
-      ) {
-        setPropertyEditorMode('tag');
-        return;
-      }
-
-      const focusedProperty =
-        filteredProperties()[props.focusedIndex() - propertyRowOffset()];
-      if (focusedProperty) {
-        setProperty(focusedProperty);
-      }
-    },
-  });
-
-  createEffect(() => {
-    const index = props.focusedIndex();
-    const elem = document.getElementById(
-      showCreatePropertyOption() && index === 0
-        ? 'property-editor-option-create'
-        : showTagAssignmentOption() && index === tagsRowOffset()
-          ? 'property-editor-option-tags'
-          : `property-editor-option-${index}`
-    );
-    if (elem) {
-      elem.scrollIntoView({ block: 'nearest' });
-    }
   });
 
   const setProperty = (property: Property | PropertyDefinitionDomain) => {
@@ -513,7 +450,44 @@ function PropertyList(props: {
     setPropertyEditorTarget(property);
   };
 
-  const selector = createSelector(props.focusedIndex);
+  const selectRow = (row: PropertyListRow) => {
+    if (row.type === 'create') {
+      props.onCreateProperty(row.name);
+      return;
+    }
+
+    if (row.type === 'tags') {
+      setPropertyEditorMode('tag');
+      return;
+    }
+
+    setProperty(row.property);
+  };
+
+  const listController = createCommandListController({
+    items: rows,
+    selectedIndex: props.focusedIndex,
+    setSelectedIndex: props.setFocusedIndex,
+    onSelect: selectRow,
+  });
+
+  props.setKeybindings({
+    select: () => {
+      listController.selectSelected();
+    },
+    next: () => {
+      listController.selectNext();
+    },
+    previous: () => {
+      listController.selectPrevious();
+    },
+  });
+
+  const rowId = (row: PropertyListRow, index: number) => {
+    if (row.type === 'create') return 'property-editor-option-create';
+    if (row.type === 'tags') return 'property-editor-option-tags';
+    return `property-editor-option-${index}`;
+  };
 
   return (
     <Show
@@ -524,59 +498,48 @@ function PropertyList(props: {
         </CommandMenuEmptyState>
       }
     >
-      <div
-        ref={containerRef}
-        class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2"
+      <CommandMenuList
+        items={rows()}
+        selectedIndex={props.focusedIndex()}
+        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+        itemId={rowId}
+        onSelect={selectRow}
+        onItemMouseMove={(index) =>
+          listController.setSelectedIndexFromPointer(index)
+        }
       >
-        <Show when={showCreatePropertyOption()}>
-          <ListItem
-            id="property-editor-option-create"
-            isSelected={selector(0)}
-            onClick={() => props.onCreateProperty(createPropertyName())}
-            onMouseEnter={() => props.setFocusedIndexFromMouse(0)}
-            class="scroll-m-2"
-          >
-            <PencilIcon class="size-4 text-ink-muted opacity-50" />
-            <div class="flex-1 text-left flex">
-              <p class="text-sm font-medium">
-                Create property "{createPropertyName()}"
-              </p>
-            </div>
-          </ListItem>
-        </Show>
-        <Show when={showTagAssignmentOption()}>
-          <ListItem
-            id="property-editor-option-tags"
-            isSelected={selector(tagsRowOffset())}
-            onClick={() => setPropertyEditorMode('tag')}
-            onMouseEnter={() => props.setFocusedIndexFromMouse(tagsRowOffset())}
-            class="scroll-m-2"
-          >
-            <TagIcon class="size-4 text-ink-muted opacity-50" />
-            <div class="flex-1 text-left flex">
-              <p class="text-sm font-medium">Tags</p>
-            </div>
-          </ListItem>
-        </Show>
-        <For each={filteredProperties()}>
-          {(property, index) => (
-            <ListItem
-              id={`property-editor-option-${index() + propertyRowOffset()}`}
-              isSelected={selector(index() + propertyRowOffset())}
-              onClick={() => setProperty(property)}
-              onMouseEnter={() =>
-                props.setFocusedIndexFromMouse(index() + propertyRowOffset())
-              }
-              class="scroll-m-2"
-            >
-              <PropertyDataTypeIcon property={property} class="opacity-50" />
+        {(row) => (
+          <Switch>
+            <Match when={row.type === 'create'}>
+              <PencilIcon class="size-4 text-ink-muted opacity-50" />
               <div class="flex-1 text-left flex">
-                <p class="text-sm font-medium">{property.displayName}</p>
+                <p class="text-sm font-medium">
+                  Create property "{createPropertyName()}"
+                </p>
               </div>
-            </ListItem>
-          )}
-        </For>
-      </div>
+            </Match>
+            <Match when={row.type === 'tags'}>
+              <TagIcon class="size-4 text-ink-muted opacity-50" />
+              <div class="flex-1 text-left flex">
+                <p class="text-sm font-medium">Tags</p>
+              </div>
+            </Match>
+            <Match when={row.type === 'property' && row.property}>
+              {(property) => (
+                <>
+                  <PropertyDataTypeIcon
+                    property={property()}
+                    class="opacity-50"
+                  />
+                  <div class="flex-1 text-left flex">
+                    <p class="text-sm font-medium">{property().displayName}</p>
+                  </div>
+                </>
+              )}
+            </Match>
+          </Switch>
+        )}
+      </CommandMenuList>
     </Show>
   );
 }
@@ -621,7 +584,6 @@ function TagAssignmentEditor(props: {
   searchValue: Accessor<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
 }) {
@@ -778,20 +740,48 @@ function TagAssignmentEditor(props: {
   const showClearAllRow = () => hadAnyAppliedTagsWhenOpened();
   const showClearAllAtTop = () => showClearAllRow() && !hasSearch();
   const showClearAllAtBottom = () => showClearAllRow() && hasSearch();
-  const itemRowIndex = (index: number) => index + (showClearAllAtTop() ? 1 : 0);
-  const createRowIndex = () =>
-    filteredItems().length + (showClearAllAtTop() ? 1 : 0);
-  const clearAllRowIndex = () =>
-    showClearAllAtTop()
-      ? 0
-      : filteredItems().length + (showCreateRow() ? 1 : 0);
-  const rowCount = () =>
-    filteredItems().length +
-    (showClearAllRow() ? 1 : 0) +
-    (showCreateRow() ? 1 : 0);
   const selectedGroupSize = createMemo(
     () => filteredItems().filter(wasFullyAppliedWhenOpened).length
   );
+
+  type TagAssignmentRow =
+    | { type: 'clear'; separatorBefore: boolean }
+    | { type: 'tag'; item: TagOptionItem; separatorBefore: boolean }
+    | { type: 'create'; separatorBefore: boolean };
+
+  const rows = createMemo(() => {
+    const nextRows: TagAssignmentRow[] = [];
+
+    if (showClearAllAtTop()) {
+      nextRows.push({ type: 'clear', separatorBefore: false });
+    }
+
+    for (const [index, item] of filteredItems().entries()) {
+      nextRows.push({
+        type: 'tag',
+        item,
+        separatorBefore: index === selectedGroupSize() && index > 0,
+      });
+    }
+
+    if (showCreateRow()) {
+      nextRows.push({
+        type: 'create',
+        separatorBefore: filteredItems().length > 0,
+      });
+    }
+
+    if (showClearAllAtBottom()) {
+      nextRows.push({
+        type: 'clear',
+        separatorBefore: filteredItems().length > 0 || showCreateRow(),
+      });
+    }
+
+    return nextRows;
+  });
+
+  const rowCount = () => rows().length;
 
   createEffect(() => {
     props.searchValue();
@@ -1048,47 +1038,41 @@ function TagAssignmentEditor(props: {
     }
   };
 
-  props.setKeybindings({
-    next: () => {
-      const len = rowCount();
-      if (len === 0) return;
-      props.setSelectedIndex((prev) => (prev + 1) % len);
-    },
-    previous: () => {
-      const len = rowCount();
-      if (len === 0) return;
-      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
-    },
-    select: (event) => {
-      if (showClearAllRow() && props.selectedIndex() === clearAllRowIndex()) {
-        void clearAllTags(event);
-        return;
-      }
+  const selectRow = (
+    row: TagAssignmentRow,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    if (row.type === 'clear') {
+      void clearAllTags(event);
+      return;
+    }
 
-      if (showCreateRow() && props.selectedIndex() === createRowIndex()) {
-        openCreateTag();
-        return;
-      }
+    if (row.type === 'create') {
+      openCreateTag();
+      return;
+    }
 
-      const item =
-        filteredItems()[props.selectedIndex() - (showClearAllAtTop() ? 1 : 0)];
-      if (item) void toggleTag(item, event);
-    },
+    void toggleTag(row.item, event);
+  };
+
+  const listController = createCommandListController({
+    items: rows,
+    selectedIndex: props.selectedIndex,
+    setSelectedIndex: props.setSelectedIndex,
   });
 
-  const selector = createSelector(props.selectedIndex);
-  const renderClearAllRow = () => (
-    <ListItem
-      id={`tag-assignment-option-${clearAllRowIndex()}`}
-      isSelected={selector(clearAllRowIndex())}
-      onClick={(event) => void clearAllTags(event)}
-      onMouseEnter={() => props.setSelectedIndexFromMouse(clearAllRowIndex())}
-      class="scroll-m-2"
-    >
-      <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
-      <span class="min-w-0 flex-1 truncate text-ink-muted">Clear all tags</span>
-    </ListItem>
-  );
+  props.setKeybindings({
+    next: () => {
+      listController.selectNext();
+    },
+    previous: () => {
+      listController.selectPrevious();
+    },
+    select: (event) => {
+      const row = rows()[props.selectedIndex()];
+      if (row) selectRow(row, event);
+    },
+  });
 
   return (
     <Show
@@ -1105,84 +1089,73 @@ function TagAssignmentEditor(props: {
           </CommandMenuEmptyState>
         }
       >
-        <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
-          <Show when={showClearAllAtTop()}>{renderClearAllRow()}</Show>
-          <For each={filteredItems()}>
-            {(item, index) => (
-              <>
-                <Show
-                  when={
-                    index() === selectedGroupSize() && selectedGroupSize() > 0
-                  }
-                >
-                  <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-                </Show>
-                <ListItem
-                  as="div"
-                  id={`tag-assignment-option-${itemRowIndex(index())}`}
-                  isSelected={selector(itemRowIndex(index()))}
-                  onClick={(event) => void toggleTag(item, event)}
-                  onMouseEnter={() =>
-                    props.setSelectedIndexFromMouse(itemRowIndex(index()))
-                  }
-                  class="scroll-m-2"
-                >
-                  <OptionCheckBox checked={isFullyApplied(item)} multiselect />
-                  <TagDot color={item.option.color ?? undefined} />
-                  <span class="min-w-0 flex-1 truncate">
-                    {tagOptionLabel(item.option)}
-                  </span>
-                  <Show when={item.scope === 'team'}>
-                    <span class="max-w-30 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
-                      {teamName()}
+        <CommandMenuList
+          items={rows()}
+          selectedIndex={props.selectedIndex()}
+          scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+          itemId={(_, index) => `tag-assignment-option-${index}`}
+          beforeItem={(row) =>
+            row.separatorBefore ? (
+              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+            ) : null
+          }
+          onSelect={(row, _, event) => selectRow(row, event)}
+          onItemMouseMove={(index) =>
+            listController.setSelectedIndexFromPointer(index)
+          }
+        >
+          {(row) => (
+            <Switch>
+              <Match when={row.type === 'clear'}>
+                <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
+                <span class="min-w-0 flex-1 truncate text-ink-muted">
+                  Clear all tags
+                </span>
+              </Match>
+              <Match when={row.type === 'create'}>
+                <TagIcon class="size-4 text-ink-muted opacity-50" />
+                <span class="min-w-0 flex-1 truncate">
+                  Create new tag "{createLabel()}"
+                </span>
+              </Match>
+              <Match when={row.type === 'tag' && row.item}>
+                {(item) => (
+                  <>
+                    <OptionCheckBox
+                      checked={isFullyApplied(item())}
+                      multiselect
+                    />
+                    <TagDot color={item().option.color ?? undefined} />
+                    <span class="min-w-0 flex-1 truncate">
+                      {tagOptionLabel(item().option)}
                     </span>
-                  </Show>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${tagOptionLabel(item.option)}`}
-                    class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted opacity-0 outline-none hover:bg-hover hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openEditTag(item);
-                    }}
-                  >
-                    <PencilIcon class="size-3.5" />
-                  </button>
-                </ListItem>
-              </>
-            )}
-          </For>
-          <Show when={showCreateRow()}>
-            <Show when={filteredItems().length > 0}>
-              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-            </Show>
-            <ListItem
-              id={`tag-assignment-option-${createRowIndex()}`}
-              isSelected={selector(createRowIndex())}
-              onClick={openCreateTag}
-              onMouseEnter={() =>
-                props.setSelectedIndexFromMouse(createRowIndex())
-              }
-              class="scroll-m-2"
-            >
-              <TagIcon class="size-4 text-ink-muted opacity-50" />
-              <span class="min-w-0 flex-1 truncate">
-                Create new tag "{createLabel()}"
-              </span>
-            </ListItem>
-          </Show>
-          <Show when={showClearAllAtBottom()}>
-            <Show when={filteredItems().length > 0 || showCreateRow()}>
-              <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-            </Show>
-            {renderClearAllRow()}
-          </Show>
-        </div>
+                    <Show when={item().scope === 'team'}>
+                      <span class="max-w-30 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
+                        {teamName()}
+                      </span>
+                    </Show>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${tagOptionLabel(item().option)}`}
+                      class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted opacity-0 outline-none hover:bg-hover hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openEditTag(item());
+                      }}
+                    >
+                      <PencilIcon class="size-3.5" />
+                    </button>
+                  </>
+                )}
+              </Match>
+            </Switch>
+          )}
+        </CommandMenuList>
       </Show>
       <TagEditorDialog
         open={tagEditorOpen()}
@@ -1223,7 +1196,6 @@ function PropertyValueEditor(props: {
   setSearchValue: Setter<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   setInputType: Setter<'text' | 'number'>;
@@ -1254,7 +1226,6 @@ function PropertyValueEditor(props: {
           searchValue={props.searchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
-          setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
@@ -1267,7 +1238,6 @@ function PropertyValueEditor(props: {
           setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
-          setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
@@ -1287,7 +1257,6 @@ function PropertyValueEditor(props: {
           setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
-          setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
@@ -1308,7 +1277,6 @@ function SelectPropertyEditor(props: {
   searchValue: Accessor<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: string) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
@@ -1353,51 +1321,38 @@ function SelectPropertyEditor(props: {
     },
   });
 
-  createEffect(() => {
-    const index = listController.selectedIndex();
-    if (!listController.shouldScrollSelectedIntoView()) return;
-
-    const elem = document.getElementById(`property-value-option-${index}`);
-    elem?.scrollIntoView({ block: 'nearest' });
-  });
-
-  const selector = createSelector(props.selectedIndex);
-
   return (
-    <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
-      <Show
-        when={filteredOptions().length > 0}
-        fallback={
-          <CommandMenuEmptyState>
-            No matching options found
-          </CommandMenuEmptyState>
+    <Show
+      when={filteredOptions().length > 0}
+      fallback={
+        <CommandMenuEmptyState>No matching options found</CommandMenuEmptyState>
+      }
+    >
+      <CommandMenuList
+        items={filteredOptions()}
+        selectedIndex={props.selectedIndex()}
+        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+        itemId={(_, index) => `property-value-option-${index}`}
+        onSelect={(option) => props.onSubmit(option.id)}
+        onItemMouseMove={(index) =>
+          listController.setSelectedIndexFromPointer(index)
         }
       >
-        <For each={filteredOptions()}>
-          {(option, index) => (
-            <ListItem
-              id={`property-value-option-${index()}`}
-              isSelected={selector(index())}
-              onClick={() => props.onSubmit(option.id)}
-              onMouseEnter={() =>
-                listController.setSelectedIndexFromPointer(index())
-              }
-              class="scroll-m-2"
-            >
-              <PropertyValueIcon optionId={option.id} />
-              <div class="flex-1 text-left">
-                <p class="text-sm font-medium">{String(option.value.value)}</p>
+        {(option, index) => (
+          <>
+            <PropertyValueIcon optionId={option.id} />
+            <div class="flex-1 text-left">
+              <p class="text-sm font-medium">{String(option.value.value)}</p>
+            </div>
+            <Show when={shouldShowHotkeys() && index() < 9}>
+              <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                <Hotkey shortcut={`${index() + 1}`} />
               </div>
-              <Show when={shouldShowHotkeys() && index() < 9}>
-                <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                  <Hotkey shortcut={`${index() + 1}`} />
-                </div>
-              </Show>
-            </ListItem>
-          )}
-        </For>
-      </Show>
-    </div>
+            </Show>
+          </>
+        )}
+      </CommandMenuList>
+    </Show>
   );
 }
 
@@ -1407,7 +1362,6 @@ function EntityPropertyEditor(props: {
   setSearchValue: Setter<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: EntityReference) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
@@ -1449,70 +1403,57 @@ function EntityPropertyEditor(props: {
     props.setSelectedIndex(0);
   });
 
+  const selectEntity = (entity: CombinedEntity) => {
+    const entityRef: EntityReference = {
+      entity_id: entity.id,
+      entity_type: getEntityType(entity),
+    };
+    props.onSubmit(entityRef);
+  };
+
+  const listController = createCommandListController({
+    items: entities,
+    selectedIndex: props.selectedIndex,
+    setSelectedIndex: props.setSelectedIndex,
+    onSelect: selectEntity,
+  });
+
   props.setKeybindings({
     select: () => {
-      const selected = entities()[props.selectedIndex()];
-      if (selected) {
-        const entityRef: EntityReference = {
-          entity_id: selected.id,
-          entity_type: getEntityType(selected),
-        };
-        props.onSubmit(entityRef);
-      }
+      listController.selectSelected();
     },
     next: () => {
-      const len = entities().length;
-      props.setSelectedIndex((prev) => (prev + 1) % len);
+      listController.selectNext();
     },
     previous: () => {
-      const len = entities().length;
-      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+      listController.selectPrevious();
     },
   });
 
-  createEffect(() => {
-    const index = props.selectedIndex();
-    const elem = document.getElementById(`entity-option-${index}`);
-    if (elem) {
-      elem.scrollIntoView({ block: 'nearest' });
-    }
-  });
-
-  const selector = createSelector(props.selectedIndex);
-
   return (
-    <div class="max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
-      <Show
-        when={entities().length > 0}
-        fallback={
-          <CommandMenuEmptyState>
-            {props.searchValue().trim()
-              ? 'No matching entities found'
-              : 'No entities available'}
-          </CommandMenuEmptyState>
+    <Show
+      when={entities().length > 0}
+      fallback={
+        <CommandMenuEmptyState>
+          {props.searchValue().trim()
+            ? 'No matching entities found'
+            : 'No entities available'}
+        </CommandMenuEmptyState>
+      }
+    >
+      <CommandMenuList
+        items={entities()}
+        selectedIndex={props.selectedIndex()}
+        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+        itemId={(_, index) => `entity-option-${index}`}
+        onSelect={selectEntity}
+        onItemMouseMove={(index) =>
+          listController.setSelectedIndexFromPointer(index)
         }
       >
-        <For each={entities()}>
-          {(entity, index) => (
-            <ListItem
-              id={`entity-option-${index()}`}
-              isSelected={selector(index())}
-              class="scroll-m-2"
-              onClick={() => {
-                const entityRef: EntityReference = {
-                  entity_id: entity.id,
-                  entity_type: getEntityType(entity),
-                };
-                props.onSubmit(entityRef);
-              }}
-              onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
-            >
-              <EntityRowContent entity={entity} />
-            </ListItem>
-          )}
-        </For>
-      </Show>
-    </div>
+        {(entity) => <EntityRowContent entity={entity} />}
+      </CommandMenuList>
+    </Show>
   );
 }
 
@@ -1540,7 +1481,6 @@ function DirectEditPropertyEditor(props: {
   setSearchValue: Setter<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: string | number | boolean | Date) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
@@ -1554,7 +1494,6 @@ function DirectEditPropertyEditor(props: {
         searchValue={props.searchValue}
         selectedIndex={props.selectedIndex}
         setSelectedIndex={props.setSelectedIndex}
-        setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
         onSubmit={props.onSubmit as (value: Date) => void}
         setKeybindings={props.setKeybindings}
         setPlaceholder={props.setPlaceholder}
@@ -1672,26 +1611,29 @@ function DirectEditPropertyEditor(props: {
   };
 
   return (
-    <div class="max-h-50 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2">
-      <ListItem
-        id="property-value-option-0"
-        isSelected={true}
-        disabled={!isValidInput()}
-        onClick={handleSubmit}
-        onMouseEnter={() => {}}
-      >
-        <PropertyDataTypeIcon property={props.property!} class="opacity-50" />
-        <div class="flex-1 text-left">
-          <p class="text-sm font-medium">
-            Set {props.property?.displayName}
-            <Show when={displayValue()}>
-              {' '}
-              to <span class="text-ink-muted">{displayValue()}</span>
-            </Show>
-          </p>
-        </div>
-      </ListItem>
-    </div>
+    <CommandMenuList
+      items={props.property ? [props.property] : []}
+      selectedIndex={0}
+      class="max-h-50"
+      itemId={() => 'property-value-option-0'}
+      itemDisabled={() => !isValidInput()}
+      onSelect={handleSubmit}
+    >
+      {() => (
+        <>
+          <PropertyDataTypeIcon property={props.property!} class="opacity-50" />
+          <div class="flex-1 text-left">
+            <p class="text-sm font-medium">
+              Set {props.property?.displayName}
+              <Show when={displayValue()}>
+                {' '}
+                to <span class="text-ink-muted">{displayValue()}</span>
+              </Show>
+            </p>
+          </div>
+        </>
+      )}
+    </CommandMenuList>
   );
 }
 
@@ -1700,7 +1642,6 @@ function DatePropertyEditor(props: {
   searchValue: Accessor<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
-  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: Date) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
@@ -1725,65 +1666,64 @@ function DatePropertyEditor(props: {
     })
   );
 
+  const listController = createCommandListController({
+    items: dateOptions,
+    selectedIndex: props.selectedIndex,
+    setSelectedIndex: props.setSelectedIndex,
+    onSelect: (option) => props.onSubmit(option.date),
+  });
+
   props.setKeybindings({
     select: () => {
-      const selected = dateOptions()[props.selectedIndex()];
-      if (selected) {
-        props.onSubmit(selected.date);
-      }
+      listController.selectSelected();
     },
     next: () => {
-      const len = dateOptions().length;
-      props.setSelectedIndex((prev) => (prev + 1) % len);
+      listController.selectNext();
     },
     previous: () => {
-      const len = dateOptions().length;
-      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+      listController.selectPrevious();
     },
   });
 
-  const selector = createSelector(props.selectedIndex);
-
   return (
     <>
-      <div class="p-2 max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden">
-        <Show
-          when={dateOptions().length > 0}
-          fallback={
-            <Show
-              when={props.searchValue().trim()}
-              fallback={
-                <CommandMenuEmptyState>
-                  Enter a date or duration
-                </CommandMenuEmptyState>
-              }
-            >
+      <Show
+        when={dateOptions().length > 0}
+        fallback={
+          <Show
+            when={props.searchValue().trim()}
+            fallback={
               <CommandMenuEmptyState>
-                No dates match "{props.searchValue()}"
+                Enter a date or duration
               </CommandMenuEmptyState>
-            </Show>
+            }
+          >
+            <CommandMenuEmptyState>
+              No dates match "{props.searchValue()}"
+            </CommandMenuEmptyState>
+          </Show>
+        }
+      >
+        <CommandMenuList
+          items={dateOptions()}
+          selectedIndex={props.selectedIndex()}
+          scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+          itemId={(_, index) => `date-option-${index}`}
+          onSelect={(option) => props.onSubmit(option.date)}
+          onItemMouseMove={(index) =>
+            listController.setSelectedIndexFromPointer(index)
           }
         >
-          <For each={dateOptions()}>
-            {(option, index) => (
-              <ListItem
-                id={`date-option-${index()}`}
-                isSelected={selector(index())}
-                onClick={() => props.onSubmit(option.date)}
-                onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
-                class="scroll-m-2"
-              >
-                <div class="flex-1 text-left">
-                  <p class="text-sm font-medium">{option.displayText}</p>
-                </div>
-                <span class="text-xs text-ink-muted">
-                  {option.secondaryText}
-                </span>
-              </ListItem>
-            )}
-          </For>
-        </Show>
-      </div>
+          {(option) => (
+            <>
+              <div class="flex-1 text-left">
+                <p class="text-sm font-medium">{option.displayText}</p>
+              </div>
+              <span class="text-xs text-ink-muted">{option.secondaryText}</span>
+            </>
+          )}
+        </CommandMenuList>
+      </Show>
 
       <div class="p-4 border-t border-edge-muted">
         <div class="text-xs text-ink-muted">

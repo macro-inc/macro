@@ -1,6 +1,8 @@
 import { useMaybeBlockId } from '@core/block';
 import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
+import type { CollectionNode } from '@kobalte/core';
+import { Select } from '@kobalte/core/select';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SlidersIcon from '@phosphor/sliders-horizontal.svg';
@@ -10,23 +12,25 @@ import { useCreatePropertyDefinitionMutation } from '@queries/properties/definit
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { CreatePropertyScope } from '@service-properties/generated/schemas/createPropertyScope';
+import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import { Button, CommandMenuShell, cn, Dialog, Dropdown, Hotkey } from '@ui';
+import { Button, CommandMenuShell, cn, Dialog, Hotkey, Layer, addCtrlJKMenuNavigation } from '@ui';
 import {
   type Component,
   createEffect,
   createMemo,
   createSignal,
-  For,
   Index,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { useMaybePropertiesContext } from '../../context/PropertiesContext';
 import {
   getPropertyDataTypeDropdownOptions,
+  PropertyDataTypeIcon,
   usePropertyNameFocus,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
@@ -35,6 +39,9 @@ import { ERROR_MESSAGES } from '../../utils/errorHandling';
 type DataTypeValue = ReturnType<
   typeof getPropertyDataTypeDropdownOptions
 >[number]['value'];
+type DataTypeOption = ReturnType<
+  typeof getPropertyDataTypeDropdownOptions
+>[number];
 
 type Option<T> = {
   id: string;
@@ -285,12 +292,11 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
   const dataTypeDropdownOptions = getPropertyDataTypeDropdownOptions();
 
-  const selectedDataTypeLabel = createMemo(() => {
-    const option = dataTypeDropdownOptions.find(
-      (opt) => opt.value === selectedDataType()
-    );
-    return option?.label ?? 'Select type';
-  });
+  const selectedDataTypeOption = createMemo(
+    () =>
+      dataTypeDropdownOptions.find((opt) => opt.value === selectedDataType()) ??
+      dataTypeDropdownOptions[0]
+  );
   const hasTeam = () => Boolean(currentTeamQuery.data?.team);
   const selectedPropertyScope = (): CreatePropertyScope =>
     propertyScope() === 'team' && hasTeam() ? 'team' : 'user';
@@ -326,6 +332,18 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         | 'select_number'
         | 'select_string'
         | 'link',
+    };
+  };
+
+  // Adapt a dropdown value to the shape `PropertyDataTypeIcon` expects, so the
+  // type icons here stay in sync with the property list / tooltip icons.
+  const dataTypeIconProperty = (value: DataTypeValue) => {
+    const { type, specificType } = parseDataTypeValue(value);
+    return {
+      valueType: (type === 'entity'
+        ? 'ENTITY'
+        : type.toUpperCase()) as DataType,
+      specificEntityType: specificType ?? null,
     };
   };
 
@@ -564,33 +582,75 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             </EditorRow>
 
             <EditorRow label="Type">
-              <Dropdown>
-                <Dropdown.Trigger class="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-edge-muted bg-surface px-3 text-left text-sm text-ink outline-none hover:bg-hover focus-visible:border-accent">
-                  <span class="truncate">{selectedDataTypeLabel()}</span>
+              <Select<DataTypeOption>
+                options={dataTypeDropdownOptions}
+                value={selectedDataTypeOption()}
+                onChange={(option) => {
+                  if (!option) return;
+                  setSelectedDataType(option.value);
+                  resetOptionsForType(option.value);
+                  setIsMultiSelect(false);
+                }}
+                optionValue="value"
+                optionTextValue="label"
+                gutter={4}
+                placement="bottom-start"
+                itemComponent={(itemProps: {
+                  item: CollectionNode<DataTypeOption>;
+                }) => (
+                  <Select.Item
+                    item={itemProps.item}
+                    class="flex w-full cursor-default items-center justify-between gap-2 rounded-lg p-1.5 px-2 text-left text-sm font-normal text-ink outline-none data-highlighted:bg-ink/5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
+                  >
+                    <div class="flex min-w-0 items-center gap-2">
+                      <PropertyDataTypeIcon
+                        property={dataTypeIconProperty(
+                          itemProps.item.rawValue.value
+                        )}
+                        class="size-4 shrink-0 text-ink-muted"
+                      />
+                      <Select.ItemLabel class="truncate">
+                        {itemProps.item.rawValue.label}
+                      </Select.ItemLabel>
+                    </div>
+                    <Select.ItemIndicator>
+                      <CheckIcon class="size-3 shrink-0" />
+                    </Select.ItemIndicator>
+                  </Select.Item>
+                )}
+              >
+                <Select.Trigger class="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-edge-muted bg-surface px-3 text-left text-sm text-ink outline-none hover:bg-hover focus-visible:border-accent data-expanded:bg-hover">
+                  <Select.Value<DataTypeOption>>
+                    {(state) => (
+                      <span class="flex min-w-0 items-center gap-2">
+                        <PropertyDataTypeIcon
+                          property={dataTypeIconProperty(
+                            state.selectedOption().value
+                          )}
+                          class="size-4 shrink-0 text-ink-muted"
+                        />
+                        <span class="truncate">
+                          {state.selectedOption().label}
+                        </span>
+                      </span>
+                    )}
+                  </Select.Value>
                   <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="max-h-64 min-w-56 overflow-y-auto">
-                  <Dropdown.Group>
-                    <For each={dataTypeDropdownOptions}>
-                      {(option) => (
-                        <Dropdown.Item
-                          class="justify-between"
-                          onSelect={() => {
-                            setSelectedDataType(option.value);
-                            resetOptionsForType(option.value);
-                            setIsMultiSelect(false);
-                          }}
-                        >
-                          <span>{option.label}</span>
-                          <Show when={option.value === selectedDataType()}>
-                            <CheckIcon class="size-3 shrink-0" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.Group>
-                </Dropdown.Content>
-              </Dropdown>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Layer depth={3}>
+                    <Select.Content
+                      class="z-action-menu min-w-56 overflow-y-auto rounded-xl border border-edge bg-surface p-1.5 shadow-menu menu-open-animation"
+                      ref={(el) => {
+                        const clean = addCtrlJKMenuNavigation(el, () => ({wrap: true}));
+                        onCleanup(clean);
+                      }}
+                    >
+                      <Select.Listbox class="flex flex-col gap-(--app-border-width)" />
+                    </Select.Content>
+                  </Layer>
+                </Select.Portal>
+              </Select>
             </EditorRow>
 
             <Show when={hasTeam()}>
