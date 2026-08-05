@@ -15,7 +15,7 @@ use connection_gateway_models::{
 use futures::future::try_join_all;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model_entity::Entity;
-use std::time::Instant;
+use tracing::Instrument;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where
@@ -99,8 +99,6 @@ pub async fn batch_send_message_handler(
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendMessageBody<'static>>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
-    let now = Instant::now();
-
     let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.entities.iter().map(|entity| {
@@ -115,6 +113,11 @@ pub async fn batch_send_message_handler(
             redis_connection,
         )
     }))
+    .instrument(tracing::info_span!(
+        "send_messages",
+        batch_kind = "shared",
+        message_count = body.entities.len()
+    ))
     .await
     .map_err(|e| {
         tracing::error!(error=?e, "unable to send message");
@@ -123,8 +126,6 @@ pub async fn batch_send_message_handler(
             "unable to send message".to_string(),
         )
     })?;
-
-    tracing::trace!("batch send message took {:?}", now.elapsed());
 
     Ok((
         StatusCode::OK,
@@ -151,8 +152,6 @@ pub async fn batch_send_unique_messages_handler(
     State(ctx): State<AppState>,
     Json(body): Json<BatchSendUniqueMessagesBody>,
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
-    let now = Instant::now();
-
     let redis_connection = ctx.context.redis_connection.clone();
 
     let all_receipts = try_join_all(body.messages.iter().map(|message| {
@@ -167,6 +166,11 @@ pub async fn batch_send_unique_messages_handler(
             redis_connection,
         )
     }))
+    .instrument(tracing::info_span!(
+        "send_messages",
+        batch_kind = "unique",
+        message_count = body.messages.len()
+    ))
     .await
     .map_err(|e| {
         tracing::error!(error=?e, "unable to send message");
@@ -175,8 +179,6 @@ pub async fn batch_send_unique_messages_handler(
             "unable to send message".to_string(),
         )
     })?;
-
-    tracing::trace!("batch send unique message took {:?}", now.elapsed());
 
     Ok((
         StatusCode::OK,

@@ -12,6 +12,7 @@ use model_entity::Entity;
 use redis::aio::MultiplexedConnection;
 use std::collections::HashMap;
 use std::time::Instant;
+use tracing::Instrument;
 
 pub struct Delivery {
     pub user_id: String,
@@ -45,8 +46,6 @@ where
 
     tracing::trace!("sending message to {} connections", connections.len());
 
-    let instant = Instant::now();
-
     let local_connections: Vec<&StoredConnectionEntity> = connections
         .iter()
         .filter(|c| {
@@ -64,6 +63,9 @@ where
                 .has_connection(&c.connection_id)
         })
         .collect();
+
+    let local_connection_count = local_connections.len();
+    let remote_connection_count = remote_connections.len();
 
     let local_send_futures = local_connections.into_iter().map(|connection| {
         let message = message.clone();
@@ -124,8 +126,17 @@ where
         }
     });
 
-    let local_results = try_join_all(local_send_futures).await.unwrap_or_default();
-    let remote_results = try_join_all(remote_send_futures).await.unwrap_or_default();
+    let (local_results, remote_results) = async {
+        let local_results = try_join_all(local_send_futures).await.unwrap_or_default();
+        let remote_results = try_join_all(remote_send_futures).await.unwrap_or_default();
+        (local_results, remote_results)
+    }
+    .instrument(tracing::info_span!(
+        "send_messages_to_connections",
+        local_connection_count,
+        remote_connection_count
+    ))
+    .await;
 
     let mut receipts: HashMap<String, MessageReceipt> = HashMap::new();
 
@@ -144,8 +155,6 @@ where
             );
         }
     }
-
-    tracing::trace!("sent message to connections in {:?}", instant.elapsed());
 
     Ok(receipts.into_values().collect())
 }
