@@ -7,6 +7,7 @@ version = "0.1.0"
 [features]
 schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]
+test-utils = []
 
 [dependencies]
 cowlike = { path = "../cowlike" }

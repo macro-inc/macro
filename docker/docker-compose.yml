@@ -326,6 +326,21 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_trigger_service (portless local worker)
+  # Channel messages -> agent session trigger events
+  # ============================================================================
+  agent_trigger_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_trigger_service"]
+    restart: on-failure
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================
