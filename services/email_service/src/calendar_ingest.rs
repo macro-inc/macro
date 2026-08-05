@@ -6,7 +6,7 @@ use base64::{
 };
 use calendar_events::{
     domain::{
-        models::{EmailIcsSource, OccurrenceRange},
+        models::{EmailIcsSource, GoogleScopeSet, OccurrenceRange},
         service::CalendarService,
     },
     inbound::ics::{ics_content_hash, parse_email_ics},
@@ -46,6 +46,10 @@ pub struct CalendarIngestInput<'a> {
 /// Extract and reconcile every `text/calendar`, `application/ics`, or
 /// filename-identified `.ics` part from one Gmail message.
 ///
+/// Inboxes without the Google Calendar grant are skipped: their events would
+/// never reconcile against an authoritative provider copy, so a stray `.ics`
+/// attachment would stand alone as a calendar entry the user never accepted.
+///
 /// Invalid individual invitations are logged and skipped so malformed mail
 /// cannot block email ingestion. Gmail fetch and database failures are
 /// returned, allowing the surrounding queue operation to retry.
@@ -65,6 +69,12 @@ pub async fn ingest_calendar_parts(
 ) -> anyhow::Result<usize> {
     let parts = calendar_parts(input.payload);
     if parts.is_empty() {
+        return Ok(0);
+    }
+
+    // Ordered after the parts scan so the overwhelming majority of messages,
+    // which carry no calendar part at all, never pay for the lookup.
+    if !has_calendar_capability(db, input.email_link_id).await? {
         return Ok(0);
     }
 
@@ -161,6 +171,19 @@ pub async fn ingest_calendar_parts(
     }
 
     Ok(extracted)
+}
+
+async fn has_calendar_capability(db: &sqlx::PgPool, email_link_id: Uuid) -> anyhow::Result<bool> {
+    // A link with no side-table row has never recorded a Google grant.
+    let scopes = sqlx::query_scalar!(
+        "SELECT granted_scopes FROM email_link_google_scopes WHERE link_id = $1",
+        email_link_id,
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(scopes
+        .map(|scopes| GoogleScopeSet::from_scopes(scopes).has_calendar_capability())
+        .unwrap_or(false))
 }
 
 fn calendar_parts(root: &MessagePart) -> Vec<CalendarPart<'_>> {
