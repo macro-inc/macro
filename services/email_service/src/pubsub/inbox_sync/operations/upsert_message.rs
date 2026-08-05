@@ -416,6 +416,7 @@ async fn handle_attachment_upload(
         return Ok(());
     }
 
+    // Keep this parsed-attachment gate at least as permissive as the database claim filters.
     let eligibility = attachment_upload_eligibility(attachments);
     if !eligibility.documents && !eligibility.media {
         return Ok(());

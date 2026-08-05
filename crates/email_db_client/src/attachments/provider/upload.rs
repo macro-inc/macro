@@ -289,6 +289,10 @@ pub async fn new_email_document_atts(
     link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+    if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
+        return Ok(Vec::new());
+    }
+
     // query for conditions 1-4: claim attachments atomically and return metadata
     let query1 = format!(
         r#"
@@ -363,10 +367,6 @@ pub async fn new_email_document_atts(
 
     // if one or more condition has already been met, return
     if !attachments.is_empty() {
-        return Ok(attachments);
-    }
-
-    if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
         return Ok(attachments);
     }
 
