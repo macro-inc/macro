@@ -283,7 +283,7 @@ async fn find_for_channel_distinguishes_dedicated_channel_and_originating_thread
         .find_for_channel(dedicated_channel, None, None)
         .await
         .expect("find session by dedicated channel");
-    let ChannelSession::InSessionChannel(session) = found_dedicated else {
+    let ChannelSession::InDedicatedChannel(session) = found_dedicated else {
         panic!("expected the dedicated-channel session, got {found_dedicated:?}");
     };
     assert_eq!(session.id, session_a.id);
@@ -292,7 +292,7 @@ async fn find_for_channel_distinguishes_dedicated_channel_and_originating_thread
         .find_for_channel(session_b.channel_id, Some(thread), Some(bot_b))
         .await
         .expect("look up an originating session by its own dedicated channel");
-    let ChannelSession::InSessionChannel(session) = same_session_in_both_roles else {
+    let ChannelSession::InDedicatedChannel(session) = same_session_in_both_roles else {
         panic!("expected one dedicated-channel session, got {same_session_in_both_roles:?}");
     };
     assert_eq!(session.id, session_b.id);

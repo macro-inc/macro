@@ -265,7 +265,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(match sessions.as_slice() {
             [] => ChannelSession::None,
             [session] if session.channel_id == channel_id => {
-                ChannelSession::InSessionChannel(session.clone())
+                ChannelSession::InDedicatedChannel(session.clone())
             }
             [session] if matches_subthread(session) => {
                 ChannelSession::CreatedFromThread(session.clone())
@@ -276,7 +276,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             {
                 ChannelSession::ThreadInDedicatedChannel {
                     dedicated_channel_agent_session: dedicated_channel_agent_session.clone(),
-                    subthread_agent_session: Box::new(subthread_agent_session.clone()),
+                    subthread_agent_session: subthread_agent_session.clone(),
                 }
             }
             _ => {

@@ -105,7 +105,7 @@ pub enum ChannelSession {
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
     /// The message arrived in the session's dedicated agent channel.
-    InSessionChannel(AgentSession),
+    InDedicatedChannel(AgentSession),
     /// A bot was addressed from a thread inside a dedicated agent channel.
     ///
     /// This means that:
@@ -116,7 +116,7 @@ pub enum ChannelSession {
         /// Session that owns the dedicated channel.
         dedicated_channel_agent_session: AgentSession,
         /// Session associated with the addressed bot and thread.
-        subthread_agent_session: Box<AgentSession>,
+        subthread_agent_session: AgentSession,
     },
 }
 

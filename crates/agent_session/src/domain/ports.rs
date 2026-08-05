@@ -27,7 +27,7 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     ///     |       -> ThreadInDedicatedChannel { both sessions }
     ///     |
     ///     +-- session.channel_id == channel_id
-    ///     |       -> InSessionChannel
+    ///     |       -> InDedicatedChannel
     ///     |
     ///     +-- thread_id and bot_id are Some
     ///     |   and the session matches both
