@@ -1,5 +1,5 @@
 use agent_session::domain::model::{
-    AgentSession as AgentSessionRecord, AgentSessionId, NewAgentSession,
+    AgentSession as AgentSessionRecord, AgentSessionId, CreateAgentSessionParams,
 };
 use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 
@@ -7,7 +7,7 @@ use crate::domain::agent_sessions::session::AgentSession;
 use crate::domain::connector::AgentConnector;
 use crate::domain::error::Result;
 
-/// Mints agent sessions and wires them to a link.
+/// Persists agent sessions and wires them to a link.
 ///
 /// Knows nothing about containers: a session's row has to exist before anything
 /// can be provisioned for it, since the link is named after the session. So
@@ -27,9 +27,9 @@ where
         Self { sessions, logs }
     }
 
-    /// Mint a new session's row and its own thread.
-    pub async fn create(&self, new: NewAgentSession) -> Result<AgentSessionRecord> {
-        Ok(self.sessions.create(new).await?)
+    /// Persist a new session and its dedicated channel.
+    pub async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSessionRecord> {
+        Ok(self.sessions.create(params).await?)
     }
 
     /// Read an existing session's row, to reattach to it.

@@ -30,17 +30,6 @@ impl AgentSessionId {
     pub fn as_uuid(&self) -> Uuid {
         self.0
     }
-
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_A: Self = Self(Uuid::from_u128(0));
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_B: Self = Self(Uuid::from_u128(1));
-}
-
-impl std::fmt::Display for AgentSessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
 }
 
 impl std::fmt::Display for AgentSessionId {

@@ -8,9 +8,6 @@ publish = false
 # Mock and in-memory port implementations, for crates that test against this one.
 test-utils = ["dep:mockall"]
 
-[features]
-test-utils = ["dep:mockall"]
-
 [dependencies]
 
 macro_uuid = { path = "../macro_uuid" }

@@ -8,7 +8,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentPromptAction};
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::Message;
 use agent_session::domain::model::{
-    AgentSession as AgentSessionRecord, AgentSessionId, NewAgentSession,
+    AgentSession as AgentSessionRecord, AgentSessionId, CreateAgentSessionParams,
     SessionStatus as RecordStatus,
 };
 use agent_session::domain::ports::MockAgentSessionRepo;
@@ -22,10 +22,13 @@ use crate::domain::containers::{Container, ContainerManager};
 use crate::testing::helpers::containers::MockContainerManager;
 use crate::testing::helpers::log::LogRepoMock;
 
-fn new_agent_session() -> NewAgentSession {
-    NewAgentSession {
-        created_from_thread_id: None,
+fn new_agent_session() -> CreateAgentSessionParams {
+    CreateAgentSessionParams {
+        id: AgentSessionId::TEST_A,
+        owner_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        thread_id: None,
+        originating_message_id: None,
         model: "claude".to_owned(),
         harness: "opencode".to_owned(),
         repo_url: "https://github.com/macro/macro".to_owned(),
@@ -35,8 +38,9 @@ fn new_agent_session() -> NewAgentSession {
 fn record(id: AgentSessionId) -> AgentSessionRecord {
     AgentSessionRecord {
         id,
-        created_from_thread_id: None,
-        thread_id: macro_uuid::generate_uuid_v7(),
+        channel_id: macro_uuid::generate_uuid_v7(),
+        thread_id: None,
+        originating_message_id: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         model: "claude".to_owned(),
         harness: "opencode".to_owned(),
