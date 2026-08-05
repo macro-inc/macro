@@ -93,11 +93,15 @@ VALUES ('00000000-0000-0000-0000-0000000c0007',
         'Foo@MACRO.com',
         NOW(), NOW());
 
--- The link owner's contact row, used to ensure self does not satisfy condition 5.
+-- The link owner's contact rows, used to ensure self does not satisfy condition 5 case-insensitively.
 INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0008',
         '00000000-0000-0000-0000-00000000001a',
         'user@macro.com',
+        NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000c000a',
+        '00000000-0000-0000-0000-00000000001a',
+        'USER@MACRO.COM',
         NOW(), NOW());
 
 -- A real contacted participant on Link B, which intentionally has no self-contact row.

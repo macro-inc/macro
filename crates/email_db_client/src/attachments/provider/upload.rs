@@ -176,7 +176,8 @@ pub async fn fetch_job_attachments_for_backfill(
             SELECT c.id
             FROM public.email_links l
             JOIN public.email_contacts c
-                ON (c.link_id, c.email_address) = (l.id, l.email_address)
+                ON c.link_id = l.id
+                AND LOWER(c.email_address) = LOWER(l.email_address)
             WHERE l.id = $1
         ),
         contacted AS (
@@ -203,7 +204,11 @@ pub async fn fetch_job_attachments_for_backfill(
             SELECT DISTINCT participant.thread_id
             FROM participants participant
             JOIN contacted ON contacted.contact_id = participant.contact_id
-            WHERE participant.contact_id IS DISTINCT FROM (SELECT id FROM self_contact)
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM self_contact
+                WHERE self_contact.id = participant.contact_id
+            )
         )
 
         SELECT
@@ -430,7 +435,7 @@ pub async fn new_email_document_atts(
             FROM email_links l
             JOIN email_contacts c
                 ON c.link_id = l.id
-                AND c.email_address = l.email_address
+                AND LOWER(c.email_address) = LOWER(l.email_address)
             WHERE l.id = $2
         ),
         participants AS (
@@ -461,7 +466,11 @@ pub async fn new_email_document_atts(
                     AND EXISTS (
                         SELECT 1
                         FROM participants p
-                        WHERE p.contact_id IS DISTINCT FROM (SELECT id FROM self_contact)
+                        WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM self_contact
+                                WHERE self_contact.id = p.contact_id
+                            )
                             AND EXISTS (
                                 SELECT 1
                                 FROM email_message_recipients emr

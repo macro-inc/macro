@@ -20,11 +20,15 @@ VALUES ('00000000-0000-0000-0000-00000000001a', 'macro|user_a@example.com', '000
 -- Contacts
 ------------------------------------------------------------
 
--- The user's own contact, used to verify self-only threads are excluded.
+-- The user's own contacts, used to verify self-only threads are excluded case-insensitively.
 INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0000',
         '00000000-0000-0000-0000-00000000001a',
         'user_a@example.com',
+        NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000c0005',
+        '00000000-0000-0000-0000-00000000001a',
+        'USER_A@EXAMPLE.COM',
         NOW(), NOW());
 
 -- Previously contacted person (user sent email to this person)
