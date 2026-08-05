@@ -1,13 +1,3 @@
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM agent_session)
-        OR EXISTS (SELECT 1 FROM agent_session_log)
-    THEN
-        RAISE EXCEPTION 'agent_session tables must be empty before rebuilding';
-    END IF;
-END;
-$$;
-
 DROP TABLE agent_session_log;
 DROP TABLE agent_session;
 
