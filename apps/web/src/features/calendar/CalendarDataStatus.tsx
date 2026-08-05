@@ -34,14 +34,19 @@ export function CalendarDataStatus() {
     return range !== undefined && !isCalendarRangeSupported(range);
   });
 
+  const hasEvents = () => calendarView.events().length > 0;
+
+  // Setup state is derived from the links alone. Existing events are not
+  // evidence that setup is complete: a link whose grant was revoked after a
+  // sync, or a delegated inbox, both leave events on screen with no working
+  // calendar connection of the requester's own.
   const setupState = createMemo<
     'connect' | 'permission' | 'reauth' | undefined
   >(() => {
     if (
       isRangeUnavailable() ||
       !linksQuery.isSuccess ||
-      !calendarView.occurrencesQuery.isSuccess ||
-      calendarView.events().length > 0
+      !calendarView.occurrencesQuery.isSuccess
     ) {
       return undefined;
     }
@@ -70,12 +75,11 @@ export function CalendarDataStatus() {
 
   const showLoading = () =>
     !isRangeUnavailable() &&
-    (calendarView.isLoading() ||
-      (calendarView.isSyncing() && calendarView.events().length === 0));
+    (calendarView.isLoading() || (calendarView.isSyncing() && !hasEvents()));
   const showBlockingState = () =>
     !isRangeUnavailable() &&
     (calendarView.occurrencesQuery.isError ||
-      setupState() !== undefined ||
+      (setupState() !== undefined && !hasEvents()) ||
       showLoading());
 
   return (
@@ -144,8 +148,31 @@ export function CalendarDataStatus() {
         when={
           !isRangeUnavailable() &&
           !showBlockingState() &&
+          setupState() !== undefined
+        }
+      >
+        <div class="absolute right-2 bottom-2 z-10 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
+          <span>{setupMessage().title}</span>
+          <Button
+            variant="active"
+            size="sm"
+            label={setupMessage().action}
+            onClick={() => {
+              startAddInbox();
+            }}
+          >
+            {setupMessage().action}
+          </Button>
+        </div>
+      </Show>
+
+      <Show
+        when={
+          !isRangeUnavailable() &&
+          !showBlockingState() &&
+          setupState() === undefined &&
           calendarView.isSyncing() &&
-          calendarView.events().length > 0
+          hasEvents()
         }
       >
         <div class="absolute right-2 bottom-2 z-10 flex items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2.5 py-1 text-xs text-ink-muted shadow-menu">
