@@ -12,14 +12,13 @@ use model_entity::Entity;
 use redis::aio::MultiplexedConnection;
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::Instrument;
 
 pub struct Delivery {
     pub user_id: String,
     pub active: bool,
 }
 
-#[tracing::instrument(skip(ctx, redis_connection))]
+#[tracing::instrument(skip(ctx, redis_connection), err)]
 pub async fn send_message_to_entity<Ctx>(
     ctx: Ctx,
     entity: &Entity<'_>,
@@ -46,116 +45,116 @@ where
 
     tracing::trace!("sending message to {} connections", connections.len());
 
-    let receipts = async {
-        let local_connections: Vec<&StoredConnectionEntity> = connections
-            .iter()
-            .filter(|c| {
-                api_context
-                    .connection_manager
-                    .has_connection(&c.connection_id)
-            })
-            .collect();
-
-        let remote_connections: Vec<&StoredConnectionEntity> = connections
-            .iter()
-            .filter(|c| {
-                !api_context
-                    .connection_manager
-                    .has_connection(&c.connection_id)
-            })
-            .collect();
-
-        tracing::Span::current().record("local_connection_count", local_connections.len());
-        tracing::Span::current().record("remote_connection_count", remote_connections.len());
-
-        let local_send_futures = local_connections.into_iter().map(|connection| {
-            let message = message.clone();
-
-            async move {
-                let instant = Instant::now();
-                let active = api_context
-                    .connection_manager
-                    .send_message(connection.connection_id.as_str(), message.clone())
-                    .await
-                    .is_ok()
-                    && connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
-
-                tracing::trace!(
-                    "sent message to connection directly in {:?}",
-                    instant.elapsed()
-                );
-
-                let delivery = Delivery {
-                    user_id: connection.user_id.clone(),
-                    active,
-                };
-
-                Ok::<Delivery, anyhow::Error>(delivery)
-            }
+    let (local_connections, remote_connections): (Vec<_>, Vec<_>) =
+        connections.iter().partition(|connection| {
+            api_context
+                .connection_manager
+                .has_connection(&connection.connection_id)
         });
 
-        let remote_send_futures = remote_connections.into_iter().map(|connection| {
-            let message = message.clone();
-            let redis_connection = redis_connection.clone();
-            async move {
-                let instant = Instant::now();
-                let active = connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
+    Ok(send_messages_to_connections(
+        api_context,
+        local_connections,
+        remote_connections,
+        message,
+        redis_connection,
+    )
+    .await)
+}
 
-                post_message(
-                    redis_connection,
-                    MessageWithConnection {
-                        message: message.clone(),
-                        connection_id: connection.connection_id.clone(),
-                    },
-                )
+#[tracing::instrument(
+    skip_all,
+    fields(
+        local_connection_count = local_connections.len(),
+        remote_connection_count = remote_connections.len(),
+    )
+)]
+async fn send_messages_to_connections(
+    api_context: &ApiContext,
+    local_connections: Vec<&StoredConnectionEntity>,
+    remote_connections: Vec<&StoredConnectionEntity>,
+    message: Message,
+    redis_connection: MultiplexedConnection,
+) -> Vec<MessageReceipt> {
+    let local_send_futures = local_connections.into_iter().map(|connection| {
+        let message = message.clone();
+
+        async move {
+            let instant = Instant::now();
+            let active = api_context
+                .connection_manager
+                .send_message(connection.connection_id.as_str(), message.clone())
                 .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish message to redis");
-                })?;
+                .is_ok()
+                && connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
 
-                tracing::trace!(
-                    "sent message to connection through redis in {:?}",
-                    instant.elapsed()
-                );
+            tracing::trace!(
+                "sent message to connection directly in {:?}",
+                instant.elapsed()
+            );
 
-                let delivery = Delivery {
-                    user_id: connection.user_id.clone(),
-                    active,
-                };
+            let delivery = Delivery {
+                user_id: connection.user_id.clone(),
+                active,
+            };
 
-                Ok::<Delivery, anyhow::Error>(delivery)
-            }
-        });
-
-        let local_results = try_join_all(local_send_futures).await.unwrap_or_default();
-        let remote_results = try_join_all(remote_send_futures).await.unwrap_or_default();
-
-        let mut receipts: HashMap<String, MessageReceipt> = HashMap::new();
-
-        for delivery in local_results.into_iter().chain(remote_results.into_iter()) {
-            if let Some(receipt) = receipts.get_mut(&delivery.user_id) {
-                receipt.delivery_count += 1;
-                receipt.active = receipt.active || delivery.active;
-            } else {
-                receipts.insert(
-                    delivery.user_id.clone(),
-                    MessageReceipt {
-                        user_id: delivery.user_id,
-                        delivery_count: 1,
-                        active: delivery.active,
-                    },
-                );
-            }
+            Ok::<Delivery, anyhow::Error>(delivery)
         }
+    });
 
-        receipts.into_values().collect()
+    let remote_send_futures = remote_connections.into_iter().map(|connection| {
+        let message = message.clone();
+        let redis_connection = redis_connection.clone();
+        async move {
+            let instant = Instant::now();
+            let active = connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
+
+            post_message(
+                redis_connection,
+                MessageWithConnection {
+                    message: message.clone(),
+                    connection_id: connection.connection_id.clone(),
+                },
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish message to redis");
+            })?;
+
+            tracing::trace!(
+                "sent message to connection through redis in {:?}",
+                instant.elapsed()
+            );
+
+            let delivery = Delivery {
+                user_id: connection.user_id.clone(),
+                active,
+            };
+
+            Ok::<Delivery, anyhow::Error>(delivery)
+        }
+    });
+
+    let local_results = try_join_all(local_send_futures).await.unwrap_or_default();
+    let remote_results = try_join_all(remote_send_futures).await.unwrap_or_default();
+
+    let mut receipts: HashMap<String, MessageReceipt> = HashMap::new();
+
+    for delivery in local_results.into_iter().chain(remote_results.into_iter()) {
+        if let Some(receipt) = receipts.get_mut(&delivery.user_id) {
+            receipt.delivery_count += 1;
+            receipt.active = receipt.active || delivery.active;
+        } else {
+            receipts.insert(
+                delivery.user_id.clone(),
+                MessageReceipt {
+                    user_id: delivery.user_id,
+                    delivery_count: 1,
+                    active: delivery.active,
+                },
+            );
+        }
     }
-    .instrument(tracing::info_span!(
-        "send_messages_to_connections",
-        local_connection_count = tracing::field::Empty,
-        remote_connection_count = tracing::field::Empty,
-    ))
-    .await;
 
-    Ok(receipts)
+    receipts.into_values().collect()
 }
