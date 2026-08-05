@@ -9,6 +9,7 @@ use agent_client_protocol::{
     Error as AcpError, JsonRpcMessage, JsonRpcNotification, JsonRpcResponse, RawJsonRpcMessage,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::watch;
 
 #[cfg(test)]
 mod test;
@@ -44,14 +45,17 @@ pub struct FakeAgent {
     to_harness: Arc<Mutex<Option<UnboundedSender<RawJsonRpcMessage>>>>,
     from_harness: Arc<Mutex<Vec<RawJsonRpcMessage>>>,
     progress: Arc<Mutex<Progress>>,
+    request_count: watch::Sender<usize>,
 }
 
 impl FakeAgent {
     pub(crate) fn new(to_harness: UnboundedSender<RawJsonRpcMessage>) -> Self {
+        let (request_count, _) = watch::channel(0);
         Self {
             to_harness: Arc::new(Mutex::new(Some(to_harness))),
             from_harness: Arc::new(Mutex::new(Vec::new())),
             progress: Arc::new(Mutex::new(Progress::default())),
+            request_count,
         }
     }
 
@@ -157,6 +161,15 @@ impl FakeAgent {
             .collect()
     }
 
+    /// Wait until the harness has delivered at least `count` ACP requests.
+    pub async fn wait_for_requests(&self, count: usize) {
+        let mut requests = self.request_count.subscribe();
+        requests
+            .wait_for(|current| *current >= count)
+            .await
+            .expect("fake agent request counter should remain open");
+    }
+
     /// The notifications the harness sent, in order.
     #[must_use]
     pub fn received_notifications(&self) -> Vec<ClientNotification> {
@@ -179,6 +192,7 @@ impl FakeAgent {
     /// its session exists, or `session/new` before `initialize`. A real agent
     /// would reject these, so failing loudly beats recording them.
     pub(crate) fn deliver(&self, frame: RawJsonRpcMessage) {
+        let is_request = matches!(frame, RawJsonRpcMessage::Request(_));
         if let RawJsonRpcMessage::Request(request) = &frame {
             let mut progress = self.lock_progress();
             match parse::<ClientRequest>(&request.method, &request.params) {
@@ -204,6 +218,9 @@ impl FakeAgent {
             }
         }
         self.lock_received().push(frame);
+        if is_request {
+            self.request_count.send_modify(|count| *count += 1);
+        }
     }
 
     /// Stop being able to talk, so the harness sees the stream end.

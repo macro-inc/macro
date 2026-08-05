@@ -37,6 +37,7 @@ pub struct AgentPromptAction {
 pub enum AgentAction {
     /// Send the agent a prompt.
     Prompt(AgentPromptAction),
+    // compact, etc.
 }
 
 impl AgentAction {

@@ -227,6 +227,7 @@ dependencies = [
  "axum",
  "bots",
  "chrono",
+ "dashmap",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
@@ -238,6 +239,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "tracing",
  "workspace-hack",
 ]
 

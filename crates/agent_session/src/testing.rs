@@ -119,9 +119,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .cloned();
         let subthread = sessions
             .values()
-            .find(|session| {
-                session.channel_id != channel_id && matches_subthread(session)
-            })
+            .find(|session| session.channel_id != channel_id && matches_subthread(session))
             .cloned();
         Ok(match (dedicated, subthread) {
             (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {

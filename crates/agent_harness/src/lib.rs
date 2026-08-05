@@ -1,20 +1,18 @@
-//! The agent harness: sandboxed coding-agent session orchestration.
+//! Container transports for sandboxed coding-agent sessions.
 //!
-//! The harness persists a session, provisions or resumes its container, drives
-//! the ACP handshake, and keeps one actor per active session so actions remain
-//! ordered. Inactive sessions are restored through the container port on their
-//! next action.
+//! A provisioned container implements the agent-session transport contract and
+//! can be attached to [`agent_session::domain::service::AgentSessionService`].
+//! This crate owns container provider ports and adapters; `agent_session` owns
+//! persistence, ACP lifecycle, active actors, ordering, and logging.
 //!
-//! Ports and adapters. [`domain`] owns lifecycle policy and the ports it needs;
-//! [`inbound`] translates external commands; [`outbound`] hosts concrete
-//! container transports. Nothing here reads the environment or constructs its
-//! own adapters - that is the binary's job in `services/agent_harness_service`.
+//! Nothing here reads the environment or constructs its own adapters - that is
+//! the binary's job in `services/agent_harness_service`.
 #![deny(missing_docs)]
 // Every implementation below the ports is still `todo!()`, so the fields the
 // adapters hold are written but never read. Comes out as they land.
 #![allow(dead_code)]
 
-/// The session use case and the ports it needs.
+/// Container domain types and provisioning ports.
 pub mod domain;
 pub mod inbound;
 pub mod outbound;

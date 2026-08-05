@@ -1,8 +1,21 @@
+use agent_runtime_protocol::domain::ports::Transport;
+use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
 use macro_uuid::Uuid;
 
 use super::error::Result;
 use super::model::*;
+
+/// A bidirectional connection to an agent runtime.
+pub trait AgentConnector:
+    Transport<ToRuntimeMessage, ToServerMessage> + Send + Sync + 'static
+{
+}
+
+impl<T> AgentConnector for T where
+    T: Transport<ToRuntimeMessage, ToServerMessage> + Send + Sync + 'static
+{
+}
 
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
 /// from spawned tasks - a Kafka consumer hands each message to its own task,

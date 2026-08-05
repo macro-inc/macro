@@ -3,9 +3,12 @@
 use std::future::Future;
 
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::ports::AgentConnector;
 
-use crate::domain::connector::AgentConnector;
 use crate::domain::error::Result;
+
+#[cfg(test)]
+mod test;
 
 /// Identifies one sandbox at its provider.
 ///

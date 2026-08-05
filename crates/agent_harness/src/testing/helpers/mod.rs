@@ -2,4 +2,3 @@
 
 pub mod agent;
 pub mod containers;
-pub mod log;
