@@ -218,23 +218,89 @@ async fn job_attachments_for_backfill_includes_previously_contacted_participants
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
     let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
 
-    // Should return 3 attachments:
-    // 1. valid_document.pdf from Thread 1 (previously contacted participant)
-    // 2. mixed_thread_doc.pdf from Thread 3 (has previously contacted participant)
-    // 3. also_included_doc.docx from Thread 3 (same thread as #2)
-    assert_eq!(res.len(), 3);
-
-    // Check that the correct attachments are returned
     let filenames: Vec<&str> = res
         .iter()
-        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .map(|attachment| attachment.filename.as_deref().unwrap())
         .collect();
-    assert!(filenames.contains(&"valid_document.pdf"));
-    assert!(filenames.contains(&"mixed_thread_doc.pdf"));
-    assert!(filenames.contains(&"also_included_doc.docx"));
+    assert_eq!(
+        filenames,
+        vec![
+            "also_included_doc.docx",
+            "mixed_thread_doc.pdf",
+            "valid_document.pdf"
+        ]
+    );
 
-    // Verify excluded_document.pdf is NOT included (from thread with no contacted participants)
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_excludes_ineligible_and_filtered_attachments(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+    let filenames: Vec<&str> = res
+        .iter()
+        .filter_map(|attachment| attachment.filename.as_deref())
+        .collect();
+
     assert!(!filenames.contains(&"excluded_document.pdf"));
+    assert!(!filenames.contains(&"self_only.pdf"));
+    assert!(!filenames.contains(&"filtered_image.jpg"));
+    assert_eq!(res.len(), 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_allows_missing_self_contact(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000002a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename.as_deref(), Some("missing_self_contact.pdf"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_does_not_leak_other_links(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+
+    assert!(
+        res.iter()
+            .all(|attachment| attachment.filename.as_deref() != Some("other_link_document.pdf"))
+    );
 
     Ok(())
 }

@@ -165,47 +165,47 @@ pub async fn fetch_job_attachments_for_backfill(
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     let query = format!(
         r#"
-        -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
         WITH
-        user_email AS (
-            SELECT email_address
-            FROM public.email_links
-            WHERE id = $1
+        eligible_threads AS (
+            SELECT DISTINCT thread_id
+            FROM public.email_messages
+            WHERE link_id = $1
+                AND has_attachments = true
         ),
-
-        -- Step 2: Create a distinct list of OTHER people this user has ever sent mail to.
-        previously_contacted_emails AS (
-            SELECT DISTINCT ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = $1
-                AND em.is_sent = true
-                AND ec.email_address != (SELECT email_address FROM user_email)
+        self_contact AS (
+            SELECT c.id
+            FROM public.email_links l
+            JOIN public.email_contacts c
+                ON (c.link_id, c.email_address) = (l.id, l.email_address)
+            WHERE l.id = $1
         ),
-
-        -- Step 3: For each thread, create a complete list of OTHER participant email addresses.
-        thread_participants AS (
-            -- Get all senders in each thread (excluding the user)
-            SELECT DISTINCT em.thread_id, ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_contacts ec ON em.from_contact_id = ec.id
-            WHERE em.link_id = $1
-                AND ec.email_address != (SELECT email_address FROM user_email)
+        contacted AS (
+            SELECT DISTINCT emr.contact_id
+            FROM public.email_messages sent_message
+            JOIN public.email_message_recipients emr ON emr.message_id = sent_message.id
+            WHERE sent_message.link_id = $1
+                AND sent_message.is_sent = true
+        ),
+        participants AS (
+            SELECT message.thread_id, message.from_contact_id AS contact_id
+            FROM eligible_threads eligible
+            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
+            WHERE message.from_contact_id IS NOT NULL
 
             UNION
 
-            -- Get all recipients in each thread (excluding the user)
-            SELECT DISTINCT em.thread_id, ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
-            WHERE em.link_id = $1
-                AND ec.email_address != (SELECT email_address FROM user_email)
+            SELECT message.thread_id, recipient.contact_id
+            FROM eligible_threads eligible
+            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
+            JOIN public.email_message_recipients recipient ON recipient.message_id = message.id
+        ),
+        qualified_threads AS (
+            SELECT DISTINCT participant.thread_id
+            FROM participants participant
+            JOIN contacted ON contacted.contact_id = participant.contact_id
+            WHERE participant.contact_id IS DISTINCT FROM (SELECT id FROM self_contact)
         )
 
-        -- Final Step: Select attachments from threads where AT LEAST ONE of the OTHER participants
-        --             is in the list of OTHER previously_contacted_emails.
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -220,11 +220,7 @@ pub async fn fetch_job_attachments_for_backfill(
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
         JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE m.thread_id IN (
-                SELECT DISTINCT tp.thread_id
-                FROM thread_participants tp
-                INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
-            )
+        WHERE m.thread_id IN (SELECT thread_id FROM qualified_threads)
             -- attachment mime type filters injected below
             {}
             AND a.filename IS NOT NULL
