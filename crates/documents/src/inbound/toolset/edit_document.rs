@@ -1,5 +1,6 @@
 //! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
 
+use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
@@ -16,6 +17,9 @@ use serde::{Deserialize, Serialize};
 
 use super::DocumentToolContext;
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
@@ -28,6 +32,26 @@ pub struct EditDocument {
         description = "Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up."
     )]
     pub instructions: String,
+}
+
+/// The editing worker opens a sync-service session and blocks on the initial
+/// Loro snapshot. Content that lives anywhere else has no Loro doc, so nothing
+/// is ever sent and the worker fails with an opaque gateway error once its
+/// handshake times out. Reject those documents up front instead.
+fn ensure_sync_service_backed(content: &DocumentContent) -> Result<(), ToolCallError> {
+    if content.location == Some(DocumentContentLocation::SyncService) {
+        return Ok(());
+    }
+
+    let location = content.location_db_value().unwrap_or("unknown");
+    Err(ToolCallError {
+        description: format!(
+            "this document cannot be edited: its content is stored as `{location}`, not in Macro's collaborative markdown editor. Only Macro markdown documents support AI editing -- uploaded files (PDFs, DOCX, images, source files, and so on) do not. Report this back to the user rather than retrying."
+        ),
+        internal_error: anyhow::anyhow!(
+            "document content location {location} is not backed by sync-service"
+        ),
+    })
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -66,6 +90,27 @@ where
                 description: "you do not have edit access to this document".to_string(),
                 internal_error: e.into(),
             })?;
+
+        let document = ctx
+            .service
+            .internal_get_basic_document(&self.document_id)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "unable to look up this document".to_string(),
+                internal_error: e.into(),
+            })?;
+
+        let content = ctx
+            .service
+            .get_document_content(&document)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "unable to determine where this document's content is stored"
+                    .to_string(),
+                internal_error: e.into(),
+            })?;
+
+        ensure_sync_service_backed(&content)?;
 
         let document_token = encode_permission_token(
             Some(request_context.user_id.to_string()),
