@@ -428,17 +428,20 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
           </Layer>
         }
       >
-        <Layer depth={2}>
-          <ContextMenu.SubContent
-            class={cn(
-              MENU_CONTENT_CLASS,
-              props.class,
-              props.width && menuWidths[props.width]
-            )}
-          >
-            {props.children}
-          </ContextMenu.SubContent>
-        </Layer>
+        <ContextMenu.Portal>
+          <Layer depth={2}>
+            <ContextMenu.SubContent
+              class={cn(
+                MENU_CONTENT_CLASS,
+                props.class,
+                props.width && menuWidths[props.width]
+              )}
+              ref={contentRef}
+            >
+              {props.children}
+            </ContextMenu.SubContent>
+          </Layer>
+        </ContextMenu.Portal>
       </Show>
     </MobileConditionalOverlay>
   );
