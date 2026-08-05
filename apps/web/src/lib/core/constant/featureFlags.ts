@@ -563,3 +563,16 @@ export const ENABLE_CALENDAR_UI_FLAG = 'enable-calendar-ui';
 export const ENABLE_CALENDAR_UI_OVERRIDE =
   getFeatureFlagOverride('ENABLE_CALENDAR_UI') ??
   (DEV_MODE_ENV ? true : undefined);
+
+// The "Enable calendar" prompt on phones. Off by default everywhere,
+// including dev: the mobile toast layout drops the body and the close button,
+// so the prompt lands as an undismissable one-line bar over the composer.
+// Settings › Email keeps a per-inbox "Enable calendar" button, so nothing
+// becomes unreachable while this is off. Flip it on in PostHog once the
+// mobile layout is fixed, or locally with
+// VITE_ENABLE_CALENDAR_PROMPT_MOBILE=true.
+export const ENABLE_CALENDAR_PROMPT_MOBILE_FLAG =
+  'enable-calendar-prompt-mobile';
+export const ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_CALENDAR_PROMPT_MOBILE'
+);

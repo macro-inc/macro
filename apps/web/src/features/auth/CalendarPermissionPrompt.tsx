@@ -1,4 +1,7 @@
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import {
+  useCalendarPromptAllowed,
+  useCalendarUiFlag,
+} from '@app/features/calendar/use-calendar-ui-flag';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -12,15 +15,20 @@ import { useEmailLinksQuery } from '@queries/email/link';
  *
  * Inboxes that also need a full reconnect are skipped: the reconnect prompt
  * covers them, and reconnecting records the calendar grant anyway.
+ *
+ * Suppressed on phones unless `enable-calendar-prompt-mobile` says otherwise —
+ * the mobile toast layout can't present it without stranding the user. See
+ * `useCalendarPromptAllowed`.
  */
 export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
+  const promptAllowed = useCalendarPromptAllowed();
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
 
   useKeyedPersistentToasts({
     items: () =>
-      calendarUiEnabled()
+      calendarUiEnabled() && promptAllowed()
         ? (linksQuery.data?.links ?? []).filter(
             (link) => link.needs_calendar_permission && !link.needs_reauth
           )
