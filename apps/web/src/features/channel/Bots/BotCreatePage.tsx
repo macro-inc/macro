@@ -11,8 +11,9 @@ import {
   useAddBotToChannelsMutation,
   useCreateChannelScopedBotMutation,
 } from '@queries/channel/channel-bots';
+import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Button } from '@ui';
+import { Button, SegmentedControl } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { BotCreationResult } from './BotCreationResult';
@@ -29,14 +30,18 @@ import { ChannelMultiSelect } from './ChannelMultiSelect';
 import { createBotAvatarUpload } from './createBotAvatarUpload';
 
 type Stage = 'form' | 'creating' | 'ready';
+type BotOwnerScope = 'personal' | 'team';
 
 export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   const channelsContext = useChannelsContext();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const isTeamAdmin = useIsTeamAdmin();
   const createBotMutation = useCreateBotMutation();
   const createTokenMutation = useCreateBotTokenMutation();
   const createScopedBotMutation = useCreateChannelScopedBotMutation();
   const addBotToChannelsMutation = useAddBotToChannelsMutation();
   const [stage, setStage] = createSignal<Stage>('form');
+  const [ownerScope, setOwnerScope] = createSignal<BotOwnerScope>('personal');
   const [handleEdited, setHandleEdited] = createSignal(false);
   const [errors, setErrors] = createSignal<BotFormErrors>({});
   const [createdBot, setCreatedBot] = createSignal<Bot>();
@@ -54,6 +59,18 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
+  const currentTeam = createMemo(() => currentTeamQuery.data?.team);
+  const canCreateTeamBot = createMemo(
+    () => currentTeam() !== undefined && isTeamAdmin()
+  );
+  const ownerOptions = createMemo(() => [
+    { value: 'personal' as const, label: 'Personal' },
+    {
+      value: 'team' as const,
+      label: currentTeam()?.name?.trim() || 'Team',
+      disabled: !canCreateTeamBot(),
+    },
+  ]);
   const resultChannels = createMemo(() => {
     const selected = new Set(createdChannelIds());
     return channelOptions().filter((channel) => selected.has(channel.id));
@@ -72,6 +89,12 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   };
 
   const submit = () => {
+    const teamId = ownerScope() === 'team' ? currentTeam()?.id : undefined;
+    if (ownerScope() === 'team' && (!teamId || !canCreateTeamBot())) {
+      toast.failure('Only team admins and owners can create team bots');
+      return;
+    }
+
     const parsed = validateBotForm({
       ...form,
       handle: form.handle || slugBotHandle(form.name),
@@ -92,6 +115,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
       createScopedBotMutation.mutate(
         {
           channelId: firstChannelId,
+          team_id: teamId,
           name: values.name,
           handle: values.handle,
           description: values.description || undefined,
@@ -125,6 +149,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
 
     createBotMutation.mutate(
       {
+        teamId,
         name: values.name,
         handle: values.handle,
         description: values.description || undefined,
@@ -219,6 +244,34 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 }}
                 onDescriptionChange={(value) => setForm('description', value)}
               />
+            </BotFormSection>
+
+            <BotFormSection
+              title="Ownership"
+              description="Choose whether this bot belongs to you or your team."
+            >
+              <SegmentedControl
+                class="w-full"
+                value={ownerScope()}
+                options={ownerOptions()}
+                onChange={setOwnerScope}
+                aria-label="Bot owner"
+              />
+              <p class="mt-2 text-xs text-ink-muted">
+                <Show
+                  when={ownerScope() === 'team'}
+                  fallback="Personal bots are managed by you and use user scope."
+                >
+                  Team bots are shared with your team and can use team scope.
+                </Show>
+              </p>
+              <Show when={!currentTeamQuery.isLoading && !canCreateTeamBot()}>
+                <p class="mt-1 text-xs text-ink-extra-muted">
+                  {currentTeam()
+                    ? 'Only team admins and owners can create team bots.'
+                    : 'Join or create a team to create a team bot.'}
+                </p>
+              </Show>
             </BotFormSection>
 
             <BotFormSection
