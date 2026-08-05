@@ -26,6 +26,7 @@ ports = []
 anyhow = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+system_skills = { path = "../system_skills" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

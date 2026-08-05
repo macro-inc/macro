@@ -189,6 +189,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::create_task::create_task_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
         documents_hex::inbound::axum_router::create_skill::create_skill_handler,
+        documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 

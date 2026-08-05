@@ -106,6 +106,7 @@ macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+system_skills = { path = "../system_skills" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
@@ -147,6 +148,7 @@ model_file_type = { path = "../model_file_type", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+
 
 # Attachment
 attachment = { path = "../attachment", optional = true }

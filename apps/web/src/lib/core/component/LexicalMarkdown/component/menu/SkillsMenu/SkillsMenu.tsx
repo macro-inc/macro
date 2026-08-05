@@ -6,10 +6,13 @@ import type {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityItem } from '@core/context/quickAccess';
+import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-search';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import PlusIcon from '@phosphor/plus.svg';
+import { useSystemSkillsQuery } from '@queries/storage/system-skills';
+import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';
 import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -39,6 +42,30 @@ false && floatWithSelection;
 // Height consumed by Surface's border + vertical padding
 const PANEL_DECORATION_HEIGHT = 18;
 
+/**
+ * A built-in system skill as a menu item. System skills are static strings in
+ * code, not documents, so they are appended to the quick-access list here
+ * rather than flowing through the soup queries.
+ */
+function systemSkillItem(skill: SystemSkillSummary): EntityItem {
+  return {
+    kind: 'entity',
+    id: skill.documentId,
+    bucket: 'skill',
+    searchText: skill.name.toLowerCase(),
+    sortTimestamp: 0,
+    timestamps: {},
+    data: {
+      id: skill.documentId,
+      name: skill.name,
+      ownerId: '',
+      type: 'document',
+      fileType: 'md',
+      subType: { type: 'skill' },
+    },
+  };
+}
+
 type SkillsMenuProps = {
   editor: LexicalEditor;
   menu: MenuOperations;
@@ -66,10 +93,20 @@ function SkillsMenuInner(props: SkillsMenuProps) {
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
-  const { entities: skills } = useEntityMention({
+  const { entities: userSkills } = useEntityMention({
     buckets: ['skill'],
     searchTerm: activeSearchTerm,
   });
+
+  const systemSkills = useSystemSkillsQuery();
+  const systemSkillItems = () => systemSkills.skills().map(systemSkillItem);
+
+  // User skills first, system skills at the bottom, both narrowed by the
+  // active search term.
+  const skills = () => [
+    ...userSkills(),
+    ...searchQuickAccessEntities(systemSkillItems(), activeSearchTerm()),
+  ];
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();

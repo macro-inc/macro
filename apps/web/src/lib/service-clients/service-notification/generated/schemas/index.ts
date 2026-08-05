@@ -159,6 +159,8 @@ export * from './notifEventOneOfTwothreeTag';
 export * from './notificationBulkRequest';
 export * from './notificationDocumentSubType';
 export * from './notificationDocumentSubTypeOneOf';
+export * from './notificationDocumentSubTypeOneOfFive';
+export * from './notificationDocumentSubTypeOneOfFiveType';
 export * from './notificationDocumentSubTypeOneOfThree';
 export * from './notificationDocumentSubTypeOneOfThreeType';
 export * from './notificationDocumentSubTypeOneOfType';

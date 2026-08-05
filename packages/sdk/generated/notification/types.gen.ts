@@ -886,6 +886,8 @@ export type NotificationDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type NotificationServiceApiVersion = 'v1';

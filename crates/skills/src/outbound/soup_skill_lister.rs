@@ -7,9 +7,10 @@ use document_sub_type::DocumentSubType;
 use email::domain::models::PreviewView;
 use filter_ast::Expr;
 use item_filters::ast::{
-    EntityFilterAst, call::CallLiteral, channel::ChannelLiteral, channel::ChannelThreadLiteral,
-    chat::ChatLiteral, crm_company::CrmCompanyLiteral, document::DocumentLiteral,
-    email::EmailLiteral, foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
+    EntityFilterAst, calendar_event::CalendarEventLiteral, call::CallLiteral,
+    channel::ChannelLiteral, channel::ChannelThreadLiteral, chat::ChatLiteral,
+    crm_company::CrmCompanyLiteral, document::DocumentLiteral, email::EmailLiteral,
+    foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
@@ -65,6 +66,7 @@ fn skill_only_filter() -> EntityFilterAst {
         call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         properties_filter: None,
     }
 }

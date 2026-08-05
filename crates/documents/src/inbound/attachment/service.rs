@@ -131,6 +131,24 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
         user_id: &MacroUserIdStr<'_>,
         id: &str,
     ) -> Result<AttachmentContent<'static>, AttachmentError> {
+        // System skills are static, code-defined content with well-known ids
+        // rather than documents; resolve them before any document lookup or
+        // access check (they are visible to every user).
+        if let Some(skill) = uuid::Uuid::from_str(id)
+            .ok()
+            .and_then(system_skills::system_skill)
+        {
+            return Ok(AttachmentContent {
+                reference: EntityType::Document.with_entity_string(id.to_string()),
+                name: Some(skill.name.to_string()),
+                content: NonEmpty::new(vec![
+                    skill_type_metadata(),
+                    AttachmentPart::Content(skill.render_content()),
+                ])
+                .expect("content is non-empty"),
+            });
+        }
+
         let receipt = self
             .entity_access_service
             .generate_entity_access_receipt(user_id, None, id, EntityType::Document)
@@ -227,6 +245,16 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
                 "unexpected location response for document"
             ))),
         }
+    }
+}
+
+/// Metadata part marking an attachment as a skill, so the AI treats its
+/// content as instructions to follow (see the `skills` section of the system
+/// prompt) rather than as a document under discussion.
+pub(super) fn skill_type_metadata() -> AttachmentPart<'static> {
+    AttachmentPart::Metadata {
+        key: "type".to_string(),
+        value: "skill".to_string(),
     }
 }
 

@@ -267,6 +267,9 @@ export const listTypedNotificationsResponse = zod
                                     zod.object({
                                       type: zod.enum(['snippet']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -306,6 +309,9 @@ export const listTypedNotificationsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -350,6 +356,9 @@ export const listTypedNotificationsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -396,6 +405,9 @@ export const listTypedNotificationsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -646,6 +658,9 @@ export const listTypedNotificationsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -1551,6 +1566,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                     zod.object({
                                       type: zod.enum(['snippet']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -1590,6 +1608,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -1634,6 +1655,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -1680,6 +1704,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -1930,6 +1957,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -2829,6 +2859,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                     zod.object({
                                       type: zod.enum(['snippet']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum(['skill']),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -2868,6 +2901,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -2912,6 +2948,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -2958,6 +2997,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -3208,6 +3250,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['snippet']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['skill']),
                                   }),
                                 ])
                                 .describe(
@@ -4112,6 +4157,9 @@ export const getTypedNotificationByIdResponse = zod
                             zod.object({
                               type: zod.enum(['snippet']),
                             }),
+                            zod.object({
+                              type: zod.enum(['skill']),
+                            }),
                           ])
                           .describe(
                             'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -4149,6 +4197,9 @@ export const getTypedNotificationByIdResponse = zod
                           }),
                           zod.object({
                             type: zod.enum(['snippet']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['skill']),
                           }),
                         ])
                         .describe(
@@ -4189,6 +4240,9 @@ export const getTypedNotificationByIdResponse = zod
                           }),
                           zod.object({
                             type: zod.enum(['snippet']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['skill']),
                           }),
                         ])
                         .describe(
@@ -4231,6 +4285,9 @@ export const getTypedNotificationByIdResponse = zod
                           }),
                           zod.object({
                             type: zod.enum(['snippet']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['skill']),
                           }),
                         ])
                         .describe(
@@ -4465,6 +4522,9 @@ export const getTypedNotificationByIdResponse = zod
                           }),
                           zod.object({
                             type: zod.enum(['snippet']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['skill']),
                           }),
                         ])
                         .describe(

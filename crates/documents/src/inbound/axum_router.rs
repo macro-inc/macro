@@ -12,6 +12,7 @@
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `POST /create_snippet` — create and initialize a snippet document
 //! - `POST /create_skill` — create and initialize a skill document
+//! - `GET /system_skills` — list the built-in system skills
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -38,6 +39,7 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod system_skills;
 pub mod task_duplicates;
 pub mod team_share;
 
@@ -79,6 +81,7 @@ use self::{
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
     put_snapshot::put_snapshot_handler,
+    system_skills::get_system_skills_handler,
     task_duplicates::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
         get_task_duplicates_handler, task_similarity_search_handler,
@@ -294,6 +297,10 @@ where
         .route(
             "/similarity_search",
             axum::routing::post(task_similarity_search_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/system_skills",
+            axum::routing::get(get_system_skills_handler::<Auth>),
         );
 
     #[cfg(feature = "document_create")]

@@ -4687,6 +4687,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
@@ -13810,6 +13811,7 @@ dependencies = [
  "search_service_client",
  "serde",
  "soup",
+ "system_skills",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -14626,6 +14628,15 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_skills"
+version = "0.1.0"
+dependencies = [
+ "prompt",
  "uuid",
  "workspace-hack",
 ]

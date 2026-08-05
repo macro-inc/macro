@@ -33,6 +33,51 @@ fn sort_most_recently_updated_first(skills: &mut [SkillSummary]) {
     });
 }
 
+fn system_skill_summaries() -> impl Iterator<Item = SkillSummary> {
+    system_skills::SYSTEM_SKILLS
+        .iter()
+        .map(|skill| SkillSummary {
+            document_id: skill.id(),
+            name: skill.name.to_string(),
+            updated_at: None,
+        })
+}
+
+fn tokenize(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Matches a system skill name against a query with the same semantics the
+/// search service applies to skill documents: the query tokens must appear as
+/// an adjacent run of name tokens. [`SkillMatchType::Partial`] additionally
+/// lets the final query token match a name-token prefix.
+fn system_skill_name_matches(name: &str, query: &str, match_type: SkillMatchType) -> bool {
+    let name_tokens = tokenize(name);
+    let query_tokens = tokenize(query);
+    if query_tokens.is_empty() || query_tokens.len() > name_tokens.len() {
+        return false;
+    }
+
+    (0..=name_tokens.len() - query_tokens.len()).any(|start| {
+        query_tokens
+            .iter()
+            .enumerate()
+            .all(|(offset, query_token)| {
+                let name_token = &name_tokens[start + offset];
+                let is_last = offset == query_tokens.len() - 1;
+                match match_type {
+                    SkillMatchType::Exact => name_token == query_token,
+                    SkillMatchType::Partial if is_last => name_token.starts_with(query_token),
+                    SkillMatchType::Partial => name_token == query_token,
+                }
+            })
+    })
+}
+
 impl<S: SkillSearcher, L: SkillLister> SkillService for SkillServiceImpl<S, L> {
     #[tracing::instrument(skip(self), err)]
     async fn search_skills(
@@ -53,6 +98,13 @@ impl<S: SkillSearcher, L: SkillLister> SkillService for SkillServiceImpl<S, L> {
             .search_skills_by_name(user_id, query, match_type)
             .await?;
 
+        // System skills are static, so they are matched here rather than by
+        // the search backend.
+        skills.extend(
+            system_skill_summaries()
+                .filter(|skill| system_skill_name_matches(&skill.name, query, match_type)),
+        );
+
         sort_most_recently_updated_first(&mut skills);
 
         Ok(skills)
@@ -64,6 +116,10 @@ impl<S: SkillSearcher, L: SkillLister> SkillService for SkillServiceImpl<S, L> {
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Vec<SkillSummary>, SkillError> {
         let mut skills = self.lister.list_skills(user_id, LIST_LIMIT).await?;
+
+        // System skills are visible to everyone; having no update timestamp,
+        // they sort after every user skill.
+        skills.extend(system_skill_summaries());
 
         sort_most_recently_updated_first(&mut skills);
 

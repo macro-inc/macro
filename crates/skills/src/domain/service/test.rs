@@ -121,13 +121,62 @@ async fn search_results_are_sorted_most_recently_updated_first() {
         FakeLister::unused(),
     );
 
+    // A query no system skill name matches, so only searcher results return.
     let results = service
-        .search_skills(&user(), "skill", SkillMatchType::Partial)
+        .search_skills(&user(), "quarterly report", SkillMatchType::Partial)
         .await
         .unwrap();
 
     let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["newest", "newer", "older", "never-updated"]);
+}
+
+#[tokio::test]
+async fn search_includes_matching_system_skills() {
+    let service = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused());
+
+    let results = service
+        .search_skills(&user(), "skill authoring", SkillMatchType::Partial)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        results,
+        vec![SkillSummary {
+            document_id: system_skills::skill_authoring::SKILL.id(),
+            name: "Skill Authoring Guide".to_string(),
+            updated_at: None,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn search_excludes_non_matching_system_skills() {
+    // "author" alone only prefix-matches when partial; exact must not match.
+    let partial = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused())
+        .search_skills(&user(), "author", SkillMatchType::Partial)
+        .await
+        .unwrap();
+    let exact = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused())
+        .search_skills(&user(), "author", SkillMatchType::Exact)
+        .await
+        .unwrap();
+
+    assert_eq!(partial.len(), 1);
+    assert!(exact.is_empty());
+}
+
+#[tokio::test]
+async fn system_skill_matching_requires_adjacent_tokens() {
+    let service = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused());
+
+    // "skill guide" skips the middle token, so the phrase must not match.
+    let results = service
+        .search_skills(&user(), "skill guide", SkillMatchType::Partial)
+        .await
+        .unwrap();
+
+    assert!(results.is_empty());
 }
 
 #[tokio::test]
@@ -156,7 +205,27 @@ async fn listed_skills_are_sorted_most_recently_updated_first() {
     let results = service.list_skills(&user()).await.unwrap();
 
     let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, vec!["newest", "older", "never-updated"]);
+    // System skills have no update timestamp, so they sort with (after, by
+    // id) the never-updated user skills.
+    assert_eq!(names.first(), Some(&"newest"));
+    assert_eq!(names.get(1), Some(&"older"));
+    assert!(names.contains(&"never-updated"));
+    for system in system_skills::SYSTEM_SKILLS {
+        assert!(names.contains(&system.name));
+    }
+}
+
+#[tokio::test]
+async fn listing_always_includes_system_skills() {
+    let service = SkillServiceImpl::new(FakeSearcher::unused(), FakeLister::returning(vec![]));
+
+    let results = service.list_skills(&user()).await.unwrap();
+
+    let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names.len(), system_skills::SYSTEM_SKILLS.len());
+    for system in system_skills::SYSTEM_SKILLS {
+        assert!(names.contains(&system.name));
+    }
 }
 
 #[tokio::test]

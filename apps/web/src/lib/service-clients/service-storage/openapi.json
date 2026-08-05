@@ -6250,6 +6250,46 @@
         }
       }
     },
+    "/documents/system_skills": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "operationId": "get_system_skills_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response listing the built-in system skills.",
+                  "required": ["skills"],
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemSkillSummary"
+                      },
+                      "description": "Every system skill, in display order."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -23388,6 +23428,22 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "SystemSkillSummary": {
+        "type": "object",
+        "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
+        "required": ["documentId", "name"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The well-known id the skill is referenced by in mentions and AI tools.\nNot a real document id: system skills cannot be opened as documents."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the skill."
           }
         }
       },

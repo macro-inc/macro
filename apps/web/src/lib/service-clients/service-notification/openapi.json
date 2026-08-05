@@ -2381,6 +2381,16 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern."

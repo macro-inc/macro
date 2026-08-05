@@ -114,6 +114,7 @@ import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreateP
 import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
+import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
@@ -1385,6 +1386,17 @@ export const storageServiceClient = {
 
     const response = result.value;
     return ok(response);
+  },
+
+  /**
+   * Lists the built-in system skills. System skills are static, code-defined
+   * AI instructions with well-known ids; they surface like skill documents
+   * but have no document behind them and must not be opened as documents.
+   */
+  async getSystemSkills() {
+    return dssFetch<GetSystemSkillsHandler200>(`/documents/system_skills`, {
+      method: 'GET',
+    });
   },
 
   async getSnippetRaw(args: {

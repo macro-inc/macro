@@ -42,6 +42,7 @@ import {
   type PreviewItemNoAccess,
   useItemPreview,
 } from '@queries/preview';
+import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -98,6 +99,58 @@ function MentionContainer(props: {
           {props.text}
         </span>
       </Show>
+    </span>
+  );
+}
+
+/**
+ * Skill mentions render as `/Skill Name` in the accent color rather than the
+ * icon-and-underline pill other document mentions use. Same mention node and
+ * data attributes — only the visual differs.
+ *
+ * Clicking opens the skill document. The listener is a native (`on:click`)
+ * one rather than Solid's delegated `onClick`: inside an editable editor
+ * Lexical stops click propagation before it reaches the document-level
+ * delegation, so skill mentions in the chat input would otherwise be inert.
+ * System skills have no document behind them and never open.
+ */
+function SkillSlashText(props: {
+  documentId: string;
+  name: string;
+  collapsed?: boolean;
+  dimmed?: boolean;
+}) {
+  const systemSkills = useSystemSkillsQuery();
+  const openSkill = createCallback((e: MouseEvent) => {
+    if (systemSkills.isSystemSkillId(props.documentId)) return;
+    // Also keeps the outer mention click handler (read-only contexts) from
+    // opening the skill a second time.
+    e.stopPropagation();
+    openDocument(
+      'skill',
+      props.documentId,
+      undefined,
+      openInNewSplitForMention(e.shiftKey, true)
+    );
+  });
+  return (
+    <span
+      class="pointer-events-auto mx-1 text-accent"
+      classList={{ 'opacity-50': props.dimmed }}
+      on:mousedown={(e) => e.preventDefault()}
+      on:click={openSkill}
+    >
+      <span
+        data-document-mention="true"
+        data-document-id={props.documentId}
+        data-block-name="skill"
+        data-document-name={props.name}
+      >
+        /
+        <Show when={!props.collapsed}>
+          {props.name.replaceAll('\n', ' ').trim()}
+        </Show>
+      </span>
     </span>
   );
 }
@@ -181,128 +234,166 @@ function InlinePreview(props: {
       props.documentName
     );
   });
+  const isSkill = () => props.blockName === 'skill';
+
   return (
     <Switch>
       <Match when={item().loading}>
-        <MentionContainer
-          icon={
-            <EntityIcon
-              targetType={props.blockName as any}
-              size="fill"
-              class="animate-pulse"
+        <Show
+          when={isSkill()}
+          fallback={
+            <MentionContainer
+              icon={
+                <EntityIcon
+                  targetType={props.blockName as any}
+                  size="fill"
+                  class="animate-pulse"
+                />
+              }
+              text={
+                <span
+                  data-document-mention="true"
+                  data-document-id={props.entity.id}
+                  data-block-name={props.blockName}
+                  data-document-name={props.documentName}
+                  class="opacity-50"
+                >
+                  <Show when={props.documentName} fallback={'Loading...'}>
+                    {(name) => name().replaceAll('\n', ' ').trim()}
+                  </Show>
+                </span>
+              }
+              collapsed={props.collapsed}
             />
           }
-          text={
-            <span
-              data-document-mention="true"
-              data-document-id={props.entity.id}
-              data-block-name={props.blockName}
-              data-document-name={props.documentName}
-              class="opacity-50"
-            >
-              <Show when={props.documentName} fallback={'Loading...'}>
-                {(name) => name().replaceAll('\n', ' ').trim()}
-              </Show>
-            </span>
-          }
-          collapsed={props.collapsed}
-        />
+        >
+          <SkillSlashText
+            documentId={props.entity.id}
+            name={props.documentName ?? ''}
+            collapsed={props.collapsed}
+            dimmed
+          />
+        </Show>
       </Match>
       <Match when={shouldShowFallback()}>
-        <MentionContainer
-          icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
-          text={
-            <span
-              data-document-mention="true"
-              data-document-id={props.entity.id}
-              data-block-name={props.blockName}
-              data-document-name={props.documentName}
-            >
-              <Show when={props.documentName} fallback={'Unknown'}>
-                {(name) => name().replaceAll('\n', ' ').trim()}
-              </Show>
-              <span class="relative text-[0.8em] text-current/50 rounded-md">
-                {(() => {
-                  const accessories = mentionsAccessories(
-                    props.blockName as BlockName,
-                    props.blockParams
-                  );
-                  if (accessories) {
-                    return (
-                      <>
-                        {` ${accessories.note ?? ''}`}
-                        {getMentionsIcon(accessories.icon)}
-                      </>
-                    );
-                  }
-                })()}
-              </span>
-            </span>
+        <Show
+          when={isSkill()}
+          fallback={
+            <MentionContainer
+              icon={
+                <EntityIcon targetType={props.blockName as any} size="fill" />
+              }
+              text={
+                <span
+                  data-document-mention="true"
+                  data-document-id={props.entity.id}
+                  data-block-name={props.blockName}
+                  data-document-name={props.documentName}
+                >
+                  <Show when={props.documentName} fallback={'Unknown'}>
+                    {(name) => name().replaceAll('\n', ' ').trim()}
+                  </Show>
+                  <span class="relative text-[0.8em] text-current/50 rounded-md">
+                    {(() => {
+                      const accessories = mentionsAccessories(
+                        props.blockName as BlockName,
+                        props.blockParams
+                      );
+                      if (accessories) {
+                        return (
+                          <>
+                            {` ${accessories.note ?? ''}`}
+                            {getMentionsIcon(accessories.icon)}
+                          </>
+                        );
+                      }
+                    })()}
+                  </span>
+                </span>
+              }
+              collapsed={props.collapsed}
+            />
           }
-          collapsed={props.collapsed}
-        />
+        >
+          <SkillSlashText
+            documentId={props.entity.id}
+            name={props.documentName ?? ''}
+            collapsed={props.collapsed}
+          />
+        </Show>
       </Match>
       <Match when={matches(item(), isAccessiblePreviewItem)}>
         {(accessibleItem) => (
-          <MentionContainer
-            icon={
-              <ItemEntityIcon
-                size="fill"
-                theme={
-                  accessibleItem().type !== 'channel' &&
-                  props.theme?.['document-mention'] === 'chat-blue'
-                    ? 'monochrome'
-                    : undefined
+          <Show
+            when={isSkill()}
+            fallback={
+              <MentionContainer
+                icon={
+                  <ItemEntityIcon
+                    size="fill"
+                    theme={
+                      accessibleItem().type !== 'channel' &&
+                      props.theme?.['document-mention'] === 'chat-blue'
+                        ? 'monochrome'
+                        : undefined
+                    }
+                  />
                 }
+                text={
+                  <span
+                    data-document-mention="true"
+                    data-document-id={accessibleItem().id}
+                    data-block-name={props.blockName}
+                    data-document-name={accessibleItem().name}
+                  >
+                    {accessibleItem().name.replaceAll('\n', ' ').trim()}
+                    <Show
+                      when={
+                        accessibleItem().type === 'call' &&
+                        accessibleItem().updatedAt
+                      }
+                    >
+                      {(timeStamp) => {
+                        return (
+                          <span class="text-current/50 text-[0.8em]">
+                            {` ${formatDate(timeStamp(), { showTime: true })}`}
+                          </span>
+                        );
+                      }}
+                    </Show>
+                    <span class="relative text-[0.8em] text-current/50 rounded-xs">
+                      {(() => {
+                        const accessories = mentionsAccessories(
+                          props.blockName as BlockName,
+                          props.blockParams
+                        );
+                        if (accessories) {
+                          return (
+                            <>
+                              {` ${accessories.note ?? ''}`}
+                              {getMentionsIcon(accessories.icon)}
+                            </>
+                          );
+                        }
+                      })()}
+                    </span>
+                    <Show when={props.blockName === 'task'}>
+                      <Suspense>
+                        <InlineTaskProperties taskId={accessibleItem().id} />
+                      </Suspense>
+                    </Show>
+                  </span>
+                }
+                collapsed={props.collapsed}
               />
             }
-            text={
-              <span
-                data-document-mention="true"
-                data-document-id={accessibleItem().id}
-                data-block-name={props.blockName}
-                data-document-name={accessibleItem().name}
-              >
-                {accessibleItem().name.replaceAll('\n', ' ').trim()}
-                <Show
-                  when={
-                    accessibleItem().type === 'call' &&
-                    accessibleItem().updatedAt
-                  }
-                >
-                  {(timeStamp) => {
-                    return (
-                      <span class="text-current/50 text-[0.8em]">
-                        {` ${formatDate(timeStamp(), { showTime: true })}`}
-                      </span>
-                    );
-                  }}
-                </Show>
-                <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                  {(() => {
-                    const accessories = mentionsAccessories(
-                      props.blockName as BlockName,
-                      props.blockParams
-                    );
-                    if (accessories) {
-                      return (
-                        <>
-                          {` ${accessories.note ?? ''}`}
-                          {getMentionsIcon(accessories.icon)}
-                        </>
-                      );
-                    }
-                  })()}
-                </span>
-                <Show when={props.blockName === 'task'}>
-                  <Suspense>
-                    <InlineTaskProperties taskId={accessibleItem().id} />
-                  </Suspense>
-                </Show>
-              </span>
-            }
-            collapsed={props.collapsed}
-          />
+          >
+            <SkillSlashText
+              documentId={accessibleItem().id}
+              name={accessibleItem().name}
+              collapsed={props.collapsed}
+            />
+          </Show>
         )}
       </Match>
       <Match when={(item() as PreviewItemNoAccess).access === 'no_access'}>
@@ -320,15 +411,54 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
   }
+  const systemSkills = useSystemSkillsQuery();
   return (
-    <Suspense>
-      <DocumentMentionInner {...props} />
-    </Suspense>
+    <Switch>
+      <Match when={systemSkills.getSystemSkill(props.documentId)}>
+        {(skill) => <SystemSkillMention name={skill().name} {...props} />}
+      </Match>
+      {/* Until the (once-per-session) system skill list arrives, ids can't be
+          classified — render from the stored name so a system skill never
+          flashes the preview service's "Deleted" state. */}
+      <Match when={systemSkills.query.isPending}>
+        <DocumentMentionStatic {...props} />
+      </Match>
+      <Match when={true}>
+        <Suspense>
+          <DocumentMentionInner {...props} />
+        </Suspense>
+      </Match>
+    </Switch>
+  );
+}
+
+/**
+ * Mention pill for a built-in system skill. System skills are static strings
+ * in code, not documents, so there is nothing to preview-fetch and nothing to
+ * open — the pill never navigates.
+ */
+function SystemSkillMention(
+  props: DocumentMentionDecoratorProps & { name: string }
+) {
+  return (
+    <SkillSlashText
+      documentId={props.documentId}
+      name={props.name}
+      collapsed={props.collapsed}
+    />
   );
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
 function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+  if (props.blockName === 'skill') {
+    return (
+      <SkillSlashText
+        documentId={props.documentId}
+        name={props.documentName ?? ''}
+      />
+    );
+  }
   return (
     <MentionContainer
       icon={<EntityIcon targetType={props.blockName as any} size="fill" />}

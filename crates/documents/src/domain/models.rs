@@ -530,6 +530,29 @@ pub struct CreateSkillResponse {
     pub document_id: String,
 }
 
+/// A built-in system skill: static, code-defined AI instructions surfaced
+/// through the same tools as user-authored skill documents, but with no
+/// document behind them.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillSummary {
+    /// The well-known id the skill is referenced by in mentions and AI tools.
+    /// Not a real document id: system skills cannot be opened as documents.
+    pub document_id: uuid::Uuid,
+    /// The name of the skill.
+    pub name: String,
+}
+
+/// Response listing the built-in system skills.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillsResponse {
+    /// Every system skill, in display order.
+    pub skills: Vec<SystemSkillSummary>,
+}
+
 /// The team-share state of a document. The team is resolved from the document
 /// owner's team membership.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

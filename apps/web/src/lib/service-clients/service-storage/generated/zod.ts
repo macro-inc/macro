@@ -5417,6 +5417,33 @@ export const handlerResponse = zod
   .describe('The deterministic starter document ids for the current user.');
 
 /**
+ * @summary Lists the built-in system skills. System skills are static, code-defined
+AI instructions (see the `system_skills` crate); they surface in the
+skills menu and AI skill tools like user skills, but have no document
+behind them, so clients must not offer to open them.
+ */
+export const getSystemSkillsHandlerResponse = zod
+  .object({
+    skills: zod
+      .array(
+        zod
+          .object({
+            documentId: zod
+              .uuid()
+              .describe(
+                'The well-known id the skill is referenced by in mentions and AI tools.\nNot a real document id: system skills cannot be opened as documents.'
+              ),
+            name: zod.string().describe('The name of the skill.'),
+          })
+          .describe(
+            'A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.'
+          )
+      )
+      .describe('Every system skill, in display order.'),
+  })
+  .describe('Response listing the built-in system skills.');
+
+/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */

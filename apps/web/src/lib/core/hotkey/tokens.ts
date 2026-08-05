@@ -264,8 +264,6 @@ export const TOKENS = {
     taskNewSplit: 'create.taskNewSplit',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
-    skill: 'create.skill',
-    skillNewSplit: 'create.skillNewSplit',
     close_menu: 'create.close_menu',
   },
 

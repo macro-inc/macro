@@ -7668,6 +7668,23 @@ export type SyncServiceVersionId = {
 };
 
 /**
+ * A built-in system skill: static, code-defined AI instructions surfaced
+ * through the same tools as user-authored skill documents, but with no
+ * document behind them.
+ */
+export type SystemSkillSummary = {
+    /**
+     * The well-known id the skill is referenced by in mentions and AI tools.
+     * Not a real document id: system skills cannot be opened as documents.
+     */
+    documentId: string;
+    /**
+     * The name of the skill.
+     */
+    name: string;
+};
+
+/**
  * How multiple `tag_option_ids` combine when filtering.
  */
 export type TagFilterMode = 'any' | 'all';
@@ -10653,6 +10670,33 @@ export type HandlerResponses = {
 };
 
 export type HandlerResponse = HandlerResponses[keyof HandlerResponses];
+
+export type GetSystemSkillsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/documents/system_skills';
+};
+
+export type GetSystemSkillsHandlerErrors = {
+    401: ErrorResponse;
+};
+
+export type GetSystemSkillsHandlerError = GetSystemSkillsHandlerErrors[keyof GetSystemSkillsHandlerErrors];
+
+export type GetSystemSkillsHandlerResponses = {
+    /**
+     * Response listing the built-in system skills.
+     */
+    200: {
+        /**
+         * Every system skill, in display order.
+         */
+        skills: Array<SystemSkillSummary>;
+    };
+};
+
+export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
 export type DeleteDocumentData = {
     body?: never;
