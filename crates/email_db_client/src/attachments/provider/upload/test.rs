@@ -287,6 +287,14 @@ async fn insertable_attachments_condition_5_previously_contacted(
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-401");
 
+    let second_res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
+        message_provider_id,
+    )
+    .await?;
+    assert!(second_res.is_empty());
+
     Ok(())
 }
 
@@ -636,6 +644,139 @@ async fn new_email_media_returns_empty_for_nonexistent_message(pool: Pool<Postgr
 // ============================================================================
 // Upload claim tests - verify attachments are atomically claimed
 // ============================================================================
+
+fn claim_test_link_id() -> Uuid {
+    Uuid::parse_str("00000000-0000-0000-0000-000000000c01").unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_finds_eligible_unclaimed_attachment(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    assert!(
+        message_has_unclaimed_document_attachment(
+            &pool,
+            claim_test_link_id(),
+            "claim-test-doc-msg"
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_excludes_preclaimed_attachment(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    assert!(
+        !message_has_unclaimed_document_attachment(
+            &pool,
+            claim_test_link_id(),
+            "claim-test-preclaimed-msg"
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn document_candidate_probe_excludes_existing_document_email(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+
+    assert!(!message_has_unclaimed_document_attachment(&pool, link_id, "target-msg-701").await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_excludes_unsupported_mime_types(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    assert!(
+        !message_has_unclaimed_document_attachment(
+            &pool,
+            claim_test_link_id(),
+            "claim-test-media-msg"
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_excludes_missing_filenames(pool: Pool<Postgres>) -> Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE email_attachments
+        SET filename = NULL
+        WHERE message_id = '00000000-0000-0000-0000-0000000ec101'
+        "#
+    )
+    .execute(&pool)
+    .await?;
+
+    assert!(
+        !message_has_unclaimed_document_attachment(
+            &pool,
+            claim_test_link_id(),
+            "claim-test-doc-msg"
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_excludes_unknown_message(pool: Pool<Postgres>) -> Result<()> {
+    assert!(
+        !message_has_unclaimed_document_attachment(&pool, claim_test_link_id(), "unknown-message")
+            .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn document_candidate_probe_excludes_mismatched_link(pool: Pool<Postgres>) -> Result<()> {
+    let other_link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+
+    assert!(
+        !message_has_unclaimed_document_attachment(&pool, other_link_id, "claim-test-doc-msg")
+            .await?
+    );
+
+    Ok(())
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

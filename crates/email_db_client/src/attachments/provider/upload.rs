@@ -220,6 +220,40 @@ pub async fn fetch_job_attachments_for_backfill(
     Ok(attachments)
 }
 
+async fn message_has_unclaimed_document_attachment(
+    db: &Pool<Postgres>,
+    link_id: Uuid,
+    message_provider_id: &str,
+) -> anyhow::Result<bool> {
+    let query = format!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM email_attachments a
+            JOIN email_messages m ON a.message_id = m.id
+            LEFT JOIN document_email de ON de.email_attachment_id = a.id
+            WHERE m.link_id = $2
+                AND m.provider_id = $1
+                AND de.email_attachment_id IS NULL
+                AND a.upload_claimed_at IS NULL
+                AND a.filename IS NOT NULL
+                {}
+        )
+        "#,
+        ATTACHMENT_MIME_TYPE_FILTERS
+    );
+
+    // The attachment filter is generated from a trusted allowlist, so this query must remain
+    // dynamic. Runtime values are passed only as bind parameters.
+    let has_candidate = sqlx::query_scalar::<_, bool>(&query)
+        .bind(message_provider_id)
+        .bind(link_id)
+        .fetch_one(db)
+        .await?;
+
+    Ok(has_candidate)
+}
+
 /// Fetch and atomically claim attachments for a specific message to upload to Macro.
 /// This is called when a new email is inserted for a user. Attachments for the message
 /// should be uploaded if any message in the message's thread meets any of the following criteria:
@@ -317,6 +351,10 @@ pub async fn new_email_document_atts(
 
     // if one or more condition has already been met, return
     if !attachments.is_empty() {
+        return Ok(attachments);
+    }
+
+    if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
         return Ok(attachments);
     }
 
