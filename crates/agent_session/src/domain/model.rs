@@ -22,7 +22,8 @@ impl AgentSessionId {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum SessionStatus {
     /// No status updates received
     #[default]
