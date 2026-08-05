@@ -586,3 +586,13 @@ export const ENABLE_CALENDAR_PROMPT_WEB_FLAG = 'enable-calendar-prompt-web';
 export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_CALENDAR_PROMPT_WEB'
 );
+
+// Sharing a personal tag with the team: the "Share with team" action on
+// personal tags in Settings › Tags, and the prompt that merges into an
+// existing team label when the names collide. The backend endpoints ship
+// ungated, so flipping this off only hides the entry point. PostHog-gated
+// with a dev-mode default; override with VITE_ENABLE_TAG_TEAM_SHARING.
+export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
+export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
+  (DEV_MODE_ENV ? true : undefined);
