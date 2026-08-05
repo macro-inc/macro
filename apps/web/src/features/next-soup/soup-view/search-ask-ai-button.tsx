@@ -6,19 +6,26 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { Button, Hotkey } from '@ui';
-import { onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { useSoupView } from './soup-view-context';
 
 export function SearchAskAiButton() {
   const soupView = useSoupView();
   const panel = useSplitPanelOrThrow();
 
-  const askAi = () => {
-    const query = soupView.searchText().trim();
-    if (query) {
-      openChatWithMessageReplacingSplit(query, panel.handle);
-    } else {
-      openChatWithInputReplacingSplit('', panel.handle);
+  const [isAsking, setIsAsking] = createSignal(false);
+  const askAi = async () => {
+    if (isAsking()) return;
+    setIsAsking(true);
+    try {
+      const query = soupView.searchText().trim();
+      if (query) {
+        await openChatWithMessageReplacingSplit(query, panel.handle);
+      } else {
+        await openChatWithInputReplacingSplit('', panel.handle);
+      }
+    } finally {
+      setIsAsking(false);
     }
   };
 
@@ -42,6 +49,7 @@ export function SearchAskAiButton() {
       depth={2}
       tooltip="Ask AI"
       class="shrink-0 h-7 mobile:h-9 gap-1.5 rounded-lg px-2"
+      disabled={isAsking()}
       onClick={askAi}
     >
       <span class="font-medium">Ask AI</span>
