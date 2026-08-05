@@ -2,7 +2,6 @@
 name = "agent_session"
 version = "0.1.0"
 edition = "2024"
-publish = false
 
 [dependencies]
 
@@ -16,7 +15,6 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strum = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
