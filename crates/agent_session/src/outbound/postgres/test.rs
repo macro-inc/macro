@@ -393,20 +393,18 @@ async fn create_rolls_back_channel_when_session_insert_fails(pool: PgPool) {
 async fn channel_belongs_to_only_one_session(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
-    let session = create_session(&repo, new_session(bot, None, None)).await;
+    create_session(&repo, new_session(bot, None, None)).await;
 
-    let duplicate = sqlx::query(
+    let duplicate = sqlx::raw_sql(
         r#"
         INSERT INTO agent_session (
             id, channel_id, bot_id, model, harness, repo_url, status
         )
-        SELECT $1, channel_id, bot_id, model, harness, repo_url, status
+        SELECT gen_random_uuid(), channel_id, bot_id, model, harness, repo_url, status
         FROM agent_session
-        WHERE id = $2
+        LIMIT 1
         "#,
     )
-    .bind(macro_uuid::generate_uuid_v7())
-    .bind(session.id.as_uuid())
     .execute(&pool)
     .await;
 

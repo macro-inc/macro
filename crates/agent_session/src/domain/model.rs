@@ -115,7 +115,7 @@ pub enum ChannelSession {
         /// Session that owns the dedicated channel.
         dedicated_channel_agent_session: AgentSession,
         /// Session associated with the addressed bot and thread.
-        subthread_agent_session: AgentSession,
+        subthread_agent_session: Box<AgentSession>,
     },
 }
 

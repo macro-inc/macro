@@ -250,44 +250,40 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to find agent session for channel context")?;
 
-        if rows.len() > 2 {
-            return Err(anyhow::anyhow!(
-                "multiple agent sessions matched the same channel context"
-            )
-            .into());
-        }
-
-        let mut dedicated_channel_agent_session = None;
-        let mut subthread_agent_session = None;
-        for row in rows {
-            let is_dedicated_channel = row.channel_id == channel_id;
-            let is_subthread = thread_id.is_some()
+        let sessions = rows
+            .into_iter()
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let matches_subthread = |session: &AgentSession| {
+            thread_id.is_some()
                 && bot_id.is_some()
-                && row.thread_id == thread_id
-                && Some(row.bot_id) == bot_id;
-            let session = AgentSession::try_from(row)?;
+                && session.thread_id == thread_id
+                && Some(session.bot_id.as_uuid()) == bot_id
+        };
 
-            if is_dedicated_channel {
-                dedicated_channel_agent_session = Some(session.clone());
+        Ok(match sessions.as_slice() {
+            [] => ChannelSession::None,
+            [session] if session.channel_id == channel_id => {
+                ChannelSession::InSessionChannel(session.clone())
             }
-            if is_subthread && !is_dedicated_channel && subthread_agent_session.is_none() {
-                subthread_agent_session = Some(session);
+            [session] if matches_subthread(session) => {
+                ChannelSession::CreatedFromThread(session.clone())
             }
-        }
-
-        Ok(
-            match (dedicated_channel_agent_session, subthread_agent_session) {
-                (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {
-                    ChannelSession::ThreadInDedicatedChannel {
-                        dedicated_channel_agent_session,
-                        subthread_agent_session,
-                    }
+            [dedicated_channel_agent_session, subthread_agent_session]
+                if dedicated_channel_agent_session.channel_id == channel_id
+                    && matches_subthread(subthread_agent_session) =>
+            {
+                ChannelSession::ThreadInDedicatedChannel {
+                    dedicated_channel_agent_session: dedicated_channel_agent_session.clone(),
+                    subthread_agent_session: Box::new(subthread_agent_session.clone()),
                 }
-                (Some(session), None) => ChannelSession::InSessionChannel(session),
-                (None, Some(session)) => ChannelSession::CreatedFromThread(session),
-                (None, None) => ChannelSession::None,
-            },
-        )
+            }
+            _ => {
+                return Err(
+                    anyhow::anyhow!("agent sessions violated channel lookup invariants").into(),
+                );
+            }
+        })
     }
 
     async fn update(&self, session: AgentSession) -> Result<()> {
