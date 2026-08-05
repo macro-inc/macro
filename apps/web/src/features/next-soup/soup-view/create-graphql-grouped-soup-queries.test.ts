@@ -50,7 +50,7 @@ import {
   groupedSoupLogicalViewKey,
 } from '@queries/soup/grouped/graphql-operation-registry';
 import type { GroupMeta } from '@queries/soup/grouped/types';
-import { useReactiveGroupedSoupAstItemsQuery } from '@queries/soup/reactive-grouped-items';
+import { createGraphqlGroupedSoupAstItemsQuery } from '@queries/soup/graphql/grouped-items';
 import type { GroupSoupQueryVariables } from '@service-storage/graphql/generated/graphql';
 import { createGraphqlGroupedSoupQueries } from './create-graphql-grouped-soup-queries';
 
@@ -151,7 +151,7 @@ function setup() {
 
   let grouped!: ReturnType<typeof createGraphqlGroupedSoupQueries>;
   const dispose = createRoot((rootDispose) => {
-    const parent = useReactiveGroupedSoupAstItemsQuery(
+    const parent = createGraphqlGroupedSoupAstItemsQuery(
       () => ({
         params: { limit: 2, sort_method: 'updated_at' },
         body: {},
