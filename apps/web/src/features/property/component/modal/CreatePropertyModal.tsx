@@ -16,7 +16,15 @@ import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import { Button, CommandMenuShell, cn, Dialog, Hotkey, Layer, addCtrlJKMenuNavigation } from '@ui';
+import {
+  addCtrlJKMenuNavigation,
+  Button,
+  CommandMenuShell,
+  cn,
+  Dialog,
+  Hotkey,
+  Layer,
+} from '@ui';
 import {
   type Component,
   createEffect,
@@ -642,7 +650,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     <Select.Content
                       class="z-action-menu min-w-56 overflow-y-auto rounded-xl border border-edge bg-surface p-1.5 shadow-menu menu-open-animation"
                       ref={(el) => {
-                        const clean = addCtrlJKMenuNavigation(el, () => ({wrap: true}));
+                        const clean = addCtrlJKMenuNavigation(el, () => ({
+                          wrap: true,
+                        }));
                         onCleanup(clean);
                       }}
                     >

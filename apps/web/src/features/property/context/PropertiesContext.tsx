@@ -38,6 +38,7 @@ interface PropertiesContextValue {
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
+  addProperty?: (propertyDefinitionId: string) => Promise<void>;
   saveHandler: PropertySaveHandler;
 
   // Specific modal state accessors
@@ -72,6 +73,7 @@ interface PropertiesProviderProps extends ParentProps {
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
+  addProperty?: (propertyDefinitionId: string) => Promise<void>;
   saveHandler: PropertySaveHandler;
 }
 
@@ -96,7 +98,33 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
           entityType: props.entityType,
         },
       ],
-      'selector'
+      'selector',
+      undefined,
+      {
+        onPropertyAdded: async (definitionIds) => {
+          if (!definitionIds?.length) {
+            props.onPropertyAdded();
+            return;
+          }
+
+          for (const definitionId of definitionIds) {
+            const existingProperty = props
+              .properties()
+              .find(
+                (property) => property.propertyDefinitionId === definitionId
+              );
+
+            if (existingProperty) {
+              props.onPropertyPinned?.(existingProperty.propertyId);
+              continue;
+            }
+
+            props.onPropertyAdded([definitionId]);
+            await props.addProperty?.(definitionId);
+            props.onPropertyAdded([definitionId]);
+          }
+        },
+      }
     );
   };
 
@@ -173,6 +201,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     onPropertyPinned: props.onPropertyPinned,
     onPropertyUnpinned: props.onPropertyUnpinned,
     pinnedPropertyIds: props.pinnedPropertyIds,
+    addProperty: props.addProperty,
     saveHandler: props.saveHandler,
     // Specific modal state
     datePickerModal,

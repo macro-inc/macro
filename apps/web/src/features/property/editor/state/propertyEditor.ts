@@ -25,6 +25,7 @@ interface PropertyEditorState {
 
 type PropertyEditorOpenOptions = {
   restoreFocus?: () => void | Promise<void>;
+  onPropertyAdded?: (addedDefinitionIds?: string[]) => void | Promise<void>;
 };
 
 const [state, setState] = createStore<PropertyEditorState>({
@@ -34,6 +35,7 @@ const [state, setState] = createStore<PropertyEditorState>({
 });
 
 let restoreFocusAfterClose: PropertyEditorOpenOptions['restoreFocus'];
+let onPropertyAddedForOpenEditor: PropertyEditorOpenOptions['onPropertyAdded'];
 
 export function openPropertyEditor(
   entities: PropertyEditorEntity[],
@@ -46,6 +48,7 @@ export function openPropertyEditor(
     return;
   }
   restoreFocusAfterClose = options?.restoreFocus;
+  onPropertyAddedForOpenEditor = options?.onPropertyAdded;
   setState(
     reconcile({
       mode,
@@ -59,6 +62,7 @@ export function openPropertyEditor(
 export function closePropertyEditor() {
   const restoreFocus = restoreFocusAfterClose;
   restoreFocusAfterClose = undefined;
+  onPropertyAddedForOpenEditor = undefined;
   setPropertyEditorOpen(false);
   setState(
     reconcile({
@@ -69,6 +73,16 @@ export function closePropertyEditor() {
     })
   );
   void restoreFocus?.();
+}
+
+export async function notifyPropertyEditorPropertyAdded(
+  addedDefinitionIds?: string[]
+) {
+  await onPropertyAddedForOpenEditor?.(addedDefinitionIds);
+}
+
+export function hasPropertyEditorPropertyAddedHandler() {
+  return Boolean(onPropertyAddedForOpenEditor);
 }
 
 export function togglePropertyEditor(force?: boolean) {

@@ -81,6 +81,8 @@ import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import {
   closePropertyEditor,
+  hasPropertyEditorPropertyAddedHandler,
+  notifyPropertyEditorPropertyAdded,
   type PropertyEditorEntity,
   propertyEditorOpen,
   propertyEditorState,
@@ -168,6 +170,33 @@ function docTagIdsByDefinition(
   return new Map([[entityId, byDefinition]]);
 }
 
+function propertyIdentity(property: Property | PropertyDefinitionDomain) {
+  return 'propertyDefinitionId' in property
+    ? property.propertyDefinitionId
+    : property.id;
+}
+
+function selectedOptionIds(
+  property: Property | PropertyDefinitionDomain
+): Set<string> {
+  if (!('value' in property)) return new Set();
+  if (
+    property.valueType !== 'SELECT_STRING' &&
+    property.valueType !== 'SELECT_NUMBER'
+  ) {
+    return new Set();
+  }
+
+  return new Set(property.value ?? []);
+}
+
+function selectedEntityRefs(
+  property: Property | PropertyDefinitionDomain
+): EntityReference[] {
+  if (!('value' in property) || property.valueType !== 'ENTITY') return [];
+  return property.value ?? [];
+}
+
 function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   if ('entityType' in entity) return entity.entityType;
   if (isTaskEntity(entity)) return 'TASK';
@@ -200,8 +229,10 @@ export function PropertyEditorModal() {
   const [placeholder, setPlaceholder] = createSignal('');
 
   const saveProperties = useSavePropertyForMultiEntitites();
-
-  const handlePropertySave = (value: PropertyApiValues) => {
+  const handlePropertySave = (
+    value: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
     const { selectedEntities, targetProperty } = propertyEditorState;
     if (!selectedEntities.length || !targetProperty) return;
 
@@ -216,7 +247,7 @@ export function PropertyEditorModal() {
     saveProperties(selectedEntities, targetProperty, value).then((success) => {
       if (success) toast.success(message);
     });
-    closePropertyEditor();
+    if (!event?.shiftKey) closePropertyEditor();
   };
 
   const openCreateProperty = (initialName: string) => {
@@ -230,10 +261,23 @@ export function PropertyEditorModal() {
     setCreatePropertyInitialName(null);
     if (!propertyDefinition) return;
 
+    const createdDefinitionId = propertyDefinition.id;
+    const shouldNotifySelectedEntity = Boolean(
+      hasPropertyEditorPropertyAddedHandler() &&
+        propertyEditorState.selectedEntities.length === 1
+    );
+
+    if (shouldNotifySelectedEntity) {
+      try {
+        await notifyPropertyEditorPropertyAdded([createdDefinitionId]);
+      } catch (error) {
+        console.error('Failed to add created property to entity', error);
+      }
+    }
+
     try {
-      const propertyWithOptions = await fetchPropertyDefinitionWithOptions(
-        propertyDefinition.id
-      );
+      const propertyWithOptions =
+        await fetchPropertyDefinitionWithOptions(createdDefinitionId);
 
       if (propertyWithOptions && 'definition' in propertyWithOptions) {
         setPropertyEditorMode('direct');
@@ -310,6 +354,16 @@ export function PropertyEditorModal() {
                   setFocusedIndex={setSelectedIndex}
                   setKeybindings={keybindings}
                   onCreateProperty={openCreateProperty}
+                  onPropertySelected={async (property) => {
+                    if (
+                      hasPropertyEditorPropertyAddedHandler() &&
+                      propertyEditorState.selectedEntities.length === 1
+                    ) {
+                      await notifyPropertyEditorPropertyAdded([
+                        propertyIdentity(property),
+                      ]);
+                    }
+                  }}
                 />
               </div>
             </Match>
@@ -324,6 +378,7 @@ export function PropertyEditorModal() {
                 setPlaceholder={setPlaceholder}
                 setInputType={setInputType}
                 onSave={handlePropertySave}
+                selectedEntities={propertyEditorState.selectedEntities}
               />
             </Match>
             <Match when={propertyEditorState.mode === 'tag'}>
@@ -393,6 +448,9 @@ function PropertyList(props: {
   setFocusedIndex: Setter<number>;
   setKeybindings: (navAction: ListNavActions) => void;
   onCreateProperty: (initialName: string) => void;
+  onPropertySelected?: (
+    property: Property | PropertyDefinitionDomain
+  ) => void | Promise<void>;
 }) {
   const properties = useAllProperties();
 
@@ -403,6 +461,8 @@ function PropertyList(props: {
   );
 
   const showTagAssignmentOption = createMemo(() => {
+    if (hasPropertyEditorPropertyAddedHandler()) return false;
+
     const query = props.searchTerm.toLowerCase().trim();
     return (
       propertyEditorState.selectedEntities.every(canAssignTags) &&
@@ -410,7 +470,15 @@ function PropertyList(props: {
     );
   });
   const createPropertyName = () => props.searchTerm.trim();
-  const showCreatePropertyOption = () => createPropertyName().length > 0;
+  const exactPropertyMatchExists = () => {
+    const name = createPropertyName().toLowerCase();
+    if (!name) return false;
+    return properties().some(
+      (property) => property.displayName.trim().toLowerCase() === name
+    );
+  };
+  const showCreatePropertyOption = () =>
+    createPropertyName().length > 0 && !exactPropertyMatchExists();
 
   const rowCount = () =>
     filteredProperties().length +
@@ -425,16 +493,16 @@ function PropertyList(props: {
   const rows = createMemo(() => {
     const nextRows: PropertyListRow[] = [];
 
-    if (showCreatePropertyOption()) {
-      nextRows.push({ type: 'create', name: createPropertyName() });
-    }
-
     if (showTagAssignmentOption()) {
       nextRows.push({ type: 'tags' });
     }
 
     for (const property of filteredProperties()) {
       nextRows.push({ type: 'property', property });
+    }
+
+    if (showCreatePropertyOption()) {
+      nextRows.push({ type: 'create', name: createPropertyName() });
     }
 
     return nextRows;
@@ -445,12 +513,13 @@ function PropertyList(props: {
     props.setFocusedIndex(0);
   });
 
-  const setProperty = (property: Property | PropertyDefinitionDomain) => {
+  const setProperty = async (property: Property | PropertyDefinitionDomain) => {
+    await props.onPropertySelected?.(property);
     setPropertyEditorMode('direct');
     setPropertyEditorTarget(property);
   };
 
-  const selectRow = (row: PropertyListRow) => {
+  const selectRow = async (row: PropertyListRow) => {
     if (row.type === 'create') {
       props.onCreateProperty(row.name);
       return;
@@ -461,7 +530,7 @@ function PropertyList(props: {
       return;
     }
 
-    setProperty(row.property);
+    await setProperty(row.property);
   };
 
   const listController = createCommandListController({
@@ -473,7 +542,7 @@ function PropertyList(props: {
 
   props.setKeybindings({
     select: () => {
-      listController.selectSelected();
+      void listController.selectSelected();
     },
     next: () => {
       listController.selectNext();
@@ -1199,9 +1268,36 @@ function PropertyValueEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   setInputType: Setter<'text' | 'number'>;
-  onSave: (apiValues: PropertyApiValues) => void;
+  onSave: (
+    apiValues: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => void;
+  selectedEntities: PropertyEditorEntity[];
 }) {
   const propertyType = () => props.property?.valueType;
+  const singleEntity = () =>
+    props.selectedEntities.length === 1 ? props.selectedEntities[0] : null;
+
+  const entityPropertiesQuery = useEntityPropertiesQuery(
+    () => {
+      const entity = singleEntity();
+      return entity ? propertyEditorEntityType(entity) : 'DOCUMENT';
+    },
+    () => singleEntity()?.id ?? '',
+    false
+  );
+
+  const resolvedProperty = createMemo(() => {
+    const property = props.property;
+    if (!property) return undefined;
+    if ('value' in property) return property;
+
+    return (
+      entityPropertiesQuery.data?.find(
+        (entityProperty) => entityProperty.propertyDefinitionId === property.id
+      ) ?? property
+    );
+  });
 
   const handleSubmit = (
     value: string | number | boolean | Date | EntityReference
@@ -1222,18 +1318,20 @@ function PropertyValueEditor(props: {
         }
       >
         <SelectPropertyEditor
-          property={props.property!}
+          property={resolvedProperty()!}
           searchValue={props.searchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
+          selectedEntityCount={props.selectedEntities.length}
+          onSave={props.onSave}
         />
       </Match>
       <Match when={propertyType() === 'ENTITY'}>
         <EntityPropertyEditor
-          property={props.property}
+          property={resolvedProperty()}
           searchValue={props.searchValue}
           setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
@@ -1241,6 +1339,8 @@ function PropertyValueEditor(props: {
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
+          selectedEntityCount={props.selectedEntities.length}
+          onSave={props.onSave}
         />
       </Match>
       <Match
@@ -1252,7 +1352,7 @@ function PropertyValueEditor(props: {
         }
       >
         <DirectEditPropertyEditor
-          property={props.property}
+          property={resolvedProperty()}
           searchValue={props.searchValue}
           setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
@@ -1278,9 +1378,26 @@ function SelectPropertyEditor(props: {
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
   onSubmit: (value: string) => void;
+  onSave: (
+    apiValues: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  selectedEntityCount: number;
 }) {
+  const [localSelectedIds, setLocalSelectedIds] = createSignal(
+    selectedOptionIds(props.property)
+  );
+  const [orderedSelectedIds, setOrderedSelectedIds] = createSignal(
+    selectedOptionIds(props.property)
+  );
+  let syncedPropertyId = propertyIdentity(props.property);
+  let syncedSelectionKey = [...selectedOptionIds(props.property)]
+    .sort()
+    .join('\0');
+  const [openOrderFrozen, setOpenOrderFrozen] = createSignal(false);
+
   createEffect(() => {
     if (props.property.isMultiSelect) {
       props.setPlaceholder(
@@ -1291,6 +1408,32 @@ function SelectPropertyEditor(props: {
     props.setPlaceholder(`Set ${props.property.displayName.toLowerCase()}...`);
   });
 
+  createEffect(() => {
+    const propertyId = propertyIdentity(props.property);
+    const nextSelectedIds = selectedOptionIds(props.property);
+    const nextSelectionKey = [...nextSelectedIds].sort().join('\0');
+
+    if (propertyId !== syncedPropertyId) {
+      syncedPropertyId = propertyId;
+      syncedSelectionKey = nextSelectionKey;
+      setOpenOrderFrozen(false);
+      setLocalSelectedIds(nextSelectedIds);
+      setOrderedSelectedIds(nextSelectedIds);
+      return;
+    }
+
+    if (openOrderFrozen() || nextSelectionKey === syncedSelectionKey) return;
+
+    syncedSelectionKey = nextSelectionKey;
+    setLocalSelectedIds(nextSelectedIds);
+    setOrderedSelectedIds(nextSelectedIds);
+  });
+
+  const canGroupMultiValues = () =>
+    props.property.isMultiSelect &&
+    props.selectedEntityCount === 1 &&
+    'value' in props.property;
+
   const filteredOptions = createMemo(() => {
     const options = props.property?.options || [];
     const search = props.searchValue().trim();
@@ -1298,20 +1441,143 @@ function SelectPropertyEditor(props: {
     return fuzzyFilter(search, options, (opt) => String(opt.value.value));
   });
 
-  const shouldShowHotkeys = createMemo(() => {
-    return !props.searchValue().trim() && filteredOptions().length <= 9;
+  const orderedOptions = createMemo(() => {
+    if (!canGroupMultiValues()) return filteredOptions();
+
+    const selectedAtOpen = orderedSelectedIds();
+    const selected = filteredOptions().filter((option) =>
+      selectedAtOpen.has(option.id)
+    );
+    const remaining = filteredOptions().filter(
+      (option) => !selectedAtOpen.has(option.id)
+    );
+
+    return [...selected, ...remaining];
   });
 
+  const selectedGroupSize = createMemo(() =>
+    canGroupMultiValues()
+      ? orderedOptions().filter((option) => orderedSelectedIds().has(option.id))
+          .length
+      : 0
+  );
+
+  const searchQuery = () => props.searchValue().trim();
+  const showClearAllRow = () =>
+    canGroupMultiValues() && orderedSelectedIds().size > 0;
+  const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
+  const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
+
+  type SelectPropertyRow =
+    | { type: 'clear'; separatorBefore: boolean }
+    | {
+        type: 'option';
+        option: NonNullable<
+          (Property | PropertyDefinitionDomain)['options']
+        >[number];
+        separatorBefore: boolean;
+      };
+
+  const rows = createMemo(() => {
+    const nextRows: SelectPropertyRow[] = [];
+
+    if (showClearAllAtTop()) {
+      nextRows.push({ type: 'clear', separatorBefore: false });
+    }
+
+    for (const [index, option] of orderedOptions().entries()) {
+      nextRows.push({
+        type: 'option',
+        option,
+        separatorBefore:
+          canGroupMultiValues() && index === selectedGroupSize() && index > 0,
+      });
+    }
+
+    if (showClearAllAtBottom()) {
+      nextRows.push({
+        type: 'clear',
+        separatorBefore: orderedOptions().length > 0,
+      });
+    }
+
+    return nextRows;
+  });
+
+  const shouldShowHotkeys = createMemo(() => {
+    return !props.searchValue().trim() && rows().length <= 9;
+  });
+
+  const buildApiValue = (
+    selectedIds: Set<string>
+  ): PropertyApiValues | null => {
+    if (
+      props.property.valueType !== 'SELECT_STRING' &&
+      props.property.valueType !== 'SELECT_NUMBER'
+    ) {
+      return null;
+    }
+
+    return {
+      valueType: props.property.valueType,
+      values: selectedIds.size > 0 ? [...selectedIds] : null,
+    };
+  };
+
+  const toggleOption = (
+    optionId: string,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    if (!canGroupMultiValues()) {
+      props.onSubmit(optionId);
+      return;
+    }
+
+    const nextSelectedIds = new Set(localSelectedIds());
+    setOpenOrderFrozen(true);
+    if (nextSelectedIds.has(optionId)) {
+      nextSelectedIds.delete(optionId);
+    } else {
+      nextSelectedIds.add(optionId);
+    }
+
+    setLocalSelectedIds(nextSelectedIds);
+    const apiValue = buildApiValue(nextSelectedIds);
+    if (apiValue) props.onSave(apiValue, event);
+  };
+
+  const clearAllOptions = (event?: KeyboardEvent | MouseEvent) => {
+    if (!showClearAllRow()) return;
+
+    const nextSelectedIds = new Set<string>();
+    setOpenOrderFrozen(true);
+    setLocalSelectedIds(nextSelectedIds);
+    const apiValue = buildApiValue(nextSelectedIds);
+    if (apiValue) props.onSave(apiValue, event);
+  };
+
+  const selectRow = (
+    row: SelectPropertyRow,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    if (row.type === 'clear') {
+      clearAllOptions(event);
+      return;
+    }
+
+    toggleOption(row.option.id, event);
+  };
+
   const listController = createCommandListController({
-    items: filteredOptions,
+    items: rows,
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
-    onSelect: (option) => props.onSubmit(option.id),
   });
 
   props.setKeybindings({
-    select: () => {
-      listController.selectSelected();
+    select: (event) => {
+      const row = rows()[props.selectedIndex()];
+      if (row) selectRow(row, event);
     },
     next: () => {
       listController.selectNext();
@@ -1323,33 +1589,61 @@ function SelectPropertyEditor(props: {
 
   return (
     <Show
-      when={filteredOptions().length > 0}
+      when={rows().length > 0}
       fallback={
         <CommandMenuEmptyState>No matching options found</CommandMenuEmptyState>
       }
     >
       <CommandMenuList
-        items={filteredOptions()}
+        items={rows()}
         selectedIndex={props.selectedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `property-value-option-${index}`}
-        onSelect={(option) => props.onSubmit(option.id)}
+        beforeItem={(row) =>
+          row.separatorBefore ? (
+            <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+          ) : null
+        }
+        onSelect={(row, _, event) => selectRow(row, event)}
         onItemMouseMove={(index) =>
           listController.setSelectedIndexFromPointer(index)
         }
       >
-        {(option, index) => (
-          <>
-            <PropertyValueIcon optionId={option.id} />
-            <div class="flex-1 text-left">
-              <p class="text-sm font-medium">{String(option.value.value)}</p>
-            </div>
-            <Show when={shouldShowHotkeys() && index() < 9}>
-              <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                <Hotkey shortcut={`${index() + 1}`} />
-              </div>
-            </Show>
-          </>
+        {(row, index) => (
+          <Switch>
+            <Match when={row.type === 'clear'}>
+              <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
+              <span class="min-w-0 flex-1 truncate text-ink-muted">
+                Clear all {props.property.displayName.toLowerCase()}
+              </span>
+            </Match>
+            <Match when={row.type === 'option' && row.option}>
+              {(option) => (
+                <>
+                  <Show
+                    when={canGroupMultiValues()}
+                    fallback={<PropertyValueIcon optionId={option().id} />}
+                  >
+                    <OptionCheckBox
+                      checked={localSelectedIds().has(option().id)}
+                      multiselect
+                    />
+                    <PropertyValueIcon optionId={option().id} />
+                  </Show>
+                  <div class="flex-1 text-left">
+                    <p class="text-sm font-medium">
+                      {String(option().value.value)}
+                    </p>
+                  </div>
+                  <Show when={shouldShowHotkeys() && index() < 9}>
+                    <div class="text-xxs px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+                      <Hotkey shortcut={`${index() + 1}`} />
+                    </div>
+                  </Show>
+                </>
+              )}
+            </Match>
+          </Switch>
         )}
       </CommandMenuList>
     </Show>
@@ -1363,8 +1657,13 @@ function EntityPropertyEditor(props: {
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
   onSubmit: (value: EntityReference) => void;
+  onSave: (
+    apiValues: PropertyApiValues,
+    event?: KeyboardEvent | MouseEvent
+  ) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  selectedEntityCount: number;
 }) {
   // Company owners are always teammates, so the owner picker offers the
   // team roster instead of the default quick-access people pool (same as
@@ -1391,6 +1690,48 @@ function EntityPropertyEditor(props: {
     props.searchValue,
     { users: () => (isCompanyOwner() ? teamMembers() : undefined) }
   );
+  const [localSelectedRefs, setLocalSelectedRefs] = createSignal(
+    props.property ? selectedEntityRefs(props.property) : []
+  );
+  const [orderedSelectedIds, setOrderedSelectedIds] = createSignal(
+    new Set(
+      props.property
+        ? selectedEntityRefs(props.property).map((ref) => ref.entity_id)
+        : []
+    )
+  );
+  let syncedPropertyId = props.property ? propertyIdentity(props.property) : '';
+  let syncedSelectionKey = props.property
+    ? selectedEntityRefs(props.property)
+        .map((ref) => ref.entity_id)
+        .sort()
+        .join('\0')
+    : '';
+  const [openOrderFrozen, setOpenOrderFrozen] = createSignal(false);
+
+  createEffect(() => {
+    const propertyId = props.property ? propertyIdentity(props.property) : '';
+    const refs = props.property ? selectedEntityRefs(props.property) : [];
+    const nextSelectionKey = refs
+      .map((ref) => ref.entity_id)
+      .sort()
+      .join('\0');
+
+    if (propertyId !== syncedPropertyId) {
+      syncedPropertyId = propertyId;
+      syncedSelectionKey = nextSelectionKey;
+      setOpenOrderFrozen(false);
+      setLocalSelectedRefs(refs);
+      setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
+      return;
+    }
+
+    if (openOrderFrozen() || nextSelectionKey === syncedSelectionKey) return;
+
+    syncedSelectionKey = nextSelectionKey;
+    setLocalSelectedRefs(refs);
+    setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
+  });
 
   createEffect(() => {
     const entityTypeLabel =
@@ -1411,16 +1752,141 @@ function EntityPropertyEditor(props: {
     props.onSubmit(entityRef);
   };
 
+  const canGroupMultiValues = () =>
+    Boolean(
+      props.property?.isMultiSelect &&
+        props.selectedEntityCount === 1 &&
+        props.property &&
+        'value' in props.property
+    );
+
+  const localSelectedIds = createMemo(
+    () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
+  );
+
+  const orderedEntities = createMemo(() => {
+    if (!canGroupMultiValues()) return entities();
+
+    const selectedAtOpen = orderedSelectedIds();
+    const selected = entities().filter((entity) =>
+      selectedAtOpen.has(entity.id)
+    );
+    const remaining = entities().filter(
+      (entity) => !selectedAtOpen.has(entity.id)
+    );
+
+    return [...selected, ...remaining];
+  });
+
+  const selectedGroupSize = createMemo(() =>
+    canGroupMultiValues()
+      ? orderedEntities().filter((entity) =>
+          orderedSelectedIds().has(entity.id)
+        ).length
+      : 0
+  );
+
+  const searchQuery = () => props.searchValue().trim();
+  const showClearAllRow = () =>
+    canGroupMultiValues() && orderedSelectedIds().size > 0;
+  const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
+  const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
+
+  type EntityPropertyRow =
+    | { type: 'clear'; separatorBefore: boolean }
+    | {
+        type: 'entity';
+        entity: CombinedEntity;
+        separatorBefore: boolean;
+      };
+
+  const rows = createMemo(() => {
+    const nextRows: EntityPropertyRow[] = [];
+
+    if (showClearAllAtTop()) {
+      nextRows.push({ type: 'clear', separatorBefore: false });
+    }
+
+    for (const [index, entity] of orderedEntities().entries()) {
+      nextRows.push({
+        type: 'entity',
+        entity,
+        separatorBefore:
+          canGroupMultiValues() && index === selectedGroupSize() && index > 0,
+      });
+    }
+
+    if (showClearAllAtBottom()) {
+      nextRows.push({
+        type: 'clear',
+        separatorBefore: orderedEntities().length > 0,
+      });
+    }
+
+    return nextRows;
+  });
+
+  const toggleEntity = (
+    entity: CombinedEntity,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    if (!canGroupMultiValues()) {
+      selectEntity(entity);
+      return;
+    }
+
+    const selectedIds = localSelectedIds();
+    setOpenOrderFrozen(true);
+    const nextRefs = selectedIds.has(entity.id)
+      ? localSelectedRefs().filter((ref) => ref.entity_id !== entity.id)
+      : [
+          ...localSelectedRefs(),
+          {
+            entity_id: entity.id,
+            entity_type: getEntityType(entity),
+          },
+        ];
+
+    setLocalSelectedRefs(nextRefs);
+    props.onSave(
+      {
+        valueType: 'ENTITY',
+        refs: nextRefs.length > 0 ? nextRefs : null,
+      },
+      event
+    );
+  };
+
+  const clearAllEntities = (event?: KeyboardEvent | MouseEvent) => {
+    if (!showClearAllRow()) return;
+
+    setOpenOrderFrozen(true);
+    setLocalSelectedRefs([]);
+    props.onSave({ valueType: 'ENTITY', refs: null }, event);
+  };
+
+  const selectRow = (
+    row: EntityPropertyRow,
+    event?: KeyboardEvent | MouseEvent
+  ) => {
+    if (row.type === 'clear') {
+      clearAllEntities(event);
+      return;
+    }
+
+    toggleEntity(row.entity, event);
+  };
+
   const listController = createCommandListController({
-    items: entities,
+    items: rows,
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
-    onSelect: selectEntity,
   });
 
   props.setKeybindings({
-    select: () => {
-      listController.selectSelected();
+    select: (event) => {
+      const row = rows()[props.selectedIndex()];
+      if (row) selectRow(row, event);
     },
     next: () => {
       listController.selectNext();
@@ -1432,7 +1898,7 @@ function EntityPropertyEditor(props: {
 
   return (
     <Show
-      when={entities().length > 0}
+      when={rows().length > 0}
       fallback={
         <CommandMenuEmptyState>
           {props.searchValue().trim()
@@ -1442,22 +1908,50 @@ function EntityPropertyEditor(props: {
       }
     >
       <CommandMenuList
-        items={entities()}
+        items={rows()}
         selectedIndex={props.selectedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `entity-option-${index}`}
-        onSelect={selectEntity}
+        beforeItem={(row) =>
+          row.separatorBefore ? (
+            <div class="mx-2 my-1 h-px bg-edge-muted/50" />
+          ) : null
+        }
+        onSelect={(row, _, event) => selectRow(row, event)}
         onItemMouseMove={(index) =>
           listController.setSelectedIndexFromPointer(index)
         }
       >
-        {(entity) => <EntityRowContent entity={entity} />}
+        {(row) => (
+          <Switch>
+            <Match when={row.type === 'clear'}>
+              <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
+              <span class="min-w-0 flex-1 truncate text-ink-muted">
+                Clear all{' '}
+                {props.property?.displayName.toLowerCase() ?? 'entities'}
+              </span>
+            </Match>
+            <Match when={row.type === 'entity' && row.entity}>
+              {(entity) => (
+                <EntityRowContent
+                  entity={entity()}
+                  multiselect={canGroupMultiValues()}
+                  selected={localSelectedIds().has(entity().id)}
+                />
+              )}
+            </Match>
+          </Switch>
+        )}
       </CommandMenuList>
     </Show>
   );
 }
 
-function EntityRowContent(props: { entity: CombinedEntity }) {
+function EntityRowContent(props: {
+  entity: CombinedEntity;
+  multiselect?: boolean;
+  selected?: boolean;
+}) {
   const { icon } = usePropertyEntityDisplay(
     () => props.entity.id,
     () => getEntityType(props.entity)
@@ -1465,6 +1959,9 @@ function EntityRowContent(props: { entity: CombinedEntity }) {
 
   return (
     <>
+      <Show when={props.multiselect}>
+        <OptionCheckBox checked={Boolean(props.selected)} multiselect />
+      </Show>
       <span class="size-4 flex items-center justify-center shrink-0">
         {icon()}
       </span>
@@ -1501,40 +1998,14 @@ function DirectEditPropertyEditor(props: {
     );
   }
 
-  // Fetch existing property value for single entity
-  const singleEntity = () => {
-    const entities = propertyEditorState.selectedEntities;
-    return entities.length === 1 ? entities[0] : null;
-  };
-
-  const entityPropertiesQuery = useEntityPropertiesQuery(
-    () => {
-      const entity = singleEntity();
-      return entity ? propertyEditorEntityType(entity) : 'DOCUMENT';
-    },
-    () => singleEntity()?.id ?? '',
-    false
-  );
-
   const existingValue = createMemo(() => {
-    const entity = singleEntity();
-    if (!entity || !props.property) return null;
-
-    const propertyDefId =
-      'propertyDefinitionId' in props.property
-        ? props.property.propertyDefinitionId
-        : props.property.id;
-
-    const entityProperties = entityPropertiesQuery.data;
-    if (!entityProperties) return null;
-
-    const prop = entityProperties.find(
-      (p) => p.propertyDefinitionId === propertyDefId
-    );
-    if (!prop) return null;
-
-    if (prop.valueType === 'STRING' || prop.valueType === 'NUMBER') {
-      return prop.value;
+    const property = props.property;
+    if (
+      property &&
+      'value' in property &&
+      (property.valueType === 'STRING' || property.valueType === 'NUMBER')
+    ) {
+      return property.value;
     }
     return null;
   });

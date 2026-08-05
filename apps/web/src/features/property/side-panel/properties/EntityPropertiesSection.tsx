@@ -16,9 +16,14 @@ import {
   type PropertySaveHandler,
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
+import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { TagsRow } from '@property/tags';
-import type { Property, PropertyApiValues } from '@property/types';
+import type {
+  Property,
+  PropertyApiValues,
+  PropertyDefinitionDomain,
+} from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -113,10 +118,15 @@ export function EntityTagsSection(props: EntityTagsSectionProps) {
 }
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
-  const { properties, isLoading, error, refetch } = useEntityProperties(
-    props.entityId,
-    props.entityType,
-    props.includeMetadata ?? false
+  const { properties, isLoading, error, refetch, addProperty } =
+    useEntityProperties(
+      props.entityId,
+      props.entityType,
+      props.includeMetadata ?? false
+    );
+  const allProperties = useAllProperties();
+  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
+    new Set()
   );
 
   const tagsQuery = useTagsQuery();
@@ -142,11 +152,21 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     const fetchedDefinitionIds = new Set(
       fetched.map((property) => property.propertyDefinitionId)
     );
+    const pendingPlaceholderProperties = allProperties().flatMap(
+      (definition) => {
+        if (!pendingPinDefIds().has(definition.id)) return [];
+        if (hiddenDefinitionIds.has(definition.id)) return [];
+        if (fetchedDefinitionIds.has(definition.id)) return [];
+        const property = propertyFromPendingDefinition(definition);
+        return property ? [property] : [];
+      }
+    );
     return [
       ...fetched,
       ...defaults.filter(
         (property) => !fetchedDefinitionIds.has(property.propertyDefinitionId)
       ),
+      ...pendingPlaceholderProperties,
     ];
   });
 
@@ -164,6 +184,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         return false;
       }
       if (property.isMetadata) return props.includeMetadata === true;
+      if (pendingPinDefIds().has(property.propertyDefinitionId)) return true;
       if (!usesPinnedFilter) return true;
       return (
         defaultPinnedIds.includes(property.propertyDefinitionId) ||
@@ -183,16 +204,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     filteredPinnedProperties().filter(isNonUserMultiEntityProperty)
   );
 
-  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
-    new Set()
-  );
-
   const handlePropertyAdded = (addedDefinitionIds?: string[]) => {
-    if (
-      props.onPropertyPinned &&
-      addedDefinitionIds &&
-      addedDefinitionIds.length > 0
-    ) {
+    if (addedDefinitionIds && addedDefinitionIds.length > 0) {
       setPendingPinDefIds((prev) => {
         const next = new Set(prev);
         for (const id of addedDefinitionIds) next.add(id);
@@ -204,7 +217,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
   createEffect(() => {
     const pending = pendingPinDefIds();
-    if (pending.size === 0 || !props.onPropertyPinned) return;
+    if (pending.size === 0) return;
 
     const remaining = new Set(pending);
     for (const defId of pending) {
@@ -212,7 +225,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         (property) => property.propertyDefinitionId === defId
       );
       if (instance) {
-        props.onPropertyPinned(instance.propertyId);
+        props.onPropertyPinned?.(instance.propertyId);
         remaining.delete(defId);
       }
     }
@@ -261,6 +274,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           onPropertyPinned={props.onPropertyPinned}
           onPropertyUnpinned={props.onPropertyUnpinned}
           pinnedPropertyIds={props.pinnedPropertyIds}
+          addProperty={addProperty}
           saveHandler={saveHandler}
         >
           <Show when={isLoading()}>
@@ -338,6 +352,45 @@ function AddPinnedPropertyButton() {
       <span>Add property</span>
     </button>
   );
+}
+
+function propertyFromPendingDefinition(
+  definition: PropertyDefinitionDomain
+): Property | undefined {
+  const base = {
+    propertyId: `pending:${definition.id}`,
+    propertyDefinitionId: definition.id,
+    displayName: definition.displayName,
+    isMultiSelect: definition.isMultiSelect,
+    isMetadata: definition.isMetadata,
+    isSystemProperty: definition.isSystem,
+    options: definition.options,
+    owner: definition.owner,
+    specificEntityType: definition.specificEntityType,
+    createdAt: definition.createdAt,
+    updatedAt: definition.updatedAt,
+  };
+
+  switch (definition.valueType) {
+    case 'STRING':
+      return { ...base, valueType: 'STRING', value: null };
+    case 'NUMBER':
+      return { ...base, valueType: 'NUMBER', value: null };
+    case 'BOOLEAN':
+      return { ...base, valueType: 'BOOLEAN', value: null };
+    case 'DATE':
+      return { ...base, valueType: 'DATE', value: null };
+    case 'SELECT_STRING':
+      return { ...base, valueType: 'SELECT_STRING', value: null };
+    case 'SELECT_NUMBER':
+      return { ...base, valueType: 'SELECT_NUMBER', value: null };
+    case 'ENTITY':
+      return { ...base, valueType: 'ENTITY', value: null };
+    case 'LINK':
+      return { ...base, valueType: 'LINK', value: null };
+    case 'TAG':
+      return undefined;
+  }
 }
 
 function sortPinnedProperties<T extends Property>(

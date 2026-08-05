@@ -199,7 +199,7 @@ export function CommandMenuList<T>(props: {
     if (!props.scrollSelectedIntoView || !listRef || !item) return;
 
     suppressPointerSelectionUntil = performance.now() + 250;
-    const elem = listRef.children.item(index);
+    const elem = document.getElementById(itemId(item, index));
     elem?.scrollIntoView({ block: 'nearest' });
   });
 
