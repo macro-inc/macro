@@ -259,6 +259,17 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: false,
     },
+    RustService {
+        compose_name: "agent_trigger_service",
+        cargo_bin: "agent_trigger_service",
+        package: "agent_trigger_service",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

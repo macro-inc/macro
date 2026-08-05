@@ -80,6 +80,14 @@ pub const MACRO_CODER_NAME: &str = "Macro Coder";
 pub struct BotId(Uuid);
 
 impl BotId {
+    #[cfg(any(test, feature = "test-utils"))]
+    #[allow(missing_docs)]
+    pub const TEST_A: Self = Self(Uuid::from_u128(0xB07A));
+
+    #[cfg(any(test, feature = "test-utils"))]
+    #[allow(missing_docs)]
+    pub const TEST_B: Self = Self(Uuid::from_u128(0xB07B));
+
     /// Build a bot id from its UUID.
     pub const fn new_from_uuid(id: Uuid) -> Self {
         Self(id)
