@@ -89,3 +89,7 @@ doppler-config = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }

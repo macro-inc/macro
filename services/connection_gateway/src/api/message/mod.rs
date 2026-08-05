@@ -15,7 +15,9 @@ use connection_gateway_models::{
 use futures::future::try_join_all;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model_entity::Entity;
-use tracing::Instrument;
+
+#[cfg(test)]
+mod test;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where
@@ -32,6 +34,20 @@ where
             post(batch_send_unique_messages_handler),
         )
         .with_state(state)
+}
+
+#[tracing::instrument(name = "send_messages", skip(send), err(Debug))]
+async fn trace_send_messages<Send, Fut, T, E>(
+    batch_kind: &'static str,
+    message_count: usize,
+    send: Send,
+) -> Result<T, E>
+where
+    Send: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+    E: std::fmt::Debug,
+{
+    send().await
 }
 
 #[utoipa::path(
@@ -101,26 +117,22 @@ pub async fn batch_send_message_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let redis_connection = ctx.context.redis_connection.clone();
 
-    let all_receipts = try_join_all(body.entities.iter().map(|entity| {
-        let redis_connection = redis_connection.clone();
-        send_message_to_entity(
-            &ctx,
-            entity,
-            Message {
-                message_type: body.message_type.clone(),
-                data: body.message.to_string(),
-            },
-            redis_connection,
-        )
-    }))
-    .instrument(tracing::info_span!(
-        "send_messages",
-        batch_kind = "shared",
-        message_count = body.entities.len()
-    ))
+    let all_receipts = trace_send_messages("shared", body.entities.len(), || {
+        try_join_all(body.entities.iter().map(|entity| {
+            let redis_connection = redis_connection.clone();
+            send_message_to_entity(
+                &ctx,
+                entity,
+                Message {
+                    message_type: body.message_type.clone(),
+                    data: body.message.to_string(),
+                },
+                redis_connection,
+            )
+        }))
+    })
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to send message");
+    .map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to send message".to_string(),
@@ -154,26 +166,22 @@ pub async fn batch_send_unique_messages_handler(
 ) -> Result<(StatusCode, JsonResponse<SendMessageResponse>), (StatusCode, String)> {
     let redis_connection = ctx.context.redis_connection.clone();
 
-    let all_receipts = try_join_all(body.messages.iter().map(|message| {
-        let redis_connection = redis_connection.clone();
-        send_message_to_entity(
-            &ctx,
-            &message.entity,
-            Message {
-                message_type: message.message_type.clone(),
-                data: message.message_content.to_string(),
-            },
-            redis_connection,
-        )
-    }))
-    .instrument(tracing::info_span!(
-        "send_messages",
-        batch_kind = "unique",
-        message_count = body.messages.len()
-    ))
+    let all_receipts = trace_send_messages("unique", body.messages.len(), || {
+        try_join_all(body.messages.iter().map(|message| {
+            let redis_connection = redis_connection.clone();
+            send_message_to_entity(
+                &ctx,
+                &message.entity,
+                Message {
+                    message_type: message.message_type.clone(),
+                    data: message.message_content.to_string(),
+                },
+                redis_connection,
+            )
+        }))
+    })
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to send message");
+    .map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to send message".to_string(),
