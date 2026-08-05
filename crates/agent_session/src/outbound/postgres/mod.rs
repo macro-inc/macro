@@ -31,13 +31,14 @@ impl PgAgentSessionRepo {
     }
 }
 
-/// The wire name for a [`SessionStatus`] and its optional event name.
-fn status_columns(status: &SessionStatus) -> (&'static str, Option<String>) {
-    match status {
-        SessionStatus::NoMessages => ("no_messages", None),
-        SessionStatus::Event(event) => ("event", Some(event.as_str().to_owned())),
-        SessionStatus::Disconnected => ("disconnected", None),
-    }
+/// The wire name for a [`SessionStatus`] and, for `SessionStatus::Event`, the
+/// system event name to store alongside it.
+fn status_columns(status: &SessionStatus) -> (&str, Option<String>) {
+    let event_name = match status {
+        SessionStatus::Event(event) => Some(event.as_str().to_owned()),
+        SessionStatus::NoMessages | SessionStatus::Disconnected => None,
+    };
+    (status.as_ref(), event_name)
 }
 
 /// Reverse of [`status_columns`].
