@@ -12,7 +12,8 @@ import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
-import { createMemo, createSignal, type JSX } from 'solid-js';
+import { batch, createMemo, createSignal, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 /**
  * Active "focus" predicates that exclude done entities. When one of these is
@@ -43,6 +44,8 @@ export type GroupMeta = {
 };
 
 export type SoupRow = {
+  /** Stable identity used to preserve this row's store proxy across updates. */
+  identityKey: string;
   id: string;
   index: number;
   original: SoupEntity;
@@ -141,7 +144,24 @@ export const createSoupState = <TId extends string = FilterID>(
       isGrouped = false,
       isLoadMore = false,
     } = options;
+    const kind = isGrouped
+      ? 'group-header'
+      : isLoadMore
+        ? 'load-more'
+        : 'entity';
+    // Group membership distinguishes duplicate entities and makes a moved task
+    // a new row. Structural rows also include their representative entity so
+    // Solid never merges a new header/load-more entity into an aliased proxy.
+    const identityKey = JSON.stringify([
+      kind,
+      group?.key ?? null,
+      original.type,
+      original.id,
+      id,
+    ]);
+
     return {
+      identityKey,
       id,
       index,
       original,
@@ -154,17 +174,26 @@ export const createSoupState = <TId extends string = FilterID>(
     };
   };
 
-  const [rows, setRowsInternal] = createSignal<SoupRow[]>(
+  const initialRows =
     initialData?.map((e, i) => buildRow({ id: e.id, index: i, original: e })) ??
-      []
-  );
+    [];
+  const [rowStore, setRowStore] = createStore<SoupRow[]>(initialRows);
+  // The array snapshot changes only for structural updates, while its row
+  // proxies update nested entity/group fields reactively in place.
+  const rows = createMemo(() => [...rowStore]);
 
   const setRows = (newRows: SoupRow[]) => {
-    setRowsInternal(newRows);
-    if (!lastFocusedRowId) return;
-    const nextIndex = newRows.findIndex((r) => r.id === lastFocusedRowId);
-    setFocusedIndex(nextIndex);
-    if (nextIndex < 0) lastFocusedRowId = undefined;
+    batch(() => {
+      setRowStore(reconcile(newRows, { key: 'identityKey', merge: true }));
+
+      if (lastFocusedRowId) {
+        const nextIndex = rowStore.findIndex(
+          (row) => row.id === lastFocusedRowId
+        );
+        setFocusedIndex(nextIndex);
+        if (nextIndex < 0) lastFocusedRowId = undefined;
+      }
+    });
   };
 
   const [collapseEntityCallback, setCollapseEntityCallback] = createSignal<

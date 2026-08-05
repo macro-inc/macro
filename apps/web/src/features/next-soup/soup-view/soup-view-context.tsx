@@ -1260,7 +1260,7 @@ export const SoupViewContextProvider: FlowComponent<
     return '';
   };
 
-  const rows = createMemo((): SoupRow[] => {
+  const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsSource.data()?.groups;
 
@@ -1514,7 +1514,7 @@ export const SoupViewContextProvider: FlowComponent<
       },
     },
     items,
-    rows,
+    rows: soup.rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
     searchPaused: sourceSearchPaused,
@@ -1552,7 +1552,7 @@ export const SoupViewContextProvider: FlowComponent<
     <SoupViewContext.Provider value={context}>
       {props.children}
       <Suspense>
-        <SyncWithSoup soup={soup} rows={rows()} />
+        <SyncWithSoup soup={soup} rows={builtRows()} />
       </Suspense>
     </SoupViewContext.Provider>
   );
