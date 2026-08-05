@@ -34,6 +34,7 @@ interface PropertiesContextValue {
   properties: () => Property[];
   onRefresh: () => void;
   onPropertyAdded: (addedDefinitionIds?: string[]) => void;
+  onPropertyAddFailed?: (definitionId: string) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -70,6 +71,7 @@ interface PropertiesProviderProps extends ParentProps {
   properties: () => Property[];
   onRefresh: () => void;
   onPropertyAdded: (addedDefinitionIds?: string[]) => void;
+  onPropertyAddFailed?: (definitionId: string) => void;
   onPropertyDeleted: () => void;
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
@@ -122,8 +124,13 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
             }
 
             props.onPropertyAdded([definitionId]);
-            await props.addProperty?.(definitionId);
-            props.onPropertyAdded([definitionId]);
+            try {
+              await props.addProperty?.(definitionId);
+              props.onPropertyAdded([definitionId]);
+            } catch (error) {
+              props.onPropertyAddFailed?.(definitionId);
+              console.error('Failed to add property to entity', error);
+            }
           }
         },
       }
@@ -199,6 +206,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     properties: props.properties,
     onRefresh: props.onRefresh,
     onPropertyAdded: props.onPropertyAdded,
+    onPropertyAddFailed: props.onPropertyAddFailed,
     onPropertyDeleted: props.onPropertyDeleted,
     onPropertyPinned: props.onPropertyPinned,
     onPropertyUnpinned: props.onPropertyUnpinned,

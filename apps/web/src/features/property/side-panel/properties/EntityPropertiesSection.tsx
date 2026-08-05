@@ -43,6 +43,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 
 export interface EntityPropertiesSectionProps {
   entityId: string;
@@ -231,6 +232,15 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     });
   };
 
+  const handlePropertyAddFailed = (definitionId: string) => {
+    setPendingPinDefIds((prev) => {
+      const next = new Set(prev);
+      next.delete(definitionId);
+      return next;
+    });
+    refetch();
+  };
+
   createEffect(() => {
     const pending = pendingPinDefIds();
     if (pending.size === 0) return;
@@ -286,6 +296,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           properties={filteredPinnedProperties}
           onRefresh={refetch}
           onPropertyAdded={handlePropertyAdded}
+          onPropertyAddFailed={handlePropertyAddFailed}
           onPropertyDeleted={refetch}
           onPropertyPinned={props.onPropertyPinned}
           onPropertyUnpinned={props.onPropertyUnpinned}
@@ -400,26 +411,41 @@ function propertyFromPendingDefinition(
     updatedAt: definition.updatedAt,
   };
 
-  switch (definition.valueType) {
-    case 'STRING':
-      return { ...base, valueType: 'STRING', value: null };
-    case 'NUMBER':
-      return { ...base, valueType: 'NUMBER', value: null };
-    case 'BOOLEAN':
-      return { ...base, valueType: 'BOOLEAN', value: null };
-    case 'DATE':
-      return { ...base, valueType: 'DATE', value: null };
-    case 'SELECT_STRING':
-      return { ...base, valueType: 'SELECT_STRING', value: null };
-    case 'SELECT_NUMBER':
-      return { ...base, valueType: 'SELECT_NUMBER', value: null };
-    case 'ENTITY':
-      return { ...base, valueType: 'ENTITY', value: null };
-    case 'LINK':
-      return { ...base, valueType: 'LINK', value: null };
-    case 'TAG':
-      return undefined;
-  }
+  return match(definition.valueType)
+    .with('STRING', () => ({
+      ...base,
+      valueType: 'STRING' as const,
+      value: null,
+    }))
+    .with('NUMBER', () => ({
+      ...base,
+      valueType: 'NUMBER' as const,
+      value: null,
+    }))
+    .with('BOOLEAN', () => ({
+      ...base,
+      valueType: 'BOOLEAN' as const,
+      value: null,
+    }))
+    .with('DATE', () => ({ ...base, valueType: 'DATE' as const, value: null }))
+    .with('SELECT_STRING', () => ({
+      ...base,
+      valueType: 'SELECT_STRING' as const,
+      value: null,
+    }))
+    .with('SELECT_NUMBER', () => ({
+      ...base,
+      valueType: 'SELECT_NUMBER' as const,
+      value: null,
+    }))
+    .with('ENTITY', () => ({
+      ...base,
+      valueType: 'ENTITY' as const,
+      value: null,
+    }))
+    .with('LINK', () => ({ ...base, valueType: 'LINK' as const, value: null }))
+    .with('TAG', () => undefined)
+    .exhaustive();
 }
 
 function sortPinnedProperties<T extends Property>(
@@ -569,8 +595,9 @@ function PropertyRowActions(props: {
     <Show when={hasActions()}>
       <div
         class={cn(
-          'absolute right-0 top-1/2 z-1 hidden -translate-y-1/2 items-center gap-0.5',
-          'group-hover/property-row:flex focus-within:flex'
+          'absolute right-0 top-1/2 z-1 flex -translate-y-1/2 items-center gap-0.5',
+          'pointer-events-none opacity-0 transition-opacity',
+          'group-hover/property-row:opacity-100 group-focus-within/property-row:opacity-100 focus-within:opacity-100'
         )}
         onMouseDown={stopRowInteraction}
       >
@@ -580,7 +607,7 @@ function PropertyRowActions(props: {
             title="Remove from entity"
             aria-label="Remove from entity"
             disabled={isSaving()}
-            class="flex size-5 items-center justify-center rounded-full text-ink-muted outline-none ring-0 shadow-none hover:bg-hover hover:text-failure-ink focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50"
+            class="pointer-events-auto flex size-5 items-center justify-center rounded-full text-ink-muted outline-none ring-0 shadow-none hover:bg-hover hover:text-failure-ink focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50"
             onClick={removeFromEntity}
           >
             <TrashIcon class="size-3" />
