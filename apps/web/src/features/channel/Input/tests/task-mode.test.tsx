@@ -229,6 +229,7 @@ vi.mock('../TaskComposer', () => ({
 }));
 
 import { ChannelInput } from '../ChannelInput';
+import { TaskModeChannelInput } from '../TaskModeChannelInput';
 import type { InputData } from '../types';
 
 const baseInput: InputData = {
@@ -242,16 +243,21 @@ const baseInput: InputData = {
 };
 
 describe('Channel input task mode', () => {
-  it('omits the task mode switch when onSendTask is not provided', () => {
+  it('keeps the base channel input message-only', () => {
     render(() => <ChannelInput input={baseInput} />);
 
     expect(screen.queryByRole('switch', { name: 'Task' })).toBeNull();
     expect(screen.queryByTestId('task-composer')).toBeNull();
   });
 
-  it('shows an unchecked task mode switch when onSendTask is provided', () => {
-    render(() => <ChannelInput input={baseInput} onSendTask={() => {}} />);
+  it('shows an unchecked task mode switch at the normal input width', () => {
+    const { container } = render(() => (
+      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
+    ));
 
+    expect(container.firstElementChild?.classList).toContain(
+      'macro-message-width'
+    );
     const modeSwitch = screen.getByRole('switch', { name: 'Task' });
     expect(modeSwitch).toHaveProperty('checked', false);
     expect(screen.queryByTestId('task-composer')).toBeNull();
@@ -260,7 +266,7 @@ describe('Channel input task mode', () => {
   it('swaps the input faces when toggling task mode on and off', async () => {
     const user = userEvent.setup();
     const { container } = render(() => (
-      <ChannelInput input={baseInput} onSendTask={() => {}} />
+      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
 
     await user.click(screen.getByRole('switch', { name: 'Task' }));
@@ -286,7 +292,9 @@ describe('Channel input task mode', () => {
 
   it('enters task mode from clicks on the switch pill itself, not just the control', async () => {
     const user = userEvent.setup();
-    render(() => <ChannelInput input={baseInput} onSendTask={() => {}} />);
+    render(() => (
+      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
+    ));
 
     // The pill (Kobalte switch root) is the label's parent; clicking its
     // padding must toggle just like clicking the control or label.
@@ -305,7 +313,7 @@ describe('Channel input task mode', () => {
     localStorage.removeItem(taskPersistence.modeKey);
 
     const first = render(() => (
-      <ChannelInput
+      <TaskModeChannelInput
         input={baseInput}
         onSendTask={() => {}}
         taskPersistence={taskPersistence}
@@ -320,7 +328,7 @@ describe('Channel input task mode', () => {
     first.unmount();
 
     const second = render(() => (
-      <ChannelInput
+      <TaskModeChannelInput
         input={baseInput}
         onSendTask={() => {}}
         taskPersistence={taskPersistence}
@@ -341,7 +349,7 @@ describe('Channel input task mode', () => {
     const user = userEvent.setup();
     const onSendTask = vi.fn();
     const { container } = render(() => (
-      <ChannelInput input={baseInput} onSendTask={onSendTask} />
+      <TaskModeChannelInput input={baseInput} onSendTask={onSendTask} />
     ));
 
     await user.click(screen.getByRole('switch', { name: 'Task' }));
