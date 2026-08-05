@@ -8,7 +8,7 @@
 /// Calendar business models, ports, and services.
 pub mod domain;
 /// Inbound adapters that expose calendar use cases and accepted formats.
-#[cfg(any(feature = "ics", feature = "inbound"))]
+#[cfg(feature = "inbound")]
 pub mod inbound;
 /// Database and provider adapters used by service composition roots.
 #[cfg(any(feature = "google", feature = "postgres"))]

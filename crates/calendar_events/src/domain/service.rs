@@ -9,14 +9,12 @@ use super::{
     models::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarOccurrenceCursor, EmailCalendarBackfillState, EmailCalendarScanAssociation,
-        EmailCalendarScanStatus, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarOccurrenceCursor, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, EmailCalendarBackfillPublisher, EmailCalendarBackfillRepository,
-        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
-        GoogleProviderError, GoogleProviderErrorKind,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
     },
 };
 
@@ -37,137 +35,6 @@ pub enum CalendarValidationError {
     /// A page size was outside the supported bound.
     #[error("calendar repository query limit must be between 1 and 2001")]
     InvalidLimit,
-}
-
-/// Queue-visible outcome of scheduling a full email rescan for ICS extraction.
-#[derive(Debug, thiserror::Error)]
-pub enum EmailCalendarBackfillRunError {
-    /// An unrelated email scan is already in progress.
-    #[error("email calendar extraction is waiting for the active email backfill")]
-    Busy,
-    /// The calendar job or its associated email scan was not found.
-    #[error("email calendar extraction job was not found")]
-    NotFound,
-    /// The associated email scan already failed.
-    #[error("email calendar extraction scan failed")]
-    ScanFailed,
-    /// Persistence or queue publication can be retried.
-    #[error("email calendar extraction failed transiently: {0}")]
-    Retryable(String),
-}
-
-/// Application service that associates a complete email scan with ICS extraction.
-pub struct EmailCalendarBackfillCoordinator<R, P> {
-    repository: R,
-    publisher: P,
-}
-
-impl<R, P> EmailCalendarBackfillCoordinator<R, P>
-where
-    R: EmailCalendarBackfillRepository,
-    P: EmailCalendarBackfillPublisher,
-{
-    /// Construct the coordinator from persistence and queue ports.
-    pub fn new(repository: R, publisher: P) -> Self {
-        Self {
-            repository,
-            publisher,
-        }
-    }
-
-    /// Start or resume one durable email-ICS calendar backfill.
-    #[tracing::instrument(skip(self, fusionauth_user_id), fields(job_id = %key.job_id), err)]
-    pub async fn run(
-        &self,
-        key: CalendarBackfillJobKey,
-        fusionauth_user_id: &str,
-    ) -> Result<(), EmailCalendarBackfillRunError> {
-        let state = self
-            .repository
-            .get_email_calendar_backfill_state(key)
-            .await
-            .map_err(retryable_email_backfill)?;
-        let (email_job, allow_in_progress) = match state {
-            EmailCalendarBackfillState::Complete => return Ok(()),
-            EmailCalendarBackfillState::NotFound => {
-                return Err(EmailCalendarBackfillRunError::NotFound);
-            }
-            EmailCalendarBackfillState::Associated { email_job_id } => {
-                let job = self
-                    .repository
-                    .get_email_scan_job(key.email_link_id, email_job_id)
-                    .await
-                    .map_err(retryable_email_backfill)?
-                    .ok_or(EmailCalendarBackfillRunError::NotFound)?;
-                if !job.is_full_scan {
-                    return Err(EmailCalendarBackfillRunError::ScanFailed);
-                }
-                (job, true)
-            }
-            EmailCalendarBackfillState::Unassociated => {
-                let job = match self
-                    .repository
-                    .get_active_email_scan_job(key.email_link_id)
-                    .await
-                    .map_err(retryable_email_backfill)?
-                {
-                    Some(job) => job,
-                    None => self
-                        .repository
-                        .create_email_scan_job(key.email_link_id, fusionauth_user_id)
-                        .await
-                        .map_err(retryable_email_backfill)?,
-                };
-                if !job.is_full_scan || job.status == EmailCalendarScanStatus::InProgress {
-                    return Err(EmailCalendarBackfillRunError::Busy);
-                }
-                (job, false)
-            }
-        };
-
-        let association = self
-            .repository
-            .associate_email_scan(key, email_job.id, allow_in_progress)
-            .await
-            .map_err(retryable_email_backfill)?;
-        let status = match association {
-            EmailCalendarScanAssociation::Associated(status) => status,
-            EmailCalendarScanAssociation::Busy => {
-                return Err(EmailCalendarBackfillRunError::Busy);
-            }
-            EmailCalendarScanAssociation::NotFound => {
-                return Err(EmailCalendarBackfillRunError::NotFound);
-            }
-        };
-        match status {
-            EmailCalendarScanStatus::Complete => Ok(()),
-            EmailCalendarScanStatus::Failed => Err(EmailCalendarBackfillRunError::ScanFailed),
-            EmailCalendarScanStatus::InProgress => Ok(()),
-            EmailCalendarScanStatus::Init => self
-                .publisher
-                .publish_email_scan_init(key.email_link_id, email_job.id)
-                .await
-                .map_err(retryable_email_backfill),
-        }
-    }
-
-    /// Apply a terminal queue failure through the calendar lifecycle port.
-    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
-    pub async fn fail_terminal(
-        &self,
-        key: CalendarBackfillJobKey,
-        message: &str,
-    ) -> Result<(), EmailCalendarBackfillRunError> {
-        self.repository
-            .fail_email_calendar_backfill(key, message)
-            .await
-            .map_err(retryable_email_backfill)?;
-        Ok(())
-    }
-}
-
-fn retryable_email_backfill(error: Report) -> EmailCalendarBackfillRunError {
-    EmailCalendarBackfillRunError::Retryable(format!("{error:?}"))
 }
 
 /// Calendar use cases with provider and persistence details behind ports.

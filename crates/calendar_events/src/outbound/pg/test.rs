@@ -235,7 +235,7 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
         .await
         .unwrap();
     assert!(enabled.changed);
-    assert_eq!(enabled.jobs.len(), 2);
+    assert_eq!(enabled.jobs.len(), 1);
 
     let duplicate = repo
         .apply_google_grant(link_id, complete_grant())
@@ -299,11 +299,6 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
         .jobs
         .iter()
         .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
-        .unwrap();
-    let email_job = enabled
-        .jobs
-        .iter()
-        .find(|job| job.kind == CalendarBackfillKind::EmailIcs)
         .unwrap();
     let account_id = google_job.account_id.unwrap();
     let key = CalendarBackfillJobKey {
@@ -376,18 +371,15 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
             calendar.is_deleted,
             google_job.status AS google_job_status,
             google_job.lease_token,
-            email_job.status AS email_job_status,
-            (SELECT count(*) FROM calendar_event_sources WHERE event_id = $4) AS "source_count!",
-            (SELECT count(*) FROM calendar_events WHERE id = $4) AS "event_count!"
+            (SELECT count(*) FROM calendar_event_sources WHERE event_id = $3) AS "source_count!",
+            (SELECT count(*) FROM calendar_events WHERE id = $3) AS "event_count!"
         FROM calendar_accounts account
         JOIN calendars calendar ON calendar.account_id = account.id
         JOIN calendar_backfill_jobs google_job ON google_job.id = $2
-        JOIN calendar_backfill_jobs email_job ON email_job.id = $3
         WHERE account.id = $1
         "#,
         account_id,
         google_job.id,
-        email_job.id,
         event_id,
     )
     .fetch_one(&pool)
@@ -397,7 +389,6 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
     assert!(state.is_deleted);
     assert_eq!(state.google_job_status, "failed");
     assert!(state.lease_token.is_none());
-    assert_eq!(state.email_job_status, "pending");
     assert_eq!(state.source_count, 0);
     assert_eq!(state.event_count, 0);
     assert!(matches!(
@@ -409,7 +400,7 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
         .apply_google_grant(link_id, complete_grant())
         .await
         .unwrap();
-    assert_eq!(reenabled.jobs.len(), 2);
+    assert_eq!(reenabled.jobs.len(), 1);
     assert_eq!(
         sqlx::query_scalar!(
             r#"SELECT sync_status FROM calendar_accounts WHERE id = $1"#,

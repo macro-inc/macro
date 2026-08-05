@@ -679,8 +679,6 @@ pub struct GoogleCalendarSyncSnapshot {
 pub enum CalendarBackfillKind {
     /// Fetch calendars and canonical provider events.
     GoogleCalendar,
-    /// Re-scan existing email for iCalendar MIME parts.
-    EmailIcs,
 }
 
 impl CalendarBackfillKind {
@@ -688,7 +686,6 @@ impl CalendarBackfillKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::GoogleCalendar => "google_calendar",
-            Self::EmailIcs => "email_ics",
         }
     }
 }
@@ -758,57 +755,6 @@ pub struct CalendarBackfillFailureOutcome {
     pub job_transitioned: bool,
     /// Whether the associated inbox newly transitioned to require reauthorization.
     pub link_reauth_transitioned: bool,
-}
-
-/// Durable state of the email scan associated with calendar extraction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarScanStatus {
-    /// The email scan is created but has not begun listing threads.
-    Init,
-    /// The email scan is actively processing messages.
-    InProgress,
-    /// The scan and calendar extraction completed.
-    Complete,
-    /// The scan ended before calendar extraction completed.
-    Failed,
-}
-
-/// Minimal email scan identity needed by calendar backfill policy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EmailCalendarScanJob {
-    /// Durable email backfill job identifier.
-    pub id: Uuid,
-    /// Current scan lifecycle state.
-    pub status: EmailCalendarScanStatus,
-    /// Whether the scan covers the entire mailbox rather than a bounded subset.
-    pub is_full_scan: bool,
-}
-
-/// Durable state of an email-ICS calendar backfill.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarBackfillState {
-    /// No email scan has been associated yet.
-    Unassociated,
-    /// A scan is already durably associated.
-    Associated {
-        /// Durable email scan identifier.
-        email_job_id: Uuid,
-    },
-    /// Calendar extraction already completed.
-    Complete,
-    /// No matching email-ICS calendar job exists.
-    NotFound,
-}
-
-/// Result of atomically associating an email scan with calendar extraction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarScanAssociation {
-    /// The scan was associated at its current safe state.
-    Associated(EmailCalendarScanStatus),
-    /// An unrelated scan is already in progress and cannot provide a full rescan.
-    Busy,
-    /// The email scan no longer exists.
-    NotFound,
 }
 
 /// Result of applying an OAuth grant.

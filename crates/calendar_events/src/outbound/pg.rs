@@ -399,10 +399,7 @@ impl CalendarRepository for PgCalendarRepository {
             let account_id =
                 upsert_google_account_tx(&mut tx, email_link_id, &row.macro_id, &row.email_address)
                     .await?;
-            for kind in [
-                CalendarBackfillKind::GoogleCalendar,
-                CalendarBackfillKind::EmailIcs,
-            ] {
+            for kind in [CalendarBackfillKind::GoogleCalendar] {
                 let job_id = Uuid::now_v7();
                 let inserted = sqlx::query_scalar!(
                     r#"
@@ -1748,6 +1745,7 @@ async fn retry_failed_backfills_tx(
         WHERE email_link_id = $1
           AND grant_version = $2
           AND status = 'failed'
+          AND kind = 'google_calendar'
         RETURNING id, account_id, kind
         "#,
         email_link_id,
@@ -1773,7 +1771,6 @@ async fn retry_failed_backfills_tx(
 
         let kind = match row.kind.as_str() {
             "google_calendar" => CalendarBackfillKind::GoogleCalendar,
-            "email_ics" => CalendarBackfillKind::EmailIcs,
             _ => return Err(rootcause::report!("invalid calendar backfill kind")),
         };
         jobs.push(CalendarBackfillJob {

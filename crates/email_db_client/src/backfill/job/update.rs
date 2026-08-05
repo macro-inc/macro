@@ -233,13 +233,9 @@ pub async fn finalize_initialization(
     Ok(true)
 }
 
-/// Atomically fails an email backfill job and any running email-calendar
-/// extraction job associated with that scan.
+/// Fails an active email backfill job.
 #[tracing::instrument(skip(pool), err)]
-pub async fn fail_backfill_job_and_calendar_extraction(
-    pool: &PgPool,
-    job_id: Uuid,
-) -> anyhow::Result<bool> {
+pub async fn fail_backfill_job(pool: &PgPool, job_id: Uuid) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;
     let failed = sqlx::query!(
         r#"
@@ -259,30 +255,14 @@ pub async fn fail_backfill_job_and_calendar_extraction(
         return Ok(false);
     }
 
-    sqlx::query!(
-        r#"
-        UPDATE calendar_backfill_jobs
-        SET status = 'failed',
-            last_error = 'email backfill failed before calendar extraction completed',
-            completed_at = now(),
-            updated_at = now()
-        WHERE kind = 'email_ics'
-          AND status = 'running'
-          AND cursor->>'emailBackfillJobId' = $1
-        "#,
-        job_id.to_string(),
-    )
-    .execute(&mut *tx)
-    .await?;
-
     tx.commit().await?;
     Ok(true)
 }
 
-/// Atomically completes an active email backfill and its associated email-ICS
-/// extraction job, returning a durable outcome for idempotency and fencing.
+/// Completes an active email backfill, returning a durable outcome for
+/// idempotency and fencing.
 #[tracing::instrument(skip(pool), err)]
-pub async fn complete_backfill_job_and_calendar_extraction(
+pub async fn complete_backfill_job(
     pool: &PgPool,
     job_id: Uuid,
     init_lease_token: Option<Uuid>,
@@ -334,21 +314,6 @@ pub async fn complete_backfill_job_and_calendar_extraction(
             None => BackfillCompletion::NotFound,
         });
     }
-
-    sqlx::query!(
-        r#"
-        UPDATE calendar_backfill_jobs
-        SET status = 'complete',
-            completed_at = now(),
-            updated_at = now()
-        WHERE kind = 'email_ics'
-          AND status = 'running'
-          AND cursor->>'emailBackfillJobId' = $1
-        "#,
-        job_id.to_string(),
-    )
-    .execute(&mut *tx)
-    .await?;
 
     sqlx::query!(
         r#"
@@ -486,93 +451,6 @@ pub async fn mark_completion_effects_complete(
         anyhow::bail!("no pending completion effects for backfill job {job_id}");
     }
     Ok(())
-}
-
-/// Atomically fails an active email-ICS calendar backfill and any unpublished
-/// email scan it owns.
-#[tracing::instrument(skip(pool, message), err)]
-pub async fn fail_email_ics_calendar_backfill_job(
-    pool: &PgPool,
-    calendar_job_id: Uuid,
-    email_link_id: Uuid,
-    message: &str,
-) -> anyhow::Result<bool> {
-    let mut tx = pool.begin().await?;
-    let job_identity = sqlx::query!(
-        r#"
-        SELECT
-            (cursor->>'emailBackfillJobId')::uuid AS email_job_id
-        FROM calendar_backfill_jobs
-        WHERE id = $1
-          AND email_link_id = $2
-          AND kind = 'email_ics'
-        "#,
-        calendar_job_id,
-        email_link_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let Some(job_identity) = job_identity else {
-        tx.commit().await?;
-        return Ok(false);
-    };
-
-    if let Some(email_job_id) = job_identity.email_job_id {
-        sqlx::query_scalar!(
-            r#"
-            SELECT id
-            FROM email_backfill_jobs
-            WHERE id = $1
-            FOR UPDATE
-            "#,
-            email_job_id,
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-    }
-
-    let failed_job = sqlx::query!(
-        r#"
-        UPDATE calendar_backfill_jobs
-        SET status = 'failed',
-            last_error = $3,
-            completed_at = now(),
-            lease_token = NULL,
-            lease_expires_at = NULL,
-            updated_at = now()
-        WHERE id = $1
-          AND email_link_id = $2
-          AND kind = 'email_ics'
-          AND status NOT IN ('complete', 'failed')
-        RETURNING
-            (cursor->>'emailBackfillJobId')::uuid AS email_job_id
-        "#,
-        calendar_job_id,
-        email_link_id,
-        message,
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let Some(failed_job) = failed_job else {
-        tx.commit().await?;
-        return Ok(false);
-    };
-
-    sqlx::query!(
-        r#"
-        UPDATE email_backfill_jobs
-        SET status = 'Failed',
-            updated_at = now()
-        WHERE id = $1
-          AND status = 'Init'
-        "#,
-        failed_job.email_job_id,
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    tx.commit().await?;
-    Ok(true)
 }
 
 #[tracing::instrument(skip(pool), err)]

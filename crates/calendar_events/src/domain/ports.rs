@@ -9,8 +9,7 @@ use uuid::Uuid;
 use super::models::{
     AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEvent, CalendarEventUpsert,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EmailCalendarBackfillState,
-    EmailCalendarScanAssociation, EmailCalendarScanJob, GoogleCalendarSyncSnapshot,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, GoogleCalendarSyncSnapshot,
     GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
     OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
 };
@@ -281,59 +280,4 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
-}
-
-/// Durable email-scan operations used by calendar extraction policy.
-pub trait EmailCalendarBackfillRepository: Send + Sync + 'static {
-    /// Load the calendar job and any scan already associated with it.
-    fn get_email_calendar_backfill_state(
-        &self,
-        key: CalendarBackfillJobKey,
-    ) -> impl Future<Output = Result<EmailCalendarBackfillState, Report>> + Send;
-
-    /// Load one associated email scan.
-    fn get_email_scan_job(
-        &self,
-        email_link_id: Uuid,
-        email_job_id: Uuid,
-    ) -> impl Future<Output = Result<Option<EmailCalendarScanJob>, Report>> + Send;
-
-    /// Return the active email scan for an inbox, if one exists.
-    fn get_active_email_scan_job(
-        &self,
-        email_link_id: Uuid,
-    ) -> impl Future<Output = Result<Option<EmailCalendarScanJob>, Report>> + Send;
-
-    /// Create a full email scan, returning the winner of any concurrent insert.
-    fn create_email_scan_job(
-        &self,
-        email_link_id: Uuid,
-        fusionauth_user_id: &str,
-    ) -> impl Future<Output = Result<EmailCalendarScanJob, Report>> + Send;
-
-    /// Atomically associate a scan, optionally accepting an already-started
-    /// scan only when it was associated by an earlier delivery.
-    fn associate_email_scan(
-        &self,
-        key: CalendarBackfillJobKey,
-        email_job_id: Uuid,
-        allow_in_progress: bool,
-    ) -> impl Future<Output = Result<EmailCalendarScanAssociation, Report>> + Send;
-
-    /// Atomically terminate an active email-ICS job and its unpublished scan.
-    fn fail_email_calendar_backfill(
-        &self,
-        key: CalendarBackfillJobKey,
-        message: &str,
-    ) -> impl Future<Output = Result<bool, Report>> + Send;
-}
-
-/// Queue publication required to begin a newly associated email scan.
-pub trait EmailCalendarBackfillPublisher: Send + Sync + 'static {
-    /// Publish the idempotent email scan initialization message.
-    fn publish_email_scan_init(
-        &self,
-        email_link_id: Uuid,
-        email_job_id: Uuid,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
