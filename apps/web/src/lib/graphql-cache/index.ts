@@ -41,6 +41,7 @@ export { createWorkerCacheHost } from './host/worker-host';
 export type {
   CachedQueryInstanceWire,
   CachePush,
+  CacheReadPriority,
   CacheRequest,
   CacheResponse,
   MutationSettlement,

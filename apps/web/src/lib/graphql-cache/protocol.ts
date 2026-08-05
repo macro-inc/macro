@@ -11,6 +11,9 @@
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Scheduling hint for latency-sensitive cache reads. */
+export type CacheReadPriority = 'user-visible';
+
 /** Opaque exclusive cursor for deterministic normalized-record scans. */
 export type RecordCursor = string;
 
@@ -140,6 +143,8 @@ export type CacheRequest = { id: number } & (
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
+      /** May overtake unrelated observational reads, never ordering barriers. */
+      priority?: CacheReadPriority;
     }
   | {
       kind: 'write';

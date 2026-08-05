@@ -124,7 +124,12 @@ const ALIASED_RENAME_MUTATION = gql`
 `;
 
 type FakeHost = CacheHost & {
-  reads: Array<{ opKey?: number; query: string; variables?: object }>;
+  reads: Array<{
+    opKey?: number;
+    query: string;
+    variables?: object;
+    priority?: 'user-visible';
+  }>;
   writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
   begins: Array<{
     query: string;
@@ -184,6 +189,7 @@ function makeFakeHost(): FakeHost {
         opKey: args.opKey,
         query: args.query,
         variables: args.variables,
+        priority: args.priority,
       });
       return readResult;
     },
@@ -825,18 +831,27 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.identity).toBe('macro|sean@macro.com');
   });
 
-  it('re-executes affected active operations as cache-first', async () => {
+  it('re-executes each affected active operation once as a prioritized cache read', async () => {
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
     const { ops, client } = harness(host);
     const op = makeOp(7, 'cache-and-network');
     ops.next(op);
     await tick();
+    vi.mocked(client.reexecuteOperation).mockImplementation((reissued) => {
+      ops.next(reissued);
+    });
 
     host.pushAffected([7, 999]); // 999 is not active → ignored
+    await tick();
+
     const reexec = vi.mocked(client.reexecuteOperation);
     expect(reexec).toHaveBeenCalledOnce();
     const reissued = reexec.mock.calls[0]?.[0] as Operation;
     expect(reissued.key).toBe(7);
     expect(reissued.context.requestPolicy).toBe('cache-first');
+    expect(host.reads).toHaveLength(2);
+    expect(host.reads[0]?.priority).toBeUndefined();
+    expect(host.reads[1]?.priority).toBe('user-visible');
   });
 
   it('teardown unregisters the op with the host and stops re-execution', async () => {
