@@ -2,6 +2,7 @@ export const TOKENS = {
   // soup
   soup: {
     openSearch: 'soup.openSearch',
+    askAi: 'soup.askAi',
     sort: 'soup.sort',
     filter: 'soup.filter',
     tabs: {
