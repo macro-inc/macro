@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "agent_fold"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+non_empty = { path = "../non_empty" }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+agent_session = { path = "../agent_session", features = ["test-utils"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

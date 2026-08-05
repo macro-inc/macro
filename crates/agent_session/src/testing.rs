@@ -1,0 +1,175 @@
+//! In-memory port implementations for tests.
+//!
+//! Lets crates that consume this one - the agent service, `agent_fold` -
+//! exercise their own logic against a real [`AgentSessionRepo`] /
+//! [`AgentSessionLogRepo`] contract without a database.
+
+use crate::domain::error::{AgentSessionError, Result};
+use crate::domain::model::{
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
+    SessionStatus,
+};
+use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use bots::domain::models::BotId;
+use macro_uuid::Uuid;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+/// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
+///
+/// Cheap to clone - clones share one store, so a handle kept for assertions
+/// sees writes made through the copy under test. Log entries are returned in
+/// insertion order, which is the chronology the real repo gets from
+/// `ORDER BY created_at, id`.
+#[derive(Debug, Clone, Default)]
+pub struct InMemoryAgentSessionRepo {
+    sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
+    logs: Arc<Mutex<HashMap<AgentSessionId, Vec<AgentSessionLog>>>>,
+}
+
+impl InMemoryAgentSessionRepo {
+    /// An empty store.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Seed a session, bypassing [`AgentSessionRepo::create`] so a test can
+    /// choose the id and channel it will query by.
+    pub fn insert_session(&self, session: AgentSession) {
+        self.sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, session);
+    }
+
+    /// Seed log entries, in the order they should be read back.
+    pub fn extend_log(&self, entries: impl IntoIterator<Item = AgentSessionLog>) {
+        let mut logs = self
+            .logs
+            .lock()
+            .expect("in-memory log store is not poisoned");
+        for entry in entries {
+            logs.entry(entry.agent_session_id).or_default().push(entry);
+        }
+    }
+}
+
+impl FromIterator<AgentSessionLog> for InMemoryAgentSessionRepo {
+    fn from_iter<I: IntoIterator<Item = AgentSessionLog>>(entries: I) -> Self {
+        let repo = Self::new();
+        repo.extend_log(entries);
+        repo
+    }
+}
+
+impl AgentSessionRepo for InMemoryAgentSessionRepo {
+    async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
+        let now = chrono::Utc::now();
+        // The real repo creates a dedicated channel owned by `params.owner_id`;
+        // in memory the channel is just a fresh id.
+        let session = AgentSession {
+            id: params.id,
+            channel_id: macro_uuid::generate_uuid_v7(),
+            thread_id: params.thread_id,
+            originating_message_id: params.originating_message_id,
+            bot_id: params.bot_id,
+            model: params.model,
+            harness: params.harness,
+            repo_url: params.repo_url,
+            acp_session_id: None,
+            status: SessionStatus::default(),
+            created_at: now,
+            modified_at: now,
+        };
+        self.insert_session(session.clone());
+        Ok(session)
+    }
+
+    async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| {
+                AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+            })
+    }
+
+    async fn find_for_channel(
+        &self,
+        channel_id: Uuid,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> Result<ChannelSession> {
+        let sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let matches_subthread = |session: &AgentSession| {
+            thread_id.is_some()
+                && bot_id.is_some()
+                && session.thread_id == thread_id
+                && Some(session.bot_id) == bot_id
+        };
+        let dedicated = sessions
+            .values()
+            .find(|session| session.channel_id == channel_id)
+            .cloned();
+        let subthread = sessions
+            .values()
+            .find(|session| {
+                session.channel_id != channel_id && matches_subthread(session)
+            })
+            .cloned();
+        Ok(match (dedicated, subthread) {
+            (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {
+                ChannelSession::ThreadInDedicatedChannel {
+                    dedicated_channel_agent_session,
+                    subthread_agent_session,
+                }
+            }
+            (Some(session), None) => ChannelSession::InDedicatedChannel(session),
+            (None, Some(session)) => ChannelSession::CreatedFromThread(session),
+            (None, None) => ChannelSession::None,
+        })
+    }
+
+    async fn update(&self, session: AgentSession) -> Result<()> {
+        self.insert_session(session);
+        Ok(())
+    }
+
+    async fn delete(&self, id: AgentSessionId) -> Result<()> {
+        self.sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .remove(&id);
+        self.logs
+            .lock()
+            .expect("in-memory log store is not poisoned")
+            .remove(&id);
+        Ok(())
+    }
+}
+
+impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
+    async fn create(&self, log: AgentSessionLog) -> Result<()> {
+        self.extend_log([log]);
+        Ok(())
+    }
+
+    async fn list_by_session(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<AgentSessionLog>> {
+        Ok(self
+            .logs
+            .lock()
+            .expect("in-memory log store is not poisoned")
+            .get(&agent_session_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+}

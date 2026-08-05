@@ -52,11 +52,11 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
 pub trait AgentSessionLogRepo {
     /// Append a new log entry to a session's history.
-    fn create(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>>;
+    fn create(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 
     /// List all log entries for a session, in chronological order.
     fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<AgentSessionLog>>>;
+    ) -> impl Future<Output = Result<Vec<AgentSessionLog>>> + Send;
 }
