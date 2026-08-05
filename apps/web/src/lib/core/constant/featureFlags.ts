@@ -576,3 +576,13 @@ export const ENABLE_CALENDAR_PROMPT_MOBILE_FLAG =
 export const ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_CALENDAR_PROMPT_MOBILE'
 );
+
+// The "Enable calendar" prompt on desktop/web, the counterpart to
+// `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
+// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
+// "Enable calendar" button, so nothing becomes unreachable while this is off.
+// Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
+export const ENABLE_CALENDAR_PROMPT_WEB_FLAG = 'enable-calendar-prompt-web';
+export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_CALENDAR_PROMPT_WEB'
+);

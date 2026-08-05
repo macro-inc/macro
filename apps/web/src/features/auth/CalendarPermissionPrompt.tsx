@@ -16,9 +16,9 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * Inboxes that also need a full reconnect are skipped: the reconnect prompt
  * covers them, and reconnecting records the calendar grant anyway.
  *
- * Suppressed on phones unless `enable-calendar-prompt-mobile` says otherwise —
- * the mobile toast layout can't present it without stranding the user. See
- * `useCalendarPromptAllowed`.
+ * Gated per form factor: `enable-calendar-prompt-web` on desktop/web and
+ * `enable-calendar-prompt-mobile` on phones, where the toast layout can't
+ * present it without stranding the user. See `useCalendarPromptAllowed`.
  */
 export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
