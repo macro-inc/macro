@@ -14,7 +14,7 @@ import {
 
 type MacroApplicationLoadBalancerArgs = {
   // The sub domain for the application load balancer
-  // This will be `${subDomain}.macro.com`
+  // This will be `${subDomain}.${BASE_DOMAIN}`
   subDomain: string;
   // AWS resource tags
   tags: { [key: string]: string };
@@ -174,7 +174,7 @@ export class MacroApplicationLoadBalancer extends pulumi.ComponentResource {
     this.dns_record = new aws.route53.Record(
       'domain-record',
       {
-        name: `${subDomain}.macro.com`,
+        name: `${subDomain}.${BASE_DOMAIN}`,
         type: 'A',
         zoneId: zone.zoneId,
         aliases: [
