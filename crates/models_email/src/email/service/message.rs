@@ -269,6 +269,8 @@ pub struct SimpleMessage {
     pub thread_db_id: Uuid,
     pub provider_thread_id: Option<String>,
     pub replying_to_id: Option<Uuid>,
+    #[serde(skip)]
+    pub in_reply_to_message_id_header: Option<String>,
     pub global_id: String,
     pub link_id: Uuid,
     pub subject: Option<String>,
@@ -388,6 +390,24 @@ pub struct MessageSendersRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MessageSendersResponse {
     pub sender_map: HashMap<Uuid, MessageSenderInfo>,
+}
+
+/// Extracts and normalizes the In-Reply-To header from a provider header array.
+pub fn extract_in_reply_to_message_id_header(headers_json: Option<&JsonValue>) -> Option<String> {
+    headers_json?
+        .as_array()?
+        .iter()
+        .find(|header| {
+            header
+                .get("name")
+                .and_then(JsonValue::as_str)
+                .is_some_and(|name| name.eq_ignore_ascii_case("In-Reply-To"))
+        })
+        .and_then(|header| header.get("value"))
+        .and_then(JsonValue::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 pub trait HasContactInfo {

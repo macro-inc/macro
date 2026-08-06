@@ -150,6 +150,7 @@ pub async fn get_scheduled_db_messages_by_link_id(
             m.thread_id,
             m.provider_thread_id,
             m.replying_to_id,
+            m.in_reply_to_message_id_header,
             m.link_id,
             m.provider_history_id,
             m.internal_date_ts,

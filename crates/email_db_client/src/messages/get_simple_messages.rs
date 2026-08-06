@@ -35,8 +35,8 @@ pub async fn get_simple_message_by_provider_and_link(
         db::message::Message,
         r#"
         SELECT
-            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id, 
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
+            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id,
+            m.in_reply_to_message_id_header, m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -72,7 +72,7 @@ pub async fn get_simple_message(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id,
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
+            m.in_reply_to_message_id_header, m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -112,7 +112,7 @@ pub async fn get_simple_messages_batch(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id,
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
+            m.in_reply_to_message_id_header, m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -157,6 +157,7 @@ where
             m.thread_id,
             m.provider_thread_id,
             m.replying_to_id,
+            m.in_reply_to_message_id_header,
             m.provider_history_id,
             m.internal_date_ts,
             m.snippet,
@@ -173,7 +174,10 @@ where
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
             NULL::TEXT as body_macro,
-            m.headers_jsonb,
+            CASE
+                WHEN m.in_reply_to_message_id_header IS NULL THEN m.headers_jsonb
+                ELSE NULL
+            END AS headers_jsonb,
             m.created_at,
             m.updated_at
         FROM
@@ -210,7 +214,7 @@ pub async fn get_first_simple_message_draft(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
-            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
+            m.replying_to_id, m.in_reply_to_message_id_header, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,

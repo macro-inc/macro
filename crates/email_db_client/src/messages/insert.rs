@@ -83,16 +83,18 @@ async fn insert_db_message(
     let result = sqlx::query!(
         r#"
         INSERT INTO email_messages (
-        id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id, provider_history_id, internal_date_ts,
-            snippet, size_estimate, subject, from_name, from_contact_id, sent_at, has_attachments, is_read,
-            is_starred, is_sent, is_draft, body_text, body_html_sanitized, headers_jsonb
+        id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id,
+            in_reply_to_message_id_header, provider_history_id, internal_date_ts, snippet, size_estimate,
+            subject, from_name, from_contact_id, sent_at, has_attachments, is_read, is_starred, is_sent,
+            is_draft, body_text, body_html_sanitized, headers_jsonb
         )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         ON CONFLICT (link_id, provider_id) WHERE provider_id IS NOT NULL DO UPDATE SET
             global_id = EXCLUDED.global_id,
             provider_history_id = EXCLUDED.provider_history_id,
             provider_thread_id = EXCLUDED.provider_thread_id,
             replying_to_id = EXCLUDED.replying_to_id,
+            in_reply_to_message_id_header = EXCLUDED.in_reply_to_message_id_header,
             from_name = EXCLUDED.from_name,
             from_contact_id = EXCLUDED.from_contact_id,
             internal_date_ts = EXCLUDED.internal_date_ts,
@@ -118,6 +120,7 @@ async fn insert_db_message(
         thread_id,
         db_message.provider_thread_id,
         db_message.replying_to_id,
+        db_message.in_reply_to_message_id_header,
         db_message.provider_history_id,
         db_message.internal_date_ts,
         db_message.snippet,

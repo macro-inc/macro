@@ -59,6 +59,9 @@ pub fn map_service_message_to_db(
         thread_id,
         provider_thread_id: service_msg.provider_thread_id.clone(),
         replying_to_id: service_msg.replying_to_id,
+        in_reply_to_message_id_header: message::extract_in_reply_to_message_id_header(
+            service_msg.headers_json.as_ref(),
+        ),
         link_id: service_msg.link_id,
         provider_history_id: service_msg.provider_history_id.clone(),
         internal_date_ts: service_msg.internal_date_ts,

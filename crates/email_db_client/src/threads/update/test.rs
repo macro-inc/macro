@@ -203,6 +203,7 @@ async fn draft_discard_without_metadata_recompute_syncs_signal_flag(
         thread_db_id: Uuid::parse_str(THREAD)?,
         provider_thread_id: None,
         replying_to_id: None,
+        in_reply_to_message_id_header: None,
         global_id: String::new(),
         link_id: Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?,
         subject: None,

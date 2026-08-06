@@ -209,6 +209,7 @@ pub fn map_db_message_to_simple_message(
         thread_db_id: db_message.thread_id,
         provider_thread_id: db_message.provider_thread_id,
         replying_to_id: db_message.replying_to_id,
+        in_reply_to_message_id_header: db_message.in_reply_to_message_id_header,
         link_id: db_message.link_id,
         subject: db_message.subject,
         snippet: db_message.snippet,

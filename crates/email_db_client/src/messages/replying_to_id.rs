@@ -110,8 +110,8 @@ pub async fn update_message_replying_to_from_headers(
     message_db_id: Uuid,
     link_id: Uuid,
 ) -> anyhow::Result<()> {
-    if let Some(headers) = &message.headers_json
-        && let Some(in_reply_to) = extract_in_reply_to(headers)
+    if let Some(in_reply_to) =
+        message::extract_in_reply_to_message_id_header(message.headers_json.as_ref())
     {
         let db_id_replying_to =
             get::get_message_id_by_global_id(&mut *tx, link_id, &in_reply_to).await?;
@@ -163,16 +163,18 @@ pub async fn update_thread_messages_replying_to(
 
     let mut replying_to_id_tuples: Vec<(Uuid, Uuid)> = Vec::new();
 
-    // if message has In-Reply-To header, get db_id of message with that global_id and add to list for insertion
     for message in simple_messages {
-        if let Some(headers) = &message.headers_json
-            && let Some(in_reply_to) = extract_in_reply_to(headers)
+        // Only legacy rows with a NULL stored value inspect headers_jsonb. A stored reference that
+        // points outside this thread must remain unresolved rather than using stale legacy data.
+        let in_reply_to = message.in_reply_to_message_id_header.or_else(|| {
+            message::extract_in_reply_to_message_id_header(message.headers_json.as_ref())
+        });
+
+        if let Some(db_id_replying_to) = in_reply_to
+            .as_ref()
+            .and_then(|global_id| global_db_map.get(global_id))
         {
-            // doesn't always exist, because forwarded emails can have In-Reply-To referring to
-            // the email that was forwarded,y which may or may not exist in db
-            if let Some(db_id_replying_to) = global_db_map.get(&in_reply_to) {
-                replying_to_id_tuples.push((message.db_id, *db_id_replying_to));
-            }
+            replying_to_id_tuples.push((message.db_id, *db_id_replying_to));
         }
     }
 
@@ -180,26 +182,4 @@ pub async fn update_thread_messages_replying_to(
     update_db_messages_replying_to_ids(tx, link_id, &replying_to_id_tuples).await?;
 
     Ok(())
-}
-
-/// Extracts the In-Reply-To value from the headers_json
-fn extract_in_reply_to(headers_json: &serde_json::Value) -> Option<String> {
-    // Check if headers_json is an array
-    if let Some(headers) = headers_json.as_array() {
-        // Iterate through each header object
-        for header in headers {
-            // Get the name field
-            if let Some(name) = header.get("name").and_then(|n| n.as_str()) {
-                // Check if the name is "In-Reply-To" (case sensitive)
-                if name == "In-Reply-To" {
-                    // Return the value
-                    return header
-                        .get("value")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                }
-            }
-        }
-    }
-    None
 }

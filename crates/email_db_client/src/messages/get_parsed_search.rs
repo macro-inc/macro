@@ -23,7 +23,7 @@ pub async fn get_parsed_search_message_by_id(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
-            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
+            m.replying_to_id, m.in_reply_to_message_id_header, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             m.body_text as body_text,
             m.body_html_sanitized as body_html_sanitized,
@@ -89,6 +89,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
             thread_id,
             provider_thread_id,
             replying_to_id,
+            in_reply_to_message_id_header,
             link_id,
             provider_history_id,
             internal_date_ts,
@@ -178,6 +179,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
             thread_id,
             provider_thread_id,
             replying_to_id,
+            in_reply_to_message_id_header,
             link_id,
             provider_history_id,
             internal_date_ts,
