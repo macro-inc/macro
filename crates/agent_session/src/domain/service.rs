@@ -17,13 +17,15 @@ use super::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo};
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
 /// Buffered not-yet-accepted commands per session actor.
-const COMMAND_BUFFER: usize = 64;
+const COMMAND_BUFFER: usize = 1028;
+
+type ActiveSessions = DashMap<AgentSessionId, mpsc::Sender<SessionCommand>>;
 
 /// Persists agent sessions and manages their active transports.
 pub struct AgentSessionService<Sessions, Logs> {
     sessions: Sessions,
     logs: Logs,
-    registry: Arc<SessionRegistry>,
+    active: Arc<ActiveSessions>,
 }
 
 impl<Sessions, Logs> AgentSessionService<Sessions, Logs>
@@ -36,7 +38,7 @@ where
         Self {
             sessions,
             logs,
-            registry: Arc::new(SessionRegistry::default()),
+            active: Arc::new(DashMap::new()),
         }
     }
 
@@ -67,56 +69,20 @@ where
     ///
     /// Completes once the action reaches the transport. Actions accepted while
     /// the transport boots remain queued until its ACP handshake completes.
-    pub async fn send_message(
+    pub async fn send_action(
         &self,
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
     ) -> Result<()> {
-        let handle = self
-            .registry
-            .sessions
+        let commands = self
+            .active
             .get(&id)
-            .map(|entry| entry.clone())
+            .map(|entry| entry.value().clone())
             .ok_or(AgentSessionError::Disconnected(id))?;
 
-        handle.send(id, user_id, action).await
-    }
-
-    fn attach_session<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
-    where
-        Connector: AgentConnector + Clone,
-    {
-        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
-        let handle = SessionHandle { commands };
-
-        match self.registry.sessions.entry(id) {
-            Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
-            Entry::Vacant(entry) => {
-                entry.insert(handle);
-            }
-        }
-
-        let actor = SessionActor::new(id, connector, self.logs.clone(), command_rx);
-        tokio::spawn(run_session(actor, Arc::downgrade(&self.registry)));
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct SessionHandle {
-    commands: mpsc::Sender<SessionCommand>,
-}
-
-impl SessionHandle {
-    async fn send(
-        &self,
-        id: AgentSessionId,
-        user_id: Option<MacroUserIdStr<'static>>,
-        action: AgentAction,
-    ) -> Result<()> {
         let (completed, result) = oneshot::channel();
-        self.commands
+        commands
             .send(SessionCommand {
                 user_id,
                 action,
@@ -128,17 +94,30 @@ impl SessionHandle {
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))?
     }
-}
 
-#[derive(Default)]
-struct SessionRegistry {
-    sessions: DashMap<AgentSessionId, SessionHandle>,
+    fn attach_session<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
+    where
+        Connector: AgentConnector + Clone,
+    {
+        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
+
+        match self.active.entry(id) {
+            Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
+            Entry::Vacant(entry) => {
+                entry.insert(commands);
+            }
+        }
+
+        let actor = SessionActor::new(id, connector, self.logs.clone(), command_rx);
+        tokio::spawn(run_session(actor, Arc::downgrade(&self.active)));
+        Ok(())
+    }
 }
 
 /// Step the actor until its machine stops, then release the registry entry.
 async fn run_session<Connector, Logs>(
     mut actor: SessionActor<Connector, Logs>,
-    registry: std::sync::Weak<SessionRegistry>,
+    active: std::sync::Weak<ActiveSessions>,
 ) where
     Connector: AgentConnector + Clone,
     Logs: AgentSessionLogRepo,
@@ -149,8 +128,10 @@ async fn run_session<Connector, Logs>(
     // cannot enqueue into an actor that will never step again.
     actor.close();
     let id = actor.id();
+
+    // Tear down the old transport before allowing another actor to attach.
     drop(actor);
-    if let Some(registry) = registry.upgrade() {
-        registry.sessions.remove(&id);
+    if let Some(active) = active.upgrade() {
+        active.remove(&id);
     }
 }

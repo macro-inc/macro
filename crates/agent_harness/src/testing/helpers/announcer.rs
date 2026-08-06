@@ -2,24 +2,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use agent_session::domain::model::AgentSession;
-
-use crate::domain::service::{MentionOrigin, SessionAnnouncer};
-
-/// One recorded announcement.
-#[derive(Debug, Clone)]
-pub struct Announced {
-    /// The session as it was announced, dedicated channel id included.
-    pub session: AgentSession,
-    /// The mention it answered.
-    pub origin: MentionOrigin,
-}
+use crate::domain::error::{HarnessError, Result};
+use crate::domain::model::SessionAnnouncement;
+use crate::domain::ports::SessionAnnouncer;
 
 /// A [`SessionAnnouncer`] that records instead of posting. Cloning shares one
 /// record.
 #[derive(Clone, Default)]
 pub struct AnnouncerMock {
-    announced: Arc<Mutex<Vec<Announced>>>,
+    announced: Arc<Mutex<Vec<SessionAnnouncement>>>,
     /// When set, every announce fails with this message.
     failure: Arc<Mutex<Option<String>>>,
 }
@@ -42,7 +33,7 @@ impl AnnouncerMock {
 
     /// Every announcement recorded, in order.
     #[must_use]
-    pub fn announced(&self) -> Vec<Announced> {
+    pub fn announced(&self) -> Vec<SessionAnnouncement> {
         self.announced
             .lock()
             .expect("announcer mock lock should not be poisoned")
@@ -51,23 +42,20 @@ impl AnnouncerMock {
 }
 
 impl SessionAnnouncer for AnnouncerMock {
-    async fn announce(&self, session: &AgentSession, origin: &MentionOrigin) -> anyhow::Result<()> {
+    async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
         if let Some(message) = self
             .failure
             .lock()
             .expect("announcer mock failure lock should not be poisoned")
             .clone()
         {
-            anyhow::bail!("{message}");
+            return Err(HarnessError::Announce(rootcause::report!("{message}")));
         }
 
         self.announced
             .lock()
             .expect("announcer mock lock should not be poisoned")
-            .push(Announced {
-                session: session.clone(),
-                origin: origin.clone(),
-            });
+            .push(announcement);
         Ok(())
     }
 }

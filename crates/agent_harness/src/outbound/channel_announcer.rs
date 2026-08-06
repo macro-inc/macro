@@ -13,13 +13,14 @@
 
 use std::sync::Arc;
 
-use agent_session::domain::model::AgentSession;
 use bot_id::BotId;
 use channel_sender::ChannelSender;
 use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use channels::domain::ports::ChannelService;
 
-use crate::domain::service::{MentionOrigin, SessionAnnouncer};
+use crate::domain::error::{HarnessError, Result};
+use crate::domain::model::SessionAnnouncement;
+use crate::domain::ports::SessionAnnouncer;
 
 /// Posts session announcements as `bot_id` through a [`ChannelService`].
 pub struct ChannelAnnouncer<Channels> {
@@ -38,30 +39,30 @@ impl<Channels> SessionAnnouncer for ChannelAnnouncer<Channels>
 where
     Channels: ChannelService + Send + Sync + 'static,
 {
-    async fn announce(&self, session: &AgentSession, origin: &MentionOrigin) -> anyhow::Result<()> {
+    async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
         let content = format!(
             "Agent session created! Channel: https://macro.com/app/channel/{}",
-            session.channel_id
+            announcement.session_channel_id
         );
 
         self.channels
             .post_message(
                 ChannelSender::new_from_bot(self.bot_id),
-                origin.channel_id,
+                announcement.origin_channel_id,
                 PostMessageRequest {
                     content,
                     mentions: Vec::new(),
-                    thread_id: Some(origin.thread_id),
+                    thread_id: Some(announcement.origin_thread_id),
                     attachments: Vec::new(),
                     nonce: None,
                     notification_policy: PostMessageNotificationPolicy::default(),
                     // Attributed to whoever mentioned the bot, so the reply
                     // reads as their agent answering.
-                    triggered_by: Some(origin.sender.as_ref().to_owned()),
+                    triggered_by: Some(announcement.triggered_by.as_ref().to_owned()),
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!("failed to post the session announcement: {error}"))?;
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
 
         Ok(())
     }

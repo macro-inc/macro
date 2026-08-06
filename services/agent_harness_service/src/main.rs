@@ -9,7 +9,8 @@ mod config;
 
 use std::sync::Arc;
 
-use agent_harness::domain::service::{AgentHarnessService, SessionDefaults};
+use agent_harness::domain::model::SessionDefaults;
+use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{HarnessCommand, command_for};
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
@@ -95,10 +96,6 @@ async fn main() -> anyhow::Result<()> {
         github_token: GithubTokenSecret::new(config.github_token.clone()),
     });
 
-    // Announcements: a channel service with the same side-effect fan-out as
-    // the channel API - persistence, realtime, notifications, contacts, and
-    // broker events - so the announcement is indistinguishable from a message
-    // posted by hand.
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
         queue: notification::outbound::queue::SqsQueue::new(

@@ -4,6 +4,7 @@
 pub mod channel_announcer;
 pub mod daytona;
 // pub mod namespace;
+pub(crate) mod provision;
 pub mod sidecar;
 
 /// Give credential newtypes their constructor and their one escape hatch.

@@ -12,7 +12,7 @@
 // adapters hold are written but never read. Comes out as they land.
 #![allow(dead_code)]
 
-/// Container domain types and provisioning ports.
+/// Harness commands, orchestration, and required outbound ports.
 pub mod domain;
 pub mod inbound;
 pub mod outbound;

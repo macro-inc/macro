@@ -32,7 +32,7 @@ use serde::Deserialize;
 use anyhow::Context;
 
 use crate::domain::ports::{AcpFrames, AgentSandbox, ContainerId, SandboxProvider};
-use crate::domain::provision;
+use crate::outbound::provision;
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::sidecar_pump;
 

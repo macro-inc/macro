@@ -34,6 +34,6 @@ pub enum HarnessError {
     #[error(transparent)]
     Session(#[from] AgentSessionError),
     /// The session link could not be posted back to the mention's thread.
-    #[error("failed to announce the agent session")]
-    Announce(#[source] anyhow::Error),
+    #[error("failed to announce the agent session: {0}")]
+    Announce(rootcause::Report),
 }

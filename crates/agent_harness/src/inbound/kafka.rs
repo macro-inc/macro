@@ -10,10 +10,8 @@ use agent_trigger::domain::broker_events::{
     AgentSessionTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::BotId;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
-use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::service::{ForwardMessage, MentionOrigin, OpenSession};
+use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession};
 
 #[cfg(test)]
 mod test;
@@ -52,10 +50,23 @@ pub fn command_for(
             if mentioned.bot_id != our_bot {
                 return Err(Skipped::ForeignBot);
             }
-            let origin = origin_of(&mentioned.message).ok_or(Skipped::NotFromUser)?;
+            let message = mentioned.message;
+            let sender = message
+                .sender
+                .as_user()
+                .cloned()
+                .ok_or(Skipped::NotFromUser)?;
             Ok(HarnessCommand::Open(OpenSession {
                 bot_id: mentioned.bot_id,
-                origin,
+                origin: MentionOrigin {
+                    channel_id: message.channel_id,
+                    // A top-level mention roots its own thread; a mention
+                    // inside a thread answers into that thread.
+                    thread_id: message.thread_id.unwrap_or(message.message_id),
+                    message_id: message.message_id,
+                    sender,
+                    content: message.content,
+                },
             }))
         }
         AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
@@ -71,33 +82,10 @@ pub fn command_for(
             }
             Ok(HarnessCommand::Forward(ForwardMessage {
                 session_id,
-                sender: sender_of(&message),
+                sender: message.sender.as_user().cloned(),
                 content: message.content,
             }))
         }
-        // Both event enums are non-exhaustive: the trigger may grow new
-        // session sources before this harness learns them.
         _ => Err(Skipped::Unrecognized),
     }
-}
-
-/// The mention as domain vocabulary, when a user sent it.
-fn origin_of(message: &ChannelMessagePostedMetadata) -> Option<MentionOrigin> {
-    let sender = sender_of(message)?;
-    Some(MentionOrigin {
-        channel_id: message.channel_id,
-        // A top-level mention roots its own thread; a mention inside a thread
-        // answers into that thread.
-        thread_id: message.thread_id.unwrap_or(message.message_id),
-        message_id: message.message_id,
-        sender,
-        content: message.content.clone(),
-    })
-}
-
-/// The message's author, when it is a user. Bot senders yield `None`: another
-/// bot cannot own an agent session, and the trigger already drops our own
-/// messages.
-fn sender_of(message: &ChannelMessagePostedMetadata) -> Option<MacroUserIdStr<'static>> {
-    message.sender.as_user().cloned()
 }

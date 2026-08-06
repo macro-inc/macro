@@ -1,5 +1,5 @@
 //! Daytona sandbox provider: a thin client over the handful of REST calls
-//! this worker needs, plus the [`ContainerManager`]/[`Container`] adapters.
+//! this worker needs, plus the [`ContainerManager`] adapter.
 //!
 //! Deliberately not the `daytona-client` crate: we use six endpoints, and
 //! adopting it would drag a second `reqwest`/`tokio` feature set into
@@ -28,9 +28,10 @@ use serde::Deserialize;
 
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
-use crate::domain::containers::{Container, ContainerId, ContainerManager};
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::provision;
+use crate::domain::model::SpawnContainer;
+use crate::domain::ports::ContainerManager;
+use crate::outbound::provision;
 use crate::outbound::sidecar::SidecarTransport;
 
 /// How often the state and readiness polls re-check.
@@ -330,9 +331,9 @@ impl DaytonaClient {
     /// Poll the sidecar's readiness probe until it answers or the deadline
     /// passes.
     ///
-    /// Lives here rather than in `domain::provision` because polling is an
+    /// Lives here rather than in `outbound::provision` because polling is an
     /// HTTP concern; the timeout it is given is the domain's
-    /// [`crate::domain::provision::PING_TIMEOUT`].
+    /// [`crate::outbound::provision::PING_TIMEOUT`].
     #[tracing::instrument(err, skip(self))]
     pub async fn wait_for_ping(
         &self,
@@ -500,7 +501,7 @@ impl DaytonaContainerManager {
         let socket = dial_sidecar(&preview).await?;
 
         Ok(DaytonaContainer {
-            id: ContainerId::new(id),
+            id: id.to_owned(),
             client: self.client.clone(),
             wire: Arc::new(SidecarTransport::connect(socket)),
         })
@@ -536,15 +537,19 @@ impl DaytonaContainerManager {
 }
 
 impl ContainerManager for DaytonaContainerManager {
-    type Container = DaytonaContainer;
+    type Transport = DaytonaContainer;
 
     #[tracing::instrument(err, skip(self))]
-    async fn spawn(&self, session: AgentSessionId) -> Result<DaytonaContainer> {
+    async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
+        let SpawnContainer {
+            session_id,
+            repo_url,
+        } = command;
         // The repo url and token ride in the sandbox environment so the ensure
         // script takes no arguments and a reconnect need not rethread them -
         // and so a credential never lands in a command line.
         let env = HashMap::from([
-            ("REPO_URL".to_owned(), provision::REPO_URL.to_owned()),
+            ("REPO_URL".to_owned(), repo_url),
             (
                 "GITHUB_TOKEN".to_owned(),
                 self.github_token.expose().to_owned(),
@@ -552,14 +557,14 @@ impl ContainerManager for DaytonaContainerManager {
         ]);
         // Stamped at creation, because this is the only thing `resume` has to
         // find the sandbox by.
-        let labels = HashMap::from([(SESSION_LABEL.to_owned(), session.to_string())]);
+        let labels = HashMap::from([(SESSION_LABEL.to_owned(), session_id.to_string())]);
 
         let id = self
             .client
             .create(&self.snapshot, env, labels)
             .await
             .map_err(unavailable)?;
-        tracing::info!(sandbox_id = %id, %session, "sandbox created");
+        tracing::info!(sandbox_id = %id, session = %session_id, "sandbox created");
 
         // Everything past create runs against a sandbox we are paying for, so
         // failures destroy it rather than leaking it.
@@ -597,7 +602,7 @@ impl ContainerManager for DaytonaContainerManager {
 /// clones share one socket, and only one of them can be receiving at a time.
 #[derive(Clone)]
 pub struct DaytonaContainer {
-    id: ContainerId,
+    id: String,
     client: DaytonaClient,
     wire: Arc<SidecarTransport>,
 }
@@ -605,22 +610,16 @@ pub struct DaytonaContainer {
 impl DaytonaContainer {
     /// Destroy the sandbox.
     ///
-    /// Inherent rather than part of [`Container`], because the domain has no
-    /// lifecycle policy to call it from yet: an idle session is resumed rather
-    /// than finished, so there is no correct automatic call site. Until there
-    /// is, the caller that knows a session is over - today `boot_agent` - is the
-    /// one that releases.
+    /// The domain has no lifecycle policy to call this yet: an idle session is
+    /// resumed rather than finished, so the caller that knows a session is over
+    /// is the one that releases it.
     ///
     /// Reported rather than propagated: a leaked sandbox should not mask why the
     /// run ended.
     pub async fn release(&self) {
-        let _ = self
-            .client
-            .delete(self.id.as_str())
-            .await
-            .inspect_err(|error| {
-                tracing::error!(error = ?error, sandbox_id = %self.id, "sandbox delete failed");
-            });
+        let _ = self.client.delete(&self.id).await.inspect_err(|error| {
+            tracing::error!(error = ?error, sandbox_id = %self.id, "sandbox delete failed");
+        });
     }
 }
 
@@ -631,12 +630,6 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for DaytonaContainer {
 
     async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
         self.wire.recv().await
-    }
-}
-
-impl Container for DaytonaContainer {
-    fn container_id(&self) -> &ContainerId {
-        &self.id
     }
 }
 

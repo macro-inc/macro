@@ -3,7 +3,7 @@
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{NewSessionResponse, RequestId};
-use agent_runtime_protocol::domain::action::{AgentAction, AgentPromptAction};
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -21,9 +21,7 @@ fn machine() -> SessionMachine<u32> {
 fn command(text: &str, token: u32) -> Input<u32> {
     Input::Command {
         from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
-        action: AgentAction::Prompt(AgentPromptAction {
-            prompt: text.to_owned(),
-        }),
+        action: AgentAction::prompt(text),
         token,
     }
 }

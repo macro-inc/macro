@@ -12,8 +12,9 @@ use agent_runtime_protocol::domain::schema::v0::{
 use agent_session::domain::model::AgentSessionId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-use crate::domain::containers::{Container, ContainerId, ContainerManager};
 use crate::domain::error::{HarnessError, Result};
+use crate::domain::model::SpawnContainer;
+use crate::domain::ports::ContainerManager;
 use crate::testing::helpers::agent::FakeAgent;
 
 /// A container connection driven by hand.
@@ -24,7 +25,6 @@ use crate::testing::helpers::agent::FakeAgent;
 /// [`Self::disconnects`] ends it. Cloning shares one container.
 #[derive(Clone)]
 pub struct ContainerMock {
-    id: ContainerId,
     agent: FakeAgent,
     /// `None` once disconnected.
     events: Arc<Mutex<Option<UnboundedSender<SystemEvent>>>>,
@@ -34,21 +34,12 @@ pub struct ContainerMock {
     send_budget: Arc<Mutex<Option<usize>>>,
 }
 
-/// The receiving ends, held together so `recv` can await both at once.
-struct Inbound {
-    events: UnboundedReceiver<SystemEvent>,
-    frames: UnboundedReceiver<RawJsonRpcMessage>,
-}
-
-impl ContainerMock {
-    /// Create a container whose agent has not spoken and which is not ready.
-    #[must_use]
-    pub fn new(id: ContainerId) -> Self {
+impl Default for ContainerMock {
+    fn default() -> Self {
         let (event_tx, event_rx) = unbounded_channel();
         let (frame_tx, frame_rx) = unbounded_channel();
 
         Self {
-            id,
             agent: FakeAgent::new(frame_tx),
             events: Arc::new(Mutex::new(Some(event_tx))),
             inbound: Arc::new(tokio::sync::Mutex::new(Inbound {
@@ -59,7 +50,15 @@ impl ContainerMock {
             send_budget: Arc::new(Mutex::new(None)),
         }
     }
+}
 
+/// The receiving ends, held together so `recv` can await both at once.
+struct Inbound {
+    events: UnboundedReceiver<SystemEvent>,
+    frames: UnboundedReceiver<RawJsonRpcMessage>,
+}
+
+impl ContainerMock {
     /// The agent hosted in this container.
     #[must_use]
     pub fn agent(&self) -> FakeAgent {
@@ -156,12 +155,6 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
     }
 }
 
-impl Container for ContainerMock {
-    fn container_id(&self) -> &ContainerId {
-        &self.id
-    }
-}
-
 /// Hands out [`ContainerMock`]s and remembers them, so `resume` returns the
 /// same container `spawn` created. Cloning shares one provisioner.
 #[derive(Clone, Default)]
@@ -209,11 +202,11 @@ impl MockContainerManager {
 }
 
 impl ContainerManager for MockContainerManager {
-    type Container = ContainerMock;
+    type Transport = ContainerMock;
 
-    async fn spawn(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {
-        let container = ContainerMock::new(session.into());
-        self.lock().insert(session, container.clone());
+    async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+        let container = ContainerMock::default();
+        self.lock().insert(command.session_id, container.clone());
         Ok(container)
     }
 

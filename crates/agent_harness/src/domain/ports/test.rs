@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agent_client_protocol::schema::v1::{
     ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
 };
-use agent_runtime_protocol::domain::action::{AgentAction, AgentPromptAction};
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::AgentSessionLogRepo;
@@ -14,6 +14,8 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::ContainerManager;
+use crate::domain::model::SpawnContainer;
+use crate::outbound::provision::SIDECAR_PORT;
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -31,12 +33,6 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         harness: "opencode".to_owned(),
         repo_url: "https://github.com/macro/macro".to_owned(),
     }
-}
-
-fn prompt(text: &str) -> AgentAction {
-    AgentAction::Prompt(AgentPromptAction {
-        prompt: text.to_owned(),
-    })
 }
 
 fn prompt_texts(container: &ContainerMock) -> Vec<Vec<ContentBlock>> {
@@ -58,6 +54,10 @@ fn workspace_matches_the_container_script() {
         script.contains(&format!("workspace_dir={AGENT_WORKING_DIRECTORY}")),
         "ensure_ready.sh does not clone into {AGENT_WORKING_DIRECTORY}"
     );
+    assert!(
+        script.contains(&format!("sidecar_port={SIDECAR_PORT}")),
+        "ensure_ready.sh does not expose sidecar port {SIDECAR_PORT}"
+    );
 }
 
 #[tokio::test]
@@ -66,7 +66,13 @@ async fn container_session_runs_and_logs_end_to_end() {
     let store = InMemoryAgentSessionRepo::new();
     let sessions = Arc::new(AgentSessionService::new(store.clone(), store.clone()));
     let containers = MockContainerManager::new();
-    let container = containers.spawn(id).await.unwrap();
+    let container = containers
+        .spawn(SpawnContainer {
+            session_id: id,
+            repo_url: "https://github.com/macro/macro".to_owned(),
+        })
+        .await
+        .unwrap();
     let agent = container.agent();
 
     let record = sessions
@@ -81,7 +87,7 @@ async fn container_session_runs_and_logs_end_to_end() {
         let sessions = sessions.clone();
         async move {
             sessions
-                .send_message(id, Some(owner()), prompt("fix the flaky test"))
+                .send_action(id, Some(owner()), AgentAction::prompt("fix the flaky test"))
                 .await
         }
     });
@@ -109,7 +115,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert_eq!(logs[5].user_id, Some(owner()));
 
     sessions
-        .send_message(id, Some(owner()), prompt("and run clippy"))
+        .send_action(id, Some(owner()), AgentAction::prompt("and run clippy"))
         .await
         .unwrap();
     assert_eq!(containers.spawned(), 1);
@@ -127,8 +133,8 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
     let id = AgentSessionId::TEST_A;
     let store = InMemoryAgentSessionRepo::new();
     let sessions = AgentSessionService::new(store.clone(), store);
-    let first = ContainerMock::new(id.into());
-    let second = ContainerMock::new(id.into());
+    let first = ContainerMock::default();
+    let second = ContainerMock::default();
 
     sessions.create(params(id), first).await.unwrap();
     let error = sessions.attach(id, second).await.unwrap_err();

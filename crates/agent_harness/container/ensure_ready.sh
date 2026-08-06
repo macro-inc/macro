@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bring a booted sandbox to "ready", idempotently.
 #
-# Run by `agent_harness::domain::provision::ensure_ready_command`, which embeds
+# Run by `agent_harness::outbound::provision::ensure_ready_command`, which embeds
 # this file with `include_str!`. Every stage skips itself when already done, so
 # this is safe on first boot, on reconnect, and after a machine restart.
 #

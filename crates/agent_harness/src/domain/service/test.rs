@@ -13,8 +13,9 @@ use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::{AgentHarnessService, ForwardMessage, MentionOrigin, OpenSession, SessionDefaults};
+use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
+use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession, SessionDefaults};
 // Cold-session resume is `todo!()` in `forward` for now; its tests return
 // with the implementation.
 use crate::testing::helpers::agent::FakeAgent;
@@ -119,9 +120,10 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.thread_id, Some(origin.thread_id));
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
-    assert_eq!(announced[0].session.id, id);
-    assert_eq!(announced[0].session.channel_id, session.channel_id);
-    assert_eq!(announced[0].origin.thread_id, origin.thread_id);
+    assert_eq!(announced[0].session_channel_id, session.channel_id);
+    assert_eq!(announced[0].origin_channel_id, origin.channel_id);
+    assert_eq!(announced[0].origin_thread_id, origin.thread_id);
+    assert_eq!(announced[0].triggered_by, origin.sender);
 
     // The mention's text reached the agent as the first prompt.
     assert_eq!(
