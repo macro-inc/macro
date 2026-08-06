@@ -39,6 +39,9 @@ type JsonScalar = string | number | boolean | null;
 type ScalarKey<T> = {
   [K in StringKey<T>]-?: Present<T[K]> extends JsonScalar ? K : never;
 }[StringKey<T>];
+type ScalarInsertFields<T> = Partial<{
+  [K in ScalarKey<T>]: Exclude<T[K], undefined>;
+}>;
 type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
   readonly variables: AnyVariables;
@@ -74,6 +77,13 @@ export type NormalizedEntityIdentity = {
   __typename: string;
   id: string;
 };
+type NormalizedEntityListKey<T> = {
+  [K in StringKey<T>]-?: Present<T[K]> extends readonly (infer TItem)[]
+    ? Present<TItem> extends NormalizedEntityIdentity
+      ? K
+      : never
+    : never;
+}[StringKey<T>];
 
 /** An idempotent change to a normalized-link list. */
 export type LinkDiff =
@@ -234,6 +244,41 @@ export function update<TItem extends object>(
     operation: {
       kind: operation.kind,
       entityKey: normalizedEntityKey(operation.entity),
+    },
+  } as OptimisticUpdate;
+}
+
+/**
+ * Prepends an entity link inside a selected embedded list item, creating the
+ * embedded item from scalar fields when its selector does not exist.
+ */
+export function upsertEmbeddedLink<
+  TItem extends object,
+  TSelectorField extends ScalarKey<TItem>,
+  TLinkField extends NormalizedEntityListKey<TItem>,
+>(
+  selection: ListSelection<TItem>,
+  args: {
+    listItem: {
+      whereField: TSelectorField;
+      equals: Present<TItem[TSelectorField]>;
+    };
+    linkField: TLinkField;
+    entity: NormalizedEntityIdentity;
+    insertFields: ScalarInsertFields<TItem>;
+  }
+): OptimisticUpdate {
+  return {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'upsertEmbeddedLink',
+      listItem: args.listItem,
+      linkField: args.linkField,
+      entityKey: normalizedEntityKey(args.entity),
+      insertFields: args.insertFields,
     },
   } as OptimisticUpdate;
 }

@@ -1,6 +1,12 @@
 import { GroupSoupMembershipDocument } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it } from 'vitest';
-import { prependUnique, remove, select, update } from './optimistic';
+import {
+  prependUnique,
+  remove,
+  select,
+  update,
+  upsertEmbeddedLink,
+} from './optimistic';
 
 const input = {
   initial: {
@@ -46,6 +52,32 @@ describe('typed optimistic graph updates', () => {
       entityKey: 'GraphqlSoupDocument:task-1',
     });
     expect(prepend.operation.kind).toBe('prependUnique');
+  });
+
+  it('serializes an embedded bin insertion with an entity link', () => {
+    const bins = select(GroupSoupMembershipDocument, { input })
+      .field('user')
+      .field('groupSoup')
+      .field('bins');
+    const insertion = upsertEmbeddedLink(bins, {
+      listItem: { whereField: 'key', equals: 'urgent' },
+      linkField: 'items',
+      entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+      insertFields: { totalCount: 1, nextCursor: null },
+    });
+
+    expect(insertion.path).toEqual([
+      { field: 'user' },
+      { field: 'groupSoup' },
+      { field: 'bins' },
+    ]);
+    expect(insertion.operation).toEqual({
+      kind: 'upsertEmbeddedLink',
+      listItem: { whereField: 'key', equals: 'urgent' },
+      linkField: 'items',
+      entityKey: 'GraphqlSoupDocument:task-1',
+      insertFields: { totalCount: 1, nextCursor: null },
+    });
   });
 
   it('uses generated operation result and variable types', () => {

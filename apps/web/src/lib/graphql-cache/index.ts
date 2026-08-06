@@ -25,6 +25,7 @@ export {
   type Selection,
   select,
   update,
+  upsertEmbeddedLink,
 } from './exchange/optimistic';
 export {
   type RecordSelection,

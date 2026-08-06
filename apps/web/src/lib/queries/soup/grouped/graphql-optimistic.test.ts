@@ -243,7 +243,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     ]);
   });
 
-  it('does not make a partial move when the destination bin is absent', async () => {
+  it('creates a missing destination bin as part of the move', async () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ destination: false }),
       entityId: 'task-1',
@@ -252,7 +252,22 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       newGroupKeys: ['completed'],
     });
 
-    expect(result.updates).toEqual([]);
+    expect(result.updates).toHaveLength(2);
+    expect(result.updates.map((patch) => patch.operation)).toEqual([
+      { kind: 'remove', entityKey: 'GraphqlSoupDocument:task-1' },
+      {
+        kind: 'upsertEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'completed' },
+        linkField: 'items',
+        entityKey: 'GraphqlSoupDocument:task-1',
+        insertFields: { totalCount: 1, nextCursor: null },
+      },
+    ]);
+    expect(result.updates[1]?.path).toEqual([
+      { field: 'user' },
+      { field: 'groupSoup' },
+      { field: 'bins' },
+    ]);
     expect(result.revalidations).toHaveLength(1);
   });
 
