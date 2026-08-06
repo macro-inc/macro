@@ -6,8 +6,8 @@ import CheckIcon from '@phosphor/check.svg';
 import { Dropdown, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
-import { useFullCalendar } from './fullcalendar-solid';
 
 const CALENDAR_VIEWS = [
   { value: 'dayGridMonth', label: 'Month' },
@@ -18,7 +18,7 @@ const CALENDAR_VIEWS = [
 /** Selects the FullCalendar period and provides narrow custom-date navigation. */
 export function CalendarPeriodSelector() {
   const calendarView = useCalendarView();
-  const calendar = useFullCalendar();
+  const calendarPager = useCalendarPager();
   const sidePanel = useSidePanel();
   const initialDate = new Date();
   const [pickerState, setPickerState] = createStore({
@@ -29,15 +29,15 @@ export function CalendarPeriodSelector() {
 
   const isNarrow = () => sidePanel?.isNarrow() ?? false;
   const currentDate = createMemo(
-    () => calendar.dateInfo()?.view.calendar.getDate() ?? initialDate
+    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
   const activeView = createMemo(
-    () => calendar.dateInfo()?.view.type ?? 'timeGridWeek'
+    () => calendarPager.activeDateInfo()?.view.type ?? 'timeGridWeek'
   );
 
   const highlightedRange = createMemo(() => {
-    const dateInfo = calendar.dateInfo();
+    const dateInfo = calendarPager.activeDateInfo();
     return dateInfo?.view.type === 'timeGridWeek'
       ? { end: dateInfo.end, start: dateInfo.start }
       : undefined;
@@ -45,9 +45,8 @@ export function CalendarPeriodSelector() {
 
   const changeView = (view: string) => {
     setPickerState('open', false);
-    const calendarApi = calendar.api();
-    if (calendarApi?.view.type === view) return;
-    calendarApi?.changeView(view);
+    if (calendarPager.activeDateInfo()?.view.type === view) return;
+    calendarPager.changeView(view);
   };
 
   const syncCustomDatePicker = () => {
@@ -68,7 +67,7 @@ export function CalendarPeriodSelector() {
   const selectCustomDate = (date: Date | null) => {
     if (!date) return;
     setPickerState({ month: date, focusedDay: date, open: false });
-    calendar.api()?.gotoDate(date);
+    calendarPager.gotoDate(date);
   };
 
   return (

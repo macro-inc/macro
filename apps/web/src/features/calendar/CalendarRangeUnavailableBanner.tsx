@@ -1,14 +1,14 @@
 import InfoIcon from '@phosphor/info.svg';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { useCalendarView } from './CalendarViewContext';
+import { useCalendarPager } from './CalendarPagerContext';
 import { isCalendarRangeSupported } from './calendar-supported-range';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */
 export function CalendarRangeUnavailableBanner() {
-  const calendarView = useCalendarView();
+  const calendarPager = useCalendarPager();
   const isUnavailable = createMemo(() => {
-    const range = calendarView.visibleRange();
+    const range = calendarPager.visibleRange();
     return range !== undefined && !isCalendarRangeSupported(range);
   });
 
