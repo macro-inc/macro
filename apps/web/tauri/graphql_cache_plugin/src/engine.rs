@@ -14,9 +14,7 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::{
-    CachedQueryInstance, CachedQueryVariant, QueryInspection,
-};
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
 use cache_core::value::EntityKey;
@@ -217,8 +215,8 @@ impl EngineHandle {
         cursor: Option<RecordCursor>,
         limit: u32,
     ) -> Result<SelectedRecordPage, String> {
-        let selection = RecordSelection::parse(&document, &fragment_name)
-            .map_err(|error| error.to_string())?;
+        let selection =
+            RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
         self.inner
             .lock()
             .await
