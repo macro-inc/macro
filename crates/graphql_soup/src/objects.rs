@@ -915,16 +915,6 @@ where
         self.0.thread.inbox_visible
     }
 
-    /// The identifier of the link.
-    async fn link_id(&self) -> Option<ID> {
-        self.0
-            .participants
-            .first()
-            .map(|participant| participant.link_id)
-            .or_else(|| self.0.labels.first().map(|label| label.link_id))
-            .map(|id| ID(id.to_string()))
-    }
-
     /// The name.
     async fn name(&self) -> Option<&str> {
         self.0.thread.name.as_deref()

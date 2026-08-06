@@ -1,8 +1,8 @@
 use crate::domain::{
     assembler::{message_from_row, split_recipients, thread_from_row},
     models::{
-        ContactInfo, EmailErr, Message, MessageLabel, MessageRow, ParsedLabel, ParsedMessage,
-        ParsedThread, Thread, ThreadRow,
+        ContactInfo, EmailErr, EmailThreadMetadata, Message, MessageLabel, MessageRow, ParsedLabel,
+        ParsedMessage, ParsedThread, Thread, ThreadRow,
     },
     ports::{EmailRepo, RecipientsByMessageId},
 };
@@ -299,6 +299,27 @@ where
             messages,
             labels,
         }))
+    }
+
+    /// Fetch canonical metadata for authorized email threads in one repository batch.
+    pub(crate) async fn get_email_thread_metadata_impl(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        let thread_ids = email_thread_ids_from_receipts(receipts)?;
+
+        if thread_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        Ok(self
+            .email_repo
+            .thread_metadata_by_ids(&thread_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|metadata| (metadata.thread_id, metadata))
+            .collect())
     }
 
     /// Fetch the newest non-draft content message for each authorized thread in one

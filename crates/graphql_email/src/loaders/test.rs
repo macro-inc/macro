@@ -4,7 +4,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use email::domain::models::EmailErr;
+use email::domain::{
+    models::{EmailErr, EmailThreadMetadata},
+    ports::EmailThreadMetadataService,
+};
 use entity_access::domain::{
     models::{
         AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
@@ -22,6 +25,35 @@ use super::*;
 #[derive(Clone, Default)]
 struct RecordingReader {
     calls: Arc<AtomicUsize>,
+    metadata_calls: Arc<AtomicUsize>,
+    metadata_batches: Arc<Mutex<Vec<Vec<Uuid>>>>,
+}
+
+impl SoupEmailThreadMetadataEdgeReader for RecordingReader {
+    async fn get_email_thread_metadata(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, EmailThreadMetadataLoad> {
+        self.metadata_calls.fetch_add(1, Ordering::SeqCst);
+        self.metadata_batches
+            .lock()
+            .unwrap()
+            .push(thread_ids.clone());
+        thread_ids
+            .into_iter()
+            .map(|thread_id| {
+                (
+                    thread_id,
+                    EmailThreadMetadataLoad::Found(EmailThreadMetadata {
+                        thread_id,
+                        link_id: Uuid::from_u128(100 + thread_id.as_u128()),
+                        latest_inbound_message_ts: None,
+                    }),
+                )
+            })
+            .collect()
+    }
 }
 
 impl SoupEmailContentEdgeReader for RecordingReader {
@@ -149,11 +181,35 @@ impl EntityAccessService for TestAccessService {
 
 #[derive(Default)]
 struct RecordingContentService {
+    metadata_calls: AtomicUsize,
     latest_calls: AtomicUsize,
     latest_full_calls: AtomicUsize,
     page_calls: AtomicUsize,
     page_full_calls: AtomicUsize,
     pagination: Mutex<Vec<(i64, i64)>>,
+}
+
+impl EmailThreadMetadataService for RecordingContentService {
+    async fn get_email_thread_metadata(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        self.metadata_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(receipts
+            .into_iter()
+            .map(|receipt| {
+                let thread_id = Uuid::parse_str(&receipt.entity().entity_id).unwrap();
+                (
+                    thread_id,
+                    EmailThreadMetadata {
+                        thread_id,
+                        link_id: Uuid::from_u128(500 + thread_id.as_u128()),
+                        latest_inbound_message_ts: None,
+                    },
+                )
+            })
+            .collect())
+    }
 }
 
 impl EmailContentService for RecordingContentService {
@@ -222,6 +278,33 @@ async fn batches_distinct_threads_in_one_reader_call() {
 }
 
 #[tokio::test]
+async fn batches_email_thread_metadata_in_one_reader_call() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let loader = email_thread_metadata_loader(user_id, reader.clone());
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+
+    let loaded = loader.load_many(vec![first, second]).await.unwrap();
+
+    assert_eq!(reader.metadata_calls.load(Ordering::SeqCst), 1);
+    let mut batches = reader.metadata_batches.lock().unwrap().clone();
+    assert_eq!(batches.len(), 1);
+    batches[0].sort();
+    assert_eq!(batches[0], vec![first, second]);
+    assert!(matches!(
+        loaded.get(&first),
+        Some(EmailThreadMetadataLoad::Found(metadata))
+            if metadata.link_id == Uuid::from_u128(101)
+    ));
+    assert!(matches!(
+        loaded.get(&second),
+        Some(EmailThreadMetadataLoad::Found(metadata))
+            if metadata.link_id == Uuid::from_u128(102)
+    ));
+}
+
+#[tokio::test]
 async fn rejects_oversized_batches_without_calling_the_reader() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
@@ -267,6 +350,53 @@ async fn authorized_keys_reach_the_email_domain() {
     assert!(matches!(
         loaded.get(&requested),
         Some(EmailContentLoad::Missing)
+    ));
+}
+
+#[tokio::test]
+async fn authorized_metadata_keys_reach_the_email_domain_in_bulk() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: true }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+
+    let loaded = reader
+        .get_email_thread_metadata(&user_id, vec![first, second])
+        .await;
+
+    assert_eq!(content.metadata_calls.load(Ordering::SeqCst), 1);
+    assert!(matches!(
+        loaded.get(&first),
+        Some(EmailThreadMetadataLoad::Found(metadata)) if metadata.thread_id == first
+    ));
+    assert!(matches!(
+        loaded.get(&second),
+        Some(EmailThreadMetadataLoad::Found(metadata)) if metadata.thread_id == second
+    ));
+}
+
+#[tokio::test]
+async fn unauthorized_metadata_keys_do_not_reach_the_email_domain() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: false }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let requested = Uuid::from_u128(1);
+
+    let loaded = reader
+        .get_email_thread_metadata(&user_id, vec![requested])
+        .await;
+
+    assert_eq!(content.metadata_calls.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        loaded.get(&requested),
+        Some(EmailThreadMetadataLoad::Missing)
     ));
 }
 
@@ -333,6 +463,7 @@ async fn unauthorized_keys_do_not_reach_the_email_domain() {
 
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
+    assert_eq!(content.metadata_calls.load(Ordering::SeqCst), 0);
     assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
     assert_eq!(content.latest_full_calls.load(Ordering::SeqCst), 0);
     assert_eq!(content.page_calls.load(Ordering::SeqCst), 0);

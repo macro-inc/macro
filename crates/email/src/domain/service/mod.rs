@@ -15,11 +15,14 @@ mod entity_mutation;
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-        GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, Thread,
-        UpdateThreadLabelsResult, UpsertEmailFilterInput,
+        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMetadata,
+        EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread,
+        Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
-    ports::{EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService},
+    ports::{
+        EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
+        EmailThreadMetadataService,
+    },
 };
 use crm::domain::service::CrmService;
 use entity_access::domain::models::{
@@ -461,6 +464,24 @@ where
             .list_email_filters(link.id)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+}
+
+impl<T, U, E, CS, Eam, B> EmailThreadMetadataService for EmailServiceImpl<T, U, E, CS, Eam, B>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
+    CS: CrmService,
+    Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
+    anyhow::Error: From<T::Err>,
+{
+    async fn get_email_thread_metadata(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        self.get_email_thread_metadata_impl(receipts).await
     }
 }
 

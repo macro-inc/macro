@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
 
-use async_graphql::{Context, Object};
+use async_graphql::{Context, ID, Object};
 use graphql_email::{
-    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader,
-    email_message_selection_requires_full_payload, load_email_messages, load_latest_email_message,
+    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
+    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
+    load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
@@ -47,7 +48,7 @@ impl<NR, PR, ER, FR, AR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
 {
@@ -112,7 +113,7 @@ impl<NR, PR, ER, FR, AR> SoupEdges<NR, PR, ER, FR, AR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
 {
@@ -197,8 +198,25 @@ impl<ER> Clone for SoupEmailThreadEdges<ER> {
 #[Object]
 impl<ER> SoupEmailThreadEdges<ER>
 where
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
 {
+    /// The canonical identifier of the email link that owns this thread.
+    async fn link_id(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(ID(metadata.link_id.to_string()))
+    }
+
+    /// Timestamp of the latest inbound message, in RFC 3339 format.
+    async fn latest_inbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_inbound_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
     /// A page of messages in this thread, newest first.
     async fn messages(
         &self,

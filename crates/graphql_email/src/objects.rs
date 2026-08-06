@@ -1,12 +1,13 @@
 use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
-    AttachmentDraft, AttachmentForwarded, ContactInfo, Message, MessageAttachment, ParsedLabel,
-    ParsedMessage,
+    AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMetadata, Message,
+    MessageAttachment, ParsedLabel, ParsedMessage,
 };
 
 use crate::loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
-    SoupEmailContentEdgeReader,
+    EmailThreadMetadataLoad, EmailThreadMetadataLoader, SoupEmailContentEdgeReader,
+    SoupEmailThreadMetadataEdgeReader,
 };
 
 const FULL_MESSAGE_FIELDS: &[&str] = &[
@@ -380,6 +381,23 @@ impl GraphqlSoupEmailMessageLabel {
     }
 }
 
+/// Load canonical metadata for an email thread.
+pub async fn load_email_thread_metadata<R>(
+    ctx: &Context<'_>,
+    thread_id: uuid::Uuid,
+) -> async_graphql::Result<EmailThreadMetadata>
+where
+    R: SoupEmailThreadMetadataEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EmailThreadMetadataLoader<R>>>()?;
+    match loader.load_one(thread_id).await? {
+        Some(EmailThreadMetadataLoad::Found(metadata)) => Ok(metadata),
+        Some(EmailThreadMetadataLoad::Missing | EmailThreadMetadataLoad::Failed) | None => Err(
+            async_graphql::Error::new("email thread metadata is unavailable"),
+        ),
+    }
+}
+
 /// Load a paginated adaptively hydrated message page for an email thread.
 pub async fn load_email_messages<R>(
     ctx: &Context<'_>,
@@ -451,6 +469,28 @@ mod tests {
     }
 
     struct ContentReader;
+
+    impl SoupEmailThreadMetadataEdgeReader for ContentReader {
+        async fn get_email_thread_metadata(
+            &self,
+            _user_id: &MacroUserIdStr<'static>,
+            thread_ids: Vec<Uuid>,
+        ) -> HashMap<Uuid, EmailThreadMetadataLoad> {
+            thread_ids
+                .into_iter()
+                .map(|thread_id| {
+                    (
+                        thread_id,
+                        EmailThreadMetadataLoad::Found(EmailThreadMetadata {
+                            thread_id,
+                            link_id: Uuid::from_u128(3),
+                            latest_inbound_message_ts: None,
+                        }),
+                    )
+                })
+                .collect()
+        }
+    }
 
     impl SoupEmailContentEdgeReader for ContentReader {
         async fn get_email_content(

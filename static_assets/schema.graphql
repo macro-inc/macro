@@ -3101,10 +3101,6 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	inboxVisible: Boolean!
 	"""
-	The identifier of the link.
-	"""
-	linkId: ID
-	"""
 	The name.
 	"""
 	name: String
@@ -3196,6 +3192,14 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	The canonical identifier of the email link that owns this thread.
+	"""
+	linkId: ID!
+	"""
+	Timestamp of the latest inbound message, in RFC 3339 format.
+	"""
+	latestInboundMessageTs: String
 	"""
 	A page of messages in this thread, newest first.
 	"""

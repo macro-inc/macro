@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, CreateDraftInput, CreatedDraft, EmailErr, EmailFilter,
-    EmailSyncStatus, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility, LabelType,
-    Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink,
-    UserEmailLinkSettings, UserProvider,
+    EmailSyncStatus, EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest,
+    LabelListVisibility, LabelType, Link, LinkLabel, Message, MessageAttachment,
+    MessageListVisibility, ParsedMessage, ParsedThread, Thread, UpdateThreadLabelsResult,
+    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -431,6 +431,34 @@ impl EmailService for CountingEmailService {
 #[derive(Clone, Default)]
 struct RecordingEmailContentReader {
     calls: Arc<Mutex<Vec<Vec<graphql_email::EmailContentKey>>>>,
+    metadata_calls: Arc<Mutex<Vec<Vec<Uuid>>>>,
+}
+
+impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentReader {
+    async fn get_email_thread_metadata(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, graphql_email::EmailThreadMetadataLoad> {
+        self.metadata_calls
+            .lock()
+            .expect("email metadata calls lock")
+            .push(thread_ids.clone());
+        thread_ids
+            .into_iter()
+            .map(|thread_id| {
+                (
+                    thread_id,
+                    graphql_email::EmailThreadMetadataLoad::Found(EmailThreadMetadata {
+                        thread_id,
+                        link_id: Uuid::from_u128(900 + thread_id.as_u128()),
+                        latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
+                            .then(Default::default),
+                    }),
+                )
+            })
+            .collect()
+    }
 }
 
 impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
@@ -852,6 +880,10 @@ impl TestHarness {
                 Arc::new(self.email_service.clone()),
             ))
             .data(graphql_email::email_content_loader(
+                user_id.clone(),
+                self.email_content_reader.clone(),
+            ))
+            .data(graphql_email::email_thread_metadata_loader(
                 user_id,
                 self.email_content_reader.clone(),
             ))
@@ -1231,7 +1263,7 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
 
     let response = harness
         .execute(&format!(
-            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ __typename id linkId inboxVisible isRead messages(offset: 7, limit: 20) {{ id threadId bodyParsed }} }} }} }}"#
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ __typename id linkId latestInboundMessageTs inboxVisible isRead messages(offset: 7, limit: 20) {{ id threadId bodyParsed }} }} }} }}"#
         ))
         .await;
 
@@ -1240,7 +1272,8 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
     let thread = &data["user"]["emailThread"];
     assert_eq!(thread["__typename"], "GraphqlSoupEmailThread");
     assert_eq!(thread["id"], thread_id.to_string());
-    assert_eq!(thread["linkId"], Uuid::from_u128(200).to_string());
+    assert_eq!(thread["linkId"], Uuid::from_u128(942).to_string());
+    assert!(thread["latestInboundMessageTs"].is_null());
     assert_eq!(thread["inboxVisible"], true);
     assert_eq!(thread["isRead"], false);
     assert_eq!(thread["messages"][0]["threadId"], thread_id.to_string());
@@ -1250,11 +1283,75 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
     assert_eq!(
         *harness
             .email_content_reader
+            .metadata_calls
+            .lock()
+            .expect("email metadata calls lock"),
+        vec![vec![thread_id]]
+    );
+    assert_eq!(
+        *harness
+            .email_content_reader
             .calls
             .lock()
             .expect("email content calls lock"),
         vec![vec![graphql_email::EmailContentKey::page(thread_id, 7, 20)]]
     );
+}
+
+#[tokio::test]
+async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
+    let harness = harness();
+    let first_id = Uuid::from_u128(51);
+    let second_id = Uuid::from_u128(52);
+    harness.soup_service.set_raw_response(vec![
+        soup_email_thread(first_id),
+        soup_email_thread(second_id),
+    ]);
+
+    let without_metadata = harness
+        .execute(
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id inboxVisible } } } } }"#,
+        )
+        .await;
+    assert!(
+        without_metadata.errors.is_empty(),
+        "{:?}",
+        without_metadata.errors
+    );
+    assert!(
+        harness
+            .email_content_reader
+            .metadata_calls
+            .lock()
+            .expect("email metadata calls lock")
+            .is_empty()
+    );
+
+    let with_metadata = harness
+        .execute(
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs } } } } }"#,
+        )
+        .await;
+    assert!(
+        with_metadata.errors.is_empty(),
+        "{:?}",
+        with_metadata.errors
+    );
+    let mut calls = harness
+        .email_content_reader
+        .metadata_calls
+        .lock()
+        .expect("email metadata calls lock")
+        .clone();
+    assert_eq!(calls.len(), 1);
+    calls[0].sort();
+    assert_eq!(calls[0], vec![first_id, second_id]);
+
+    let items = &with_metadata.data.into_json().unwrap()["user"]["soup"]["items"];
+    assert_eq!(items[0]["linkId"], Uuid::from_u128(951).to_string());
+    assert_eq!(items[1]["linkId"], Uuid::from_u128(952).to_string());
+    assert!(items[0]["latestInboundMessageTs"].as_str().is_some());
+    assert!(items[1]["latestInboundMessageTs"].is_null());
 }
 
 #[tokio::test]
