@@ -1499,10 +1499,22 @@ impl TeamRepository for TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
-        // Already a member — nothing was added, so don't touch the seat count.
+        // Already a member — nothing was added, so don't touch the invite or seat count.
         if inserted.rows_affected() == 0 {
             return Ok(None);
         }
+
+        let user_email = user_id.email_part().lowercase();
+        sqlx::query!(
+            r#"
+            DELETE FROM team_invite
+            WHERE team_id = $1 AND email = $2
+            "#,
+            team_id,
+            user_email.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, 1).await?;
 

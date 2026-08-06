@@ -375,20 +375,21 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized properties tool context");
 
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            EmailServiceImpl::new(
-                EmailPgRepo::new(db.clone()),
-                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-                sqs_client.clone(),
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(db.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
@@ -482,6 +483,15 @@ async fn main() -> anyhow::Result<()> {
     // replicas, where a boot-time sweep would clobber other instances' jobs.
     tracing::info!("initialized import service");
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -497,6 +507,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         chat_tool_context,
         channel_tool_context,
+        project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,

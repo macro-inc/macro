@@ -31,6 +31,9 @@ pub struct QueryInspection {
     pub operation_name: Option<String>,
     /// Field-only response-key path beginning at the query root.
     pub path: Vec<String>,
+    /// Recursive partial-variable filters. A variant is materialized when it
+    /// matches any filter; an empty list materializes every cached variant.
+    pub variable_filters: Vec<serde_json::Map<String, Json>>,
 }
 
 /// One cached argument variant reconstructed as generated query variables.
@@ -278,6 +281,38 @@ pub(crate) fn recover_variants(
         unique.entry(key).or_insert(variables);
     }
     Ok(unique.into_values().collect())
+}
+
+/// Returns whether one recovered variable set should be materialized.
+///
+/// Filter objects use recursive partial-object matching and OR semantics. A
+/// scalar or array leaf must equal the cached value exactly.
+pub(crate) fn matches_variable_filters(
+    variables: &serde_json::Map<String, Json>,
+    filters: &[serde_json::Map<String, Json>],
+) -> bool {
+    filters.is_empty()
+        || filters
+            .iter()
+            .any(|filter| partial_object_match(variables, filter))
+}
+
+fn partial_object_match(
+    value: &serde_json::Map<String, Json>,
+    filter: &serde_json::Map<String, Json>,
+) -> bool {
+    filter.iter().all(|(key, expected)| {
+        value
+            .get(key)
+            .is_some_and(|actual| partial_json_match(actual, expected))
+    })
+}
+
+fn partial_json_match(actual: &Json, expected: &Json) -> bool {
+    match (actual, expected) {
+        (Json::Object(actual), Json::Object(expected)) => partial_object_match(actual, expected),
+        _ => actual == expected,
+    }
 }
 
 fn parse_stored_arguments(

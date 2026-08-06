@@ -11,7 +11,8 @@ import type { PatchWebhookRequestName } from './patchWebhookRequestName';
 import type { PatchWebhookRequestStatus } from './patchWebhookRequestStatus';
 
 /**
- * Request to patch a webhook.
+ * Request to patch a webhook. The webhook's namespace is fixed at creation
+time and is deliberately not patchable.
  */
 export interface PatchWebhookRequest {
   /** Endpoint URL. HTTPS is required outside local environments. */

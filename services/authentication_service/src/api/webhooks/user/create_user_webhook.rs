@@ -287,16 +287,31 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
-    // Add the new sign-up to Loops (our email marketing audience / mailing
-    // list). Fire-and-forget: a Loops failure must never block user creation.
+    // Tell Loops the account now exists. This upserts the contact into our
+    // marketing audience, triggers the welcome sequence, and is the exit
+    // condition for the mobile-lead nurture sequence — so a lead who converts
+    // stops being asked to sign up. Fire-and-forget: a Loops failure must never
+    // block user creation.
     tokio::spawn({
         let loops_client = ctx.loops_client.clone();
-        let email = email.clone();
+        let email = loops_client::normalize_email(&email);
+        let user_id = user_id.clone();
         async move {
             let _ = loops_client
-                .add_contact(&email, "macro-signup")
+                .send_event(
+                    &email,
+                    "user_registered",
+                    &serde_json::json!({
+                        "signupStage": "registered",
+                        "hasAccount": true,
+                        "source": "macro-signup",
+                    }),
+                    Some(&format!("user-registered-{user_id}")),
+                )
                 .await
-                .inspect_err(|e| tracing::warn!(error=?e, "failed to add contact to Loops"));
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
+                );
         }
     });
 

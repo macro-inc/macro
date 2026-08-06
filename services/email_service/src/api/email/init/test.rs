@@ -1,11 +1,73 @@
 use super::*;
 use anyhow::anyhow;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::PgPool;
+
+async fn insert_email_link(pool: &PgPool) -> Uuid {
+    let link_id = Uuid::now_v7();
+    let email_address = format!("sso-grant-{link_id}@example.com");
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, $3, 'GMAIL')
+        "#,
+        link_id,
+        "macro|sso-grant@example.com",
+        email_address,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    link_id
+}
 
 async fn body_json(response: Response) -> serde_json::Value {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
     serde_json::from_slice(&bytes).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn zero_grant_is_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+    sqlx::query!(
+        "INSERT INTO email_link_google_scopes (link_id) VALUES ($1)",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_side_table_state_is_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+
+    assert!(has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recorded_side_table_grant_is_not_unrecorded(pool: PgPool) {
+    let link_id = insert_email_link(&pool).await;
+    sqlx::query!(
+        "INSERT INTO email_link_google_scopes (link_id, grant_version) VALUES ($1, 1)",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(!has_unrecorded_google_grant(&pool, link_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn missing_email_link_is_not_unrecorded(pool: PgPool) {
+    assert!(!has_unrecorded_google_grant(&pool, Uuid::now_v7()).await);
 }
 
 #[tokio::test]

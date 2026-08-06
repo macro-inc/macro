@@ -12,11 +12,18 @@ export type ToggleSwitchProps = {
   checked?: boolean;
   /** Visual size. `sm` (default) is the compact toolbar size; `md` is larger,
    *  used in settings rows. */
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   class?: string;
+  controlClass?: string;
 };
 
 const SWITCH_SIZES = {
+  xs: {
+    control: 'h-3.5 w-5.5',
+    thumb: 'top-0.5 left-0.5 h-2.5',
+    stretched: 'w-3 data-checked:translate-x-1.5',
+    normal: 'w-2.5 data-checked:translate-x-2',
+  },
   sm: {
     control: 'h-4 w-6',
     thumb: 'top-0.5 left-0.5 h-3',
@@ -39,6 +46,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'disabled',
     'checked',
     'class',
+    'controlClass',
     'label',
     'size',
   ]);
@@ -57,6 +65,14 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     local.onChange?.(checked);
   };
 
+  // Kobalte's switch root is an inert div — only the control and the label
+  // toggle. Forward clicks that land on the root itself (its padding/gap) to
+  // the hidden input so the whole component is one hit target.
+  const handleRootClick = (event: MouseEvent) => {
+    if (event.target !== event.currentTarget) return;
+    (event.currentTarget as HTMLElement).querySelector('input')?.click();
+  };
+
   onCleanup(() => {
     if (stretchTimeout) clearTimeout(stretchTimeout);
   });
@@ -68,13 +84,15 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       onChange={handleChange}
       disabled={local.disabled}
       checked={local.checked}
+      onClick={handleRootClick}
       {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
       <KobalteSwitch.Control
         class={cn(
           'relative rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent',
-          sizing().control
+          sizing().control,
+          local.controlClass
         )}
       >
         <KobalteSwitch.Thumb

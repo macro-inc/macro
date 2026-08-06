@@ -17,6 +17,30 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
 
+/// When calendar sync is disabled, return the delivery's outbox row to the
+/// unpublished state and ack the message; the outbox drain republishes it
+/// once the switch flips back on. `None` means calendar sync is enabled and
+/// the delivery should proceed.
+async fn park_calendar_delivery(
+    ctx: &PubSubContext,
+    calendar_job_id: Uuid,
+) -> Option<Result<(), ProcessingError>> {
+    if ctx.calendar_sync_enabled {
+        return None;
+    }
+    tracing::info!(%calendar_job_id, "calendar sync disabled; returning delivery to the outbox");
+    Some(
+        crate::calendar_outbox::republish_calendar_job(&ctx.db, calendar_job_id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("failed to return calendar delivery to the outbox"),
+                })
+            }),
+    )
+}
+
 // Process a single message from the backfill queue
 pub async fn process_message(
     ctx: PubSubContext,
@@ -134,6 +158,9 @@ async fn inner_process_message(
                 .await
         }
         BackfillOperation::CalendarGoogleBackfill(scope) => {
+            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
+                return parked;
+            }
             let link = fetch_link(ctx, scope.link_id).await?;
             // Calendar jobs can be created immediately after an incremental
             // Google scope grant. Bypass the Gmail token cache so this job does
@@ -166,6 +193,9 @@ async fn inner_process_message(
             .await
         }
         BackfillOperation::CalendarEmailIcsBackfill(scope) => {
+            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
+                return parked;
+            }
             let link = fetch_link(ctx, scope.link_id).await?;
             calendar_email_ics_backfill::calendar_email_ics_backfill(ctx, &link, &scope.payload)
                 .await

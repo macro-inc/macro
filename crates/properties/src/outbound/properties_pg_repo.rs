@@ -11,11 +11,13 @@ use uuid::Uuid;
 
 use super::{
     entity_properties_get_query, entity_property_queries, metadata_queries,
-    property_definition_queries, property_option_queries, task_property_queries,
+    property_definition_queries, property_option_queries, tag_promotion_queries,
+    task_property_queries,
 };
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -231,6 +233,40 @@ impl PropertiesRepo for PropertiesPgRepo {
         owner: PropertyDefinitionOwner<'_>,
     ) -> Result<GetOrCreateTagDefinitionResult, Self::Err> {
         property_definition_queries::get_or_create_tag_definition(&self.pool, owner).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<TagPromotionOutcome, Self::Err> {
+        tag_promotion_queries::promote_tag_option(
+            &self.pool,
+            option_id,
+            source_definition_id,
+            target_definition_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> Result<Option<TagRemapOutcome>, Self::Err> {
+        tag_promotion_queries::merge_tag_option(
+            &self.pool,
+            source_option_id,
+            source_definition_id,
+            target_option_id,
+            target_definition_id,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self))]

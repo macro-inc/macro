@@ -43,6 +43,7 @@ import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotToken } from './generated/schemas/botToken';
+import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
@@ -115,6 +116,7 @@ import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupP
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
+import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
@@ -410,6 +412,25 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify({ document_ids: args.document_ids }),
       })
+    ).map((result) => result);
+  },
+
+  async listCalendarOccurrences(
+    args: ListOccurrencesParams & { signal?: AbortSignal }
+  ) {
+    const { cursor, end, endDate, limit, signal, start, startDate } = args;
+    const params = new URLSearchParams({ end, start });
+
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor) params.set('cursor', cursor);
+
+    return (
+      await dssFetch<CalendarOccurrenceResponse>(
+        `/calendar-events?${params.toString()}`,
+        { method: 'GET', signal }
+      )
     ).map((result) => result);
   },
 

@@ -97,6 +97,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(serde_json::json!([{"field": "user"}, {"field": "soup"}])),
+        js(serde_json::json!([])),
     ))
     .await
     .unwrap();

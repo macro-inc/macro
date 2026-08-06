@@ -157,6 +157,7 @@ pub struct PubSubContext {
     pub crm_service: CrmServiceType,
     pub macro_event_broker: PubSubEventBroker,
     pub notifications_enabled: bool,
+    pub calendar_sync_enabled: bool,
     pub retry_worker: bool,
     pub calendar_backfills: CalendarBackfillServices,
 }

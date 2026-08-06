@@ -207,13 +207,15 @@ export function ComposeLayout(props: {
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1 min-w-0">
-                    <span class="shrink-0">from</span>
-                    <FromInboxSelector
-                      links={ctx.fromInboxes?.() ?? []}
-                      activeLinkId={ctx.selectedFromLinkId?.()}
-                      onSelect={(id) => ctx.onSelectFromLink?.(id)}
-                    />
+                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-2 min-w-0 flex-1">
+                    <span class="w-14 shrink-0">from</span>
+                    <div class="min-w-0">
+                      <FromInboxSelector
+                        links={ctx.fromInboxes?.() ?? []}
+                        activeLinkId={ctx.selectedFromLinkId?.()}
+                        onSelect={(id) => ctx.onSelectFromLink?.(id)}
+                      />
+                    </div>
                   </div>
                 </Show>
               </Suspense>

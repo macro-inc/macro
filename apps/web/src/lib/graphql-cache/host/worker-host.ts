@@ -181,6 +181,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
+        priority: args.priority,
       })) as ReadResult;
     },
 
@@ -235,6 +236,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         query: args.query,
         operationName: args.operationName,
         path: args.path,
+        variableFilters: args.variableFilters,
       })) as CachedQueryInstanceWire[];
     },
 

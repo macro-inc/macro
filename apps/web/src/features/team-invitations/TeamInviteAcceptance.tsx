@@ -11,7 +11,7 @@ import {
   useRejectInvitationMutation,
   useUserInvitesQuery,
 } from '@queries/team/invitations';
-import { useTeamQuery } from '@queries/team/teams';
+import { useCurrentTeamQuery, useTeamQuery } from '@queries/team/teams';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
@@ -35,6 +35,16 @@ export function TeamInviteAcceptance() {
   const teamQuery = useTeamQuery(teamId);
 
   const teamName = createMemo(() => teamQuery.data?.team.name);
+
+  // If the invite is gone but the user already belongs to a team (e.g. a
+  // domain auto-join consumed the invite between clicking the link and
+  // landing here), show that instead of "Invite Not Found". Only fetched
+  // once the invite lookup has settled without a match — a valid invite
+  // never waits on (or triggers) this request.
+  const currentTeamQuery = useCurrentTeamQuery(
+    () => !!userInfo()?.authenticated && invitesQuery.isSuccess && !invite()
+  );
+  const currentTeamName = createMemo(() => currentTeamQuery.data?.team.name);
 
   const joinMutation = useJoinTeamMutation({
     onSuccess: () => {
@@ -67,7 +77,10 @@ export function TeamInviteAcceptance() {
   };
 
   const isLoading = createMemo(
-    () => invitesQuery.isLoading || teamQuery.isLoading
+    () =>
+      invitesQuery.isLoading ||
+      teamQuery.isLoading ||
+      (!invite() && currentTeamQuery.isLoading)
   );
 
   return (
@@ -115,6 +128,9 @@ export function TeamInviteAcceptance() {
 
                 <Match when={isLoading()}>
                   <LoadingBlock />
+                </Match>
+                <Match when={!invite() && currentTeamName()}>
+                  {(name) => <AlreadyOnTeam teamName={name()} />}
                 </Match>
                 <Match when={!invite()}>
                   <InviteNotFound />
@@ -177,6 +193,31 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
         onClick={props.onLogin}
       >
         Sign In to Continue
+      </Button>
+    </div>
+  );
+}
+
+function AlreadyOnTeam(props: { teamName: string }) {
+  const navigate = useNavigate();
+  return (
+    <div class="w-full flex flex-col items-center gap-4 text-center">
+      <h2 class="flex items-center justify-center gap-2 text-lg font-medium text-ink">
+        <UsersThreeIcon class="size-5" />
+        Already on Team {props.teamName}
+      </h2>
+      <p class="text-sm text-ink-muted">
+        You're already a member of{' '}
+        <span class="text-ink">{props.teamName}</span>, so there's nothing more
+        to do here.
+      </p>
+      <Button
+        variant="base"
+        size="md"
+        class="w-full rounded-xs"
+        onClick={() => navigate('/')}
+      >
+        Go to Home
       </Button>
     </div>
   );

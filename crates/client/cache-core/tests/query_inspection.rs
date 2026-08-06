@@ -62,6 +62,7 @@ fn inspection(query: &str, path: &[&str]) -> QueryInspection {
         query: query.to_string(),
         operation_name: Some("GroupViews".to_string()),
         path: path.iter().map(|part| (*part).to_string()).collect(),
+        variable_filters: Vec::new(),
     }
 }
 
@@ -145,6 +146,70 @@ fn enumerates_variants_aliases_and_misses_in_canonical_order() {
         assert_eq!(
             hit.value.as_ref().unwrap()["bins"][0]["items"][0]["id"],
             "task-1"
+        );
+    });
+}
+
+#[test]
+fn materializes_only_variants_matching_recursive_variable_filters() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let status_initial = initial(20);
+        let status_continuation = continuation("cursor-1");
+        let priority_initial = object(json!({"input": {"initial": {
+            "groupBy": {"field": "PROPERTY", "propertyDefinitionId": "priority-def"},
+            "limit": 20
+        }}}));
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &status_initial,
+            &page("task-1", None),
+        )
+        .await;
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &status_continuation,
+            &page("task-2", None),
+        )
+        .await;
+        write_group(
+            &mut engine,
+            GROUP_QUERY,
+            &priority_initial,
+            &page("task-3", None),
+        )
+        .await;
+
+        let mut filtered = inspection(GROUP_QUERY, &["user", "groupSoup"]);
+        filtered.variable_filters = vec![
+            object(json!({"input": {"initial": {"groupBy": {
+                "field": "PROPERTY",
+                "propertyDefinitionId": "status-def"
+            }}}})),
+            object(json!({"input": {"continuation": {"groupBy": {
+                "field": "PROPERTY",
+                "propertyDefinitionId": "status-def"
+            }}}})),
+        ];
+        let results = engine.inspect_query(&filtered).await.unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(
+            results
+                .iter()
+                .any(|result| result.variables == status_initial)
+        );
+        assert!(
+            results
+                .iter()
+                .any(|result| result.variables == status_continuation)
+        );
+        assert!(
+            results
+                .iter()
+                .all(|result| result.variables != priority_initial)
         );
     });
 }
@@ -322,6 +387,7 @@ fn rejects_invalid_entrypoints_paths_variables_and_limits() {
             query: "mutation GroupViews { renameFile(input: {}) { id } }".into(),
             operation_name: Some("GroupViews".into()),
             path: vec!["renameFile".into()],
+            variable_filters: Vec::new(),
         };
         assert!(matches!(
             engine.inspect_query(&mutation).await.unwrap_err(),

@@ -744,6 +744,25 @@ async fn init_user(
         .into_response())
 }
 
+/// Returns false when the link is missing or the lookup fails so token discovery remains
+/// best-effort on the authentication path.
+async fn has_unrecorded_google_grant(db: &sqlx::PgPool, link_id: Uuid) -> bool {
+    sqlx::query_scalar!(
+        r#"
+        SELECT COALESCE(g.grant_version, 0) = 0 AS "unrecorded!"
+        FROM email_links l
+        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+        WHERE l.id = $1
+        "#,
+        link_id,
+    )
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false)
+}
+
 /// Init runs on every authentication, including first-login SSO where
 /// FusionAuth performs the token exchange and the granted scopes never reach
 /// the link flow. When the link has no recorded grant generation, discover
@@ -751,16 +770,7 @@ async fn init_user(
 /// SSO-only users still receive calendar sync. Best-effort: a failure here
 /// must never fail authentication, and the next init retries it.
 async fn apply_grant_discovered_from_token(ctx: &ApiContext, link: &link::Link) {
-    let unrecorded = sqlx::query_scalar!(
-        r#"SELECT google_grant_version = 0 AS "unrecorded!" FROM email_links WHERE id = $1"#,
-        link.id,
-    )
-    .fetch_optional(&ctx.db)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or(false);
-    if !unrecorded {
+    if !has_unrecorded_google_grant(&ctx.db, link.id).await {
         return;
     }
     let token = match fetch_gmail_token_for_email(

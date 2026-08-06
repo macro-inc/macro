@@ -76,7 +76,7 @@ impl NotificationQueue for SqsQueue {
             .filter_map(|msg| {
                 let body_str = msg.body?;
                 let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize queue message"))
+                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize queue message"))
                     .ok()?;
                 let receipt_handle = msg.receipt_handle?;
                 Some(RawQueueMessage {
@@ -116,7 +116,7 @@ impl NotificationIngressQueue for SqsQueue {
             .filter_map(|msg| {
                 let body_str = msg.body?;
                 let body = serde_json::from_str(&body_str)
-                    .inspect_err(|e| tracing::error!(error=?e, body=%body_str, "failed to deserialize ingress queue message"))
+                    .inspect_err(|e| tracing::error!(error=?e, payload_length=body_str.len(), "failed to deserialize ingress queue message"))
                     .ok()?;
                 let receipt_handle = msg.receipt_handle?;
                 Some(RawIngressQueueMessage {

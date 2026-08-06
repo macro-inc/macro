@@ -285,6 +285,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         is_read: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Record that the user viewed a thread.
+    fn upsert_thread_user_history(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the starred status for a batch of messages, verified by link_id.
     fn update_message_starred_status_batch(
         &self,
@@ -513,6 +520,26 @@ pub trait EmailService: Send + Sync + 'static {
         label_id: Uuid,
         add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send;
+
+    /// Mark a caller-accessible thread as seen and read.
+    fn mark_thread_seen(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
+
+    /// Add or remove a label from a caller-accessible thread.
+    fn update_thread_labels_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+        _label_id: Uuid,
+        _add: bool,
+    ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
 
     /// Update the project assignment for a thread. Returns the old project_id.
     ///

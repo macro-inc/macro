@@ -178,7 +178,11 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const scheduleRename = (newName: string, oldName: string) => {
-    if (newName === oldName) return;
+    if (newName === oldName) {
+      pendingRename = undefined;
+      debouncedFlushRename.clear();
+      return;
+    }
     pendingRename = { newName, oldName };
     debouncedFlushRename();
   };
@@ -296,8 +300,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   );
 
   createEffect(() => {
-    if (inlineMenuOpen()) return;
     const currentState = state();
+    if (untrack(inlineMenuOpen)) return;
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
@@ -306,11 +310,14 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (nextName !== untrack(mdDocumentName)) {
       setOptimisticName(nextName);
     }
-    if (nextName !== (untrack(persistedDocumentName) ?? '')) {
+    const persistedName = untrack(persistedDocumentName) ?? '';
+    if (nextName !== persistedName) {
       selfChangedTitle = true;
       if (canEdit()) {
-        scheduleRename(nextName, untrack(persistedDocumentName) ?? '');
+        scheduleRename(nextName, persistedName);
       }
+    } else {
+      scheduleRename(nextName, persistedName);
     }
   });
 

@@ -1,5 +1,8 @@
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  openEntityInSplitFromUnifiedList,
+  restoreSoupFocus,
+} from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -77,7 +80,11 @@ export const useBlockEntityCommands = () => {
   ) => {
     const entity = getEntity();
     if (entity) {
-      openPropertyEditor([entity], mode, property);
+      openPropertyEditor([entity], mode, property, {
+        restoreFocus: () => {
+          if (soup) return restoreSoupFocus(entity.id);
+        },
+      });
     }
   };
   const canAssignTags = (entity: EntityData) => {
@@ -308,21 +315,20 @@ export const useBlockEntityCommands = () => {
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Copy entity id (command menu only, no keybinding)
+    // Copy entity id (command menu only, no keybinding). Deliberately not
+    // gated on getEntity(): a block is keyed by its entity id, and Quick
+    // Access — a recents cache built from history, channels, contacts,
+    // companies and snippets — has no entry for entity types it never indexes
+    // (emails, calls) or for an item created moments ago. Requiring the entity
+    // hid Copy ID on exactly those blocks, and since it has no keybinding the
+    // command menu is the only way to reach it.
     registerHotkey({
       hotkeyToken: TOKENS.entity.action.copyEntityId,
       scopeId,
       description: 'Copy ID',
       keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!copyEntityIdAction.canExecute(entity)) return false;
-        copyEntityIdAction.execute([entity]);
+        copyEntityIdAction.executeById(blockId);
         return true;
-      },
-      condition: () => {
-        const entity = getEntity();
-        return entity !== undefined && copyEntityIdAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -355,7 +361,11 @@ export const useBlockEntityCommands = () => {
       keyDownHandler: () => {
         const entity = getEntity();
         if (!entity) return false;
-        openPropertyEditor([entity], 'tag');
+        openPropertyEditor([entity], 'tag', undefined, {
+          restoreFocus: () => {
+            if (soup) return restoreSoupFocus(entity.id);
+          },
+        });
         return true;
       },
       condition: () => {

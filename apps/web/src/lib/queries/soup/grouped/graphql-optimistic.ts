@@ -101,9 +101,22 @@ export async function buildOptimisticGroupedPropertyUpdates(
     return { updates: [], revalidations: [] };
   }
 
+  const relevantGroupBy = {
+    field: 'PROPERTY' as const,
+    propertyDefinitionId: args.propertyDefinitionId,
+  };
   const cachedViews = await inspect(
     args.host,
-    selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
+    selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup'),
+    {
+      // Filter inside cache-core before each variant is denormalized. Without
+      // this, editing one property reads every cached grouped view first and
+      // discards unrelated groupings only after crossing the worker boundary.
+      variableFilters: [
+        { input: { initial: { groupBy: relevantGroupBy } } },
+        { input: { continuation: { groupBy: relevantGroupBy } } },
+      ],
+    }
   );
   const relevantViews = cachedViews.filter(({ variables }) =>
     isRelevantPropertyGrouping(variables.input, args.propertyDefinitionId)

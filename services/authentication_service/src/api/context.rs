@@ -138,6 +138,8 @@ pub(crate) struct ApiContext {
     pub rate_limit_service: RateLimiter,
     /// The stripe price id
     pub stripe_price_id: String,
+    /// Whether Gmail link consent requests the Google Calendar scope.
+    pub calendar_scope_enabled: bool,
 }
 
 env_var! {

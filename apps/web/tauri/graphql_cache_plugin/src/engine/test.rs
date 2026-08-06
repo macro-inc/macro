@@ -148,6 +148,7 @@ fn query_inspection_serializes_generated_variables_and_value() {
         QUERY.to_string(),
         Some("Soup".to_string()),
         vec!["user".to_string(), "soup".to_string()],
+        Vec::new(),
     ))
     .unwrap();
     assert_eq!(instances.len(), 1);

@@ -3872,3 +3872,416 @@ async fn test_bulk_update_entities_rejects_invalid_option_wholesale() {
         crate::domain::error::PropertiesErr::Validation(_)
     ));
 }
+
+// ===== Sharing a personal label with the team =====
+
+fn team_id() -> Uuid {
+    Uuid::from_u128(0x7EA3)
+}
+
+/// A team-membership receipt for the test caller, minted without a check.
+fn team_receipt() -> crate::domain::service::TeamReceipt {
+    crate::domain::service::TeamReceipt::dangerously_assert_authenticated_user(
+        caller_user_id(),
+        &team_id().to_string(),
+        AccessEntityType::Team,
+    )
+}
+
+fn tag_definition(id: Uuid, owner: PropertyOwner) -> PropertyDefinition {
+    let created_at = event_timestamp();
+    PropertyDefinition {
+        id,
+        owner,
+        display_name: "Tags".to_string(),
+        data_type: DataType::Tag,
+        is_multi_select: true,
+        specific_entity_type: None,
+        created_at,
+        updated_at: created_at,
+        is_system: false,
+        is_metadata: false,
+    }
+}
+
+fn personal_tag_definition(id: Uuid) -> PropertyDefinition {
+    tag_definition(
+        id,
+        PropertyOwner::User {
+            user_id: caller_user_id().to_string(),
+        },
+    )
+}
+
+fn team_tag_definition(id: Uuid) -> PropertyDefinition {
+    tag_definition(id, PropertyOwner::Team { team_id: team_id() })
+}
+
+/// Wire up the reads every promote/merge does before it touches the tag sets:
+/// the label being shared, the caller's tag set, and the team's.
+fn expect_tag_sets(
+    repo: &mut MockPropertiesRepo,
+    option: PropertyOption,
+    personal: PropertyDefinition,
+    team: PropertyDefinition,
+) {
+    repo.expect_get_property_option()
+        .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
+    repo.expect_get_tag_definition()
+        .return_once(move |_| Box::pin(async move { Ok(Some(personal)) }));
+    repo.expect_get_or_create_tag_definition()
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(GetOrCreateTagDefinitionResult {
+                    definition: team,
+                    created: false,
+                })
+            })
+        });
+}
+
+#[tokio::test]
+async fn promote_tag_publishes_the_moved_option_and_every_retagged_entity() {
+    let personal_definition_id = Uuid::from_u128(0x7A01);
+    let team_definition_id = Uuid::from_u128(0x7A02);
+    let option_id = Uuid::from_u128(0x7A03);
+
+    let personal_option = property_option_for_event(
+        option_id,
+        personal_definition_id,
+        0,
+        PropertyOptionValue::String("bug-report".to_string()),
+        Some("#ff0000"),
+    );
+    // The move keeps the option id and hands it to the team definition.
+    let promoted_option = property_option_for_event(
+        option_id,
+        team_definition_id,
+        3,
+        PropertyOptionValue::String("bug-report".to_string()),
+        Some("#ff0000"),
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_tag_sets(
+        &mut repo,
+        personal_option,
+        personal_tag_definition(personal_definition_id),
+        team_tag_definition(team_definition_id),
+    );
+    let expected_option = promoted_option.clone();
+    repo.expect_promote_tag_option()
+        .return_once(move |_, _, _| {
+            Box::pin(async move {
+                Ok(crate::domain::model::TagPromotionOutcome::Promoted(
+                    crate::domain::model::TagRemapOutcome {
+                        option: expected_option,
+                        mutations: vec![
+                            entity_property_mutation(
+                                "doc1",
+                                EntityType::Document,
+                                team_definition_id,
+                                Some(PropertyValue::SelectOption(vec![option_id])),
+                            ),
+                            entity_property_mutation(
+                                "thread1",
+                                EntityType::Thread,
+                                team_definition_id,
+                                Some(PropertyValue::SelectOption(vec![option_id])),
+                            ),
+                        ],
+                    },
+                ))
+            })
+        });
+
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let option = service
+        .promote_tag_option(&caller_user_id(), Some(&team_receipt()), option_id)
+        .await
+        .unwrap();
+    assert_eq!(option.property_definition_id, team_definition_id);
+
+    let events = event_broker.events();
+    let event_types: Vec<_> = events
+        .iter()
+        .map(|event| event.envelope["event_type"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        event_types,
+        vec![
+            "property_option.updated",
+            "entity_property.updated",
+            "entity_property.updated",
+        ],
+        "search and Soup rebuild from one entity event per retagged entity"
+    );
+    assert_eq!(
+        events[1].envelope["metadata"]["entity_id"], "doc1",
+        "the entity events carry the entities, not the label"
+    );
+    assert_eq!(events[2].envelope["metadata"]["entity_id"], "thread1");
+}
+
+#[tokio::test]
+async fn promote_tag_reports_the_colliding_team_label() {
+    let personal_definition_id = Uuid::from_u128(0x7B01);
+    let team_definition_id = Uuid::from_u128(0x7B02);
+    let option_id = Uuid::from_u128(0x7B03);
+    let conflict_id = Uuid::from_u128(0x7B04);
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_tag_sets(
+        &mut repo,
+        property_option_for_event(
+            option_id,
+            personal_definition_id,
+            0,
+            PropertyOptionValue::String("Urgent".to_string()),
+            Some("#ff0000"),
+        ),
+        personal_tag_definition(personal_definition_id),
+        team_tag_definition(team_definition_id),
+    );
+    repo.expect_promote_tag_option()
+        .return_once(move |_, _, _| {
+            Box::pin(async move {
+                Ok(crate::domain::model::TagPromotionOutcome::Conflict(
+                    property_option_for_event(
+                        conflict_id,
+                        team_definition_id,
+                        1,
+                        PropertyOptionValue::String("urgent".to_string()),
+                        Some("#00ff00"),
+                    ),
+                ))
+            })
+        });
+
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let err = service
+        .promote_tag_option(&caller_user_id(), Some(&team_receipt()), option_id)
+        .await
+        .unwrap_err();
+
+    let PropertiesErr::ConflictingTeamLabel(conflict) = err else {
+        panic!("expected the conflicting team label, got {err:?}");
+    };
+    assert_eq!(conflict.id, conflict_id);
+    assert!(
+        event_broker.events().is_empty(),
+        "a rejected promotion changed nothing to publish"
+    );
+}
+
+#[tokio::test]
+async fn promote_tag_requires_a_team() {
+    let personal_definition_id = Uuid::from_u128(0x7C01);
+    let option_id = Uuid::from_u128(0x7C02);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_option().return_once(move |_| {
+        Box::pin(async move {
+            Ok(Some(property_option_for_event(
+                option_id,
+                personal_definition_id,
+                0,
+                PropertyOptionValue::String("bug-report".to_string()),
+                Some("#ff0000"),
+            )))
+        })
+    });
+    repo.expect_get_tag_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(personal_tag_definition(personal_definition_id))) })
+    });
+    repo.expect_promote_tag_option().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .promote_tag_option(&caller_user_id(), None, option_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::TeamMembershipRequired));
+}
+
+#[tokio::test]
+async fn promote_tag_rejects_a_label_from_another_tag_set() {
+    let option_id = Uuid::from_u128(0x7D01);
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_option().return_once(move |_| {
+        Box::pin(async move {
+            Ok(Some(property_option_for_event(
+                option_id,
+                // Somebody else's tag definition.
+                Uuid::from_u128(0x7D02),
+                0,
+                PropertyOptionValue::String("not-mine".to_string()),
+                Some("#ff0000"),
+            )))
+        })
+    });
+    repo.expect_get_tag_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(personal_tag_definition(Uuid::from_u128(0x7D03)))) })
+    });
+    repo.expect_promote_tag_option().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .promote_tag_option(&caller_user_id(), Some(&team_receipt()), option_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::OptionNotFound));
+}
+
+#[tokio::test]
+async fn merge_tag_publishes_the_retired_label_and_every_retagged_entity() {
+    let personal_definition_id = Uuid::from_u128(0x7E01);
+    let team_definition_id = Uuid::from_u128(0x7E02);
+    let option_id = Uuid::from_u128(0x7E03);
+    let target_option_id = Uuid::from_u128(0x7E04);
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_tag_sets(
+        &mut repo,
+        property_option_for_event(
+            option_id,
+            personal_definition_id,
+            0,
+            PropertyOptionValue::String("Urgent".to_string()),
+            Some("#ff0000"),
+        ),
+        personal_tag_definition(personal_definition_id),
+        team_tag_definition(team_definition_id),
+    );
+    repo.expect_merge_tag_option()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(Some(crate::domain::model::TagRemapOutcome {
+                    option: property_option_for_event(
+                        target_option_id,
+                        team_definition_id,
+                        1,
+                        PropertyOptionValue::String("urgent".to_string()),
+                        Some("#00ff00"),
+                    ),
+                    mutations: vec![entity_property_mutation(
+                        "doc1",
+                        EntityType::Document,
+                        team_definition_id,
+                        Some(PropertyValue::SelectOption(vec![target_option_id])),
+                    )],
+                }))
+            })
+        });
+
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let option = service
+        .merge_tag_option(
+            &caller_user_id(),
+            Some(&team_receipt()),
+            option_id,
+            target_option_id,
+        )
+        .await
+        .unwrap();
+    assert_eq!(option.id, target_option_id, "the team label wins");
+
+    let events = event_broker.events();
+    let event_types: Vec<_> = events
+        .iter()
+        .map(|event| event.envelope["event_type"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        event_types,
+        vec!["property_option.deleted", "entity_property.updated"]
+    );
+    assert_eq!(
+        events[0].envelope["metadata"]["option_id"],
+        option_id.to_string(),
+        "the retired label is the personal one"
+    );
+}
+
+#[tokio::test]
+async fn merge_tag_rejects_a_target_outside_the_team_tag_set() {
+    let personal_definition_id = Uuid::from_u128(0x7F01);
+    let team_definition_id = Uuid::from_u128(0x7F02);
+    let option_id = Uuid::from_u128(0x7F03);
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_tag_sets(
+        &mut repo,
+        property_option_for_event(
+            option_id,
+            personal_definition_id,
+            0,
+            PropertyOptionValue::String("Urgent".to_string()),
+            Some("#ff0000"),
+        ),
+        personal_tag_definition(personal_definition_id),
+        team_tag_definition(team_definition_id),
+    );
+    repo.expect_merge_tag_option()
+        .return_once(move |_, _, _, _| Box::pin(async move { Ok(None) }));
+
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let err = service
+        .merge_tag_option(
+            &caller_user_id(),
+            Some(&team_receipt()),
+            option_id,
+            Uuid::from_u128(0x7F04),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::OptionNotFound));
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn merge_tag_rejects_merging_a_label_into_itself() {
+    let option_id = Uuid::from_u128(0x8003);
+
+    // The guard runs before anything is read, so provisioning a team tag set
+    // is not a side effect of a request that was never going to work.
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_option().never();
+    repo.expect_get_or_create_tag_definition().never();
+    repo.expect_merge_tag_option().never();
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .merge_tag_option(
+            &caller_user_id(),
+            Some(&team_receipt()),
+            option_id,
+            option_id,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::Validation(_)));
+}

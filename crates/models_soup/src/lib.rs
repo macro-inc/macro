@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+/// Calendar event models for Soup responses.
+pub mod calendar_event;
 /// Call record models for Soup responses.
 pub mod call_record;
 /// Chat models for Soup responses.

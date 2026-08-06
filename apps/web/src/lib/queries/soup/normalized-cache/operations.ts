@@ -580,6 +580,10 @@ export function buildSingleEntityFilter(
       ...base,
       channel_thread_filters: { thread_ids: [entityId] },
     }))
+    .with('calendarEvent', () => ({
+      ...base,
+      calendar_event_filters: { calendar_event_ids: [entityId] },
+    }))
     .exhaustive();
 }
 

@@ -97,29 +97,31 @@ pub async fn backfill_message(
             })
         })?;
 
-    crate::calendar_ingest::ingest_calendar_parts(
-        &ctx.db,
-        &ctx.gmail_client,
-        &ctx.redis_client,
-        crate::calendar_ingest::CalendarIngestInput {
-            is_backfill: true,
-            access_token,
-            owner_id: link.macro_id.as_ref(),
-            email_link_id: link.id,
-            email_thread_id: persisted_thread_id,
-            email_message_id: message_db_id,
-            provider_message_id: &p.message_provider_id,
-            payload: &calendar_payload,
-        },
-    )
-    .await
-    .inspect_err(|error| {
-        // Calendar extraction is best-effort: a Gmail or database failure
-        // here must not block the message's core side effects, and the
-        // durable email-ICS backfill re-extracts anything missed.
-        tracing::warn!(error = ?error, "failed to extract calendar invitation");
-    })
-    .ok();
+    if ctx.calendar_sync_enabled {
+        crate::calendar_ingest::ingest_calendar_parts(
+            &ctx.db,
+            &ctx.gmail_client,
+            &ctx.redis_client,
+            crate::calendar_ingest::CalendarIngestInput {
+                is_backfill: true,
+                access_token,
+                owner_id: link.macro_id.as_ref(),
+                email_link_id: link.id,
+                email_thread_id: persisted_thread_id,
+                email_message_id: message_db_id,
+                provider_message_id: &p.message_provider_id,
+                payload: &calendar_payload,
+            },
+        )
+        .await
+        .inspect_err(|error| {
+            // Calendar extraction is best-effort: a Gmail or database failure
+            // here must not block the message's core side effects, and the
+            // durable email-ICS backfill re-extracts anything missed.
+            tracing::warn!(error = ?error, "failed to extract calendar invitation");
+        })
+        .ok();
+    }
 
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both

@@ -23,6 +23,7 @@ async fn insert_webhook(pool: &PgPool, deleted: bool) -> anyhow::Result<()> {
         INSERT INTO webhook (
             id,
             workspace_id,
+            namespace,
             name,
             endpoint_url,
             signing_secret,
@@ -33,10 +34,11 @@ async fn insert_webhook(pool: &PgPool, deleted: bool) -> anyhow::Result<()> {
             created_by_user_id,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11)
         "#,
         WEBHOOK_ID,
         USER_ID,
+        "delivery-test",
         "Delivery test",
         ENDPOINT_URL,
         SIGNING_SECRET,

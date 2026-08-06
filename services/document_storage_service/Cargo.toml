@@ -185,6 +185,7 @@ soup_realtime = { path = "../../crates/soup_realtime", default-features = false,
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "document",
+  "email",
   "search",
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }

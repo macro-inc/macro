@@ -273,7 +273,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * Query parameters for listing properties
@@ -288,6 +288,30 @@ export type ListPropertiesQuery = {
      * Scope filter for properties
      */
     scope: PropertyScope;
+};
+
+/**
+ * Request to replace a personal label with an existing team label.
+ */
+export type MergeTagRequest = {
+    /**
+     * The personal label to retire.
+     */
+    option_id: string;
+    /**
+     * The team label every entity carrying `option_id` is retagged with.
+     */
+    target_option_id: string;
+};
+
+/**
+ * Request to share one of the caller's personal labels with their team.
+ */
+export type PromoteTagRequest = {
+    /**
+     * The personal label to move into the team tag set.
+     */
+    option_id: string;
 };
 
 /**
@@ -581,6 +605,22 @@ export type SetPropertyValue = {
 } | {
     type: 'multi_link';
     urls: Array<string>;
+};
+
+/**
+ * Body returned when a promotion collides with a label the team already has.
+ * The caller confirms with the user, then calls the merge endpoint with
+ * `conflicting_option.id` as the target.
+ */
+export type TagPromotionConflictResponse = {
+    /**
+     * The team label that already uses this name.
+     */
+    conflicting_option: PropertyOptionResponse;
+    /**
+     * Human-readable description of the collision.
+     */
+    message: string;
 };
 
 /**
@@ -1306,3 +1346,75 @@ export type EnsureTagSetResponses = {
 };
 
 export type EnsureTagSetResponse = EnsureTagSetResponses[keyof EnsureTagSetResponses];
+
+export type MergeTagData = {
+    body: MergeTagRequest;
+    path?: never;
+    query?: never;
+    url: '/properties/tags/merge';
+};
+
+export type MergeTagErrors = {
+    /**
+     * Invalid request
+     */
+    400: unknown;
+    /**
+     * Team membership required
+     */
+    403: unknown;
+    /**
+     * Either label was not found in the expected tag set
+     */
+    404: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type MergeTagResponses = {
+    /**
+     * Label merged into the team label
+     */
+    200: PropertyOptionResponse;
+};
+
+export type MergeTagResponse = MergeTagResponses[keyof MergeTagResponses];
+
+export type PromoteTagData = {
+    body: PromoteTagRequest;
+    path?: never;
+    query?: never;
+    url: '/properties/tags/promote';
+};
+
+export type PromoteTagErrors = {
+    /**
+     * Team membership required
+     */
+    403: unknown;
+    /**
+     * Label not found in the caller's tag set
+     */
+    404: unknown;
+    /**
+     * The team already has a label with that name
+     */
+    409: TagPromotionConflictResponse;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type PromoteTagError = PromoteTagErrors[keyof PromoteTagErrors];
+
+export type PromoteTagResponses = {
+    /**
+     * Label moved to the team tag set
+     */
+    200: PropertyOptionResponse;
+};
+
+export type PromoteTagResponse = PromoteTagResponses[keyof PromoteTagResponses];

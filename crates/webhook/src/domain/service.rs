@@ -1,14 +1,17 @@
 //! Webhook service implementation.
 
+#[cfg(test)]
+mod test;
+
 use super::{
     events::{
         WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookMacroEvent, WebhookUpdatedMetadata,
         WebhookValidatedMetadata,
     },
     models::{
-        CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest, ValidateWebhookResponse,
-        Webhook, WebhookEndpointSchemePolicy, WebhookFilters, WebhookId, WebhookScope,
-        WebhookValidationResult,
+        CreateWebhookOutcome, CreateWebhookRequest, ListWebhooksResponse, PatchWebhookRequest,
+        ValidateWebhookResponse, Webhook, WebhookEndpointSchemePolicy, WebhookFilters, WebhookId,
+        WebhookScope, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
@@ -19,6 +22,7 @@ use std::net::IpAddr;
 use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
+const MAX_NAMESPACE_LEN: usize = 128;
 const MAX_FILTERS: usize = 50;
 const MAX_FILTER_EVENTS: usize = 100;
 const MAX_FILTER_IDS: usize = 100;
@@ -66,6 +70,16 @@ fn validate_name(name: &str) -> Result<(), WebhookError> {
     if name.is_empty() || name.len() > MAX_NAME_LEN {
         return Err(WebhookError::BadRequest(format!(
             "name must be non-empty and at most {MAX_NAME_LEN} characters"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_namespace(namespace: &str) -> Result<(), WebhookError> {
+    let namespace = namespace.trim();
+    if namespace.is_empty() || namespace.len() > MAX_NAMESPACE_LEN {
+        return Err(WebhookError::BadRequest(format!(
+            "namespace must be non-empty and at most {MAX_NAMESPACE_LEN} characters"
         )));
     }
     Ok(())
@@ -204,6 +218,7 @@ fn validate_create_request(
     endpoint_scheme_policy: WebhookEndpointSchemePolicy,
 ) -> Result<(), WebhookError> {
     validate_name(&request.name)?;
+    validate_namespace(&request.namespace)?;
     validate_endpoint_url(&request.endpoint_url, endpoint_scheme_policy)?;
     validate_filters(&request.filters)
 }
@@ -364,11 +379,19 @@ where
         let signing_secret = generate_signing_secret(&caller);
         let headers = serde_json::to_value(request.headers.clone().unwrap_or_default())
             .map_err(|err| WebhookError::Repo(err.into()))?;
-        let mut webhook = self
+        let mut webhook = match self
             .repo
             .create_webhook(caller, workspace_id, request, signing_secret, headers)
             .await
-            .map_err(|err| WebhookError::Repo(err.into()))?;
+            .map_err(|err| WebhookError::Repo(err.into()))?
+        {
+            CreateWebhookOutcome::Created(webhook) => *webhook,
+            CreateWebhookOutcome::NamespaceConflict => {
+                return Err(WebhookError::Conflict(
+                    "namespace is already used by another webhook in this workspace".to_string(),
+                ));
+            }
+        };
         webhook.is_valid = false;
 
         self.publish_webhook_event(&WebhookMacroEvent::created(
@@ -376,6 +399,7 @@ where
             WebhookCreatedMetadata {
                 webhook_id: webhook.id.clone(),
                 workspace_id: webhook.workspace_id.clone(),
+                namespace: webhook.namespace.clone(),
                 created_by_user_id,
                 name: webhook.name.clone(),
                 endpoint_url: webhook.endpoint_url.clone(),

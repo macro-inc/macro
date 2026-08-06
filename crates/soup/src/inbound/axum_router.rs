@@ -34,6 +34,7 @@ use item_filters::{
     EntityFilters,
     ast::{
         EntityFilterAst, ExpandErr, LiteralTree,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
@@ -1059,6 +1060,10 @@ where
 /// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
+    /// filters applied to canonical calendar events
+    #[serde(default, rename = "calf")]
+    #[schema(value_type = serde_json::Value)]
+    pub calendar_event_filter: LiteralTree<CalendarEventLiteral>,
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
     #[schema(value_type = serde_json::Value)]
@@ -1179,6 +1184,7 @@ impl ApiEntityFilterAst {
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
+            calendar_event_filter,
             document_filter,
             project_filter,
             chat_filter,
@@ -1242,6 +1248,7 @@ impl ApiEntityFilterAst {
         };
 
         Ok(EntityFilterAst {
+            calendar_event_filter,
             document_filter,
             project_filter,
             chat_filter,

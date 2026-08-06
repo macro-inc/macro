@@ -207,6 +207,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           query: args.query,
           operationName: args.operationName,
           path: args.path,
+          variableFilters: args.variableFilters,
         }
       );
     },

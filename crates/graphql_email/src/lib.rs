@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 
 mod loaders;
+mod mutation;
 mod objects;
 mod user_objects;
 mod user_query;
@@ -10,6 +11,10 @@ mod user_query;
 pub use loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
     NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, email_content_loader,
+};
+pub use mutation::{
+    EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
+    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
 };
 pub use objects::{GraphqlSoupEmailMessage, load_email_messages, load_latest_email_message};
 pub use user_objects::{

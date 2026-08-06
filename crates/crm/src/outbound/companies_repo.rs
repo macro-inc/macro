@@ -772,6 +772,41 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(outcome)
     }
 
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        if pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (link_ids, emails): (Vec<uuid::Uuid>, Vec<String>) = pairs
+            .iter()
+            .map(|(link_id, email)| (*link_id, email.to_ascii_lowercase()))
+            .unzip();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT cs.link_id AS "link_id!", LOWER(ct.email) AS "email!"
+            FROM crm_contact_sources cs
+            JOIN crm_contacts ct ON ct.id = cs.contact_id
+            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
+              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)
+            "#,
+            &link_ids,
+            &emails,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.link_id, row.email))
+            .collect())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn depopulate_link_in_team(
         &self,

@@ -20,10 +20,11 @@ pub use graphql_channel::{
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
-    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailProvider,
-    GraphqlEmailQuery, GraphqlEmailSyncStatus, NoOpSoupEmailContentEdgeReader,
-    SoupEmailContentEdgeReader, email_content_loader,
+    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailMutationService,
+    EmailServiceEmailContentReader, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
+    GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
+    MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader,
+    UpdateEmailThreadLabelInput, email_content_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,

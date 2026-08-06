@@ -118,6 +118,11 @@ pub struct Config {
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub kafka_brokers: KafkaBrokers,
+    /// Whether Gmail link consent requests the Google Calendar scope. Off by
+    /// default so deployed environments don't ask users for a scope the
+    /// calendar feature isn't using yet.
+    #[macro_config_default(false)]
+    pub calendar_scope_enabled: bool,
 }
 
 impl Config {

@@ -77,7 +77,15 @@ export function Row(props: {
     <div
       class={cn(
         'flex flex-row',
-        '[&>*]:min-w-0 [&>*]:flex-1',
+        // Non-wrapping rows must always fit their children on one line, so
+        // items are given a zero basis (flex-1) and no min-width floor and
+        // simply shrink evenly to fit. A wrapping row needs the opposite:
+        // items need a real min-width floor so the browser's line-breaking
+        // algorithm can tell when they no longer fit and start a new line,
+        // instead of shrinking indefinitely to stay on one line forever.
+        local.wrap
+          ? '[&>*]:min-w-40 [&>*]:flex-1 [&>*]:basis-40'
+          : '[&>*]:min-w-0 [&>*]:flex-1',
         gapClass(local.gap),
         alignClass(local.align),
         justifyClass(local.justify),

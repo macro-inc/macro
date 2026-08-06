@@ -10,6 +10,7 @@ use crate::domain::ports::editing::EditingWorkerService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
+use entity_access::domain::models::{EditAccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
@@ -57,6 +58,12 @@ pub struct CreateDocument {
     #[schemars(description = "Whether this document is a task. Only applies to md documents.")]
     #[serde(default)]
     pub is_task: bool,
+
+    #[schemars(
+        description = "The id of the project (shown as a folder in the app UI) to create the document in. Requires edit access to the project. Omit to create the document at the top level of the user's files."
+    )]
+    #[serde(default)]
+    pub project_id: Option<uuid::Uuid>,
 }
 
 #[async_trait]
@@ -82,6 +89,25 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
+        // Mirrors the axum create route's project body extractor: creating
+        // inside a project requires edit access to that project.
+        if let Some(project_id) = self.project_id {
+            service_context
+                .entity_access_service
+                .generate_entity_access_receipt::<EditAccessLevel>(
+                    &user_id,
+                    None,
+                    &project_id.to_string(),
+                    EntityType::Project,
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: "you need edit access to the target project, or it does not exist"
+                        .to_string(),
+                    internal_error: e.into(),
+                })?;
+        }
+
         // gets the members team if exists so we can track the task number correctly
         let maybe_team = if self.is_task {
             service_context
@@ -97,13 +123,17 @@ where
             None
         };
 
-        let document =
-            NewPlainTextDocument::builder(NewDocumentMetadata::new(self.document_name.clone()))
-                .file_type(parsed_file_type)
-                .text(self.file_content.clone())
-                .task_flag(self.is_task, maybe_team)
-                .build()
-                .map_err(failed_to_create_document)?;
+        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone());
+        if let Some(project_id) = self.project_id {
+            metadata_builder = metadata_builder.project_id(project_id);
+        }
+
+        let document = NewPlainTextDocument::builder(metadata_builder.build())
+            .file_type(parsed_file_type)
+            .text(self.file_content.clone())
+            .task_flag(self.is_task, maybe_team)
+            .build()
+            .map_err(failed_to_create_document)?;
 
         let response = service_context
             .creator

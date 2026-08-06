@@ -7,12 +7,14 @@
 
 import type {
   CachedQueryInstanceWire,
+  CacheReadPriority,
   ClaimedMutation,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
   QueryRevalidationWire,
+  QueryVariableFilter,
   ReadRecordsArgs,
   ReadResult,
   SelectedRecordPageWire,
@@ -25,6 +27,8 @@ export interface CacheReadArgs {
   query: string;
   operationName?: string;
   variables?: Record<string, unknown>;
+  /** Prioritizes a pushed, user-visible refresh over incidental reads. */
+  priority?: CacheReadPriority;
 }
 
 export interface InspectQueryArgs {
@@ -32,9 +36,11 @@ export interface InspectQueryArgs {
   operationName?: string;
   /** Response-key field path from the query root. */
   path: Array<{ field: string }>;
+  /** OR-ed recursive partial matches applied before result materialization. */
+  variableFilters?: QueryVariableFilter[];
 }
 
-export interface CacheWriteArgs extends CacheReadArgs {
+export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;

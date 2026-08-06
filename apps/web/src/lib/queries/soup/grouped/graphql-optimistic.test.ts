@@ -1,4 +1,4 @@
-import type { CacheHost } from '@graphql-cache/host/types';
+import type { CacheHost, InspectQueryArgs } from '@graphql-cache/host/types';
 import { describe, expect, it, vi } from 'vitest';
 import { registerGroupedSoupContinuation } from './graphql-operation-registry';
 import { buildOptimisticGroupedPropertyUpdates } from './graphql-optimistic';
@@ -30,7 +30,7 @@ function host(args?: {
   continuation?: boolean;
   initialContainsItem?: boolean;
   miss?: boolean;
-  onInspect?: () => void;
+  onInspect?: (request: InspectQueryArgs) => void;
   sourceKey?: string;
   typename?: 'GraphqlSoupCall' | 'GraphqlSoupDocument';
 }): CacheHost {
@@ -97,8 +97,8 @@ function host(args?: {
 
   return {
     clientId: 'test',
-    async inspectQuery() {
-      args?.onInspect?.();
+    async inspectQuery(request: InspectQueryArgs) {
+      args?.onInspect?.(request);
       return instances;
     },
   } as unknown as CacheHost;
@@ -106,8 +106,9 @@ function host(args?: {
 
 describe('buildOptimisticGroupedPropertyUpdates', () => {
   it('builds source removal then destination prepend for a status move', async () => {
+    const onInspect = vi.fn();
     const result = await buildOptimisticGroupedPropertyUpdates({
-      host: host({ includeUnrelated: true }),
+      host: host({ includeUnrelated: true, onInspect }),
       entityId: 'task-1',
       propertyDefinitionId: 'status-def',
       oldGroupKeys: ['in-progress'],
@@ -136,6 +137,32 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       ],
     ]);
     expect(result.revalidations).toHaveLength(1);
+    expect(onInspect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variableFilters: [
+          {
+            input: {
+              initial: {
+                groupBy: {
+                  field: 'PROPERTY',
+                  propertyDefinitionId: 'status-def',
+                },
+              },
+            },
+          },
+          {
+            input: {
+              continuation: {
+                groupBy: {
+                  field: 'PROPERTY',
+                  propertyDefinitionId: 'status-def',
+                },
+              },
+            },
+          },
+        ],
+      })
+    );
   });
 
   it('derives the normalized key from the inspected typename and id', async () => {

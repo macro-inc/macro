@@ -120,6 +120,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupPreviewAvailability } from './use-soup-preview-availability';
@@ -610,15 +611,18 @@ export const SoupView = (props: SoupViewProps) => {
             <Show
               when={!isComponentListView('search')}
               fallback={
-                <Layer depth={2}>
-                  <div class="grow ml-2 min-w-0 [contain:inline-size]">
-                    <SoupSearchbar
-                      variant="secondary"
-                      placeholder="Search, @mention contacts"
-                      initialValue={props.initialSearchText}
-                    />
-                  </div>
-                </Layer>
+                <>
+                  <Layer depth={2}>
+                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
+                      <SoupSearchbar
+                        variant="secondary"
+                        placeholder="Search, @mention contacts"
+                        initialValue={props.initialSearchText}
+                      />
+                    </div>
+                  </Layer>
+                  <SearchAskAiButton />
+                </>
               }
             >
               <Show when={!narrowSearchExpanded()}>
@@ -694,7 +698,8 @@ export const SoupView = (props: SoupViewProps) => {
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
-            !isBoardRendered()
+            !isBoardRendered() &&
+            !isComponentListView('search')
           }
         >
           <SoupChatInput />

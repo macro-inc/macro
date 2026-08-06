@@ -57,20 +57,26 @@ local-email: ensure-cache-wasm
 # All app builds need the gitignored wasm pkg (src/lib/graphql-cache/wasm):
 # without it the cache worker's dynamic import 404s at runtime and the
 # normalized cache silently degrades to network-only.
+#
+# The vite build's chunk-rendering peaks right at node's default ~4GB heap
+# cap, so CI builds flap with "Ineffective mark-compacts near heap limit".
+# Lift the ceiling; peak usage stays the same, it just stops aborting.
+node_heap := "--max-old-space-size=6144"
+
 build-dev: build-cache-wasm
-    MODE=development NODE_ENV=production bun run --bun build
+    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
 
 build-staging: build-cache-wasm
-    MODE=staging NODE_ENV=production bun run --bun build
+    MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
 
 build-prod: build-cache-wasm
-    MODE=production NODE_ENV=production bun run --bun build
+    MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
 build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
-    MODE=production NODE_ENV=production bun run --bun build
+    MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle

@@ -158,7 +158,6 @@ sqlx-core = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "email",
   "gmail",
-  "search",
   "sfs_delete",
   "sfs_uploader"
 ] }
@@ -186,3 +185,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

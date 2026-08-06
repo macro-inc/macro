@@ -1503,7 +1503,7 @@ async fn patch_message_propagates_channel_touch_errors() {
 }
 
 #[tokio::test]
-async fn patch_message_notify_as_posted_adds_notification_context() {
+async fn patch_message_notify_as_posted_broadcasts_to_channel_and_adds_notification_context() {
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -1511,6 +1511,22 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     let repo = FakeMutationRepo::new(channel_id, &bot_sender);
     repo.state.lock().unwrap().message.thread_id = Some(thread_id);
     repo.state.lock().unwrap().message.sender_id = Sender::new_from_bot(bot_id);
+    {
+        let mut state = repo.state.lock().unwrap();
+        let now = Utc::now();
+        state.participants = ["macro|requester@test.com", "macro|observer@test.com"]
+            .into_iter()
+            .map(|user_id| ChannelParticipant {
+                channel_id,
+                user_id: user_id.to_string(),
+                role: ParticipantRole::Member,
+                joined_at: now,
+                left_at: None,
+            })
+            .collect();
+        state.thread_participants =
+            vec![MacroUserIdStr::try_from("macro|requester@test.com".to_string()).unwrap()];
+    }
     let message_id = repo.state.lock().unwrap().message.id;
     let events = FakeEvents::default();
     let svc = mutation_service(
@@ -1540,6 +1556,7 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     assert_eq!(emitted.len(), 1);
     let ChannelEvent::MessageChanged {
         message,
+        recipients,
         posted_notification,
         ..
     } = &emitted[0]
@@ -1547,6 +1564,13 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
         panic!("expected MessageChanged event, got {:?}", emitted[0]);
     };
     assert_eq!(message.content, "final answer");
+    assert_eq!(
+        recipients
+            .iter()
+            .map(|recipient| recipient.as_ref())
+            .collect::<Vec<_>>(),
+        vec!["macro|requester@test.com", "macro|observer@test.com"]
+    );
     let posted_notification = posted_notification
         .as_ref()
         .expect("expected posted notification context");

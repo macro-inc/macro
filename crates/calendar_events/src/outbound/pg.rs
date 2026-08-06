@@ -98,10 +98,10 @@ impl PgCalendarRepository {
                   AND lease_expires_at > now()
                   AND EXISTS (
                         SELECT 1
-                        FROM email_links link
-                        WHERE link.id = calendar_backfill_jobs.email_link_id
-                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                          AND link.google_granted_scopes @> $7::text[]
+                        FROM email_link_google_scopes scopes
+                        WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                          AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                          AND scopes.granted_scopes @> $7::text[]
                   )
                 "#,
                 key.job_id,
@@ -132,10 +132,10 @@ impl PgCalendarRepository {
                   AND lease_token IS NULL
                   AND EXISTS (
                         SELECT 1
-                        FROM email_links link
-                        WHERE link.id = calendar_backfill_jobs.email_link_id
-                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                          AND link.google_granted_scopes @> $6::text[]
+                        FROM email_link_google_scopes scopes
+                        WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                          AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                          AND scopes.granted_scopes @> $6::text[]
                   )
                 "#,
                 key.job_id,
@@ -224,12 +224,13 @@ impl PgCalendarRepository {
             GrantRow,
             r#"
             SELECT
-                macro_id,
-                email_address::text AS "email_address!",
-                google_granted_scopes,
-                google_grant_version
-            FROM email_links
-            WHERE id = $1
+                l.macro_id,
+                l.email_address::text AS "email_address!",
+                COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
+                COALESCE(g.grant_version, 0) AS "grant_version!"
+            FROM email_links l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            WHERE l.id = $1
             "#,
             email_link_id,
         )
@@ -247,8 +248,8 @@ impl PgCalendarRepository {
 struct GrantRow {
     macro_id: String,
     email_address: String,
-    google_granted_scopes: Vec<String>,
-    google_grant_version: i64,
+    granted_scopes: Vec<String>,
+    grant_version: i64,
 }
 
 struct StoredCalendarRow {
@@ -331,17 +332,20 @@ impl CalendarRepository for PgCalendarRepository {
         scopes: GoogleScopeSet,
     ) -> Result<AppliedGoogleGrant, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
+        // The email_links row remains the grant serialization point. Every
+        // production side-table write below occurs while holding this lock.
         let row = sqlx::query_as!(
             GrantRow,
             r#"
             SELECT
-                macro_id,
-                email_address::text AS "email_address!",
-                google_granted_scopes,
-                google_grant_version
-            FROM email_links
-            WHERE id = $1
-            FOR UPDATE
+                l.macro_id,
+                l.email_address::text AS "email_address!",
+                COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
+                COALESCE(g.grant_version, 0) AS "grant_version!"
+            FROM email_links l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            WHERE l.id = $1
+            FOR UPDATE OF l
             "#,
             email_link_id,
         )
@@ -349,32 +353,33 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
-        let old_scopes = GoogleScopeSet::from_scopes(row.google_granted_scopes);
+        let old_scopes = GoogleScopeSet::from_scopes(row.granted_scopes);
         let had_calendar_capability = old_scopes.has_calendar_capability();
         let changed = old_scopes != scopes;
         if !changed {
             let jobs = if scopes.has_calendar_capability() {
-                retry_failed_backfills_tx(&mut tx, email_link_id, row.google_grant_version).await?
+                retry_failed_backfills_tx(&mut tx, email_link_id, row.grant_version).await?
             } else {
                 Vec::new()
             };
             tx.commit().await.map_err(report)?;
             return Ok(AppliedGoogleGrant {
-                grant_version: row.google_grant_version,
+                grant_version: row.grant_version,
                 changed: false,
                 jobs,
             });
         }
 
-        let grant_version = row.google_grant_version + 1;
+        let grant_version = row.grant_version + 1;
         let granted_scopes = scopes.clone().into_vec();
         sqlx::query!(
             r#"
-            UPDATE email_links
-            SET google_granted_scopes = $2,
-                google_grant_version = $3,
+            INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (link_id) DO UPDATE
+            SET granted_scopes = EXCLUDED.granted_scopes,
+                grant_version = EXCLUDED.grant_version,
                 updated_at = now()
-            WHERE id = $1
             "#,
             email_link_id,
             &granted_scopes,
@@ -1049,15 +1054,15 @@ impl CalendarRepository for PgCalendarRepository {
                     lease_token = NULL,
                     lease_expires_at = NULL,
                     updated_at = now()
-                FROM calendar_accounts account, email_links link
+                FROM calendar_accounts account, email_link_google_scopes scopes
                 WHERE job.email_link_id = $1
                   AND job.email_link_id = account.email_link_id
                   AND job.account_id = account.id
-                  AND link.id = job.email_link_id
+                  AND scopes.link_id = job.email_link_id
                   AND job.kind = 'google_calendar'
                   AND job.status = 'complete'
-                  AND job.grant_version = link.google_grant_version
-                  AND link.google_granted_scopes @> $2::text[]
+                  AND job.grant_version = scopes.grant_version
+                  AND scopes.granted_scopes @> $2::text[]
                   AND account.sync_status = 'ready'
                 RETURNING job.id
             ),
@@ -1171,14 +1176,14 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
                     lease_token = NULL,
                     lease_expires_at = NULL,
                     updated_at = now()
-                FROM calendar_accounts account, email_links link
+                FROM calendar_accounts account, email_link_google_scopes scopes
                 WHERE job.email_link_id = account.email_link_id
                   AND job.account_id = account.id
-                  AND link.id = job.email_link_id
+                  AND scopes.link_id = job.email_link_id
                   AND job.kind = 'google_calendar'
                   AND job.status = 'complete'
-                  AND job.grant_version = link.google_grant_version
-                  AND link.google_granted_scopes @> $2::text[]
+                  AND job.grant_version = scopes.grant_version
+                  AND scopes.granted_scopes @> $2::text[]
                   AND account.sync_status = 'ready'
                   AND account.last_synced_at <= $1
                 RETURNING job.id
@@ -1220,10 +1225,10 @@ async fn fence_google_mutation_tx(
           AND job.lease_expires_at > now()
           AND EXISTS (
                 SELECT 1
-                FROM email_links link
-                WHERE link.id = job.email_link_id
-                  AND link.google_grant_version = job.grant_version
-                  AND link.google_granted_scopes @> $5::text[]
+                FROM email_link_google_scopes scopes
+                WHERE scopes.link_id = job.email_link_id
+                  AND scopes.grant_version = job.grant_version
+                  AND scopes.granted_scopes @> $5::text[]
           )
           AND EXISTS (
                 SELECT 1
@@ -1366,10 +1371,10 @@ impl CalendarBackfillRepository for PgCalendarRepository {
               AND kind = 'google_calendar'
               AND EXISTS (
                     SELECT 1
-                    FROM email_links link
-                    WHERE link.id = calendar_backfill_jobs.email_link_id
-                      AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                      AND link.google_granted_scopes @> $4::text[]
+                    FROM email_link_google_scopes scopes
+                    WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                      AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                      AND scopes.granted_scopes @> $4::text[]
               )
               AND EXISTS (
                     SELECT 1
@@ -1487,10 +1492,10 @@ impl CalendarBackfillRepository for PgCalendarRepository {
                   AND lease_expires_at > now()
                   AND EXISTS (
                         SELECT 1
-                        FROM email_links link
-                        WHERE link.id = calendar_backfill_jobs.email_link_id
-                          AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                          AND link.google_granted_scopes @> $4::text[]
+                        FROM email_link_google_scopes scopes
+                        WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                          AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                          AND scopes.granted_scopes @> $4::text[]
                   )
                 "#,
                 key.job_id,
@@ -1533,10 +1538,10 @@ impl CalendarBackfillRepository for PgCalendarRepository {
               AND lease_expires_at > now()
               AND EXISTS (
                     SELECT 1
-                    FROM email_links link
-                    WHERE link.id = calendar_backfill_jobs.email_link_id
-                      AND link.google_grant_version = calendar_backfill_jobs.grant_version
-                      AND link.google_granted_scopes @> $4::text[]
+                    FROM email_link_google_scopes scopes
+                    WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                      AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                      AND scopes.granted_scopes @> $4::text[]
               )
             "#,
             key.job_id,

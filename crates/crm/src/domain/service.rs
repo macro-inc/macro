@@ -113,6 +113,18 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         email: &str,
     ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
+    /// Filters `(link_id, email)` pairs down to those with a live
+    /// `crm_contact_sources` row — the pairs a teardown would actually touch.
+    /// See
+    /// [`crate::domain::companies_repo::CompaniesRepository::link_contact_pairs_with_sources`].
+    ///
+    /// Used by the nightly cleanup job to prune candidates for contacts CRM
+    /// never tracked, before they become one SQS message each.
+    fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> impl Future<Output = Result<Vec<(uuid::Uuid, String)>, CrmError>> + Send;
+
     /// Bulk teardown for one user's email link within one team: drops
     /// the team's `crm_contact_sources` rows owned by `link_id`, then
     /// cascades to `crm_contacts` and `crm_companies` for the rows
@@ -644,6 +656,16 @@ where
             .await
     }
 
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        self.companies_repository
+            .link_contact_pairs_with_sources(pairs)
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn depopulate_link_in_team(
         &self,
@@ -1055,6 +1077,13 @@ impl CrmService for NoOpCrmService {
         _email: &str,
     ) -> Result<DepopulateContactOutcome, CrmError> {
         unimplemented!("NoOpCrmService.depopulate_contact")
+    }
+
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        unimplemented!("NoOpCrmService.link_contact_pairs_with_sources")
     }
 
     async fn depopulate_link_in_team(

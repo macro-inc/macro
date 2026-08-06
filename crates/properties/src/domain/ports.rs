@@ -23,7 +23,8 @@ use uuid::Uuid;
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -154,6 +155,36 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         owner: PropertyDefinitionOwner<'a>,
     ) -> impl Future<Output = Result<GetOrCreateTagDefinitionResult, Self::Err>> + Send;
+
+    /// Move a personal tag option into a team tag definition, keeping the option
+    /// id, and rewrite every entity value that referenced it so the label now
+    /// hangs off the team definition.
+    ///
+    /// The whole move is one transaction that first locks the target definition,
+    /// so two callers promoting the same label name into one team serialize and
+    /// the loser sees the winner's label as a
+    /// [`TagPromotionOutcome::Conflict`] instead of creating a duplicate.
+    /// Names are compared case-insensitively on the trimmed value.
+    fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<TagPromotionOutcome, Self::Err>> + Send;
+
+    /// Replace a personal tag option with an existing team option: every entity
+    /// carrying the personal label is retagged with the team label (deduped if
+    /// it already has it), then the personal option is deleted.
+    ///
+    /// Returns `None` when `target_option_id` does not belong to
+    /// `target_definition_id`, which the caller reports as a missing option.
+    fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TagRemapOutcome>, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(

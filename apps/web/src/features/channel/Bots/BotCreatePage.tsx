@@ -11,8 +11,9 @@ import {
   useAddBotToChannelsMutation,
   useCreateChannelScopedBotMutation,
 } from '@queries/channel/channel-bots';
+import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Button } from '@ui';
+import { Button, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { BotCreationResult } from './BotCreationResult';
@@ -32,11 +33,14 @@ type Stage = 'form' | 'creating' | 'ready';
 
 export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   const channelsContext = useChannelsContext();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const isTeamAdmin = useIsTeamAdmin();
   const createBotMutation = useCreateBotMutation();
   const createTokenMutation = useCreateBotTokenMutation();
   const createScopedBotMutation = useCreateChannelScopedBotMutation();
   const addBotToChannelsMutation = useAddBotToChannelsMutation();
   const [stage, setStage] = createSignal<Stage>('form');
+  const [teamOwned, setTeamOwned] = createSignal(false);
   const [handleEdited, setHandleEdited] = createSignal(false);
   const [errors, setErrors] = createSignal<BotFormErrors>({});
   const [createdBot, setCreatedBot] = createSignal<Bot>();
@@ -53,6 +57,10 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
 
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
+  );
+  const currentTeam = createMemo(() => currentTeamQuery.data?.team);
+  const canCreateTeamBot = createMemo(
+    () => currentTeam() !== undefined && isTeamAdmin()
   );
   const resultChannels = createMemo(() => {
     const selected = new Set(createdChannelIds());
@@ -72,6 +80,12 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   };
 
   const submit = () => {
+    const teamId = teamOwned() ? currentTeam()?.id : undefined;
+    if (teamOwned() && (!teamId || !canCreateTeamBot())) {
+      toast.failure('Only team admins and owners can create team bots');
+      return;
+    }
+
     const parsed = validateBotForm({
       ...form,
       handle: form.handle || slugBotHandle(form.name),
@@ -92,6 +106,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
       createScopedBotMutation.mutate(
         {
           channelId: firstChannelId,
+          team_id: teamId,
           name: values.name,
           handle: values.handle,
           description: values.description || undefined,
@@ -125,6 +140,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
 
     createBotMutation.mutate(
       {
+        teamId,
         name: values.name,
         handle: values.handle,
         description: values.description || undefined,
@@ -219,6 +235,35 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 }}
                 onDescriptionChange={(value) => setForm('description', value)}
               />
+            </BotFormSection>
+
+            <BotFormSection
+              title="Ownership"
+              description="Bots are personal by default."
+            >
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="text-sm font-medium text-ink">Team bot</div>
+                  <p class="mt-0.5 text-xs text-ink-muted">
+                    Share this bot with your team and let it use team scope.
+                  </p>
+                </div>
+                <ToggleSwitch
+                  size="md"
+                  checked={teamOwned()}
+                  disabled={currentTeamQuery.isLoading || !canCreateTeamBot()}
+                  onChange={setTeamOwned}
+                  label={<span>Create as a team bot</span>}
+                  labelClass="sr-only"
+                />
+              </div>
+              <Show when={!currentTeamQuery.isLoading && !canCreateTeamBot()}>
+                <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                  {currentTeam()
+                    ? 'Only team admins and owners can create team bots.'
+                    : 'Join or create a team to create a team bot.'}
+                </p>
+              </Show>
             </BotFormSection>
 
             <BotFormSection

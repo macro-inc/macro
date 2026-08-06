@@ -1688,6 +1688,12 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
     let seat_count_before = team_repo.get_team_seat_count(&team_id).await?;
+    let invites_before = team_repo.get_user_team_invites(&user_id).await?;
+    assert!(
+        invites_before
+            .iter()
+            .any(|invite| invite.team_id == team_id)
+    );
 
     let member = team_repo
         .add_user_to_team(&team_id, &user_id)
@@ -1703,6 +1709,9 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let seat_count = team_repo.get_team_seat_count(&team_id).await?;
     assert_eq!(seat_count, seat_count_before + 1);
+
+    let invites_after = team_repo.get_user_team_invites(&user_id).await?;
+    assert!(!invites_after.iter().any(|invite| invite.team_id == team_id));
 
     // Adding again is a no-op: no member returned, no extra seat counted.
     let member = team_repo.add_user_to_team(&team_id, &user_id).await?;

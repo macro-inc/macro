@@ -4,6 +4,18 @@ import type { SerializedEditorState } from 'lexical';
 const STORAGE_KEY = 'task-composer-draft';
 const EXPIRY_TIME_MS = 2 * 60 * 1000; // 2 minutes
 
+/**
+ * Where a task composer draft is stored and how long it stays valid.
+ * Defaults describe the global compose-task dialog draft; other hosts
+ * (e.g. the channel input's task mode) pass their own scoped key.
+ */
+export type TaskComposerDraftStorage = {
+  /** localStorage key. Defaults to the compose-task dialog's draft. */
+  storageKey?: string;
+  /** Max draft age in ms; `null` means drafts never expire. Defaults to 2 minutes. */
+  expiryMs?: number | null;
+};
+
 export interface TaskComposerDraft {
   title: string;
   /** Serialized Lexical editor state (lossless — preserves images, dimensions, etc.) */
@@ -18,14 +30,18 @@ export interface TaskComposerDraft {
  * Save task composer draft to local storage
  */
 export function saveTaskComposerDraft(
-  draft: Omit<TaskComposerDraft, 'timestamp'>
+  draft: Omit<TaskComposerDraft, 'timestamp'>,
+  storage?: TaskComposerDraftStorage
 ): void {
   try {
     const draftWithTimestamp: TaskComposerDraft = {
       ...draft,
       timestamp: Date.now(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draftWithTimestamp));
+    localStorage.setItem(
+      storage?.storageKey ?? STORAGE_KEY,
+      JSON.stringify(draftWithTimestamp)
+    );
   } catch (error) {
     console.warn('Failed to save task composer draft:', error);
   }
@@ -34,18 +50,21 @@ export function saveTaskComposerDraft(
 /**
  * Load task composer draft from local storage if not expired
  */
-export function loadTaskComposerDraft(): TaskComposerDraft | null {
+export function loadTaskComposerDraft(
+  storage?: TaskComposerDraftStorage
+): TaskComposerDraft | null {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storage?.storageKey ?? STORAGE_KEY);
     if (!stored) return null;
 
     const draft: TaskComposerDraft = JSON.parse(stored);
-    const now = Date.now();
-    const elapsed = now - draft.timestamp;
+    const expiryMs =
+      storage?.expiryMs === undefined ? EXPIRY_TIME_MS : storage.expiryMs;
+    const elapsed = Date.now() - draft.timestamp;
 
-    if (elapsed > EXPIRY_TIME_MS) {
+    if (expiryMs !== null && elapsed > expiryMs) {
       // Draft expired, remove it
-      clearTaskComposerDraft();
+      clearTaskComposerDraft(storage);
       return null;
     }
 
@@ -53,7 +72,7 @@ export function loadTaskComposerDraft(): TaskComposerDraft | null {
     return draft;
   } catch (error) {
     console.warn('Failed to load task composer draft:', error);
-    clearTaskComposerDraft();
+    clearTaskComposerDraft(storage);
     return null;
   }
 }
@@ -82,9 +101,11 @@ function rehydratePropertyValues(
 /**
  * Clear task composer draft from local storage
  */
-export function clearTaskComposerDraft(): void {
+export function clearTaskComposerDraft(
+  storage?: TaskComposerDraftStorage
+): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(storage?.storageKey ?? STORAGE_KEY);
   } catch (error) {
     console.warn('Failed to clear task composer draft:', error);
   }
@@ -93,14 +114,15 @@ export function clearTaskComposerDraft(): void {
 /**
  * Update timestamp of existing draft (used when closing composer)
  */
-export function updateDraftTimestamp(): void {
+export function updateDraftTimestamp(storage?: TaskComposerDraftStorage): void {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const key = storage?.storageKey ?? STORAGE_KEY;
+    const stored = localStorage.getItem(key);
     if (!stored) return;
 
     const draft: TaskComposerDraft = JSON.parse(stored);
     draft.timestamp = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    localStorage.setItem(key, JSON.stringify(draft));
   } catch (error) {
     console.warn('Failed to update draft timestamp:', error);
   }

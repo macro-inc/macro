@@ -34,6 +34,7 @@ pub async fn run_worker(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
+    calendar_sync_enabled: bool,
 ) {
     run_worker_with_cancellation(
         db,
@@ -51,6 +52,7 @@ pub async fn run_worker(
         crm_service,
         macro_event_broker,
         notifications_enabled,
+        calendar_sync_enabled,
         CancellationToken::new(),
     )
     .await;
@@ -76,6 +78,7 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
+    calendar_sync_enabled: bool,
     cancellation_token: CancellationToken,
 ) {
     let calendar_backfills =
@@ -96,6 +99,7 @@ pub async fn run_worker_with_cancellation(
         crm_service,
         macro_event_broker,
         notifications_enabled,
+        calendar_sync_enabled,
         retry_worker: false,
         calendar_backfills,
     };

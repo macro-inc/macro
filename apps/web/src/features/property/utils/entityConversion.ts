@@ -60,6 +60,7 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('COMPANY', () => undefined) // huh
     .with('USER', () => undefined) // huh
     .with('THREAD', () => 'email' as ItemType)
+    .with('CALENDAR_EVENT', () => undefined) // no calendar item rendering yet
     .exhaustive();
 }
 

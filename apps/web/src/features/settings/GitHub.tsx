@@ -128,15 +128,28 @@ export function GitHubCard() {
         label="GitHub App"
         description="Choose repositories for Macro to sync."
       >
-        <a
-          href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+        {/* The install callback rejects users without a linked account, so
+            don't offer the flow until the account above is connected. */}
+        <Show
+          when={status() === 'linked'}
+          fallback={
+            <span class="text-xs text-ink-muted">
+              {githubLink.isLoading
+                ? 'Loading…'
+                : 'Connect your GitHub account first'}
+            </span>
+          }
         >
-          Configure app
-          <ArrowUpRightIcon class="size-3.5 opacity-70" />
-        </a>
+          <a
+            href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+          >
+            Configure app
+            <ArrowUpRightIcon class="size-3.5 opacity-70" />
+          </a>
+        </Show>
       </SettingsRow>
     </SettingsCard>
   );

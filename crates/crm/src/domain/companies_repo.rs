@@ -292,6 +292,23 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         email: &str,
     ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
+    /// Filters `(link_id, email)` pairs down to those that currently have a
+    /// `crm_contact_sources` row — i.e. the pairs where this link actually
+    /// contributed something [`depopulate_contact`] would tear down.
+    ///
+    /// Exists so the nightly cleanup job can drop never-tracked contacts
+    /// before fanning out a message per candidate: the candidate table is fed
+    /// by every message deletion, but CRM only tracks a small subset of
+    /// correspondents, so most candidates have nothing to remove.
+    ///
+    /// `email` is matched case-insensitively against `crm_contacts.email`.
+    /// Returns the surviving pairs with their emails lowercased; input order
+    /// is not preserved and unmatched pairs are simply absent.
+    fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> impl Future<Output = Result<Vec<(uuid::Uuid, String)>, CrmError>> + Send;
+
     /// Bulk counterpart to [`depopulate_contact`]: removes everything
     /// the link contributed to a single team's CRM rows. In one
     /// transaction:

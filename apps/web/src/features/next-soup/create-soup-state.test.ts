@@ -1,4 +1,5 @@
-import { createRoot } from 'solid-js';
+import { createComputed, createRoot } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 
 // Mock external dependencies
@@ -25,7 +26,11 @@ vi.mock('@core/component/EntityIcon', () => ({
 }));
 
 import type { EntityData } from '@entity';
-import { createSoupState } from './create-soup-state';
+import {
+  createSoupState,
+  type GroupMeta,
+  type SoupState,
+} from './create-soup-state';
 
 const createTestEntity = (id: string, name?: string): EntityData => ({
   id,
@@ -34,6 +39,36 @@ const createTestEntity = (id: string, name?: string): EntityData => ({
   ownerId: 'test-owner',
   updatedAt: new Date(),
 });
+
+const createTestGroup = (key: string, count: number): GroupMeta => ({
+  key,
+  label: key,
+  value: key,
+  count,
+  isExpanded: () => true,
+  toggle: () => {},
+});
+
+const buildTestRow = (
+  state: SoupState,
+  original: EntityData,
+  index: number,
+  group?: GroupMeta,
+  kind: 'entity' | 'header' | 'load-more' = 'entity'
+) =>
+  state.buildRow({
+    id:
+      kind === 'header'
+        ? `header:${group?.key}`
+        : kind === 'load-more'
+          ? `loadmore:${group?.key}`
+          : original.id,
+    index,
+    original,
+    group,
+    isGrouped: kind === 'header',
+    isLoadMore: kind === 'load-more',
+  });
 
 describe('createSoupState', () => {
   describe('initial state', () => {
@@ -83,6 +118,144 @@ describe('createSoupState', () => {
         dispose();
       });
     });
+
+    it('preserves a row proxy while updating its entity reactively', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+        const before = createTestEntity('1', 'Before');
+        const second = createTestEntity('2', 'Second');
+        state.setRows([
+          state.buildRow({ id: before.id, index: 0, original: before }),
+          state.buildRow({ id: second.id, index: 1, original: second }),
+        ]);
+
+        const storedRow = state.rows()[0];
+        const secondStoredRow = state.rows()[1];
+        state.focus.set('1');
+        const observedNames: string[] = [];
+        let rowUpdates = 0;
+        createComputed(() => {
+          observedNames.push(storedRow.original.name);
+        });
+        createComputed(() => {
+          state.rows();
+          rowUpdates += 1;
+        });
+
+        const after = createTestEntity('1', 'After');
+        state.setRows([
+          state.buildRow({
+            id: second.id,
+            index: 0,
+            original: createTestEntity('2', 'Second'),
+          }),
+          state.buildRow({ id: after.id, index: 1, original: after }),
+        ]);
+
+        expect(state.rows()[0]).toBe(secondStoredRow);
+        expect(state.rows()[1]).toBe(storedRow);
+        expect(storedRow.index).toBe(1);
+        expect(storedRow.isFocused()).toBe(true);
+        expect(state.focus.index()).toBe(1);
+        expect(storedRow.original.name).toBe('After');
+        expect(observedNames).toEqual(['Before', 'After']);
+        expect(rowUpdates).toBe(2);
+
+        dispose();
+      });
+    });
+
+    it('uses composite identities for task moves and structural rows', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+        const groupA = createTestGroup('a', 2);
+        const groupB = createTestGroup('b', 1);
+        const staysInA = createTestEntity('stays-a');
+        const moved = createTestEntity('moved');
+        const staysInB = createTestEntity('stays-b');
+
+        state.setRows([
+          buildTestRow(state, staysInA, 0, groupA, 'header'),
+          buildTestRow(state, staysInA, 1, groupA),
+          buildTestRow(state, moved, 2, groupA),
+          buildTestRow(state, staysInB, 3, groupB, 'header'),
+          buildTestRow(state, staysInB, 4, groupB),
+          buildTestRow(state, staysInB, 5, groupB, 'load-more'),
+        ]);
+
+        const [headerA, , movedInA, headerB, staysInBRow, loadMoreB] =
+          state.rows();
+        const staysInARow = state.rows()[1];
+        const nextGroupA = createTestGroup('a', 1);
+        const nextGroupB = createTestGroup('b', 2);
+        const movedAfterUpdate = createTestEntity('moved');
+
+        state.setRows([
+          buildTestRow(
+            state,
+            createTestEntity('stays-a'),
+            0,
+            nextGroupA,
+            'header'
+          ),
+          buildTestRow(state, createTestEntity('stays-a'), 1, nextGroupA),
+          buildTestRow(state, movedAfterUpdate, 2, nextGroupB, 'header'),
+          buildTestRow(state, movedAfterUpdate, 3, nextGroupB),
+          buildTestRow(state, createTestEntity('stays-b'), 4, nextGroupB),
+          buildTestRow(
+            state,
+            createTestEntity('stays-b'),
+            5,
+            nextGroupB,
+            'load-more'
+          ),
+        ]);
+
+        expect(state.rows()[0]).toBe(headerA);
+        expect(state.rows()[0].group?.count).toBe(1);
+        expect(state.rows()[1]).toBe(staysInARow);
+        expect(state.rows()[1].index).toBe(1);
+        expect(state.rows()[2]).not.toBe(headerB);
+        expect(state.rows()[2].original.id).toBe('moved');
+        expect(state.rows()[2].group?.count).toBe(2);
+        expect(state.rows()[3]).not.toBe(movedInA);
+        expect(state.rows()[4]).toBe(staysInBRow);
+        expect(state.rows()[4].original.id).toBe('stays-b');
+        expect(state.rows()[5]).toBe(loadMoreB);
+        expect(state.rows()[5].group?.count).toBe(2);
+
+        dispose();
+      });
+    });
+
+    it('preserves focus on the same duplicate row after reconciliation', () => {
+      createRoot((dispose) => {
+        const state = createSoupState();
+        const entity = createTestEntity('duplicate');
+        const groups = [
+          createTestGroup('first', 1),
+          createTestGroup('second', 1),
+        ];
+        const buildRows = () =>
+          groups.map((group, index) =>
+            state.buildRow({
+              id: entity.id,
+              index,
+              original: entity,
+              group,
+            })
+          );
+
+        state.setRows(buildRows());
+        state.focus.setIndex(1);
+        state.setRows(buildRows());
+
+        expect(state.focus.index()).toBe(1);
+        expect(state.focus.row()?.group?.key).toBe('second');
+
+        dispose();
+      });
+    });
   });
 
   describe('items', () => {
@@ -97,8 +270,8 @@ describe('createSoupState', () => {
           )
         );
 
-        expect(state.items.get('1')?.original).toBe(entity1);
-        expect(state.items.get('2')?.original).toBe(entity2);
+        expect(unwrap(state.items.get('1')?.original)).toBe(entity1);
+        expect(unwrap(state.items.get('2')?.original)).toBe(entity2);
         expect(state.items.get('nonexistent')).toBeUndefined();
 
         dispose();
@@ -113,8 +286,8 @@ describe('createSoupState', () => {
           initialData: [entity1, entity2],
         });
 
-        expect(state.items.at(0)?.original).toBe(entity1);
-        expect(state.items.at(1)?.original).toBe(entity2);
+        expect(unwrap(state.items.at(0)?.original)).toBe(entity1);
+        expect(unwrap(state.items.at(1)?.original)).toBe(entity2);
         expect(state.items.at(99)).toBeUndefined();
 
         dispose();
@@ -159,7 +332,7 @@ describe('createSoupState', () => {
         state.focus.set('1');
 
         expect(state.focus.id()).toBe('1');
-        expect(state.focus.item()).toBe(entity);
+        expect(unwrap(state.focus.item())).toBe(entity);
         expect(state.focus.index()).toBe(0);
 
         dispose();
@@ -194,11 +367,11 @@ describe('createSoupState', () => {
         const state = createSoupState({ initialData: entities });
 
         const result1 = state.navigate.down();
-        expect(result1?.row.original).toBe(entities[0]);
+        expect(unwrap(result1?.row.original)).toBe(entities[0]);
         expect(result1?.index).toBe(0);
 
         const result2 = state.navigate.down();
-        expect(result2?.row.original).toBe(entities[1]);
+        expect(unwrap(result2?.row.original)).toBe(entities[1]);
         expect(result2?.index).toBe(1);
 
         dispose();
@@ -216,11 +389,11 @@ describe('createSoupState', () => {
 
         // When no focus, up goes to last
         const result1 = state.navigate.up();
-        expect(result1?.row.original).toBe(entities[2]);
+        expect(unwrap(result1?.row.original)).toBe(entities[2]);
         expect(result1?.index).toBe(2);
 
         const result2 = state.navigate.up();
-        expect(result2?.row.original).toBe(entities[1]);
+        expect(unwrap(result2?.row.original)).toBe(entities[1]);
         expect(result2?.index).toBe(1);
 
         dispose();
@@ -241,7 +414,7 @@ describe('createSoupState', () => {
           skip: (row) => row.id === '2',
         });
 
-        expect(result?.row.original).toBe(entities[2]);
+        expect(unwrap(result?.row.original)).toBe(entities[2]);
         expect(state.focus.id()).toBe('3');
 
         dispose();
@@ -256,7 +429,7 @@ describe('createSoupState', () => {
         state.focus.set('2');
         const result = state.navigate.toFirst();
 
-        expect(result?.row.original).toBe(entities[0]);
+        expect(unwrap(result?.row.original)).toBe(entities[0]);
         expect(state.focus.id()).toBe('1');
 
         dispose();
@@ -271,7 +444,7 @@ describe('createSoupState', () => {
         state.focus.set('1');
         const result = state.navigate.toLast();
 
-        expect(result?.row.original).toBe(entities[1]);
+        expect(unwrap(result?.row.original)).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -289,7 +462,7 @@ describe('createSoupState', () => {
 
         const result = state.navigate.toIndex(1);
 
-        expect(result?.row.original).toBe(entities[1]);
+        expect(unwrap(result?.row.original)).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -303,7 +476,7 @@ describe('createSoupState', () => {
 
         const result = state.navigate.toId('2');
 
-        expect(result?.row.original).toBe(entities[1]);
+        expect(unwrap(result?.row.original)).toBe(entities[1]);
         expect(state.focus.id()).toBe('2');
 
         dispose();
@@ -381,7 +554,7 @@ describe('createSoupState', () => {
         expect(state.focus.id()).toBe('2');
 
         const peeked = state.navigate.peekOffset(1);
-        expect(peeked?.row.original).toBe(entities[2]);
+        expect(unwrap(peeked?.row.original)).toBe(entities[2]);
 
         // Focus should remain unchanged
         expect(state.focus.id()).toBe('2');

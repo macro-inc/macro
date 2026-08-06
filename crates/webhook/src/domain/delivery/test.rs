@@ -49,6 +49,7 @@ fn webhook(endpoint_url: &str) -> Webhook {
     Webhook {
         id: WEBHOOK_ID.to_string(),
         workspace_id: "macro|delivery@example.com".to_string(),
+        namespace: "delivery-test".to_string(),
         name: "Delivery test".to_string(),
         endpoint_url: endpoint_url.to_string(),
         signing_secret: "whsec_current".to_string(),

@@ -1,5 +1,8 @@
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { Popover } from '@kobalte/core/popover';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
@@ -17,7 +20,7 @@ import {
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Layer } from '@ui';
+import { Button, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -36,6 +39,7 @@ import {
   type TagEditorDialogMode,
 } from './TagEditorDialog';
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from './tagColors';
+import { navigateToTag } from './tagNavigation';
 import type { ResolvedTag, useDocTags } from './useDocTags';
 
 type DocTags = ReturnType<typeof useDocTags>;
@@ -61,6 +65,8 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 }
 
 const MAX_LIST_HEIGHT = 192;
+const tagActionButtonClass =
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
 
 type TagPickerProps = {
   replaceTag?: ResolvedTag;
@@ -310,6 +316,8 @@ function TagPickerBody(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const addOption = useAddPropertyOptionMutation();
   const ensureTagSet = useEnsureTagSetMutation();
+  const split = useSplitLayout();
+  const panel = useSplitPanel();
   let scrollContainerRef: HTMLDivElement | undefined;
   const [initialOutsideEventGuard, setInitialOutsideEventGuard] =
     createSignal(true);
@@ -485,6 +493,19 @@ function TagPickerBody(props: {
       type: 'edit',
       tag: editableTagForItem(item),
     });
+  };
+
+  const openTaggedItems = async (item: TagOptionItem) => {
+    if (!(await persistSelection())) return;
+    props.onClose();
+    navigateToTag(
+      split.openWithSplit,
+      {
+        optionId: item.option.id,
+        propertyDefinitionId: item.option.propertyDefinitionId,
+      },
+      { handle: panel?.handle }
+    );
   };
 
   const createTag = async (scope: TagScope) => {
@@ -691,6 +712,7 @@ function TagPickerBody(props: {
                               if (!event.shiftKey) saveAndClose();
                             }}
                             onEdit={() => void beginEdit(item)}
+                            onOpenTag={() => void openTaggedItems(item)}
                             onMouseEnter={() => {
                               if (!dropdown.keyboardMode()) {
                                 dropdown.setSelectedIndex(itemIndex(item));
@@ -725,6 +747,7 @@ function TagPickerBody(props: {
                                   if (!event.shiftKey) saveAndClose();
                                 }}
                                 onEdit={() => void beginEdit(item)}
+                                onOpenTag={() => void openTaggedItems(item)}
                                 onMouseEnter={() => {
                                   if (!dropdown.keyboardMode()) {
                                     dropdown.setSelectedIndex(itemIndex(item));
@@ -820,39 +843,70 @@ function TagPickerRow(props: {
   selected: boolean;
   onSelect: (event: MouseEvent) => void;
   onEdit: () => void;
+  onOpenTag: () => void;
   onMouseEnter: () => void;
 }) {
+  const label = () => optionLabel(props.item.option);
+
   return (
     <div data-tag-index={props.index}>
       <DropdownSelectableRow
         isSelected={props.selected}
         onClick={props.onSelect}
         onMouseEnter={props.onMouseEnter}
+        rightContent={
+          <div class="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              noTouchResize
+              tooltip="View tagged items"
+              aria-label={`View all items with tag ${label()}`}
+              class={tagActionButtonClass}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                props.onOpenTag();
+              }}
+            >
+              <FilterIcon class="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              noTouchResize
+              tooltip="Edit tag"
+              aria-label={`Edit ${label()}`}
+              class={tagActionButtonClass}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                props.onEdit();
+              }}
+            >
+              <PencilIcon class="size-3.5" />
+            </Button>
+          </div>
+        }
       >
         <OptionCheckBox checked={props.checked} multiselect />
         <TagDot color={props.item.option.color ?? undefined} />
-        <span class="min-w-0 truncate">{optionLabel(props.item.option)}</span>
+        <span class="min-w-0 truncate">{label()}</span>
         <Show when={props.item.scope === 'team'}>
           <span class="max-w-20 shrink-0 truncate rounded-full border border-ink/5 px-1.5 py-0.5 text-[10px] leading-none text-ink-extra-muted">
             {props.teamName}
           </span>
         </Show>
-        <button
-          type="button"
-          aria-label={`Edit ${optionLabel(props.item.option)}`}
-          class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted opacity-0 outline-none hover:bg-hover hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            props.onEdit();
-          }}
-        >
-          <PencilIcon class="size-3.5" />
-        </button>
       </DropdownSelectableRow>
     </div>
   );

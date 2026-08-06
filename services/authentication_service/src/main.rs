@@ -279,11 +279,13 @@ async fn main() -> anyhow::Result<()> {
     }));
     tracing::trace!("initialized analytics client");
 
-    // Initialize Loops client. Only production sign-ups are added to Loops;
-    // in all other environments (or when no API key is configured) this is a
-    // no-op.
+    // Initialize Loops client. Production and develop sign-ups are added to
+    // Loops; on localhost, or wherever no API key is configured, this is a
+    // no-op. Note there is one Loops audience — a develop sign-up creates a
+    // real contact and can trigger live workflows, so leave the key unset in
+    // any environment that should not send.
     let loops_client = match (config.environment, config.loops_api_key.value()) {
-        (Environment::Production, Some(api_key)) => {
+        (Environment::Production | Environment::Develop, Some(api_key)) => {
             tracing::info!("configuring Loops");
             LoopsClient::new(api_key.to_string())
         }
@@ -408,6 +410,7 @@ async fn main() -> anyhow::Result<()> {
             sqs_client,
             environment: config.environment,
             rate_limit_service: rate_limit,
+            calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {

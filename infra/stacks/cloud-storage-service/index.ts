@@ -145,6 +145,10 @@ const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
   .getOutput('scheduledQueueArn')
   .apply((arn) => arn as string);
 
+const gmailOpsQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('gmailOpsQueueArn')
+  .apply((arn) => arn as string);
+
 const {
   notificationIngressQueueArn,
   notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
@@ -261,6 +265,7 @@ const cloudStorageService = new CloudStorageService(
       notificationIngressQueueArn,
       contactsQueueArn,
       emailScheduledQueueArn,
+      gmailOpsQueueArn,
     ],
     vpc: coparse_api_vpc,
     platform: {
