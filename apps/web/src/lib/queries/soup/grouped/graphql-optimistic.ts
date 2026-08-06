@@ -165,9 +165,7 @@ export async function buildOptimisticGroupedPropertyUpdates(
       continue;
     }
 
-    const destinationPages = pages.filter((page) =>
-      isInitialInput(page.input)
-    );
+    const destinationPages = pages.filter((page) => isInitialInput(page.input));
     // Never expose a source-only move when this logical view has no initial
     // page where the destination can be shown.
     if (added.length > 0 && destinationPages.length === 0) continue;

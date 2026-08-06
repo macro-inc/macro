@@ -87,10 +87,7 @@ export type OptimisticLinkPatchWire = {
         linkField: string;
         entityKey: string;
         /** Scalar fields used only when the embedded item must be created. */
-        insertFields: Record<
-          string,
-          string | number | boolean | null
-        >;
+        insertFields: Record<string, string | number | boolean | null>;
       };
 };
 
