@@ -1,4 +1,4 @@
-use crate::messages::get::draft_exists_with_id;
+use crate::messages::get::{draft_exists_with_id, fetch_messages_metadata};
 use crate::messages::scheduled::get::get_scheduled_db_messages_by_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
@@ -69,6 +69,45 @@ async fn draft_exists_with_id_returns_false_for_nonexistent_message(
     let exists = draft_exists_with_id(&pool, link_id, nonexistent_id).await?;
 
     assert!(!exists);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn fetch_messages_metadata_omits_headers_and_preserves_metadata(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000d202")?;
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000d502")?;
+
+    sqlx::query!(
+        r#"
+        UPDATE email_messages
+        SET headers_jsonb = '[{"name": "X-Test", "value": "unused"}]'::jsonb
+        WHERE id = $1
+        "#,
+        message_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let mut connection = pool.acquire().await?;
+    let messages = fetch_messages_metadata(&mut connection, thread_id).await?;
+
+    assert_eq!(messages.len(), 1);
+    let message = &messages[0];
+    assert_eq!(message.db_id, message_id);
+    assert_eq!(message.global_id.as_deref(), Some("gid-d502"));
+    assert_eq!(
+        message.from.as_ref().map(|sender| sender.email.as_str()),
+        Some("promo@newsletter.com")
+    );
+    assert_eq!(message.labels.len(), 1);
+    assert_eq!(message.labels[0].provider_label_id, "CATEGORY_PROMOTIONS");
+    assert!(message.headers_json.is_none());
 
     Ok(())
 }

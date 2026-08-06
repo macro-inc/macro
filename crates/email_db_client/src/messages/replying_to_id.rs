@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::messages;
 use crate::messages::get;
 
@@ -68,9 +71,7 @@ where
     let result = sqlx::query!(
         r#"
         UPDATE email_messages
-        SET
-            replying_to_id = update_data.new_replying_to_id,
-            updated_at = NOW()
+        SET replying_to_id = update_data.new_replying_to_id
         FROM
             UNNEST($1::uuid[], $2::uuid[])
                 AS update_data(message_id, new_replying_to_id)

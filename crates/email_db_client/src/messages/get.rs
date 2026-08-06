@@ -147,7 +147,7 @@ pub async fn fetch_messages_metadata(
             is_starred,
             is_sent,
             is_draft,
-            headers_jsonb,
+            NULL::JSONB as "headers_jsonb?",
             created_at,
             updated_at,
             -- No body attributes

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id,\n            provider_id,\n            global_id,\n            thread_id,\n            provider_thread_id,\n            replying_to_id,\n            link_id,\n            provider_history_id,\n            internal_date_ts,\n            snippet,\n            size_estimate,\n            subject,\n            from_name,\n            from_contact_id,\n            sent_at,\n            has_attachments,\n            is_read,\n            is_starred,\n            is_sent,\n            is_draft,\n            headers_jsonb,\n            created_at,\n            updated_at,\n            -- No body attributes\n            NULL as \"body_text?\",\n            NULL as \"body_html_sanitized?\",\n            NULL as \"body_macro?\"\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY internal_date_ts DESC NULLS LAST\n        ",
+  "query": "\n        SELECT\n            id,\n            provider_id,\n            global_id,\n            thread_id,\n            provider_thread_id,\n            replying_to_id,\n            link_id,\n            provider_history_id,\n            internal_date_ts,\n            snippet,\n            size_estimate,\n            subject,\n            from_name,\n            from_contact_id,\n            sent_at,\n            has_attachments,\n            is_read,\n            is_starred,\n            is_sent,\n            is_draft,\n            NULL::JSONB as \"headers_jsonb?\",\n            created_at,\n            updated_at,\n            -- No body attributes\n            NULL as \"body_text?\",\n            NULL as \"body_html_sanitized?\",\n            NULL as \"body_macro?\"\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY internal_date_ts DESC NULLS LAST\n        ",
   "describe": {
     "columns": [
       {
@@ -105,7 +105,7 @@
       },
       {
         "ordinal": 20,
-        "name": "headers_jsonb",
+        "name": "headers_jsonb?",
         "type_info": "Jsonb"
       },
       {
@@ -160,7 +160,7 @@
       false,
       false,
       false,
-      true,
+      null,
       false,
       false,
       null,
@@ -168,5 +168,5 @@
       null
     ]
   },
-  "hash": "40791e0cf94fdc888849594849e83daebe532ed4f8935d06815c24289d3c91c2"
+  "hash": "7a5850624c5e70c474d23a67b5c6d66e37a557e7fbcfb09265201a99e2fc7705"
 }
