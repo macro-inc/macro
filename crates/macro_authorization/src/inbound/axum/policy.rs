@@ -41,6 +41,9 @@ pub struct ActingUser;
 /// Admits only directly authenticated users.
 pub struct UserOnly;
 
+/// Admits directly authenticated users and authenticated bots.
+pub struct UserOrBot;
+
 /// Admits only authenticated bots.
 pub struct BotOnly;
 
@@ -97,6 +100,30 @@ impl UserOrInternalServiceAuthorization {
     }
 }
 
+/// A directly authenticated user or bot.
+#[derive(Clone, Debug)]
+pub enum UserOrBotAuthorization {
+    /// A directly authenticated user.
+    User(MacroUserAuthentication),
+    /// An authenticated bot, optionally acting for a user.
+    Bot(BotAuthentication),
+}
+
+impl UserOrBotAuthorization {
+    /// Return the authenticated or verified user the caller acts for, if any.
+    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(bot) => bot.acting_user.as_ref(),
+        }
+    }
+
+    /// Return whether the caller is a bot.
+    pub fn is_bot(&self) -> bool {
+        matches!(self, Self::Bot(_))
+    }
+}
+
 /// Any principal narrowed to its verified acting user.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -130,6 +157,24 @@ impl fmt::Display for UserOrInternalEntity<'_> {
         match self {
             Self::User(user_id) => formatter.write_str(user_id),
             Self::Internal => formatter.write_str("internal"),
+        }
+    }
+}
+
+/// Acting entity for policies that admit users and bots.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserOrBotEntity<'a> {
+    /// A directly authenticated Macro user.
+    User(&'a str),
+    /// An authenticated bot.
+    Bot(BotId),
+}
+
+impl fmt::Display for UserOrBotEntity<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::User(user_id) => formatter.write_str(user_id),
+            Self::Bot(bot_id) => bot_id.fmt(formatter),
         }
     }
 }
@@ -242,6 +287,30 @@ impl AuthorizationPolicy for UserOnly {
     }
 }
 
+impl AuthorizationPolicy for UserOrBot {
+    type Output = UserOrBotAuthorization;
+    type ActingEntity<'a> = UserOrBotEntity<'a>;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        match authorization {
+            MacroAuthorization::User(user) => Ok(UserOrBotAuthorization::User(user)),
+            MacroAuthorization::Bot(bot) => Ok(UserOrBotAuthorization::Bot(bot)),
+            MacroAuthorization::Internal(_) => Err(forbidden()),
+        }
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        match output {
+            UserOrBotAuthorization::User(user) => {
+                UserOrBotEntity::User(user.macro_user_id.as_ref())
+            }
+            UserOrBotAuthorization::Bot(bot) => UserOrBotEntity::Bot(bot.bot_id),
+        }
+    }
+}
+
 impl AuthorizationPolicy for BotOnly {
     type Output = BotAuthentication;
     type ActingEntity<'a> = BotId;
@@ -304,6 +373,7 @@ mod sealed {
     impl Sealed for super::UserOrInternalService {}
     impl Sealed for super::ActingUser {}
     impl Sealed for super::UserOnly {}
+    impl Sealed for super::UserOrBot {}
     impl Sealed for super::BotOnly {}
     impl Sealed for super::InternalOnly {}
     impl Sealed for super::AnyPrincipal {}

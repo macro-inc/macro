@@ -4,7 +4,6 @@ mod test;
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams};
-use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use agent_session::domain::service::AgentSessionService;
 
 use crate::domain::error::Result;
@@ -14,24 +13,22 @@ use crate::domain::model::{
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
 /// Turns trigger commands into running, announced agent sessions.
-pub struct AgentHarnessService<Sessions, Logs, Containers, Announcer> {
-    sessions: AgentSessionService<Sessions, Logs>,
+pub struct AgentHarnessService<Sessions, Containers, Announcer> {
+    sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     defaults: SessionDefaults,
 }
 
-impl<Sessions, Logs, Containers, Announcer>
-    AgentHarnessService<Sessions, Logs, Containers, Announcer>
+impl<Sessions, Containers, Announcer> AgentHarnessService<Sessions, Containers, Announcer>
 where
-    Sessions: AgentSessionRepo,
-    Logs: AgentSessionLogRepo + Clone,
+    Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
 {
     /// Build the orchestrator from its ports.
     pub fn new(
-        sessions: AgentSessionService<Sessions, Logs>,
+        sessions: Sessions,
         containers: Containers,
         announcer: Announcer,
         defaults: SessionDefaults,
@@ -68,7 +65,7 @@ where
 
         let session = self
             .sessions
-            .create(
+            .create_session(
                 CreateAgentSessionParams {
                     id,
                     owner_id: origin.sender.clone(),

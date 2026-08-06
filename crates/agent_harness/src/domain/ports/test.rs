@@ -7,7 +7,7 @@ use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::AgentSessionLogRepo;
-use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
 use agent_session::testing::InMemoryAgentSessionRepo;
 use agent_session::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 use bot_id::BotId;
@@ -64,7 +64,7 @@ fn workspace_matches_the_container_script() {
 async fn container_session_runs_and_logs_end_to_end() {
     let id = AgentSessionId::TEST_A;
     let store = InMemoryAgentSessionRepo::new();
-    let sessions = Arc::new(AgentSessionService::new(store.clone(), store.clone()));
+    let sessions = Arc::new(AgentSessionServiceImpl::new(store.clone()));
     let containers = MockContainerManager::new();
     let container = containers
         .spawn(SpawnContainer {
@@ -76,7 +76,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     let agent = container.agent();
 
     let record = sessions
-        .create(params(id), container.clone())
+        .create_session(params(id), container.clone())
         .await
         .unwrap();
     assert_eq!(record.id, id);
@@ -132,12 +132,12 @@ async fn container_session_runs_and_logs_end_to_end() {
 async fn attaching_a_second_transport_to_an_active_session_fails() {
     let id = AgentSessionId::TEST_A;
     let store = InMemoryAgentSessionRepo::new();
-    let sessions = AgentSessionService::new(store.clone(), store);
+    let sessions = AgentSessionServiceImpl::new(store);
     let first = ContainerMock::default();
     let second = ContainerMock::default();
 
-    sessions.create(params(id), first).await.unwrap();
-    let error = sessions.attach(id, second).await.unwrap_err();
+    sessions.create_session(params(id), first).await.unwrap();
+    let error = sessions.attach_session(id, second).await.unwrap_err();
 
     assert!(matches!(error, AgentSessionError::AlreadyConnected(found) if found == id));
 }

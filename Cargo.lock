@@ -135,14 +135,17 @@ dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
  "agent_session",
+ "clap",
  "macro_user_id",
  "macro_uuid",
  "non_empty",
  "rootcause",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -242,6 +245,7 @@ dependencies = [
  "bots",
  "chrono",
  "dashmap",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
@@ -254,6 +258,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -4566,6 +4571,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "ai_tools",
  "ai_usage",
  "analytics_client",

@@ -17,7 +17,7 @@ use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
     GithubToken as GithubTokenSecret,
 };
-use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Sessions: persistence and live actors.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
-    let sessions = AgentSessionService::new(session_repo.clone(), session_repo);
+    let sessions = AgentSessionServiceImpl::new(session_repo);
 
     // Containers: Daytona sandboxes.
     let containers = DaytonaContainerManager::new(DaytonaSettings {

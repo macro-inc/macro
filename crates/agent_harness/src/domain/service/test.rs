@@ -8,7 +8,7 @@ use agent_client_protocol::schema::v1::{
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo as _;
-use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -42,8 +42,7 @@ fn open_command() -> OpenSession {
 
 fn harness() -> (
     AgentHarnessService<
-        InMemoryAgentSessionRepo,
-        InMemoryAgentSessionRepo,
+        AgentSessionServiceImpl<InMemoryAgentSessionRepo>,
         MockContainerManager,
         AnnouncerMock,
     >,
@@ -55,7 +54,7 @@ fn harness() -> (
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
     let service = AgentHarnessService::new(
-        AgentSessionService::new(repo.clone(), repo.clone()),
+        AgentSessionServiceImpl::new(repo.clone()),
         containers.clone(),
         announcer.clone(),
         SessionDefaults {

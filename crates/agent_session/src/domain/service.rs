@@ -1,7 +1,8 @@
 //! Persistence and active lifecycle management for agent sessions.
 //!
-//! Decisions live in [`super::session`]'s pure machine, and each connection's
-//! effects are executed by its [`SessionActor`](super::session).
+//! Inbound adapters depend on [`AgentSessionService`] rather than repository
+//! ports. Protocol decisions live in [`super::session`]'s pure machine, and
+//! each connection's effects are executed by its actor shell.
 
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
-use super::model::{AgentSession, AgentSessionId, CreateAgentSessionParams};
+use super::model::{AgentSession, AgentSessionId, AgentSessionLog, CreateAgentSessionParams};
 use super::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo};
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
@@ -21,29 +22,88 @@ const COMMAND_BUFFER: usize = 1028;
 
 type ActiveSessions = DashMap<AgentSessionId, mpsc::Sender<SessionCommand>>;
 
-/// Persists agent sessions and manages their active transports.
-pub struct AgentSessionService<Sessions, Logs> {
-    sessions: Sessions,
-    logs: Logs,
+/// Durable and live use cases for agent sessions.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait AgentSessionService: Send + Sync + 'static {
+    /// Persist a session and attach its already-provisioned transport.
+    fn create_session<Connector>(
+        &self,
+        params: CreateAgentSessionParams,
+        connector: Connector,
+    ) -> impl Future<Output = Result<AgentSession>> + Send
+    where
+        Connector: AgentConnector + Clone;
+
+    /// Get a persisted agent session by id.
+    fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Replace an existing agent session.
+    fn update_session(&self, session: AgentSession) -> impl Future<Output = Result<()>> + Send;
+
+    /// Delete an agent session by id.
+    fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Append a protocol event to a session's durable log.
+    fn append_event(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
+
+    /// Attach a new transport to an existing persisted session.
+    fn attach_session<Connector>(
+        &self,
+        id: AgentSessionId,
+        connector: Connector,
+    ) -> impl Future<Output = Result<()>> + Send
+    where
+        Connector: AgentConnector + Clone;
+
+    /// Deliver an action through the session's active transport.
+    fn send_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        action: AgentAction,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Agent session service backed by one durable repository and local actors.
+pub struct AgentSessionServiceImpl<R> {
+    repo: R,
     active: Arc<ActiveSessions>,
 }
 
-impl<Sessions, Logs> AgentSessionService<Sessions, Logs>
-where
-    Sessions: AgentSessionRepo,
-    Logs: AgentSessionLogRepo + Clone,
-{
-    /// Build a session service from its persistence ports.
-    pub fn new(sessions: Sessions, logs: Logs) -> Self {
+impl<R> AgentSessionServiceImpl<R> {
+    /// Build a service from a repository implementing both session ports.
+    pub fn new(repo: R) -> Self {
         Self {
-            sessions,
-            logs,
+            repo,
             active: Arc::new(DashMap::new()),
         }
     }
 
-    /// Persist and attach a new agent session to an already-provisioned transport.
-    pub async fn create<Connector>(
+    fn register_transport<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
+    where
+        R: AgentSessionLogRepo + Clone,
+        Connector: AgentConnector + Clone,
+    {
+        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
+
+        match self.active.entry(id) {
+            Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
+            Entry::Vacant(entry) => {
+                entry.insert(commands);
+            }
+        }
+
+        let actor = SessionActor::new(id, connector, self.repo.clone(), command_rx);
+        tokio::spawn(run_session(actor, Arc::downgrade(&self.active)));
+        Ok(())
+    }
+}
+
+impl<R> AgentSessionService for AgentSessionServiceImpl<R>
+where
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+{
+    async fn create_session<Connector>(
         &self,
         params: CreateAgentSessionParams,
         connector: Connector,
@@ -51,25 +111,40 @@ where
     where
         Connector: AgentConnector + Clone,
     {
-        let session = self.sessions.create(params).await?;
-        self.attach_session(session.id, connector)?;
+        let session = AgentSessionRepo::create(&self.repo, params).await?;
+        self.register_transport(session.id, connector)?;
         Ok(session)
     }
 
-    /// Attach an existing persisted session to an already-provisioned transport.
-    pub async fn attach<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
+    async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.repo.get(id).await
+    }
+
+    async fn update_session(&self, session: AgentSession) -> Result<()> {
+        self.repo.update(session).await
+    }
+
+    async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
+        self.repo.delete(id).await
+    }
+
+    async fn append_event(&self, log: AgentSessionLog) -> Result<()> {
+        AgentSessionLogRepo::create(&self.repo, log).await
+    }
+
+    async fn attach_session<Connector>(
+        &self,
+        id: AgentSessionId,
+        connector: Connector,
+    ) -> Result<()>
     where
         Connector: AgentConnector + Clone,
     {
-        let session = self.sessions.get(id).await?;
-        self.attach_session(session.id, connector)
+        let session = self.repo.get(id).await?;
+        self.register_transport(session.id, connector)
     }
 
-    /// Deliver an action through the session's active transport.
-    ///
-    /// Completes once the action reaches the transport. Actions accepted while
-    /// the transport boots remain queued until its ACP handshake completes.
-    pub async fn send_action(
+    async fn send_action(
         &self,
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
@@ -93,24 +168,6 @@ where
         result
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))?
-    }
-
-    fn attach_session<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
-    where
-        Connector: AgentConnector + Clone,
-    {
-        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
-
-        match self.active.entry(id) {
-            Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
-            Entry::Vacant(entry) => {
-                entry.insert(commands);
-            }
-        }
-
-        let actor = SessionActor::new(id, connector, self.logs.clone(), command_rx);
-        tokio::spawn(run_session(actor, Arc::downgrade(&self.active)));
-        Ok(())
     }
 }
 

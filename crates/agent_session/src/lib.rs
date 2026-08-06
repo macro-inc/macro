@@ -1,6 +1,7 @@
 use agent_client_protocol::schema::ProtocolVersion;
 
 pub mod domain;
+pub mod inbound;
 pub mod outbound;
 
 /// The ACP version spoken by agent sessions.

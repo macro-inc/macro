@@ -15,8 +15,13 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+axum = { workspace = true }
 bots = { path = "../bots"}
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+] }
 macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
+utoipa = { workspace = true }
 sqlx = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
