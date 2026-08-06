@@ -310,14 +310,7 @@ pub async fn upsert_message(
         publish_email_event(&ctx.macro_event_broker, &event);
     }
 
-    handle_attachment_upload(
-        ctx,
-        gmail_access_token.expose_secret(),
-        link,
-        payload,
-        &message.attachments,
-    )
-    .await?;
+    handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
 
     handle_contacts_sync(
         ctx,
@@ -360,10 +353,9 @@ pub async fn upsert_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, gmail_access_token, attachments), err)]
+#[tracing::instrument(skip(ctx, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
-    gmail_access_token: &str,
     link: &link::Link,
     payload: &UpsertMessagePayload,
     attachments: &[Attachment],
@@ -462,12 +454,10 @@ async fn handle_attachment_upload(
 
             let ctx_upload = UploadAttachmentContext {
                 db: &ctx.db,
-                redis_client: &ctx.redis_client,
-                gmail_client: &ctx.gmail_client,
+                email_api: &ctx.email_api,
                 dss_client: &ctx.dss_client,
                 sfs_client: &ctx.sfs_client,
                 system_properties_service: &ctx.system_properties_service,
-                access_token: gmail_access_token,
                 link,
             };
 

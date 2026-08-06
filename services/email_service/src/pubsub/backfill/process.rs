@@ -140,14 +140,12 @@ async fn inner_process_message(
             update_metadata::update_thread_metadata(ctx, scope, &link).await
         }
         BackfillOperation::BackfillAttachment(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope, true).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, true).await?
             else {
                 return Ok(());
             };
-            backfill_attachment::backfill_attachment(ctx, &access_token, &link, &scope.payload)
-                .await
+            backfill_attachment::backfill_attachment(ctx, &link, &scope.payload).await
         }
         BackfillOperation::CalendarGoogleBackfill(scope) => {
             if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
@@ -215,16 +213,15 @@ async fn inner_process_message(
 /// The pre-fetched context every job-scoped handler used to receive from
 /// the top-level dispatcher: the link the operation targets, the backfill
 /// job it belongs to, and a fresh Gmail access token for the link. Used by
-/// handlers that talk to Gmail.
+/// handlers that still require a raw Gmail access token.
 struct JobContext {
     link: link::Link,
     access_token: String,
 }
 
 /// Same as [`JobContext`] but without a Gmail access token. Used by
-/// handlers that only talk to the database (e.g. UpdateThreadMetadata) so
-/// they don't fail with `AccessTokenFetchFailed` when a user's token is
-/// revoked or temporarily unavailable.
+/// handlers that do not require a raw Gmail access token. Provider operations
+/// can still fetch tokens through `email_api`.
 struct JobContextNoToken {
     link: link::Link,
     backfill_job: BackfillJob,
@@ -275,10 +272,7 @@ async fn fetch_job_context_no_token<P>(
 }
 
 /// As [`fetch_job_context_no_token`], plus a fresh Gmail access token for
-/// the link. For handlers that need to talk to Gmail (Init, ListThreads,
-/// BackfillThread, BackfillMessage, BackfillAttachment). The attachment
-/// finalization path opts into completed jobs because those messages are
-/// intentionally produced by [`BackfillOperation::FinalizeBackfill`].
+/// handlers that still call an API requiring the raw token.
 async fn fetch_job_context<P>(
     ctx: &PubSubContext,
     scope: &JobScopedPayload<P>,
