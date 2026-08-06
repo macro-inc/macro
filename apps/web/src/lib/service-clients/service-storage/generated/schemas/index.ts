@@ -664,6 +664,8 @@ export * from './githubPullRequestComment';
 export * from './githubPullRequestCommentAuthorAssociation';
 export * from './githubPullRequestCommentAuthorLogin';
 export * from './githubPullRequestCommentCreatedAt';
+export * from './githubPullRequestCommentInReplyToId';
+export * from './githubPullRequestCommentPullRequestReviewId';
 export * from './githubPullRequestComments';
 export * from './githubPullRequestCommentUpdatedAt';
 export * from './githubPullRequestCommentUrl';

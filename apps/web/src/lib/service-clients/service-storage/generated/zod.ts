@@ -6395,6 +6395,10 @@ export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMi
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemInReplyToIdMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemPullRequestReviewIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
@@ -6493,6 +6497,24 @@ export const getDocumentGithubPullRequestsResponse = zod
                       )
                       .describe(
                         'The unique GitHub identifier for the comment or review.'
+                      ),
+                    inReplyToId: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemInReplyToIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The id of the comment this one replies to, when it is part of a review\nthread. Only ever present on `review_comment` sources.'
+                      ),
+                    pullRequestReviewId: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemPullRequestReviewIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.'
                       ),
                     source: zod
                       .string()

@@ -7,6 +7,8 @@
 import type { GithubPullRequestCommentAuthorAssociation } from './githubPullRequestCommentAuthorAssociation';
 import type { GithubPullRequestCommentAuthorLogin } from './githubPullRequestCommentAuthorLogin';
 import type { GithubPullRequestCommentCreatedAt } from './githubPullRequestCommentCreatedAt';
+import type { GithubPullRequestCommentInReplyToId } from './githubPullRequestCommentInReplyToId';
+import type { GithubPullRequestCommentPullRequestReviewId } from './githubPullRequestCommentPullRequestReviewId';
 import type { GithubPullRequestCommentUpdatedAt } from './githubPullRequestCommentUpdatedAt';
 import type { GithubPullRequestCommentUrl } from './githubPullRequestCommentUrl';
 
@@ -27,6 +29,18 @@ export interface GithubPullRequestComment {
    * @minimum 0
    */
   id: number;
+  /**
+   * The id of the comment this one replies to, when it is part of a review
+thread. Only ever present on `review_comment` sources.
+   * @minimum 0
+   */
+  inReplyToId?: GithubPullRequestCommentInReplyToId;
+  /**
+   * The id of the pull request review this comment was submitted with.
+Only ever present on `review_comment` sources.
+   * @minimum 0
+   */
+  pullRequestReviewId?: GithubPullRequestCommentPullRequestReviewId;
   /** The GitHub source for the comment, such as `issue_comment` or `review_comment`. */
   source: string;
   /** When the comment or review was last updated. */

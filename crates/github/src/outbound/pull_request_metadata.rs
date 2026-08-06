@@ -224,6 +224,9 @@ struct GithubCommentResponse {
     html_url: Option<String>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    // Review-thread linkage; GitHub only returns these for review comments.
+    in_reply_to_id: Option<u64>,
+    pull_request_review_id: Option<u64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -594,6 +597,8 @@ impl GithubCommentResponse {
             created_at: self.created_at,
             updated_at: self.updated_at,
             source: source.to_string(),
+            in_reply_to_id: self.in_reply_to_id,
+            pull_request_review_id: self.pull_request_review_id,
         }
     }
 }
@@ -616,6 +621,8 @@ impl GithubReviewResponse {
             created_at: self.submitted_at,
             updated_at: None,
             source: "review".to_string(),
+            in_reply_to_id: None,
+            pull_request_review_id: None,
         })
     }
 }

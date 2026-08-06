@@ -55,6 +55,8 @@ export * from './githubPullRequestCommentAuthorAssociation';
 export * from './githubPullRequestCommentAuthorId';
 export * from './githubPullRequestCommentAuthorLogin';
 export * from './githubPullRequestCommentCreatedAt';
+export * from './githubPullRequestCommentInReplyToId';
+export * from './githubPullRequestCommentPullRequestReviewId';
 export * from './githubPullRequestCommentUpdatedAt';
 export * from './githubPullRequestCommentUrl';
 export * from './githubPullRequestRef';
