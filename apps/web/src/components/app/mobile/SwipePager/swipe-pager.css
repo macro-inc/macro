@@ -1,0 +1,26 @@
+.swipe-pager {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.swipe-pager-rail {
+  position: absolute;
+  inset: 0;
+}
+
+.swipe-pager-page {
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--swipe-pager-page-position) * 100%);
+  width: 100%;
+  min-width: 0;
+}
+
+.swipe-pager-page[aria-hidden='true'] {
+  pointer-events: none;
+}
+
+.swipe-pager[data-phase='dragging'] {
+  user-select: none;
+}
