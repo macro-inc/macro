@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT dst.document_id\n        FROM document_sub_type dst\n        JOIN \"Document\" d ON d.id = dst.document_id\n        WHERE dst.sub_type = 'task'\n          AND d.\"deletedAt\" IS NULL\n          AND (\n              $1\n              OR NOT EXISTS (\n                  SELECT 1\n                  FROM task_duplicate_embedding tde\n                  WHERE tde.document_id = dst.document_id\n              )\n          )\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d35bd972bde3e682873d7088574ab3afced6278d25e630969724dd5837182f0c"
+}

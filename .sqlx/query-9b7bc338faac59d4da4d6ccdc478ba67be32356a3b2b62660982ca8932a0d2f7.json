@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "TRUNCATE TABLE task_duplicate_embedding",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9b7bc338faac59d4da4d6ccdc478ba67be32356a3b2b62660982ca8932a0d2f7"
+}
