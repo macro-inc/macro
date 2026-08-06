@@ -7768,7 +7768,7 @@ export const getItemsSoupQueryParams = zod.object({
     .enum(['asc', 'desc'])
     .optional()
     .describe(
-      'Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.'
+      'Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.'
     ),
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });

@@ -1855,3 +1855,59 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
     let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
     assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
 }
+
+/// Ascending frecency has no meaning — the frecency branch orders by relevance
+/// score and never applies the merged sort a direction would flip. Rejecting
+/// keeps the parameter honest rather than accepting it and doing nothing.
+#[tokio::test]
+async fn ascending_frecency_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "frecency",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=frecency"
+        })
+    );
+}
+
+/// The descending default must still reach the service — the guard is scoped to
+/// the one unsupported combination, not to frecency as a whole.
+#[tokio::test]
+async fn descending_frecency_is_accepted() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "frecency" })).unwrap(),
+        ))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_ne!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(inner_counter.lock().unwrap().len(), 1);
+}

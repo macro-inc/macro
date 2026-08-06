@@ -8294,7 +8294,7 @@
           {
             "name": "sort_direction",
             "in": "query",
-            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSortDirection"
@@ -19526,7 +19526,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSortDirection",
-                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor."
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
               }
             ]
           },

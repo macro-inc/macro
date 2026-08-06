@@ -257,6 +257,12 @@ pub struct SoupRequest<T> {
     /// this cannot differ per entity type within a single feed. It is a
     /// sibling of the cursor rather than part of it because clients re-send
     /// the request params on every page, which keeps the cursor format alone.
+    ///
+    /// Only the [`SoupQuery::Simple`] branch honours this. Frecency pages come
+    /// back ordered by relevance score and never have the merged sort applied,
+    /// so there is no ascending frecency order to produce — the REST adapter
+    /// rejects that combination rather than letting it read as supported, and
+    /// the GraphQL adapter cannot express frecency at all.
     pub sort_direction: SoupSortDirection,
     /// User whose soup should be queried.
     pub user: MacroUserIdStr<'static>,

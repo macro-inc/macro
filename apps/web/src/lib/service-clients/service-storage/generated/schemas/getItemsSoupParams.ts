@@ -25,6 +25,11 @@ export type GetItemsSoupParams = {
  * Sort direction. Options are asc, desc. Defaults to desc.
 
 Re-send this with every page: it is not carried in the cursor.
+
+Applies to the timestamp sort methods only. `asc` combined with
+`frecency` is rejected rather than ignored: frecency pages are ordered
+by relevance score and the cursor comparison assumes descending, so
+there is no ascending frecency order to give.
  */
   sort_direction?: SoupApiSortDirection;
   /**

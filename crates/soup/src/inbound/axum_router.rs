@@ -88,6 +88,11 @@ pub struct Params {
     /// Sort direction. Options are asc, desc. Defaults to desc.
     ///
     /// Re-send this with every page: it is not carried in the cursor.
+    ///
+    /// Applies to the timestamp sort methods only. `asc` combined with
+    /// `frecency` is rejected rather than ignored: frecency pages are ordered
+    /// by relevance score and the cursor comparison assumes descending, so
+    /// there is no ascending frecency order to give.
     #[serde(default)]
     sort_direction: Option<SoupApiSortDirection>,
 }
@@ -521,6 +526,8 @@ where
         R: Clone + Serialize + Send,
     {
         let user_for_favorites = macro_user_id.copied().into_owned();
+        let sort_direction: SoupSortDirection =
+            params.sort_direction.map(Into::into).unwrap_or_default();
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method
@@ -543,6 +550,15 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
+        // Frecency pages are ordered by relevance score, and that branch never
+        // applies the merged sort the direction would flip. Rejecting beats
+        // accepting the parameter and silently doing nothing with it. Checked
+        // against the resolved query so a frecency *cursor* is caught too, not
+        // just an initial request naming the method.
+        if sort_direction == SoupSortDirection::Asc && matches!(cursor, SoupQuery::Frecency(_)) {
+            return Err(SoupHandlerErr::AscendingFrecencyUnsupported);
+        }
+
         // CRM authorization (team membership for CRM scope, admin/owner
         // role for hidden companies) is enforced by the soup domain and
         // CRM service from the receipt itself; the router just forwards
@@ -557,7 +573,7 @@ where
                     },
                     limit: params.limit.unwrap_or(20),
                     cursor,
-                    sort_direction: params.sort_direction.map(Into::into).unwrap_or_default(),
+                    sort_direction,
                     user: macro_user_id,
                     email_preview_view: email_view,
                     link_ids,
@@ -730,6 +746,9 @@ pub enum SoupHandlerErr {
     /// Hidden CRM company query was requested without admin privileges.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
+    /// Ascending order was requested for a frecency-sorted query.
+    #[error("sort_direction=asc is not supported with sort_method=frecency")]
+    AscendingFrecencyUnsupported,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -746,7 +765,9 @@ impl From<SoupErr> for SoupHandlerErr {
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
+            SoupHandlerErr::ExpandErr(_)
+            | SoupHandlerErr::Expand
+            | SoupHandlerErr::AscendingFrecencyUnsupported => StatusCode::BAD_REQUEST,
             SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
                 StatusCode::FORBIDDEN
             }
