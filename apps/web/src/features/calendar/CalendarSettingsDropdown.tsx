@@ -5,7 +5,8 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { MobileCalendarPeriodControls } from './CalendarPeriodSelector';
 import { useCalendarView } from './CalendarViewContext';
 import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
 
@@ -215,10 +216,13 @@ const DRAWER_ROW_CLASS =
 function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
   const controls = props.controls;
   const calendarView = controls.calendarView;
+  const [open, setOpen] = createSignal(false);
 
   return (
     <MobileDrawer
       side="bottom"
+      open={open()}
+      onOpenChange={setOpen}
       preventScroll={false}
       preventScrollbarShift={false}
     >
@@ -226,7 +230,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
         as={Button}
         variant="ghost"
         size="icon-sm"
-        class="shrink-0 rounded-lg"
+        class="shrink-0 rounded-full"
         aria-label="Calendar settings"
       >
         <GearIcon class="size-3.5" />
@@ -239,9 +243,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           class="overflow-y-auto"
         >
           <MobileDrawer.Handle />
-          <h2 class="px-4 pb-4 text-base font-semibold text-ink">
-            Calendar settings
-          </h2>
+          <MobileCalendarPeriodControls onSelect={() => setOpen(false)} />
 
           <Show when={controls.showCalendarVisibility()}>
             <MobileDrawer.Label>Calendars</MobileDrawer.Label>

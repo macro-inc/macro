@@ -6,6 +6,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -197,20 +198,41 @@ function CalendarWorkspace() {
       <SplitHeaderRight>
         <HeaderIsland class="px-1">
           <div class="flex items-center gap-1">
-            <Show when={!isTodayVisible()}>
+            <Show
+              when={isMobile()}
+              fallback={
+                <Show when={!isTodayVisible()}>
+                  <Button
+                    variant="active"
+                    size="sm"
+                    class="rounded-lg px-3"
+                    depth={2}
+                    label="Go to today"
+                    onClick={calendarPager.today}
+                  >
+                    Today
+                  </Button>
+                </Show>
+              }
+            >
               <Button
-                variant="active"
-                size="sm"
-                class="rounded-lg px-3"
-                depth={2}
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-full"
                 label="Go to today"
                 onClick={calendarPager.today}
               >
-                Today
+                <CalendarBlankIcon aria-hidden="true" />
+                <span
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[8px] font-bold leading-none"
+                >
+                  {today().getDate()}
+                </span>
               </Button>
             </Show>
-            <CalendarPeriodSelector />
             <Show when={!isMobile()}>
+              <CalendarPeriodSelector />
               <div class="flex shrink-0 items-center gap-1">
                 <Button
                   variant="ghost"

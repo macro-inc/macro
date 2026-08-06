@@ -1,3 +1,4 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -15,11 +16,12 @@ const CALENDAR_VIEWS = [
   { value: 'timeGridDay', label: 'Day' },
 ];
 
-/** Selects the FullCalendar period and provides narrow custom-date navigation. */
-export function CalendarPeriodSelector() {
+const DRAWER_ROW_CLASS =
+  'flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:mb-px';
+
+function createCalendarPeriodControls(onSelect?: () => void) {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
-  const sidePanel = useSidePanel();
   const initialDate = new Date();
   const [pickerState, setPickerState] = createStore({
     open: false,
@@ -27,7 +29,6 @@ export function CalendarPeriodSelector() {
     focusedDay: initialDate,
   });
 
-  const isNarrow = () => sidePanel?.isNarrow() ?? false;
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
@@ -43,15 +44,22 @@ export function CalendarPeriodSelector() {
       : undefined;
   });
 
-  const changeView = (view: string) => {
-    setPickerState('open', false);
-    if (calendarPager.activeDateInfo()?.view.type === view) return;
-    calendarPager.changeView(view);
-  };
-
   const syncCustomDatePicker = () => {
     const date = currentDate();
     setPickerState({ month: date, focusedDay: date });
+  };
+
+  const setOpen = (open: boolean) => {
+    if (open) syncCustomDatePicker();
+    setPickerState('open', open);
+  };
+
+  const changeView = (view: string) => {
+    setPickerState('open', false);
+    onSelect?.();
+    if (calendarPager.activeDateInfo()?.view.type === view) return;
+
+    calendarPager.changeView(view);
   };
 
   const navigateCustomDateMonth = (month: Date) => {
@@ -66,14 +74,58 @@ export function CalendarPeriodSelector() {
 
   const selectCustomDate = (date: Date | null) => {
     if (!date) return;
+
     setPickerState({ month: date, focusedDay: date, open: false });
     calendarPager.gotoDate(date);
+    onSelect?.();
   };
+
+  return {
+    activeView,
+    calendarView,
+    changeView,
+    currentDate,
+    highlightedRange,
+    navigateCustomDateMonth,
+    pickerState,
+    selectCustomDate,
+    setFocusedDay: (date: Date) => setPickerState('focusedDay', date),
+    setOpen,
+    syncCustomDatePicker,
+  };
+}
+
+type CalendarPeriodControls = ReturnType<typeof createCalendarPeriodControls>;
+
+function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
+  const controls = props.controls;
+
+  return (
+    <MiniCalendar
+      required
+      fixedWeeks
+      startOfWeek={controls.calendarView.displaySettings.weekStartsOn}
+      value={controls.currentDate()}
+      month={controls.pickerState.month}
+      focusedDay={controls.pickerState.focusedDay}
+      highlightedRange={controls.highlightedRange()}
+      onMonthChange={controls.navigateCustomDateMonth}
+      onFocusedDayChange={controls.setFocusedDay}
+      onValueChange={controls.selectCustomDate}
+    />
+  );
+}
+
+/** Desktop calendar period selector and custom-date dropdown. */
+export function CalendarPeriodSelector() {
+  const sidePanel = useSidePanel();
+  const controls = createCalendarPeriodControls();
+  const isNarrow = () => sidePanel?.isNarrow() ?? false;
 
   return (
     <Dropdown
-      open={pickerState.open}
-      onOpenChange={(open) => setPickerState('open', open)}
+      open={controls.pickerState.open}
+      onOpenChange={controls.setOpen}
       placement="bottom-end"
     >
       <Dropdown.Trigger
@@ -82,13 +134,16 @@ export function CalendarPeriodSelector() {
         size="sm"
         class="shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
       >
-        {CALENDAR_VIEWS.find((view) => view.value === activeView())?.label ??
-          'Week'}
+        {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
+          ?.label ?? 'Week'}
         <CaretDownIcon class="size-3 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
         <Dropdown.Group>
-          <Dropdown.RadioGroup value={activeView()} onChange={changeView}>
+          <Dropdown.RadioGroup
+            value={controls.activeView()}
+            onChange={controls.changeView}
+          >
             <For each={CALENDAR_VIEWS}>
               {(view) => (
                 <Dropdown.RadioItem closeOnSelect value={view.value}>
@@ -103,11 +158,7 @@ export function CalendarPeriodSelector() {
         </Dropdown.Group>
         <Show when={isNarrow()}>
           <Dropdown.Group>
-            <Dropdown.Sub
-              onOpenChange={(open) => {
-                if (open) syncCustomDatePicker();
-              }}
-            >
+            <Dropdown.Sub>
               <Dropdown.SubTrigger>
                 <CalendarIcon class="size-3.5 text-ink-muted" />
                 <span class="flex-1">Custom date…</span>
@@ -115,20 +166,7 @@ export function CalendarPeriodSelector() {
               </Dropdown.SubTrigger>
               <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">
                 <Dropdown.Group class="p-3">
-                  <MiniCalendar
-                    required
-                    fixedWeeks
-                    startOfWeek={calendarView.displaySettings.weekStartsOn}
-                    value={currentDate()}
-                    month={pickerState.month}
-                    focusedDay={pickerState.focusedDay}
-                    highlightedRange={highlightedRange()}
-                    onMonthChange={navigateCustomDateMonth}
-                    onFocusedDayChange={(date) =>
-                      setPickerState('focusedDay', date)
-                    }
-                    onValueChange={selectCustomDate}
-                  />
+                  <CustomDatePicker controls={controls} />
                 </Dropdown.Group>
               </Dropdown.SubContent>
             </Dropdown.Sub>
@@ -136,5 +174,37 @@ export function CalendarPeriodSelector() {
         </Show>
       </Dropdown.Content>
     </Dropdown>
+  );
+}
+
+/** Period controls embedded in the mobile settings drawer. */
+export function MobileCalendarPeriodControls(props: { onSelect: () => void }) {
+  const controls = createCalendarPeriodControls(props.onSelect);
+
+  return (
+    <>
+      <MobileDrawer.Label>Period</MobileDrawer.Label>
+      <MobileDrawer.Section class="flex shrink-0 flex-col">
+        <For each={CALENDAR_VIEWS}>
+          {(view) => (
+            <button
+              type="button"
+              class={DRAWER_ROW_CLASS}
+              aria-pressed={controls.activeView() === view.value}
+              onClick={() => controls.changeView(view.value)}
+            >
+              <span class="flex-1">{view.label}</span>
+              <CheckIcon
+                class="size-4 shrink-0 text-accent"
+                classList={{
+                  invisible: controls.activeView() !== view.value,
+                }}
+              />
+            </button>
+          )}
+        </For>
+      </MobileDrawer.Section>
+      <div class="mt-4" />
+    </>
   );
 }
