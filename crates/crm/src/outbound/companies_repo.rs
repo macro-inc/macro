@@ -127,9 +127,9 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Merge an interaction range into a company row.
-    /// `last_interaction` always bumps via GREATEST; `first_interaction`
-    /// only LEAST-merges on `is_sent = true` — received-direction
-    /// populates must not pull the anchor backwards.
+    /// `last_interaction` GREATEST-merges; `first_interaction` only
+    /// LEAST-merges on `is_sent = true` — received-direction populates
+    /// must not pull the anchor backwards. Unchanged ranges skip the write.
     async fn merge_company_interactions(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         company_id: &uuid::Uuid,
@@ -145,7 +145,11 @@ impl CompaniesRepositoryImpl {
                        ELSE first_interaction
                    END,
                    last_interaction = GREATEST(last_interaction, $3)
-               WHERE id = $1"#,
+               WHERE id = $1
+                 AND (
+                     last_interaction < $3
+                     OR ($4 AND first_interaction > $2)
+                 )"#,
             company_id,
             first_at,
             last_at,
@@ -383,20 +387,40 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // populate-vs-hide race can't sneak a visible contact under a
         // hidden company. On CONFLICT we leave `hidden` alone —
         // preserves any individual `set_contact_hidden` state and any
-        // company-cascade state from a prior hide.
+        // company-cascade state from a prior hide. The CTE keeps the
+        // existing ID available when the conflict update is a no-op.
         let contact_id = sqlx::query_scalar!(
             r#"
-            INSERT INTO crm_contacts (company_id, email, name, first_interaction, last_interaction, hidden)
-            VALUES ($1, $2, $3, $4, $5, $7)
-            ON CONFLICT (company_id, email) DO UPDATE
-                SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
-                    updated_at = now(),
-                    first_interaction = CASE
-                        WHEN $6 THEN LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction)
-                        ELSE crm_contacts.first_interaction
-                    END,
-                    last_interaction = GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
-            RETURNING id
+            WITH upserted_contact AS (
+                INSERT INTO crm_contacts (company_id, email, name, first_interaction, last_interaction, hidden)
+                VALUES ($1, $2, $3, $4, $5, $7)
+                ON CONFLICT (company_id, email) DO UPDATE
+                    SET name = COALESCE(crm_contacts.name, EXCLUDED.name),
+                        updated_at = now(),
+                        first_interaction = CASE
+                            WHEN $6 THEN LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction)
+                            ELSE crm_contacts.first_interaction
+                        END,
+                        last_interaction = GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
+                    WHERE (
+                        COALESCE(crm_contacts.name, EXCLUDED.name),
+                        CASE
+                            WHEN $6 THEN LEAST(crm_contacts.first_interaction, EXCLUDED.first_interaction)
+                            ELSE crm_contacts.first_interaction
+                        END,
+                        GREATEST(crm_contacts.last_interaction, EXCLUDED.last_interaction)
+                    ) IS DISTINCT FROM (
+                        crm_contacts.name,
+                        crm_contacts.first_interaction,
+                        crm_contacts.last_interaction
+                    )
+                RETURNING id
+            )
+            SELECT id FROM upserted_contact
+            UNION ALL
+            SELECT id FROM crm_contacts
+            WHERE company_id = $1 AND email = $2
+            LIMIT 1
             "#,
             company_id,
             normalized_email,

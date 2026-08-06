@@ -79,7 +79,7 @@ async fn service_populate_contact_same_domain_check_is_case_insensitive(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn service_populate_contact_refreshes_existing_company_and_contact_updated_at(
+async fn service_populate_contact_advancing_interactions_updates_company_and_contact_timestamps(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
@@ -140,7 +140,7 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
             &link_id,
             "user@macro.com",
             "alice@acme.com",
-            Some("Alice"),
+            None,
             chrono::Utc::now(),
             chrono::Utc::now(),
             true,
@@ -156,6 +156,87 @@ async fn service_populate_contact_refreshes_existing_company_and_contact_updated
 
     assert!(company_updated_at > old_updated_at);
     assert!(contact_updated_at > old_updated_at);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn service_populate_contact_unchanged_values_do_not_update_timestamps(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let first_link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+    let second_link_id = insert_email_link(&pool, owner_id, "other@macro.com").await?;
+
+    let interaction_at: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+
+    service
+        .populate_contact(
+            &team_id,
+            &first_link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            Some("Alice"),
+            interaction_at,
+            interaction_at,
+            true,
+        )
+        .await?;
+
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    let contact_id = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("contact");
+
+    sqlx::query!(
+        r#"UPDATE crm_companies SET updated_at = updated_at WHERE id = $1"#,
+        company_id,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"UPDATE crm_contacts SET updated_at = updated_at WHERE id = $1"#,
+        contact_id,
+    )
+    .execute(&pool)
+    .await?;
+    let company_updated_at = fetch_company_updated_at(&pool, company_id).await?;
+    let contact_updated_at = fetch_contact_updated_at(&pool, contact_id).await?;
+
+    service
+        .populate_contact(
+            &team_id,
+            &second_link_id,
+            "other@macro.com",
+            "alice@acme.com",
+            Some("Alice"),
+            interaction_at,
+            interaction_at,
+            true,
+        )
+        .await?;
+
+    assert_eq!(
+        fetch_company_updated_at(&pool, company_id).await?,
+        company_updated_at
+    );
+    assert_eq!(
+        fetch_contact_updated_at(&pool, contact_id).await?,
+        contact_updated_at
+    );
+    assert_eq!(
+        count_sources_for_company(&pool, company_id).await?,
+        2,
+        "the existing contact ID must remain available for source insertion"
+    );
     Ok(())
 }
 
