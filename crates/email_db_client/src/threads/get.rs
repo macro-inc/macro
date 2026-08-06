@@ -60,6 +60,33 @@ pub async fn get_paginated_thread_ids_with_macro_user_id_since(
     Ok(result)
 }
 
+/// gets the macro user id for each of the given threads.
+///
+/// Unlike the paginated variants this neither sorts nor offsets: it is a
+/// primary-key lookup, so it stays short enough to run on a read replica
+/// without tripping a recovery conflict. Threads that do not exist are absent
+/// from the result.
+#[tracing::instrument(skip(pool, thread_ids), err)]
+pub async fn get_thread_ids_with_macro_user_id_by_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> anyhow::Result<Vec<(Uuid, String)>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT t.id, l.macro_id
+        FROM email_threads t
+        JOIN email_links l ON t.link_id = l.id
+        WHERE t.id = ANY($1)
+        "#,
+        thread_ids
+    )
+    .map(|row| (row.id, row.macro_id))
+    .fetch_all(pool)
+    .await?;
+
+    Ok(result)
+}
+
 /// get the ids of the latest-updated threads for the user.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_latest_thread_ids_paginated(
