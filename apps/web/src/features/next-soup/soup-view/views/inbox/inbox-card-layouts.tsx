@@ -12,7 +12,7 @@ import {
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { plural } from '@core/util/string';
 import {
   DraftBadge,
@@ -383,7 +383,10 @@ const createSenderDisplayName = (
     return id ? tryMacroId(id) : undefined;
   };
 
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => {
+    const id = macroId();
+    return id ? getDisplayName(id) : undefined;
+  };
 
   const botName = () => {
     const id = senderId();

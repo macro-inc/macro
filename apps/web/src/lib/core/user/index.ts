@@ -8,6 +8,7 @@ export {
 } from './combinedRecipient';
 export { useContacts } from './contactService';
 export {
+  getDisplayName,
   getInitials,
   getInitialsFromName,
   seedMockDisplayNames,

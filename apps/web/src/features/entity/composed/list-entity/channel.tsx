@@ -96,7 +96,6 @@ export function ChannelMessageNarrowBody(props: {
 
 export function ChannelLatestMessageNarrowBody(props: {
   message: NonNullable<ChannelEntity['latestMessage']>;
-  senderFirstName?: string;
 }) {
   return (
     <Entity.Slot
@@ -107,12 +106,12 @@ export function ChannelLatestMessageNarrowBody(props: {
         when={props.message.content?.trim()}
         fallback={<span class="italic">Attached Items</span>}
       >
+        <span class="ph-no-capture font-medium text-ink-muted">
+          <DisplayName id={props.message.senderId} format="firstName" />:{' '}
+        </span>
         <StaticMarkdown
           theme={twoLineClampMarkdownTheme}
-          markdown={
-            (props.senderFirstName ? `**${props.senderFirstName}:** ` : '') +
-            props.message.content.trim()
-          }
+          markdown={props.message.content.trim()}
           singleLine
         />
       </Show>
