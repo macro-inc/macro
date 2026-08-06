@@ -485,10 +485,7 @@ fn test_get_sort_timestamp_field_inbox() {
 fn test_get_sort_timestamp_field_default() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let result = get_sort_timestamp_field(&view);
-    assert_eq!(
-        result,
-        "COALESCE(t.latest_non_spam_message_ts, t.updated_at)"
-    );
+    assert_eq!(result, "t.latest_non_spam_message_ts");
 }
 
 #[test]
@@ -502,6 +499,21 @@ fn test_build_query_shared_include_uses_union_instead_of_or() {
     assert!(sql.contains("UNION"));
     assert!(sql.contains("t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
     assert!(!sql.contains(" OR t.id IN (SELECT thread_id FROM SharedEmailThreads)"));
+}
+
+#[test]
+fn test_build_query_default_sort_orders_null_timestamps_last() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.latest_non_spam_message_ts AS effective_ts"));
+    assert!(!sql.contains("COALESCE(t.latest_non_spam_message_ts, t.updated_at)"));
+    assert!(sql.contains(
+        "OR t.latest_non_spam_message_ts IS NULL OR ((t.latest_non_spam_message_ts, t.id) < ("
+    ));
+    assert!(sql.contains("ORDER BY effective_ts DESC NULLS LAST, id DESC"));
+    assert!(sql.contains("ORDER BY t.effective_ts DESC NULLS LAST, t.id DESC"));
 }
 
 #[test]
@@ -537,7 +549,8 @@ fn test_build_query_multi_link_fans_out_per_link() {
     );
     // ...with a per-branch LIMIT feeding the outer sort.
     assert_eq!(
-        sql.matches("ORDER BY effective_ts DESC, id DESC").count(),
+        sql.matches("ORDER BY effective_ts DESC NULLS LAST, id DESC")
+            .count(),
         2,
         "expected per-link and outer candidate ordering: {sql}"
     );
@@ -572,8 +585,8 @@ fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
     ));
     let sql = super::query::debug_build_query_sql(&view, &expr);
 
-    assert!(sql.contains("ORDER BY effective_ts DESC, id DESC"));
-    assert!(sql.contains("ORDER BY t.effective_ts DESC, t.id DESC"));
+    assert!(sql.contains("ORDER BY effective_ts DESC NULLS LAST, id DESC"));
+    assert!(sql.contains("ORDER BY t.effective_ts DESC NULLS LAST, t.id DESC"));
     assert!(!sql.contains("ORDER BY effective_ts DESC, updated_at DESC"));
     assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
 }
@@ -615,7 +628,9 @@ fn test_build_query_team_scoped_dedupes_on_root_global_id() {
     );
     // Own copy wins, then recency, then id.
     assert!(
-        sql.contains("ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC"),
+        sql.contains(
+            "ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC NULLS LAST, id DESC"
+        ),
         "wrong representative preference order: {sql}"
     );
 }
@@ -1296,7 +1311,7 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
     );
     // No inline EXISTS or correlated subquery remains in the candidate WHERE.
     let candidate_end = sql
-        .find("ORDER BY effective_ts DESC, id DESC")
+        .find("ORDER BY effective_ts DESC NULLS LAST, id DESC")
         .expect("candidate ORDER BY missing");
     let candidate_section = &sql[..candidate_end];
     assert!(

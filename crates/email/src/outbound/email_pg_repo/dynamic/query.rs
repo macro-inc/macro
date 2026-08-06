@@ -347,8 +347,8 @@ fn push_thread_candidate_select(
         );
         builder.push_bind(params.cursor_timestamp);
         builder.push(format!(
-            r#"::timestamptz IS NULL) OR (({}, t.id) < ("#,
-            sort_ts_field
+            r#"::timestamptz IS NULL) OR {} IS NULL OR (({}, t.id) < ("#,
+            sort_ts_field, sort_ts_field
         ));
         builder.push_bind(params.cursor_timestamp);
         builder.push("::timestamptz, ");
@@ -377,6 +377,18 @@ fn push_thread_candidate_select(
                           WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
                           WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
                           ELSE {}
+                      END IS NULL OR (
+                      CASE "#,
+            sort_ts_field, sort_ts_field
+        ));
+
+        builder.push_bind(params.sort_method_str.clone());
+
+        builder.push(format!(
+            r#"
+                          WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
+                          WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
+                          ELSE {}
                       END, t.id
                   ) < ("#,
             sort_ts_field, sort_ts_field
@@ -385,7 +397,7 @@ fn push_thread_candidate_select(
         builder.push_bind(params.cursor_timestamp);
         builder.push("::timestamptz, ");
         builder.push_bind(params.cursor_id_str.clone());
-        builder.push("::uuid))");
+        builder.push("::uuid)))");
     }
 
     if per_link_fanout {
@@ -393,7 +405,7 @@ fn push_thread_candidate_select(
         // `query_limit` rows from each inbox.
         builder.push(
             r#"
-                ORDER BY effective_ts DESC, id DESC
+                ORDER BY effective_ts DESC NULLS LAST, id DESC
                 LIMIT "#,
         );
         builder.push_bind(params.query_limit);
@@ -610,26 +622,26 @@ fn build_query(
         builder.push(
             r#"
                 ) AS candidate_threads
-                ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC
+                ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC NULLS LAST, id DESC
             ) AS deduped_threads
             -- Cursor logic (post-dedupe, on the representative row)
             WHERE (("#,
         );
         builder.push_bind(params.cursor_timestamp);
-        builder.push("::timestamptz IS NULL) OR ((effective_ts, id) < (");
+        builder.push("::timestamptz IS NULL) OR effective_ts IS NULL OR ((effective_ts, id) < (");
         builder.push_bind(params.cursor_timestamp);
         builder.push("::timestamptz, ");
         builder.push_bind(params.cursor_id_str.clone());
         builder.push(
             r#"::uuid)))
-            ORDER BY effective_ts DESC, id DESC
+            ORDER BY effective_ts DESC NULLS LAST, id DESC
             LIMIT "#,
         );
     } else {
         builder.push(
             r#"
             ) AS candidate_threads
-            ORDER BY effective_ts DESC, id DESC
+            ORDER BY effective_ts DESC NULLS LAST, id DESC
             LIMIT "#,
         );
     }
@@ -685,7 +697,7 @@ fn build_query(
     }
 
     builder.push(
-        r#"        ORDER BY t.effective_ts DESC, t.id DESC
+        r#"        ORDER BY t.effective_ts DESC NULLS LAST, t.id DESC
         "#,
     );
 

@@ -1015,7 +1015,7 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
             "t.latest_inbound_message_ts"
         }
-        _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
+        _ => "t.latest_non_spam_message_ts",
     }
 }
 
