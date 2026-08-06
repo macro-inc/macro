@@ -25,10 +25,6 @@ struct Args {
     /// Port to listen on.
     #[arg(long, env = "ACP_PORT", default_value_t = 8700)]
     port: u16,
-    /// Shared secret bridge connections must present (query `?token=` or
-    /// bearer header). Unset = no auth; only safe behind a trusted proxy.
-    #[arg(long, env = "ACP_TOKEN")]
-    token: Option<String>,
 }
 
 #[tokio::main]
@@ -40,12 +36,11 @@ async fn main() {
         port = args.port,
         harness = %args.harness,
         workspace = %args.workspace,
-        auth = args.token.is_some(),
         "acp-sidecar listening"
     );
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", args.port))
         .await
         .expect("bind sidecar port");
-    let config = Config::new(args.harness, args.workspace, args.token);
+    let config = Config::new(args.harness, args.workspace);
     axum::serve(listener, app(config)).await.expect("serve");
 }

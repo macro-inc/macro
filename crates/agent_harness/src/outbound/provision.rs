@@ -14,8 +14,17 @@ pub const SIDECAR_LOG: &str = "/tmp/acp-sidecar.log";
 /// Port exposed by the ACP sidecar.
 pub const SIDECAR_PORT: u16 = 8700;
 
+/// Container build recipe.
+pub(crate) const CONTAINER_DOCKERFILE: &str = include_str!("../../container/Dockerfile");
+
+/// OpenCode configuration baked into the container.
+pub(crate) const CONTAINER_OPENCODE_CONFIG: &str = include_str!("../../container/opencode.json");
+
+/// System instructions baked into the container.
+pub(crate) const CONTAINER_SYSTEM_INSTRUCTIONS: &str = include_str!("../../container/SYSTEM.md");
+
 /// Readiness recipe baked alongside the harness container.
-const ENSURE_READY_SCRIPT: &str = include_str!("../../container/ensure_ready.sh");
+pub(crate) const ENSURE_READY_SCRIPT: &str = include_str!("../../container/ensure_ready.sh");
 
 /// Wrap the readiness recipe as one command for provider exec APIs.
 #[must_use]

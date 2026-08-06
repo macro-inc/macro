@@ -1,13 +1,12 @@
 //! The bridge itself: one websocket connection piped to one harness process.
 
-use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use futures_util::{SinkExt, StreamExt};
@@ -23,37 +22,17 @@ mod test;
 pub struct Config {
     harness: String,
     workspace: String,
-    /// When set, bridge connections must present this token (needed wherever
-    /// the sidecar is reachable from the open internet; /ping stays open as a
-    /// readiness probe).
-    token: Option<String>,
     /// Only one agent connection at a time (ACP is 1:1).
     busy: Arc<Semaphore>,
 }
 
 impl Config {
-    pub fn new(harness: String, workspace: String, token: Option<String>) -> Self {
+    pub fn new(harness: String, workspace: String) -> Self {
         Self {
             harness,
             workspace,
-            token,
             busy: Arc::new(Semaphore::new(1)),
         }
-    }
-
-    /// Accept `?token=` (websocket clients often can't set headers) or an
-    /// `Authorization: Bearer` header.
-    fn authorized(&self, params: &HashMap<String, String>, headers: &HeaderMap) -> bool {
-        let Some(expected) = &self.token else {
-            return true;
-        };
-        let query_ok = params.get("token").is_some_and(|t| t == expected);
-        let header_ok = headers
-            .get(header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .is_some_and(|t| t == expected);
-        query_ok || header_ok
     }
 }
 
@@ -64,15 +43,7 @@ pub fn app(config: Config) -> Router {
         .with_state(config)
 }
 
-async fn bridge(
-    State(config): State<Config>,
-    Query(params): Query<HashMap<String, String>>,
-    headers: HeaderMap,
-    ws: WebSocketUpgrade,
-) -> Response {
-    if !config.authorized(&params, &headers) {
-        return (StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
-    }
+async fn bridge(State(config): State<Config>, ws: WebSocketUpgrade) -> Response {
     let Ok(permit) = config.busy.clone().try_acquire_owned() else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,

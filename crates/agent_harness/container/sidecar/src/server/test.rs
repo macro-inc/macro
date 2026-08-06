@@ -29,17 +29,12 @@ fn fake_harness(body: &str) -> PathBuf {
 
 /// Serve the sidecar app on an ephemeral port with the given harness.
 async fn serve(harness: &Path) -> SocketAddr {
-    serve_with_token(harness, None).await
-}
-
-async fn serve_with_token(harness: &Path, token: Option<&str>) -> SocketAddr {
     let config = Config::new(
         harness.to_str().expect("utf-8 path").to_owned(),
         std::env::temp_dir()
             .to_str()
             .expect("utf-8 path")
             .to_owned(),
-        token.map(str::to_owned),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -101,49 +96,6 @@ async fn round_trips_one_message_per_frame() {
         .expect("send binary");
     let echoed = ws.next().await.expect("stream open").expect("read frame");
     assert_eq!(echoed, tungstenite::Message::Text("{\"id\":2}".into()));
-}
-
-#[tokio::test]
-async fn token_gates_the_bridge_but_not_ping() {
-    let harness = fake_harness("exec cat");
-    let addr = serve_with_token(&harness, Some("s3cret")).await;
-
-    // /ping stays open: it's the readiness probe and carries no secrets.
-    let mut stream = tokio::net::TcpStream::connect(addr).await.expect("connect");
-    stream
-        .write_all(
-            format!("GET /ping HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n").as_bytes(),
-        )
-        .await
-        .expect("send request");
-    let mut response = String::new();
-    stream
-        .read_to_string(&mut response)
-        .await
-        .expect("read response");
-    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
-
-    match connect(addr).await {
-        Err(tungstenite::Error::Http(response)) => {
-            assert_eq!(response.status(), 401, "{response:?}");
-        }
-        other => panic!("expected HTTP 401 rejection, got {other:?}"),
-    }
-    match tokio_tungstenite::connect_async(format!("ws://{addr}/?token=wrong")).await {
-        Err(tungstenite::Error::Http(response)) => {
-            assert_eq!(response.status(), 401, "{response:?}");
-        }
-        other => panic!("expected HTTP 401 rejection, got {other:?}"),
-    }
-
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/?token=s3cret"))
-        .await
-        .expect("token-bearing connect");
-    ws.send(tungstenite::Message::Text("hi".into()))
-        .await
-        .expect("send");
-    let echoed = ws.next().await.expect("stream open").expect("read frame");
-    assert_eq!(echoed, tungstenite::Message::Text("hi".into()));
 }
 
 #[tokio::test]

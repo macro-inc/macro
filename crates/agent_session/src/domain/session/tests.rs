@@ -1,8 +1,12 @@
 //! Table-driven tests for the pure machine: inputs in, effects out. No
 //! tokio, no mocks, no waiting - `Token` is a plain integer.
 
-use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::{NewSessionResponse, RequestId};
+use agent_client_protocol::schema::v1::{
+    NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    SelectedPermissionOutcome, ToolCallUpdate, ToolCallUpdateFields,
+};
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
@@ -245,6 +249,76 @@ fn a_live_frame_only_logs() {
 
     assert!(matches!(effects[..], [Effect::Log { .. }]));
     assert_eq!(machine.status(), RuntimeStatus::Live);
+}
+
+#[test]
+fn a_permission_request_prefers_allow_always_so_the_agent_does_not_block() {
+    let outcome = permission_response(vec![
+        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+        PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+    ]);
+
+    assert_eq!(
+        outcome,
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("always"))
+    );
+}
+
+#[test]
+fn a_permission_request_falls_back_to_allow_once() {
+    let outcome = permission_response(vec![
+        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+    ]);
+
+    assert_eq!(
+        outcome,
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("once"))
+    );
+}
+
+#[test]
+fn a_permission_request_without_an_allow_option_is_cancelled() {
+    let outcome = permission_response(Vec::new());
+
+    assert_eq!(outcome, RequestPermissionOutcome::Cancelled);
+}
+
+fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutcome {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    machine.handle(session_opened("acp-42"));
+    let permission_id = RequestId::Str("agent:permission:0".to_owned());
+    let (method, params) = RequestPermissionRequest::new(
+        "acp-42",
+        ToolCallUpdate::new("call-1", ToolCallUpdateFields::new()),
+        options,
+    )
+    .to_untyped_message()
+    .unwrap()
+    .into_parts();
+
+    let effects = machine.handle(frame(
+        RawJsonRpcMessage::request(method, params, permission_id.clone()).unwrap(),
+    ));
+
+    assert!(matches!(effects.first(), Some(Effect::Log { .. })));
+    let Effect::Send {
+        message:
+            ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+                id,
+                result,
+            }))),
+        ..
+    } = &effects[1]
+    else {
+        panic!("expected a successful ACP permission response");
+    };
+    assert_eq!(id, &permission_id);
+    serde_json::from_value::<RequestPermissionResponse>(result.clone())
+        .unwrap()
+        .outcome
 }
 
 #[test]

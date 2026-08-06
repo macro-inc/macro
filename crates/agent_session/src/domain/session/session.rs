@@ -3,7 +3,9 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, NewSessionRequest, NewSessionResponse, RequestId, Response,
+    InitializeRequest, NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    SelectedPermissionOutcome,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::acp_id::AcpId;
@@ -20,6 +22,8 @@ use crate::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 use super::types::{
     CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionPhase, StopReason,
 };
+
+const REQUEST_PERMISSION_METHOD: &str = "session/request_permission";
 
 /// Protocol state for one connection of a session to an agent runtime.
 ///
@@ -192,9 +196,12 @@ impl<Token> SessionMachine<Token> {
     }
 
     fn on_frame(&mut self, frame: RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
-        // Until the handshake answer arrives, ours is the only conversation;
-        // past it, frames belong to whoever sent the matching request and the
-        // machine only carries them.
+        if matches!(self.phase, SessionPhase::Live { .. }) {
+            self.respond_to_permission_request(&frame, effects);
+            return;
+        }
+
+        // Until the handshake answer arrives, ours is the only conversation.
         let SessionPhase::Handshaking { opened } = &self.phase else {
             return;
         };
@@ -219,6 +226,57 @@ impl<Token> SessionMachine<Token> {
 
         self.phase = SessionPhase::Live { acp: acp.clone() };
         self.flush(&acp, effects);
+    }
+
+    /// Permission prompts require a client response. This autonomous agent has
+    /// no approval UI, so approve the broadest offered allow option instead of
+    /// leaving the turn blocked forever.
+    fn respond_to_permission_request(
+        &self,
+        frame: &RawJsonRpcMessage,
+        effects: &mut Vec<Effect<Token>>,
+    ) {
+        let RawJsonRpcMessage::Request(request) = frame else {
+            return;
+        };
+        if request.method.as_ref() != REQUEST_PERMISSION_METHOD {
+            return;
+        }
+
+        let outcome = request
+            .params
+            .clone()
+            .and_then(|params| {
+                serde_json::from_value::<RequestPermissionRequest>(params.into_value()).ok()
+            })
+            .and_then(|request| {
+                request
+                    .options
+                    .iter()
+                    .find(|option| matches!(option.kind, PermissionOptionKind::AllowAlways))
+                    .or_else(|| {
+                        request
+                            .options
+                            .iter()
+                            .find(|option| matches!(option.kind, PermissionOptionKind::AllowOnce))
+                    })
+                    .map(|option| option.option_id.clone())
+            })
+            .map(|option_id| {
+                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id))
+            })
+            .unwrap_or(RequestPermissionOutcome::Cancelled);
+        let response = RequestPermissionResponse::new(outcome);
+        let Ok(result) = serde_json::to_value(response) else {
+            return;
+        };
+        effects.push(Effect::Send {
+            from: None,
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+                request.id.clone(),
+                Ok(result),
+            ))),
+        });
     }
 
     /// Send everything queued, oldest first. Each action's [`Effect::Complete`]

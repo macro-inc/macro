@@ -71,5 +71,6 @@ ENV PATH=/nix/var/nix/profiles/default/bin:$PATH \
 
 COPY --from=sidecar-build /build/target/release/acp-sidecar /opt/acp-sidecar
 COPY opencode.json /root/.config/opencode/opencode.json
+COPY SYSTEM.md /etc/macro-agent/SYSTEM.md
 
 CMD ["bash"]
