@@ -28,6 +28,7 @@ on:
           - mcp-server
           - notification-service
           - organization-retention
+          - reminder-dispatch
           - search-processing-service
           - search-upload
           - static-file-service

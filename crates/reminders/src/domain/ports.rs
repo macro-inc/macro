@@ -1,7 +1,7 @@
 //! Ports (trait contracts) for the reminders domain.
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -161,11 +161,14 @@ pub trait RemindersService: Send + Sync + 'static {
         entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
     ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
 
-    /// Fetch one of the user's reminders.
+    /// Fetch the reminder the receipt was minted for.
+    ///
+    /// The receipt carries both the reminder and the caller it was proven for,
+    /// so there is no separate id or user to pass — and no way to reach a
+    /// reminder without having proven ownership first.
     fn get_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
 
     /// List one page of the user's reminders, soonest firing first.
@@ -175,18 +178,16 @@ pub trait RemindersService: Send + Sync + 'static {
         filter: ReminderFilter,
     ) -> impl Future<Output = Result<ReminderPage, ReminderError>> + Send;
 
-    /// Modify one of the user's reminders.
+    /// Modify the reminder the receipt was minted for.
     fn update_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
         patch: ReminderPatch,
     ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
 
-    /// Delete one of the user's reminders.
+    /// Delete the reminder the receipt was minted for.
     fn delete_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<(), ReminderError>> + Send;
 }

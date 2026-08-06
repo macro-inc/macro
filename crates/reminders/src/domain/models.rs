@@ -305,9 +305,12 @@ pub struct ReminderPage {
 pub struct CreateReminder {
     /// What to remind the user about.
     pub description: String,
-    /// The entity to attach the reminder to, if any.
-    pub entity: Option<Entity<'static>>,
     /// When and how often the reminder fires.
+    ///
+    /// The entity to attach to is not named here: it comes from the
+    /// [`EntityAccessReceipt`](entity_access::domain::models::EntityAccessReceipt)
+    /// passed alongside, so a caller cannot reference an entity without first
+    /// proving access to it.
     pub schedule: ReminderSchedule,
 }
 

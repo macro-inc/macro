@@ -4,7 +4,7 @@ use chrono::{Duration, TimeZone};
 use chrono_tz::America::New_York;
 use entity_access::domain::models::{
     AccessLevel, AnyEntityPermission, Entity as AccessEntity, EntityAccessReceipt,
-    EntityPermission, ParticipantRole,
+    EntityPermission, OwnerAccessLevel, ParticipantRole,
 };
 use model_entity::EntityType;
 
@@ -70,6 +70,24 @@ fn view_receipt(
     )
 }
 
+/// An owner receipt for a reminder, as `ReminderAccessExtractor` mints it.
+///
+/// Get, update and delete take one of these instead of a user id and an id:
+/// the reminder they act on is the one ownership was proven for.
+fn owner_receipt(user_id: &'static str, id: Uuid) -> EntityAccessReceipt<OwnerAccessLevel> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user(user_id),
+        AccessEntity {
+            entity_id: id.to_string(),
+            entity_type: EntityType::Reminder,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .expect("owner satisfies an owner requirement")
+}
+
 /// A receipt carrying a channel permission.
 ///
 /// Channels never resolve to an `AccessLevel`; they resolve to a participant
@@ -103,16 +121,14 @@ fn receipt_with(
 fn create_request(schedule: ReminderSchedule) -> CreateReminder {
     CreateReminder {
         description: "follow up".to_string(),
-        entity: None,
         schedule,
     }
 }
 
-fn attached_request(entity_id: &str, schedule: ReminderSchedule) -> CreateReminder {
-    CreateReminder {
-        entity: Some(EntityType::Document.with_entity_string(entity_id.to_string())),
-        ..create_request(schedule)
-    }
+/// A view receipt for a document, which is where an attached reminder's entity
+/// comes from now that `create_reminder` takes a receipt rather than an entity.
+fn doc_receipt(entity_id: &str) -> EntityAccessReceipt<AnyEntityPermission> {
+    view_receipt(USER_A, EntityType::Document, entity_id)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -349,8 +365,8 @@ async fn creates_an_entity_reminder_with_a_matching_receipt() {
     let reminder = service()
         .create_reminder(
             &user(USER_A),
-            attached_request("doc-1", once(future())),
-            Some(view_receipt(USER_A, EntityType::Document, "doc-1")),
+            create_request(once(future())),
+            Some(doc_receipt("doc-1")),
         )
         .await
         .expect("entity reminder should be created");
@@ -381,10 +397,7 @@ async fn creates_a_channel_reminder_for_each_channel_permission_shape() {
         let reminder = service()
             .create_reminder(
                 &user(USER_A),
-                CreateReminder {
-                    entity: Some(EntityType::Channel.with_entity_string("channel-1".to_string())),
-                    ..create_request(once(future()))
-                },
+                create_request(once(future())),
                 Some(channel_receipt(USER_A, "channel-1", permission.clone())),
             )
             .await
@@ -403,10 +416,7 @@ async fn rejects_a_channel_receipt_minted_for_another_user() {
     let err = service()
         .create_reminder(
             &user(USER_A),
-            CreateReminder {
-                entity: Some(EntityType::Channel.with_entity_string("channel-1".to_string())),
-                ..create_request(once(future()))
-            },
+            create_request(once(future())),
             Some(channel_receipt(
                 USER_B,
                 "channel-1",
@@ -421,48 +431,23 @@ async fn rejects_a_channel_receipt_minted_for_another_user() {
     assert!(matches!(err, ReminderError::EntityAccessDenied));
 }
 
+/// The entity is read off the receipt, so "receipt for a different entity",
+/// "entity with no receipt" and "receipt with no entity" are all unrepresentable
+/// — there is no second place to name an entity for them to disagree with.
 #[tokio::test]
-async fn rejects_an_entity_reminder_with_no_receipt() {
-    let err = service()
+async fn the_attached_entity_comes_from_the_receipt() {
+    let reminder = service()
         .create_reminder(
             &user(USER_A),
-            attached_request("doc-1", once(future())),
-            None,
+            create_request(once(future())),
+            Some(view_receipt(USER_A, EntityType::Chat, "chat-9")),
         )
         .await
-        .expect_err("an entity reminder needs a receipt");
+        .expect("entity reminder should be created");
 
-    assert!(matches!(err, ReminderError::EntityAccessDenied));
-}
-
-#[tokio::test]
-async fn rejects_a_receipt_minted_for_a_different_entity() {
-    let err = service()
-        .create_reminder(
-            &user(USER_A),
-            attached_request("doc-1", once(future())),
-            // Same user and type, different id: the caller proved access to
-            // something else entirely.
-            Some(view_receipt(USER_A, EntityType::Document, "doc-2")),
-        )
-        .await
-        .expect_err("receipt entity must match the requested entity");
-
-    assert!(matches!(err, ReminderError::EntityAccessDenied));
-}
-
-#[tokio::test]
-async fn rejects_a_receipt_minted_for_a_different_entity_type() {
-    let err = service()
-        .create_reminder(
-            &user(USER_A),
-            attached_request("shared-id", once(future())),
-            Some(view_receipt(USER_A, EntityType::Chat, "shared-id")),
-        )
-        .await
-        .expect_err("receipt entity type must match the requested entity type");
-
-    assert!(matches!(err, ReminderError::EntityAccessDenied));
+    let entity = reminder.entity().expect("entity should be persisted");
+    assert_eq!(entity.entity_type, EntityType::Chat);
+    assert_eq!(entity.entity_id, "chat-9");
 }
 
 #[tokio::test]
@@ -470,29 +455,13 @@ async fn rejects_a_receipt_belonging_to_another_user() {
     let err = service()
         .create_reminder(
             &user(USER_A),
-            attached_request("doc-1", once(future())),
+            create_request(once(future())),
             Some(view_receipt(USER_B, EntityType::Document, "doc-1")),
         )
         .await
         .expect_err("receipt user must be the caller");
 
     assert!(matches!(err, ReminderError::EntityAccessDenied));
-}
-
-#[tokio::test]
-async fn rejects_a_receipt_with_no_entity_to_authorize() {
-    // Only reachable through driver misuse, so it is surfaced rather than
-    // silently dropped.
-    let err = service()
-        .create_reminder(
-            &user(USER_A),
-            create_request(once(future())),
-            Some(view_receipt(USER_A, EntityType::Document, "doc-1")),
-        )
-        .await
-        .expect_err("a receipt without an entity should be rejected");
-
-    assert!(matches!(err, ReminderError::BadRequest(_)));
 }
 
 #[tokio::test]
@@ -664,8 +633,8 @@ async fn lists_reminders_filtered_by_entity() {
     service
         .create_reminder(
             &user(USER_A),
-            attached_request("doc-1", once(future())),
-            Some(view_receipt(USER_A, EntityType::Document, "doc-1")),
+            create_request(once(future())),
+            Some(doc_receipt("doc-1")),
         )
         .await
         .expect("created");
@@ -795,7 +764,7 @@ async fn gets_a_reminder_by_id() {
         .expect("created");
 
     let found = service
-        .get_reminder(&user(USER_A), created.id)
+        .get_reminder(owner_receipt(USER_A, created.id))
         .await
         .expect("get should succeed");
 
@@ -811,14 +780,15 @@ async fn another_users_reminder_is_not_found() {
         .expect("created");
 
     assert!(matches!(
-        service.get_reminder(&user(USER_B), created.id).await,
+        service
+            .get_reminder(owner_receipt(USER_B, created.id))
+            .await,
         Err(ReminderError::NotFound)
     ));
     assert!(matches!(
         service
             .update_reminder(
-                &user(USER_B),
-                created.id,
+                owner_receipt(USER_B, created.id),
                 ReminderPatch {
                     enabled: Some(false),
                     ..Default::default()
@@ -828,7 +798,9 @@ async fn another_users_reminder_is_not_found() {
         Err(ReminderError::NotFound)
     ));
     assert!(matches!(
-        service.delete_reminder(&user(USER_B), created.id).await,
+        service
+            .delete_reminder(owner_receipt(USER_B, created.id))
+            .await,
         Err(ReminderError::NotFound)
     ));
 
@@ -846,8 +818,7 @@ async fn updates_description_and_enabled() {
 
     let updated = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 description: Some("  new text  ".to_string()),
                 enabled: Some(false),
@@ -873,8 +844,7 @@ async fn updating_the_schedule_recomputes_next_run_at() {
 
     let updated = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 schedule: Some(recurring()),
                 ..Default::default()
@@ -899,8 +869,7 @@ async fn rescheduling_revives_a_completed_reminder() {
 
     let revived = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 schedule: Some(once(now() + Duration::days(7))),
                 ..Default::default()
@@ -932,8 +901,7 @@ async fn a_non_schedule_update_leaves_completed_at_alone() {
 
     let updated = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 description: Some("still done".to_string()),
                 ..Default::default()
@@ -955,8 +923,7 @@ async fn rejects_an_update_to_a_past_one_shot() {
 
     let err = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 schedule: Some(once(now() - Duration::hours(1))),
                 ..Default::default()
@@ -977,7 +944,7 @@ async fn rejects_an_empty_patch() {
         .expect("created");
 
     let err = service
-        .update_reminder(&user(USER_A), created.id, ReminderPatch::default())
+        .update_reminder(owner_receipt(USER_A, created.id), ReminderPatch::default())
         .await
         .expect_err("an empty patch should be rejected");
 
@@ -993,12 +960,14 @@ async fn deletes_a_reminder_once() {
         .expect("created");
 
     service
-        .delete_reminder(&user(USER_A), created.id)
+        .delete_reminder(owner_receipt(USER_A, created.id))
         .await
         .expect("first delete should succeed");
 
     assert!(matches!(
-        service.delete_reminder(&user(USER_A), created.id).await,
+        service
+            .delete_reminder(owner_receipt(USER_A, created.id))
+            .await,
         Err(ReminderError::NotFound)
     ));
 }
@@ -1282,8 +1251,7 @@ async fn rescheduling_leaves_enabled_alone() {
         .expect("created");
     let paused = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 enabled: Some(false),
                 ..Default::default()
@@ -1296,8 +1264,7 @@ async fn rescheduling_leaves_enabled_alone() {
 
     let rescheduled = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 schedule: Some(once(now() + Duration::days(7))),
                 ..Default::default()
@@ -1315,8 +1282,7 @@ async fn rescheduling_leaves_enabled_alone() {
     // Re-enabling is a separate, explicit field on the same patch.
     let resumed = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 schedule: Some(once(now() + Duration::days(8))),
                 enabled: Some(true),
@@ -1347,7 +1313,9 @@ async fn repository_failures_surface_as_internal_errors() {
         Err(ReminderError::Internal(_))
     ));
     assert!(matches!(
-        service.get_reminder(&user(USER_A), created.id).await,
+        service
+            .get_reminder(owner_receipt(USER_A, created.id))
+            .await,
         Err(ReminderError::Internal(_))
     ));
     assert!(matches!(
@@ -1359,8 +1327,7 @@ async fn repository_failures_surface_as_internal_errors() {
     assert!(matches!(
         service
             .update_reminder(
-                &user(USER_A),
-                created.id,
+                owner_receipt(USER_A, created.id),
                 ReminderPatch {
                     enabled: Some(false),
                     ..Default::default()
@@ -1370,7 +1337,9 @@ async fn repository_failures_surface_as_internal_errors() {
         Err(ReminderError::Internal(_))
     ));
     assert!(matches!(
-        service.delete_reminder(&user(USER_A), created.id).await,
+        service
+            .delete_reminder(owner_receipt(USER_A, created.id))
+            .await,
         Err(ReminderError::Internal(_))
     ));
 }
@@ -1403,22 +1372,13 @@ async fn validation_runs_before_the_repository_is_touched() {
         Err(ReminderError::BadRequest(_))
     ));
 
-    // An entity reminder with no receipt is rejected before any read, too.
-    assert!(matches!(
-        service
-            .create_reminder(
-                &user(USER_A),
-                attached_request("doc-1", once(future())),
-                None
-            )
-            .await,
-        Err(ReminderError::EntityAccessDenied)
-    ));
-
     // And an empty patch never reaches the repo.
     assert!(matches!(
         service
-            .update_reminder(&user(USER_A), Uuid::from_u128(1), ReminderPatch::default())
+            .update_reminder(
+                owner_receipt(USER_A, Uuid::from_u128(1)),
+                ReminderPatch::default()
+            )
             .await,
         Err(ReminderError::BadRequest(_))
     ));
@@ -1437,8 +1397,7 @@ async fn update_enforces_the_description_limit() {
     assert!(matches!(
         service
             .update_reminder(
-                &user(USER_A),
-                created.id,
+                owner_receipt(USER_A, created.id),
                 ReminderPatch {
                     description: Some("🎉".repeat(MAX_DESCRIPTION_LEN + 1)),
                     ..Default::default()
@@ -1450,8 +1409,7 @@ async fn update_enforces_the_description_limit() {
 
     let at_limit = service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 description: Some("🎉".repeat(MAX_DESCRIPTION_LEN)),
                 ..Default::default()
@@ -1465,8 +1423,7 @@ async fn update_enforces_the_description_limit() {
     assert!(matches!(
         service
             .update_reminder(
-                &user(USER_A),
-                created.id,
+                owner_receipt(USER_A, created.id),
                 ReminderPatch {
                     description: Some("   ".to_string()),
                     ..Default::default()
@@ -1489,8 +1446,7 @@ async fn a_disabled_reminder_is_still_listed() {
         .expect("created");
     service
         .update_reminder(
-            &user(USER_A),
-            created.id,
+            owner_receipt(USER_A, created.id),
             ReminderPatch {
                 enabled: Some(false),
                 ..Default::default()
@@ -1518,8 +1474,8 @@ async fn pages_within_an_entity_filter() {
         service
             .create_reminder(
                 &user(USER_A),
-                attached_request("doc-1", once(remind_at)),
-                Some(view_receipt(USER_A, EntityType::Document, "doc-1")),
+                create_request(once(remind_at)),
+                Some(doc_receipt("doc-1")),
             )
             .await
             .expect("created");
@@ -1528,8 +1484,8 @@ async fn pages_within_an_entity_filter() {
         service
             .create_reminder(
                 &user(USER_A),
-                attached_request("doc-2", once(remind_at)),
-                Some(view_receipt(USER_A, EntityType::Document, "doc-2")),
+                create_request(once(remind_at)),
+                Some(doc_receipt("doc-2")),
             )
             .await
             .expect("created");

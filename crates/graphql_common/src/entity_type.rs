@@ -57,6 +57,8 @@ pub enum GraphqlEntityType {
     StaticFile,
     /// CRM contact entity.
     CrmContact,
+    /// Reminder entity.
+    Reminder,
 }
 
 impl GraphqlSoupEntityType {
@@ -120,6 +122,7 @@ impl GraphqlEntityType {
             EntityType::Team => Self::Team,
             EntityType::StaticFile => Self::StaticFile,
             EntityType::CrmContact => Self::CrmContact,
+            EntityType::Reminder => Self::Reminder,
         }
     }
 
@@ -145,6 +148,7 @@ impl GraphqlEntityType {
             Self::Team => EntityType::Team,
             Self::StaticFile => EntityType::StaticFile,
             Self::CrmContact => EntityType::CrmContact,
+            Self::Reminder => EntityType::Reminder,
         }
     }
 }

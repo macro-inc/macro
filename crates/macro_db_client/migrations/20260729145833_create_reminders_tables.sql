@@ -7,11 +7,15 @@ CREATE TABLE IF NOT EXISTS reminder
     id           UUID        PRIMARY KEY NOT NULL,
     user_id      TEXT        NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
     description  TEXT        NOT NULL,
-    -- Optional, polymorphic entity association. TEXT because entity ids in this
-    -- database are text ("Document".id, "Chat".id, "Project".id), not uuid.
-    -- No FK is possible for the same reason; readers filter dangling rows.
+    -- Optional, polymorphic entity association. Every reminderable entity is
+    -- keyed by a uuid — email_threads, comms_channels, calls, crm_companies
+    -- and crm_contacts are uuid columns already, and "Document"/"Chat"/
+    -- "Project" hold uuid values in text columns pending their own migration.
+    -- Storing uuid here keeps this table correct now instead of inheriting a
+    -- conversion later. Polymorphism still rules out an FK; readers filter
+    -- dangling rows.
     entity_type  TEXT,
-    entity_id    TEXT,
+    entity_id    UUID,
     -- One-shot mode: the single instant to fire at.
     remind_at    TIMESTAMPTZ,
     -- Recurring mode: a 6-/7-field cron expression interpreted in `timezone`.
@@ -33,8 +37,10 @@ CREATE TABLE IF NOT EXISTS reminder
         CHECK ((entity_type IS NULL) = (entity_id IS NULL)),
     -- Exactly one schedule mode, and a cron always carries its timezone.
     CONSTRAINT reminder_schedule_exactly_one
-        CHECK ((remind_at IS NOT NULL AND cron IS NULL AND timezone IS NULL)
-            OR (remind_at IS NULL AND cron IS NOT NULL AND timezone IS NOT NULL)),
+        CHECK (
+            num_nonnulls(remind_at, cron) = 1
+            AND (cron IS NULL) = (timezone IS NULL)
+        ),
     -- The DB is the final guardrail for what the service already validates, so
     -- a direct SQL path cannot leave an unusable row behind. `length()` counts
     -- characters, matching the service's char-based limit.
@@ -42,8 +48,7 @@ CREATE TABLE IF NOT EXISTS reminder
         CHECK (length(btrim(description)) > 0),
     CONSTRAINT reminder_description_max_length
         CHECK (length(btrim(description)) <= 2000),
-    CONSTRAINT reminder_entity_id_non_empty
-        CHECK (entity_id IS NULL OR length(btrim(entity_id)) > 0),
+    -- No non-empty check on entity_id: a uuid cannot be blank.
     CONSTRAINT reminder_entity_type_non_empty
         CHECK (entity_type IS NULL OR length(btrim(entity_type)) > 0)
 );

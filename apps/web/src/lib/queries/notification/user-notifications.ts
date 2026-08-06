@@ -677,7 +677,10 @@ function notificationEntityTypeToSoupTag(
         'static_file',
         'crm_company',
         'crm_contact',
-        'calendar_event'
+        'calendar_event',
+        // A reminder notification is keyed by the reminder itself, which has
+        // no soup entity to map to here.
+        'reminder'
       ),
       () => null
     )

@@ -7,15 +7,16 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{FromRef, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
 use entity_access::domain::{
-    models::{AccessError, AnyEntityPermission, EntityAccessReceipt},
+    models::{AccessError, AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel},
     ports::EntityAccessService,
 };
+use entity_access::inbound::axum_extractors::ReminderAccessExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
@@ -182,12 +183,11 @@ fn build_entity(
 ) -> Result<Option<Entity<'static>>, ReminderError> {
     match (entity_type, entity_id) {
         (Some(entity_type), Some(entity_id)) => {
+            // Stored as uuid, so reject a malformed id here rather than let it
+            // surface as an opaque repository error.
             let entity_id = entity_id.trim();
-            if entity_id.is_empty() {
-                return Err(ReminderError::BadRequest(
-                    "entityId must not be empty".to_string(),
-                ));
-            }
+            Uuid::parse_str(entity_id)
+                .map_err(|_| ReminderError::BadRequest("entityId must be a uuid".to_string()))?;
             Ok(Some(entity_type.with_entity_string(entity_id.to_string())))
         }
         (None, None) => Ok(None),
@@ -348,7 +348,6 @@ where
             user_id,
             CreateReminder {
                 description,
-                entity,
                 schedule,
             },
             entity_receipt,
@@ -378,8 +377,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn get_reminder_handler<S, Eas, Auth>(
     State(state): State<RemindersRouterState<S, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(params): Path<ReminderIdParams>,
+    access: ReminderAccessExtractor<OwnerAccessLevel, Eas, Auth>,
 ) -> Result<Json<Reminder>, ReminderError>
 where
     S: RemindersService,
@@ -388,7 +386,7 @@ where
 {
     let reminder = state
         .service
-        .get_reminder(&user.authorization.user.macro_user_id, params.id)
+        .get_reminder(access.entity_access_receipt)
         .await?;
     Ok(Json(reminder))
 }
@@ -415,8 +413,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn update_reminder_handler<S, Eas, Auth>(
     State(state): State<RemindersRouterState<S, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(params): Path<ReminderIdParams>,
+    access: ReminderAccessExtractor<OwnerAccessLevel, Eas, Auth>,
     Json(req): Json<UpdateReminderRequest>,
 ) -> Result<Json<Reminder>, ReminderError>
 where
@@ -431,7 +428,7 @@ where
     };
     let reminder = state
         .service
-        .update_reminder(&user.authorization.user.macro_user_id, params.id, patch)
+        .update_reminder(access.entity_access_receipt, patch)
         .await?;
     Ok(Json(reminder))
 }
@@ -453,8 +450,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn delete_reminder_handler<S, Eas, Auth>(
     State(state): State<RemindersRouterState<S, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(params): Path<ReminderIdParams>,
+    access: ReminderAccessExtractor<OwnerAccessLevel, Eas, Auth>,
 ) -> Result<StatusCode, ReminderError>
 where
     S: RemindersService,
@@ -463,7 +459,7 @@ where
 {
     state
         .service
-        .delete_reminder(&user.authorization.user.macro_user_id, params.id)
+        .delete_reminder(access.entity_access_receipt)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

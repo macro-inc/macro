@@ -171,6 +171,10 @@
       "name": "organization-retention-stack",
       "version": "0.0.0",
     },
+    "stacks/reminder-dispatch": {
+      "name": "reminder-dispatch-stack",
+      "version": "0.0.0",
+    },
     "stacks/search-event-queue": {
       "name": "search-event-queue-stack",
       "version": "0.0.0",
@@ -740,6 +744,8 @@
     "pulumi-fusionauth": ["pulumi-fusionauth@6.0.2", "", { "dependencies": { "@pulumi/pulumi": "^3.0.0" } }, "sha512-9By39HUEnap5kCasy7a1ELXEDDeWvBqBY4h7rS/knWUWemoMuaVYaF4YH/qGOR85Gw6AdLRzP6WFqfU7m6j/kw=="],
 
     "read-cmd-shim": ["read-cmd-shim@6.0.0", "", {}, "sha512-1zM5HuOfagXCBWMN83fuFI/x+T/UhZ7k+KIzhrHXcQoeX5+7gmaDYjELQHmmzIodumBHeByBJT4QYS7ufAgs7A=="],
+
+    "reminder-dispatch-stack": ["reminder-dispatch-stack@workspace:stacks/reminder-dispatch"],
 
     "require-directory": ["require-directory@2.1.1", "", {}, "sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q=="],
 

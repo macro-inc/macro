@@ -7289,6 +7289,7 @@ export const listFavoritesResponse = zod
                 'static_file',
                 'crm_company',
                 'crm_contact',
+                'reminder',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7332,6 +7333,7 @@ export const addFavoriteBody = zod
         'static_file',
         'crm_company',
         'crm_contact',
+        'reminder',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -7376,6 +7378,7 @@ export const addFavoriteResponse = zod
         'static_file',
         'crm_company',
         'crm_contact',
+        'reminder',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -7417,6 +7420,7 @@ export const reorderFavoritesBody = zod
                 'static_file',
                 'crm_company',
                 'crm_contact',
+                'reminder',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7451,6 +7455,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'static_file',
       'crm_company',
       'crm_contact',
+      'reminder',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -24026,6 +24031,7 @@ export const listRemindersQueryParams = zod.object({
       'static_file',
       'crm_company',
       'crm_contact',
+      'reminder',
     ])
     .optional()
     .describe(
@@ -24104,6 +24110,7 @@ export const listRemindersResponse = zod
                     'static_file',
                     'crm_company',
                     'crm_contact',
+                    'reminder',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -24187,6 +24194,7 @@ export const createReminderBody = zod
             'static_file',
             'crm_company',
             'crm_contact',
+            'reminder',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -24265,6 +24273,7 @@ export const getReminderResponse = zod
             'static_file',
             'crm_company',
             'crm_contact',
+            'reminder',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -24397,6 +24406,7 @@ export const updateReminderResponse = zod
             'static_file',
             'crm_company',
             'crm_contact',
+            'reminder',
           ])
           .describe('The type of an entity in Macro'),
       ])

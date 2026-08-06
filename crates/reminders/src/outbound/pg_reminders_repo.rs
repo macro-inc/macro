@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -56,6 +56,12 @@ pub enum RemindersRepoErr {
     /// should make impossible.
     #[error("reminder {0} has no schedule")]
     MissingSchedule(Uuid),
+    /// An entity id is not a uuid, which the `entity_id` column requires.
+    #[error("invalid entity id {value:?} for reminder association")]
+    InvalidEntityId {
+        /// The value that could not be parsed.
+        value: String,
+    },
     /// A stored owner is not a parseable macro user id.
     #[error("invalid user id {value:?} stored for reminder {reminder_id}")]
     InvalidUserId {
@@ -72,7 +78,7 @@ struct ReminderRow {
     id: Uuid,
     description: String,
     entity_type: Option<String>,
-    entity_id: Option<String>,
+    entity_id: Option<Uuid>,
     remind_at: Option<DateTime<Utc>>,
     cron: Option<String>,
     timezone: Option<String>,
@@ -121,7 +127,7 @@ impl ReminderRow {
             id: self.id,
             description: self.description,
             entity_type,
-            entity_id: self.entity_id,
+            entity_id: self.entity_id.map(|id| id.to_string()),
             schedule,
             next_run_at: self.next_run_at,
             enabled: self.enabled,
@@ -139,7 +145,7 @@ struct DueReminderRow {
     user_id: String,
     description: String,
     entity_type: Option<String>,
-    entity_id: Option<String>,
+    entity_id: Option<Uuid>,
     remind_at: Option<DateTime<Utc>>,
     cron: Option<String>,
     timezone: Option<String>,
@@ -191,6 +197,24 @@ impl DueReminderRow {
     }
 }
 
+/// The entity id as it is stored: a uuid.
+///
+/// `Entity` carries the id as a string because it is shared across domains
+/// that still key on text, so the conversion happens at this boundary. The
+/// router rejects a malformed id first, so reaching the error arm here means
+/// a caller bypassed it.
+fn entity_uuid(entity: Option<&Entity<'_>>) -> Result<Option<Uuid>, RemindersRepoErr> {
+    entity
+        .map(|entity| {
+            entity.entity_id.as_ref().parse::<Uuid>().map_err(|_| {
+                RemindersRepoErr::InvalidEntityId {
+                    value: entity.entity_id.as_ref().to_string(),
+                }
+            })
+        })
+        .transpose()
+}
+
 /// The schedule as it is stored: `(remind_at, cron, timezone)`, with exactly
 /// one mode populated.
 fn schedule_columns(
@@ -214,7 +238,7 @@ impl RemindersRepo for PgRemindersRepo {
         new: &NewReminder,
     ) -> Result<Reminder, Self::Err> {
         let entity_type: Option<&str> = new.entity.as_ref().map(|entity| entity.entity_type.into());
-        let entity_id: Option<&str> = new.entity.as_ref().map(|entity| entity.entity_id.as_ref());
+        let entity_id = entity_uuid(new.entity.as_ref())?;
         let (remind_at, cron, timezone) = schedule_columns(&new.schedule);
         // Time-ordered v7 so ids sort by creation, and so the id is known before
         // the insert rather than assigned by the database.
@@ -303,10 +327,7 @@ impl RemindersRepo for PgRemindersRepo {
             .entity
             .as_ref()
             .map(|entity| entity.entity_type.into());
-        let entity_id: Option<&str> = filter
-            .entity
-            .as_ref()
-            .map(|entity| entity.entity_id.as_ref());
+        let entity_id = entity_uuid(filter.entity.as_ref())?;
         let (cursor_next_run_at, cursor_created_at, cursor_id) = match filter.cursor {
             Some(cursor) => (
                 Some(cursor.next_run_at),
@@ -335,7 +356,7 @@ impl RemindersRepo for PgRemindersRepo {
             FROM reminder
             WHERE user_id = $1
               AND ($2::text IS NULL OR entity_type = $2)
-              AND ($3::text IS NULL OR entity_id = $3)
+              AND ($3::uuid IS NULL OR entity_id = $3)
               AND ($4::bool OR completed_at IS NULL)
               -- Keyset: resume strictly after the cursor position in the same
               -- (next_run_at, created_at, id) order the query returns.

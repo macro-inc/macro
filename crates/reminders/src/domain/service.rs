@@ -5,10 +5,8 @@ pub mod dispatch;
 #[cfg(test)]
 mod test;
 
-use std::borrow::Cow;
-
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
@@ -93,17 +91,22 @@ fn derive_next_run_at(
     })
 }
 
-/// Confirm the receipt actually authorizes *this* user for *this* entity.
+/// The entity a reminder attaches to, taken from the access receipt.
 ///
-/// The receipt type alone only proves that some caller has view access to some
-/// entity; without this check a driver that minted a receipt for a different
-/// entity (or a different user) would let a reminder attach to something the
-/// caller cannot see.
-fn validate_entity_receipt(
+/// The receipt is the only source. A caller cannot name an entity it has not
+/// proven access to, because there is nowhere else to put the id — which is
+/// the point of taking a receipt rather than an entity: the type makes the
+/// access check unskippable instead of merely expected.
+fn resolve_entity(
     user_id: &MacroUserIdStr<'_>,
-    entity: &Entity<'_>,
-    receipt: &EntityAccessReceipt<AnyEntityPermission>,
-) -> Result<(), ReminderError> {
+    entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
+) -> Result<Option<Entity<'static>>, ReminderError> {
+    let Some(receipt) = entity_receipt else {
+        return Ok(None);
+    };
+
+    // The receipt proves access for whoever it was minted for; it must be this
+    // caller, or one user could attach a reminder using another's receipt.
     let receipt_user = receipt
         .get_authenticated_user()
         .map_err(|_| ReminderError::EntityAccessDenied)?;
@@ -111,52 +114,33 @@ fn validate_entity_receipt(
         return Err(ReminderError::EntityAccessDenied);
     }
 
-    let receipt_entity = receipt.entity();
-    if receipt_entity.entity_type != entity.entity_type
-        || receipt_entity.entity_id != entity.entity_id.as_ref()
-    {
-        return Err(ReminderError::EntityAccessDenied);
-    }
-
-    Ok(())
+    let entity = receipt.entity();
+    Ok(Some(
+        entity
+            .entity_type
+            .with_entity_string(entity.entity_id.clone()),
+    ))
 }
 
-/// Validate the requested entity association, if any.
-fn resolve_entity(
-    user_id: &MacroUserIdStr<'_>,
-    entity: Option<Entity<'static>>,
-    entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
-) -> Result<Option<Entity<'static>>, ReminderError> {
-    let Some(entity) = entity else {
-        // A receipt with nothing to authorize means the caller minted access to
-        // an entity the reminder will not reference. Harmless in itself, but it
-        // only happens through driver misuse, so surface it rather than drop it.
-        if entity_receipt.is_some() {
-            return Err(ReminderError::BadRequest(
-                "entity receipt provided without an entity".to_string(),
-            ));
-        }
-        return Ok(None);
-    };
-
-    if entity.entity_id.trim().is_empty() {
-        return Err(ReminderError::BadRequest(
-            "entityId must not be empty".to_string(),
-        ));
-    }
-
-    let receipt = entity_receipt.ok_or(ReminderError::EntityAccessDenied)?;
-    validate_entity_receipt(user_id, &entity, &receipt)?;
-
-    // Store the trimmed id so reverse lookups (`reminder_entity_idx`) and
-    // equality filters match. Validation above ran against the raw id the
-    // receipt was minted for, so authorization is unaffected.
-    let mut entity = entity;
-    if entity.entity_id.trim().len() != entity.entity_id.len() {
-        entity.entity_id = Cow::Owned(entity.entity_id.trim().to_owned());
-    }
-
-    Ok(Some(entity))
+/// The owner and reminder id a receipt was minted for.
+///
+/// Both come off the receipt so a caller cannot address one reminder while
+/// holding proof for another. The repo stays user-scoped on top of this: the
+/// receipt says who proved what, the `WHERE user_id` says what the query may
+/// touch.
+fn receipt_owner_and_id(
+    receipt: &EntityAccessReceipt<OwnerAccessLevel>,
+) -> Result<(MacroUserIdStr<'static>, Uuid), ReminderError> {
+    let user_id = receipt
+        .get_authenticated_user()
+        .map_err(|_| ReminderError::NotFound)?
+        .clone();
+    let id = receipt
+        .entity()
+        .entity_id
+        .parse::<Uuid>()
+        .map_err(|_| ReminderError::NotFound)?;
+    Ok((user_id, id))
 }
 
 impl<R, C> RemindersService for RemindersServiceImpl<R, C>
@@ -177,12 +161,11 @@ where
     ) -> Result<Reminder, ReminderError> {
         let CreateReminder {
             description,
-            entity,
             schedule,
         } = request;
 
         let description = validate_description(description)?;
-        let entity = resolve_entity(user_id, entity, entity_receipt)?;
+        let entity = resolve_entity(user_id, entity_receipt)?;
         let next_run_at = derive_next_run_at(&schedule, self.clock.now())?;
 
         let new = NewReminder {
@@ -199,14 +182,14 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, receipt))]
     async fn get_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<Reminder, ReminderError> {
+        let (user_id, id) = receipt_owner_and_id(&receipt)?;
         self.repo
-            .get_reminder(user_id, id)
+            .get_reminder(&user_id, id)
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(ReminderError::NotFound)
@@ -285,13 +268,13 @@ where
         })
     }
 
-    #[tracing::instrument(err, skip(self, user_id, patch))]
+    #[tracing::instrument(err, skip(self, receipt, patch))]
     async fn update_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
         patch: ReminderPatch,
     ) -> Result<Reminder, ReminderError> {
+        let (user_id, id) = receipt_owner_and_id(&receipt)?;
         if patch.is_empty() {
             return Err(ReminderError::BadRequest("no fields to update".to_string()));
         }
@@ -320,21 +303,21 @@ where
         };
 
         self.repo
-            .update_reminder(user_id, id, &update)
+            .update_reminder(&user_id, id, &update)
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(ReminderError::NotFound)
     }
 
-    #[tracing::instrument(err, skip(self, user_id))]
+    #[tracing::instrument(err, skip(self, receipt))]
     async fn delete_reminder(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), ReminderError> {
+        let (user_id, id) = receipt_owner_and_id(&receipt)?;
         let deleted = self
             .repo
-            .delete_reminder(user_id, id)
+            .delete_reminder(&user_id, id)
             .await
             .map_err(anyhow::Error::from)?;
         if deleted {

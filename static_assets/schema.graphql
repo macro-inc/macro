@@ -1397,6 +1397,10 @@ enum GraphqlEntityType {
 	CRM contact entity.
 	"""
 	CRM_CONTACT
+	"""
+	Reminder entity.
+	"""
+	REMINDER
 }
 
 """

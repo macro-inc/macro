@@ -25,8 +25,10 @@ use crate::domain::models::{ReminderCursor, ReminderPage};
 const USER_ID: &str = "macro|reminders-user@macro.com";
 const VALID_JWT: &str = "valid";
 /// The one entity the fake access service grants view access to.
-const ACCESSIBLE_DOC: &str = "doc-accessible";
-const FORBIDDEN_DOC: &str = "doc-forbidden";
+// Entity ids are uuids: `reminder.entity_id` is a uuid column, and the router
+// rejects anything that does not parse.
+const ACCESSIBLE_DOC: &str = "11111111-1111-4111-8111-111111111111";
+const FORBIDDEN_DOC: &str = "22222222-2222-4222-8222-222222222222";
 
 fn instant(day: u32, hour: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, day, hour, 0, 0)
@@ -71,6 +73,19 @@ struct FakeEntityAccessService {
     /// Error returned for anything other than [`ACCESSIBLE_DOC`]. `None` means
     /// [`AccessError::Unauthorized`], which is the common case.
     denial: Option<fn() -> AccessError>,
+    /// When set, the caller owns no reminders, so `ReminderAccessExtractor`
+    /// rejects every item route.
+    reminder_not_owned: bool,
+}
+
+impl FakeEntityAccessService {
+    /// The caller owns no reminders.
+    fn without_reminder_ownership() -> Self {
+        Self {
+            reminder_not_owned: true,
+            ..Self::default()
+        }
+    }
 }
 
 impl FakeEntityAccessService {
@@ -78,8 +93,8 @@ impl FakeEntityAccessService {
     /// variant can be exercised.
     fn denying_with(denial: fn() -> AccessError) -> Self {
         Self {
-            receipts_minted: Arc::default(),
             denial: Some(denial),
+            ..Self::default()
         }
     }
 
@@ -137,8 +152,13 @@ impl EntityAccessService for FakeEntityAccessService {
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: EntityType,
+        entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
+        // `ReminderAccessExtractor` resolves ownership through this. A reminder
+        // grants Owner or nothing; the router never asks about anything else.
+        if entity_type == EntityType::Reminder {
+            return Ok((!self.reminder_not_owned).then_some(AccessLevel::Owner));
+        }
         Err(AccessError::Internal)
     }
 
@@ -284,10 +304,32 @@ impl FakeRemindersService {
     }
 }
 
+/// The reminder a receipt was minted for.
+fn receipt_id(receipt: &EntityAccessReceipt<OwnerAccessLevel>) -> Uuid {
+    receipt
+        .entity()
+        .entity_id
+        .parse()
+        .expect("the extractor only mints receipts for a parsed uuid")
+}
+
+/// The entity named by a list filter, which is a read filter and so still
+/// carries the entity directly.
 fn entity_pair(entity: &Option<Entity<'static>>) -> Option<(EntityType, String)> {
     entity
         .as_ref()
         .map(|entity| (entity.entity_type, entity.entity_id.to_string()))
+}
+
+/// The entity a create request attaches to, which the receipt carries now that
+/// `create_reminder` takes a receipt rather than an entity.
+fn receipt_entity_pair(
+    receipt: &Option<EntityAccessReceipt<AnyEntityPermission>>,
+) -> Option<(EntityType, String)> {
+    receipt.as_ref().map(|receipt| {
+        let entity = receipt.entity();
+        (entity.entity_type, entity.entity_id.clone())
+    })
 }
 
 impl RemindersService for FakeRemindersService {
@@ -297,26 +339,21 @@ impl RemindersService for FakeRemindersService {
         request: CreateReminder,
         entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
     ) -> Result<Reminder, ReminderError> {
+        let entity = receipt_entity_pair(&entity_receipt);
         self.record(ServiceCall::Create {
             description: request.description.clone(),
-            entity: entity_pair(&request.entity),
+            entity: entity.clone(),
             has_receipt: entity_receipt.is_some(),
         });
         self.fail_if_configured()?;
-        Ok(sample_reminder(
-            request
-                .entity
-                .as_ref()
-                .map(|entity| entity.entity_id.as_ref()),
-        ))
+        Ok(sample_reminder(entity.as_ref().map(|(_, id)| id.as_str())))
     }
 
     async fn get_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<Reminder, ReminderError> {
-        self.record(ServiceCall::Get(id));
+        self.record(ServiceCall::Get(receipt_id(&receipt)));
         self.fail_if_configured()?;
         Ok(sample_reminder(None))
     }
@@ -341,12 +378,11 @@ impl RemindersService for FakeRemindersService {
 
     async fn update_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
         patch: ReminderPatch,
     ) -> Result<Reminder, ReminderError> {
         self.record(ServiceCall::Update {
-            id,
+            id: receipt_id(&receipt),
             description: patch.description.clone(),
             enabled: patch.enabled,
             has_schedule: patch.schedule.is_some(),
@@ -357,10 +393,9 @@ impl RemindersService for FakeRemindersService {
 
     async fn delete_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), ReminderError> {
-        self.record(ServiceCall::Delete(id));
+        self.record(ServiceCall::Delete(receipt_id(&receipt)));
         self.fail_if_configured()?;
         Ok(())
     }
@@ -753,6 +788,38 @@ async fn a_non_uuid_id_is_400() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
+/// The item routes are gated by `ReminderAccessExtractor`, so a reminder the
+/// caller does not own is refused before the service is reached. "Not yours"
+/// and "does not exist" answer the same way on purpose: distinguishing them
+/// would say whether the id is real.
+#[tokio::test]
+async fn a_reminder_the_caller_does_not_own_never_reaches_the_service() {
+    let id = Uuid::from_u128(99);
+    for request in [
+        authed(axum::http::Request::get(format!("/{id}")))
+            .body(axum::body::Body::empty())
+            .expect("request should build"),
+        authed(axum::http::Request::delete(format!("/{id}")))
+            .body(axum::body::Body::empty())
+            .expect("request should build"),
+    ] {
+        let service = FakeRemindersService::default();
+        let response = build_router(
+            service.clone(),
+            FakeEntityAccessService::without_reminder_ownership(),
+        )
+        .oneshot(request)
+        .await
+        .expect("router should respond");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(
+            service.calls().is_empty(),
+            "the service must not be reached without an ownership receipt"
+        );
+    }
+}
+
 #[tokio::test]
 async fn patch_forwards_only_the_supplied_fields() {
     let service = FakeRemindersService::default();
@@ -999,13 +1066,6 @@ async fn extractor_rejections_are_plain_text_not_error_response() {
                 .expect("request should build"),
             StatusCode::UNPROCESSABLE_ENTITY,
         ),
-        // Malformed path parameter: rejected by the Path extractor as 400.
-        (
-            authed(axum::http::Request::get("/not-a-uuid"))
-                .body(axum::body::Body::empty())
-                .expect("request should build"),
-            StatusCode::BAD_REQUEST,
-        ),
     ];
 
     for (request, expected_status) in cases {
@@ -1198,7 +1258,7 @@ async fn creating_against_a_missing_entity_says_the_entity_is_missing() {
             .body(json_body(serde_json::json!({
                 "description": "follow up",
                 "entityType": "document",
-                "entityId": "missing-doc",
+                "entityId": "33333333-3333-4333-8333-333333333333",
                 "schedule": once_schedule(),
             })))
             .expect("request should build"),

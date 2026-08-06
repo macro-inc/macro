@@ -22,4 +22,5 @@ export type FavoriteEntityType =
   | 'foreign_entity'
   | 'static_file'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'reminder';

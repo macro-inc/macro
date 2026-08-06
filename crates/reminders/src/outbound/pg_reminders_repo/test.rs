@@ -11,6 +11,9 @@ use crate::domain::models::{ReminderCursor, ScheduleUpdate};
 const USER_A: &str = "macro|reminders-a@macro.com";
 const USER_B: &str = "macro|reminders-b@macro.com";
 const DAILY_9AM: &str = "0 0 9 * * *";
+// `reminder.entity_id` is a uuid column, so associations use uuids.
+const DOC_1: &str = "11111111-1111-4111-8111-111111111111";
+const DOC_2: &str = "22222222-2222-4222-8222-222222222222";
 
 fn user(id: &str) -> MacroUserIdStr<'_> {
     MacroUserIdStr::parse_from_str(id).expect("valid user id")
@@ -125,7 +128,7 @@ async fn entity_association_round_trips(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = PgRemindersRepo::new(pool);
     let new = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
         ..new_reminder("review this", once_at(at(2026, 8, 1, 14)))
     };
 
@@ -136,7 +139,7 @@ async fn entity_association_round_trips(pool: PgPool) {
 
     let entity = created.entity().expect("entity should be persisted");
     assert_eq!(entity.entity_type, EntityType::Document);
-    assert_eq!(entity.entity_id, "doc-1");
+    assert_eq!(entity.entity_id, DOC_1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -174,11 +177,11 @@ async fn list_filters_by_entity(pool: PgPool) {
     let repo = PgRemindersRepo::new(pool);
 
     let attached = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
         ..new_reminder("on doc-1", once_at(at(2026, 8, 1, 14)))
     };
     let other = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string("doc-2".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_2.to_string())),
         ..new_reminder("on doc-2", once_at(at(2026, 8, 1, 14)))
     };
     repo.create_reminder(&user(USER_A), &attached)
@@ -195,7 +198,7 @@ async fn list_filters_by_entity(pool: PgPool) {
     .expect("insert");
 
     let filter = ReminderFilter {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
         ..Default::default()
     };
     let batch = repo
@@ -805,7 +808,7 @@ async fn an_unreadable_row_is_skipped_rather_than_failing_the_page(pool: PgPool)
         .create_reminder(
             &user(USER_A),
             &NewReminder {
-                entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+                entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
                 ..new_reminder("has a bad entity type", once_at(at(2026, 8, 1, 14)))
             },
         )
@@ -901,23 +904,22 @@ async fn an_over_long_description_is_rejected_by_the_database(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_blank_entity_id_is_rejected_by_the_database(pool: PgPool) {
+async fn a_non_uuid_entity_id_is_rejected_by_the_database(pool: PgPool) {
     insert_user(&pool, USER_A).await;
 
+    // The column type is the guardrail now that `entity_id` is a uuid: there is
+    // no blank or malformed value to check for, the cast simply fails.
     let err = sqlx::query(
         r#"INSERT INTO reminder (id, user_id, description, entity_type, entity_id, next_run_at, remind_at)
-           VALUES ($1, $2, 'x', 'document', '  ', now(), now())"#,
+           VALUES ($1, $2, 'x', 'document', 'not-a-uuid', now(), now())"#,
     )
     .bind(macro_uuid::generate_uuid_v7())
     .bind(USER_A)
     .execute(&pool)
     .await
-    .expect_err("a whitespace-only entity id should violate the CHECK");
+    .expect_err("a non-uuid entity id should not be storable");
 
-    assert!(
-        err.to_string().contains("reminder_entity_id_non_empty"),
-        "unexpected error: {err}"
-    );
+    assert!(err.to_string().contains("uuid"), "unexpected error: {err}");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1196,13 +1198,16 @@ async fn an_undecodable_row_does_not_stall_the_whole_sweep(pool: PgPool) {
     let good = create_due(&pool, USER_A, at(2026, 8, 1, 11)).await;
     let repo = PgRemindersRepo::new(pool.clone());
 
-    // Only reachable by writing around the service; the CHECK constraints allow
-    // it because both entity columns are non-empty text.
-    sqlx::query(r#"UPDATE reminder SET entity_type = 'chupacabra', entity_id = 'x' WHERE id = $1"#)
-        .bind(broken.id)
-        .execute(&pool)
-        .await
-        .expect("update should succeed");
+    // Only reachable by writing around the service: the entity id is a valid
+    // uuid, so nothing stops the row landing with an unknown entity type.
+    sqlx::query(
+        r#"UPDATE reminder SET entity_type = 'chupacabra', entity_id = $2::uuid WHERE id = $1"#,
+    )
+    .bind(broken.id)
+    .bind(DOC_1)
+    .execute(&pool)
+    .await
+    .expect("update should succeed");
 
     let due = repo
         .due_reminders(at(2026, 8, 1, 12), 10)

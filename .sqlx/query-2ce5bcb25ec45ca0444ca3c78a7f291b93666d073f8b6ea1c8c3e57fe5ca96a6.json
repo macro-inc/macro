@@ -21,7 +21,7 @@
       {
         "ordinal": 3,
         "name": "entity_id",
-        "type_info": "Text"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 4,
@@ -70,7 +70,7 @@
         "Text",
         "Text",
         "Text",
-        "Text",
+        "Uuid",
         "Timestamptz",
         "Text",
         "Text",

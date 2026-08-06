@@ -101,8 +101,7 @@
         "crates/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",
-        "services/document_upload_finalizer_handler/**",
-        "services/reminder_dispatch_handler/**"
+        "services/document_upload_finalizer_handler/**"
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
@@ -111,7 +110,16 @@
       "deploy_lambdas": [
         "delete_chat_handler",
         "docx_unzip_handler",
-        "document_upload_finalizer_handler",
+        "document_upload_finalizer_handler"
+      ]
+    },
+    "reminder-dispatch": {
+      "source_paths": [
+        "crates/reminders/**",
+        "services/reminder_dispatch_handler/**"
+      ],
+      "stack_path": "infra/stacks/reminder-dispatch/**",
+      "deploy_lambdas": [
         "reminder_dispatch_handler"
       ]
     },

@@ -33,7 +33,10 @@ fn notification_item_type(entity_type: model_entity::EntityType) -> Option<Notif
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::CalendarEvent => None,
+        | EntityType::CalendarEvent
+        // A reminder's notification is keyed by the reminder's own id, which
+        // `NotificationItemType` has no variant for, so it has no edge here.
+        | EntityType::Reminder => None,
     }
 }
 

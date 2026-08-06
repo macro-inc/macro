@@ -26,7 +26,7 @@
       {
         "ordinal": 4,
         "name": "entity_id",
-        "type_info": "Text"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 5,
