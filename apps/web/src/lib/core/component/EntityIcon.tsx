@@ -527,13 +527,19 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   return validateEntity(typeString);
 }
 
+/** What the block resolvers return when they cannot place something. */
+const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
+
 /**
  * The icon for what a reminder is about, shown beside the reminder's name.
  *
  * Synchronous by design: the referenced entity's `fileType`/`subType` are
- * resolved server-side precisely so this costs no fetch per row. A reference
- * that maps to no block falls back to the bell rather than to `default`,
- * whose wide variant is the unknown-file glyph.
+ * resolved server-side precisely so this costs no fetch per row.
+ *
+ * A reference that resolves to nothing gets the bell, not the unknown-file
+ * glyph, which on a reminder row reads as breakage rather than as a reminder.
+ * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
+ * returns the literal `unknown`, and `validateEntity` returns `default`.
  */
 export function reminderReferenceIconType(
   reference: NonNullable<ReminderEntity['referencedEntity']>
@@ -549,10 +555,8 @@ export function reminderReferenceIconType(
     true
   );
 
-  if (blockName && getIconConfig(blockName)) {
-    return blockName as EntityWithValidIcon;
-  }
-  return 'reminder';
+  const iconType = blockName ? validateEntity(blockName) : 'default';
+  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(entity: EntityData) {
