@@ -439,3 +439,41 @@ fn an_unknown_operation_is_rejected() {
 
     assert!(result.is_err());
 }
+
+#[test]
+fn flooring_drops_sub_minute_precision_from_a_one_shot() {
+    // "Remind me in ten minutes" at 16:06:32 means 16:16, not 16:16:32.
+    let ragged = Utc
+        .with_ymd_and_hms(2026, 7, 1, 16, 16, 32)
+        .single()
+        .expect("unambiguous instant")
+        + chrono::Duration::nanoseconds(999);
+    let schedule = ReminderSchedule::Once { remind_at: ragged }.floored_to_minute();
+
+    let ReminderSchedule::Once { remind_at } = schedule else {
+        panic!("still a one-shot");
+    };
+    assert_eq!(remind_at, utc(2026, 7, 1, 16, 16));
+}
+
+#[test]
+fn flooring_leaves_an_already_flat_instant_alone() {
+    let flat = utc(2026, 7, 1, 16, 16);
+    let schedule = ReminderSchedule::Once { remind_at: flat }.floored_to_minute();
+
+    let ReminderSchedule::Once { remind_at } = schedule else {
+        panic!("still a one-shot");
+    };
+    assert_eq!(remind_at, flat);
+}
+
+#[test]
+fn flooring_leaves_a_cron_schedule_untouched() {
+    // The seconds in a cron are the owner's, not an artifact of request timing.
+    let schedule = ReminderSchedule::Recurring {
+        cron: ReminderCron::parse("30 0 9 * * *").expect("valid cron"),
+        timezone: New_York,
+    };
+
+    assert_eq!(schedule.clone().floored_to_minute(), schedule);
+}

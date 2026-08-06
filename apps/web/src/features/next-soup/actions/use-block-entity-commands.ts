@@ -376,7 +376,7 @@ export const useBlockEntityCommands = (
       hotkey: ['h'],
       hotkeyToken: TOKENS.entity.action.createReminder,
       scopeId,
-      description: 'Remind me about this',
+      description: 'Remind me',
       keyDownHandler: runCreateReminder,
       condition: () => {
         if (!canUseReminderHotkey()) return false;
@@ -392,7 +392,7 @@ export const useBlockEntityCommands = (
     // from the command menu
     registerHotkey({
       scopeId,
-      description: 'Remind me about this',
+      description: 'Remind me',
       keyDownHandler: runCreateReminder,
       condition: () => {
         if (canUseReminderHotkey()) return false;

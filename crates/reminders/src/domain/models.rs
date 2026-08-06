@@ -5,7 +5,7 @@ mod test;
 
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -79,6 +79,13 @@ fn truncate_to_micros(at: DateTime<Utc>) -> DateTime<Utc> {
     DateTime::from_timestamp_micros(at.timestamp_micros()).unwrap_or(at)
 }
 
+/// Drop everything finer than a minute.
+fn floor_to_minute(at: DateTime<Utc>) -> DateTime<Utc> {
+    at.with_second(0)
+        .and_then(|at| at.with_nanosecond(0))
+        .unwrap_or(at)
+}
+
 /// Promote a conventional 5-field cron to the 6-field form the `cron` crate
 /// parses. Anything else is passed through for `cron` to accept or reject.
 fn normalize_cron(cron: String) -> String {
@@ -130,6 +137,25 @@ impl ReminderSchedule {
     /// Whether this schedule fires more than once.
     pub fn repeats(&self) -> bool {
         matches!(self, Self::Recurring { .. })
+    }
+
+    /// Drop sub-minute precision from a one-shot firing.
+    ///
+    /// "Remind me in ten minutes" at 16:06:32 means 16:16, not 16:16:32. The
+    /// seconds are an artifact of when the request happened to be sent, they
+    /// are not something the owner chose, and a reminder that fires at a ragged
+    /// time reads as a bug.
+    ///
+    /// Recurring schedules are left alone: their seconds come from a cron the
+    /// owner wrote, so `30 0 9 * * *` means 09:00:30 and flooring it would
+    /// quietly ignore what they asked for.
+    pub fn floored_to_minute(self) -> Self {
+        match self {
+            Self::Once { remind_at } => Self::Once {
+                remind_at: floor_to_minute(remind_at),
+            },
+            recurring @ Self::Recurring { .. } => recurring,
+        }
     }
 }
 

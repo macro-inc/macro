@@ -361,7 +361,12 @@ function soupQueryExcludesDone(key: QueryKey): boolean {
   return (
     serialized.includes('"emailView":"inbox"') ||
     serialized.includes('"NotificationDone":false') ||
-    serialized.includes('"nd":false')
+    serialized.includes('"nd":false') ||
+    // Reminders carry their done state on themselves rather than on a
+    // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
+    // shape the Reminders "Upcoming" view filters on. Without it, marking a
+    // reminder done left the row sitting there until the next refetch.
+    serialized.includes('"comp":false')
   );
 }
 

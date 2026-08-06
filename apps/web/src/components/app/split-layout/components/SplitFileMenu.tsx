@@ -307,7 +307,7 @@ export function SplitFileMenu(props: {
     const entity = menuEntity();
     if (!entity || !createReminderAction.canExecute(entity)) return undefined;
     return {
-      label: 'Remind me about this',
+      label: 'Remind me',
       icon: BellSimple,
       action: () => {
         setOpen(false);

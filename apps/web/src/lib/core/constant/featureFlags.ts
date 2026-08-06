@@ -170,7 +170,7 @@ export function ENABLE_CRM(): boolean {
   return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
 }
 
-// Reminders: the "Remind me about this" entry in the command menu, the soup
+// Reminders: the "Remind me" entry in the command menu, the soup
 // context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
 // is the single gate for all of them. PostHog-gated with a dev-mode default.

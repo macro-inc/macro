@@ -89,6 +89,27 @@ fn derive_next_run_at(
     })
 }
 
+/// Check the schedule will fire, then store it at minute granularity.
+///
+/// Order matters. Flooring first would drag a request inside the current minute
+/// back into the past and reject it, but "remind me in thirty seconds" is a
+/// legitimate ask — it just fires on the next sweep rather than in thirty
+/// seconds, which is what minute granularity means.
+fn normalize_schedule(
+    schedule: ReminderSchedule,
+    now: DateTime<Utc>,
+) -> Result<(ReminderSchedule, DateTime<Utc>), ReminderError> {
+    let derived = derive_next_run_at(&schedule, now)?;
+    let schedule = schedule.floored_to_minute();
+    let next_run_at = match schedule {
+        // Same instant the schedule now carries, so the two cannot disagree.
+        ReminderSchedule::Once { remind_at } => remind_at,
+        // A cron's seconds are the owner's, so its firing is left as derived.
+        ReminderSchedule::Recurring { .. } => derived,
+    };
+    Ok((schedule, next_run_at))
+}
+
 /// The entity a reminder attaches to, taken from the access receipt.
 ///
 /// The receipt is the only source. A caller cannot name an entity it has not
@@ -163,7 +184,7 @@ where
 
         let description = validate_description(description)?;
         let entity = resolve_entity(user_id, entity_receipt)?;
-        let next_run_at = derive_next_run_at(&schedule, self.clock.now())?;
+        let (schedule, next_run_at) = normalize_schedule(schedule, self.clock.now())?;
 
         let new = NewReminder {
             description,
@@ -304,7 +325,7 @@ where
         let description = description.map(validate_description).transpose()?;
         let schedule = schedule
             .map(|schedule| {
-                let next_run_at = derive_next_run_at(&schedule, self.clock.now())?;
+                let (schedule, next_run_at) = normalize_schedule(schedule, self.clock.now())?;
                 Ok::<_, ReminderError>(ScheduleUpdate {
                     schedule,
                     next_run_at,

@@ -308,7 +308,7 @@ export function createSoupEntityActions(): {
     if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
       middleItems.push({
         id: 'create-reminder',
-        label: 'Remind me about this',
+        label: 'Remind me',
         hotkeyToken: TOKENS.entity.action.createReminder,
         onClick: handle(createReminderAction.executeWithSoup),
       });

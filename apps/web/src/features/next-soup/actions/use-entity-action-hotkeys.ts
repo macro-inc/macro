@@ -488,7 +488,7 @@ export const useEntityActionHotkeys = (
     hotkey: ['h'],
     hotkeyToken: TOKENS.entity.action.createReminder,
     scopeId,
-    description: 'Remind me about this',
+    description: 'Remind me',
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length !== 1) return false;

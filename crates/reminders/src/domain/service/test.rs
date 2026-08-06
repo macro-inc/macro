@@ -595,7 +595,15 @@ async fn accepts_a_one_shot_one_second_from_now() {
         .await
         .expect("an instant just after now should be accepted");
 
-    assert_eq!(reminder.next_run_at, remind_at);
+    // Accepted, then floored — which lands it in the current minute, so it
+    // fires on the next sweep. Validating before flooring is what keeps this
+    // from being rejected as "remindAt must be in the future": a sub-minute
+    // request is honoured at the granularity reminders actually work at.
+    assert_eq!(
+        reminder.next_run_at,
+        now(),
+        "floored into the current minute"
+    );
 }
 
 #[tokio::test]
@@ -1566,4 +1574,44 @@ async fn pages_within_an_entity_filter() {
     assert_eq!(seen.len(), 3, "all three doc-1 reminders, and only those");
     let unique: std::collections::HashSet<_> = seen.iter().collect();
     assert_eq!(unique.len(), 3);
+}
+
+#[tokio::test]
+async fn creating_floors_the_firing_to_the_minute() {
+    // What "remind me in 90 minutes" produces when the request lands at
+    // 12:00:00 and the client did the arithmetic against its own ragged clock.
+    let ragged = future() + Duration::seconds(32) + Duration::milliseconds(500);
+    let reminder = service()
+        .create_reminder(&user(USER_A), create_request(once(ragged)), None)
+        .await
+        .expect("reminder should be created");
+
+    assert_eq!(reminder.next_run_at, future());
+    // The stored schedule has to agree with the firing, or a later read would
+    // show a time the reminder will not actually fire at.
+    assert_eq!(reminder.schedule, once(future()));
+}
+
+#[tokio::test]
+async fn rescheduling_floors_the_firing_to_the_minute() {
+    let service = service();
+    let created = service
+        .create_reminder(&user(USER_A), create_request(once(future())), None)
+        .await
+        .expect("created");
+    let ragged = future() + Duration::hours(1) + Duration::seconds(45);
+
+    let reminder = service
+        .update_reminder(
+            owner_receipt(USER_A, created.id),
+            ReminderPatch {
+                schedule: Some(once(ragged)),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("reschedule should succeed");
+
+    assert_eq!(reminder.next_run_at, future() + Duration::hours(1));
+    assert_eq!(reminder.schedule, once(future() + Duration::hours(1)));
 }
