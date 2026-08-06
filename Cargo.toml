@@ -24,6 +24,7 @@ members = [
   "crates/favorites",
   "crates/foreign_entity",
   "crates/generic_email_domains",
+  "crates/gmail_client",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
@@ -271,6 +272,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+wiremock = "0.6.5"
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"

@@ -1,6 +1,7 @@
 pub(crate) mod attachments;
 pub(crate) mod auth;
 pub(crate) mod contacts;
+mod error;
 pub(crate) mod filters;
 pub(crate) mod history;
 pub(crate) mod labels;
@@ -8,6 +9,9 @@ pub(crate) mod messages;
 pub(crate) mod profile;
 pub(crate) mod threads;
 pub(crate) mod watch;
+
+#[cfg(test)]
+mod test;
 
 use crate::labels::delete_gmail_label;
 use regex::Regex;
@@ -23,16 +27,23 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
     let redacted = EMAIL_REGEX.replace_all(body, "[REDACTED_EMAIL]");
     let trimmed = redacted.trim();
     if trimmed.len() <= MAX_ERROR_BODY_LEN {
-        trimmed.to_string()
-    } else {
-        format!("{}… (truncated)", &trimmed[..MAX_ERROR_BODY_LEN])
+        return trimmed.to_string();
     }
+
+    let truncate_at = trimmed
+        .char_indices()
+        .map(|(index, _)| index)
+        .take_while(|index| *index <= MAX_ERROR_BODY_LEN)
+        .last()
+        .unwrap_or(0);
+    format!("{}… (truncated)", &trimmed[..truncate_at])
 }
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, get_message_thread_id, list_messages};
 use crate::threads::get_thread;
+pub use error::GmailApiHttpError;
 #[allow(unused_imports)]
 use mockall::automock;
 use models_email::email::service;
@@ -66,12 +77,33 @@ pub struct GmailClient {
 
 impl GmailClient {
     pub fn new(subscription_topic: String) -> Self {
+        Self::new_with_urls(
+            subscription_topic,
+            "https://www.googleapis.com/gmail/v1".to_string(),
+            "https://people.googleapis.com/v1".to_string(),
+            "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            "macro-gmail-webhook".to_string(),
+        )
+    }
+
+    /// Creates a client with injectable Gmail, People, and JWKS URLs.
+    ///
+    /// This constructor supports deterministic tests and Gmail-compatible
+    /// endpoints. HTTP transport details and endpoint values remain private to
+    /// this crate.
+    pub fn new_with_urls(
+        subscription_topic: String,
+        gmail_url: String,
+        people_url: String,
+        jwks_url: String,
+        audience: String,
+    ) -> Self {
         Self {
             inner: reqwest::Client::new(),
-            base_url: String::from("https://www.googleapis.com/gmail/v1"),
-            certs_url: String::from("https://www.googleapis.com/oauth2/v3/certs"),
-            contacts_url: String::from("https://people.googleapis.com/v1"),
-            audience: "macro-gmail-webhook".to_string(),
+            base_url: gmail_url.trim_end_matches('/').to_string(),
+            certs_url: jwks_url,
+            contacts_url: people_url.trim_end_matches('/').to_string(),
+            audience,
             subscription_topic,
         }
     }
