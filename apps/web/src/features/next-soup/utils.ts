@@ -66,6 +66,10 @@ import {
   snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
 import {
+  invalidateRemindersById,
+  setReminderCompleted,
+} from '@queries/reminders/reminders';
+import {
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -73,7 +77,6 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
-import { storageServiceClient } from '@service-storage/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { withPreviewSourceEntityId } from './preview-history';
@@ -1348,11 +1351,7 @@ function setRemindersCompleted(
   reminderIds: string[],
   completed: boolean
 ): Promise<unknown>[] {
-  return reminderIds.map((id) =>
-    throwOnErr(() =>
-      storageServiceClient.reminders.updateReminder(id, { completed })
-    )
-  );
+  return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
 export async function executeMarkEntitiesDone(args: {
@@ -1384,15 +1383,20 @@ export async function executeMarkEntitiesDone(args: {
 
   if (rejected) {
     // Real refetch to reconcile server state with the UI after the caller
-    // rolls back its optimistic cache writes.
+    // rolls back its optimistic cache writes. `allSettled` means some
+    // reminders may have been written even though the caller rolls all of
+    // them back, so they have to be reconciled too, not just the emails.
+    invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
       ...emailIds.map((id) => invalidateSoupEntity(id)),
+      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to mark as done');
   }
 
+  invalidateRemindersById(reminderIds);
   await Promise.all([
     queryClient.invalidateQueries({
       queryKey: queryKeys.all.email,
@@ -1438,12 +1442,18 @@ export async function executeMarkEntitiesUndone(args: {
   );
 
   if (rejected) {
+    // Some reminders may have been un-completed even though the caller rolls
+    // every optimistic transaction back, so reconcile them against the server.
+    invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
   }
+
+  invalidateRemindersById(reminderIds);
 
   await Promise.all([
     queryClient.invalidateQueries({

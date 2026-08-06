@@ -1338,7 +1338,7 @@ async fn rescheduling_leaves_enabled_alone() {
 
 #[tokio::test]
 async fn repository_failures_surface_as_internal_errors() {
-    // Every method wraps repo errors with `anyhow::Error::from`, which the router
+    // Every method wraps repo errors in a `rootcause::Report`, which the router
     // turns into a 500 with the cause logged but not returned. Without this the
     // whole mapping is unexercised.
     let service = service();

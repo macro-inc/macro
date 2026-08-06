@@ -241,7 +241,7 @@ export type ItemLike = {
   name?: string;
   /** Present on reminders: the entity the reminder is about. A reminder has no
    * block of its own, so it borrows this entity's icon. */
-  referencedEntity?: { type: string };
+  referencedEntity?: { type: string; fileType?: string; subType?: string };
 };
 
 /**
@@ -269,9 +269,15 @@ export function itemToBlockName(
   }
   if (item.type === 'channel_thread') return 'channel';
   // A reminder has no block of its own; it points at one. A standalone
-  // reminder falls through to 'unknown'.
+  // reminder falls through to 'unknown'. Same precedence as the referenced
+  // entity would get on its own row, so a task or a .docx resolves to its
+  // specific block rather than the generic 'document'.
   if (item.type === 'reminder') {
-    return fileTypeToBlockName(item.referencedEntity?.type, icon);
+    const referenced = item.referencedEntity;
+    if (referenced?.subType && isBlockAlias(referenced.subType)) {
+      return referenced.subType;
+    }
+    return fileTypeToBlockName(referenced?.fileType ?? referenced?.type, icon);
   }
   return fileTypeToBlockName(item.type, icon);
 }

@@ -441,17 +441,20 @@ impl RemindersRepo for PgRemindersRepo {
             -- Resolve the referenced document in the same round trip: the block
             -- a reminder opens (and its icon) comes from the document's file
             -- type, and the client's icon path is synchronous. "Document".id is
-            -- TEXT, as reminder.entity_id is, so this needs no cast.
+            -- still TEXT while reminder.entity_id is a uuid, hence the cast.
             LEFT JOIN "Document" d
                 ON r.entity_type = 'document'
-               AND d.id = r.entity_id
+               AND d.id = r.entity_id::text
                AND d."deletedAt" IS NULL
             LEFT JOIN document_sub_type dst ON dst.document_id = d.id
             WHERE r.user_id = $1
               AND ($2::uuid[] IS NULL OR r.id = ANY($2))
               AND (
                   $3::text[] IS NULL
-                  OR (r.entity_id IS NOT NULL AND r.entity_type || ':' || r.entity_id = ANY($3))
+                  OR (
+                      r.entity_id IS NOT NULL
+                      AND r.entity_type || ':' || r.entity_id::text = ANY($3)
+                  )
               )
               AND ($4::bool IS NULL OR (r.completed_at IS NOT NULL) = $4)
             -- Descending to match Soup's global ordering, so the LIMIT keeps the

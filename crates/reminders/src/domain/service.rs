@@ -279,7 +279,7 @@ where
         self.repo
             .list_reminders_for_soup(user_id, ids, entities, completed, limit)
             .await
-            .map_err(anyhow::Error::from)
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())
             .map_err(ReminderError::from)
     }
 
@@ -365,8 +365,7 @@ impl RemindersService for NoOpRemindersService {
 
     async fn get_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _id: Uuid,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<Reminder, ReminderError> {
         unimplemented!("NoOpRemindersService.get_reminder")
     }
@@ -392,8 +391,7 @@ impl RemindersService for NoOpRemindersService {
 
     async fn update_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _id: Uuid,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
         _patch: ReminderPatch,
     ) -> Result<Reminder, ReminderError> {
         unimplemented!("NoOpRemindersService.update_reminder")
@@ -401,8 +399,7 @@ impl RemindersService for NoOpRemindersService {
 
     async fn delete_reminder(
         &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _id: Uuid,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), ReminderError> {
         unimplemented!("NoOpRemindersService.delete_reminder")
     }

@@ -89,6 +89,46 @@ type CreateReminderCallbacks = MutationCallbacks<
   CreateReminderArgs
 >;
 
+/**
+ * Set a reminder's completed flag.
+ *
+ * Bulk done/not-done runs over a mixed selection (emails, notifications,
+ * reminders) with one shared optimistic layer, so it drives the writes itself
+ * rather than through a mutation per row. The service call still belongs
+ * here; `next-soup/utils` keeps only the orchestration.
+ */
+export async function setReminderCompleted(id: string, completed: boolean) {
+  return await throwOnErr(() =>
+    storageServiceClient.reminders.updateReminder(id, { completed })
+  );
+}
+
+/**
+ * Invalidate the lists plus each of the given reminder details.
+ *
+ * `refetch` should be true only when the server state is unknown — after a
+ * failed or partly-failed write. On success the optimistic layer already
+ * holds the right values, and an immediate refetch would detach the list's
+ * Suspense boundary and reset its scroll.
+ */
+export function invalidateRemindersById(
+  ids: string[],
+  { refetch = false }: { refetch?: boolean } = {}
+) {
+  if (ids.length === 0) return;
+  const refetchType = refetch ? undefined : ('none' as const);
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.list._def,
+    refetchType,
+  });
+  for (const id of ids) {
+    void queryClient.invalidateQueries({
+      queryKey: reminderKeys.detail(id).queryKey,
+      refetchType,
+    });
+  }
+}
+
 /** Invalidate every reminder list, plus one detail when the id is known. */
 function invalidateReminders(id?: string) {
   void queryClient.invalidateQueries({ queryKey: reminderKeys.list._def });

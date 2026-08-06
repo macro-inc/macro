@@ -28,13 +28,18 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
    */
   const deleteRemindersNow = async (reminders: EntityData[]) => {
     if (reminders.length === 0) return;
-    const splitManager = globalSplitManager();
-    if (splitManager) {
-      const ids = new Set(reminders.map(({ id }) => id));
-      globalRemoveFromSplitHistory(splitManager, (entry) => ids.has(entry.id));
-    }
     try {
       await bulkDelete.mutateAsync(reminders);
+      // Only after the delete lands: the mutation restores the rows on
+      // failure, and a dropped split-history entry cannot be restored with
+      // them.
+      const splitManager = globalSplitManager();
+      if (splitManager) {
+        const ids = new Set(reminders.map(({ id }) => id));
+        globalRemoveFromSplitHistory(splitManager, (entry) =>
+          ids.has(entry.id)
+        );
+      }
       toast.success(
         reminders.length > 1
           ? `Deleted ${reminders.length} reminders`

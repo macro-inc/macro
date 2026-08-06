@@ -1562,16 +1562,16 @@ async fn soup_list_filters_by_entity_token(pool: PgPool) {
     let repo = PgRemindersRepo::new(pool);
 
     let on_doc = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
         ..new_reminder("on doc-1", once_at(at(2026, 8, 1, 14)))
     };
     let on_other_doc = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string("doc-2".to_string())),
+        entity: Some(EntityType::Document.with_entity_string(DOC_2.to_string())),
         ..new_reminder("on doc-2", once_at(at(2026, 8, 1, 14)))
     };
     // Same id, different type — proves the token is matched whole, not by id.
     let on_chat = NewReminder {
-        entity: Some(EntityType::Chat.with_entity_string("doc-1".to_string())),
+        entity: Some(EntityType::Chat.with_entity_string(DOC_1.to_string())),
         ..new_reminder("on chat doc-1", once_at(at(2026, 8, 1, 14)))
     };
     for new in [&on_doc, &on_other_doc, &on_chat] {
@@ -1590,7 +1590,7 @@ async fn soup_list_filters_by_entity_token(pool: PgPool) {
         .list_reminders_for_soup(
             &user(USER_A),
             &[],
-            &[entity_token(&EntityType::Document.with_entity_str("doc-1"))],
+            &[entity_token(&EntityType::Document.with_entity_str(DOC_1))],
             None,
             100,
         )
