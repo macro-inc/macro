@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                user_id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            FROM reminder\n            WHERE enabled\n              AND completed_at IS NULL\n              AND next_run_at <= $1\n            ORDER BY next_run_at\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                id,\n                user_id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            FROM reminder\n            WHERE enabled\n              AND completed_at IS NULL\n              AND cron IS NULL\n              AND next_run_at <= $1\n            ORDER BY next_run_at\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -91,5 +91,5 @@
       false
     ]
   },
-  "hash": "56e30dacffac7bd6ee0f2e0634c57411c08554fa7dd73e29a868d9901e2b1bfc"
+  "hash": "f5e9d984817699163945a80f774d20984d2865fd0696d83c2bdce6f0db64ebbe"
 }

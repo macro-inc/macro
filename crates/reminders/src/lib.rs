@@ -12,8 +12,9 @@
 //! - **inbound**: driving adapters (Axum HTTP router).
 //! - **outbound**: driven adapters (Postgres repository).
 //!
-//! Delivery is out of scope: the dispatcher that fires due reminders and writes
-//! `reminder_occurrence` rows does not exist yet.
+//! Delivery lives here too: the dispatch sweep claims due firings, sends the
+//! notification, and records `reminder_occurrence` rows. Recurring schedules
+//! are modelled and stored but not yet dispatched.
 
 pub mod domain;
 

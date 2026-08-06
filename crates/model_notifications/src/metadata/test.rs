@@ -735,6 +735,23 @@ fn reminder_notif_event_round_trips_and_renders_without_a_sender() {
 }
 
 #[test]
+fn reminder_body_is_bounded_for_the_push_payload() {
+    // Descriptions are allowed up to 2000 chars. Four-byte chars would make an
+    // 8 KB body, over Apple's 4 KB payload limit, so the body is cut on a char
+    // boundary rather than passed through whole.
+    let metadata = ReminderMetadata {
+        reminder_id: Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap(),
+        description: "🎉".repeat(2_000),
+    };
+
+    let body = metadata.format_body(None).unwrap();
+
+    assert_eq!(body.chars().count(), 513, "512 chars plus the ellipsis");
+    assert!(body.ends_with('…'));
+    assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
+}
+
+#[test]
 fn reminder_collapse_key_is_per_reminder_not_per_entity() {
     let entity = EntityType::Document.with_entity_str("doc-1");
     let key = |id: &str| {

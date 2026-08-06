@@ -477,8 +477,14 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         now: DateTime<Utc>,
         limit: i64,
     ) -> Result<Vec<DueReminder>, Self::Err> {
-        // Matches `reminder_due_idx` exactly: (next_run_at) WHERE enabled AND
-        // completed_at IS NULL.
+        // Driven by `reminder_due_idx`: (next_run_at) WHERE enabled AND
+        // completed_at IS NULL, with recurring rows filtered out on top.
+        //
+        // Recurring reminders are excluded here rather than only in the
+        // dispatch loop because `LIMIT` applies before that loop sees a row.
+        // A recurring reminder is never completed and never has its
+        // next_run_at advanced, so it stays due forever — enough of them
+        // would fill every sweep and starve one-shot reminders permanently.
         let rows = sqlx::query_as!(
             DueReminderRow,
             r#"
@@ -499,6 +505,7 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             FROM reminder
             WHERE enabled
               AND completed_at IS NULL
+              AND cron IS NULL
               AND next_run_at <= $1
             ORDER BY next_run_at
             LIMIT $2

@@ -1368,9 +1368,21 @@ impl NotificationTitle for ReminderMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(self.description.clone())
+        // A description can be 2000 characters, which is 8 KB of UTF-8 at four
+        // bytes each — twice Apple's 4 KB push payload limit, and the alert
+        // renders only a few lines anyway. Cut on a char boundary.
+        Ok(
+            match self.description.char_indices().nth(REMINDER_BODY_MAX_CHARS) {
+                None => self.description.clone(),
+                Some((cut, _)) => format!("{}…", &self.description[..cut]),
+            },
+        )
     }
 }
+
+/// Characters of a reminder description kept in the notification body, chosen
+/// so the APNS payload stays well inside Apple's 4 KB limit.
+const REMINDER_BODY_MAX_CHARS: usize = 512;
 
 impl NotificationExtIos for ReminderMetadata {
     type NotifData = PushNotificationData;

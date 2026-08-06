@@ -990,6 +990,30 @@ async fn due_reminders_returns_only_firings_that_have_arrived(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn due_reminders_excludes_recurring_before_the_limit(pool: PgPool) {
+    // A recurring reminder is never completed and never has its next_run_at
+    // advanced, so if the query returned it the row would stay due forever.
+    // With LIMIT applied before the dispatch loop skips it, enough of them
+    // would starve one-shot reminders permanently.
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let now = at(2026, 8, 1, 12);
+
+    repo.create_reminder(&user(USER_A), &new_reminder("standup", recurring()))
+        .await
+        .expect("recurring reminder should insert");
+    let one_shot = create_due(&pool, USER_A, at(2026, 8, 1, 11)).await;
+
+    let due = repo.due_reminders(now, 1).await.expect("query succeeds");
+
+    assert_eq!(due.len(), 1);
+    assert_eq!(
+        due[0].reminder.id, one_shot.id,
+        "the one-shot must win the single slot, not the recurring row"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn due_reminders_spans_users(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
