@@ -43,19 +43,17 @@ fn parse<T: JsonRpcMessage>(method: &str, params: &impl serde::Serialize) -> T {
 pub struct FakeAgent {
     /// `None` once the container has disconnected.
     to_harness: Arc<Mutex<Option<UnboundedSender<RawJsonRpcMessage>>>>,
-    from_harness: Arc<Mutex<Vec<RawJsonRpcMessage>>>,
+    received: watch::Sender<Vec<RawJsonRpcMessage>>,
     progress: Arc<Mutex<Progress>>,
-    request_count: watch::Sender<usize>,
 }
 
 impl FakeAgent {
     pub(crate) fn new(to_harness: UnboundedSender<RawJsonRpcMessage>) -> Self {
-        let (request_count, _) = watch::channel(0);
+        let (received, _) = watch::channel(Vec::new());
         Self {
             to_harness: Arc::new(Mutex::new(Some(to_harness))),
-            from_harness: Arc::new(Mutex::new(Vec::new())),
+            received,
             progress: Arc::new(Mutex::new(Progress::default())),
-            request_count,
         }
     }
 
@@ -144,13 +142,14 @@ impl FakeAgent {
     /// Every frame the harness has delivered, in order.
     #[must_use]
     pub fn received_frames(&self) -> Vec<RawJsonRpcMessage> {
-        self.lock_received().clone()
+        self.received.borrow().clone()
     }
 
     /// The requests the harness invoked, in order.
     #[must_use]
     pub fn received_requests(&self) -> Vec<ClientRequest> {
-        self.lock_received()
+        self.received
+            .borrow()
             .iter()
             .filter_map(|frame| match frame {
                 RawJsonRpcMessage::Request(request) => {
@@ -163,17 +162,24 @@ impl FakeAgent {
 
     /// Wait until the harness has delivered at least `count` ACP requests.
     pub async fn wait_for_requests(&self, count: usize) {
-        let mut requests = self.request_count.subscribe();
-        requests
-            .wait_for(|current| *current >= count)
+        let mut received = self.received.subscribe();
+        received
+            .wait_for(|frames| {
+                frames
+                    .iter()
+                    .filter(|frame| matches!(frame, RawJsonRpcMessage::Request(_)))
+                    .count()
+                    >= count
+            })
             .await
-            .expect("fake agent request counter should remain open");
+            .expect("fake agent frame history should remain open");
     }
 
     /// The notifications the harness sent, in order.
     #[must_use]
     pub fn received_notifications(&self) -> Vec<ClientNotification> {
-        self.lock_received()
+        self.received
+            .borrow()
             .iter()
             .filter_map(|frame| match frame {
                 RawJsonRpcMessage::Notification(notification) => {
@@ -192,7 +198,6 @@ impl FakeAgent {
     /// its session exists, or `session/new` before `initialize`. A real agent
     /// would reject these, so failing loudly beats recording them.
     pub(crate) fn deliver(&self, frame: RawJsonRpcMessage) {
-        let is_request = matches!(frame, RawJsonRpcMessage::Request(_));
         if let RawJsonRpcMessage::Request(request) = &frame {
             let mut progress = self.lock_progress();
             match parse::<ClientRequest>(&request.method, &request.params) {
@@ -217,10 +222,7 @@ impl FakeAgent {
                 ),
             }
         }
-        self.lock_received().push(frame);
-        if is_request {
-            self.request_count.send_modify(|count| *count += 1);
-        }
+        self.received.send_modify(|frames| frames.push(frame));
     }
 
     /// Stop being able to talk, so the harness sees the stream end.
@@ -246,11 +248,5 @@ impl FakeAgent {
         self.progress
             .lock()
             .expect("fake agent progress lock should not be poisoned")
-    }
-
-    fn lock_received(&self) -> std::sync::MutexGuard<'_, Vec<RawJsonRpcMessage>> {
-        self.from_harness
-            .lock()
-            .expect("fake agent received lock should not be poisoned")
     }
 }
