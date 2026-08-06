@@ -2,7 +2,7 @@ use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::pubsub::util::publish_email_event;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
-    cleanup_draft_attachments, fetch_and_attach_draft_attachments,
+    build_mime_message, cleanup_draft_attachments, fetch_and_attach_draft_attachments,
     fetch_and_attach_forwarded_attachments, generate_email_threading_headers,
 };
 use anyhow::Context;
@@ -152,20 +152,29 @@ async fn process_scheduled_message_inner(
     )
     .await?;
 
-    // send message to gmail api
-    ctx.gmail_client
+    let mime = build_mime_message(
+        &message_to_send,
+        &sender_contact,
+        parent_message_id.as_deref(),
+        references.as_deref(),
+    )?;
+
+    // Send the prepared MIME through Gmail, then write the returned provider IDs
+    // onto the temporary service model for the existing persistence flow.
+    let sent_message = ctx
+        .gmail_client
         .send_message(
             gmail_access_token.as_str(),
-            &mut message_to_send,
-            &sender_contact,
-            parent_message_id,
-            references,
+            &mime,
+            message_to_send.provider_thread_id.as_deref(),
         )
         .await
         .context(format!(
             "Failed to send message to gmail api for message_id {}",
             data.message_id
         ))?;
+    message_to_send.provider_id = Some(sent_message.id);
+    message_to_send.provider_thread_id = Some(sent_message.thread_id);
 
     let mut tx = ctx
         .db
@@ -184,8 +193,7 @@ async fn process_scheduled_message_inner(
 
             // Gmail accepted the send and the DB updates are committed:
             // publish the message_sent event resolving the earlier
-            // message_send_queued. Provider ids were set on
-            // `message_to_send` by the Gmail send call above.
+            // message_send_queued.
             // Actor is not tracked on scheduled sends; owner is on `link`.
             if let (Some(message_db_id), Some(thread_db_id)) =
                 (message_to_send.db_id, message_to_send.thread_db_id)

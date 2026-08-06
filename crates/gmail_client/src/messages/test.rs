@@ -1,5 +1,7 @@
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::StatusCode;
-use wiremock::matchers::{method, path, query_param};
+use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
@@ -99,6 +101,97 @@ async fn message_errors_are_typed_and_sanitized() {
         .expect_err("error status should fail");
     assert_eq!(error.status(), Some(StatusCode::INTERNAL_SERVER_ERROR));
     assert_eq!(error.body(), Some("failure for [REDACTED_EMAIL]"));
+}
+
+#[tokio::test]
+async fn send_message_posts_unpadded_base64url_mime_and_returns_provider_ids() {
+    let server = MockServer::start().await;
+    let mime = b"From: sender@example.com\r\n\r\nbody with ? and /";
+    let encoded_mime = URL_SAFE_NO_PAD.encode(mime);
+    assert!(!encoded_mime.contains('='));
+
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/send"))
+        .and(header("authorization", "Bearer token"))
+        .and(body_json(serde_json::json!({
+            "raw": encoded_mime,
+            "threadId": "thread-existing"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "message-sent",
+            "threadId": "thread-sent"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let sent = send_message(&client(&server), "token", mime, Some("thread-existing"))
+        .await
+        .expect("message should send");
+
+    assert_eq!(sent.id, "message-sent");
+    assert_eq!(sent.thread_id, "thread-sent");
+}
+
+#[tokio::test]
+async fn send_message_omits_absent_thread_id() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/send"))
+        .and(body_json(serde_json::json!({
+            "raw": URL_SAFE_NO_PAD.encode(b"mime")
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "message-sent",
+            "threadId": "thread-new"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    send_message(&client(&server), "token", b"mime", None)
+        .await
+        .expect("message should send without a thread id");
+}
+
+#[tokio::test]
+async fn send_message_classifies_http_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/send"))
+        .respond_with(
+            ResponseTemplate::new(StatusCode::TOO_MANY_REQUESTS.as_u16())
+                .insert_header("Retry-After", "17")
+                .set_body_string("quota exceeded for private@example.com"),
+        )
+        .mount(&server)
+        .await;
+
+    let error = send_message(&client(&server), "token", b"mime", None)
+        .await
+        .expect_err("error status should fail");
+
+    assert_eq!(error.status(), Some(StatusCode::TOO_MANY_REQUESTS));
+    assert_eq!(error.body(), Some("quota exceeded for [REDACTED_EMAIL]"));
+    assert_eq!(
+        error.retry_after(),
+        Some(std::time::Duration::from_secs(17))
+    );
+}
+
+#[tokio::test]
+async fn malformed_send_response_is_a_decode_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/send"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("not-json"))
+        .mount(&server)
+        .await;
+
+    let error = send_message(&client(&server), "token", b"mime", None)
+        .await
+        .expect_err("malformed JSON should fail");
+    assert!(matches!(error, GmailApiHttpError::Decode(_)));
 }
 
 #[tokio::test]

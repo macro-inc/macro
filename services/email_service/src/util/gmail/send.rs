@@ -1,5 +1,8 @@
 use anyhow::Context;
 use gmail_client::GmailClient;
+use mail_builder::MessageBuilder;
+use mail_builder::headers::address::Address;
+use models_email::service::address::ContactInfo;
 use models_email::service::attachment::{AttachmentDraft, AttachmentToSend};
 use models_email::service::link::Link;
 use models_email::service::message;
@@ -53,6 +56,60 @@ pub async fn generate_email_threading_headers(
         // If there is no message to reply to
         (None, None)
     }
+}
+
+/// Builds the MIME payload used by the temporary scheduled-send integration.
+///
+/// This does not mutate the message, including its prepared attachments.
+pub fn build_mime_message(
+    message: &message::MessageToSend,
+    from_contact: &ContactInfo,
+    parent_message_id: Option<&str>,
+    references: Option<&[String]>,
+) -> anyhow::Result<Vec<u8>> {
+    let mut builder = MessageBuilder::new()
+        .from(contact_to_address(from_contact))
+        .to(contacts_to_address_list(message.to.as_deref()))
+        .cc(contacts_to_address_list(message.cc.as_deref()))
+        .bcc(contacts_to_address_list(message.bcc.as_deref()))
+        .subject(&message.subject);
+
+    if let Some(parent_message_id) = parent_message_id {
+        builder = builder.in_reply_to(parent_message_id);
+    }
+    if let Some(references) = references {
+        builder = builder.references(references.to_vec());
+    }
+    if let Some(text_body) = &message.body_text {
+        builder = builder.text_body(text_body);
+    }
+    if let Some(html_body) = &message.body_html {
+        builder = builder.html_body(html_body);
+    }
+    if let Some(attachments) = &message.attachments {
+        for attachment in attachments {
+            builder = builder.attachment(
+                attachment.content_type.clone(),
+                attachment.file_name.clone(),
+                attachment.data.clone(),
+            );
+        }
+    }
+
+    builder.write_to_vec().context("building message error")
+}
+
+fn contact_to_address(contact: &ContactInfo) -> Address<'_> {
+    Address::new_address(contact.name.as_deref(), contact.email.as_str())
+}
+
+fn contacts_to_address_list(contacts: Option<&[ContactInfo]>) -> Address<'_> {
+    let addresses = contacts
+        .unwrap_or_default()
+        .iter()
+        .map(contact_to_address)
+        .collect();
+    Address::new_list(addresses)
 }
 
 /// Fetch any attachments the user previously added to the draft from s3 and attach them to the message

@@ -43,12 +43,7 @@ use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
-#[allow(unused_imports)]
-use mockall::automock;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::message;
 use models_email::gmail::contacts::PersonResource;
-pub use models_email::gmail::error::GmailError;
 pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
@@ -253,25 +248,15 @@ impl GmailClient {
         get_message_label_ids(self, access_token, message_provider_id).await
     }
 
-    /// Sends a new email message
-    #[tracing::instrument(skip(self, access_token, message), err)]
+    /// Sends prepared MIME bytes and returns Gmail's provider identifiers.
+    #[tracing::instrument(skip(self, access_token, mime), err)]
     pub async fn send_message(
         &self,
         access_token: &str,
-        message: &mut message::MessageToSend,
-        from_contact: &ContactInfo,
-        parent_message_id: Option<String>,
-        references: Option<Vec<String>>,
-    ) -> anyhow::Result<()> {
-        messages::send_message(
-            self,
-            access_token,
-            message,
-            from_contact,
-            parent_message_id,
-            references,
-        )
-        .await
+        mime: &[u8],
+        thread_id: Option<&str>,
+    ) -> Result<models_email::gmail::SentMessageResource, GmailApiHttpError> {
+        messages::send_message(self, access_token, mime, thread_id).await
     }
 
     /// Fetches an attachment from Gmail by its provider ID

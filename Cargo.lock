@@ -5206,6 +5206,7 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
+ "mail-builder",
  "mailparse",
  "mime_guess",
  "model",
@@ -6287,12 +6288,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 name = "gmail_client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "base64 0.22.1",
  "chrono",
  "jsonwebtoken 10.3.0",
- "mail-builder",
- "mockall",
  "models_email",
  "regex",
  "reqwest 0.13.4",
