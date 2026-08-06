@@ -101,6 +101,9 @@ export type ScalarFieldFilters = {
   // Reminders are off by default in Soup; a view must opt in.
   includeReminders?: boolean;
   reminderCompleted?: boolean;
+  /** Whether the reminder has come due. Resolved against the server clock, so
+   *  it stays out of the query cache key. */
+  reminderFired?: boolean;
   documentCreatedAt?: DateRangeFilter;
   documentUpdatedAt?: DateRangeFilter;
   chatCreatedAt?: DateRangeFilter;

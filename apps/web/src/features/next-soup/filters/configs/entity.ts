@@ -7,12 +7,14 @@ import {
   crmCompanyActiveFilter as crmCompanyActivePredicate,
   crmCompanyHiddenFilter as crmCompanyHiddenPredicate,
   crmCompanyFilter as crmCompanyPredicate,
+  doneRemindersFilter as doneRemindersPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
+  firedRemindersFilter as firedRemindersPredicate,
   projectFilter as projectPredicate,
   remindersFilter as remindersPredicate,
+  scheduledRemindersFilter as scheduledRemindersPredicate,
   searchSupportedFilter as searchSupportedPredicate,
   taskFilter as taskPredicate,
-  upcomingRemindersFilter as upcomingRemindersPredicate,
 } from '../predicates';
 import { config, isAgent, isNotTask, NIL_UUID } from './base';
 
@@ -81,11 +83,40 @@ export const remindersFilter = config({
   query: defineQueryFilters({ include: { includeReminders: true } }),
 });
 
-export const upcomingRemindersFilter = config({
-  id: 'reminders-upcoming',
-  predicate: upcomingRemindersPredicate,
+// `reminderCompleted: false` is load-bearing beyond the filtering: it is what
+// `soupQueryExcludesDone` matches on (as `"comp":false`) to drop a reminder
+// from these views the moment it is marked done, rather than on the next
+// refetch. `reminderFired` is resolved server-side against the database clock
+// — a client timestamp would land in the query key and change every render.
+export const firedRemindersFilter = config({
+  id: 'reminders-fired',
+  predicate: firedRemindersPredicate,
   query: defineQueryFilters({
-    include: { includeReminders: true, reminderCompleted: false },
+    include: {
+      includeReminders: true,
+      reminderCompleted: false,
+      reminderFired: true,
+    },
+  }),
+});
+
+export const scheduledRemindersFilter = config({
+  id: 'reminders-scheduled',
+  predicate: scheduledRemindersPredicate,
+  query: defineQueryFilters({
+    include: {
+      includeReminders: true,
+      reminderCompleted: false,
+      reminderFired: false,
+    },
+  }),
+});
+
+export const doneRemindersFilter = config({
+  id: 'reminders-done',
+  predicate: doneRemindersPredicate,
+  query: defineQueryFilters({
+    include: { includeReminders: true, reminderCompleted: true },
   }),
 });
 

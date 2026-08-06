@@ -25,6 +25,11 @@ type SoupFiltersPreset = {
    * `entity_type`, `project`, or `property:<definition-id>`).
    */
   groupBy?: string;
+  /**
+   * Direction to order the server page in. Defaults to `desc` when absent,
+   * matching every feed that reads newest-first.
+   */
+  sortDirection?: 'asc' | 'desc';
 };
 
 // Tab preset configuration types
@@ -496,21 +501,43 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   // NIL-excludes every target this query does not reference — makes the view
   // reminders-only. Soup already orders them by when they fire.
   reminders: {
-    default: 'upcoming',
+    default: 'active',
     tabs: {
-      // Not yet fired. Recurring reminders never complete, so they stay here
-      // across firings, which is what "upcoming" should mean for them.
-      upcoming: () => ({
+      // Fired and waiting on you — an inbox, so newest arrival on top like
+      // every other feed. `reminderFired` is a server filter rather than a
+      // client one for a reason: both this tab and Scheduled would otherwise
+      // share one `comp:false` query, and the page limit would be spent on
+      // whichever end the sort direction favours, so a user with a hundred
+      // future reminders could open Active on an empty list.
+      active: () => ({
         filters: defineQueryFilters({
-          include: { includeReminders: true, reminderCompleted: false },
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: true,
+          },
         }),
-        clientFilters: { and: ['reminders-upcoming'] },
+        clientFilters: { and: ['reminders-fired'] },
       }),
-      all: () => ({
+      // Not due yet. Soonest first: "newest first" on a future date means
+      // furthest away first, which puts December above tomorrow.
+      scheduled: () => ({
         filters: defineQueryFilters({
-          include: { includeReminders: true },
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: false,
+          },
         }),
-        clientFilters: { and: ['reminders'] },
+        clientFilters: { and: ['reminders-scheduled'] },
+        sortDirection: 'asc',
+      }),
+      // Dealt with. Most-recently-due first, like every other archive view.
+      done: () => ({
+        filters: defineQueryFilters({
+          include: { includeReminders: true, reminderCompleted: true },
+        }),
+        clientFilters: { and: ['reminders-done'] },
       }),
     },
   },

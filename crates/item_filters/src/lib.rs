@@ -419,9 +419,18 @@ pub struct ReminderFilters {
     /// Restrict to reminders attached to these entities, each `"{type}:{id}"`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entities: Vec<String>,
-    /// Filter on whether the reminder has already fired. `None` returns both.
+    /// Filter on whether the owner has marked the reminder done. `None` returns
+    /// both.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed: Option<bool>,
+    /// Filter on whether the reminder's next run has come due, i.e. it has
+    /// fired and is awaiting its owner. `None` returns both.
+    ///
+    /// Evaluated server-side against the database clock rather than a
+    /// timestamp supplied by the caller: a timestamp would land in the query
+    /// cache key and change on every render.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fired: Option<bool>,
 }
 
 impl IsEmpty for ReminderFilters {
@@ -431,8 +440,9 @@ impl IsEmpty for ReminderFilters {
             ids,
             entities,
             completed,
+            fired,
         } = self;
-        !include && ids.is_empty() && entities.is_empty() && completed.is_none()
+        !include && ids.is_empty() && entities.is_empty() && completed.is_none() && fired.is_none()
     }
 }
 

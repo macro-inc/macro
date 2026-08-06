@@ -38,7 +38,7 @@ use rootcause::{
     markers::{Cloneable, Dynamic},
 };
 use soup::domain::{
-    models::{SoupQuery, SoupRequest, SoupType},
+    models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
 use uuid::Uuid;
@@ -136,6 +136,8 @@ where
             soup_type: SoupType::Expanded,
             limit,
             cursor: SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, filter),
+            // Batch entity load — order is irrelevant, the caller re-keys by id.
+            sort_direction: SoupSortDirection::default(),
             user: user_id.clone(),
             email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
             link_ids,

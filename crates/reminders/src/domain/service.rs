@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     CreateReminder, MAX_DESCRIPTION_LEN, NewReminder, Reminder, ReminderBatch, ReminderCursor,
     ReminderError, ReminderFilter, ReminderForSoup, ReminderPage, ReminderPatch, ReminderSchedule,
-    ReminderUpdate, ScheduleUpdate,
+    ReminderUpdate, ScheduleUpdate, SoupReminderQuery,
 };
 use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
 
@@ -290,15 +290,12 @@ where
     async fn list_reminders_for_soup(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ids: &[Uuid],
-        entities: &[String],
-        completed: Option<bool>,
-        limit: i64,
+        query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, ReminderError> {
         // No re-probing on undecodable rows: Soup merges many item types and
         // owns its own pagination, so a short slice is not a short page.
         self.repo
-            .list_reminders_for_soup(user_id, ids, entities, completed, limit)
+            .list_reminders_for_soup(user_id, query)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())
             .map_err(ReminderError::from)
@@ -402,10 +399,7 @@ impl RemindersService for NoOpRemindersService {
     async fn list_reminders_for_soup(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-        _ids: &[Uuid],
-        _entities: &[String],
-        _completed: Option<bool>,
-        _limit: i64,
+        _query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, ReminderError> {
         Ok(Vec::new())
     }

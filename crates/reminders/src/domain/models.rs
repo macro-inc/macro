@@ -244,6 +244,42 @@ pub struct ReminderForSoup {
     pub reference: Option<ReminderReference>,
 }
 
+/// Which end of the `next_run_at` ordering the Soup feed wants.
+///
+/// This picks the rows, not just their display order: the read is bounded by a
+/// limit with no cursor, so asking for the wrong end silently returns a
+/// different set of reminders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoupOrder {
+    /// Soonest `next_run_at` first — overdue and imminent reminders.
+    SoonestFirst,
+    /// Latest `next_run_at` first, matching Soup's usual newest-first feeds.
+    #[default]
+    LatestFirst,
+}
+
+/// One Soup read of a user's reminders.
+///
+/// Bundled rather than passed positionally: the filters are four `Option`s and
+/// slices in a row, where a transposed pair type-checks and silently returns
+/// the wrong rows.
+#[derive(Debug, Clone, Copy)]
+pub struct SoupReminderQuery<'a> {
+    /// Restrict to these reminder ids. Empty means no constraint.
+    pub ids: &'a [Uuid],
+    /// Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+    /// Empty means no constraint.
+    pub entities: &'a [String],
+    /// Filter on whether the owner marked it done. `None` returns both.
+    pub completed: Option<bool>,
+    /// Filter on whether it has come due. `None` returns both.
+    pub fired: Option<bool>,
+    /// Which end of the `next_run_at` ordering `limit` rows come from.
+    pub order: SoupOrder,
+    /// Upper bound on rows returned.
+    pub limit: i64,
+}
+
 /// The caller's reminders, soonest firing first.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

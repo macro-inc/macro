@@ -20,7 +20,7 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{ReminderCursor, ReminderForSoup, ReminderPage};
+use crate::domain::models::{ReminderCursor, ReminderForSoup, ReminderPage, SoupReminderQuery};
 
 const USER_ID: &str = "macro|reminders-user@macro.com";
 const VALID_JWT: &str = "valid";
@@ -380,10 +380,7 @@ impl RemindersService for FakeRemindersService {
     async fn list_reminders_for_soup(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-        _ids: &[Uuid],
-        _entities: &[String],
-        _completed: Option<bool>,
-        _limit: i64,
+        _query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, ReminderError> {
         self.fail_if_configured()?;
         Ok(vec![ReminderForSoup {

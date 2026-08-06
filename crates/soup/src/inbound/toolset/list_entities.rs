@@ -1,7 +1,9 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
+    models::{
+        EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+    },
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -759,6 +761,8 @@ where
                     soup_type: SoupType::Expanded,
                     limit,
                     cursor: SoupQuery::new_sort_simple(sort_method, filters),
+                    // The tool has no ascending mode; newest first as before.
+                    sort_direction: SoupSortDirection::default(),
                     user: request_context.user_id.clone(),
                     email_preview_view,
                     link_ids,

@@ -16,7 +16,7 @@ type MakeMarkNotDoneOptions = {
 };
 
 /**
- * Return completed reminders to the Upcoming tab. Kept off the email path:
+ * Return completed reminders to Active or Scheduled. Kept off the email path:
  * none of its preconditions apply, and a reminder's not-done state is its own
  * `completed` column rather than a notification override.
  */

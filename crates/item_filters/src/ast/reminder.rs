@@ -21,9 +21,12 @@ pub enum ReminderLiteral {
     /// Filter to reminders attached to this entity, as `"{type}:{id}"`.
     #[serde(rename = "ent")]
     Entity(String),
-    /// Filter by whether the reminder has already fired.
+    /// Filter by whether the owner has marked the reminder done.
     #[serde(rename = "comp")]
     Completed(bool),
+    /// Filter by whether the reminder has come due and is awaiting its owner.
+    #[serde(rename = "fired")]
+    Fired(bool),
 }
 
 impl ExpandFrame<ReminderLiteral> for ReminderFilters {
@@ -37,6 +40,7 @@ impl ExpandFrame<ReminderLiteral> for ReminderFilters {
             ids,
             entities,
             completed,
+            fired,
         } = filter_request;
 
         let include = include.then_some(Expr::val(ReminderLiteral::Include));
@@ -52,7 +56,9 @@ impl ExpandFrame<ReminderLiteral> for ReminderFilters {
 
         let completed = completed.map(|c| Expr::val(ReminderLiteral::Completed(c)));
 
-        Ok([include, ids, entities, completed]
+        let fired = fired.map(|f| Expr::val(ReminderLiteral::Fired(f)));
+
+        Ok([include, ids, entities, completed, fired]
             .into_iter()
             .fold_with(Expr::and))
     }

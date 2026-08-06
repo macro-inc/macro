@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
-        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
         grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
@@ -85,6 +85,30 @@ pub struct Params {
     /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
+    /// Sort direction. Options are asc, desc. Defaults to desc.
+    ///
+    /// Re-send this with every page: it is not carried in the cursor.
+    #[serde(default)]
+    sort_direction: Option<SoupApiSortDirection>,
+}
+
+/// Sort direction accepted by non-grouped soup API endpoints.
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SoupApiSortDirection {
+    /// Oldest, or soonest-firing, first.
+    Asc,
+    /// Newest first.
+    Desc,
+}
+
+impl From<SoupApiSortDirection> for SoupSortDirection {
+    fn from(value: SoupApiSortDirection) -> Self {
+        match value {
+            SoupApiSortDirection::Asc => SoupSortDirection::Asc,
+            SoupApiSortDirection::Desc => SoupSortDirection::Desc,
+        }
+    }
 }
 
 /// Sort options accepted by non-grouped soup API endpoints.
@@ -533,6 +557,7 @@ where
                     },
                     limit: params.limit.unwrap_or(20),
                     cursor,
+                    sort_direction: params.sort_direction.map(Into::into).unwrap_or_default(),
                     user: macro_user_id,
                     email_preview_view: email_view,
                     link_ids,
@@ -1153,6 +1178,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -1173,6 +1199,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,

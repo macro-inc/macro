@@ -1946,9 +1946,13 @@ input GraphqlReminderLiteral @oneOf {
 	"""
 	entity: String
 	"""
-	Whether the reminder has already fired.
+	Whether the owner has marked the reminder done.
 	"""
 	completed: Boolean
+	"""
+	Whether the reminder has come due and is awaiting its owner.
+	"""
+	fired: Boolean
 }
 
 """
@@ -2087,6 +2091,20 @@ type GraphqlSnippetSubType {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+Direction a Soup page is ordered in.
+"""
+enum GraphqlSortDirection {
+	"""
+	Oldest, or soonest-firing, first.
+	"""
+	ASC
+	"""
+	Newest first.
+	"""
+	DESC
 }
 
 """
@@ -3927,6 +3945,13 @@ input SoupContinuationInput {
 	Email preview view used when hydrating email Soup items.
 	"""
 	emailView: GraphqlEmailView
+	"""
+	Direction to order the page in. Defaults to DESC.
+	
+	The cursor does not carry it, so re-send whatever the initial query
+	used or the continuation flips order mid-list.
+	"""
+	sortDirection: GraphqlSortDirection
 }
 
 """
@@ -3954,6 +3979,10 @@ input SoupInitialInput {
 	AST-shaped filters applied to each Soup entity type.
 	"""
 	filters: GraphqlEntityFilterAst
+	"""
+	Direction to order the page in. Defaults to DESC.
+	"""
+	sortDirection: GraphqlSortDirection
 }
 
 """

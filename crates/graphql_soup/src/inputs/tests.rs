@@ -20,6 +20,7 @@ fn maps_email_view_to_soup_request() {
         sort_method: None,
         email_view: Some(GraphqlEmailView::Sent),
         filters: None,
+        sort_direction: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -35,6 +36,7 @@ fn defaults_email_view_to_inbox() {
         sort_method: None,
         email_view: None,
         filters: None,
+        sort_direction: None,
     }))
     .into_request(test_macro_user_id(), vec![])
     .unwrap();
@@ -57,6 +59,7 @@ fn maps_soup_cursor_continuation() {
         cursor: cursor.to_string(),
         expand: Some(false),
         email_view: Some(GraphqlEmailView::Sent),
+        sort_direction: None,
     })
     .into_request(test_macro_user_id(), vec![])
     .unwrap();

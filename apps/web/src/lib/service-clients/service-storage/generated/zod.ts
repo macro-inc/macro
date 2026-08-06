@@ -7764,6 +7764,12 @@ export const getItemsSoupQueryParams = zod.object({
     .describe(
       'Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'
     ),
+  sort_direction: zod
+    .enum(['asc', 'desc'])
+    .optional()
+    .describe(
+      'Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.'
+    ),
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });
 
@@ -11290,13 +11296,19 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            'Filter on whether the reminder has already fired. `None` returns both.'
+            'Filter on whether the owner has marked the reminder done. `None` returns\nboth.'
           ),
         entities: zod
           .array(zod.string())
           .optional()
           .describe(
             'Restrict to reminders attached to these entities, each `\"{type}:{id}\"`.'
+          ),
+        fired: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
           ),
         ids: zod
           .array(zod.string())
@@ -11339,6 +11351,16 @@ export const postItemsSoupBody = zod
           .describe(
             'Limit the number of items returned. Defaults to 20. Max 500.'
           ),
+        sort_direction: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['asc', 'desc'])
+              .describe(
+                'Sort direction accepted by non-grouped soup API endpoints.'
+              ),
+          ])
+          .optional(),
         sort_method: zod
           .union([
             zod.null(),
@@ -14410,6 +14432,16 @@ export const postItemsSoupAstBody = zod
           .describe(
             'Limit the number of items returned. Defaults to 20. Max 500.'
           ),
+        sort_direction: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['asc', 'desc'])
+              .describe(
+                'Sort direction accepted by non-grouped soup API endpoints.'
+              ),
+          ])
+          .optional(),
         sort_method: zod
           .union([
             zod.null(),

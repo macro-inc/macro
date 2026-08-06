@@ -624,6 +624,7 @@ async fn simple_soup_includes_channel_threads() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -685,6 +686,7 @@ async fn simple_soup_includes_call_records() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -738,6 +740,7 @@ async fn simple_soup_uses_channel_thread_filters_without_touching_channel_filter
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -807,6 +810,7 @@ async fn simple_soup_includes_foreign_entities() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -889,6 +893,7 @@ async fn frecency_soup_does_not_query_foreign_entities() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -936,6 +941,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -997,6 +1003,7 @@ async fn crm_filters_without_team_receipt_are_rejected() {
         )
         .get_user_soup(
             SoupRequest {
+                sort_direction: SoupSortDirection::default(),
                 email_preview_view: PreviewView::StandardLabel(
                     email::domain::models::PreviewViewStandardLabel::Inbox,
                 ),
@@ -1044,6 +1051,7 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1116,6 +1124,7 @@ async fn it_should_not_query_frecency() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1178,6 +1187,7 @@ async fn properties_are_populated_once_after_pagination() {
     )
     .get_user_soup_with_properties(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1252,6 +1262,7 @@ async fn frecency_is_populated_once_after_pagination() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1321,6 +1332,7 @@ async fn properties_and_frecency_are_composed_after_pagination() {
     )
     .get_user_soup_with_properties_and_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1486,6 +1498,7 @@ async fn it_should_query_frecency() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1571,6 +1584,7 @@ async fn it_should_sort_frecency_descending() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1670,6 +1684,7 @@ async fn frecency_should_fallback() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1753,6 +1768,7 @@ async fn frecency_should_paginate() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1838,6 +1854,7 @@ async fn frecency_should_resume_cursor() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1939,6 +1956,7 @@ async fn frecency_fallback_cursor_should_resume() {
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2013,6 +2031,7 @@ async fn cursor_should_return_simple_sort() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2086,6 +2105,7 @@ async fn cursor_should_return_frecency() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2146,6 +2166,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2196,6 +2217,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2246,6 +2268,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2308,6 +2331,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2392,6 +2416,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),

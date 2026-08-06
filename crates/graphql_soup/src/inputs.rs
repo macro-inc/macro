@@ -30,7 +30,9 @@ use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_file_type::FileType;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod};
-use soup::domain::models::{GroupedSortRequest, SoupQuery, SoupRequest, SoupType};
+use soup::domain::models::{
+    GroupedSortRequest, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+};
 use uuid::Uuid;
 
 /// Input for `Query.soup`.
@@ -56,6 +58,8 @@ pub struct SoupInitialInput {
     email_view: Option<GraphqlEmailView>,
     /// AST-shaped filters applied to each Soup entity type.
     filters: Option<GraphqlEntityFilterAst>,
+    /// Direction to order the page in. Defaults to DESC.
+    sort_direction: Option<GraphqlSortDirection>,
 }
 
 /// Input for continuing a Soup query.
@@ -67,6 +71,30 @@ pub struct SoupContinuationInput {
     expand: Option<bool>,
     /// Email preview view used when hydrating email Soup items.
     email_view: Option<GraphqlEmailView>,
+    /// Direction to order the page in. Defaults to DESC.
+    ///
+    /// The cursor does not carry it, so re-send whatever the initial query
+    /// used or the continuation flips order mid-list.
+    sort_direction: Option<GraphqlSortDirection>,
+}
+
+/// Direction a Soup page is ordered in.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlSortDirection {
+    /// Oldest, or soonest-firing, first.
+    Asc,
+    /// Newest first.
+    Desc,
+}
+
+impl GraphqlSortDirection {
+    /// Convert this value into the domain representation.
+    fn into_model(self) -> SoupSortDirection {
+        match self {
+            GraphqlSortDirection::Asc => SoupSortDirection::Asc,
+            GraphqlSortDirection::Desc => SoupSortDirection::Desc,
+        }
+    }
 }
 
 /// Input for `Query.groupSoup`.
@@ -280,6 +308,7 @@ impl SoupInitialInput {
             soup_type: soup_type(self.expand),
             limit: self.limit.unwrap_or(20).min(500),
             cursor: SoupQuery::new_sort_simple(sort, filter),
+            sort_direction: sort_direction(self.sort_direction),
             user: macro_user_id,
             email_preview_view: email_preview_view(self.email_view)?,
             link_ids,
@@ -305,11 +334,19 @@ impl SoupContinuationInput {
             soup_type: soup_type(self.expand),
             limit,
             cursor: SoupQuery::new_cursor_simple(cursor),
+            sort_direction: sort_direction(self.sort_direction),
             user: macro_user_id,
             email_preview_view: email_preview_view(self.email_view)?,
             link_ids,
         })
     }
+}
+
+/// Convert the optional GraphQL sort direction into the domain representation.
+fn sort_direction(direction: Option<GraphqlSortDirection>) -> SoupSortDirection {
+    direction
+        .map(GraphqlSortDirection::into_model)
+        .unwrap_or_default()
 }
 
 /// Convert the optional GraphQL expansion flag into the domain representation.
@@ -1087,8 +1124,10 @@ enum GraphqlReminderLiteral {
     Id(ID),
     /// The referenced entity, as `"{type}:{id}"`.
     Entity(String),
-    /// Whether the reminder has already fired.
+    /// Whether the owner has marked the reminder done.
     Completed(bool),
+    /// Whether the reminder has come due and is awaiting its owner.
+    Fired(bool),
 }
 
 impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
@@ -1106,6 +1145,7 @@ impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
             Self::Id(id) => ReminderLiteral::Id(parse_id(id, "id")?),
             Self::Entity(entity) => ReminderLiteral::Entity(entity),
             Self::Completed(completed) => ReminderLiteral::Completed(completed),
+            Self::Fired(fired) => ReminderLiteral::Fired(fired),
         };
         Ok(Expr::val(literal))
     }

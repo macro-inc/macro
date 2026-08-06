@@ -140,6 +140,7 @@ const FIELD_CONFIG: Record<
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
   reminderId: { target: 'remf', field: 'id' },
   reminderCompleted: { target: 'remf', field: 'comp' },
+  reminderFired: { target: 'remf', field: 'fired' },
   includeReminders: { target: 'remf', field: 'inc', unit: true },
 };
 

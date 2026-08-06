@@ -473,6 +473,19 @@ function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   unsupported('expected property value so or er');
 }
 
+function mapSortDirection(
+  sortDirection: SoupParams['sort_direction']
+): GraphqlSoupInitialInput['sortDirection'] {
+  switch (sortDirection) {
+    case 'asc':
+      return 'ASC';
+    case 'desc':
+      return 'DESC';
+    case undefined:
+      return undefined;
+  }
+}
+
 function mapSortMethod(
   sortMethod: SoupParams['sort_method']
 ): GraphqlSoupInitialInput['sortMethod'] {
@@ -574,12 +587,17 @@ export function makeGraphqlSoupInput(args: {
   assertGraphqlCompatibleBody(body);
   const emailView = mapEmailView(body.emailView);
 
+  // The cursor does not carry the direction, so the continuation has to
+  // re-send it or page two comes back in the opposite order.
+  const sortDirection = mapSortDirection(args.params.sort_direction);
+
   if (args.cursor != null) {
     return {
       continuation: {
         cursor: args.cursor,
         expand: true,
         emailView,
+        sortDirection,
       },
     };
   }
@@ -589,6 +607,7 @@ export function makeGraphqlSoupInput(args: {
       limit: args.params.limit ?? undefined,
       expand: true,
       sortMethod: mapSortMethod(args.params.sort_method),
+      sortDirection,
       emailView,
       filters: makeGraphqlFilters(body),
     },

@@ -756,13 +756,15 @@ export type GraphqlReminderExpr =
 
 /** GraphQL input representing the reminder literal. */
 export type GraphqlReminderLiteral =
-  {   /** Whether the reminder has already fired. */
-  completed: boolean; entity?: never; id?: never; include?: never; }
+  {   /** Whether the owner has marked the reminder done. */
+  completed: boolean; entity?: never; fired?: never; id?: never; include?: never; }
   |  { completed?: never;   /** The referenced entity, as `"{type}:{id}"`. */
-  entity: string; id?: never; include?: never; }
-  |  { completed?: never; entity?: never;   /** The id option. */
+  entity: string; fired?: never; id?: never; include?: never; }
+  |  { completed?: never; entity?: never;   /** Whether the reminder has come due and is awaiting its owner. */
+  fired: boolean; id?: never; include?: never; }
+  |  { completed?: never; entity?: never; fired?: never;   /** The id option. */
   id: string | number; include?: never; }
-  |  { completed?: never; entity?: never; id?: never;   /**
+  |  { completed?: never; entity?: never; fired?: never; id?: never;   /**
    * Opt this query into reminders at all. Reminders are off by default, so
    * without this (or an `id`/`entity`) Soup omits them entirely — a filter
    * of only `completed` would otherwise silently match nothing. Must be
@@ -821,6 +823,13 @@ export type GraphqlSimpleSortMethod =
   | 'VIEWED_AT'
   /** Sort by viewed timestamp, falling back to updated timestamp. */
   | 'VIEWED_UPDATED';
+
+/** Direction a Soup page is ordered in. */
+export type GraphqlSortDirection =
+  /** Oldest, or soonest-firing, first. */
+  | 'ASC'
+  /** Newest first. */
+  | 'DESC';
 
 /** GraphQL representation of Soup entity types. */
 export type GraphqlSoupEntityType =
@@ -929,6 +938,13 @@ export type SoupContinuationInput = {
   emailView?: GraphqlEmailView | null | undefined;
   /** Whether to return expanded Soup items. Defaults to true. */
   expand?: boolean | null | undefined;
+  /**
+   * Direction to order the page in. Defaults to DESC.
+   *
+   * The cursor does not carry it, so re-send whatever the initial query
+   * used or the continuation flips order mid-list.
+   */
+  sortDirection?: GraphqlSortDirection | null | undefined;
 };
 
 /** Input for starting a Soup query. */
@@ -941,6 +957,8 @@ export type SoupInitialInput = {
   filters?: GraphqlEntityFilterAst | null | undefined;
   /** Maximum number of items to return. Defaults to 20, max 500. */
   limit?: number | null | undefined;
+  /** Direction to order the page in. Defaults to DESC. */
+  sortDirection?: GraphqlSortDirection | null | undefined;
   /**
    * Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
    * not supported by this initial GraphQL adapter.

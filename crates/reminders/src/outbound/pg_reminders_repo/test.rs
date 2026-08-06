@@ -6,7 +6,9 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::models::{ReminderCursor, ScheduleUpdate, entity_token};
+use crate::domain::models::{
+    ReminderCursor, ScheduleUpdate, SoupOrder, SoupReminderQuery, entity_token,
+};
 
 const USER_A: &str = "macro|reminders-a@macro.com";
 const USER_B: &str = "macro|reminders-b@macro.com";
@@ -33,6 +35,19 @@ fn recurring() -> ReminderSchedule {
     ReminderSchedule::Recurring {
         cron: ReminderCron::parse(DAILY_9AM).expect("valid cron"),
         timezone: New_York,
+    }
+}
+
+/// A Soup read with no filters, newest first. Spread over it to vary one field:
+/// `SoupReminderQuery { completed: Some(false), ..soup_query(100) }`.
+fn soup_query(limit: i64) -> SoupReminderQuery<'static> {
+    SoupReminderQuery {
+        ids: &[],
+        entities: &[],
+        completed: None,
+        fired: None,
+        order: SoupOrder::LatestFirst,
+        limit,
     }
 }
 
@@ -1618,7 +1633,7 @@ async fn soup_list_returns_the_users_reminders_newest_firing_first(pool: PgPool)
     .expect("insert");
 
     let found = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .list_reminders_for_soup(&user(USER_A), soup_query(100))
         .await
         .expect("soup list should succeed");
 
@@ -1628,6 +1643,138 @@ async fn soup_list_returns_the_users_reminders_newest_firing_first(pool: PgPool)
         .map(|r| r.reminder.description.as_str())
         .collect();
     assert_eq!(descriptions, vec!["later", "soon"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_soonest_first_reverses_the_order(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    for (description, day) in [("soon", 1), ("middle", 15), ("later", 28)] {
+        repo.create_reminder(
+            &user(USER_A),
+            &new_reminder(description, once_at(at(2026, 8, day, 14))),
+        )
+        .await
+        .expect("insert");
+    }
+
+    let found = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                order: SoupOrder::SoonestFirst,
+                ..soup_query(100)
+            },
+        )
+        .await
+        .expect("soup list should succeed");
+
+    let descriptions: Vec<&str> = found
+        .iter()
+        .map(|r| r.reminder.description.as_str())
+        .collect();
+    assert_eq!(descriptions, vec!["soon", "middle", "later"]);
+}
+
+/// The direction picks the rows, not just their order: there is no cursor
+/// here, so a bounded read in the wrong direction returns a different set.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_takes_the_limit_from_the_ordered_end(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    for (description, day) in [("soon", 1), ("middle", 15), ("later", 28)] {
+        repo.create_reminder(
+            &user(USER_A),
+            &new_reminder(description, once_at(at(2026, 8, day, 14))),
+        )
+        .await
+        .expect("insert");
+    }
+
+    let soonest = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                order: SoupOrder::SoonestFirst,
+                ..soup_query(1)
+            },
+        )
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(soonest.len(), 1);
+    assert_eq!(soonest[0].reminder.description, "soon");
+
+    let latest = repo
+        .list_reminders_for_soup(&user(USER_A), soup_query(1))
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(latest.len(), 1);
+    assert_eq!(latest[0].reminder.description, "later");
+}
+
+/// `fired` is what separates the Active tab from Scheduled, and it has to be
+/// applied in SQL: both tabs are otherwise the same `completed = false` query,
+/// so the row limit would be spent on whichever end the sort favours.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_filters_on_whether_the_reminder_has_come_due(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("already fired", once_at(at(2026, 3, 1, 9))),
+    )
+    .await
+    .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("not yet", once_at(at(2099, 1, 1, 9))),
+    )
+    .await
+    .expect("insert");
+
+    let fired = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                completed: Some(false),
+                fired: Some(true),
+                ..soup_query(100)
+            },
+        )
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(fired.len(), 1);
+    assert_eq!(fired[0].reminder.description, "already fired");
+
+    let scheduled = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                completed: Some(false),
+                fired: Some(false),
+                order: SoupOrder::SoonestFirst,
+                ..soup_query(100)
+            },
+        )
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(scheduled.len(), 1);
+    assert_eq!(scheduled[0].reminder.description, "not yet");
+
+    let both = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                completed: Some(false),
+                ..soup_query(100)
+            },
+        )
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(both.len(), 2);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1650,7 +1797,13 @@ async fn soup_list_filters_by_id(pool: PgPool) {
     .expect("insert");
 
     let found = repo
-        .list_reminders_for_soup(&user(USER_A), &[wanted.id], &[], None, 100)
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                ids: &[wanted.id],
+                ..soup_query(100)
+            },
+        )
         .await
         .expect("soup list should succeed");
 
@@ -1691,10 +1844,10 @@ async fn soup_list_filters_by_entity_token(pool: PgPool) {
     let found = repo
         .list_reminders_for_soup(
             &user(USER_A),
-            &[],
-            &[entity_token(&EntityType::Document.with_entity_str(DOC_1))],
-            None,
-            100,
+            SoupReminderQuery {
+                entities: &[entity_token(&EntityType::Document.with_entity_str(DOC_1))],
+                ..soup_query(100)
+            },
         )
         .await
         .expect("soup list should succeed");
@@ -1729,14 +1882,26 @@ async fn soup_list_filters_on_completion(pool: PgPool) {
         .expect("complete should update");
 
     let pending = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], Some(false), 100)
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                completed: Some(false),
+                ..soup_query(100)
+            },
+        )
         .await
         .expect("soup list should succeed");
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].reminder.description, "pending");
 
     let completed = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], Some(true), 100)
+        .list_reminders_for_soup(
+            &user(USER_A),
+            SoupReminderQuery {
+                completed: Some(true),
+                ..soup_query(100)
+            },
+        )
         .await
         .expect("soup list should succeed");
     assert_eq!(completed.len(), 1);
@@ -1744,7 +1909,7 @@ async fn soup_list_filters_on_completion(pool: PgPool) {
 
     // `None` means "no constraint", so both come back.
     let both = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .list_reminders_for_soup(&user(USER_A), soup_query(100))
         .await
         .expect("soup list should succeed");
     assert_eq!(both.len(), 2);
@@ -1883,7 +2048,7 @@ async fn soup_list_resolves_the_referenced_documents_file_type(pool: PgPool) {
         .expect("insert");
 
     let found = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .list_reminders_for_soup(&user(USER_A), soup_query(100))
         .await
         .expect("soup list should succeed");
 
@@ -1911,7 +2076,7 @@ async fn soup_list_has_no_reference_for_a_standalone_reminder(pool: PgPool) {
     .expect("insert");
 
     let found = repo
-        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .list_reminders_for_soup(&user(USER_A), soup_query(100))
         .await
         .expect("soup list should succeed");
 

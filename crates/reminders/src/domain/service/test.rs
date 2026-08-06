@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use chrono::{Duration, TimeZone};
+use chrono::{Duration, TimeZone, Utc};
 use chrono_tz::America::New_York;
 use entity_access::domain::models::{
     AccessLevel, AnyEntityPermission, Entity as AccessEntity, EntityAccessReceipt,
@@ -10,7 +10,8 @@ use model_entity::EntityType;
 
 use super::*;
 use crate::domain::models::{
-    MAX_PAGE_SIZE, ReminderCron, ReminderForSoup, RemindersList, entity_token,
+    MAX_PAGE_SIZE, ReminderCron, ReminderForSoup, RemindersList, SoupOrder, SoupReminderQuery,
+    entity_token,
 };
 
 const USER_A: &str = "macro|reminders-a@macro.com";
@@ -292,11 +293,16 @@ impl RemindersRepo for FakeRemindersRepo {
     async fn list_reminders_for_soup(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ids: &[Uuid],
-        entities: &[String],
-        completed: Option<bool>,
-        limit: i64,
+        query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, Self::Err> {
+        let SoupReminderQuery {
+            ids,
+            entities,
+            completed,
+            fired,
+            order,
+            limit,
+        } = query;
         self.check_failing()?;
         let mut found: Vec<Reminder> = self
             .rows()
@@ -314,10 +320,23 @@ impl RemindersRepo for FakeRemindersRepo {
                 Some(completed) => reminder.completed_at.is_some() == completed,
                 None => true,
             })
+            .filter(|reminder| match fired {
+                Some(fired) => (reminder.next_run_at <= Utc::now()) == fired,
+                None => true,
+            })
             .filter(|reminder| !self.is_unreadable(reminder.id))
             .collect();
-        // Descending, as the SQL adapter returns.
-        found.sort_by_key(|reminder| std::cmp::Reverse((reminder.next_run_at, reminder.id)));
+        // Order and then bound, as the SQL adapter does — the bound is what
+        // makes the direction select rows rather than merely arrange them.
+        match order {
+            SoupOrder::SoonestFirst => {
+                found.sort_by_key(|reminder| (reminder.next_run_at, reminder.id));
+            }
+            SoupOrder::LatestFirst => {
+                found
+                    .sort_by_key(|reminder| std::cmp::Reverse((reminder.next_run_at, reminder.id)));
+            }
+        }
         found.truncate(limit.max(0) as usize);
         // The fake has no documents to resolve against.
         Ok(found

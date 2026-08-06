@@ -2,8 +2,8 @@ use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
         GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
-        grouping::ItemGroupingInfo,
+        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
+        SoupType, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -50,7 +50,7 @@ use models_soup::{
     item::SoupItem,
     reminder::SoupReminder,
 };
-use reminders::domain::ports::RemindersService;
+use reminders::domain::{models::SoupReminderQuery, ports::RemindersService};
 use serde::Serialize;
 use std::cmp::Ordering;
 use uuid::Uuid;
@@ -522,12 +522,24 @@ where
             reminder_ids,
             entities,
             completed,
+            fired,
+            order,
             limit,
         } = req;
 
         let items: Vec<SoupItem<()>> = self
             .reminders_service
-            .list_reminders_for_soup(&user_id, &reminder_ids, &entities, completed, limit)
+            .list_reminders_for_soup(
+                &user_id,
+                SoupReminderQuery {
+                    ids: &reminder_ids,
+                    entities: &entities,
+                    completed,
+                    fired,
+                    order,
+                    limit,
+                },
+            )
             .await
             .map_err(|err| {
                 tracing::error!(error = ?err, "reminder soup request failed");
@@ -817,6 +829,7 @@ where
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
         let reminder_request = req.build_reminder_request(limit.into());
+        let sort_direction = req.sort_direction;
 
         match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
@@ -863,7 +876,7 @@ where
                     foreign_entity_soup_fut,
                 );
 
-                let page = main_soup?
+                let paginator = main_soup?
                     .chain(email_soup?)
                     .chain(comms_soup?)
                     .chain(comms_thread_soup?)
@@ -872,9 +885,13 @@ where
                     .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
-                    .filter_on(entity_filter)
-                    .sort_desc()
-                    .into_page();
+                    .filter_on(entity_filter);
+
+                let page = match sort_direction {
+                    SoupSortDirection::Asc => paginator.sort_asc(),
+                    SoupSortDirection::Desc => paginator.sort_desc(),
+                }
+                .into_page();
 
                 Ok(Either::Left(page))
             }

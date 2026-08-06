@@ -36,10 +36,25 @@ use models_pagination::{Cursor, CursorWithValAndFilter, Frecency, Query, SimpleS
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use reminders::domain::models::SoupOrder;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
+
+/// Direction the merged Soup page is ordered in.
+///
+/// Deliberately Soup's own type rather than one borrowed from the paginator:
+/// `Paginator` already exposes `sort_asc`/`sort_desc`, so this only has to name
+/// the choice, and doing it here keeps the shared pagination crate untouched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoupSortDirection {
+    /// Smallest sort value first — oldest, or soonest for a future timestamp.
+    Asc,
+    /// Largest sort value first. What every view but Scheduled reminders wants.
+    #[default]
+    Desc,
+}
 
 /// Controls whether soup items should include expanded nested data.
 #[derive(Debug, Clone, Copy)]
@@ -235,6 +250,14 @@ pub struct SoupRequest<T> {
     pub limit: u16,
     /// Initial query or pagination cursor to execute.
     pub cursor: SoupQuery<T>,
+    /// Direction the merged page is ordered in. Defaults to descending, which
+    /// is what every feed but reminders wants.
+    ///
+    /// One choice per request: the paginator sorts the whole merged page, so
+    /// this cannot differ per entity type within a single feed. It is a
+    /// sibling of the cursor rather than part of it because clients re-send
+    /// the request params on every page, which keeps the cursor format alone.
+    pub sort_direction: SoupSortDirection,
     /// User whose soup should be queried.
     pub user: MacroUserIdStr<'static>,
     /// Email preview view used when hydrating email soup items.
@@ -257,6 +280,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -266,6 +290,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilters> {
             soup_type,
             limit,
             cursor: cursor.into_ast()?,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -279,6 +304,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -288,6 +314,7 @@ impl IntoSoupReqAst for SoupRequest<EntityFilterAst> {
             soup_type,
             limit,
             cursor: cursor.map(|f| if f.is_empty() { None } else { Some(f) }),
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -550,6 +577,11 @@ impl SoupRequest<Option<EntityFilterAst>> {
             reminder_ids: extract.ids,
             entities: extract.entities,
             completed: extract.completed,
+            fired: extract.fired,
+            order: match self.sort_direction {
+                SoupSortDirection::Asc => SoupOrder::SoonestFirst,
+                SoupSortDirection::Desc => SoupOrder::LatestFirst,
+            },
             limit,
         })
     }
@@ -804,8 +836,13 @@ pub struct GetRemindersRequest<'a> {
     /// Filter to reminders attached to these entities, each `"{type}:{id}"`.
     /// Empty = no entity constraint.
     pub entities: Vec<String>,
-    /// Filter on whether the reminder has fired. `None` returns both.
+    /// Filter on whether the owner marked the reminder done. `None` returns both.
     pub completed: Option<bool>,
+    /// Filter on whether the reminder has come due. `None` returns both.
+    pub fired: Option<bool>,
+    /// Which end of the `next_run_at` ordering to take `limit` rows from.
+    /// Mirrors the request's sort direction so the leg and the merge agree.
+    pub order: SoupOrder,
     /// Upper bound on rows returned — the soup paginator re-slices.
     pub limit: i64,
 }
@@ -817,6 +854,7 @@ pub(crate) struct ReminderFilterExtract {
     pub(crate) ids: Vec<Uuid>,
     pub(crate) entities: Vec<String>,
     pub(crate) completed: Option<bool>,
+    pub(crate) fired: Option<bool>,
 }
 
 impl ReminderFilterExtract {
@@ -828,8 +866,8 @@ impl ReminderFilterExtract {
 }
 
 /// Walks a `ReminderLiteral` AST collecting ids, entity tokens, and a single
-/// `Completed(bool)` constraint. Returns `false` (fail closed) on `Not(_)`, on
-/// conflicting `Completed` literals, and on an `Or` branch that is not a pure
+/// single `Completed(bool)`/`Fired(bool)` constraint. Returns `false` (fail
+/// closed) on `Not(_)`, on conflicting literals, and on an `Or` branch that is not a pure
 /// id/entity sub-tree — the same shape restrictions as the CRM extractor, for
 /// the same reason: a flat extract cannot represent those set semantics.
 fn extract_reminder_filter(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
@@ -853,6 +891,13 @@ fn extract_reminder_filter(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilte
                 true
             }
         },
+        Expr::Literal(ReminderLiteral::Fired(b)) => match out.fired {
+            Some(prev) if prev != *b => false,
+            _ => {
+                out.fired = Some(*b);
+                true
+            }
+        },
         Expr::And(a, b) => extract_reminder_filter(a, out) && extract_reminder_filter(b, out),
         Expr::Or(a, b) => {
             // The repo ANDs `ids` against `entities`, so an `Or` spanning both
@@ -868,7 +913,8 @@ fn extract_reminder_filter(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilte
 }
 
 /// Helper for [`extract_reminder_filter`]: an `Or` branch must be a pure
-/// id/entity sub-tree — a `Completed`, `And`, or `Not` inside fails closed.
+/// id/entity sub-tree — a `Completed`, `Fired`, `And`, or `Not` inside fails
+/// closed.
 fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
     match expr {
         Expr::Literal(ReminderLiteral::Id(id)) => {

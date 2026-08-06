@@ -364,8 +364,8 @@ function soupQueryExcludesDone(key: QueryKey): boolean {
     serialized.includes('"nd":false') ||
     // Reminders carry their done state on themselves rather than on a
     // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
-    // shape the Reminders "Upcoming" view filters on. Without it, marking a
-    // reminder done left the row sitting there until the next refetch.
+    // shape the Reminders Active and Scheduled tabs filter on. Without it,
+    // marking a reminder done left the row sitting there until the refetch.
     serialized.includes('"comp":false')
   );
 }

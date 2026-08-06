@@ -17,6 +17,10 @@ import {
   type SoupViewMode,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  type TabbedListView,
+  VIEW_TAB_LISTS,
+} from '@app/features/next-soup/soup-view/tab-lists';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { TabItem } from '@core/component/Tabs';
@@ -25,74 +29,6 @@ import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
-
-/** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
-export type TabbedListView = Extract<
-  ListView,
-  | 'inbox'
-  | 'agents'
-  | 'mail'
-  | 'documents'
-  | 'tasks'
-  | 'channels'
-  | 'calls'
-  | 'folders'
-  | 'reminders'
->;
-
-/** Tab definitions for each list view. */
-export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
-  inbox: [
-    { value: 'signal', label: 'Signal' },
-    { value: 'noise', label: 'Noise' },
-    { value: 'all', label: 'All' },
-  ],
-  agents: [
-    { value: 'owned', label: 'Owned' },
-    { value: 'running', label: 'Running' },
-    { value: 'shared', label: 'Shared' },
-    { value: 'automations', label: 'Automations' },
-  ],
-  mail: [
-    { value: 'important', label: 'Signal' },
-    { value: 'noise', label: 'Noise' },
-    { value: 'sent', label: 'Sent' },
-    { value: 'calendar', label: 'Calendar' },
-    { value: 'drafts', label: 'Drafts' },
-    { value: 'shared', label: 'Shared' },
-    { value: 'all', label: 'All' },
-  ],
-  documents: [
-    { value: 'owned', label: 'Owned' },
-    { value: 'shared', label: 'Shared' },
-    { value: 'attachments', label: 'Attachments' },
-    { value: 'folders', label: 'Folders' },
-    { value: 'all', label: 'All' },
-  ],
-  tasks: [
-    { value: 'assigned-to-me', label: 'Assigned' },
-    { value: 'created-by-me', label: 'Created' },
-    { value: 'all', label: 'All' },
-  ],
-  channels: [
-    { value: 'recent', label: 'Recent' },
-    { value: 'people', label: 'People' },
-    { value: 'teams', label: 'Teams' },
-  ],
-  calls: [
-    { value: 'all', label: 'All' },
-    { value: 'missed', label: 'Missed' },
-    { value: 'unattended', label: 'Unattended' },
-  ],
-  folders: [
-    { value: 'owned', label: 'Owned' },
-    { value: 'all', label: 'All' },
-  ],
-  reminders: [
-    { value: 'upcoming', label: 'Upcoming' },
-    { value: 'all', label: 'All' },
-  ],
-};
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -385,3 +321,5 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
     />
   );
 };
+
+export { type TabbedListView, VIEW_TAB_LISTS };

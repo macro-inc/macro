@@ -6,6 +6,7 @@
  */
 
 /**
- * Filter on whether the reminder has already fired. `None` returns both.
+ * Filter on whether the owner has marked the reminder done. `None` returns
+both.
  */
 export type ReminderFiltersCompleted = boolean | null;

@@ -31,9 +31,11 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'mail-noise',
   'mail-shared',
   // Completing a reminder is the whole point of the Reminders view: without
-  // it the only way to clear one is to delete it.
-  'reminders-upcoming',
-  'reminders-all',
+  // it the only way to clear one is to delete it. Done is listed too so a
+  // reminder marked by mistake can be reopened from where it landed.
+  'reminders-active',
+  'reminders-scheduled',
+  'reminders-done',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {

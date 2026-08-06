@@ -33,8 +33,8 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
-            grouping::ItemGroupingInfo,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
+            SoupSortDirection, SoupType, grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -1644,6 +1644,7 @@ fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1672,6 +1673,7 @@ fn ast_endpoint_email_crm_addresses_stamps_scope() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1700,6 +1702,7 @@ fn ast_endpoint_email_crm_both_lists_rejected() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1721,6 +1724,7 @@ fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1755,6 +1759,7 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1831,6 +1836,7 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(

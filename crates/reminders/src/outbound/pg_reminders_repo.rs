@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     DueFiring, DueReminder, InvalidCron, NewReminder, Reminder, ReminderBatch, ReminderCron,
     ReminderCursor, ReminderFilter, ReminderForSoup, ReminderReference, ReminderSchedule,
-    ReminderUpdate,
+    ReminderUpdate, SoupOrder, SoupReminderQuery,
 };
 use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 
@@ -410,15 +410,21 @@ impl RemindersRepo for PgRemindersRepo {
     async fn list_reminders_for_soup(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ids: &[Uuid],
-        entities: &[String],
-        completed: Option<bool>,
-        limit: i64,
+        query: SoupReminderQuery<'_>,
     ) -> Result<Vec<ReminderForSoup>, Self::Err> {
+        let SoupReminderQuery {
+            ids,
+            entities,
+            completed,
+            fired,
+            order,
+            limit,
+        } = query;
         // Empty means "no constraint", so bind NULL rather than an empty array
         // — `= ANY('{}')` matches nothing.
         let ids = (!ids.is_empty()).then_some(ids);
         let entities = (!entities.is_empty()).then_some(entities);
+        let soonest_first = matches!(order, SoupOrder::SoonestFirst);
 
         let rows = sqlx::query!(
             r#"
@@ -457,15 +463,28 @@ impl RemindersRepo for PgRemindersRepo {
                   )
               )
               AND ($4::bool IS NULL OR (r.completed_at IS NOT NULL) = $4)
-            -- Descending to match Soup's global ordering, so the LIMIT keeps the
-            -- same rows Soup would keep after merging every item type.
-            ORDER BY r.next_run_at DESC, r.id DESC
-            LIMIT $5
+              -- Due-ness is resolved against the database clock. The caller
+              -- cannot pass a timestamp: it would land in the client's query
+              -- cache key and change on every render.
+              AND ($5::bool IS NULL OR (r.next_run_at <= now()) = $5)
+            -- Order in whichever direction Soup will merge in, so the LIMIT
+            -- keeps the same rows Soup would keep after merging every item
+            -- type. The first two keys collapse to a constant NULL when $6 is
+            -- false, leaving the descending pair to decide; when it is true
+            -- they fully determine the order and the descending pair is inert.
+            ORDER BY
+                CASE WHEN $6::bool THEN r.next_run_at END ASC,
+                CASE WHEN $6::bool THEN r.id END ASC,
+                r.next_run_at DESC,
+                r.id DESC
+            LIMIT $7
             "#,
             user_id.as_ref(),
             ids as Option<&[Uuid]>,
             entities as Option<&[String]>,
             completed,
+            fired,
+            soonest_first,
             limit,
         )
         .fetch_all(&self.pool)

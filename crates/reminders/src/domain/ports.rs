@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     CreateReminder, DeliveryOutcome, DueFiring, DueReminder, NewReminder, Reminder, ReminderBatch,
     ReminderDispatchMessage, ReminderError, ReminderFilter, ReminderForSoup, ReminderPage,
-    ReminderPatch, ReminderUpdate, SweepSummary,
+    ReminderPatch, ReminderUpdate, SoupReminderQuery, SweepSummary,
 };
 
 /// Source of the current time.
@@ -67,22 +67,26 @@ pub trait RemindersRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ReminderBatch, Self::Err>> + Send;
 
     /// Read at most `limit` of the user's reminders for the Soup feed, ordered
-    /// by `next_run_at` descending to match Soup's global ordering.
+    /// by `next_run_at` in `order`'s direction.
+    ///
+    /// `query.order` must match the direction Soup will merge in. There is no cursor
+    /// here, so it selects which `limit` reminders come back, not merely how
+    /// they are arranged: an ascending view served by a descending read gets
+    /// the furthest-future reminders and never sees an overdue one.
     ///
     /// Deliberately separate from [`RemindersRepo::list_reminders`]: Soup pages
-    /// on its own cursor and sorts descending, whereas the CRUD list keysets
-    /// ascending on `(next_run_at, created_at, id)`. As in
-    /// [`RemindersRepo::list_reminders`], an undecodable row is skipped rather
-    /// than failing the whole read.
+    /// on its own cursor, whereas the CRUD list keysets ascending on
+    /// `(next_run_at, created_at, id)`. As in [`RemindersRepo::list_reminders`],
+    /// an undecodable row is skipped rather than failing the whole read.
+    ///
+    /// `query.fired` selects on whether `next_run_at` has come due, evaluated against
+    /// the database clock so the caller need not agree with it on the time.
     ///
     /// An empty `ids`/`entities` slice means "no constraint", not "match none".
     fn list_reminders_for_soup(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ids: &[Uuid],
-        entities: &[String],
-        completed: Option<bool>,
-        limit: i64,
+        query: SoupReminderQuery<'_>,
     ) -> impl Future<Output = Result<Vec<ReminderForSoup>, Self::Err>> + Send;
 
     /// Apply `update` to one of the user's reminders, returning the new state.
@@ -286,10 +290,12 @@ pub trait RemindersService: Send + Sync + 'static {
         filter: ReminderFilter,
     ) -> impl Future<Output = Result<ReminderPage, ReminderError>> + Send;
 
-    /// List the user's reminders for the Soup feed.
+    /// List the user's reminders for the Soup feed, ordered by `order`.
     ///
-    /// Soup owns pagination and ordering across every item type, so this
-    /// returns a plain bounded slice rather than a [`ReminderPage`].
+    /// Soup owns pagination across every item type, so this returns a plain
+    /// bounded slice rather than a [`ReminderPage`]. It does not own ordering:
+    /// the bound is applied here, so `order` decides which reminders Soup gets
+    /// to merge.
     ///
     /// Unlike the single-reminder methods this takes a user id rather than a
     /// receipt: Soup reads many reminders at once, so there is no one entity
@@ -297,10 +303,7 @@ pub trait RemindersService: Send + Sync + 'static {
     fn list_reminders_for_soup(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ids: &[Uuid],
-        entities: &[String],
-        completed: Option<bool>,
-        limit: i64,
+        query: SoupReminderQuery<'_>,
     ) -> impl Future<Output = Result<Vec<ReminderForSoup>, ReminderError>> + Send;
 
     /// Modify the reminder the receipt was minted for.

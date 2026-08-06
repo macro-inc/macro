@@ -1111,9 +1111,9 @@ export function resolveMarkEntitiesDoneVariables(args: {
     scopeChannelNotificationsToEntity = false,
   } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
-  // A reminder's done state is its own column, not its notification's: an
-  // upcoming reminder has no notification to mark, and the Reminders view
-  // filters on the column.
+  // A reminder's done state is its own column, not its notification's: a
+  // reminder that has not fired yet has no notification to mark, and the
+  // Reminders view filters on the column.
   const reminderIds = entities
     .filter((e) => e.type === 'reminder')
     .map((e) => e.id);
@@ -1248,9 +1248,9 @@ export function applyEntitiesDoneOptimistic(args: {
         frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
       })
     );
-    // Stamping `completedAt` is what drops a reminder out of the Upcoming
-    // tab, which requires `!entity.completedAt` — so this takes effect before
-    // any refetch, whether or not the reminder had already fired.
+    // Stamping `completedAt` is what drops a reminder out of the Active and
+    // Scheduled tabs, both of which require `!entity.completedAt` — so this
+    // takes effect before any refetch, whether or not it had already fired.
     reminderRowTxns = reminderIds.map((id) =>
       optimisticUpdateSoupEntity({
         tag: 'reminder',
@@ -1307,8 +1307,8 @@ export function applyEntitiesNotDoneOptimistic(args: {
   reminderIds?: string[];
 }): { rollback: () => void } {
   const { emailIds, notificationIds, reminderIds = [] } = args;
-  // Clearing `completedAt` is what returns a reminder to the Upcoming tab,
-  // whose predicate is `!entity.completedAt`.
+  // Clearing `completedAt` is what returns a reminder to Active or Scheduled
+  // (whichever its `nextRunAt` puts it in); both predicates require it unset.
   const reminderRowTxns = reminderIds.map((id) =>
     optimisticUpdateSoupEntity({
       tag: 'reminder',

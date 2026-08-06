@@ -14,6 +14,7 @@ afterEach(() => {
 });
 
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
+import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
 
 const mailTabs = Object.keys(VIEW_TAB_PRESETS.mail.tabs);
@@ -77,23 +78,59 @@ describe('reminders view presets', () => {
     return compileToAst(queryStateFrom(preset.filters));
   };
 
-  it('defaults to the upcoming tab', () => {
-    expect(VIEW_TAB_PRESETS.reminders.default).toBe('upcoming');
+  it('defaults to the active tab', () => {
+    expect(VIEW_TAB_PRESETS.reminders.default).toBe('active');
   });
 
-  it('asks for reminders that have not fired on the upcoming tab', () => {
-    expect(astFor('upcoming').remf).toEqual({
-      '&': [{ l: { comp: false } }, { l: 'inc' }],
+  // Active and Scheduled split on `fired` server-side rather than in a client
+  // predicate: they would otherwise share one `comp:false` query whose row
+  // limit is spent on whichever end the sort direction favours.
+  it('asks for fired, uncompleted reminders on the active tab', () => {
+    expect(astFor('active').remf).toEqual({
+      '&': [
+        { l: { comp: false } },
+        { '&': [{ l: { fired: true } }, { l: 'inc' }] },
+      ],
     });
   });
 
-  it('asks for every reminder on the all tab', () => {
-    expect(astFor('all').remf).toEqual({ l: 'inc' });
+  it('asks for not-yet-fired reminders on the scheduled tab', () => {
+    expect(astFor('scheduled').remf).toEqual({
+      '&': [
+        { l: { comp: false } },
+        { '&': [{ l: { fired: false } }, { l: 'inc' }] },
+      ],
+    });
+  });
+
+  it('asks for completed reminders on the done tab', () => {
+    expect(astFor('done').remf).toEqual({
+      '&': [{ l: { comp: true } }, { l: 'inc' }],
+    });
+  });
+
+  // `comp: false` is what `soupQueryExcludesDone` matches to drop a row
+  // optimistically when it is marked done; losing it regresses that silently.
+  it.each(['active', 'scheduled'])(
+    'keeps the not-completed filter on the %s tab',
+    (tab) => {
+      expect(
+        JSON.stringify(getViewPreset('reminders', tab)?.filters)
+      ).toContain('reminderCompleted');
+    }
+  );
+
+  // Active is an inbox, so newest-fired first like every other feed. Scheduled
+  // points at future dates, where newest-first would mean furthest-away first.
+  it('reads only the scheduled tab soonest-first', () => {
+    expect(getViewPreset('reminders', 'active')?.sortDirection).toBeUndefined();
+    expect(getViewPreset('reminders', 'scheduled')?.sortDirection).toBe('asc');
+    expect(getViewPreset('reminders', 'done')?.sortDirection).toBeUndefined();
   });
 
   // defineQueryFilters NIL-excludes every target a query does not name, which
   // is the only thing keeping other entity types out of this view.
-  it.each(['upcoming', 'all'])(
+  it.each(['active', 'scheduled', 'done'])(
     'excludes every other entity type on the %s tab',
     (tab) => {
       const ast = astFor(tab);
@@ -104,4 +141,37 @@ describe('reminders view presets', () => {
       expect(ast.cf, 'chats').toBeDefined();
     }
   );
+});
+
+// The tab bar's labels and the filter presets are two separate tables keyed by
+// the same ids, so a renamed tab can leave the UI showing the old one while the
+// new preset is unreachable. That is exactly what happened when Reminders went
+// from Upcoming/All to Active/Scheduled/Done.
+describe('tab lists and filter presets agree', () => {
+  const tabbedViews = Object.keys(
+    VIEW_TAB_LISTS
+  ) as (keyof typeof VIEW_TAB_LISTS)[];
+
+  it.each(tabbedViews)('every %s tab in the tab bar has a preset', (view) => {
+    const presetIds = Object.keys(VIEW_TAB_PRESETS[view].tabs);
+    for (const tab of VIEW_TAB_LISTS[view]) {
+      expect(presetIds, `${view}/${tab.value}`).toContain(tab.value);
+    }
+  });
+
+  it.each(tabbedViews)(
+    'every %s preset is reachable from the tab bar',
+    (view) => {
+      const shownIds = VIEW_TAB_LISTS[view].map((tab) => tab.value);
+      for (const tabId of Object.keys(VIEW_TAB_PRESETS[view].tabs)) {
+        expect(shownIds, `${view}/${tabId}`).toContain(tabId);
+      }
+    }
+  );
+
+  it.each(tabbedViews)('the %s default tab is one of its tabs', (view) => {
+    expect(VIEW_TAB_LISTS[view].map((tab) => tab.value)).toContain(
+      VIEW_TAB_PRESETS[view].default
+    );
+  });
 });
