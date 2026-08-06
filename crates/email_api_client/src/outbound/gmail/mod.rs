@@ -109,13 +109,16 @@ pub(crate) fn map_history_error(error: GmailApiHttpError) -> EmailApiError {
 }
 
 #[allow(dead_code)]
-pub(crate) fn map_watch_error(error: GmailApiHttpError) -> EmailApiError {
-    let is_watch_conflict = error.status().is_some_and(|status| status.as_u16() == 400)
-        && error
-            .body()
-            .is_some_and(|body| body.contains(WATCH_CONFLICT_BODY_FRAGMENT));
+pub(crate) fn is_watch_conflict(error: &GmailApiHttpError) -> bool {
+    error.status().is_some_and(|status| status.as_u16() == 400)
+        && error.body().is_some_and(|body| {
+            body.to_ascii_lowercase()
+                .contains(WATCH_CONFLICT_BODY_FRAGMENT)
+        })
+}
 
-    if is_watch_conflict {
+pub(crate) fn map_watch_error(error: GmailApiHttpError) -> EmailApiError {
+    if is_watch_conflict(&error) {
         return EmailApiError::Conflict;
     }
 
