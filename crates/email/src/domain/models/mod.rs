@@ -35,4 +35,4 @@ pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,
     PreviewView, PreviewViewStandardLabel,
 };
-pub use thread::{Thread, ThreadRow};
+pub use thread::{EmailThreadMetadata, Thread, ThreadRow};

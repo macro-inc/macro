@@ -24,12 +24,7 @@ import {
 } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
-import {
-  type ChannelEntity,
-  EntityRowIcon,
-  isChannelEntity,
-  UnreadIndicator,
-} from '@entity';
+import { type ChannelEntity, EntityRowIcon, isChannelEntity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { openNotification } from '@notifications';
@@ -40,19 +35,21 @@ import {
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { cn, NavRow, Surface, Tooltip } from '@ui';
+import { makePersisted } from '@solid-primitives/storage';
+import { cn, NavRow, Surface, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
 
 /** Rows the channel list shows before it scrolls internally. */
-const VISIBLE_CHANNEL_COUNT = 5;
+const VISIBLE_CHANNEL_COUNT = 12;
 /**
  * How long the user must be done scrolling the list before a new channel
  * message snaps it back to the top.
@@ -68,6 +65,10 @@ interface RecentChannel {
   entity: ChannelEntity;
   /** Unread channel notifications, newest first. */
   unread: UnifiedNotification[];
+}
+
+function unreadCountLabel(count: number): string {
+  return count > 99 ? '99+' : String(count);
 }
 
 /**
@@ -200,6 +201,7 @@ function ChannelRow(props: {
 
   const entity = () => props.channel.entity;
   const isUnread = () => props.channel.unread.length > 0;
+  const unreadCount = () => props.channel.unread.length;
   const isSlim = () => props.isSlim ?? false;
 
   const canOpenInNewSplit = () =>
@@ -231,7 +233,9 @@ function ChannelRow(props: {
           <EntityRowIcon entity={entity()} suppressClick showTooltip={false} />
         </div>
         <Show when={isSlim() && isUnread()}>
-          <div class="absolute -top-0.5 -right-0.5 size-1.5 bg-accent rounded-full ring-surface ring-2" />
+          <span class="absolute -top-1.5 -right-1.5 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center text-[9px] leading-none font-medium bg-accent text-surface rounded-full ring-surface ring-2">
+            {unreadCountLabel(unreadCount())}
+          </span>
         </Show>
       </div>
 
@@ -241,7 +245,9 @@ function ChannelRow(props: {
         </span>
       </Show>
       <Show when={!isSlim() && isUnread()}>
-        <UnreadIndicator active />
+        <span class="ml-auto shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md">
+          {unreadCountLabel(unreadCount())}
+        </span>
       </Show>
     </NavRow>
   );
@@ -307,8 +313,12 @@ export const ChannelsRecentWidget = (props: {
   maxVisible?: number;
   onSectionOpenChange?: () => void;
   onDropdownOpenChange?: (open: boolean) => void;
+  headerWrapper?: (header: JSX.Element) => JSX.Element;
 }) => {
   const notificationSource = useGlobalNotificationSource();
+  const [unreadOnly, setUnreadOnly] = makePersisted(createSignal(false), {
+    name: 'sidebar-recent-channels-unread-only',
+  });
 
   const channelsQuery = useSoupAstItemsQuery(
     () => ({
@@ -359,6 +369,15 @@ export const ChannelsRecentWidget = (props: {
       ...channels.filter((channel) => channel.unread.length === 0),
     ];
   });
+  const visibleChannels = createMemo(() =>
+    unreadOnly()
+      ? recentChannels().filter((channel) => channel.unread.length > 0)
+      : recentChannels()
+  );
+  const showAllCaughtUp = () =>
+    unreadOnly() &&
+    recentChannels().length > 0 &&
+    visibleChannels().length === 0;
 
   const maxVisible = () => props.maxVisible ?? VISIBLE_CHANNEL_COUNT;
   // The list shows `maxVisible` rows (h-7 rows, gap-0.5) and scrolls inside
@@ -401,7 +420,7 @@ export const ChannelsRecentWidget = (props: {
   // Overflow can change without a scroll event (channels load in, rows are
   // removed, the visible-row cap changes), so re-check when those change too.
   createEffect(() => {
-    recentChannels();
+    visibleChannels();
     maxVisible();
     scheduleListScrollUpdate();
   });
@@ -444,7 +463,7 @@ export const ChannelsRecentWidget = (props: {
               lastUserScrollAt = Date.now();
             }}
           >
-            <For each={recentChannels()}>
+            <For each={visibleChannels()}>
               {(channel) => (
                 <ChannelRow
                   channel={channel}
@@ -452,6 +471,11 @@ export const ChannelsRecentWidget = (props: {
                 />
               )}
             </For>
+            <Show when={showAllCaughtUp()}>
+              <div class="flex h-7 w-full items-center gap-2 px-2 py-1 text-sm font-medium text-ink-extra-muted/60">
+                <span class="truncate">All caught up</span>
+              </div>
+            </Show>
           </div>
           <div
             class={cn(
@@ -491,9 +515,38 @@ export const ChannelsRecentWidget = (props: {
     >
       <Show when={recentChannels().length > 0}>
         <CollapsibleSidebarSection
-          label="Channels"
+          label="Latest"
           persistKey="recent-channels"
           items={sectionItems()}
+          headerWrapper={props.headerWrapper}
+          headerMenu={(open) => (
+            <Show when={open}>
+              <Tooltip
+                label="Toggle unread filter"
+                placement="top"
+                class="pointer-events-none rounded-full opacity-0 transition-opacity duration-100 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100"
+              >
+                <div
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ToggleSwitch
+                    checked={unreadOnly()}
+                    onChange={setUnreadOnly}
+                    size="xs"
+                    label={
+                      <span class="text-[11px] font-medium leading-none text-ink-extra-muted/60">
+                        Unread
+                      </span>
+                    }
+                    labelClass="flex items-center"
+                    controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
+                    class="flex-row-reverse gap-1 rounded-full px-1.5 py-1"
+                  />
+                </div>
+              </Tooltip>
+            </Show>
+          )}
           onOpenChange={() => props.onSectionOpenChange?.()}
         />
       </Show>

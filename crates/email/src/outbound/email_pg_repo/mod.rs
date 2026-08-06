@@ -1,10 +1,10 @@
 use crate::domain::{
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailInboxDetails, EmailThreadPreview, Label, Link, LinkLabel,
-        MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, PreviewCursorQuery,
-        ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
-        UpsertedContacts, UserProvider,
+        EmailFilter, EmailInboxDetails, EmailThreadMetadata, EmailThreadPreview, Label, Link,
+        LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+        PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow,
+        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
@@ -149,6 +149,13 @@ impl EmailRepo for EmailPgRepo {
 
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
         thread::thread_by_id(&self.pool, thread_id).await
+    }
+
+    async fn thread_metadata_by_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<EmailThreadMetadata>, Self::Err> {
+        thread::thread_metadata_by_ids(&self.pool, thread_ids).await
     }
 
     async fn messages_by_thread_id_paginated(

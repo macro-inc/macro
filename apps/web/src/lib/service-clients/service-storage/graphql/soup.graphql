@@ -63,6 +63,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						ownerId
 						inboxVisible
 						linkId
+						latestInboundMessageTs
 						emailName: name
 						snippet
 						senderEmail

@@ -1245,6 +1245,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const findLink = (id: SidebarItem['id']) =>
     allLinks().find((link) => link.id === id && !link.hiddenFromSidebar);
   const searchLink = () => allLinks().find((link) => link.id === 'search');
+  const channelsLink = () => allLinks().find((link) => link.id === 'channels');
+  const channelsContent = () =>
+    ({
+      type: 'component',
+      id: 'channels',
+      params: channelsLink()?.params,
+    }) as const;
 
   const renderSidebarLink = (link: SidebarItem) => (
     <Dynamic
@@ -1483,12 +1490,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             persistKey="workspace"
             items={workspaceItems()}
             headerMenu={() => (
-              <SidebarSectionMenu
-                label="Workspace"
-                options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
-                onToggle={toggleSectionVisibility}
-                onOpenChange={handleWorkspaceContextMenuOpenChange}
-              />
+              <div class="pointer-events-auto">
+                <SidebarSectionMenu
+                  label="Workspace"
+                  options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
+                  onToggle={toggleSectionVisibility}
+                  onOpenChange={handleWorkspaceContextMenuOpenChange}
+                />
+              </div>
             )}
             onOpenChange={scheduleMiddleScrollUpdate}
           />
@@ -1505,6 +1514,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
               sidebarState={sidebarDisplayState()}
               onSectionOpenChange={scheduleMiddleScrollUpdate}
               onDropdownOpenChange={handleOverlayDropdownOpenChange}
+              headerWrapper={(header) => (
+                <SidebarOpenInSplitMenu
+                  content={channelsContent}
+                  onOpenChange={handleOverlayDropdownOpenChange}
+                >
+                  {header}
+                </SidebarOpenInSplitMenu>
+              )}
             />
           </Suspense>
         </div>
