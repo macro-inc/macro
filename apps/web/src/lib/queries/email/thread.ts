@@ -24,6 +24,7 @@ import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { fetchGraphqlEmailThreadPage } from './graphql/thread';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -47,22 +48,21 @@ type UseThreadQueryOptions = Omit<
 
 /**
  * Shared infinite query options for thread fetching.
+ *
+ * TODO(email-graphql): This intentionally keeps the existing TanStack cache
+ * facade so REST mutations retain their optimistic updates during the quick
+ * GraphQL read migration. Replace it with the native urql-solid primitive once
+ * those mutations update or explicitly refresh the normalized GraphQL cache.
  */
 export function threadQueryOptions(threadId: string) {
   return {
     queryKey: emailKeys.threadMessages(threadId).queryKey,
-    queryFn: async ({ pageParam }: { pageParam: number }) => {
-      const result = await throwOnErr(
-        async () =>
-          await emailClient.getThread({
-            thread_id: threadId,
-            offset: pageParam,
-            limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-          })
-      );
-
-      return result.thread;
-    },
+    queryFn: async ({ pageParam }: { pageParam: number }) =>
+      await fetchGraphqlEmailThreadPage(
+        threadId,
+        pageParam,
+        DEFAULT_THREAD_MESSAGES_LIMIT
+      ),
     initialPageParam: 0,
     getNextPageParam: (lastPage: Thread, allPages: Thread[]) => {
       if (lastPage.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT) {

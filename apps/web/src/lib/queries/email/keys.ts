@@ -12,7 +12,8 @@ export const emailKeys = createQueryKeys('email', {
     queryKey: [threadId],
   }),
   threadMessages: (threadId: string) => ({
-    queryKey: ['messages', threadId],
+    // Versioned so pages fetched through REST are never reused as GraphQL data.
+    queryKey: ['messages', 'graphql-v1', threadId],
   }),
   previews: (params: {
     view: PreviewViewStandardLabel;
