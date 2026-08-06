@@ -140,29 +140,17 @@ pub async fn update_labels(
 
     let has_label_changes = !labels_to_add.is_empty() || !labels_to_delete.is_empty();
 
-    if !labels_to_add.is_empty() {
-        add_message_labels(
+    if has_label_changes {
+        apply_message_label_diff(
             &ctx.db,
             link,
             db_message.db_id,
             db_message.thread_db_id,
             &labels_to_add,
-        )
-        .await?
-    }
-
-    if !labels_to_delete.is_empty() {
-        remove_message_labels(
-            &ctx.db,
-            link,
-            db_message.db_id,
-            db_message.thread_db_id,
             &labels_to_delete,
         )
-        .await?
-    }
+        .await?;
 
-    if has_label_changes {
         publish_label_diff_events(
             ctx,
             link,
@@ -227,6 +215,33 @@ fn build_provider_spam_changed_metadata(
 
 fn is_user_label(label: &str) -> bool {
     !NON_USER_LABELS.contains(&label) && !label.starts_with("CATEGORY_")
+}
+
+fn is_thread_metadata_label(label: &str) -> bool {
+    matches!(
+        label,
+        service::label::system_labels::INBOX
+            | service::label::system_labels::SENT
+            | service::label::system_labels::DRAFT
+            | service::label::system_labels::SPAM
+            | service::label::system_labels::TRASH
+            | service::label::system_labels::UNREAD
+            | "CATEGORY_PERSONAL"
+            | "CATEGORY_SOCIAL"
+            | "CATEGORY_PROMOTIONS"
+            | "CATEGORY_UPDATES"
+            | "CATEGORY_FORUMS"
+    )
+}
+
+fn label_diff_requires_metadata_update(
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
+) -> bool {
+    labels_to_add
+        .iter()
+        .chain(labels_to_delete)
+        .any(|label| is_thread_metadata_label(label))
 }
 
 /// Publish semantic macro.email events for a provider-side label diff, all
@@ -377,76 +392,18 @@ async fn publish_label_diff_events(
 }
 
 #[tracing::instrument(skip(db, link))]
-pub async fn add_message_labels(
+async fn apply_message_label_diff(
     db: &PgPool,
     link: &link::Link,
     message_db_id: Uuid,
     thread_db_id: Uuid,
-    provider_label_ids: &[String],
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
 ) -> result::Result<(), ProcessingError> {
-    // transaction as we might be making multiple changes
-    let mut tx = db.begin().await.map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to begin transaction"),
-        })
-    })?;
-
-    let result = async {
-        insert::insert_message_labels(&mut tx, link.id, message_db_id, provider_label_ids, false)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to insert message labels".to_string()),
-                })
-            })?;
-
-        // if we are adding unread label, mark message as not read
-        if provider_label_ids
-            .iter()
-            .any(|provider_id| provider_id == service::label::system_labels::UNREAD)
-        {
-            email_db_client::messages::update::update_message_read_status(
-                &mut tx,
-                message_db_id,
-                link.id,
-                false,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update message read status".to_string()),
-                })
-            })?;
-        }
-
-        update_thread_metadata(&mut tx, thread_db_id, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread metadata".to_string()),
-                })
-            })?;
-
-        Ok::<(), ProcessingError>(())
+    if labels_to_add.is_empty() && labels_to_delete.is_empty() {
+        return Ok(());
     }
-    .await;
 
-    complete_transaction_with_processing_error(tx, result).await
-}
-
-#[tracing::instrument(skip(db, link))]
-pub async fn remove_message_labels(
-    db: &PgPool,
-    link: &link::Link,
-    message_db_id: Uuid,
-    thread_db_id: Uuid,
-    provider_label_ids: &[String],
-) -> result::Result<(), ProcessingError> {
-    // transaction as we might be making multiple db changes
     let mut tx = db.begin().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
@@ -455,43 +412,76 @@ pub async fn remove_message_labels(
     })?;
 
     let result = async {
-        delete_db_message_labels(&mut tx, message_db_id, provider_label_ids, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to delete message labels"),
-                })
-            })?;
+        if !labels_to_add.is_empty() {
+            insert::insert_message_labels(&mut tx, link.id, message_db_id, labels_to_add, false)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to insert message labels"),
+                    })
+                })?;
 
-        // if we are removing unread label, mark message as read
-        if provider_label_ids
-            .iter()
-            .any(|provider_id| provider_id == service::label::system_labels::UNREAD)
-        {
-            email_db_client::messages::update::update_message_read_status(
-                &mut tx,
-                message_db_id,
-                link.id,
-                true,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update message read status"),
-                })
-            })?;
+            if labels_to_add
+                .iter()
+                .any(|label| label == service::label::system_labels::UNREAD)
+            {
+                email_db_client::messages::update::update_message_read_status(
+                    &mut tx,
+                    message_db_id,
+                    link.id,
+                    false,
+                )
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to mark message unread"),
+                    })
+                })?;
+            }
         }
 
-        update_thread_metadata(&mut tx, thread_db_id, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread metadata"),
-                })
-            })?;
+        if !labels_to_delete.is_empty() {
+            delete_db_message_labels(&mut tx, message_db_id, labels_to_delete, link.id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to delete message labels"),
+                    })
+                })?;
+
+            if labels_to_delete
+                .iter()
+                .any(|label| label == service::label::system_labels::UNREAD)
+            {
+                email_db_client::messages::update::update_message_read_status(
+                    &mut tx,
+                    message_db_id,
+                    link.id,
+                    true,
+                )
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to mark message read"),
+                    })
+                })?;
+            }
+        }
+
+        if label_diff_requires_metadata_update(labels_to_add, labels_to_delete) {
+            update_thread_metadata(&mut tx, thread_db_id, link.id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to update thread metadata"),
+                    })
+                })?;
+        }
 
         Ok::<(), ProcessingError>(())
     }

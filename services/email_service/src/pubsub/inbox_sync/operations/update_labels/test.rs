@@ -70,3 +70,78 @@ fn ignores_diffs_without_spam_changes() {
 fn spam_remains_excluded_from_user_label_events() {
     assert!(!is_user_label(service::label::system_labels::SPAM));
 }
+
+#[test]
+fn combined_add_and_remove_diff_requires_one_metadata_update() {
+    let labels_to_add = vec![service::label::system_labels::INBOX.to_string()];
+    let labels_to_delete = vec![service::label::system_labels::TRASH.to_string()];
+
+    assert!(label_diff_requires_metadata_update(
+        &labels_to_add,
+        &labels_to_delete
+    ));
+}
+
+#[test]
+fn add_only_diff_can_require_metadata_update() {
+    let labels_to_add = vec![service::label::system_labels::UNREAD.to_string()];
+
+    assert!(label_diff_requires_metadata_update(&labels_to_add, &[]));
+}
+
+#[test]
+fn remove_only_diff_can_require_metadata_update() {
+    let labels_to_delete = vec![service::label::system_labels::SENT.to_string()];
+
+    assert!(label_diff_requires_metadata_update(&[], &labels_to_delete));
+}
+
+#[test]
+fn empty_diff_does_not_require_metadata_update() {
+    assert!(!label_diff_requires_metadata_update(&[], &[]));
+}
+
+#[test]
+fn all_thread_metadata_and_signal_labels_are_relevant() {
+    let relevant_labels = [
+        service::label::system_labels::INBOX,
+        service::label::system_labels::SENT,
+        service::label::system_labels::DRAFT,
+        service::label::system_labels::SPAM,
+        service::label::system_labels::TRASH,
+        service::label::system_labels::UNREAD,
+        "CATEGORY_PERSONAL",
+        "CATEGORY_SOCIAL",
+        "CATEGORY_PROMOTIONS",
+        "CATEGORY_UPDATES",
+        "CATEGORY_FORUMS",
+    ];
+
+    for label in relevant_labels {
+        assert!(
+            is_thread_metadata_label(label),
+            "{label} should be relevant"
+        );
+    }
+}
+
+#[test]
+fn user_and_unrelated_system_labels_are_irrelevant() {
+    for label in [
+        "Label_123",
+        service::label::system_labels::STARRED,
+        service::label::system_labels::IMPORTANT,
+    ] {
+        assert!(
+            !is_thread_metadata_label(label),
+            "{label} should be irrelevant"
+        );
+    }
+
+    let labels_to_add = vec!["Label_123".to_string()];
+    let labels_to_delete = vec![service::label::system_labels::STARRED.to_string()];
+    assert!(!label_diff_requires_metadata_update(
+        &labels_to_add,
+        &labels_to_delete
+    ));
+}
