@@ -7,6 +7,16 @@ version = "0.3.2"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Custom profiles are reserved for local profiling builds. Keep Rust DWARF in
+# wasm-bindgen's output and skip wasm-opt, which otherwise strips or rewrites
+# the source locations needed to symbolicate Firefox profiles.
+[package.metadata.wasm-pack.profile.custom]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.custom.wasm-bindgen]
+demangle-name-section = true
+dwarf-debug-info = true
+
 # Browser-only wasm-bindgen shell around the engine + IDB storage. Like
 # cache-idb, it compiles to an empty shell off-wasm so workspace `cargo test`
 # stays green.

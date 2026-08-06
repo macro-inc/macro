@@ -293,6 +293,14 @@ unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
 
+# Retain Rust DWARF for local cache profiling while keeping release-level LLVM
+# optimization. wasm-pack's custom profile metadata prevents the final
+# wasm-opt pass from discarding or rewriting these locations.
+[profile.cache-wasm-profiling]
+inherits = "release"
+debug = 2
+strip = "none"
+
 # The Cloudflare sync worker is size-sensitive. Package manifests cannot own
 # profiles once they are workspace members, so keep its former release profile
 # here without changing release optimization for the backend services.
