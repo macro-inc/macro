@@ -75,8 +75,6 @@ pub struct GoogleEventSyncContext {
 
 /// Authorized ingestion command for one normalized calendar event.
 pub enum CalendarEventWrite {
-    /// Event extracted from a connected inbox's RFC 5545 content.
-    EmailIcs(CalendarEventUpsert),
     /// Google event written while holding a durable backfill lease.
     GoogleBackfill {
         /// Durable job and connected-inbox identity.

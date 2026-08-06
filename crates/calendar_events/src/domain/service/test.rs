@@ -3,9 +3,9 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarEvent,
-        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EmailIcsSource, EventStatus,
-        EventTime, EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
+        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
         ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
@@ -33,8 +33,7 @@ impl CalendarRepository for FakeRepo {
 
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
         let upsert = match write {
-            CalendarEventWrite::EmailIcs(upsert)
-            | CalendarEventWrite::GoogleBackfill { upsert, .. }
+            CalendarEventWrite::GoogleBackfill { upsert, .. }
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
@@ -155,12 +154,13 @@ fn valid_upsert() -> CalendarEventUpsert {
             created_at: starts_at,
             updated_at: starts_at,
         },
-        source: CalendarEventSource::EmailIcs(EmailIcsSource {
+        source: CalendarEventSource::Google(GoogleEventSource {
             email_link_id: Uuid::now_v7(),
-            email_thread_id: None,
-            email_message_id: Uuid::now_v7(),
-            email_attachment_id: None,
-            content_hash: "hash".to_string(),
+            account_id: Uuid::now_v7(),
+            calendar_id: Uuid::now_v7(),
+            provider_event_id: "provider-event".to_string(),
+            provider_recurring_event_id: None,
+            provider_etag: None,
             raw_payload: serde_json::json!({}),
         }),
         overrides: Vec::new(),
@@ -178,21 +178,13 @@ fn valid_upsert() -> CalendarEventUpsert {
     }
 }
 
-#[tokio::test]
-async fn accepts_valid_event() {
-    let repo = FakeRepo::default();
-    let service = CalendarService::new(repo.clone());
-    let upsert = valid_upsert();
-
-    service.upsert_email_event(upsert).await.unwrap();
-
-    assert_eq!(repo.upserts.lock().unwrap().len(), 1);
+#[test]
+fn accepts_valid_event() {
+    assert!(validate_upsert(&valid_upsert()).is_ok());
 }
 
-#[tokio::test]
-async fn rejects_invalid_occurrence_time() {
-    let repo = FakeRepo::default();
-    let service = CalendarService::new(repo.clone());
+#[test]
+fn rejects_invalid_occurrence_time() {
     let mut upsert = valid_upsert();
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
     upsert.occurrences[0].time = EventTime::Timed {
@@ -201,8 +193,7 @@ async fn rejects_invalid_occurrence_time() {
         time_zone: None,
     };
 
-    assert!(service.upsert_email_event(upsert).await.is_err());
-    assert!(repo.upserts.lock().unwrap().is_empty());
+    assert!(validate_upsert(&upsert).is_err());
 }
 
 #[test]

@@ -5,7 +5,6 @@ use super::{
     release_init_lease, renew_completion_effects, renew_init_lease,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use serde_json::json;
 use sqlx::{PgPool, types::Uuid};
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -286,7 +285,6 @@ async fn zero_thread_completion_is_fenced_by_init_lease(pool: PgPool) -> anyhow:
 async fn failing_a_terminal_scan_is_an_idempotent_noop(pool: PgPool) -> anyhow::Result<()> {
     let link_id = Uuid::new_v4();
     let email_job_id = Uuid::new_v4();
-    let calendar_job_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
@@ -309,19 +307,6 @@ async fn failing_a_terminal_scan_is_an_idempotent_noop(pool: PgPool) -> anyhow::
     )
     .execute(&pool)
     .await?;
-    sqlx::query!(
-        r#"
-        INSERT INTO calendar_backfill_jobs (
-            id, email_link_id, kind, grant_version, status, cursor, completed_at
-        )
-        VALUES ($1, $2, 'email_ics', 1, 'complete', $3, now())
-        "#,
-        calendar_job_id,
-        link_id,
-        json!({ "emailBackfillJobId": email_job_id }),
-    )
-    .execute(&pool)
-    .await?;
 
     assert!(!fail_backfill_job(&pool, email_job_id).await?);
     assert!(!fail_backfill_job(&pool, Uuid::new_v4()).await?);
@@ -332,14 +317,7 @@ async fn failing_a_terminal_scan_is_an_idempotent_noop(pool: PgPool) -> anyhow::
     )
     .fetch_one(&pool)
     .await?;
-    let calendar_status = sqlx::query_scalar!(
-        "SELECT status FROM calendar_backfill_jobs WHERE id = $1",
-        calendar_job_id,
-    )
-    .fetch_one(&pool)
-    .await?;
 
     assert_eq!(email_status, "Complete");
-    assert_eq!(calendar_status, "complete");
     Ok(())
 }

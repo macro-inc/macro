@@ -458,24 +458,12 @@ impl CalendarRepository for PgCalendarRepository {
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let upsert = match write {
-            CalendarEventWrite::EmailIcs(upsert) => {
-                if !matches!(upsert.source, CalendarEventSource::EmailIcs(_)) {
-                    return Err(rootcause::report!(
-                        "email ICS ingestion requires an email ICS source"
-                    ));
-                }
-                upsert
-            }
             CalendarEventWrite::GoogleBackfill {
                 key,
                 lease_token,
                 upsert,
             } => {
-                let CalendarEventSource::Google(source) = &upsert.source else {
-                    return Err(rootcause::report!(
-                        "Google backfill ingestion requires a Google source"
-                    ));
-                };
+                let CalendarEventSource::Google(source) = &upsert.source;
                 if source.email_link_id != key.email_link_id {
                     return Err(rootcause::report!(
                         "Google calendar event fence does not match its connected inbox"
@@ -488,14 +476,9 @@ impl CalendarRepository for PgCalendarRepository {
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
-        let source_kind = match &upsert.source {
-            CalendarEventSource::Google(_) => "google",
-            CalendarEventSource::EmailIcs(_) => "email_ics",
-        };
-        let source_link_id = match &upsert.source {
-            CalendarEventSource::Google(source) => source.email_link_id,
-            CalendarEventSource::EmailIcs(source) => source.email_link_id,
-        };
+        let CalendarEventSource::Google(source) = &upsert.source;
+        let source_kind = "google";
+        let source_link_id = source.email_link_id;
         let reconciliation_lock = event_reconciliation_lock(source_link_id, &upsert.event.ical_uid);
         sqlx::query_scalar!(
             r#"SELECT 1 AS "locked!" FROM pg_advisory_xact_lock($1)"#,
@@ -508,31 +491,28 @@ impl CalendarRepository for PgCalendarRepository {
         // sync-token reset makes that happen wholesale. When the incoming
         // Google projection is identical to the stored one, skip the write
         // path entirely so rebuilds cost reads, not occurrence churn.
-        if let CalendarEventSource::Google(source) = &upsert.source {
-            let existing = sqlx::query!(
-                r#"
-                SELECT event_id, normalized_payload
-                FROM calendar_event_sources
-                WHERE source_kind = 'google'
-                  AND account_id = $1
-                  AND calendar_id = $2
-                  AND provider_event_id = $3
-                "#,
-                source.account_id,
-                source.calendar_id,
-                &source.provider_event_id,
-            )
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(report)?;
-            if let Some(row) = existing {
-                let incoming =
-                    serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
-                if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming)
-                {
-                    tx.commit().await.map_err(report)?;
-                    return Ok(row.event_id);
-                }
+        let existing = sqlx::query!(
+            r#"
+            SELECT event_id, normalized_payload
+            FROM calendar_event_sources
+            WHERE source_kind = 'google'
+              AND account_id = $1
+              AND calendar_id = $2
+              AND provider_event_id = $3
+            "#,
+            source.account_id,
+            source.calendar_id,
+            &source.provider_event_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if let Some(row) = existing {
+            let incoming =
+                serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
+            if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming) {
+                tx.commit().await.map_err(report)?;
+                return Ok(row.event_id);
             }
         }
 
@@ -583,29 +563,11 @@ impl CalendarRepository for PgCalendarRepository {
                 canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
                 updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at)
             WHERE
-                (
-                    $25 = 'google'
-                    AND (
-                        EXCLUDED.sequence > calendar_events.sequence
-                        OR (
-                            EXCLUDED.sequence = calendar_events.sequence
-                            AND EXCLUDED.canonical_source_updated_at
-                                >= calendar_events.canonical_source_updated_at
-                        )
-                        OR calendar_events.canonical_source_kind <> 'google'
-                    )
-                )
+                EXCLUDED.sequence > calendar_events.sequence
                 OR (
-                    $25 = 'email_ics'
-                    AND calendar_events.canonical_source_kind <> 'google'
-                    AND (
-                        EXCLUDED.sequence > calendar_events.sequence
-                        OR (
-                            EXCLUDED.sequence = calendar_events.sequence
-                            AND EXCLUDED.canonical_source_updated_at
-                                >= calendar_events.canonical_source_updated_at
-                        )
-                    )
+                    EXCLUDED.sequence = calendar_events.sequence
+                    AND EXCLUDED.canonical_source_updated_at
+                        >= calendar_events.canonical_source_updated_at
                 )
             RETURNING id
             "#,
@@ -633,7 +595,6 @@ impl CalendarRepository for PgCalendarRepository {
             source_kind,
             upsert.event.created_at,
             upsert.event.updated_at,
-            source_kind,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -1791,11 +1752,9 @@ async fn persist_source(
 ) -> Result<(), Report> {
     let normalized_payload =
         serde_json::to_value(StoredSourceProjection::from(upsert)).map_err(report)?;
-    let source = &upsert.source;
-    match source {
-        CalendarEventSource::Google(source) => {
-            sqlx::query!(
-                r#"
+    let CalendarEventSource::Google(source) = &upsert.source;
+    sqlx::query!(
+        r#"
                 INSERT INTO calendar_event_sources (
                     id, event_id, source_link_id, source_kind, account_id, calendar_id,
                     provider_event_id, provider_recurring_event_id,
@@ -1824,72 +1783,22 @@ async fn persist_source(
                         AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at
                     )
                 "#,
-                Uuid::now_v7(),
-                event_id,
-                source.email_link_id,
-                source.account_id,
-                source.calendar_id,
-                &source.provider_event_id,
-                source.provider_recurring_event_id.as_deref(),
-                source.provider_etag.as_deref(),
-                &source.raw_payload,
-                db_sequence(upsert.event.sequence)?,
-                upsert.event.updated_at,
-                &normalized_payload,
-            )
-            .execute(&mut **tx)
-            .await
-            .map_err(report)?;
-        }
-        CalendarEventSource::EmailIcs(source) => {
-            sqlx::query!(
-                r#"
-                INSERT INTO calendar_event_sources (
-                    id, event_id, source_link_id, source_kind, email_link_id, email_thread_id,
-                    email_message_id, email_attachment_id, content_hash,
-                    raw_payload, source_sequence, source_updated_at, normalized_payload
-                )
-                VALUES (
-                    $1, $2, $3, 'email_ics', $3, $4, $5, $6, $7, $8,
-                    $9, $10, $11
-                )
-                ON CONFLICT (
-                    email_link_id,
-                    email_message_id,
-                    COALESCE(email_attachment_id, ''),
-                    content_hash,
-                    event_id
-                ) WHERE source_kind = 'email_ics'
-                DO UPDATE SET
-                    raw_payload = EXCLUDED.raw_payload,
-                    source_sequence = EXCLUDED.source_sequence,
-                    source_updated_at = EXCLUDED.source_updated_at,
-                    normalized_payload = EXCLUDED.normalized_payload,
-                    last_seen_at = now()
-                WHERE
-                    EXCLUDED.source_sequence > calendar_event_sources.source_sequence
-                    OR (
-                        EXCLUDED.source_sequence = calendar_event_sources.source_sequence
-                        AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at
-                    )
-                "#,
-                Uuid::now_v7(),
-                event_id,
-                source.email_link_id,
-                source.email_thread_id,
-                source.email_message_id,
-                source.email_attachment_id.as_deref(),
-                &source.content_hash,
-                &source.raw_payload,
-                db_sequence(upsert.event.sequence)?,
-                upsert.event.updated_at,
-                &normalized_payload,
-            )
-            .execute(&mut **tx)
-            .await
-            .map_err(report)?;
-        }
-    }
+        Uuid::now_v7(),
+        event_id,
+        source.email_link_id,
+        source.account_id,
+        source.calendar_id,
+        &source.provider_event_id,
+        source.provider_recurring_event_id.as_deref(),
+        source.provider_etag.as_deref(),
+        &source.raw_payload,
+        db_sequence(upsert.event.sequence)?,
+        upsert.event.updated_at,
+        &normalized_payload,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
     Ok(())
 }
 
@@ -1927,7 +1836,6 @@ async fn restore_best_source_or_delete(
         FROM calendar_event_sources
         WHERE event_id = $1
         ORDER BY
-            CASE source_kind WHEN 'google' THEN 0 ELSE 1 END,
             source_sequence DESC,
             source_updated_at DESC,
             last_seen_at DESC,

@@ -66,23 +66,6 @@ where
             .await
     }
 
-    /// Validate and atomically reconcile a provider or email source.
-    #[tracing::instrument(skip(self, upsert), fields(ical_uid = %upsert.event.ical_uid), err)]
-    pub async fn upsert_email_event(&self, upsert: CalendarEventUpsert) -> Result<Uuid, Report> {
-        validate_upsert(&upsert)?;
-        if !matches!(
-            upsert.source,
-            super::models::CalendarEventSource::EmailIcs(_)
-        ) {
-            return Err(rootcause::report!(
-                "unfenced calendar ingestion only accepts email ICS sources"
-            ));
-        }
-        self.repository
-            .upsert_event(CalendarEventWrite::EmailIcs(upsert))
-            .await
-    }
-
     /// Query a bounded occurrence viewport.
     #[tracing::instrument(skip(self, requester_id, range), err)]
     pub async fn list_occurrences(
@@ -509,9 +492,8 @@ where
                     );
                     continue;
                 }
-                if let super::models::CalendarEventSource::Google(source) = &upsert.source {
-                    debug_assert_eq!(source.calendar_id, calendar_id);
-                }
+                let super::models::CalendarEventSource::Google(source) = &upsert.source;
+                debug_assert_eq!(source.calendar_id, calendar_id);
                 self.repository
                     .upsert_event(CalendarEventWrite::GoogleBackfill {
                         key,

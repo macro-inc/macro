@@ -479,23 +479,6 @@ fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
 #[cfg(test)]
 mod test;
 
-/// Email attachment/message identity for an iCalendar source.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EmailIcsSource {
-    /// Connected inbox.
-    pub email_link_id: Uuid,
-    /// Email thread containing the invitation.
-    pub email_thread_id: Option<Uuid>,
-    /// Email message containing the invitation.
-    pub email_message_id: Uuid,
-    /// Provider attachment identifier, or `None` for inline calendar MIME parts.
-    pub email_attachment_id: Option<String>,
-    /// SHA-256 of the source bytes.
-    pub content_hash: String,
-    /// Source payload retained for reconciliation/debugging.
-    pub raw_payload: serde_json::Value,
-}
-
 /// Google provider identity for an event source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GoogleEventSource {
@@ -518,8 +501,6 @@ pub struct GoogleEventSource {
 /// Source-specific metadata attached to a canonical event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CalendarEventSource {
-    /// Event found in an email iCalendar part.
-    EmailIcs(EmailIcsSource),
     /// Event fetched from Google Calendar.
     Google(GoogleEventSource),
 }
