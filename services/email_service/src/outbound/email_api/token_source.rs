@@ -6,6 +6,7 @@ mod test;
 use authentication_service_client::AuthServiceClient;
 use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
 use email_api_client::domain::ports::ProviderTokenSource;
+use models_email::service::link::Link;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use uuid::Uuid;
@@ -61,10 +62,18 @@ impl ProviderTokenSource for EmailServiceTokenSource {
             .map_err(|_| transient_error("unable to load the linked mailbox"))?
             .ok_or_else(|| transient_error("linked mailbox was not found"))?;
 
+        self.get_access_token_for_link(&link, freshness).await
+    }
+
+    async fn get_access_token_for_link(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
         let result = match freshness {
             TokenFreshness::Cached => {
                 fetch_token_or_mark_reauth(
-                    &link,
+                    link,
                     &self.db,
                     &self.redis_client,
                     &self.auth_service_client,
@@ -74,7 +83,7 @@ impl ProviderTokenSource for EmailServiceTokenSource {
             }
             TokenFreshness::Fresh => {
                 fetch_token_or_mark_reauth_no_cache(
-                    &link,
+                    link,
                     &self.db,
                     &self.redis_client,
                     &self.auth_service_client,

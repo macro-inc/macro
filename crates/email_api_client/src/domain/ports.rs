@@ -5,6 +5,7 @@ use std::future::Future;
 use models_email::email::service::label::Label;
 use models_email::email::service::message::Message;
 use models_email::service::contact::{Contact, ContactList};
+use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{
@@ -234,6 +235,15 @@ pub trait ProviderTokenSource: Send + Sync + 'static {
         link_id: Uuid,
         freshness: TokenFreshness,
     ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send;
+
+    /// Returns an access token for a link that may not have been persisted yet.
+    fn get_access_token_for_link(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send {
+        self.get_access_token(link.id, freshness)
+    }
 }
 
 /// Applies provider quota policy before an outbound request.

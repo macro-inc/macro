@@ -1,3 +1,4 @@
+use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::super::models::{EmailApiError, ProviderSubscription, TokenFreshness};
@@ -25,13 +26,15 @@ where
     /// could outlive a revoked provider grant.
     pub async fn register_subscription_without_cache(
         &self,
-        link_id: Uuid,
+        link: &Link,
     ) -> Result<ProviderSubscription, EmailApiError> {
         let access_token = self
-            .get_access_token(link_id, TokenFreshness::Fresh)
-            .await?;
+            .token_source
+            .get_access_token_for_link(link, TokenFreshness::Fresh)
+            .await
+            .map_err(super::map_token_error)?;
         self.rate_limiter
-            .check_rate_limit(link_id, ApiOperationKind::Subscribe)
+            .check_rate_limit(link.id, ApiOperationKind::Subscribe)
             .await
             .map_err(EmailApiError::from)?;
 

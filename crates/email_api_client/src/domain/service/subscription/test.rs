@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 
 use chrono::{TimeZone, Utc};
+use models_email::service::link::{Link, UserProvider};
 use uuid::Uuid;
 
 use super::super::super::models::{
@@ -57,8 +58,8 @@ fn registration_and_stop_use_matching_costs_and_operations() {
         assert_eq!(
             *calls.lock().unwrap(),
             vec![
-                Call::Token(TokenFreshness::Cached),
-                Call::RateLimit(operation),
+                Call::Token(Uuid::nil(), TokenFreshness::Cached),
+                Call::RateLimit(Uuid::nil(), operation),
                 Call::Repository(repository_call),
             ]
         );
@@ -70,16 +71,32 @@ fn registration_can_bypass_the_token_cache_for_initialization() {
     let calls = call_log();
     let service = service(calls.clone());
 
-    block_on(service.register_subscription_without_cache(Uuid::nil())).unwrap();
+    block_on(service.register_subscription_without_cache(&link())).unwrap();
 
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(TokenFreshness::Fresh),
-            Call::RateLimit(super::ApiOperationKind::Subscribe),
+            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
+            Call::RateLimit(Uuid::nil(), super::ApiOperationKind::Subscribe),
             Call::Repository("subscribe"),
         ]
     );
+}
+
+fn link() -> Link {
+    Link {
+        id: Uuid::nil(),
+        macro_id: "macro|user@example.com".to_string().try_into().unwrap(),
+        fusionauth_user_id: "fusion-user-id".to_string(),
+        email_address: "user@example.com".to_string().try_into().unwrap(),
+        provider: UserProvider::Gmail,
+        is_sync_active: true,
+        is_primary: true,
+        needs_reauth: false,
+        last_sync_error_at: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
 }
 
 fn service(
