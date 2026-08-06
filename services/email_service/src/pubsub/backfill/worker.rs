@@ -1,3 +1,4 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::backfill::process;
 use crate::pubsub::context::{
     CalendarBackfillServices, CrmServiceType, NotificationIngressType, PubSubContext,
@@ -24,6 +25,7 @@ pub async fn run_worker(
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     gmail_client: gmail_client::GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
@@ -42,6 +44,7 @@ pub async fn run_worker(
         sqs_client,
         contacts_ingress,
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         notification_ingress_service,
@@ -68,6 +71,7 @@ pub async fn run_worker_with_cancellation(
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     gmail_client: gmail_client::GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
@@ -88,6 +92,7 @@ pub async fn run_worker_with_cancellation(
         sqs_client,
         contacts_ingress,
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         notification_ingress_service,

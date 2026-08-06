@@ -1,3 +1,4 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
@@ -130,6 +131,7 @@ pub struct PubSubContext {
     pub sqs_client: sqs_client::SQS,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub gmail_client: GmailClient,
+    pub email_api: GmailApi,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
     pub notification_ingress_service: Arc<NotificationIngressType>,

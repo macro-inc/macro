@@ -1,8 +1,13 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
+use email_api_client::GmailApiClientRepository;
 use email_service::config::Config;
+use email_service::outbound::email_api::{
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+};
 use email_service::pubsub::CrmMetadataResolver;
+use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -11,6 +16,7 @@ use macro_service_urls::{
 };
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
+use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -19,6 +25,21 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn compose_email_api(
+    db: PgPool,
+    gmail_client: gmail_client::GmailClient,
+    auth_service_client: authentication_service_client::AuthServiceClient,
+    redis_client: RedisClient,
+    sqs_client: sqs_client::SQS,
+    rate_budget: RateBudget,
+) -> GmailApi {
+    GmailApi::new(
+        GmailApiClientRepository::new(gmail_client),
+        EmailServiceTokenSource::new(db, redis_client.clone(), auth_service_client, sqs_client),
+        RedisProviderRateLimiter::new(redis_client, rate_budget),
+    )
+}
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -252,11 +273,28 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue,
     });
 
-    let redis_client = email_service::util::redis::RedisClient::new(
+    let redis_client = RedisClient::new(
         redis_inner_client,
         config.redis_rate_limit_reqs,
         config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
+    );
+
+    let email_api_live = compose_email_api(
+        db.clone(),
+        gmail_client.clone(),
+        auth_service_client.clone(),
+        redis_client.clone(),
+        sqs_client.clone(),
+        RateBudget::Live,
+    );
+    let email_api_backfill = compose_email_api(
+        db_backfill.clone(),
+        gmail_client.clone(),
+        auth_service_client.clone(),
+        redis_client.clone(),
+        sqs_client.clone(),
+        RateBudget::Backfill,
     );
 
     let sfs_client = StaticFileServiceClient::new(
@@ -332,6 +370,7 @@ async fn main() -> anyhow::Result<()> {
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
         let gmail_client_inbox_sync = gmail_client.clone();
+        let email_api_inbox_sync = email_api_live.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
@@ -349,6 +388,7 @@ async fn main() -> anyhow::Result<()> {
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
                 gmail_client_inbox_sync,
+                email_api_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
@@ -377,6 +417,7 @@ async fn main() -> anyhow::Result<()> {
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
         let gmail_client_inbox_sync = gmail_client.clone();
+        let email_api_inbox_sync = email_api_live.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
@@ -394,6 +435,7 @@ async fn main() -> anyhow::Result<()> {
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
                 gmail_client_inbox_sync,
+                email_api_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
@@ -421,6 +463,7 @@ async fn main() -> anyhow::Result<()> {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
         let gmail_client_gmail_ops = gmail_client.clone();
+        let email_api_gmail_ops = email_api_live.clone();
         let auth_service_client_gmail_ops = auth_service_client.clone();
         let redis_client_gmail_ops = redis_client.clone();
         let cancellation_token = worker_cancellation_token.clone();
@@ -430,6 +473,7 @@ async fn main() -> anyhow::Result<()> {
                 worker,
                 sqs_client_gmail_ops,
                 gmail_client_gmail_ops,
+                email_api_gmail_ops,
                 auth_service_client_gmail_ops,
                 redis_client_gmail_ops,
                 false,
@@ -448,6 +492,7 @@ async fn main() -> anyhow::Result<()> {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
         let gmail_client_gmail_ops = gmail_client.clone();
+        let email_api_gmail_ops = email_api_live.clone();
         let auth_service_client_gmail_ops = auth_service_client.clone();
         let redis_client_gmail_ops = redis_client.clone();
         let cancellation_token = worker_cancellation_token.clone();
@@ -457,6 +502,7 @@ async fn main() -> anyhow::Result<()> {
                 worker,
                 sqs_client_gmail_ops,
                 gmail_client_gmail_ops,
+                email_api_gmail_ops,
                 auth_service_client_gmail_ops,
                 redis_client_gmail_ops,
                 true,
@@ -476,6 +522,7 @@ async fn main() -> anyhow::Result<()> {
         let sqs_client_backfill = sqs_client.clone();
         let contacts_ingress_backfill = contacts_ingress.clone();
         let gmail_client_backfill = gmail_client.clone();
+        let email_api_backfill = email_api_backfill.clone();
         let auth_service_client_backfill = auth_service_client.clone();
         let redis_client_backfill = redis_client.clone();
         let notification_ingress_service_backfill = notification_ingress_service.clone();
@@ -493,6 +540,7 @@ async fn main() -> anyhow::Result<()> {
                 sqs_client_backfill,
                 contacts_ingress_backfill,
                 gmail_client_backfill,
+                email_api_backfill,
                 auth_service_client_backfill,
                 redis_client_backfill,
                 notification_ingress_service_backfill,
@@ -539,6 +587,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_link_manager = db.clone();
     let gmail_client_link_manager = gmail_client.clone();
+    let email_api_link_manager = email_api_live.clone();
     let auth_service_client_link_manager = auth_service_client.clone();
     let redis_client_link_manager = redis_client.clone();
     let sqs_client_link_manager = sqs_client.clone();
@@ -553,6 +602,7 @@ async fn main() -> anyhow::Result<()> {
             link_manager_worker,
             db_link_manager,
             gmail_client_link_manager,
+            email_api_link_manager,
             auth_service_client_link_manager,
             redis_client_link_manager,
             sqs_client_link_manager,
@@ -567,6 +617,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_scheduled = db.clone();
     let gmail_client_scheduled = gmail_client.clone();
+    let email_api_scheduled = email_api_live;
     let auth_service_client_scheduled = auth_service_client.clone();
     let redis_client_scheduled = redis_client.clone();
     let s3_client_scheduled = s3_client.clone();
@@ -579,6 +630,7 @@ async fn main() -> anyhow::Result<()> {
             scheduled_worker,
             db_scheduled,
             gmail_client_scheduled,
+            email_api_scheduled,
             auth_service_client_scheduled,
             redis_client_scheduled,
             s3_client_scheduled,

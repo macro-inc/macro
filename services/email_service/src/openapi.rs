@@ -6,6 +6,7 @@ mod backfill_init_service;
 mod calendar_outbox;
 mod config;
 mod convert;
+mod outbound;
 mod pubsub;
 mod util;
 mod utils;

@@ -1,3 +1,4 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::gmail_ops::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
@@ -15,6 +16,7 @@ pub struct GmailOpsContext {
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,
     pub gmail_client: GmailClient,
+    pub email_api: GmailApi,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
     pub retry_worker: bool,
@@ -26,6 +28,7 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     gmail_client: GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     retry_worker: bool,
@@ -35,6 +38,7 @@ pub async fn run_worker(
         worker,
         sqs_client,
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         retry_worker,
@@ -52,6 +56,7 @@ pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     gmail_client: GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     retry_worker: bool,
@@ -62,6 +67,7 @@ pub async fn run_worker_with_cancellation(
         sqs_worker: worker.clone(),
         sqs_client,
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         retry_worker,

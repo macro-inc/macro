@@ -1,3 +1,4 @@
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
@@ -17,6 +18,7 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     gmail_client: gmail_client::GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
@@ -29,6 +31,7 @@ pub async fn run_worker(
         worker,
         db,
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         sqs_client,
@@ -49,6 +52,7 @@ pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     gmail_client: gmail_client::GmailClient,
+    email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
@@ -62,6 +66,7 @@ pub async fn run_worker_with_cancellation(
         db,
         sqs_worker: worker.clone(),
         gmail_client,
+        email_api,
         auth_service_client,
         redis_client,
         sqs_client,
