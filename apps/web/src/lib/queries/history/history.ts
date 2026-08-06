@@ -94,30 +94,11 @@ export function useHistoryQuery() {
   const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
     enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
   });
-  const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
     if (!graphqlSoupFlag().enabled) return undefined;
     const cacheHost = getGraphqlSoupCacheHost();
     return cacheHost?.disabled ? undefined : cacheHost;
   };
-
-  createEffect(() => {
-    const cacheHost = graphqlCacheHost();
-    if (!cacheHost) return;
-
-    const scheduleCacheRefresh = debounce(() => {
-      void activeQueryClient.invalidateQueries({
-        queryKey: historyKeys.graphqlList.queryKey,
-      });
-    }, HISTORY_CACHE_REFRESH_DEBOUNCE_MS);
-    const unsubscribeCacheChanges =
-      cacheHost.onCacheChanged(scheduleCacheRefresh);
-
-    onCleanup(() => {
-      unsubscribeCacheChanges();
-      scheduleCacheRefresh.clear();
-    });
-  });
 
   return useQuery<HistoryQueryFnResult, Error, HistoryQueryFnResult, QueryKey>(
     () => {
