@@ -1,5 +1,6 @@
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -296,6 +297,8 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const calendarView = useCalendarView();
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
   const isActive = () => pager.isActive(props.id);
+  const useNarrowWeekdayHeaders = () =>
+    calendarView.useNarrowDayHeaders() && !isMobile();
   const data = createCalendarPageData(range, isActive);
 
   const handleDatesSet = ({ end, start }: DatesSetArg) => {
@@ -343,7 +346,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       }}
       datesSet={handleDatesSet}
       dayHeaderFormat={{
-        weekday: calendarView.useNarrowDayHeaders() ? 'narrow' : 'short',
+        weekday: useNarrowWeekdayHeaders() ? 'narrow' : 'short',
       }}
       dayCellClassNames={({ date, view }) =>
         isSameLocalDate(date, view.calendar.getDate())
@@ -358,7 +361,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
               view.type === 'timeGridDay'
                 ? formatWeekdayHeader.short(date)
                 : formatWeekdayHeader[
-                    calendarView.useNarrowDayHeaders() ? 'narrow' : 'short'
+                    useNarrowWeekdayHeaders() ? 'narrow' : 'short'
                   ](date);
 
             return (
