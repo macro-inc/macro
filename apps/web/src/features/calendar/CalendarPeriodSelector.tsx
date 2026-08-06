@@ -80,7 +80,7 @@ export function CalendarPeriodSelector() {
         depth={2}
         aria-label="Choose calendar view"
         size="sm"
-        class="shrink-0 gap-1 rounded-lg border-edge-muted bg-panel text-xs font-medium text-ink"
+        class="shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
       >
         {CALENDAR_VIEWS.find((view) => view.value === activeView())?.label ??
           'Week'}
