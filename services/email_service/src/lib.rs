@@ -7,7 +7,6 @@ pub mod calendar_outbox;
 /// Access-token adapter for user-initiated calendar mutations.
 pub mod calendar_tokens;
 pub mod config;
-pub mod convert;
 /// Outbound infrastructure adapters for email provider capabilities.
 pub mod outbound;
 pub mod pubsub;
