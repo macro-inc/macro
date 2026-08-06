@@ -2,8 +2,11 @@ import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
 import type { CreateReminderRequest } from '@service-storage/generated/schemas/createReminderRequest';
+import type { ListRemindersParams } from '@service-storage/generated/schemas/listRemindersParams';
 import type { Reminder } from '@service-storage/generated/schemas/reminder';
-import { useMutation } from '@tanstack/solid-query';
+import type { RemindersList } from '@service-storage/generated/schemas/remindersList';
+import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -42,12 +45,41 @@ export function reminderEntityType(
       return 'crm_company';
     case 'crm_contact':
       return 'crm_contact';
-    // Channel messages and threads are excluded for the same reason favorites
-    // excludes them: their frontend id is a composite `channelId:messageId`
-    // that the entity-access layer has no access level for.
+    // Channel messages and threads have no reminder type of their own —
+    // `entity_access` resolves no access level for `channel_message`, so the
+    // receipt the reminders API requires cannot be minted. Thread rows attach
+    // to their parent channel instead; see `reminderTarget`.
     default:
       return undefined;
   }
+}
+
+/** What a reminder attaches to: a backend entity type paired with its id. */
+export type ReminderTarget = {
+  entityType: NonNullable<ReminderEntityType>;
+  entityId: string;
+};
+
+/**
+ * Resolve what a reminder created from `entity` should point at.
+ *
+ * Returns the type and the id together because they do not always come from
+ * the same place: a thread row attaches to its parent channel, so its
+ * `channelId` is the id — pairing `reminderEntityType()` with `entity.id`
+ * would store the message id under the `channel` type.
+ *
+ * A thread reminder pointing at the channel is a deliberate limitation, not an
+ * oversight: attaching to the message itself needs `entity_access` to resolve
+ * a `ChannelMessage` through its owning channel, which it does not do yet.
+ * Opening such a reminder lands on the channel rather than the thread; the
+ * description still quotes the message, so the row says which one.
+ */
+export function reminderTarget(entity: EntityData): ReminderTarget | undefined {
+  if (entity.type === 'channel_thread') {
+    return { entityType: 'channel', entityId: entity.channelId };
+  }
+  const entityType = reminderEntityType(entity.type);
+  return entityType ? { entityType, entityId: entity.id } : undefined;
 }
 
 type CreateReminderArgs = CreateReminderRequest;
@@ -57,12 +89,22 @@ type CreateReminderCallbacks = MutationCallbacks<
   CreateReminderArgs
 >;
 
+/** Invalidate every reminder list, plus one detail when the id is known. */
+function invalidateReminders(id?: string) {
+  void queryClient.invalidateQueries({ queryKey: reminderKeys.list._def });
+  if (id) {
+    void queryClient.invalidateQueries({
+      queryKey: reminderKeys.detail(id).queryKey,
+    });
+  }
+}
+
 /**
  * Create a reminder.
  *
- * Not optimistic: nothing renders a reminder list yet, so there is no cache to
- * update ahead of the server. The list key is invalidated so whatever reads it
- * first sees the new row.
+ * Not optimistic: a reminder's `nextRunAt` is derived server-side from its
+ * schedule, so an optimistic row would sort into the wrong place until the
+ * response lands. Lists are invalidated instead.
  */
 export function useCreateReminderMutation(callbacks?: CreateReminderCallbacks) {
   return useMutation(() => ({
@@ -71,13 +113,96 @@ export function useCreateReminderMutation(callbacks?: CreateReminderCallbacks) {
         storageServiceClient.reminders.createReminder(args)
       ),
     ...withCallbacks<Reminder, Error, CreateReminderArgs>(
-      {
-        onSettled: () =>
-          queryClient.invalidateQueries({
-            queryKey: reminderKeys.list.queryKey,
-          }),
-      },
+      { onSettled: () => invalidateReminders() },
       callbacks
     ),
   }));
 }
+
+/** One page of the caller's reminders, soonest firing first. */
+export function useRemindersQuery(
+  params: () => ListRemindersParams = () => ({})
+) {
+  return useQuery(() => ({
+    queryKey: reminderKeys.list(params()).queryKey,
+    queryFn: async () =>
+      await throwOnErr(() =>
+        storageServiceClient.reminders.listReminders(params())
+      ),
+  }));
+}
+
+/**
+ * Fetch one reminder outside a component, going through the query cache so a
+ * reminder already on screen is not re-fetched.
+ *
+ * Used by notification navigation, which has to read a reminder's referenced
+ * entity before it knows what to open.
+ */
+export async function getReminderById(
+  id: string
+): Promise<Reminder | undefined> {
+  try {
+    return await queryClient.fetchQuery({
+      queryKey: reminderKeys.detail(id).queryKey,
+      queryFn: async () =>
+        await throwOnErr(() => storageServiceClient.reminders.getReminder(id)),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/** A single reminder by id. */
+export function useReminderQuery(id: () => string | undefined) {
+  return useQuery(() => ({
+    queryKey: reminderKeys.detail(id() ?? '').queryKey,
+    queryFn: async () =>
+      await throwOnErr(() =>
+        storageServiceClient.reminders.getReminder(id() as string)
+      ),
+    enabled: !!id(),
+  }));
+}
+
+type UpdateReminderArgs = { id: string; patch: UpdateReminderRequest };
+type UpdateReminderCallbacks = MutationCallbacks<
+  Reminder,
+  Error,
+  UpdateReminderArgs
+>;
+
+/** Modify a reminder's description, schedule, or enabled flag. */
+export function useUpdateReminderMutation(callbacks?: UpdateReminderCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async ({ id, patch }: UpdateReminderArgs) =>
+      await throwOnErr(() =>
+        storageServiceClient.reminders.updateReminder(id, patch)
+      ),
+    ...withCallbacks<Reminder, Error, UpdateReminderArgs>(
+      { onSettled: (_data, _error, args) => invalidateReminders(args?.id) },
+      callbacks
+    ),
+  }));
+}
+
+type DeleteReminderCallbacks = MutationCallbacks<void, Error, string>;
+
+/**
+ * Delete a reminder.
+ *
+ * The delete is a hard delete server-side, so any notification it already
+ * produced outlives it — see the retraction note on the reminders service.
+ */
+export function useDeleteReminderMutation(callbacks?: DeleteReminderCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (id: string) =>
+      await throwOnErr(() => storageServiceClient.reminders.deleteReminder(id)),
+    ...withCallbacks<void, Error, string>(
+      { onSettled: (_data, _error, id) => invalidateReminders(id) },
+      callbacks
+    ),
+  }));
+}
+
+export type { RemindersList };

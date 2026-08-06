@@ -6,7 +6,7 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::models::{ReminderCursor, ScheduleUpdate};
+use crate::domain::models::{ReminderCursor, ScheduleUpdate, entity_token};
 
 const USER_A: &str = "macro|reminders-a@macro.com";
 const USER_B: &str = "macro|reminders-b@macro.com";
@@ -280,6 +280,102 @@ async fn update_applies_only_the_provided_fields(pool: PgPool) {
     assert_eq!(updated.schedule, once_at(remind_at));
     assert_eq!(updated.next_run_at, remind_at);
     assert!(updated.updated_at >= created.updated_at);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_can_complete_and_uncomplete_a_reminder(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+    let created = repo
+        .create_reminder(
+            &user(USER_A),
+            &new_reminder("thing", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+    assert!(created.completed_at.is_none());
+
+    let completed = repo
+        .update_reminder(
+            &user(USER_A),
+            created.id,
+            &ReminderUpdate {
+                completed: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed")
+        .expect("reminder should exist");
+    let stamp = completed.completed_at.expect("should be completed");
+
+    // Completing twice must not move the stamp — the second call is a no-op,
+    // not a re-completion.
+    let again = repo
+        .update_reminder(
+            &user(USER_A),
+            created.id,
+            &ReminderUpdate {
+                completed: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed")
+        .expect("reminder should exist");
+    assert_eq!(again.completed_at, Some(stamp));
+
+    let reopened = repo
+        .update_reminder(
+            &user(USER_A),
+            created.id,
+            &ReminderUpdate {
+                completed: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed")
+        .expect("reminder should exist");
+    assert!(reopened.completed_at.is_none(), "undo must clear the stamp");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_leaves_completion_alone_when_not_asked(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+    let created = repo
+        .create_reminder(
+            &user(USER_A),
+            &new_reminder("thing", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+    repo.update_reminder(
+        &user(USER_A),
+        created.id,
+        &ReminderUpdate {
+            completed: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("complete");
+
+    // A description-only patch must not resurrect a completed reminder.
+    let renamed = repo
+        .update_reminder(
+            &user(USER_A),
+            created.id,
+            &ReminderUpdate {
+                description: Some("renamed".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update should succeed")
+        .expect("reminder should exist");
+    assert!(renamed.completed_at.is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1392,4 +1488,331 @@ async fn an_undecodable_row_is_isolated_to_its_own_firing(pool: PgPool) {
             .is_some(),
         "and leaves its neighbour deliverable"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_returns_the_users_reminders_newest_firing_first(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("soon", once_at(at(2026, 8, 1, 14))),
+    )
+    .await
+    .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("later", once_at(at(2026, 9, 1, 14))),
+    )
+    .await
+    .expect("insert");
+    repo.create_reminder(
+        &user(USER_B),
+        &new_reminder("someone else's", once_at(at(2026, 8, 15, 14))),
+    )
+    .await
+    .expect("insert");
+
+    let found = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .await
+        .expect("soup list should succeed");
+
+    // Descending, matching Soup's global ordering — and never another user's.
+    let descriptions: Vec<&str> = found
+        .iter()
+        .map(|r| r.reminder.description.as_str())
+        .collect();
+    assert_eq!(descriptions, vec!["later", "soon"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_filters_by_id(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    let wanted = repo
+        .create_reminder(
+            &user(USER_A),
+            &new_reminder("wanted", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("other", once_at(at(2026, 8, 2, 14))),
+    )
+    .await
+    .expect("insert");
+
+    let found = repo
+        .list_reminders_for_soup(&user(USER_A), &[wanted.id], &[], None, 100)
+        .await
+        .expect("soup list should succeed");
+
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].reminder.id, wanted.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_filters_by_entity_token(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    let on_doc = NewReminder {
+        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        ..new_reminder("on doc-1", once_at(at(2026, 8, 1, 14)))
+    };
+    let on_other_doc = NewReminder {
+        entity: Some(EntityType::Document.with_entity_string("doc-2".to_string())),
+        ..new_reminder("on doc-2", once_at(at(2026, 8, 1, 14)))
+    };
+    // Same id, different type — proves the token is matched whole, not by id.
+    let on_chat = NewReminder {
+        entity: Some(EntityType::Chat.with_entity_string("doc-1".to_string())),
+        ..new_reminder("on chat doc-1", once_at(at(2026, 8, 1, 14)))
+    };
+    for new in [&on_doc, &on_other_doc, &on_chat] {
+        repo.create_reminder(&user(USER_A), new)
+            .await
+            .expect("insert");
+    }
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("standalone", once_at(at(2026, 8, 1, 14))),
+    )
+    .await
+    .expect("insert");
+
+    let found = repo
+        .list_reminders_for_soup(
+            &user(USER_A),
+            &[],
+            &[entity_token(&EntityType::Document.with_entity_str("doc-1"))],
+            None,
+            100,
+        )
+        .await
+        .expect("soup list should succeed");
+
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].reminder.description, "on doc-1");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_filters_on_completion(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+
+    let fired = repo
+        .create_reminder(
+            &user(USER_A),
+            &new_reminder("fired", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("pending", once_at(at(2026, 8, 2, 14))),
+    )
+    .await
+    .expect("insert");
+
+    sqlx::query(r#"UPDATE reminder SET completed_at = now() WHERE id = $1"#)
+        .bind(fired.id)
+        .execute(&pool)
+        .await
+        .expect("complete should update");
+
+    let pending = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], Some(false), 100)
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].reminder.description, "pending");
+
+    let completed = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], Some(true), 100)
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(completed.len(), 1);
+    assert_eq!(completed[0].reminder.description, "fired");
+
+    // `None` means "no constraint", so both come back.
+    let both = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .await
+        .expect("soup list should succeed");
+    assert_eq!(both.len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_retracts_the_reminders_notification(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+
+    let created = repo
+        .create_reminder(
+            &user(USER_A),
+            &new_reminder("follow up", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+
+    // Stand in for the dispatcher having fired it.
+    let notification_id = macro_uuid::generate_uuid_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO notification
+            (id, notification_event_type, event_item_id, event_item_type, service_sender)
+        VALUES ($1, 'reminder', $2, 'reminder', 'reminders')
+        "#,
+    )
+    .bind(notification_id)
+    .bind(created.id.to_string())
+    .execute(&pool)
+    .await
+    .expect("notification should insert");
+    sqlx::query(r#"INSERT INTO user_notification (user_id, notification_id) VALUES ($1, $2)"#)
+        .bind(USER_A)
+        .bind(notification_id)
+        .execute(&pool)
+        .await
+        .expect("user_notification should insert");
+
+    assert!(
+        repo.delete_reminder(&user(USER_A), created.id)
+            .await
+            .expect("delete should succeed")
+    );
+
+    // Otherwise the Inbox keeps a row pointing at a reminder that is gone.
+    let remaining: i64 = sqlx::query_scalar(r#"SELECT count(*) FROM notification WHERE id = $1"#)
+        .bind(notification_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count should succeed");
+    assert_eq!(remaining, 0, "the firing notification should be retracted");
+
+    // `user_notification` cascades, so the junction row goes with it.
+    let junction: i64 =
+        sqlx::query_scalar(r#"SELECT count(*) FROM user_notification WHERE notification_id = $1"#)
+            .bind(notification_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count should succeed");
+    assert_eq!(junction, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_leaves_another_users_notification_alone(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+
+    let theirs = repo
+        .create_reminder(
+            &user(USER_B),
+            &new_reminder("theirs", once_at(at(2026, 8, 1, 14))),
+        )
+        .await
+        .expect("insert");
+
+    let notification_id = macro_uuid::generate_uuid_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO notification
+            (id, notification_event_type, event_item_id, event_item_type, service_sender)
+        VALUES ($1, 'reminder', $2, 'reminder', 'reminders')
+        "#,
+    )
+    .bind(notification_id)
+    .bind(theirs.id.to_string())
+    .execute(&pool)
+    .await
+    .expect("notification should insert");
+
+    // USER_A cannot see the reminder, so the delete misses...
+    assert!(
+        !repo
+            .delete_reminder(&user(USER_A), theirs.id)
+            .await
+            .expect("delete should succeed")
+    );
+
+    // ...and must not have retracted USER_B's notification on the way past.
+    let remaining: i64 = sqlx::query_scalar(r#"SELECT count(*) FROM notification WHERE id = $1"#)
+        .bind(notification_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count should succeed");
+    assert_eq!(remaining, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_resolves_the_referenced_documents_file_type(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+
+    let doc_id = macro_uuid::generate_uuid_v7().to_string();
+    sqlx::query(
+        r#"INSERT INTO "Document" (id, name, owner, "fileType") VALUES ($1, $2, $3, 'md')"#,
+    )
+    .bind(&doc_id)
+    .bind("awesome new file")
+    .bind(USER_A)
+    .execute(&pool)
+    .await
+    .expect("document should insert");
+    sqlx::query(r#"INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')"#)
+        .bind(&doc_id)
+        .execute(&pool)
+        .await
+        .expect("sub type should insert");
+
+    let on_doc = NewReminder {
+        entity: Some(EntityType::Document.with_entity_string(doc_id.clone())),
+        ..new_reminder("review it", once_at(at(2026, 8, 1, 14)))
+    };
+    repo.create_reminder(&user(USER_A), &on_doc)
+        .await
+        .expect("insert");
+
+    let found = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .await
+        .expect("soup list should succeed");
+
+    assert_eq!(found.len(), 1);
+    // Without these the client cannot tell which block to open or icon, and a
+    // referenced document would render as "unknown".
+    let reference = found[0]
+        .reference
+        .as_ref()
+        .expect("a referenced document resolves");
+    assert_eq!(reference.file_type.as_deref(), Some("md"));
+    assert_eq!(reference.sub_type.as_deref(), Some("task"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn soup_list_has_no_reference_for_a_standalone_reminder(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool);
+
+    repo.create_reminder(
+        &user(USER_A),
+        &new_reminder("standalone", once_at(at(2026, 8, 1, 14))),
+    )
+    .await
+    .expect("insert");
+
+    let found = repo
+        .list_reminders_for_soup(&user(USER_A), &[], &[], None, 100)
+        .await
+        .expect("soup list should succeed");
+
+    assert_eq!(found.len(), 1);
+    assert!(found[0].reference.is_none());
 }

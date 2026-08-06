@@ -1833,6 +1833,10 @@
             },
             "description": "property-based filters applied across entity types"
           },
+          "reminder_filters": {
+            "$ref": "#/components/schemas/ReminderFilters",
+            "description": "the bundled [ReminderFilters]"
+          },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
             "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
@@ -2843,6 +2847,34 @@
           }
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "ReminderFilters": {
+        "type": "object",
+        "description": "Filters for reminders.",
+        "properties": {
+          "completed": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder has already fired. `None` returns both."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
       },
       "SearchHighlight": {
         "type": "object",

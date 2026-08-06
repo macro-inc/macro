@@ -12020,6 +12020,9 @@
           },
           "propf": {
             "description": "the filters that should be applied based on entity properties"
+          },
+          "remf": {
+            "description": "Filters applied to reminders (wire key `remf`). Unlike every other\nfilter here, empty/omitted returns **no** reminders: they are opt-in,\nso the caller must send `inc`, an id, or an entity to get any."
           }
         }
       },
@@ -17311,6 +17314,10 @@
             },
             "description": "property-based filters applied across entity types"
           },
+          "reminder_filters": {
+            "$ref": "#/components/schemas/ReminderFilters",
+            "description": "the bundled [ReminderFilters]"
+          },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
             "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
@@ -20986,6 +20993,34 @@
           }
         }
       },
+      "ReminderFilters": {
+        "type": "object",
+        "description": "Filters for reminders.",
+        "properties": {
+          "completed": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder has already fired. `None` returns both."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
       "ReminderSchedule": {
         "oneOf": [
           {
@@ -22630,6 +22665,21 @@
                 "enum": ["foreignEntity"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Reminder item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupReminder_SoupPropertiesField",
+                "description": "Reminder item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["reminder"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -22882,6 +22932,172 @@
             ]
           }
         }
+      },
+      "SoupReminderReference": {
+        "type": "object",
+        "description": "The entity a reminder is about, resolved server-side.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, and the client's icon path is synchronous, so this is resolved here\nrather than costing a fetch per row.",
+        "required": ["id", "entityType"],
+        "properties": {
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder"
+                ]
+              }
+            ],
+            "description": "The referenced entity's type."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "File type, when the reference is a document — `md`, `pdf`, and so on."
+          },
+          "id": {
+            "type": "string",
+            "description": "The referenced entity's id."
+          },
+          "subType": {
+            "type": ["string", "null"],
+            "description": "Sub type, when the reference is a task or snippet document."
+          }
+        }
+      },
+      "SoupReminderSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Fires once, at a fixed instant.",
+            "required": ["remindAt", "type"],
+            "properties": {
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant to fire at."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
+            "required": ["cron", "timezone", "type"],
+            "properties": {
+              "cron": {
+                "type": "string",
+                "description": "Cron expression, normalized to the 6-field form."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The timezone the cron expression is evaluated in."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["recurring"]
+              }
+            }
+          }
+        ],
+        "description": "How often a reminder fires, flattened for the wire.\n\nThe domain's [`ReminderSchedule`] is an internally-tagged enum carrying a\nvalidated cron type; Soup only needs enough to render \"once\" vs \"every\nweekday at 9am\", so the cron is exposed as a plain string."
+      },
+      "SoupReminder_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "description",
+              "schedule",
+              "nextRunAt",
+              "enabled",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "completedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Set once a one-shot reminder has fired."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was created."
+              },
+              "description": {
+                "type": "string",
+                "description": "What to remind the user about. Doubles as the display name."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "When false, the dispatcher skips this reminder."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The reminder id."
+              },
+              "nextRunAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The next firing. This is what Soup sorts reminders on."
+              },
+              "referencedEntity": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupReminderReference",
+                    "description": "The entity this reminder is about, when attached to one, with enough\ndetail for the client to render and open it without a second fetch."
+                  }
+                ]
+              },
+              "schedule": {
+                "$ref": "#/components/schemas/SoupReminderSchedule",
+                "description": "When and how often the reminder fires."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was last modified."
+              }
+            }
+          }
+        ],
+        "description": "A reminder as displayed in Soup.\n\nReminders are user-owned rather than shared, so unlike most Soup items they\ncarry no access metadata — the repository only ever returns the caller's own."
       },
       "SoupThreadInfo": {
         "type": "object",
@@ -23302,6 +23518,10 @@
         "type": "object",
         "description": "Request body for modifying a reminder. Omitted fields are left unchanged;\nthe entity association is not modifiable.\n\nEvery field is optional but **not** nullable. `Option` here means \"absent\",\nand serde cannot tell an explicit `null` from an omitted key — so a body of\n`{\"enabled\": null}` would deserialize to an empty patch and be rejected as\nhaving no fields to update. `nullable = false` keeps the schema from\nadvertising a value the API has no meaning for; the deserializer still\ntolerates `null` rather than erroring on it.",
         "properties": {
+          "completed": {
+            "type": "boolean",
+            "description": "Mark the reminder as dealt with, or live again. Distinct from\n`enabled`, which controls whether the dispatcher considers it."
+          },
           "description": {
             "type": "string",
             "description": "Replacement description."

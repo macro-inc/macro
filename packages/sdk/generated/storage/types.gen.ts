@@ -681,6 +681,12 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied based on entity properties
      */
     propf?: unknown;
+    /**
+     * Filters applied to reminders (wire key `remf`). Unlike every other
+     * filter here, empty/omitted returns **no** reminders: they are opt-in,
+     * so the caller must send `inc`, an id, or an entity to get any.
+     */
+    remf?: unknown;
 };
 
 /**
@@ -4292,6 +4298,10 @@ export type EntityFilters = {
      */
     property_filters?: Array<PropertyFilter>;
     /**
+     * the bundled [ReminderFilters]
+     */
+    reminder_filters?: ReminderFilters;
+    /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
      */
@@ -6109,6 +6119,30 @@ export type Reminder = {
 };
 
 /**
+ * Filters for reminders.
+ */
+export type ReminderFilters = {
+    /**
+     * Filter on whether the reminder has already fired. `None` returns both.
+     */
+    completed?: boolean | null;
+    /**
+     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+     */
+    entities?: Array<string>;
+    /**
+     * Reminder ids to filter by. Empty to include all of the caller's reminders.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into reminders at all. Reminders are off by default —
+     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
+     * specific `ids` or `entities` also opts in.
+     */
+    include?: boolean;
+};
+
+/**
  * When a reminder fires.
  */
 export type ReminderSchedule = {
@@ -7191,6 +7225,12 @@ export type SoupItem = {
      */
     data: SoupForeignEntity;
     tag: 'foreignEntity';
+} | {
+    /**
+     * Reminder item.
+     */
+    data: SoupReminderSoupPropertiesField;
+    tag: 'reminder';
 };
 
 /**
@@ -7380,6 +7420,105 @@ export type SoupProperty = {
      */
     id: string;
     value?: null | PropertyValue;
+};
+
+/**
+ * The entity a reminder is about, resolved server-side.
+ *
+ * A reminder has no block of its own — it opens, and is iconed as, whatever it
+ * references. Which block that is depends on the referenced document's file
+ * type, and the client's icon path is synchronous, so this is resolved here
+ * rather than costing a fetch per row.
+ */
+export type SoupReminderReference = {
+    /**
+     * The referenced entity's type.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    /**
+     * File type, when the reference is a document — `md`, `pdf`, and so on.
+     */
+    fileType?: string | null;
+    /**
+     * The referenced entity's id.
+     */
+    id: string;
+    /**
+     * Sub type, when the reference is a task or snippet document.
+     */
+    subType?: string | null;
+};
+
+/**
+ * How often a reminder fires, flattened for the wire.
+ *
+ * The domain's [`ReminderSchedule`] is an internally-tagged enum carrying a
+ * validated cron type; Soup only needs enough to render "once" vs "every
+ * weekday at 9am", so the cron is exposed as a plain string.
+ */
+export type SoupReminderSchedule = {
+    /**
+     * The instant to fire at.
+     */
+    remindAt: string;
+    type: 'once';
+} | {
+    /**
+     * Cron expression, normalized to the 6-field form.
+     */
+    cron: string;
+    /**
+     * The timezone the cron expression is evaluated in.
+     */
+    timezone: string;
+    type: 'recurring';
+};
+
+/**
+ * A reminder as displayed in Soup.
+ *
+ * Reminders are user-owned rather than shared, so unlike most Soup items they
+ * carry no access metadata — the repository only ever returns the caller's own.
+ */
+export type SoupReminderSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Set once a one-shot reminder has fired.
+     */
+    completedAt?: string | null;
+    /**
+     * When the reminder was created.
+     */
+    createdAt: string;
+    /**
+     * What to remind the user about. Doubles as the display name.
+     */
+    description: string;
+    /**
+     * When false, the dispatcher skips this reminder.
+     */
+    enabled: boolean;
+    /**
+     * The reminder id.
+     */
+    id: string;
+    /**
+     * The next firing. This is what Soup sorts reminders on.
+     */
+    nextRunAt: string;
+    referencedEntity?: null | SoupReminderReference;
+    /**
+     * When and how often the reminder fires.
+     */
+    schedule: SoupReminderSchedule;
+    /**
+     * When the reminder was last modified.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -7660,6 +7799,11 @@ export type UpdateOperation = 'add' | 'remove' | 'replace';
  * tolerates `null` rather than erroring on it.
  */
 export type UpdateReminderRequest = {
+    /**
+     * Mark the reminder as dealt with, or live again. Distinct from
+     * `enabled`, which controls whether the dispatcher considers it.
+     */
+    completed?: boolean;
     /**
      * Replacement description.
      */

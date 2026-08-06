@@ -9,8 +9,10 @@ import {
   crmCompanyFilter as crmCompanyPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   projectFilter as projectPredicate,
+  remindersFilter as remindersPredicate,
   searchSupportedFilter as searchSupportedPredicate,
   taskFilter as taskPredicate,
+  upcomingRemindersFilter as upcomingRemindersPredicate,
 } from '../predicates';
 import { config, isAgent, isNotTask, NIL_UUID } from './base';
 
@@ -68,6 +70,23 @@ export const crmCompanyFilter = config({
   id: 'crm-company',
   predicate: crmCompanyPredicate,
   query: defineQueryFilters({}, { skipTargets: ['ccf'] }),
+});
+
+// Reminders are opt-in server-side, so unlike the other entity filters these
+// queries name `includeReminders` rather than just skipping their own target —
+// there is no `remf` entry in ID_FIELD_NAMES to skip.
+export const remindersFilter = config({
+  id: 'reminders',
+  predicate: remindersPredicate,
+  query: defineQueryFilters({ include: { includeReminders: true } }),
+});
+
+export const upcomingRemindersFilter = config({
+  id: 'reminders-upcoming',
+  predicate: upcomingRemindersPredicate,
+  query: defineQueryFilters({
+    include: { includeReminders: true, reminderCompleted: false },
+  }),
 });
 
 export const crmCompanyActiveFilter = config({

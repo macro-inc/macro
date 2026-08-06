@@ -144,6 +144,10 @@ pub struct UpdateReminderRequest {
     /// Whether the reminder should fire at all.
     #[schema(nullable = false)]
     pub enabled: Option<bool>,
+    /// Mark the reminder as dealt with, or live again. Distinct from
+    /// `enabled`, which controls whether the dispatcher considers it.
+    #[schema(nullable = false)]
+    pub completed: Option<bool>,
 }
 
 /// Query params for listing reminders.
@@ -425,6 +429,7 @@ where
         description: req.description,
         schedule: req.schedule,
         enabled: req.enabled,
+        completed: req.completed,
     };
     let reminder = state
         .service

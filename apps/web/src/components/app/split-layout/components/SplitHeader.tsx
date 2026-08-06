@@ -69,6 +69,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 
   if (data.type === 'foreign') return undefined;
 
+  // A reminder has no block of its own — it is opened through the entity it
+  // references, which the caller navigates to instead.
+  if (data.type === 'reminder') return undefined;
+
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
   if (data.type === 'crm_contact') return { type: 'contact', id: data.id };

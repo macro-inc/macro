@@ -111,6 +111,7 @@ export const TOKENS = {
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
+      reminders: 'sidebar.goTo.reminders',
     },
   },
 

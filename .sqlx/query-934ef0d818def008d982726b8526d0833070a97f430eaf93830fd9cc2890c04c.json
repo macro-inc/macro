@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE reminder\n            SET description = COALESCE($3::text, description),\n                remind_at   = CASE WHEN $4::bool THEN $5::timestamptz ELSE remind_at END,\n                cron        = CASE WHEN $4::bool THEN $6::text ELSE cron END,\n                timezone    = CASE WHEN $4::bool THEN $7::text ELSE timezone END,\n                next_run_at = COALESCE($8::timestamptz, next_run_at),\n                enabled     = COALESCE($9::bool, enabled),\n                completed_at = CASE WHEN $4::bool THEN NULL ELSE completed_at END,\n                updated_at  = now()\n            WHERE id = $1 AND user_id = $2\n            RETURNING\n                id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            ",
+  "query": "\n            UPDATE reminder\n            SET description = COALESCE($3::text, description),\n                remind_at   = CASE WHEN $4::bool THEN $5::timestamptz ELSE remind_at END,\n                cron        = CASE WHEN $4::bool THEN $6::text ELSE cron END,\n                timezone    = CASE WHEN $4::bool THEN $7::text ELSE timezone END,\n                next_run_at = COALESCE($8::timestamptz, next_run_at),\n                enabled     = COALESCE($9::bool, enabled),\n                -- An explicit `completed` wins over the reschedule rule above;\n                -- COALESCE keeps re-completing an already-completed reminder\n                -- from moving its timestamp.\n                completed_at = CASE\n                    WHEN $10::bool IS TRUE  THEN COALESCE(completed_at, now())\n                    WHEN $10::bool IS FALSE THEN NULL\n                    WHEN $4::bool           THEN NULL\n                    ELSE completed_at\n                END,\n                updated_at  = now()\n            WHERE id = $1 AND user_id = $2\n            RETURNING\n                id,\n                description,\n                entity_type,\n                entity_id,\n                remind_at,\n                cron,\n                timezone,\n                next_run_at,\n                enabled,\n                completed_at,\n                created_at,\n                updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -74,6 +74,7 @@
         "Text",
         "Text",
         "Timestamptz",
+        "Bool",
         "Bool"
       ]
     },
@@ -92,5 +93,5 @@
       false
     ]
   },
-  "hash": "a7a8fe712c27896d29b2550800fe36f9b684d3c9e2ddb5e6516a5aef593aa052"
+  "hash": "934ef0d818def008d982726b8526d0833070a97f430eaf93830fd9cc2890c04c"
 }

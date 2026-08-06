@@ -481,6 +481,8 @@ export type GraphqlEntityFilterAst = {
   projectFilter?: GraphqlProjectExpr | null | undefined;
   /** The properties filter to apply. */
   propertiesFilter?: GraphqlPropertiesExpr | null | undefined;
+  /** The reminder filter to apply. */
+  reminderFilter?: GraphqlReminderExpr | null | undefined;
 };
 
 /** Stable machine-readable mutation error code. */
@@ -532,6 +534,8 @@ export type GraphqlEntityType =
   | 'FOREIGN_ENTITY'
   /** Project entity. */
   | 'PROJECT'
+  /** Reminder entity. */
+  | 'REMINDER'
   /** Static file entity. */
   | 'STATIC_FILE'
   /** Team entity. */
@@ -731,6 +735,41 @@ export type GraphqlPropertyTargetEntityType =
   /** User target. */
   | 'USER';
 
+/** The two operands of a recursive `ReminderFilterExpr` binary expression. */
+export type GraphqlReminderBinaryExpr = {
+  /** The left-hand expression. */
+  left: GraphqlReminderExpr;
+  /** The right-hand expression. */
+  right: GraphqlReminderExpr;
+};
+
+/** A recursive `ReminderFilterExpr` filter expression. */
+export type GraphqlReminderExpr =
+  {   /** Matches when both expressions match. */
+  and: GraphqlReminderBinaryExpr; literal?: never; not?: never; or?: never; }
+  |  { and?: never;   /** Matches a domain-specific literal condition. */
+  literal: GraphqlReminderLiteral; not?: never; or?: never; }
+  |  { and?: never; literal?: never;   /** Negates an expression. */
+  not: GraphqlReminderExpr; or?: never; }
+  |  { and?: never; literal?: never; not?: never;   /** Matches when either expression matches. */
+  or: GraphqlReminderBinaryExpr; };
+
+/** GraphQL input representing the reminder literal. */
+export type GraphqlReminderLiteral =
+  {   /** Whether the reminder has already fired. */
+  completed: boolean; entity?: never; id?: never; include?: never; }
+  |  { completed?: never;   /** The referenced entity, as `"{type}:{id}"`. */
+  entity: string; id?: never; include?: never; }
+  |  { completed?: never; entity?: never;   /** The id option. */
+  id: string | number; include?: never; }
+  |  { completed?: never; entity?: never; id?: never;   /**
+   * Opt this query into reminders at all. Reminders are off by default, so
+   * without this (or an `id`/`entity`) Soup omits them entirely — a filter
+   * of only `completed` would otherwise silently match nothing. Must be
+   * `true`; there is no literal for excluding reminders, that is the default.
+   */
+  include: boolean; };
+
 /** A typed value accepted when setting an entity property. */
 export type GraphqlSetPropertyValue =
   {   /** A Boolean value. */
@@ -804,7 +843,9 @@ export type GraphqlSoupEntityType =
   /** Foreign entity. */
   | 'FOREIGN_ENTITY'
   /** Project entity. */
-  | 'PROJECT';
+  | 'PROJECT'
+  /** Reminder entity. */
+  | 'REMINDER';
 
 /** Input for continuing a single grouped Soup bin. */
 export type GroupedSoupContinuationInput = {
@@ -1033,6 +1074,7 @@ type EntityMutationResultFields_GraphqlMutationSuccess_Fragment = { __typename: 
               | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+        | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
        | null }
   > };
 
@@ -1107,6 +1149,7 @@ export type EntityMutationPayloadFieldsFragment = { results: Array<
                   | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                   | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                  | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+            | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
            | null }
       > }
   > };
@@ -1182,6 +1225,7 @@ export type RenameEntitiesMutation = { renameEntities: { results: Array<
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1257,6 +1301,7 @@ export type MoveEntitiesMutation = { moveEntities: { results: Array<
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1332,6 +1377,7 @@ export type UpdateEntitySharePoliciesMutation = { updateEntitySharePolicies: { r
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1407,6 +1453,7 @@ export type TrashEntitiesMutation = { trashEntities: { results: Array<
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1482,6 +1529,7 @@ export type RestoreEntitiesMutation = { restoreEntities: { results: Array<
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1557,6 +1605,7 @@ export type DeleteEntitiesPermanentlyMutation = { deleteEntitiesPermanently: { r
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1632,6 +1681,7 @@ export type DuplicateEntitiesMutation = { duplicateEntities: { results: Array<
                     | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                     | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                    | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+              | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
              | null }
         > }
     > } };
@@ -1708,6 +1758,7 @@ export type SetEntityFavoriteMutation = { setEntityFavorite:
                   | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                   | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                  | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+            | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
            | null }
       > }
    };
@@ -1808,6 +1859,15 @@ export type EntityPropertiesQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }> }
+        | { __typename: 'GraphqlSoupReminder', id: string, properties: Array<{ id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:
+              | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
+              | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
+              | { __typename: 'GraphqlEntityReferencePropertyValue', references: Array<{ entityId: string, entityType: GraphqlPropertyEntityType, specificMessageId: string | null }> }
+              | { __typename: 'GraphqlLinkPropertyValue', urls: Array<string> }
+              | { __typename: 'GraphqlNumberPropertyValue', numberValue: number }
+              | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
+              | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
+             | null }> }
       > } } };
 
 export type GroupSoupMembershipQueryVariables = Exact<{
@@ -1826,6 +1886,7 @@ export type GroupSoupMembershipQuery = { user: { id: string, groupSoup: { bins: 
           | { __typename: 'GraphqlSoupEmailThread', id: string }
           | { __typename: 'GraphqlSoupForeignEntity', id: string }
           | { __typename: 'GraphqlSoupProject', id: string }
+          | { __typename: 'GraphqlSoupReminder', id: string }
         > }> } } };
 
 export type GroupSoupQueryVariables = Exact<{
@@ -1895,6 +1956,7 @@ export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ ke
                 | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
                 | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
                | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+          | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
         > }> } } };
 
 type GraphqlHistoryItemFields_GraphqlSoupCalendarEvent_Fragment = { __typename: 'GraphqlSoupCalendarEvent', id: string, entityType: GraphqlSoupEntityType, frecencyScore: number | null };
@@ -1960,6 +2022,8 @@ type GraphqlHistoryItemFields_GraphqlSoupProject_Fragment = { __typename: 'Graph
       | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
      | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
+type GraphqlHistoryItemFields_GraphqlSoupReminder_Fragment = { __typename: 'GraphqlSoupReminder', id: string, entityType: GraphqlSoupEntityType, frecencyScore: number | null };
+
 export type GraphqlHistoryItemFieldsFragment =
   | GraphqlHistoryItemFields_GraphqlSoupCalendarEvent_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupCall_Fragment
@@ -1971,6 +2035,7 @@ export type GraphqlHistoryItemFieldsFragment =
   | GraphqlHistoryItemFields_GraphqlSoupEmailThread_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupForeignEntity_Fragment
   | GraphqlHistoryItemFields_GraphqlSoupProject_Fragment
+  | GraphqlHistoryItemFields_GraphqlSoupReminder_Fragment
 ;
 
 export type SetEntityPropertyMutationVariables = Exact<{
@@ -2052,6 +2117,7 @@ type SoupPatchFields_SoupUpdated_Fragment = { __typename: 'SoupUpdated', item:
           | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
           | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
          | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+    | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
    | null };
 
 export type SoupPatchFieldsFragment =
@@ -2126,6 +2192,7 @@ export type SoupUpdatesSubscription = { soupUpdates: Array<
               | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+        | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
        | null }
   > };
 
@@ -2196,6 +2263,7 @@ export type SoupQuery = { user: { id: string, soup: { nextCursor: string | null,
               | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
               | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
              | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
+        | { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> }
       > } } };
 
 type SoupItemFields_GraphqlSoupCalendarEvent_Fragment = { __typename: 'GraphqlSoupCalendarEvent', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
@@ -2269,6 +2337,8 @@ type SoupItemFields_GraphqlSoupProject_Fragment = { __typename: 'GraphqlSoupProj
       | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
      | null }>, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
+type SoupItemFields_GraphqlSoupReminder_Fragment = { __typename: 'GraphqlSoupReminder', frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
+
 export type SoupItemFieldsFragment =
   | SoupItemFields_GraphqlSoupCalendarEvent_Fragment
   | SoupItemFields_GraphqlSoupCall_Fragment
@@ -2280,6 +2350,7 @@ export type SoupItemFieldsFragment =
   | SoupItemFields_GraphqlSoupEmailThread_Fragment
   | SoupItemFields_GraphqlSoupForeignEntity_Fragment
   | SoupItemFields_GraphqlSoupProject_Fragment
+  | SoupItemFields_GraphqlSoupReminder_Fragment
 ;
 
 type SoupEntityCoreFields_GraphqlSoupCalendarEvent_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
@@ -2302,6 +2373,8 @@ type SoupEntityCoreFields_GraphqlSoupForeignEntity_Fragment = { id: string, enti
 
 type SoupEntityCoreFields_GraphqlSoupProject_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
 
+type SoupEntityCoreFields_GraphqlSoupReminder_Fragment = { id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, notifications: Array<{ id: string, eventType: string, entityType: GraphqlSoupEntityType, entityId: string, sent: boolean, done: boolean, seen: boolean, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata: unknown }> };
+
 export type SoupEntityCoreFieldsFragment =
   | SoupEntityCoreFields_GraphqlSoupCalendarEvent_Fragment
   | SoupEntityCoreFields_GraphqlSoupCall_Fragment
@@ -2313,6 +2386,7 @@ export type SoupEntityCoreFieldsFragment =
   | SoupEntityCoreFields_GraphqlSoupEmailThread_Fragment
   | SoupEntityCoreFields_GraphqlSoupForeignEntity_Fragment
   | SoupEntityCoreFields_GraphqlSoupProject_Fragment
+  | SoupEntityCoreFields_GraphqlSoupReminder_Fragment
 ;
 
 export type SoupPropertyFieldsFragment = { id: string, propertyDefinitionId: string, displayName: string, dataType: GraphqlPropertyDataType, isMultiSelect: boolean, specificEntityType: GraphqlPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value:

@@ -16,19 +16,59 @@ type MakeMarkNotDoneOptions = {
 };
 
 /**
+ * Return completed reminders to the Upcoming tab. Kept off the email path:
+ * none of its preconditions apply, and a reminder's not-done state is its own
+ * `completed` column rather than a notification override.
+ */
+const uncompleteReminders = async (reminders: EntityData[]) => {
+  const reminderIds = reminders.map((r) => r.id);
+  const optimistic = applyEntitiesNotDoneOptimistic({
+    emailIds: [],
+    notificationIds: [],
+    reminderIds,
+  });
+  try {
+    await executeMarkEntitiesUndone({
+      emailIds: [],
+      notificationIds: [],
+      reminderIds,
+    });
+    toast.success(
+      reminderIds.length > 1
+        ? `Marked ${reminderIds.length} reminders as not done`
+        : 'Marked as not done',
+      { duration: 3_000, stack: true, hideOnMobile: true }
+    );
+  } catch {
+    optimistic.rollback();
+    toast.failure('Failed to mark as not done');
+  }
+};
+
+/**
  * Reverses a mark-done: unarchives email threads and restores their
- * notifications. Only done emails qualify — other entity types' done state
+ * notifications, and un-completes reminders. Other entity types' done state
  * lives on their notifications, and their rows never render as done in the
  * mark-done-capable views. Threads whose done state can't be reversed (no
  * inbound message) are dropped at execute time; see
  * `threadCanBeMarkedNotDone`.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
+  // Always reversible — unlike a done thread there is no "permanently done" case.
+  const isCompletedReminder = (entity: EntityData): boolean =>
+    entity.type === 'reminder' && entity.completedAt != null;
+
   const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'email' && entity.done === true;
+    (entity.type === 'email' && entity.done === true) ||
+    isCompletedReminder(entity);
 
   const execute = async (entities: EntityData[]) => {
-    const candidates = entities.filter(canExecute);
+    const reminders = entities.filter(isCompletedReminder);
+    if (reminders.length > 0) await uncompleteReminders(reminders);
+
+    const candidates = entities.filter(
+      (e) => e.type === 'email' && e.done === true
+    );
     if (candidates.length === 0) return;
 
     // `done` alone doesn't mean the state is reversible — a thread with only

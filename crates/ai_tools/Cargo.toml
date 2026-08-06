@@ -66,6 +66,7 @@ models_soup = { path = "../models_soup" }
 rand.workspace = true
 reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
+reminders = { path = "../reminders", default-features = false, features = ["ports"] }
 rootcause = { workspace = true }
 schemars.workspace = true
 search_service_client = { path = "../search_service_client" }

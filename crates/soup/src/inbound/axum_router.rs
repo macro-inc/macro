@@ -44,6 +44,7 @@ use item_filters::{
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
+        reminder::ReminderLiteral,
     },
 };
 use macro_authorization::{
@@ -1104,6 +1105,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
+    /// Filters applied to reminders (wire key `remf`). Unlike every other
+    /// filter here, empty/omitted returns **no** reminders: they are opt-in,
+    /// so the caller must send `inc`, an id, or an entity to get any.
+    #[serde(default, rename = "remf")]
+    #[schema(value_type = serde_json::Value)]
+    pub reminder_filter: LiteralTree<ReminderLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -1194,6 +1201,7 @@ impl ApiEntityFilterAst {
             foreign_entity_filter,
             call_filter,
             crm_company_filter,
+            reminder_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -1261,6 +1269,7 @@ impl ApiEntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            reminder_filter,
             properties_filter,
         })
     }

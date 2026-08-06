@@ -169,6 +169,15 @@ pub struct Reminder {
     pub updated_at: DateTime<Utc>,
 }
 
+/// The `"{type}:{id}"` token identifying a reminder's referenced entity.
+///
+/// Soup filters on these rather than on a pair of columns, so the format is
+/// defined here and mirrored by `entity_type || ':' || entity_id` in the
+/// repository's Soup query.
+pub fn entity_token(entity: &Entity<'_>) -> String {
+    format!("{}:{}", entity.entity_type.as_ref(), entity.entity_id)
+}
+
 impl Reminder {
     /// The associated entity, when the reminder is attached to one.
     pub fn entity(&self) -> Option<Entity<'_>> {
@@ -177,6 +186,35 @@ impl Reminder {
             _ => None,
         }
     }
+}
+
+/// Display details of the entity a reminder is about, resolved alongside the
+/// reminder itself.
+///
+/// A reminder has no block of its own — it opens, and is iconed as, whatever it
+/// references. Which block that is depends on the referenced document's file
+/// type, so resolving it client-side would mean a second fetch per row against
+/// a synchronous icon path. Reading it here keeps Soup to one round trip.
+///
+/// Only documents populate these; every other entity type is identified by its
+/// [`EntityType`] alone.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ReminderReference {
+    /// The referenced document's file type, e.g. `md` or `pdf`.
+    pub file_type: Option<String>,
+    /// The referenced document's sub type, e.g. `task` or `snippet`.
+    pub sub_type: Option<String>,
+}
+
+/// A reminder together with what it references, as Soup needs it.
+#[derive(Debug, Clone)]
+pub struct ReminderForSoup {
+    /// The reminder itself.
+    pub reminder: Reminder,
+    /// Details of [`Reminder::entity`], when it resolves to something readable.
+    /// `None` for a standalone reminder, a non-document entity, or a reference
+    /// that no longer exists.
+    pub reference: Option<ReminderReference>,
 }
 
 /// The caller's reminders, soonest firing first.
@@ -325,12 +363,22 @@ pub struct ReminderPatch {
     pub schedule: Option<ReminderSchedule>,
     /// Whether the dispatcher should consider this reminder.
     pub enabled: Option<bool>,
+    /// Mark the reminder as dealt with (`true`) or live again (`false`).
+    ///
+    /// Separate from `enabled`: a disabled reminder is one the dispatcher
+    /// skips, while a completed one has been handled. The dispatcher sets this
+    /// itself when a one-shot fires; this lets the owner do it by hand without
+    /// deleting the reminder.
+    pub completed: Option<bool>,
 }
 
 impl ReminderPatch {
     /// Whether the patch would change anything.
     pub fn is_empty(&self) -> bool {
-        self.description.is_none() && self.schedule.is_none() && self.enabled.is_none()
+        self.description.is_none()
+            && self.schedule.is_none()
+            && self.enabled.is_none()
+            && self.completed.is_none()
     }
 }
 
@@ -388,6 +436,8 @@ pub struct ReminderUpdate {
     pub schedule: Option<ScheduleUpdate>,
     /// Replacement enabled flag.
     pub enabled: Option<bool>,
+    /// Replacement completed flag. See [`ReminderPatch::completed`].
+    pub completed: Option<bool>,
 }
 
 /// A reminder that is due to fire, with everything the dispatcher needs to

@@ -42,16 +42,12 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
     // reminder id is safe to put in a span.
     #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder.id))]
     async fn notify(&self, due: &DueReminder) -> Result<(), Self::Err> {
-        // A standalone reminder has no entity to hang the notification on, so
-        // it is addressed at the user themselves — the same shape
-        // `inbox_reauth_required` uses.
-        let notification_entity = match due.reminder.entity() {
-            Some(entity) => entity,
-            None => EntityType::User.with_entity_str(due.owner_id.as_ref()),
-        };
-
+        // The notification belongs to the reminder itself, not to whatever the
+        // reminder references. The client resolves the referenced entity through
+        // the reminder's `referencedEntity` edge.
         let request = SendNotificationRequestBuilder {
-            notification_entity,
+            notification_entity: EntityType::Reminder
+                .with_entity_string(due.reminder.id.to_string()),
             secondary_notification_entity: None,
             notification: ReminderMetadata {
                 reminder_id: due.reminder.id,

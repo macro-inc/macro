@@ -27,6 +27,7 @@ use item_filters::ast::{
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
+    reminder::ReminderLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -337,6 +338,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut crm_companies = Vec::new();
     let mut foreign_entities = Vec::new();
     let mut calendar_events = Vec::new();
+    let mut reminders = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -360,12 +362,11 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::CrmCompany => crm_companies.push(CrmCompanyLiteral::Id(id)),
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
+            EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
-            // Reminders are not a Soup entity yet.
-            | EntityType::Reminder => {
+            | EntityType::CrmContact => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -396,6 +397,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             foreign_entities,
             ForeignEntityLiteral::Id(nil),
         )),
+        reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
         properties_filter: None,
     })
 }

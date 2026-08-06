@@ -161,6 +161,35 @@ describe('reminderDescriptionFor', () => {
     );
   });
 
+  // A thread's name is the placeholder "Channel thread", and its reminder
+  // attaches to the parent channel — so the message text is the only thing
+  // telling two reminders on the same channel apart.
+  it('describes a channel thread by its message text', () => {
+    const thread = {
+      type: 'channel_thread',
+      id: 'msg-1',
+      channelId: 'chan-1',
+      name: 'Channel thread',
+      content: 'can we ship the migration today?',
+    } as EntityData;
+
+    expect(reminderDescriptionFor(thread)).toBe(
+      'can we ship the migration today?'
+    );
+  });
+
+  it('falls back to the thread placeholder when it has no text', () => {
+    const thread = {
+      type: 'channel_thread',
+      id: 'msg-1',
+      channelId: 'chan-1',
+      name: 'Channel thread',
+      content: '   ',
+    } as EntityData;
+
+    expect(reminderDescriptionFor(thread)).toBe('Channel thread');
+  });
+
   // The API rejects an empty description, and plenty of entities have no name:
   // a subject-less thread, a freshly created doc.
   it('names an unnamed entity the way lists label it', () => {

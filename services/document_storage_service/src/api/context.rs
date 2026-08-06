@@ -155,6 +155,7 @@ pub(crate) type DssSoupService = SoupImpl<
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
     ForeignEntityServiceType,
+    RemindersServiceType,
 >;
 
 type DssSoupState =

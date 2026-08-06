@@ -7,6 +7,7 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   ENABLE_NEW_INBOX,
+  ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -98,6 +99,12 @@ const getInboxSignalFilters = () => {
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
+      // Reminders are off by default server-side rather than excluded by
+      // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
+      // this literal is the only thing that surfaces them — and Signal is the
+      // only view that sends it. Behind the flag so an unflagged user never
+      // pays for the reminders lookup on every Signal fetch.
+      ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
@@ -481,6 +488,29 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           exclude: { folderId: [NIL_UUID] },
         }),
         clientFilters: { and: ['folders'] },
+      }),
+    },
+  },
+  // Reminders are the one entity type that is opt-in server-side, so naming
+  // `includeReminders` both surfaces them and — via defineQueryFilters, which
+  // NIL-excludes every target this query does not reference — makes the view
+  // reminders-only. Soup already orders them by when they fire.
+  reminders: {
+    default: 'upcoming',
+    tabs: {
+      // Not yet fired. Recurring reminders never complete, so they stay here
+      // across firings, which is what "upcoming" should mean for them.
+      upcoming: () => ({
+        filters: defineQueryFilters({
+          include: { includeReminders: true, reminderCompleted: false },
+        }),
+        clientFilters: { and: ['reminders-upcoming'] },
+      }),
+      all: () => ({
+        filters: defineQueryFilters({
+          include: { includeReminders: true },
+        }),
+        clientFilters: { and: ['reminders'] },
       }),
     },
   },

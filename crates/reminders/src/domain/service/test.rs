@@ -9,7 +9,9 @@ use entity_access::domain::models::{
 use model_entity::EntityType;
 
 use super::*;
-use crate::domain::models::{MAX_PAGE_SIZE, ReminderCron, RemindersList};
+use crate::domain::models::{
+    MAX_PAGE_SIZE, ReminderCron, ReminderForSoup, RemindersList, entity_token,
+};
 
 const USER_A: &str = "macro|reminders-a@macro.com";
 const USER_B: &str = "macro|reminders-b@macro.com";
@@ -285,6 +287,46 @@ impl RemindersRepo for FakeRemindersRepo {
             }
         }
         Ok(batch)
+    }
+
+    async fn list_reminders_for_soup(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+        entities: &[String],
+        completed: Option<bool>,
+        limit: i64,
+    ) -> Result<Vec<ReminderForSoup>, Self::Err> {
+        self.check_failing()?;
+        let mut found: Vec<Reminder> = self
+            .rows()
+            .into_iter()
+            .filter(|(owner, _)| owner == user_id.as_ref())
+            .map(|(_, reminder)| reminder)
+            .filter(|reminder| ids.is_empty() || ids.contains(&reminder.id))
+            .filter(|reminder| {
+                entities.is_empty()
+                    || reminder
+                        .entity()
+                        .is_some_and(|e| entities.iter().any(|want| *want == entity_token(&e)))
+            })
+            .filter(|reminder| match completed {
+                Some(completed) => reminder.completed_at.is_some() == completed,
+                None => true,
+            })
+            .filter(|reminder| !self.is_unreadable(reminder.id))
+            .collect();
+        // Descending, as the SQL adapter returns.
+        found.sort_by_key(|reminder| std::cmp::Reverse((reminder.next_run_at, reminder.id)));
+        found.truncate(limit.max(0) as usize);
+        // The fake has no documents to resolve against.
+        Ok(found
+            .into_iter()
+            .map(|reminder| ReminderForSoup {
+                reminder,
+                reference: None,
+            })
+            .collect())
     }
 
     async fn update_reminder(

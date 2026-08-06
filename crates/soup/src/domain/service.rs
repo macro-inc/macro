@@ -1,8 +1,9 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery, SimpleSortRequest,
-        SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType, grouping::ItemGroupingInfo,
+        GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
+        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
+        grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -47,7 +48,9 @@ use models_soup::{
     },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
+    reminder::SoupReminder,
 };
+use reminders::domain::ports::RemindersService;
 use serde::Serialize;
 use std::cmp::Ordering;
 use uuid::Uuid;
@@ -102,7 +105,7 @@ fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem<()> {
 }
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U, V, C, K, Crm, F> {
+pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
@@ -117,9 +120,11 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     crm_service: Crm,
     /// the interface for interacting with foreign entities
     foreign_entity_service: F,
+    /// the interface for interacting with reminders
+    reminders_service: Rem,
 }
 
-impl<T, U, V, C, K, Crm, F> SoupImpl<T, U, V, C, K, Crm, F>
+impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
@@ -129,8 +134,10 @@ where
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,
+    Rem: RemindersService,
 {
     /// Creates a soup service from its repository and dependent domain services.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         soup_storage: T,
         frecency: U,
@@ -139,6 +146,7 @@ where
         call_record_service: K,
         crm_service: Crm,
         foreign_entity_service: F,
+        reminders_service: Rem,
     ) -> Self {
         SoupImpl {
             soup_storage,
@@ -148,6 +156,7 @@ where
             call_record_service,
             crm_service,
             foreign_entity_service,
+            reminders_service,
         }
     }
 
@@ -500,6 +509,41 @@ where
     }
 
     #[tracing::instrument(err, skip(self, req))]
+    async fn handle_reminder_request(
+        &self,
+        req: Option<GetRemindersRequest<'_>>,
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        let GetRemindersRequest {
+            user_id,
+            reminder_ids,
+            entities,
+            completed,
+            limit,
+        } = req;
+
+        let items: Vec<SoupItem<()>> = self
+            .reminders_service
+            .list_reminders_for_soup(&user_id, &reminder_ids, &entities, completed, limit)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "reminder soup request failed");
+                SoupErr::ReminderErr
+            })?
+            .into_iter()
+            .map(|reminder| SoupItem::Reminder(SoupReminder::from(reminder)))
+            .collect();
+
+        Ok(Either::Right(items.into_iter().map(|item| SoupCandidate {
+            item,
+            frecency_score: None,
+        })))
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_call_request(
         &self,
         req: Option<GetCallRecordsRequest>,
@@ -772,6 +816,7 @@ where
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
+        let reminder_request = req.build_reminder_request(limit.into());
 
         match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
@@ -790,6 +835,7 @@ where
                 let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
                 let call_soup_fut = self.handle_call_request(call_request);
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
+                let reminder_soup_fut = self.handle_reminder_request(reminder_request);
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
                     Some(req.user.to_string()),
                     foreign_entity_source_ids,
@@ -804,6 +850,7 @@ where
                     comms_thread_soup,
                     call_soup,
                     crm_company_soup,
+                    reminder_soup,
                     foreign_entity_soup,
                 ) = tokio::join!(
                     main_soup_fut,
@@ -812,6 +859,7 @@ where
                     comms_thread_soup_fut,
                     call_soup_fut,
                     crm_company_soup_fut,
+                    reminder_soup_fut,
                     foreign_entity_soup_fut,
                 );
 
@@ -821,6 +869,7 @@ where
                     .chain(comms_thread_soup?)
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
+                    .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter)
@@ -840,7 +889,7 @@ where
     }
 }
 
-impl<T, U, V, C, K, Crm, F> SoupService for SoupImpl<T, U, V, C, K, Crm, F>
+impl<T, U, V, C, K, Crm, F, Rem> SoupService for SoupImpl<T, U, V, C, K, Crm, F, Rem>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
@@ -850,6 +899,7 @@ where
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,
+    Rem: RemindersService,
 {
     #[tracing::instrument(err, skip(self, req, team_receipt))]
     async fn get_user_soup<R>(

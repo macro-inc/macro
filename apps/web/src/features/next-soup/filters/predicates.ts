@@ -141,6 +141,15 @@ export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }
 
+export function remindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder';
+}
+
+/** Reminders that have not fired yet — recurring ones never complete. */
+export function upcomingRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !entity.completedAt;
+}
+
 /**
  * Entity types the search view supports. Mirrors the search preset's
  * server-side exclusions (foreign entities + CRM) so entities that enter

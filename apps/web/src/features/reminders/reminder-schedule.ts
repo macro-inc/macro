@@ -137,7 +137,13 @@ function untitledName(type: EntityData['type']): string {
  * Counts characters, not bytes, because the service's limit does.
  */
 export function reminderDescriptionFor(entity: EntityData): string {
-  const name = entity.name?.trim();
+  // A thread row's `name` is the literal placeholder "Channel thread", so the
+  // message text is the only thing that says which thread. It matters more
+  // here than elsewhere: the reminder attaches to the parent channel, so the
+  // description is all that distinguishes two reminders on the same channel.
+  const label =
+    entity.type === 'channel_thread' ? entity.content?.trim() : undefined;
+  const name = label || entity.name?.trim();
   const characters = [...(name || untitledName(entity.type))];
   return characters.length > REMINDER_DESCRIPTION_MAX_LENGTH
     ? characters.slice(0, REMINDER_DESCRIPTION_MAX_LENGTH).join('')

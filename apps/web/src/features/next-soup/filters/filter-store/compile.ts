@@ -29,6 +29,7 @@ type QueryTarget =
   | 'callf'
   | 'fef'
   | 'ccf'
+  | 'remf'
   | 'propf';
 
 export type TargetAstMap = {
@@ -137,6 +138,9 @@ const FIELD_CONFIG: Record<
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
+  reminderId: { target: 'remf', field: 'id' },
+  reminderCompleted: { target: 'remf', field: 'comp' },
+  includeReminders: { target: 'remf', field: 'inc', unit: true },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -197,6 +201,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   callf: [],
   fef: [],
   ccf: [],
+  remf: [],
   propf: [],
 });
 

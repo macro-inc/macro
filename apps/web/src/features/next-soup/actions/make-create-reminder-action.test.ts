@@ -23,6 +23,15 @@ import { makeCreateReminderAction } from './make-create-reminder-action';
 const entity = (type: EntityData['type'], id = 'e1') =>
   ({ type, id, name: 'Thing' }) as EntityData;
 
+const threadEntity = (channelId = 'chan-1') =>
+  ({
+    type: 'channel_thread',
+    id: 'msg-1',
+    channelId,
+    name: 'Channel thread',
+    content: 'ship it',
+  }) as EntityData;
+
 describe('makeCreateReminderAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,14 +46,27 @@ describe('makeCreateReminderAction', () => {
     expect(canExecute(entity('crm_company'))).toBe(true);
   });
 
-  // Channel messages/threads have composite `channelId:messageId` ids that the
-  // entity-access layer cannot resolve an access level for.
+  // `entity_access` resolves no access level for `channel_message`, so the
+  // receipt the reminders API requires cannot be minted for one.
   it('cannot run for entity types with no reminder mapping', () => {
     const { canExecute } = makeCreateReminderAction();
 
     expect(canExecute(entity('channel_message'))).toBe(false);
-    expect(canExecute(entity('channel_thread'))).toBe(false);
     expect(canExecute(entity('automation'))).toBe(false);
+  });
+
+  // Thread rows are offered the action even though `channel_message` is not a
+  // reminder target: they fall back to the parent channel.
+  it('can run for a channel thread row', () => {
+    expect(makeCreateReminderAction().canExecute(threadEntity())).toBe(true);
+  });
+
+  it('opens the composer for a channel thread row', () => {
+    const target = threadEntity();
+
+    makeCreateReminderAction().execute([target]);
+
+    expect(mocks.openReminderComposer).toHaveBeenCalledWith(target);
   });
 
   it('opens the composer for the entity', () => {

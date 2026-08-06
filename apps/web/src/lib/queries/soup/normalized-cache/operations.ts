@@ -584,6 +584,10 @@ export function buildSingleEntityFilter(
       ...base,
       calendar_event_filters: { calendar_event_ids: [entityId] },
     }))
+    .with('reminder', () => ({
+      ...base,
+      reminder_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 

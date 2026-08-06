@@ -23,6 +23,7 @@ use item_filters::{
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::PropertyEntityType,
+        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
@@ -387,6 +388,8 @@ struct GraphqlEntityFilterAst {
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
     /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
+    /// The reminder filter to apply.
+    reminder_filter: Option<GraphqlReminderExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlPropertiesExpr>,
 }
@@ -409,6 +412,7 @@ impl GraphqlEntityFilterAst {
             call_filter: optional_tree(self.call_filter)?,
             crm_company_filter: optional_tree(self.crm_company_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
+            reminder_filter: optional_tree(self.reminder_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
         })
     }
@@ -522,6 +526,13 @@ filter_expr_input!(
     GraphqlForeignEntityLiteral,
     ForeignEntityLiteral,
     "ForeignEntityFilterExpr"
+);
+filter_expr_input!(
+    GraphqlReminderExpr,
+    GraphqlReminderBinaryExpr,
+    GraphqlReminderLiteral,
+    ReminderLiteral,
+    "ReminderFilterExpr"
 );
 /// GraphQL input representing the email filter ast.
 #[derive(async_graphql::InputObject)]
@@ -1061,6 +1072,42 @@ impl GraphqlCallStatus {
             Self::Missed => CallStatus::Missed,
             Self::Unattended => CallStatus::Unattended,
         }
+    }
+}
+
+/// GraphQL input representing the reminder literal.
+#[derive(async_graphql::OneofObject)]
+enum GraphqlReminderLiteral {
+    /// Opt this query into reminders at all. Reminders are off by default, so
+    /// without this (or an `id`/`entity`) Soup omits them entirely — a filter
+    /// of only `completed` would otherwise silently match nothing. Must be
+    /// `true`; there is no literal for excluding reminders, that is the default.
+    Include(bool),
+    /// The id option.
+    Id(ID),
+    /// The referenced entity, as `"{type}:{id}"`.
+    Entity(String),
+    /// Whether the reminder has already fired.
+    Completed(bool),
+}
+
+impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
+    /// Convert this value into the expr representation.
+    fn into_expr(self) -> async_graphql::Result<Expr<ReminderLiteral>> {
+        let literal = match self {
+            // `include: false` is the default, not a literal — accepting it
+            // would opt the query in, the opposite of what was asked.
+            Self::Include(false) => {
+                return Err(async_graphql::Error::new(
+                    "reminder `include` must be true; omit the filter to exclude reminders",
+                ));
+            }
+            Self::Include(true) => ReminderLiteral::Include,
+            Self::Id(id) => ReminderLiteral::Id(parse_id(id, "id")?),
+            Self::Entity(entity) => ReminderLiteral::Entity(entity),
+            Self::Completed(completed) => ReminderLiteral::Completed(completed),
+        };
+        Ok(Expr::val(literal))
     }
 }
 

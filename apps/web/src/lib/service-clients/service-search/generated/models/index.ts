@@ -205,6 +205,8 @@ export * from './propertyValueOneOfSevenType';
 export * from './propertyValueOneOfThree';
 export * from './propertyValueOneOfThreeType';
 export * from './propertyValueOneOfType';
+export * from './reminderFilters';
+export * from './reminderFiltersCompleted';
 export * from './searchHighlight';
 export * from './searchHighlightName';
 export * from './searchHighlightSender';

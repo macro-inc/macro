@@ -11,6 +11,8 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  NamedSubType,
+  ReminderEntity,
 } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import WideAutomation from '@icon/wide-automation.svg';
@@ -494,6 +496,8 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
+  /** Reminders icon as the entity they reference. */
+  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
@@ -503,6 +507,23 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
+    // A reminder shows the icon of what it is about. The referenced entity's
+    // fileType/subType are resolved server-side precisely so this stays
+    // synchronous — every icon call site is.
+    .with({ type: 'reminder' }, (e) =>
+      e.referencedEntity
+        ? (itemToBlockName(
+            {
+              type: e.referencedEntity.type,
+              fileType: e.referencedEntity.fileType,
+              subType: e.referencedEntity.subType
+                ? { type: e.referencedEntity.subType as NamedSubType }
+                : undefined,
+            },
+            true
+          ) ?? 'default')
+        : 'default'
+    )
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);

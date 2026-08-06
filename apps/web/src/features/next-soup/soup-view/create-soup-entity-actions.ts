@@ -34,7 +34,11 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
-import { openEntityInSplitFromUnifiedList } from '../utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+  reminderSplitTarget,
+} from '../utils';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -211,6 +215,15 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
+      // A reminder opens what it references. A standalone one references
+      // nothing, so there is nothing to open.
+      if (entity.type === 'reminder') {
+        const target = reminderSplitTarget(entity);
+        if (!target) return undefined;
+        const open = splitManager.getSplitByContent(target.type, target.id);
+        if (open && open.id !== splitHandle?.viewerId()) return undefined;
+        return entity;
+      }
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -232,6 +245,8 @@ export function createSoupEntityActions(): {
             from: 'soup_view_entity_actions_menu',
           });
         }
+
+        markReminderSeenOnOpen(entity, notificationSource);
 
         // Same path as shift/opt+click, so the menu inherits Preview Pair
         // routing (new split when it fits; replacing the pair outright) and

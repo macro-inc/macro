@@ -25,6 +25,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_ACTIVITY,
   ENABLE_CRM,
+  ENABLE_REMINDERS,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
@@ -189,6 +190,28 @@ registerComponent(
     }
     usePageViewTracking('activity');
     return <ActivityView />;
+  })
+);
+
+registerComponent(
+  'reminders',
+  withAuth(() => {
+    // Registered even when the flag is closed so a bookmarked /reminders or a
+    // restored split recovers to the inbox instead of an empty split.
+    if (!ENABLE_REMINDERS()) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
+    usePageViewTracking('reminders');
+    const preset = getViewPreset('reminders');
+    return (
+      <SoupView
+        viewName="Reminders"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
+        disableLocalSearch
+      />
+    );
   })
 );
 

@@ -24,6 +24,8 @@ pub enum GraphqlSoupEntityType {
     ForeignEntity,
     /// Calendar event entity.
     CalendarEvent,
+    /// Reminder entity.
+    Reminder,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -83,6 +85,7 @@ impl GraphqlSoupEntityType {
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
+            EntityType::Reminder => Self::Reminder,
             _ => return None,
         })
     }
@@ -100,6 +103,7 @@ impl GraphqlSoupEntityType {
             Self::CrmCompany => EntityType::CrmCompany,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
+            Self::Reminder => EntityType::Reminder,
         }
     }
 }

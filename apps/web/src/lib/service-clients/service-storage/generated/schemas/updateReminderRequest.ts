@@ -18,6 +18,9 @@ advertising a value the API has no meaning for; the deserializer still
 tolerates `null` rather than erroring on it.
  */
 export interface UpdateReminderRequest {
+  /** Mark the reminder as dealt with, or live again. Distinct from
+`enabled`, which controls whether the dispatcher considers it. */
+  completed?: boolean;
   /** Replacement description. */
   description?: string;
   /** Whether the reminder should fire at all. */

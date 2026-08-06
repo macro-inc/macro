@@ -235,10 +235,13 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 }
 
 export type ItemLike = {
-  type: ItemType | 'call' | 'crm_company';
+  type: ItemType | 'call' | 'crm_company' | 'reminder';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
+  /** Present on reminders: the entity the reminder is about. A reminder has no
+   * block of its own, so it borrows this entity's icon. */
+  referencedEntity?: { type: string };
 };
 
 /**
@@ -265,6 +268,11 @@ export function itemToBlockName(
     return fileTypeToBlockName(item.fileType, icon);
   }
   if (item.type === 'channel_thread') return 'channel';
+  // A reminder has no block of its own; it points at one. A standalone
+  // reminder falls through to 'unknown'.
+  if (item.type === 'reminder') {
+    return fileTypeToBlockName(item.referencedEntity?.type, icon);
+  }
   return fileTypeToBlockName(item.type, icon);
 }
 

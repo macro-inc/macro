@@ -5,6 +5,7 @@ use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::project::SoupProject;
+use crate::reminder::SoupReminder;
 use crate::{
     chat::SoupChat,
     comms::{SoupChannel, SoupChannelThread},
@@ -44,6 +45,8 @@ pub enum SoupItem<T = ()> {
     CrmCompany(SoupCrmCompany<T>),
     /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
+    /// Reminder item.
+    Reminder(SoupReminder<T>),
 }
 
 impl<T> SoupItem<T> {
@@ -80,6 +83,9 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(foreign_entity) => {
                 EntityType::ForeignEntity.with_entity_string(foreign_entity.id.to_string())
             }
+            SoupItem::Reminder(reminder) => {
+                EntityType::Reminder.with_entity_string(reminder.id.to_string())
+            }
         }
     }
 
@@ -97,6 +103,7 @@ impl<T> SoupItem<T> {
             SoupItem::CalendarEvent(event) => event.updated_at,
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
+            SoupItem::Reminder(reminder) => reminder.updated_at,
         }
     }
 
@@ -172,6 +179,10 @@ impl<T> SoupItem<T> {
                 foreign_entity.created_at
             }
             (SoupItem::ForeignEntity(foreign_entity), _) => foreign_entity.updated_at,
+            // Reminders always order by when they fire, whatever sort was asked
+            // for — the same way emails always use their precomputed sort_ts.
+            // No other ordering means anything for a reminder.
+            (SoupItem::Reminder(reminder), _) => reminder.next_run_at,
         }
     }
 
@@ -211,6 +222,7 @@ impl<T> SoupItem<T> {
                 PropertiesEntityType::Company,
             )),
             SoupItem::ForeignEntity(_) => None,
+            SoupItem::Reminder(_) => None,
         }
     }
 
@@ -412,6 +424,29 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(soup_foreign_entity) => {
                 SoupItem::ForeignEntity(soup_foreign_entity)
             }
+            SoupItem::Reminder(SoupReminder {
+                id,
+                description,
+                referenced_entity,
+                schedule,
+                next_run_at,
+                enabled,
+                completed_at,
+                created_at,
+                updated_at,
+                extra,
+            }) => SoupItem::Reminder(SoupReminder {
+                id,
+                description,
+                referenced_entity,
+                schedule,
+                next_run_at,
+                enabled,
+                completed_at,
+                created_at,
+                updated_at,
+                extra: f(extra),
+            }),
         }
     }
 }
@@ -431,6 +466,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::CalendarEvent(event) => event.id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
+            SoupItem::Reminder(reminder) => reminder.id,
         }
     }
 }

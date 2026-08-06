@@ -14,10 +14,14 @@ import {
   itemToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_REMINDERS,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import type { EntityType, NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
+import { getReminderById } from '@queries/reminders/reminders';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
@@ -361,20 +365,26 @@ function getSupportedHandler(
         });
     })
     .with('reminder', () => {
-      // A reminder carries no entity details of its own — it points at
-      // whatever it was set on, and that lives on the notification. A
-      // standalone reminder is addressed at the user and has nothing to open.
-      const entityType = notification.entity_type as EntityType;
-      if (entityType === 'user') return null;
-
+      // The notification points at the reminder itself, so there is nothing to
+      // open until the reminder is fetched and its referenced entity read. A
+      // standalone reminder references nothing and opens nothing.
       return async (lm: SplitManager, newSplit: boolean = false) => {
+        // A reminder created before the flag closed still has a live
+        // notification; opening it would reach reminder surfaces the user is
+        // no longer meant to have.
+        if (!ENABLE_REMINDERS()) return;
+        const reminder = await getReminderById(notification.entity_id);
+        const entityType = reminder?.entityType;
+        const entityId = reminder?.entityId;
+        if (!entityType || !entityId) return;
+
         const blockName = await DefaultNotificationBlockNameResolver(
-          notification.entity_id,
-          entityType
+          entityId,
+          entityType as EntityType
         );
         if (!blockName) return;
 
-        openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+        openSplitIfNotOpen(lm, blockName, entityId, {
           newSplit,
           sourceHandle,
         });

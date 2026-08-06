@@ -119,7 +119,7 @@ async fn sends_with_no_sender_so_the_owner_is_not_filtered_out() {
 }
 
 #[tokio::test]
-async fn addresses_the_notification_at_the_reminders_entity() {
+async fn addresses_the_notification_at_the_reminder_not_its_referenced_entity() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
@@ -127,13 +127,15 @@ async fn addresses_the_notification_at_the_reminders_entity() {
         .await
         .expect("notify succeeds");
 
+    // The referenced channel is reachable through the reminder's
+    // `referencedEntity` edge; the notification itself points at the reminder.
     let entity = &ingress.last()["req"]["notification_entity"];
-    assert_eq!(entity["entity_type"], "channel");
-    assert_eq!(entity["entity_id"], "channel-1");
+    assert_eq!(entity["entity_type"], "reminder");
+    assert_eq!(entity["entity_id"], reminder_id().to_string());
 }
 
 #[tokio::test]
-async fn falls_back_to_the_user_when_the_reminder_has_no_entity() {
+async fn a_standalone_reminder_still_points_at_itself() {
     let ingress = CapturingIngress::default();
 
     NotificationReminderNotifier::new(ingress.clone())
@@ -141,11 +143,11 @@ async fn falls_back_to_the_user_when_the_reminder_has_no_entity() {
         .await
         .expect("notify succeeds");
 
-    // `event_item_id`/`event_item_type` are NOT NULL, so a standalone reminder
-    // still needs an entity; it is addressed at the user, as inbox_reauth does.
+    // `event_item_id`/`event_item_type` are NOT NULL, and the reminder is always
+    // a valid entity — so no fallback is needed.
     let entity = &ingress.last()["req"]["notification_entity"];
-    assert_eq!(entity["entity_type"], "user");
-    assert_eq!(entity["entity_id"], OWNER);
+    assert_eq!(entity["entity_type"], "reminder");
+    assert_eq!(entity["entity_id"], reminder_id().to_string());
 }
 
 #[tokio::test]

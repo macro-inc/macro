@@ -161,6 +161,10 @@ export function filterSoupItemByRequestBody(
       )
       // Calendar soup rendering lands with the calendar FE; never cache-match.
       .with({ tag: 'calendarEvent' }, () => false)
+      .with(
+        { tag: 'reminder' },
+        ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
+      )
       .exhaustive()
   );
 }

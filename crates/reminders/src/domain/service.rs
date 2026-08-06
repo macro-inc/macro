@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     CreateReminder, MAX_DESCRIPTION_LEN, NewReminder, Reminder, ReminderBatch, ReminderCursor,
-    ReminderError, ReminderFilter, ReminderPage, ReminderPatch, ReminderSchedule, ReminderUpdate,
-    ScheduleUpdate,
+    ReminderError, ReminderFilter, ReminderForSoup, ReminderPage, ReminderPatch, ReminderSchedule,
+    ReminderUpdate, ScheduleUpdate,
 };
 use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
 
@@ -265,6 +265,24 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn list_reminders_for_soup(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        ids: &[Uuid],
+        entities: &[String],
+        completed: Option<bool>,
+        limit: i64,
+    ) -> Result<Vec<ReminderForSoup>, ReminderError> {
+        // No re-probing on undecodable rows: Soup merges many item types and
+        // owns its own pagination, so a short slice is not a short page.
+        self.repo
+            .list_reminders_for_soup(user_id, ids, entities, completed, limit)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ReminderError::from)
+    }
+
     #[tracing::instrument(err, skip(self, receipt, patch))]
     async fn update_reminder(
         &self,
@@ -280,6 +298,7 @@ where
             description,
             schedule,
             enabled,
+            completed,
         } = patch;
 
         let description = description.map(validate_description).transpose()?;
@@ -297,6 +316,7 @@ where
             description,
             schedule,
             enabled,
+            completed,
         };
 
         self.repo
@@ -322,5 +342,68 @@ where
         } else {
             Err(ReminderError::NotFound)
         }
+    }
+}
+
+/// No-op [`RemindersService`] for binaries that need to satisfy the bound but
+/// never surface reminders — the AI-facing services, whose tool surfaces
+/// force-filter reminders out anyway. `list_reminders_for_soup` returns empty;
+/// every other method panics. Swap for [`RemindersServiceImpl`] if you actually
+/// need reminders.
+#[derive(Clone, Debug)]
+pub struct NoOpRemindersService;
+
+impl RemindersService for NoOpRemindersService {
+    async fn create_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: CreateReminder,
+        _entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("NoOpRemindersService.create_reminder")
+    }
+
+    async fn get_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _id: Uuid,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("NoOpRemindersService.get_reminder")
+    }
+
+    async fn list_reminders(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _filter: ReminderFilter,
+    ) -> Result<ReminderPage, ReminderError> {
+        unimplemented!("NoOpRemindersService.list_reminders")
+    }
+
+    async fn list_reminders_for_soup(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _ids: &[Uuid],
+        _entities: &[String],
+        _completed: Option<bool>,
+        _limit: i64,
+    ) -> Result<Vec<ReminderForSoup>, ReminderError> {
+        Ok(Vec::new())
+    }
+
+    async fn update_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _id: Uuid,
+        _patch: ReminderPatch,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("NoOpRemindersService.update_reminder")
+    }
+
+    async fn delete_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _id: Uuid,
+    ) -> Result<(), ReminderError> {
+        unimplemented!("NoOpRemindersService.delete_reminder")
     }
 }

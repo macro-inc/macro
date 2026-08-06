@@ -169,6 +169,23 @@ describe('compileToAst', () => {
     });
   });
 
+  it('compiles the reminder opt-in to a bare Include literal', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { includeReminders: true } })
+    );
+
+    // Reminders are off in Soup unless a view asks; this literal is the ask.
+    expect(ast.remf).toEqual({ l: 'inc' });
+  });
+
+  it('leaves reminders unrequested when a view does not opt in', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { documentDone: false } })
+    );
+
+    expect(ast.remf).toBeUndefined();
+  });
+
   it('compiles channel message thread ids onto regular channel filters', () => {
     const ast = compileToAst(
       queryStateFrom({

@@ -258,6 +258,7 @@ async fn main() -> anyhow::Result<()> {
         CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     tracing::info!("initialized soup service");

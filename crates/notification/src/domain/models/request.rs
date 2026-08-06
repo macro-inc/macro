@@ -30,6 +30,7 @@ pub enum NotificationItemType {
     Call,
     Task,
     Github,
+    Reminder,
 }
 
 impl NotificationItemType {
@@ -44,6 +45,7 @@ impl NotificationItemType {
             Self::Call => "call",
             Self::Task => "task",
             Self::Github => "github",
+            Self::Reminder => "reminder",
         }
     }
 }

@@ -37,7 +37,9 @@ import {
   foldersFilter,
   inFolderFilter,
   notTaskFilter,
+  remindersFilter,
   searchSupportedFilter,
+  upcomingRemindersFilter,
 } from './entity';
 import { ENTITY_TYPE_FILTERS } from './entity-type';
 import {
@@ -93,6 +95,8 @@ export const SOUP_FILTERS = [
   companyStageFilter,
   emailAttachmentsFilter,
   inFolderFilter,
+  remindersFilter,
+  upcomingRemindersFilter,
   searchSupportedFilter,
   ...ENTITY_TYPE_FILTERS,
   ...TASK_STATUS_FILTERS,

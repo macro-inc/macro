@@ -51,6 +51,7 @@ import {
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
+  ENABLE_REMINDERS,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -81,6 +82,7 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -1011,6 +1013,17 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
+const REMINDERS_LINK: SidebarItem = {
+  id: 'reminders',
+  label: 'Reminders',
+  href: LIST_VIEW_PATHS.reminders,
+  icon: BellSimpleIcon,
+  // `r` is Calendar; `m` is free and the only other letter in "reminders" that
+  // is not already a sidebar destination.
+  hotkey: 'm',
+  hotkeyToken: TOKENS.sidebar.goTo.reminders,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Home, Getting
  * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
@@ -1039,6 +1052,17 @@ const buildSidebarLinks = (
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
+
+  if (ENABLE_REMINDERS()) {
+    // Directly below Activity, or below Inbox when Activity is off.
+    const anchorId = ENABLE_ACTIVITY ? 'activity' : 'inbox';
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [
+      ...links.slice(0, idx + 1),
+      REMINDERS_LINK,
       ...links.slice(idx + 1),
     ];
   }
@@ -1291,8 +1315,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ),
   });
 
+  // Ids, not the built list: this group is a fixed set, and everything else
+  // lives in the collapsible Workspace section. `findLink` drops ids that
+  // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity']
+    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

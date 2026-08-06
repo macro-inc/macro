@@ -890,6 +890,10 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         );
 
+    // Held by value here and behind an `Arc` in the router state: the impl is a
+    // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
+    let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
+
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         frecency_service,
@@ -898,6 +902,7 @@ async fn main() -> anyhow::Result<()> {
         call_record_query_service,
         crm_service.clone(),
         foreign_entity_service_for_soup,
+        reminders_service.clone(),
     ));
 
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
@@ -1006,8 +1011,6 @@ async fn main() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let reminders_service = Arc::new(RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())));
-
     // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
     // every minute; the sweep fans one message out per due firing, onto the
     // same queue, and every task in the pool delivers them in parallel.
@@ -1071,7 +1074,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         favorites_service,
         reminders_state: RemindersRouterState::new(
-            reminders_service,
+            Arc::new(reminders_service),
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

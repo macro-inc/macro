@@ -399,7 +399,8 @@ export type NotificationItemType =
   | 'chat'
   | 'call'
   | 'task'
-  | 'github';
+  | 'github'
+  | 'reminder';
 /**
  * The kind of entity to move.
  */

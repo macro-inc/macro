@@ -295,10 +295,13 @@ impl EntityItem {
                 created_by: record.created_by,
                 tags: resolve_applied_tags(&record.extra.properties, tag_map),
             },
-            // `entity_filter_ast` force-filters CrmCompany out — kept
-            // loud here so a contract break is obvious, not silent.
+            // `entity_filter_ast` force-filters CrmCompany and Reminder out —
+            // kept loud here so a contract break is obvious, not silent.
             SoupItem::CrmCompany(_) => {
                 unreachable!("ListEntities tool does not surface CrmCompany rows")
+            }
+            SoupItem::Reminder(_) => {
+                unreachable!("ListEntities tool does not surface Reminder rows")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -348,7 +351,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
-            | SoupItem::ForeignEntity(_) => return false,
+            | SoupItem::ForeignEntity(_)
+            | SoupItem::Reminder(_) => return false,
         };
         properties
             .iter()
@@ -548,6 +552,9 @@ impl ListEntities {
             // AI never sees one.
             crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
             foreign_entity_filter: self.foreign_entity_filter.clone(),
+            // Reminders are opt-in in Soup, so leaving this unset is already
+            // what keeps them out of the tool surface — no force-filter needed.
+            reminder_filter: None,
             properties_filter,
         };
 
@@ -620,6 +627,8 @@ impl ListEntities {
             } else {
                 Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
+            // Same as CrmCompany — no ItemType::Reminder to toggle against.
+            reminder_filter: ast.reminder_filter,
             properties_filter: ast.properties_filter,
         }
     }
