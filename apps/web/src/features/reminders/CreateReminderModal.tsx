@@ -77,6 +77,14 @@ export function CreateReminderModal() {
   );
 
   const submit = async (date: Date, target: EntityData) => {
+    // The options are filtered against the time the list was built, so one can
+    // slip into the past while the composer sits open. Re-check rather than
+    // let the API reject it with an opaque failure.
+    if (date.getTime() <= Date.now()) {
+      toast.failure('That time has already passed — pick another');
+      return;
+    }
+
     const description = reminderDescriptionFor(target);
     const entityType = reminderEntityType(target.type);
     closeReminderComposer();
