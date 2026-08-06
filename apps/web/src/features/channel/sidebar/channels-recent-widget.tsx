@@ -520,37 +520,32 @@ export const ChannelsRecentWidget = (props: {
           items={sectionItems()}
           headerWrapper={props.headerWrapper}
           headerMenu={(open) => (
-            <Tooltip
-              label="Toggle unread filter"
-              placement="top"
-              class={cn(
-                'rounded-full transition-opacity duration-100',
-                open
-                  ? 'pointer-events-none opacity-0 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100'
-                  : 'pointer-events-none opacity-0'
-              )}
-              disabled={!open}
-            >
-              <div
-                aria-hidden={!open}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
+            <Show when={open}>
+              <Tooltip
+                label="Toggle unread filter"
+                placement="top"
+                class="pointer-events-none rounded-full opacity-0 transition-opacity duration-100 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100"
               >
-                <ToggleSwitch
-                  checked={unreadOnly()}
-                  onChange={setUnreadOnly}
-                  size="xs"
-                  label={
-                    <span class="text-[11px] font-medium leading-none text-ink-extra-muted/60">
-                      Unread
-                    </span>
-                  }
-                  labelClass="flex items-center"
-                  controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
-                  class="flex-row-reverse gap-1 rounded-full px-1.5 py-1"
-                />
-              </div>
-            </Tooltip>
+                <div
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ToggleSwitch
+                    checked={unreadOnly()}
+                    onChange={setUnreadOnly}
+                    size="xs"
+                    label={
+                      <span class="text-[11px] font-medium leading-none text-ink-extra-muted/60">
+                        Unread
+                      </span>
+                    }
+                    labelClass="flex items-center"
+                    controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
+                    class="flex-row-reverse gap-1 rounded-full px-1.5 py-1"
+                  />
+                </div>
+              </Tooltip>
+            </Show>
           )}
           onOpenChange={() => props.onSectionOpenChange?.()}
         />
