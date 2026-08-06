@@ -79,8 +79,9 @@ async fn container_session_runs_and_logs_end_to_end() {
     });
 
     container.sends_ready();
-    agent.wait_for_requests(2).await;
+    agent.wait_for_requests(1).await;
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+    agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-container-test"));
     agent.wait_for_requests(3).await;
     send.await.unwrap().unwrap();
@@ -94,8 +95,8 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert_eq!(logs.len(), 6);
     assert!(matches!(logs[0].content, Message::ToServer(_)));
     assert!(matches!(logs[1].content, Message::ToRuntime(_)));
-    assert!(matches!(logs[2].content, Message::ToRuntime(_)));
-    assert!(matches!(logs[3].content, Message::ToServer(_)));
+    assert!(matches!(logs[2].content, Message::ToServer(_)));
+    assert!(matches!(logs[3].content, Message::ToRuntime(_)));
     assert!(matches!(logs[4].content, Message::ToServer(_)));
     assert!(matches!(logs[5].content, Message::ToRuntime(_)));
     assert_eq!(logs[5].user_id, Some(owner()));

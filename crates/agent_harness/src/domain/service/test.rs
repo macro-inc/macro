@@ -71,8 +71,9 @@ async fn complete_handshake(container: &ContainerMock) {
     let agent = container.agent();
     let already = agent.received_requests().len();
     container.sends_ready();
-    agent.wait_for_requests(already + 2).await;
+    agent.wait_for_requests(already + 1).await;
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+    agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
 }
 

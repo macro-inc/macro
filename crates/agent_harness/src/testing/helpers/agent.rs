@@ -80,11 +80,15 @@ impl FakeAgent {
     ///
     /// If the harness has not sent one.
     pub fn completes_initialize(&self, response: InitializeResponse) {
-        let id = self
-            .lock_progress()
-            .initializing
-            .take()
-            .expect("the harness has not sent initialize");
+        let id = {
+            let mut progress = self.lock_progress();
+            let id = progress
+                .initializing
+                .take()
+                .expect("the harness has not sent initialize");
+            progress.stage = Stage::Initialized;
+            id
+        };
         self.sends_reply(id, response);
     }
 
@@ -202,14 +206,13 @@ impl FakeAgent {
             let mut progress = self.lock_progress();
             match parse::<ClientRequest>(&request.method, &request.params) {
                 ClientRequest::InitializeRequest(_) => {
-                    progress.stage = Stage::Initialized;
                     progress.initializing = Some(request.id.clone());
                 }
                 ClientRequest::NewSessionRequest(_) | ClientRequest::LoadSessionRequest(_) => {
-                    assert_ne!(
+                    assert_eq!(
                         progress.stage,
-                        Stage::Fresh,
-                        "harness sent {} before initialize",
+                        Stage::Initialized,
+                        "harness sent {} before initialize completed",
                         request.method
                     );
                     progress.opening = Some(request.id.clone());

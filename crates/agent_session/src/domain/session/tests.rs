@@ -2,7 +2,7 @@
 //! tokio, no mocks, no waiting - `Token` is a plain integer.
 
 use agent_client_protocol::schema::v1::{
-    NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
+    InitializeResponse, NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
     SelectedPermissionOutcome, ToolCallUpdate, ToolCallUpdateFields,
 };
@@ -13,6 +13,7 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
+use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
@@ -40,7 +41,29 @@ fn frame(frame: RawJsonRpcMessage) -> Input<u32> {
     Input::Inbound(ToServerMessage::Acp(AcpMessage(frame)))
 }
 
-/// The answer to `session/new`, which the machine sends as its second request.
+fn initialized() -> Input<u32> {
+    frame(RawJsonRpcMessage::response(
+        request_id(0),
+        Ok(
+            serde_json::to_value(InitializeResponse::new(PROTOCOL_VERSION))
+                .expect("a serializable response"),
+        ),
+    ))
+}
+
+fn initialization_refused() -> Input<u32> {
+    frame(RawJsonRpcMessage::response(
+        request_id(0),
+        Err(agent_client_protocol::Error::internal_error()),
+    ))
+}
+
+fn begin_opening(machine: &mut SessionMachine<u32>) {
+    machine.handle(acp_ready());
+    machine.handle(initialized());
+}
+
+/// The answer to `session/new`, sent after initialization completes.
 fn session_opened(session_id: &'static str) -> Input<u32> {
     frame(RawJsonRpcMessage::response(
         RequestId::Str("agent_session:1".to_owned()),
@@ -86,15 +109,51 @@ fn a_command_while_booting_queues_silently() {
 }
 
 #[test]
-fn acp_ready_logs_then_sends_the_handshake() {
+fn acp_ready_logs_then_sends_initialize() {
     let mut machine = machine();
 
     let effects = machine.handle(acp_ready());
 
     assert!(matches!(effects[0], Effect::Log { .. }));
-    assert_eq!(sent_request_ids(&effects), [request_id(0), request_id(1)]);
-    assert_eq!(effects.len(), 3);
+    assert_eq!(sent_request_ids(&effects), [request_id(0)]);
+    assert_eq!(effects.len(), 2);
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn initialize_success_sends_session_new() {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+
+    let effects = machine.handle(initialized());
+
+    assert!(matches!(effects[0], Effect::Log { .. }));
+    assert_eq!(sent_request_ids(&effects), [request_id(1)]);
+    assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn refused_initialize_fails_the_queue_and_stops() {
+    let mut machine = machine();
+    machine.handle(command("doomed", 1));
+    machine.handle(acp_ready());
+
+    let effects = machine.handle(initialization_refused());
+
+    assert!(matches!(
+        effects[..],
+        [
+            Effect::Log { .. },
+            Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::Disconnected(_))
+            },
+            Effect::Stop {
+                reason: StopReason::InitializationRefused
+            },
+        ]
+    ));
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
 }
 
 #[test]
@@ -113,7 +172,7 @@ fn session_new_success_flushes_the_queue_positionally() {
     let mut machine = machine();
     machine.handle(command("first", 1));
     machine.handle(command("second", 2));
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
 
     let effects = machine.handle(session_opened("acp-42"));
 
@@ -146,7 +205,7 @@ fn session_new_success_flushes_the_queue_positionally() {
 #[test]
 fn a_live_command_sends_then_completes() {
     let mut machine = machine();
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
     machine.handle(session_opened("acp-42"));
 
     let effects = machine.handle(command("now", 7));
@@ -167,7 +226,7 @@ fn a_live_command_sends_then_completes() {
 fn queued_actions_carry_their_sender_onto_the_wire() {
     let mut machine = machine();
     machine.handle(command("first", 1));
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
 
     let effects = machine.handle(session_opened("acp-42"));
 
@@ -186,7 +245,7 @@ fn queued_actions_carry_their_sender_onto_the_wire() {
 fn a_refused_session_new_fails_the_queue_and_stops() {
     let mut machine = machine();
     machine.handle(command("doomed", 1));
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
 
     let effects = machine.handle(session_refused());
 
@@ -209,7 +268,7 @@ fn a_refused_session_new_fails_the_queue_and_stops() {
 #[test]
 fn an_unintelligible_session_new_answer_stops() {
     let mut machine = machine();
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
 
     let effects = machine.handle(frame(RawJsonRpcMessage::response(
         RequestId::Str("agent_session:1".to_owned()),
@@ -240,7 +299,7 @@ fn a_foreign_frame_while_handshaking_only_logs() {
 #[test]
 fn a_live_frame_only_logs() {
     let mut machine = machine();
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
     machine.handle(session_opened("acp-42"));
 
     let effects = machine.handle(frame(RawJsonRpcMessage::response(
@@ -288,7 +347,7 @@ fn a_permission_request_without_an_allow_option_is_cancelled() {
 
 fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutcome {
     let mut machine = machine();
-    machine.handle(acp_ready());
+    begin_opening(&mut machine);
     machine.handle(session_opened("acp-42"));
     let permission_id = RequestId::Str("agent:permission:0".to_owned());
     let (method, params) = RequestPermissionRequest::new(
@@ -383,6 +442,7 @@ fn every_inbound_is_logged_first() {
 
     for input in [
         acp_ready(),
+        initialized(),
         session_opened("acp-42"),
         frame(RawJsonRpcMessage::response(
             RequestId::Str("unrelated:0".to_owned()),
@@ -401,12 +461,13 @@ fn every_inbound_is_logged_first() {
 fn request_ids_never_repeat_across_the_connection() {
     let mut machine = machine();
     machine.handle(command("queued", 1));
-    let handshake = machine.handle(acp_ready());
+    let initialize = machine.handle(acp_ready());
+    let open = machine.handle(initialized());
     let flushed = machine.handle(session_opened("acp-42"));
     let live = machine.handle(command("live", 2));
 
     let mut ids = Vec::new();
-    for effects in [&handshake, &flushed, &live] {
+    for effects in [&initialize, &open, &flushed, &live] {
         ids.extend(sent_request_ids(effects));
     }
 

@@ -1,6 +1,7 @@
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, NewSessionRequest, NewSessionResponse, PromptRequest, SessionId,
+    InitializeRequest, InitializeResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
+    SessionId,
 };
 use tokio::sync::mpsc::unbounded_channel;
 
@@ -30,6 +31,7 @@ fn the_handshake_order_is_accepted() {
         &InitializeRequest::new(ProtocolVersion::V1),
         "initialize",
     ));
+    agent.completes_initialize(InitializeResponse::new(ProtocolVersion::V1));
     agent.deliver(request(&NewSessionRequest::new("/workspace"), "new"));
     agent.sends_reply(
         RequestId::Str("new".to_owned()),
@@ -61,6 +63,7 @@ fn a_prompt_before_session_new_is_answered_panics() {
         &InitializeRequest::new(ProtocolVersion::V1),
         "initialize",
     ));
+    agent.completes_initialize(InitializeResponse::new(ProtocolVersion::V1));
     agent.deliver(request(&NewSessionRequest::new("/workspace"), "new"));
 
     agent.deliver(request(

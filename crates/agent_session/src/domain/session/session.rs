@@ -3,9 +3,9 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    SelectedPermissionOutcome, SessionId,
+    InitializeRequest, InitializeResponse, NewSessionRequest, NewSessionResponse,
+    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, Response, SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -56,7 +56,9 @@ impl<Token> SessionMachine<Token> {
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
             SessionPhase::Booting => RuntimeStatus::Booting,
-            SessionPhase::Handshaking { .. } => RuntimeStatus::Handshaking,
+            SessionPhase::Initializing { .. } | SessionPhase::Opening { .. } => {
+                RuntimeStatus::Handshaking
+            }
             SessionPhase::Live { session_id } => RuntimeStatus::Live {
                 session_id: session_id.clone(),
             },
@@ -89,7 +91,9 @@ impl<Token> SessionMachine<Token> {
         token: Token,
     ) -> Vec<Effect<Token>> {
         let session_id = match &self.phase {
-            SessionPhase::Booting | SessionPhase::Handshaking { .. } => {
+            SessionPhase::Booting
+            | SessionPhase::Initializing { .. }
+            | SessionPhase::Opening { .. } => {
                 self.pending.push_back(PendingAction {
                     from,
                     action,
@@ -146,42 +150,20 @@ impl<Token> SessionMachine<Token> {
         effects
     }
 
-    /// Ready means handshakeable, not sendable: `initialize` and `session/new`
-    /// go out together, and queued actions keep waiting for the ACP session id.
+    /// Ready starts initialization; actions remain queued until `session/new` completes.
     fn begin_handshake(&mut self, effects: &mut Vec<Effect<Token>>) {
-        // A second ready report (or one on a live session) changes nothing.
         if !matches!(self.phase, SessionPhase::Booting) {
             return;
         }
 
-        let handshake = (|| -> std::result::Result<_, agent_client_protocol::Error> {
-            let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
-                .to_untyped_message()?
-                .into_parts();
-            let initialize = RawJsonRpcMessage::request(method, params, self.next_id())?;
-
-            let opened = self.next_id();
-            let (method, params) = NewSessionRequest::new(AGENT_WORKING_DIRECTORY)
-                .to_untyped_message()?
-                .into_parts();
-            let open = RawJsonRpcMessage::request(method, params, opened.clone())?;
-            Ok((initialize, open, opened))
-        })();
-
-        match handshake {
-            Ok((initialize, open, opened)) => {
+        match self.build_initialize_request() {
+            Ok((initialize, request_id)) => {
                 effects.push(Effect::Send {
                     from: None,
                     message: ToRuntimeMessage::Acp(AcpMessage(initialize)),
                 });
-                effects.push(Effect::Send {
-                    from: None,
-                    message: ToRuntimeMessage::Acp(AcpMessage(open)),
-                });
-                self.phase = SessionPhase::Handshaking { opened };
+                self.phase = SessionPhase::Initializing { request_id };
             }
-            // Building the handshake is pure serialization; failing it means
-            // this connection can never become live.
             Err(error) => self.die(
                 StopReason::HandshakeNotBuildable(error.to_string()),
                 effects,
@@ -195,15 +177,51 @@ impl<Token> SessionMachine<Token> {
             return;
         }
 
-        // Until the handshake answer arrives, ours is the only conversation.
-        let SessionPhase::Handshaking { opened } = &self.phase else {
+        match &self.phase {
+            SessionPhase::Initializing { request_id }
+                if frame.response_id() == Some(request_id) =>
+            {
+                self.on_initialized(&frame, effects);
+            }
+            SessionPhase::Opening { request_id } if frame.response_id() == Some(request_id) => {
+                self.on_session_opened(&frame, effects);
+            }
+            _ => {}
+        }
+    }
+
+    fn on_initialized(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
+        let RawJsonRpcMessage::Response(Response::Result { result, .. }) = &frame else {
+            self.die(StopReason::InitializationRefused, effects);
             return;
         };
-        if frame.response_id() != Some(opened) {
+        if let Err(error) = serde_json::from_value::<InitializeResponse>(result.clone()) {
+            self.die(
+                StopReason::InitializationUnintelligible(error.to_string()),
+                effects,
+            );
             return;
         }
 
-        let RawJsonRpcMessage::Response(Response::Result { result, .. }) = &frame else {
+        match self.build_new_session_request() {
+            Ok((open, request_id)) => {
+                effects.push(Effect::Send {
+                    from: None,
+                    message: ToRuntimeMessage::Acp(AcpMessage(open)),
+                });
+                self.phase = SessionPhase::Opening { request_id };
+            }
+            Err(error) => {
+                self.die(
+                    StopReason::HandshakeNotBuildable(error.to_string()),
+                    effects,
+                );
+            }
+        }
+    }
+
+    fn on_session_opened(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
+        let RawJsonRpcMessage::Response(Response::Result { result, .. }) = frame else {
             self.die(StopReason::SessionRefused, effects);
             return;
         };
@@ -222,6 +240,28 @@ impl<Token> SessionMachine<Token> {
             session_id: session_id.clone(),
         };
         self.flush(&session_id, effects);
+    }
+
+    fn build_initialize_request(
+        &mut self,
+    ) -> std::result::Result<(RawJsonRpcMessage, RequestId), agent_client_protocol::Error> {
+        let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
+            .to_untyped_message()?
+            .into_parts();
+        let request_id = self.next_id();
+        let request = RawJsonRpcMessage::request(method, params, request_id.clone())?;
+        Ok((request, request_id))
+    }
+
+    fn build_new_session_request(
+        &mut self,
+    ) -> std::result::Result<(RawJsonRpcMessage, RequestId), agent_client_protocol::Error> {
+        let (method, params) = NewSessionRequest::new(AGENT_WORKING_DIRECTORY)
+            .to_untyped_message()?
+            .into_parts();
+        let request_id = self.next_id();
+        let request = RawJsonRpcMessage::request(method, params, request_id.clone())?;
+        Ok((request, request_id))
     }
 
     /// Permission prompts require a client response. This autonomous agent has

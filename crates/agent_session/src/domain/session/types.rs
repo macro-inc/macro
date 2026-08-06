@@ -18,11 +18,15 @@ pub(super) struct PendingAction<Token> {
 pub(super) enum SessionPhase {
     /// The runtime has not reported its agent ready. Nothing may go out.
     Booting,
-    /// `initialize` and `session/new` are on the wire; actions keep queueing
-    /// because they need the [`SessionId`] the answer carries.
-    Handshaking {
-        /// The `session/new` request id, so its answer is recognisable.
-        opened: RequestId,
+    /// Waiting for the agent to acknowledge `initialize`.
+    Initializing {
+        /// Request id used to recognize the initialize response.
+        request_id: RequestId,
+    },
+    /// Waiting for the agent to create an ACP session.
+    Opening {
+        /// Request id used to recognize the `session/new` response.
+        request_id: RequestId,
     },
     Live {
         session_id: SessionId,
@@ -149,6 +153,10 @@ pub enum StopReason {
     /// The handshake could not even be serialized; the detail is the
     /// serializer's.
     HandshakeNotBuildable(String),
+    /// The agent refused `initialize`.
+    InitializationRefused,
+    /// The agent answered `initialize` with an invalid response.
+    InitializationUnintelligible(String),
     /// The agent refused `session/new`.
     SessionRefused,
     /// The agent answered `session/new` with something unintelligible; the
@@ -162,6 +170,13 @@ impl std::fmt::Display for StopReason {
             Self::Closed(reason) => reason.fmt(formatter),
             Self::HandshakeNotBuildable(detail) => {
                 write!(formatter, "could not build the acp handshake: {detail}")
+            }
+            Self::InitializationRefused => formatter.write_str("the agent refused initialize"),
+            Self::InitializationUnintelligible(detail) => {
+                write!(
+                    formatter,
+                    "the agent returned an invalid initialize response: {detail}"
+                )
             }
             Self::SessionRefused => formatter.write_str("the agent refused session/new"),
             Self::SessionUnintelligible(detail) => {
