@@ -71,8 +71,9 @@ pub trait RemindersRepo: Send + Sync + 'static {
     ///
     /// Deliberately separate from [`RemindersRepo::list_reminders`]: Soup pages
     /// on its own cursor and sorts descending, whereas the CRUD list keysets
-    /// ascending on `(next_run_at, created_at, id)`. Undecodable rows are
-    /// skipped, as they are there.
+    /// ascending on `(next_run_at, created_at, id)`. As in
+    /// [`RemindersRepo::list_reminders`], an undecodable row is skipped rather
+    /// than failing the whole read.
     ///
     /// An empty `ids`/`entities` slice means "no constraint", not "match none".
     fn list_reminders_for_soup(

@@ -1442,12 +1442,15 @@ export async function executeMarkEntitiesUndone(args: {
   );
 
   if (rejected) {
-    // Some reminders may have been un-completed even though the caller rolls
-    // every optimistic transaction back, so reconcile them against the server.
+    // `allSettled`, so some of these may have succeeded even though the caller
+    // rolls every optimistic transaction back. Reconcile both kinds against the
+    // server or their Soup rows keep the state the rollback restored — an
+    // unarchived thread would sit there still showing as done.
     invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+      ...emailIds.map((id) => invalidateSoupEntity(id)),
       ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
