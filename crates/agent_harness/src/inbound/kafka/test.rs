@@ -1,6 +1,6 @@
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionTopicEvent, ChannelEventMetadata, ChannelKind,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use channel_sender::ChannelSender;
@@ -31,8 +31,8 @@ fn message(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
     }
 }
 
-fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentSessionTopicEvent {
-    AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
         AgentBotMentionedEvent {
             bot_id: bot,
             message: message(sender),
@@ -40,8 +40,8 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentSessionTopicEve
     ))
 }
 
-fn channel_message(bot: BotId) -> AgentSessionTopicEvent {
-    AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
         kind: ChannelKind::DedicatedChannel,
@@ -51,7 +51,7 @@ fn channel_message(bot: BotId) -> AgentSessionTopicEvent {
 
 #[test]
 fn a_mention_for_our_bot_opens_a_session() {
-    let command = command_for(
+    let command = agent_trigger_to_harness_command(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
         BotId::TEST_A,
     )
@@ -73,15 +73,15 @@ fn a_threaded_mention_answers_into_its_thread() {
     let thread = Uuid::from_u128(9);
     let mut event = message(ChannelSender::new_from_user(user()));
     event.thread_id = Some(thread);
-    let event = AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
             message: event,
         },
     ));
 
-    let HarnessCommand::Open(open) =
-        command_for(event, BotId::TEST_A).expect("the mention should yield a command")
+    let HarnessCommand::Open(open) = agent_trigger_to_harness_command(event, BotId::TEST_A)
+        .expect("the mention should yield a command")
     else {
         panic!("a new-session event should open");
     };
@@ -91,7 +91,7 @@ fn a_threaded_mention_answers_into_its_thread() {
 #[test]
 fn a_foreign_bots_event_is_skipped() {
     assert_eq!(
-        command_for(
+        agent_trigger_to_harness_command(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
             BotId::TEST_B,
         )
@@ -99,7 +99,8 @@ fn a_foreign_bots_event_is_skipped() {
         Skipped::ForeignBot
     );
     assert_eq!(
-        command_for(channel_message(BotId::TEST_A), BotId::TEST_B).unwrap_err(),
+        agent_trigger_to_harness_command(channel_message(BotId::TEST_A), BotId::TEST_B)
+            .unwrap_err(),
         Skipped::ForeignBot
     );
 }
@@ -107,7 +108,7 @@ fn a_foreign_bots_event_is_skipped() {
 #[test]
 fn a_bot_authored_mention_is_skipped() {
     assert_eq!(
-        command_for(
+        agent_trigger_to_harness_command(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
             BotId::TEST_A,
         )
@@ -118,7 +119,7 @@ fn a_bot_authored_mention_is_skipped() {
 
 #[test]
 fn a_channel_message_forwards_to_its_session() {
-    let command = command_for(channel_message(BotId::TEST_A), BotId::TEST_A)
+    let command = agent_trigger_to_harness_command(channel_message(BotId::TEST_A), BotId::TEST_A)
         .expect("a channel event for our bot should yield a command");
 
     let HarnessCommand::Forward(forward) = command else {

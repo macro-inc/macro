@@ -6,10 +6,8 @@
 //! through the channel API. The composition root decides which
 //! `ChannelService` implementation (and side-effect stack) this wraps.
 //!
-//! The announcement links the session's dedicated channel as a plain app URL:
-//! the frontend has no inline channel-mention node yet (only user, group,
-//! document, contact, and date), so a URL is what renders today. When a
-//! channel chip exists, this is the one place that changes.
+//! The announcement links the session's dedicated channel with an inline
+//! channel mention.
 
 use std::sync::Arc;
 
@@ -21,6 +19,10 @@ use channels::domain::ports::ChannelService;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SessionAnnouncement;
 use crate::domain::ports::SessionAnnouncer;
+
+fn template_new_agent_session_response(session_channel_id: macro_uuid::Uuid) -> String {
+    format!("Agent session created! Channel: [[channel-mention;{session_channel_id}]]")
+}
 
 /// Posts session announcements as `bot_id` through a [`ChannelService`].
 pub struct ChannelAnnouncer<Channels> {
@@ -40,10 +42,7 @@ where
     Channels: ChannelService + Send + Sync + 'static,
 {
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
-        let content = format!(
-            "Agent session created! Channel: https://macro.com/app/channel/{}",
-            announcement.session_channel_id
-        );
+        let content = template_new_agent_session_response(announcement.session_channel_id);
 
         self.channels
             .post_message(

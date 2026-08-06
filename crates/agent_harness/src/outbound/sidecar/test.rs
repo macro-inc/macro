@@ -1,12 +1,17 @@
-use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::{PromptRequest, RequestId, SessionId};
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use tokio::net::{TcpListener, TcpStream};
 
 use super::*;
 
-/// One ACP frame, built the way the agent would send it.
+/// One ACP frame built from the protocol's typed request.
 fn frame() -> RawJsonRpcMessage {
-    serde_json::from_str(r#"{"jsonrpc":"2.0","id":1,"method":"session/prompt","params":{}}"#)
-        .expect("the fixture should be a valid acp frame")
+    let (method, params) = PromptRequest::new(SessionId::new("acp-test"), vec!["hello".into()])
+        .to_untyped_message()
+        .expect("the typed request should convert to an ACP message")
+        .into_parts();
+    RawJsonRpcMessage::request(method, params, RequestId::Number(1))
+        .expect("typed request params should produce a valid ACP frame")
 }
 
 /// Stand in for the sidecar: accept one WebSocket and hand back the transport

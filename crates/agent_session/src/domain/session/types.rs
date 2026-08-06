@@ -1,7 +1,6 @@
 //! The machine's vocabulary: phases, inputs, and effects.
 
-use agent_client_protocol::schema::v1::RequestId;
-use agent_runtime_protocol::domain::acp_id::AcpId;
+use agent_client_protocol::schema::v1::{RequestId, SessionId};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -20,28 +19,42 @@ pub(super) enum SessionPhase {
     /// The runtime has not reported its agent ready. Nothing may go out.
     Booting,
     /// `initialize` and `session/new` are on the wire; actions keep queueing
-    /// because they need the [`AcpId`] the answer carries.
+    /// because they need the [`SessionId`] the answer carries.
     Handshaking {
         /// The `session/new` request id, so its answer is recognisable.
         opened: RequestId,
     },
     Live {
-        acp: AcpId,
+        session_id: SessionId,
     },
     Dead,
 }
 
 /// Observable phase of a session connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeStatus {
     /// Waiting for the runtime to report its agent ready.
     Booting,
     /// The ACP handshake is in flight.
     Handshaking,
-    /// Actions flow immediately.
-    Live,
+    /// Actions flow immediately through this ACP session.
+    Live {
+        /// Session identifier chosen by the ACP agent.
+        session_id: SessionId,
+    },
     /// The connection is over; a fresh attach needs a fresh machine.
     Dead,
+}
+
+impl RuntimeStatus {
+    /// ACP session identifier when the runtime is live.
+    #[must_use]
+    pub fn session_id(&self) -> Option<&SessionId> {
+        match self {
+            Self::Live { session_id } => Some(session_id),
+            Self::Booting | Self::Handshaking | Self::Dead => None,
+        }
+    }
 }
 
 /// Why a connection is over, as observed by the shell.

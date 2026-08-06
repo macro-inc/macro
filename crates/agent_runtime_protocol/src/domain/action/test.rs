@@ -1,12 +1,12 @@
-use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock};
+use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock, SessionId};
 
 use super::*;
 
 #[test]
 fn a_prompt_becomes_a_session_prompt_request_for_the_acp_session() {
-    let acp = AcpId::new("acp-abc");
+    let session_id = SessionId::new("acp-abc");
     let translated = AgentAction::prompt("fix the flaky test")
-        .to_runtime(&acp, RequestId::Str("harness:prompt:0".to_owned()))
+        .to_runtime(&session_id, RequestId::Str("harness:prompt:0".to_owned()))
         .unwrap();
 
     let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = translated else {
@@ -22,7 +22,7 @@ fn a_prompt_becomes_a_session_prompt_request_for_the_acp_session() {
         panic!("a prompt translates to PromptRequest, got {parsed:?}");
     };
 
-    assert_eq!(parsed.session_id, acp.into());
+    assert_eq!(parsed.session_id, session_id);
     assert_eq!(parsed.prompt.len(), 1);
     let ContentBlock::Text(text) = &parsed.prompt[0] else {
         panic!("a prompt's content is text");

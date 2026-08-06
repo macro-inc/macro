@@ -11,11 +11,11 @@ use std::sync::Arc;
 
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::{HarnessCommand, command_for};
+use agent_harness::inbound::kafka::{HarnessCommand, agent_trigger_to_harness_command};
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
-    GithubToken as GithubTokenSecret,
+    GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -92,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
     let containers = DaytonaContainerManager::new(DaytonaSettings {
         api_url: config.daytona_api_url.clone(),
         api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
-        snapshot: config.daytona_snapshot.clone(),
+        snapshot: Snapshot::new(config.daytona_snapshot.clone()),
         github_token: GithubTokenSecret::new(config.github_token.clone()),
     });
 
@@ -191,7 +191,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                match command_for(event.event().event.clone(), bot_id) {
+                match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
                     Ok(HarnessCommand::Open(open)) => match harness.open(open).await {
                         Ok(id) => tracing::info!(session_id = %id, "opened an agent session"),
                         Err(error) => {

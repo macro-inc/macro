@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties\n            (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (\n            'ca1e0000-0000-0000-0000-000000000003',\n            ($1::uuid)::text,\n            'CALENDAR_EVENT',\n            $2,\n            '{\"type\":\"SelectOption\",\"value\":[\"00000001-0000-0000-0002-000000000002\"]}'::jsonb\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f7e3c832864db0f4d34143b38c1ff21fda4b7fe9bd9f946cfc924a319450589"
+}

@@ -5,10 +5,9 @@ use std::collections::VecDeque;
 use agent_client_protocol::schema::v1::{
     InitializeRequest, NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    SelectedPermissionOutcome,
+    SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::acp_id::AcpId;
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
@@ -24,6 +23,7 @@ use super::types::{
 };
 
 const REQUEST_PERMISSION_METHOD: &str = "session/request_permission";
+const INITIAL_REQUEST_NUM: u64 = 0;
 
 /// Protocol state for one connection of a session to an agent runtime.
 ///
@@ -42,7 +42,7 @@ impl<Token> SessionMachine<Token> {
         Self {
             id,
             phase: SessionPhase::Booting,
-            next_request: 0,
+            next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
         }
     }
@@ -57,16 +57,10 @@ impl<Token> SessionMachine<Token> {
         match &self.phase {
             SessionPhase::Booting => RuntimeStatus::Booting,
             SessionPhase::Handshaking { .. } => RuntimeStatus::Handshaking,
-            SessionPhase::Live { .. } => RuntimeStatus::Live,
+            SessionPhase::Live { session_id } => RuntimeStatus::Live {
+                session_id: session_id.clone(),
+            },
             SessionPhase::Dead => RuntimeStatus::Dead,
-        }
-    }
-
-    /// ACP session identifier, once the handshake has completed.
-    pub fn acp_id(&self) -> Option<&AcpId> {
-        match &self.phase {
-            SessionPhase::Live { acp } => Some(acp),
-            _ => None,
         }
     }
 
@@ -94,7 +88,7 @@ impl<Token> SessionMachine<Token> {
         action: AgentAction,
         token: Token,
     ) -> Vec<Effect<Token>> {
-        let acp = match &self.phase {
+        let session_id = match &self.phase {
             SessionPhase::Booting | SessionPhase::Handshaking { .. } => {
                 self.pending.push_back(PendingAction {
                     from,
@@ -103,7 +97,7 @@ impl<Token> SessionMachine<Token> {
                 });
                 return Vec::new();
             }
-            SessionPhase::Live { acp } => acp.clone(),
+            SessionPhase::Live { session_id } => session_id.clone(),
             SessionPhase::Dead => {
                 return vec![Effect::Complete {
                     token,
@@ -121,7 +115,7 @@ impl<Token> SessionMachine<Token> {
             token,
         });
         let mut effects = Vec::new();
-        self.flush(&acp, &mut effects);
+        self.flush(&session_id, &mut effects);
         effects
     }
 
@@ -153,7 +147,7 @@ impl<Token> SessionMachine<Token> {
     }
 
     /// Ready means handshakeable, not sendable: `initialize` and `session/new`
-    /// go out together, and queued actions keep waiting for the ACP id.
+    /// go out together, and queued actions keep waiting for the ACP session id.
     fn begin_handshake(&mut self, effects: &mut Vec<Effect<Token>>) {
         // A second ready report (or one on a live session) changes nothing.
         if !matches!(self.phase, SessionPhase::Booting) {
@@ -213,8 +207,8 @@ impl<Token> SessionMachine<Token> {
             self.die(StopReason::SessionRefused, effects);
             return;
         };
-        let acp: AcpId = match serde_json::from_value::<NewSessionResponse>(result.clone()) {
-            Ok(response) => response.session_id.into(),
+        let session_id = match serde_json::from_value::<NewSessionResponse>(result.clone()) {
+            Ok(response) => response.session_id,
             Err(error) => {
                 self.die(
                     StopReason::SessionUnintelligible(error.to_string()),
@@ -224,8 +218,10 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
-        self.phase = SessionPhase::Live { acp: acp.clone() };
-        self.flush(&acp, effects);
+        self.phase = SessionPhase::Live {
+            session_id: session_id.clone(),
+        };
+        self.flush(&session_id, effects);
     }
 
     /// Permission prompts require a client response. This autonomous agent has
@@ -283,10 +279,10 @@ impl<Token> SessionMachine<Token> {
     /// directly follows its [`Effect::Send`], so the shell aborting a batch
     /// mid-way strands no false completions - and an action that cannot be
     /// expressed as ACP fails alone, without taking the connection down.
-    fn flush(&mut self, acp: &AcpId, effects: &mut Vec<Effect<Token>>) {
+    fn flush(&mut self, session_id: &SessionId, effects: &mut Vec<Effect<Token>>) {
         while let Some(queued) = self.pending.pop_front() {
             let request_id = self.next_id();
-            match queued.action.to_runtime(acp, request_id) {
+            match queued.action.to_runtime(session_id, request_id) {
                 Ok(message) => {
                     effects.push(Effect::Send {
                         from: queued.from,

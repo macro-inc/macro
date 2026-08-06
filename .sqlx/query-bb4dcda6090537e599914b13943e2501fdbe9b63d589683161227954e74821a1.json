@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT title, canonical_source_kind,\n               (SELECT count(*) FROM calendar_event_sources WHERE event_id = $1) AS \"source_count!\"\n        FROM calendar_events\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "canonical_source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "bb4dcda6090537e599914b13943e2501fdbe9b63d589683161227954e74821a1"
+}

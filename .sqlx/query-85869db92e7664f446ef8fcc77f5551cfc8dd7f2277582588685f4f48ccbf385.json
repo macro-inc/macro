@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO frecency_aggregates (\n            entity_id, entity_type, user_id, event_count,\n            frecency_score, first_event, recent_events\n        )\n        VALUES ($1, 'calendar_event', $2, 1, 10, now(), '[]')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85869db92e7664f446ef8fcc77f5551cfc8dd7f2277582588685f4f48ccbf385"
+}

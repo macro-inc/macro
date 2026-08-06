@@ -6,40 +6,6 @@
 //! [`ToServerMessage`]/[`ToRuntimeMessage`] envelopes and a lifecycle event
 //! stream. This type is that step: it wraps and unwraps `Acp` variants, and
 //! originates the one [`SystemEvent`] the domain acts on.
-//!
-//! Shared by every provider: Daytona dials the sidecar through a preview URL
-//! and Namespace would through an ingress, but past the dial the protocol is
-//! identical, so this is written once.
-//!
-//! ## Where `AcpReady` comes from
-//!
-//! The sidecar never sends it, so it is synthesized here, once, as the first
-//! message any receiver sees. That is honest rather than a convenient lie: the
-//! sidecar spawns the agent process during the WebSocket upgrade and pipes its
-//! stdio before serving the connection, so a socket that finished connecting is
-//! a socket whose agent is running. A caller that reaches this constructor has
-//! also already waited for `/ping`.
-//!
-//! It matters that it is *first* rather than merely present:
-//! [`crate::domain::agent_sessions`] only begins the ACP handshake out of its
-//! `Booting` state, and a resumed session boots again, so every connection -
-//! including a reconnect to a sandbox that has been running for an hour - needs
-//! its own `AcpReady`. Because the queue is filled before the pump starts, no
-//! agent frame can overtake it.
-//!
-//! ## One message, one frame
-//!
-//! There is no buffering, splitting, or partial-line handling, because the
-//! sidecar does not stream bytes. It reads the agent's stdout with
-//! `BufReader::lines()` and sends each complete line as one WebSocket text
-//! message; WebSocket is message-oriented and tungstenite reassembles
-//! fragmented frames before yielding a `Message`. So every message that
-//! arrives is exactly one JSON value.
-//!
-//! The same holds outbound, with one wrinkle worth not re-learning: the sidecar
-//! appends the newline to the agent's stdin itself, so frames are sent *without*
-//! a trailing newline. Adding one here puts a blank line into the agent's stdin
-//! after every frame.
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError};

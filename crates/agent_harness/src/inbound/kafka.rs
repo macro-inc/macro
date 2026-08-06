@@ -7,7 +7,7 @@
 //! service binary.
 
 use agent_trigger::domain::broker_events::{
-    AgentSessionTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::BotId;
 
@@ -41,12 +41,12 @@ pub enum Skipped {
 
 /// Route one trigger event: a command for `our_bot`, or a reason it was
 /// skipped.
-pub fn command_for(
-    event: AgentSessionTopicEvent,
+pub fn agent_trigger_to_harness_command(
+    event: AgentTriggerTopicEvent,
     our_bot: BotId,
 ) -> Result<HarnessCommand, Skipped> {
     match event {
-        AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
             if mentioned.bot_id != our_bot {
                 return Err(Skipped::ForeignBot);
             }
@@ -69,7 +69,7 @@ pub fn command_for(
                 },
             }))
         }
-        AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
             ChannelEventMetadata {
                 bot_id,
                 session_id,

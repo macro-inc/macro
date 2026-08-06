@@ -41,10 +41,11 @@ fn frame(frame: RawJsonRpcMessage) -> Input<u32> {
 }
 
 /// The answer to `session/new`, which the machine sends as its second request.
-fn session_opened(acp: &'static str) -> Input<u32> {
+fn session_opened(session_id: &'static str) -> Input<u32> {
     frame(RawJsonRpcMessage::response(
         RequestId::Str("agent_session:1".to_owned()),
-        Ok(serde_json::to_value(NewSessionResponse::new(acp)).expect("a serializable response")),
+        Ok(serde_json::to_value(NewSessionResponse::new(session_id))
+            .expect("a serializable response")),
     ))
 }
 
@@ -134,10 +135,10 @@ fn session_new_success_flushes_the_queue_positionally() {
             },
         ]
     ));
-    assert_eq!(machine.status(), RuntimeStatus::Live);
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
     assert_eq!(machine.pending_count(), 0);
     assert_eq!(
-        machine.acp_id().map(ToString::to_string),
+        machine.status().session_id().map(ToString::to_string),
         Some("acp-42".to_owned())
     );
 }
@@ -248,7 +249,7 @@ fn a_live_frame_only_logs() {
     )));
 
     assert!(matches!(effects[..], [Effect::Log { .. }]));
-    assert_eq!(machine.status(), RuntimeStatus::Live);
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
 }
 
 #[test]

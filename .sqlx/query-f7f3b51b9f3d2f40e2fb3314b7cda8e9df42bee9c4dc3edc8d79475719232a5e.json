@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"createdAt\" as created_at, \"updatedAt\" as updated_at\n        FROM \"UserHistory\"\n        WHERE \"userId\" = $1 AND \"itemId\" = $2 AND \"itemType\" = 'project'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f7f3b51b9f3d2f40e2fb3314b7cda8e9df42bee9c4dc3edc8d79475719232a5e"
+}

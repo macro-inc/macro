@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            job.status AS job_status,\n            account.sync_status AS account_status,\n            link.needs_reauth,\n            link.last_sync_error_at\n        FROM calendar_backfill_jobs job\n        JOIN calendar_accounts account ON account.id = job.account_id\n        JOIN email_links link ON link.id = job.email_link_id\n        WHERE job.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_sync_error_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "afed14d65b93dc016921f0c3842f0ed3546a051fdefc397e0130e5617148d7d9"
+}

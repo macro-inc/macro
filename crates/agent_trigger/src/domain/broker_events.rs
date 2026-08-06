@@ -63,16 +63,16 @@ pub enum ExistingAgentSessionEvent {
 /// Events publishable to [`MacroAgentSessionsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-pub enum AgentSessionTopicEvent {
+pub enum AgentTriggerTopicEvent {
     /// Open a session.
-    #[serde(rename = "agent_session.new")]
+    #[serde(rename = "agent_trigger.new")]
     New(NewAgentSessionEvent),
     /// Feed a session that already exists.
-    #[serde(rename = "agent_session.existing")]
+    #[serde(rename = "agent_trigger.existing")]
     Existing(ExistingAgentSessionEvent),
 }
 
-impl TopicEvent for AgentSessionTopicEvent {
+impl TopicEvent for AgentTriggerTopicEvent {
     type Topic = MacroAgentSessionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
@@ -87,7 +87,7 @@ impl TopicEvent for AgentSessionTopicEvent {
 #[derive(Debug, Clone)]
 pub struct AgentSessionMacroEvent {
     key: String,
-    event: Event<AgentSessionTopicEvent>,
+    event: Event<AgentTriggerTopicEvent>,
 }
 
 impl AgentSessionMacroEvent {
@@ -97,7 +97,7 @@ impl AgentSessionMacroEvent {
         let bot_id = match &event {
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
         };
-        Self::new(bot_id, AgentSessionTopicEvent::New(event))
+        Self::new(bot_id, AgentTriggerTopicEvent::New(event))
     }
 
     /// Feed one of a bot's existing sessions.
@@ -106,24 +106,24 @@ impl AgentSessionMacroEvent {
         let bot_id = metadata.bot_id;
         Self::new(
             bot_id,
-            AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)),
+            AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)),
         )
     }
 
-    fn new(bot_id: BotId, event: AgentSessionTopicEvent) -> Self {
+    fn new(bot_id: BotId, event: AgentTriggerTopicEvent) -> Self {
         Self {
             key: bot_id.to_string(),
             event: Event::new(event),
         }
     }
 
-    fn with_event(key: String, event: Event<AgentSessionTopicEvent>) -> Self {
+    fn with_event(key: String, event: Event<AgentTriggerTopicEvent>) -> Self {
         Self { key, event }
     }
 }
 
 impl MacroEvent for AgentSessionMacroEvent {
-    type EventPayload = AgentSessionTopicEvent;
+    type EventPayload = AgentTriggerTopicEvent;
 
     fn key(&self) -> &str {
         &self.key
