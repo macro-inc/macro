@@ -1,4 +1,5 @@
 import type { ListView } from '@app/constants/list-views';
+import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import {
   CREATABLE_BLOCKS,
   runCreateAction,
@@ -18,6 +19,7 @@ import { hapticImpact } from '@core/mobile/haptics';
 import { openFilePicker } from '@core/util/upload';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import IconGear from '@icon/macro-gear.svg';
+import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -45,7 +47,7 @@ import { pressPulse } from './pressPulse';
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
 
-type DockId = ListView;
+type DockId = ListView | 'calendar';
 
 type MobileDockButtonProps = {
   icon: MobileTouchIconComponent;
@@ -105,26 +107,30 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-const MORE_VIEWS: {
-  id: ListView;
-  label: string;
-  icon: MobileTouchIconComponent;
-}[] = [
-  { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon },
-  { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
-  { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-  { id: 'documents', label: 'Documents', icon: AnimatedFileMdIcon },
-  { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
-  { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
-  { id: 'folders', label: 'Folders', icon: AnimatedFolderIcon },
-];
-
 function MoreViewsMenu(props: {
   isActive: (id: DockId) => boolean;
   onNavigate: (id: DockId) => void;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
+  const calendarUiEnabled = useCalendarUiFlag();
+
+  const moreViews = (): Array<{
+    id: DockId;
+    label: string;
+    icon: MobileTouchIconComponent;
+  }> => [
+    { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon },
+    { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
+    { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
+    { id: 'documents', label: 'Documents', icon: AnimatedFileMdIcon },
+    { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
+    ...(calendarUiEnabled()
+      ? [{ id: 'calendar' as const, label: 'Calendar', icon: WideCalendarIcon }]
+      : []),
+    { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
+    { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
+    { id: 'folders', label: 'Folders', icon: AnimatedFolderIcon },
+  ];
 
   return (
     <MobileTouchMenu
@@ -140,7 +146,7 @@ function MoreViewsMenu(props: {
           animateIcon: false,
           onSelect: toggleSettings,
         },
-        ...MORE_VIEWS.map((item) => ({
+        ...moreViews().map((item) => ({
           id: item.id,
           label: item.label,
           icon: item.icon,
