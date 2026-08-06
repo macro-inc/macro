@@ -149,6 +149,26 @@ export function CallChannelNameBadge(props: { channelName: string }) {
   );
 }
 
+/**
+ * What a reminder is about, beside its description.
+ *
+ * The same shape as {@link CallChannelNameBadge} — a reminder row is named by
+ * its own text, so this is the only thing saying which entity it points at.
+ * Presentational: the caller resolves the name and supplies the icon, since a
+ * reminder can reference any entity type.
+ */
+export function ReminderReferenceBadge(props: ParentProps<{ name: string }>) {
+  return (
+    <Badge
+      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
+      title={props.name}
+    >
+      {props.children}
+      <span class="truncate">{props.name}</span>
+    </Badge>
+  );
+}
+
 export function CallDurationBadge(props: { duration: string }) {
   return (
     <Badge class="normal-case text-ink-extra-muted border-edge-muted px-2">

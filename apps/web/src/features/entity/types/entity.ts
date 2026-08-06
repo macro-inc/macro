@@ -459,6 +459,12 @@ export const isCallEntity = (entity: EntityData): entity is CallEntity => {
   return entity.type === 'call';
 };
 
+export const isReminderEntity = (
+  entity: EntityData
+): entity is ReminderEntity => {
+  return entity.type === 'reminder';
+};
+
 export const isAutomationEntity = (
   entity: EntityData
 ): entity is AutomationEntity => {

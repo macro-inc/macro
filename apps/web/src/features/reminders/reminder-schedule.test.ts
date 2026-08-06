@@ -9,6 +9,7 @@ import {
   REMINDER_DESCRIPTION_MAX_LENGTH,
   reminderDefaultOptions,
   reminderDescriptionFor,
+  resolveReminderDescription,
 } from './reminder-schedule';
 
 const option = (id: string, date: Date): DateOption => ({
@@ -227,6 +228,63 @@ describe('reminderDescriptionFor', () => {
 
     expect([...result]).toHaveLength(REMINDER_DESCRIPTION_MAX_LENGTH);
     expect(result.endsWith('🔔')).toBe(true);
+  });
+});
+
+describe('resolveReminderDescription', () => {
+  const doc = (name: string) =>
+    ({ type: 'document', id: 'e1', name }) as EntityData;
+
+  it('uses what the user typed', () => {
+    expect(
+      resolveReminderDescription(
+        'Chase the countersignature',
+        doc('Q3 Contract')
+      )
+    ).toBe('Chase the countersignature');
+  });
+
+  it('trims what the user typed', () => {
+    expect(resolveReminderDescription('  Chase it  ', doc('Q3 Contract'))).toBe(
+      'Chase it'
+    );
+  });
+
+  // The step is optional and the API rejects an empty description, so skipping
+  // it has to land on the entity-derived name rather than send nothing.
+  it('falls back to the entity name when the field is skipped', () => {
+    expect(resolveReminderDescription('', doc('Q3 Contract'))).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  it('treats whitespace-only input as skipped', () => {
+    expect(resolveReminderDescription('   \n\t ', doc('Q3 Contract'))).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  // Skipping on an unnamed entity still has to produce something valid.
+  it('falls back through to the untitled label', () => {
+    expect(resolveReminderDescription('', doc('  '))).toBe('Untitled');
+  });
+
+  // The input's maxLength counts code units, so an emoji-heavy paste can still
+  // arrive over the service's character limit.
+  it('truncates over-long input by character', () => {
+    const long = '🔔'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 10);
+    const result = resolveReminderDescription(long, doc('Q3 Contract'));
+
+    expect([...result]).toHaveLength(REMINDER_DESCRIPTION_MAX_LENGTH);
+    expect(result.endsWith('🔔')).toBe(true);
+  });
+
+  it('leaves input exactly at the limit alone', () => {
+    const atLimit = 'x'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH);
+
+    expect(resolveReminderDescription(atLimit, doc('Q3 Contract'))).toBe(
+      atLimit
+    );
   });
 });
 

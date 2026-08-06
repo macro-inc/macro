@@ -129,12 +129,24 @@ function untitledName(type: EntityData['type']): string {
 }
 
 /**
- * The description for a reminder about `entity`.
+ * `text` trimmed and cut to the service's limit.
  *
- * Derived rather than typed, so this must always produce something the API will
- * accept: an unnamed entity falls back to how lists label it, and an over-long
- * name is truncated instead of rejected — there is no input for the user to fix.
- * Counts characters, not bytes, because the service's limit does.
+ * Counts characters, not code units, because the service's limit does — a
+ * naive `slice` would cut an emoji in half rather than drop it.
+ */
+function clampDescription(text: string): string {
+  const characters = [...text.trim()];
+  return characters.length > REMINDER_DESCRIPTION_MAX_LENGTH
+    ? characters.slice(0, REMINDER_DESCRIPTION_MAX_LENGTH).join('')
+    : characters.join('');
+}
+
+/**
+ * The description for a reminder about `entity`, derived from the entity alone.
+ *
+ * This is the fallback for a reminder the user did not describe, so it must
+ * always produce something the API will accept: an unnamed entity falls back to
+ * how lists label it, and an over-long name is truncated instead of rejected.
  */
 export function reminderDescriptionFor(entity: EntityData): string {
   // A thread row's `name` is the literal placeholder "Channel thread", so the
@@ -144,8 +156,19 @@ export function reminderDescriptionFor(entity: EntityData): string {
   const label =
     entity.type === 'channel_thread' ? entity.content?.trim() : undefined;
   const name = label || entity.name?.trim();
-  const characters = [...(name || untitledName(entity.type))];
-  return characters.length > REMINDER_DESCRIPTION_MAX_LENGTH
-    ? characters.slice(0, REMINDER_DESCRIPTION_MAX_LENGTH).join('')
-    : characters.join('');
+  return clampDescription(name || untitledName(entity.type));
+}
+
+/**
+ * What to store as a reminder's description: what the user typed, or the
+ * entity-derived name when they skipped the field.
+ *
+ * The composer's description step is optional but the API rejects an empty
+ * description, so blank input has to resolve to something rather than through.
+ */
+export function resolveReminderDescription(
+  input: string,
+  entity: EntityData
+): string {
+  return clampDescription(input) || reminderDescriptionFor(entity);
 }
