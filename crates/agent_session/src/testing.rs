@@ -10,6 +10,7 @@ use crate::domain::model::{
     SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
@@ -119,9 +120,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .cloned();
         let subthread = sessions
             .values()
-            .find(|session| {
-                session.channel_id != channel_id && matches_subthread(session)
-            })
+            .find(|session| session.channel_id != channel_id && matches_subthread(session))
             .cloned();
         Ok(match (dedicated, subthread) {
             (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {
@@ -156,7 +155,24 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<()> {
+        let event = match &log.content {
+            crate::domain::model::Message::ToServer(ToServerMessage::Event { event }) => {
+                Some(event.clone())
+            }
+            _ => None,
+        };
+        let session_id = log.agent_session_id;
         self.extend_log([log]);
+        if let Some(event) = event
+            && let Some(session) = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get_mut(&session_id)
+        {
+            session.status = SessionStatus::Event(event);
+            session.modified_at = chrono::Utc::now();
+        }
         Ok(())
     }
 

@@ -26,8 +26,7 @@ const serviceToCrate: Record<string, string> = {
 	"unfurl-service": "unfurl_service",
 	"email-service": "email_service",
 	"search-service": "search_service",
-	"scheduled-action": "scheduled_action",
-	"agent-proxy": "agent_proxy_service"
+	"scheduled-action": "scheduled_action"
 };
 
 const getRustWorkspaceDir = () =>

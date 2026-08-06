@@ -15,7 +15,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
 };
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -27,9 +27,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, CreateAgentSessionParams, Message, SessionStatus,
-};
+use crate::domain::model::{AgentSession, AgentSessionId, SessionStatus};
 use crate::domain::service::AgentSessionService;
 
 /// Shared state for the agent session router: the agent session service plus
@@ -74,16 +72,11 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
-        .route("/", post(create_agent_session_handler::<T, Auth>))
         .route(
             "/{session_id}",
             get(get_agent_session_handler::<T, Auth>)
                 .put(update_agent_session_handler::<T, Auth>)
                 .delete(delete_agent_session_handler::<T, Auth>),
-        )
-        .route(
-            "/{session_id}/events",
-            post(append_event_handler::<T, Auth>),
         )
         .with_state(state)
 }
@@ -91,8 +84,6 @@ where
 /// Transport error for agent session handlers.
 #[derive(Debug)]
 pub enum AgentSessionApiError {
-    /// The caller has no acting user to own the session's dedicated channel.
-    NoActingUser,
     /// The domain rejected the operation.
     Domain(AgentSessionError),
 }
@@ -106,11 +97,6 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
-            Self::NoActingUser => (
-                StatusCode::FORBIDDEN,
-                "creating an agent session requires an acting user",
-            )
-                .into_response(),
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "agent session request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
@@ -154,26 +140,6 @@ impl From<SessionStatusDto> for SessionStatus {
             SessionStatusDto::Disconnected => Self::Disconnected,
         }
     }
-}
-
-/// Request body for creating an agent session. The session's dedicated
-/// channel is created by the repo and owned by the caller's acting user.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateAgentSessionRequest {
-    /// The bot running the agent.
-    pub bot_id: Uuid,
-    /// The root message of the thread the session was created from, if it
-    /// was created by `@` in a thread.
-    pub thread_id: Option<Uuid>,
-    /// The exact message that invoked the bot, if any.
-    pub originating_message_id: Option<Uuid>,
-    /// Model slug.
-    pub model: String,
-    /// Harness slug.
-    pub harness: String,
-    /// The repository the session works with.
-    pub repo_url: String,
 }
 
 /// Request body for replacing an agent session. This is full-resource `PUT`
@@ -254,57 +220,6 @@ impl From<AgentSession> for AgentSessionResponse {
             modified_at: session.modified_at,
         }
     }
-}
-
-#[utoipa::path(
-    post,
-    path = "/agent-sessions",
-    tag = "agent-sessions",
-    operation_id = "create_agent_session",
-    request_body = CreateAgentSessionRequest,
-    responses(
-        (status = 200, body = AgentSessionResponse),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Create a new agent session with a dedicated channel owned by the caller's
-/// acting user.
-#[tracing::instrument(
-    skip(state, caller, req),
-    fields(actor = %caller.acting_entity()),
-    err(Debug)
-)]
-pub async fn create_agent_session_handler<
-    T: AgentSessionService,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
-    Json(req): Json<CreateAgentSessionRequest>,
-) -> Result<Json<AgentSessionResponse>, AgentSessionApiError> {
-    let owner_id = caller
-        .authorization
-        .acting_user()
-        .map(|user| user.macro_user_id.clone())
-        .ok_or(AgentSessionApiError::NoActingUser)?;
-
-    let session = state
-        .service
-        .create_session(CreateAgentSessionParams {
-            id: AgentSessionId::new(),
-            owner_id,
-            bot_id: BotId::new_from_uuid(req.bot_id),
-            thread_id: req.thread_id,
-            originating_message_id: req.originating_message_id,
-            model: req.model,
-            harness: req.harness,
-            repo_url: req.repo_url,
-        })
-        .await?;
-
-    Ok(Json(session.into()))
 }
 
 #[utoipa::path(
@@ -419,52 +334,6 @@ pub async fn delete_agent_session_handler<
     state
         .service
         .delete_session(AgentSessionId::new_from_uuid(session_id))
-        .await?;
-
-    Ok(StatusCode::OK)
-}
-
-#[utoipa::path(
-    post,
-    path = "/agent-sessions/{session_id}/events",
-    tag = "agent-sessions",
-    operation_id = "append_agent_session_event",
-    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
-    request_body(content = Object, description = "One protocol frame, tagged with `direction`/`content`"),
-    responses(
-        (status = 200),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Append a protocol event to a session's log.
-///
-/// The event is attributed to the caller's acting user when there is one: a
-/// directly authenticated user, or the user a bot acts for.
-#[tracing::instrument(
-    skip(state, caller, message),
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
-    err(Debug)
-)]
-pub async fn append_event_handler<T: AgentSessionService, Auth: MacroAuthorizationService>(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
-    Path(session_id): Path<Uuid>,
-    Json(message): Json<Message>,
-) -> Result<StatusCode, AgentSessionApiError> {
-    let user_id = caller
-        .authorization
-        .acting_user()
-        .map(|user| user.macro_user_id.clone());
-
-    state
-        .service
-        .append_event(AgentSessionLog {
-            agent_session_id: AgentSessionId::new_from_uuid(session_id),
-            user_id,
-            content: message,
-        })
         .await?;
 
     Ok(StatusCode::OK)

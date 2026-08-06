@@ -364,7 +364,18 @@ impl TryFrom<AgentSessionLogRow> for AgentSessionLog {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<()> {
+        let event_status = match &log.content {
+            Message::ToServer(ToServerMessage::Event { event }) => {
+                Some(SessionStatus::Event(event.clone()))
+            }
+            _ => None,
+        };
         let (direction, content) = message_columns(&log.content)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session log create")?;
         sqlx::query!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
@@ -376,9 +387,33 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             direction,
             content,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .context("failed to create agent session log entry")?;
+
+        if let Some(status) = event_status {
+            let (status, status_event_name) = status_columns(&status);
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET status = $2,
+                    status_event_name = $3,
+                    modified_at = now()
+                WHERE id = $1
+                "#,
+                log.agent_session_id.as_uuid(),
+                status,
+                status_event_name,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to update agent session status from log entry")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit agent session log create")?;
 
         Ok(())
     }
