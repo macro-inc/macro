@@ -132,7 +132,9 @@ export function EntityIcon(props: EntityIconProps) {
         .with({ type: 'foreign' }, () => 'default')
         .with({ type: 'crm_company' }, () => 'crm_company')
         // A reminder shows the icon of what it references; `fileType` comes
-        // resolved from the server so this stays synchronous.
+        // resolved from the server so this stays synchronous. With nothing
+        // referenced there is no such icon, so it falls back to the bell rather
+        // than to `default`, whose wide variant is the unknown-file glyph.
         .with({ type: 'reminder' }, ({ referencedEntity }) =>
           referencedEntity
             ? (itemToBlockName(
@@ -144,8 +146,8 @@ export function EntityIcon(props: EntityIconProps) {
                     : undefined,
                 },
                 true
-              ) ?? 'default')
-            : 'default'
+              ) ?? 'reminder')
+            : 'reminder'
         )
         .otherwise(() => 'default')
     );
