@@ -17,6 +17,7 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
   makeFavoriteAction,
   makeHideCompanyAction,
@@ -120,6 +121,7 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -284,6 +286,16 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    // Single-entity only: a reminder points at one thing.
+    if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'create-reminder',
+        label: 'Remind me about this',
+        hotkeyToken: TOKENS.entity.action.createReminder,
+        onClick: handle(createReminderAction.executeWithSoup),
       });
     }
 
