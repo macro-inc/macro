@@ -5,8 +5,12 @@ use cache_core::link_patch::{
     LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
 };
 use cache_core::query_inspection::{MAX_INSPECTED_VARIANTS, QueryInspection, QueryInspectionError};
-use cache_core::store::InMemoryStorage;
-use cache_core::value::EntityKey;
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
+    QueuedMutation,
+};
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{EntityKey, Record};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -76,6 +80,132 @@ async fn write_group(
         .write_query(None, query, Some("GroupViews"), variables, data, None)
         .await
         .unwrap();
+}
+
+#[derive(Clone, Debug)]
+struct OwnerOnlyStorage(InMemoryStorage);
+
+impl Storage for OwnerOnlyStorage {
+    type Error = std::convert::Infallible;
+
+    async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
+        assert!(
+            keys.iter()
+                .all(|key| key.is_root() || key.0 == "GraphqlUser:user-1"),
+            "variables-only inspection loaded a non-owner record: {keys:?}"
+        );
+        self.0.get_batch(keys).await
+    }
+
+    async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
+        self.0.put_batch(entries).await
+    }
+
+    async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
+        self.0.delete_batch(keys).await
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+        self.0.scan_records(type_names, after, limit).await
+    }
+
+    async fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> Result<MutationId, Self::Error> {
+        self.0.enqueue_mutation(entry).await
+    }
+
+    async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.0.load_mutation_queue().await
+    }
+
+    async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, Self::Error> {
+        self.0.claim_next_mutation(request).await
+    }
+
+    async fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<bool, Self::Error> {
+        self.0
+            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .await
+    }
+
+    async fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey, Record)>,
+    ) -> Result<bool, Self::Error> {
+        self.0.complete_mutation(id, claim, entries).await
+    }
+
+    async fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> Result<bool, Self::Error> {
+        self.0.discard_mutation(id, claim).await
+    }
+
+    async fn clear(&mut self) -> Result<(), Self::Error> {
+        self.0.clear().await
+    }
+}
+
+#[test]
+fn variants_only_recovers_pages_without_loading_items() {
+    block_on(async {
+        let mut writer = Engine::new(InMemoryStorage::new());
+        let initial_variables = initial(20);
+        let continuation_variables = continuation("cursor-1");
+        write_group(
+            &mut writer,
+            GROUP_QUERY,
+            &initial_variables,
+            &page("task-1", None),
+        )
+        .await;
+        write_group(
+            &mut writer,
+            GROUP_QUERY,
+            &continuation_variables,
+            &page("task-2", Some("cursor-2")),
+        )
+        .await;
+
+        let storage = OwnerOnlyStorage(writer.storage().clone());
+        let mut reopened = Engine::new(storage);
+        let variants = reopened
+            .inspect_query_variants(&inspection(GROUP_QUERY, &["user", "groupSoup"]))
+            .await
+            .unwrap();
+
+        assert_eq!(variants.len(), 2);
+        assert!(
+            variants
+                .iter()
+                .any(|variant| variant.variables == initial_variables)
+        );
+        assert!(
+            variants
+                .iter()
+                .any(|variant| variant.variables == continuation_variables)
+        );
+    });
 }
 
 #[test]

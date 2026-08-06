@@ -13,8 +13,9 @@ use crate::link_patch::{
 };
 use crate::normalize::{NormalizeError, RecordUpdates, normalize};
 use crate::query_inspection::{
-    CachedQueryInstance, OwnerResolution, QueryInspection, QueryInspectionError,
-    matches_variable_filters, prepare, recover_variants, resolve_owner, selected_result_value,
+    CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
+    QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
+    selected_result_value,
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -1091,15 +1092,14 @@ impl<S: Storage> Engine<S> {
         Ok(out)
     }
 
-    /// Enumerates cached argument variants of one generated query field.
+    /// Recovers cached argument variants of one generated query field.
     ///
-    /// Normalized owners, canonical field keys, cold records, and optimistic
-    /// layers remain internal. Every recovered variable set is read through
-    /// the ordinary denormalizer so inspection has cache-only read semantics.
-    pub async fn inspect_query(
+    /// Only records needed to resolve the selected field's normalized owner
+    /// are loaded. The recovered variants are not denormalized.
+    pub async fn inspect_query_variants(
         &mut self,
         inspection: &QueryInspection,
-    ) -> Result<Vec<CachedQueryInstance>, EngineError<S::Error>> {
+    ) -> Result<Vec<CachedQueryVariant>, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let operation = Self::document(&mut self.docs, &inspection.query)?
             .operation(inspection.operation_name.as_deref())?
@@ -1120,9 +1120,25 @@ impl<S: Storage> Engine<S> {
                 OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),
             }
         };
-        let variables = recover_variants(&owner, &prepared)?;
-        let mut instances = Vec::with_capacity(variables.len());
-        for variables in variables {
+        Ok(recover_variants(&owner, &prepared)?
+            .into_iter()
+            .map(|variables| CachedQueryVariant { variables })
+            .collect())
+    }
+
+    /// Enumerates and materializes cached argument variants of one generated
+    /// query field.
+    ///
+    /// Normalized owners, canonical field keys, cold records, and optimistic
+    /// layers remain internal. Every recovered variable set is read through
+    /// the ordinary denormalizer so inspection has cache-only read semantics.
+    pub async fn inspect_query(
+        &mut self,
+        inspection: &QueryInspection,
+    ) -> Result<Vec<CachedQueryInstance>, EngineError<S::Error>> {
+        let variants = self.inspect_query_variants(inspection).await?;
+        let mut instances = Vec::with_capacity(variants.len());
+        for CachedQueryVariant { variables } in variants {
             if !matches_variable_filters(&variables, &inspection.variable_filters) {
                 continue;
             }

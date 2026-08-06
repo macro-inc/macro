@@ -39,6 +39,14 @@ pub struct QueryInspection {
 /// One cached argument variant reconstructed as generated query variables.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CachedQueryVariant {
+    /// Variables recovered from the selected field's normalized arguments.
+    pub variables: serde_json::Map<String, Json>,
+}
+
+/// One materialized cached argument variant.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CachedQueryInstance {
     /// Variables recovered from the selected field's normalized arguments.
     pub variables: serde_json::Map<String, Json>,
