@@ -2,16 +2,10 @@ use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock};
 
 use super::*;
 
-fn prompt(text: &str) -> AgentAction {
-    AgentAction::Prompt(AgentPromptAction {
-        prompt: text.to_owned(),
-    })
-}
-
 #[test]
 fn a_prompt_becomes_a_session_prompt_request_for_the_acp_session() {
     let acp = AcpId::new("acp-abc");
-    let translated = prompt("fix the flaky test")
+    let translated = AgentAction::prompt("fix the flaky test")
         .to_runtime(&acp, RequestId::Str("harness:prompt:0".to_owned()))
         .unwrap();
 

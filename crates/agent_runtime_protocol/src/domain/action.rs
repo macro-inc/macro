@@ -41,6 +41,13 @@ pub enum AgentAction {
 }
 
 impl AgentAction {
+    /// Ask the agent to work on a text prompt.
+    pub fn prompt(prompt: impl Into<String>) -> Self {
+        Self::Prompt(AgentPromptAction {
+            prompt: prompt.into(),
+        })
+    }
+
     /// Translate into the ACP request that performs this action in `acp`.
     pub fn to_runtime(
         &self,
