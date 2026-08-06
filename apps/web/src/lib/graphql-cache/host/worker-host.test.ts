@@ -38,9 +38,11 @@ describe('createWorkerCacheHost', () => {
 
   it('round-trips generated query inspection through the worker protocol', async () => {
     const requests: unknown[] = [];
-    const instances = [
-      { variables: { input: { initial: { limit: 20 } } }, value: { bins: [] } },
-    ];
+    const variants = [{ variables: { input: { initial: { limit: 20 } } } }];
+    const instances = variants.map((variant) => ({
+      ...variant,
+      value: { bins: [] },
+    }));
     class FakeSharedWorker {
       port = {
         onmessage: null as ((event: MessageEvent) => void) | null,
@@ -54,7 +56,12 @@ describe('createWorkerCacheHost', () => {
               data: {
                 id: request.id,
                 ok: true,
-                result: request.kind === 'inspect-query' ? instances : null,
+                result:
+                  request.kind === 'inspect-query'
+                    ? instances
+                    : request.kind === 'inspect-query-variants'
+                      ? variants
+                      : null,
               },
             } as MessageEvent);
           });
@@ -63,16 +70,34 @@ describe('createWorkerCacheHost', () => {
     }
     vi.stubGlobal('SharedWorker', FakeSharedWorker);
     const host = createWorkerCacheHost({ scope: 'scope-1' });
-    const request = {
+    const variantRequest = {
       query:
         'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
       operationName: 'Views',
       path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
+    const request = {
+      ...variantRequest,
       variableFilters: [
         { input: { initial: { groupBy: { field: 'PROPERTY' } } } },
       ],
     };
 
+    await expect(host.inspectQueryVariants(variantRequest)).resolves.toEqual(
+      variants
+    );
+    expect(requests).toContainEqual(
+      expect.objectContaining({
+        kind: 'inspect-query-variants',
+        ...variantRequest,
+      })
+    );
+    expect(
+      requests.find(
+        (candidate) =>
+          (candidate as { kind?: string }).kind === 'inspect-query-variants'
+      )
+    ).not.toHaveProperty('variableFilters');
     await expect(host.inspectQuery(request)).resolves.toEqual(instances);
     expect(requests).toContainEqual(
       expect.objectContaining({ kind: 'inspect-query', ...request })

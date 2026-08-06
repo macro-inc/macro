@@ -187,29 +187,42 @@ describe('createTauriCacheHost', () => {
     );
   });
 
-  it('inspects generated query variants through the native command', async () => {
-    const instances = [
-      {
-        variables: { input: { initial: { limit: 20 } } },
-        value: { bins: [] },
-      },
-    ];
+  it('inspects generated query variants through the native commands', async () => {
+    const variants = [{ variables: { input: { initial: { limit: 20 } } } }];
+    const instances = variants.map((variant) => ({
+      ...variant,
+      value: { bins: [] },
+    }));
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_inspect_query' ? instances : null
+        command === 'graphql_cache_inspect_query'
+          ? instances
+          : command === 'graphql_cache_inspect_query_variants'
+            ? variants
+            : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const request = {
+    const variantRequest = {
       query:
         'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
       operationName: 'Views',
       path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
+    const request = {
+      ...variantRequest,
       variableFilters: [
         { input: { initial: { groupBy: { field: 'PROPERTY' } } } },
       ],
     };
 
+    await expect(host.inspectQueryVariants(variantRequest)).resolves.toEqual(
+      variants
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_inspect_query_variants',
+      variantRequest
+    );
     await expect(host.inspectQuery(request)).resolves.toEqual(instances);
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_inspect_query',

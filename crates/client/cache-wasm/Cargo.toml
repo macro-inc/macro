@@ -2,7 +2,7 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.3.1"
+version = "0.3.2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

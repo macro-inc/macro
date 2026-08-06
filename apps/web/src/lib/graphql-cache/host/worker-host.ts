@@ -5,6 +5,7 @@
 
 import {
   type CachedQueryInstanceWire,
+  type CachedQueryVariantWire,
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
@@ -26,6 +27,7 @@ import type {
   CacheReadArgs,
   CacheWriteArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './types';
 
 type Pending = {
@@ -140,7 +142,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (
         msg.kind === 'read' ||
         msg.kind === 'read-records' ||
-        msg.kind === 'inspect-query'
+        msg.kind === 'inspect-query' ||
+        msg.kind === 'inspect-query-variants'
       ) {
         entry.timer = setTimeout(() => {
           if (pending.delete(id)) {
@@ -225,6 +228,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         revalidations: args.revalidations,
         createdAtMs: Date.now(),
       })) as OptimisticWriteResult;
+    },
+
+    async inspectQueryVariants(
+      args: InspectQueryVariantsArgs
+    ): Promise<CachedQueryVariantWire[]> {
+      await ready;
+      return (await request({
+        kind: 'inspect-query-variants',
+        query: args.query,
+        operationName: args.operationName,
+        path: args.path,
+      })) as CachedQueryVariantWire[];
     },
 
     async inspectQuery(

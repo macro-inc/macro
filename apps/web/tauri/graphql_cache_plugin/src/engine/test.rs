@@ -170,6 +170,25 @@ fn query_inspection_serializes_generated_variables_and_value() {
 }
 
 #[test]
+fn query_variant_inspection_serializes_only_generated_variables() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+
+    let variants = block_on(handle.inspect_query_variants(
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        vec!["user".to_string(), "soup".to_string()],
+    ))
+    .unwrap();
+    assert_eq!(variants.len(), 1);
+    assert_eq!(variants[0].variables, variables());
+    assert_eq!(
+        serde_json::to_value(&variants).unwrap(),
+        serde_json::json!([{"variables": {"input": {"limit": 1}}}])
+    );
+}
+
+#[test]
 fn registered_op_is_affected_by_later_writes() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);
