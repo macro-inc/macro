@@ -1,0 +1,1 @@
+//! Gmail contact capability implementation.

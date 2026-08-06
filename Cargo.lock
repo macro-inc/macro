@@ -5071,6 +5071,7 @@ dependencies = [
  "chrono",
  "gmail_client",
  "html-escape",
+ "http 1.4.0",
  "lol_html",
  "mail-builder",
  "mailparse",

@@ -1,0 +1,1 @@
+//! Gmail message capability implementation.

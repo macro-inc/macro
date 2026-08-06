@@ -1,0 +1,1 @@
+//! Gmail attachment capability implementation.

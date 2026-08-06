@@ -13,6 +13,7 @@ outbound-gmail = [
   "dep:base64",
   "dep:gmail_client",
   "dep:html-escape",
+  "dep:http",
   "dep:lol_html",
   "dep:mailparse",
   "dep:regex",
@@ -27,6 +28,7 @@ base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
 gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { version = "0.2", optional = true }
+http = { workspace = true, optional = true }
 lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
 mailparse = { version = "0.16.1", optional = true }

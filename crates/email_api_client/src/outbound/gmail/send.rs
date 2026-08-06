@@ -1,0 +1,1 @@
+//! Gmail send capability implementation.

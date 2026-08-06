@@ -8,3 +8,6 @@ pub mod domain;
 /// Provider-specific outbound adapters.
 #[cfg(feature = "outbound-gmail")]
 pub mod outbound;
+
+#[cfg(feature = "outbound-gmail")]
+pub use outbound::gmail::GmailApiClientRepository;
