@@ -1908,6 +1908,10 @@ async fn descending_frecency_is_accepted() {
 
     let response = router.oneshot(request).await.unwrap();
 
-    assert_ne!(response.status(), StatusCode::BAD_REQUEST);
+    // The mock service always errors, so the 500 is the harness rather than the
+    // guard — pinned instead of loosely asserting "not 400" so a genuine
+    // regression to some other status is caught. Reaching the service at all is
+    // the actual claim: the guard let this combination through.
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(inner_counter.lock().unwrap().len(), 1);
 }
