@@ -224,9 +224,13 @@ struct GithubCommentResponse {
     html_url: Option<String>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    // Review-thread linkage; GitHub only returns these for review comments.
+    // Review-thread linkage and diff anchor; GitHub only returns these for
+    // review comments.
     in_reply_to_id: Option<u64>,
     pull_request_review_id: Option<u64>,
+    path: Option<String>,
+    line: Option<u64>,
+    original_line: Option<u64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -599,6 +603,9 @@ impl GithubCommentResponse {
             source: source.to_string(),
             in_reply_to_id: self.in_reply_to_id,
             pull_request_review_id: self.pull_request_review_id,
+            path: self.path,
+            line: self.line,
+            original_line: self.original_line,
         }
     }
 }
@@ -623,6 +630,9 @@ impl GithubReviewResponse {
             source: "review".to_string(),
             in_reply_to_id: None,
             pull_request_review_id: None,
+            path: None,
+            line: None,
+            original_line: None,
         })
     }
 }

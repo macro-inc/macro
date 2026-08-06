@@ -8,6 +8,9 @@ import type { GithubPullRequestCommentAuthorAssociation } from './githubPullRequ
 import type { GithubPullRequestCommentAuthorLogin } from './githubPullRequestCommentAuthorLogin';
 import type { GithubPullRequestCommentCreatedAt } from './githubPullRequestCommentCreatedAt';
 import type { GithubPullRequestCommentInReplyToId } from './githubPullRequestCommentInReplyToId';
+import type { GithubPullRequestCommentLine } from './githubPullRequestCommentLine';
+import type { GithubPullRequestCommentOriginalLine } from './githubPullRequestCommentOriginalLine';
+import type { GithubPullRequestCommentPath } from './githubPullRequestCommentPath';
 import type { GithubPullRequestCommentPullRequestReviewId } from './githubPullRequestCommentPullRequestReviewId';
 import type { GithubPullRequestCommentUpdatedAt } from './githubPullRequestCommentUpdatedAt';
 import type { GithubPullRequestCommentUrl } from './githubPullRequestCommentUrl';
@@ -35,6 +38,21 @@ thread. Only ever present on `review_comment` sources.
    * @minimum 0
    */
   inReplyToId?: GithubPullRequestCommentInReplyToId;
+  /**
+   * The line in the current diff the comment is anchored to. Cleared by
+GitHub when later commits outdate the comment's diff.
+   * @minimum 0
+   */
+  line?: GithubPullRequestCommentLine;
+  /**
+   * The line the comment was originally anchored to, kept even when the
+diff has since changed.
+   * @minimum 0
+   */
+  originalLine?: GithubPullRequestCommentOriginalLine;
+  /** The repository-relative file path the review comment is anchored to.
+Only ever present on `review_comment` sources. */
+  path?: GithubPullRequestCommentPath;
   /**
    * The id of the pull request review this comment was submitted with.
 Only ever present on `review_comment` sources.

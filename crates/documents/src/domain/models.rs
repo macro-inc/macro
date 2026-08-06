@@ -143,6 +143,18 @@ pub struct GithubPullRequestComment {
     /// Only ever present on `review_comment` sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request_review_id: Option<u64>,
+    /// The repository-relative file path the review comment is anchored to.
+    /// Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// The line in the current diff the comment is anchored to. Cleared by
+    /// GitHub when later commits outdate the comment's diff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u64>,
+    /// The line the comment was originally anchored to, kept even when the
+    /// diff has since changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_line: Option<u64>,
 }
 
 /// A check run associated with a GitHub pull request.

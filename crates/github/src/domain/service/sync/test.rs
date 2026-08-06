@@ -1440,6 +1440,9 @@ fn pull_request_comment(id: u64, body: &str, source: &str) -> GithubPullRequestC
         source: source.to_string(),
         in_reply_to_id: None,
         pull_request_review_id: None,
+        path: None,
+        line: None,
+        original_line: None,
     }
 }
 
