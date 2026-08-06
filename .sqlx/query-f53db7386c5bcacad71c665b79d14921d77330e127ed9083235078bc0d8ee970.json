@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1 FROM entity_access\n            WHERE entity_id = $1\n              AND entity_type = 'document'\n              AND source_id = $2\n              AND source_type = 'team'\n        ) as \"exists!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f53db7386c5bcacad71c665b79d14921d77330e127ed9083235078bc0d8ee970"
+}

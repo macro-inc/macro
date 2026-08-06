@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n            VALUES ($1, 'document', $2, 'team', $3)\n            ON CONFLICT (entity_id, entity_type, source_id, source_type)\n                WHERE granted_from_project_id IS NULL\n                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e0d56c9e8fecdbbd5ca1853876f9bf94f8980710a99f36274ab20bd75514a52"
+}

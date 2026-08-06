@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"DocumentProcessResult\" (\"documentId\", \"content\", \"jobType\")\n        SELECT $1, content, 'pdf_preprocess' FROM \"DocumentProcessResult\"\n        WHERE \"documentId\" = $2 and \"jobType\" = 'pdf_preprocess'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3463e587c615fd82082c41897c917aef97239bcdd408c928caffed0d69c21613"
+}

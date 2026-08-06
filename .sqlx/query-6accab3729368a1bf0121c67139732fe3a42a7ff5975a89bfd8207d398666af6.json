@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM \"RolesOnUsers\" ru\n                JOIN \"RolesOnPermissions\" rp ON ru.\"roleId\" = rp.\"roleId\"\n                WHERE ru.\"userId\" = $1 AND rp.\"permissionId\" = $2\n            ) AS \"has_permission!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_permission!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6accab3729368a1bf0121c67139732fe3a42a7ff5975a89bfd8207d398666af6"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM processing_ai_projections\n            WHERE ai_projection_id = $1 AND target_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "72d0d313bd1d5d5ca355eca5ea3234dbd95d889530db194e055debddb4f1267e"
+}
