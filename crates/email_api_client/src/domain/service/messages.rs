@@ -93,6 +93,28 @@ where
             .list_threads(&access_token, limit, next_page_token, label_ids)
             .await
     }
+
+    /// Applies provider label additions and removals to one message.
+    pub async fn modify_message_labels(
+        &self,
+        link_id: Uuid,
+        provider_message_id: &str,
+        labels_to_add: &[String],
+        labels_to_remove: &[String],
+    ) -> Result<(), EmailApiError> {
+        let access_token = self
+            .prepare(link_id, ApiOperationKind::ModifyMessageLabels)
+            .await?;
+
+        self.repository
+            .modify_message_labels(
+                &access_token,
+                provider_message_id,
+                labels_to_add,
+                labels_to_remove,
+            )
+            .await
+    }
 }
 
 #[cfg(test)]

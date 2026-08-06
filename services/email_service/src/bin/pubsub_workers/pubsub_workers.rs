@@ -462,20 +462,14 @@ async fn main() -> anyhow::Result<()> {
     for worker in gmail_ops_workers {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
-        let gmail_client_gmail_ops = gmail_client.clone();
         let email_api_gmail_ops = email_api_live.clone();
-        let auth_service_client_gmail_ops = auth_service_client.clone();
-        let redis_client_gmail_ops = redis_client.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
             email_service::pubsub::gmail_ops::worker::run_worker_with_cancellation(
                 db_gmail_ops,
                 worker,
                 sqs_client_gmail_ops,
-                gmail_client_gmail_ops,
                 email_api_gmail_ops,
-                auth_service_client_gmail_ops,
-                redis_client_gmail_ops,
                 false,
                 cancellation_token,
             )
@@ -491,20 +485,14 @@ async fn main() -> anyhow::Result<()> {
     for worker in gmail_ops_retry_workers {
         let db_gmail_ops = db.clone();
         let sqs_client_gmail_ops = sqs_client.clone();
-        let gmail_client_gmail_ops = gmail_client.clone();
         let email_api_gmail_ops = email_api_live.clone();
-        let auth_service_client_gmail_ops = auth_service_client.clone();
-        let redis_client_gmail_ops = redis_client.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
             email_service::pubsub::gmail_ops::worker::run_worker_with_cancellation(
                 db_gmail_ops,
                 worker,
                 sqs_client_gmail_ops,
-                gmail_client_gmail_ops,
                 email_api_gmail_ops,
-                auth_service_client_gmail_ops,
-                redis_client_gmail_ops,
                 true,
                 cancellation_token,
             )

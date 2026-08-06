@@ -17,6 +17,19 @@ where
 
         self.repository.list_labels(&access_token, link_id).await
     }
+
+    /// Deletes a provider label.
+    pub async fn delete_label(
+        &self,
+        link_id: Uuid,
+        provider_label_id: &str,
+    ) -> Result<(), EmailApiError> {
+        let access_token = self.prepare(link_id, ApiOperationKind::DeleteLabel).await?;
+
+        self.repository
+            .delete_label(&access_token, provider_label_id)
+            .await
+    }
 }
 
 #[cfg(test)]

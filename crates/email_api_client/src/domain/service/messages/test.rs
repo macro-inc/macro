@@ -15,6 +15,7 @@ enum MessageCall {
     MessageIdsForThread(String),
     Thread(Uuid, String),
     Threads(u32, Option<String>, Vec<String>),
+    ModifyLabels(String, Vec<String>, Vec<String>),
 }
 
 #[derive(Clone, Default)]
@@ -111,12 +112,19 @@ impl MailboxMessageClient for MessageClient {
 
     async fn modify_message_labels(
         &self,
-        _: &AccessToken,
-        _: &str,
-        _: &[String],
-        _: &[String],
+        access_token: &AccessToken,
+        message_id: &str,
+        labels_to_add: &[String],
+        labels_to_remove: &[String],
     ) -> Result<(), EmailApiError> {
-        unreachable!()
+        Err(self.record(
+            access_token,
+            MessageCall::ModifyLabels(
+                message_id.to_string(),
+                labels_to_add.to_vec(),
+                labels_to_remove.to_vec(),
+            ),
+        ))
     }
 }
 
@@ -201,6 +209,24 @@ fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
         |service, link_id| {
             block_on(service.list_threads(link_id, 50, Some("next-page"), &["inbox", "starred"]))
                 .map(|_| ())
+        },
+    );
+    assert_call(
+        ApiOperationKind::ModifyMessageLabels,
+        |_| {
+            MessageCall::ModifyLabels(
+                "message".into(),
+                vec!["starred".into()],
+                vec!["unread".into()],
+            )
+        },
+        |service, link_id| {
+            block_on(service.modify_message_labels(
+                link_id,
+                "message",
+                &["starred".into()],
+                &["unread".into()],
+            ))
         },
     );
 }
