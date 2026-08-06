@@ -1,6 +1,16 @@
-import { createUrqlMutation } from '@app/lib/urql-solid';
+import {
+  createUrqlInfiniteQuery,
+  createUrqlMutation,
+  type UrqlInfiniteQueryResult,
+} from '@app/lib/urql-solid';
+import type { UnifiedNotification } from '@notifications/types';
 import {
   type NotificationUpdateOperation,
+  type SoupInput,
+  type SoupNotificationFieldsFragment,
+  SoupNotificationsDocument,
+  type SoupNotificationsQuery,
+  type SoupNotificationsQueryVariables,
   UpdateNotificationsDocument,
   type UpdateNotificationsMutation,
   type UpdateNotificationsMutationVariables,
@@ -8,6 +18,122 @@ import {
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { executeGraphqlUpdateNotifications } from '@service-storage/graphql-update-notifications';
 import { CombinedError } from '@urql/core';
+import type { Accessor } from 'solid-js';
+
+const DEFAULT_NOTIFICATION_LIMIT = 20;
+const MAX_NOTIFICATION_LIMIT = 500;
+
+function normalizeLimit(limit?: number): number {
+  return limit && limit > 0 && limit <= MAX_NOTIFICATION_LIMIT
+    ? limit
+    : DEFAULT_NOTIFICATION_LIMIT;
+}
+
+/** Maps one GraphQL notification fragment to the shared UI shape. */
+export function mapGraphqlNotification(
+  record: SoupNotificationFieldsFragment
+): UnifiedNotification {
+  return {
+    id: record.id,
+    notification_event_type: record.eventType,
+    notification_metadata:
+      record.metadata as UnifiedNotification['notification_metadata'],
+    entity_id: record.entityId,
+    entity_type:
+      record.entityType.toLowerCase() as UnifiedNotification['entity_type'],
+    sent: record.sent,
+    done: record.done,
+    created_at: record.createdAt,
+    viewed_at: record.viewedAt,
+    updated_at: record.updatedAt,
+    sender_id: record.senderId,
+  };
+}
+
+function soupInput(cursor: string | null, limit: number): SoupInput {
+  return cursor
+    ? { continuation: { cursor, expand: true } }
+    : {
+        initial: {
+          expand: true,
+          limit,
+          sortMethod: 'UPDATED_AT',
+        },
+      };
+}
+
+/** Flattens and deduplicates notifications returned across Soup entity pages. */
+export function selectGraphqlNotifications(
+  pages: SoupNotificationsQuery[],
+  done = false
+): UnifiedNotification[] {
+  const notificationsById = new Map<string, UnifiedNotification>();
+  for (const page of pages) {
+    for (const entity of page.user.soup.items) {
+      for (const record of entity.notifications) {
+        if (record.done === done && !notificationsById.has(record.id)) {
+          notificationsById.set(record.id, mapGraphqlNotification(record));
+        }
+      }
+    }
+  }
+
+  return [...notificationsById.values()].sort((left, right) => {
+    const leftTimestamp = Date.parse(left.created_at);
+    const rightTimestamp = Date.parse(right.created_at);
+    const timestampOrder =
+      (Number.isNaN(rightTimestamp) ? 0 : rightTimestamp) -
+      (Number.isNaN(leftTimestamp) ? 0 : leftTimestamp);
+    return timestampOrder || left.id.localeCompare(right.id);
+  });
+}
+
+/** Live notification query projected from the regular GraphQL Soup query. */
+export type GraphqlNotificationsQuery = UrqlInfiniteQueryResult<
+  SoupNotificationsQuery,
+  SoupNotificationsQueryVariables,
+  string | null,
+  UnifiedNotification[]
+>;
+
+/** Arguments accepted by the GraphQL notification query. */
+export type GraphqlNotificationsQueryArgs = {
+  limit?: number;
+  done?: boolean;
+};
+
+/** Reactive options accepted by the GraphQL notification query. */
+export type GraphqlNotificationsQueryOptions = { enabled?: boolean };
+
+/** Creates a regular paginated urql query for Soup notification fragments. */
+export function createGraphqlNotificationsQuery(
+  args: Accessor<GraphqlNotificationsQueryArgs>,
+  options?: Accessor<GraphqlNotificationsQueryOptions>
+): GraphqlNotificationsQuery {
+  const query = createUrqlInfiniteQuery<
+    SoupNotificationsQuery,
+    SoupNotificationsQueryVariables,
+    string | null,
+    UnifiedNotification[]
+  >(() => {
+    const queryArgs = args();
+    const limit = normalizeLimit(queryArgs.limit);
+    return {
+      query: SoupNotificationsDocument,
+      client: getGraphqlSoupClient(),
+      initialPageParam: null,
+      variables: (cursor) => ({ input: soupInput(cursor, limit) }),
+      getNextPageParam: (lastPage) => lastPage.user.soup.nextCursor,
+      enabled: options?.().enabled !== false,
+      requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
+      select: ({ pages }) =>
+        selectGraphqlNotifications(pages, queryArgs.done ?? false),
+    };
+  });
+
+  return query;
+}
 
 /** Variables accepted by the transport-neutral notification mutation facade. */
 export type UpdateNotificationsInput = {

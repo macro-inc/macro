@@ -14,23 +14,29 @@ import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
   optimisticInsertNotification,
+  type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
+  useUserNotificationsQuery,
 } from '../user-notifications';
 
 const {
   createGraphqlMutationMock,
+  createGraphqlQueryMock,
   executeGraphqlMutationMock,
   graphqlSoupEnabledMock,
   restMarkDoneMock,
   restMarkSeenMock,
+  restUserNotificationsMock,
   restMarkUndoneMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
+  createGraphqlQueryMock: vi.fn(),
   executeGraphqlMutationMock: vi.fn(),
   graphqlSoupEnabledMock: vi.fn(() => true),
   restMarkDoneMock: vi.fn(),
   restMarkSeenMock: vi.fn(),
+  restUserNotificationsMock: vi.fn(),
   restMarkUndoneMock: vi.fn(),
 }));
 
@@ -40,7 +46,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: {
-    userNotifications: vi.fn(),
+    userNotifications: restUserNotificationsMock,
     bulkGetUserNotificationsByEventItemId: vi.fn(),
     bulkMarkNotificationAsDone: restMarkDoneMock,
     bulkMarkNotificationAsSeen: restMarkSeenMock,
@@ -51,6 +57,7 @@ vi.mock('@service-notification/client', () => ({
 }));
 
 vi.mock('../graphql/user-notifications', () => ({
+  createGraphqlNotificationsQuery: createGraphqlQueryMock,
   createGraphqlUpdateNotificationsMutation: createGraphqlMutationMock,
 }));
 
@@ -102,6 +109,19 @@ type GraphqlMutationOptions = {
 
 beforeEach(() => {
   graphqlSoupEnabledMock.mockReturnValue(true);
+  restUserNotificationsMock.mockResolvedValue(
+    ok({ items: [], next_cursor: null })
+  );
+  createGraphqlQueryMock.mockReturnValue({
+    data: [],
+    error: null,
+    isLoading: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: vi.fn(async () => undefined),
+    refetch: vi.fn(async () => undefined),
+  });
   createGraphqlMutationMock.mockImplementation(
     (options: GraphqlMutationOptions) => {
       let isPending = false;
@@ -234,6 +254,73 @@ function renderWithClient(Component: () => JSX.Element): () => void {
     container.remove();
   };
 }
+
+describe('useUserNotificationsQuery transport facade', () => {
+  beforeEach(() => {
+    testQueryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+  });
+
+  afterEach(() => {
+    testQueryClient.clear();
+  });
+
+  it('reads active notifications from the GraphQL query', () => {
+    const graphqlNotification = createMockNotification({ id: 'graphql-1' });
+    createGraphqlQueryMock.mockReturnValue({
+      data: [graphqlNotification],
+      error: null,
+      isLoading: false,
+      isFetching: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(async () => undefined),
+      refetch: vi.fn(async () => undefined),
+    });
+    let query: UserNotificationsQuery | undefined;
+
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 500 }));
+      return <div />;
+    });
+
+    expect(query?.transport).toBe('graphql');
+    expect(query?.data).toEqual([graphqlNotification]);
+    const [queryArgs, queryOptions] = createGraphqlQueryMock.mock.calls.at(-1)!;
+    expect(queryArgs()).toEqual({ limit: 500 });
+    expect(queryOptions()).toEqual({ enabled: true });
+    dispose();
+  });
+
+  it('keeps done-history pagination on REST', () => {
+    let query: UserNotificationsQuery | undefined;
+
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 50, done: true }));
+      return <div />;
+    });
+
+    expect(query?.transport).toBe('rest');
+    dispose();
+  });
+
+  it('falls back to REST while GraphQL Soup is disabled', () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    let query: UserNotificationsQuery | undefined;
+
+    const dispose = renderWithClient(() => {
+      query = useUserNotificationsQuery(() => ({ limit: 500 }));
+      return <div />;
+    });
+
+    expect(query?.transport).toBe('rest');
+    dispose();
+  });
+});
 
 describe('notification realtime status updates', () => {
   beforeEach(() => {
