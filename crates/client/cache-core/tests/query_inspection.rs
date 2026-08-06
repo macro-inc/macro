@@ -108,9 +108,9 @@ impl Storage for OwnerOnlyStorage {
     async fn scan_records(
         &self,
         type_names: &[String],
-        after: Option<&EntityKey>,
+        after: Option<&EntityKey<'static>>,
         limit: usize,
-    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
         self.0.scan_records(type_names, after, limit).await
     }
 

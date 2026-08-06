@@ -13,6 +13,7 @@ use crate::query_path::{
 use crate::value::{CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 use thiserror::Error;
 
@@ -58,20 +59,20 @@ pub enum LinkOperation {
     Remove {
         /// Normalized entity key to remove.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
     },
     /// Removes every occurrence and inserts one reference at the front.
     PrependUnique {
         /// Normalized entity key to prepend.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
     },
 }
 
 impl LinkOperation {
-    fn entity_key(&self) -> &EntityKey {
+    fn entity_key(&self) -> EntityKey<'_> {
         match self {
-            Self::Remove { entity_key } | Self::PrependUnique { entity_key } => entity_key,
+            Self::Remove { entity_key } | Self::PrependUnique { entity_key } => entity_key.borrow(),
         }
     }
 }
@@ -131,7 +132,7 @@ pub enum LinkPatchError {
     InvalidEntityKey(String),
     /// The selected normalized record is absent.
     #[error("link update record `{0}` is missing")]
-    MissingParent(EntityKey),
+    MissingParent(EntityKey<'static>),
     /// The selected record field is absent.
     #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
@@ -220,16 +221,16 @@ fn validate_entrypoint(
     Ok(variables)
 }
 
-fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
+fn validate_entity_key<'a>(key: EntityKey<'a>) -> Result<(), LinkPatchError> {
     let Some((typename, value)) = key.0.split_once(':') else {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     };
     let valid_name = !typename.is_empty()
         && typename.chars().enumerate().all(|(index, ch)| {
             ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit())
         });
     if !valid_name || value.is_empty() || value.chars().any(char::is_whitespace) {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     }
     Ok(())
 }
@@ -285,7 +286,7 @@ fn apply_one(
         .get(&resolved.field_key)
         .cloned()
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: resolved.parent_entity_key.0.clone(),
+            parent: resolved.parent_entity_key.0.to_string(),
             field: resolved.field_key.clone(),
         })?;
     let target = traverse(&mut field_value, &resolved.path)?;
@@ -324,7 +325,7 @@ fn apply_one(
 
 #[derive(Debug)]
 struct ResolvedTarget {
-    parent_entity_key: EntityKey,
+    parent_entity_key: EntityKey<'static>,
     field_key: FieldKey,
     path: Vec<LinkPathSegment>,
 }
@@ -335,7 +336,7 @@ struct ResolvedTarget {
 pub fn missing_patch_record(
     effective: &HashMap<EntityKey, Record>,
     patch: &OptimisticLinkPatch,
-) -> Option<EntityKey> {
+) -> Option<EntityKey<'static>> {
     match resolve_target(effective, patch) {
         Err(LinkPatchError::MissingParent(key)) => Some(key),
         _ => None,
@@ -386,7 +387,7 @@ fn resolve_from_record(
         .fields
         .get(&storage_key)
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: owner.0.clone(),
+            parent: owner.0.to_string(),
             field: storage_key.clone(),
         })?;
     let named_type = selected_type(concrete, selected)?;
@@ -407,7 +408,7 @@ fn resolve_from_record(
 
 struct ValueCursor<'a> {
     value: &'a CacheValue,
-    owner: EntityKey,
+    owner: EntityKey<'static>,
     anchor_field: FieldKey,
     relative_path: Vec<LinkPathSegment>,
     type_name: &'a str,

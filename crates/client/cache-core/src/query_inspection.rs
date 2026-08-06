@@ -96,15 +96,15 @@ pub(crate) struct PreparedInspection {
 }
 
 /// The effective owner record and final selected field.
-pub(crate) struct InspectionOwner {
-    pub fields: BTreeMap<String, CacheValue>,
-    pub field: FieldNode,
+pub(crate) struct InspectionOwner<'a> {
+    pub fields: &'a BTreeMap<String, CacheValue>,
+    pub field: &'a FieldNode,
 }
 
 /// Result of resolving the owner through currently loaded effective records.
-pub(crate) enum OwnerResolution {
-    Owner(InspectionOwner),
-    NeedRecord(EntityKey),
+pub(crate) enum OwnerResolution<'a> {
+    Owner(InspectionOwner<'a>),
+    NeedRecord(EntityKey<'a>),
     Absent,
 }
 
@@ -182,11 +182,11 @@ pub(crate) fn prepare(
 }
 
 /// Resolves the record/object that owns the final selected field.
-pub(crate) fn resolve_owner(
-    records: &HashMap<EntityKey, Record>,
-    operation: &Operation,
-    path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
+pub(crate) fn resolve_owner<'a>(
+    records: &'a HashMap<EntityKey, Record>,
+    operation: &'a Operation,
+    path: &'a [String],
+) -> Result<OwnerResolution<'a>, QueryInspectionError> {
     resolve_record_owner(
         records,
         &EntityKey::root(),
@@ -196,13 +196,13 @@ pub(crate) fn resolve_owner(
     )
 }
 
-fn resolve_record_owner(
-    records: &HashMap<EntityKey, Record>,
-    key: &EntityKey,
-    declared_type: &str,
-    selections: &[Selection],
-    path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
+fn resolve_record_owner<'a>(
+    records: &'a HashMap<EntityKey, Record>,
+    key: &'a EntityKey,
+    declared_type: &'a str,
+    selections: &'a [Selection],
+    path: &'a [String],
+) -> Result<OwnerResolution<'a>, QueryInspectionError> {
     let Some(record) = records.get(key) else {
         return Ok(OwnerResolution::NeedRecord(key.clone()));
     };
@@ -210,21 +210,21 @@ fn resolve_record_owner(
     resolve_fields_owner(records, &record.fields, concrete, selections, path)
 }
 
-fn resolve_fields_owner(
-    records: &HashMap<EntityKey, Record>,
-    fields: &BTreeMap<String, CacheValue>,
-    concrete: &str,
-    selections: &[Selection],
-    path: &[String],
-) -> Result<OwnerResolution, QueryInspectionError> {
+fn resolve_fields_owner<'a>(
+    records: &'a HashMap<EntityKey, Record>,
+    fields: &'a BTreeMap<String, CacheValue>,
+    concrete: &'a str,
+    selections: &'a [Selection],
+    path: &'a [String],
+) -> Result<OwnerResolution<'a>, QueryInspectionError> {
     let response_key = &path[0];
     let Some(field) = selected_field(selections, concrete, response_key) else {
         return Ok(OwnerResolution::Absent);
     };
     if path.len() == 1 {
         return Ok(OwnerResolution::Owner(InspectionOwner {
-            fields: fields.clone(),
-            field: field.clone(),
+            fields: fields,
+            field: field,
         }));
     }
 

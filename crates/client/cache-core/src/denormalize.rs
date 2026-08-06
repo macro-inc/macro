@@ -17,17 +17,17 @@ use thiserror::Error;
 /// Synchronous view over records available right now (hot tier + any
 /// batch-fetched records).
 pub trait RecordSource {
-    fn get(&self, key: &EntityKey) -> Option<&Record>;
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record>;
 }
 
-impl RecordSource for std::collections::BTreeMap<EntityKey, Record> {
-    fn get(&self, key: &EntityKey) -> Option<&Record> {
+impl RecordSource for std::collections::BTreeMap<EntityKey<'static>, Record> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
         std::collections::BTreeMap::get(self, key)
     }
 }
 
-impl RecordSource for std::collections::HashMap<EntityKey, Record> {
-    fn get(&self, key: &EntityKey) -> Option<&Record> {
+impl RecordSource for std::collections::HashMap<EntityKey<'static>, Record> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
         std::collections::HashMap::get(self, key)
     }
 }
@@ -48,9 +48,12 @@ pub enum ReadOutcome {
     /// All selected data present.
     Complete(Json),
     /// Some records weren't in the [`RecordSource`]; fetch these and retry.
-    NeedRecords(BTreeSet<EntityKey>),
+    NeedRecords(BTreeSet<EntityKey<'static>>),
     /// A record exists but a selected field was never written → miss.
-    Miss { entity: EntityKey, field: String },
+    Miss {
+        entity: EntityKey<'static>,
+        field: String,
+    },
 }
 
 /// Attempts to answer `op` from `source`. `deps` accumulates every entity
@@ -59,7 +62,7 @@ pub fn denormalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey>,
+    deps: &mut BTreeSet<EntityKey<'static>>,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record(
         &EntityKey::root(),
@@ -73,12 +76,12 @@ pub fn denormalize(
 
 /// Projects one normalized record through a fragment selection.
 pub fn denormalize_record(
-    key: &EntityKey,
+    key: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey>,
+    deps: &mut BTreeSet<EntityKey<'static>>,
 ) -> Result<ReadOutcome, DenormalizeError> {
     let mut walk = Walk {
         variables,
@@ -107,10 +110,10 @@ pub fn denormalize_record(
 struct Walk<'a, S: RecordSource> {
     variables: &'a serde_json::Map<String, Json>,
     source: &'a S,
-    deps: &'a mut BTreeSet<EntityKey>,
-    missing_records: BTreeSet<EntityKey>,
+    deps: &'a mut BTreeSet<EntityKey<'static>>,
+    missing_records: BTreeSet<EntityKey<'static>>,
     /// First field-level miss encountered.
-    miss: Option<(EntityKey, String)>,
+    miss: Option<(EntityKey<'static>, String)>,
 }
 
 impl<'a, S: RecordSource> Walk<'a, S> {
@@ -118,7 +121,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
     /// already determined to be incomplete (missing record / miss noted).
     fn read_record(
         &mut self,
-        key: &EntityKey,
+        key: &EntityKey<'static>,
         type_name: &str,
         selections: &[Selection],
     ) -> Result<Option<Json>, DenormalizeError> {
@@ -136,7 +139,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
     /// Reads selected fields out of a record's or embedded object's map.
     fn read_fields(
         &mut self,
-        owner: &EntityKey,
+        owner: &EntityKey<'static>,
         fields: &std::collections::BTreeMap<String, CacheValue>,
         concrete: &str,
         selections: &[Selection],
@@ -179,7 +182,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
 
     fn read_value(
         &mut self,
-        owner: &EntityKey,
+        owner: &EntityKey<'static>,
         field: &FieldNode,
         named_type: &str,
         value: &CacheValue,

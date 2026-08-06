@@ -11,8 +11,8 @@ pub type OpId = u64;
 
 #[derive(Debug, Default)]
 pub struct DepIndex {
-    by_op: HashMap<OpId, BTreeSet<EntityKey>>,
-    by_key: HashMap<EntityKey, HashSet<OpId>>,
+    by_op: HashMap<OpId, BTreeSet<EntityKey<'static>>>,
+    by_key: HashMap<EntityKey<'static>, HashSet<OpId>>,
 }
 
 impl DepIndex {
@@ -21,7 +21,7 @@ impl DepIndex {
     }
 
     /// Replaces the dependency set of an active operation.
-    pub fn set_op_deps(&mut self, op: OpId, deps: BTreeSet<EntityKey>) {
+    pub fn set_op_deps(&mut self, op: OpId, deps: BTreeSet<EntityKey<'static>>) {
         self.remove_op(op);
         for key in &deps {
             self.by_key.entry(key.clone()).or_default().insert(op);
@@ -46,7 +46,7 @@ impl DepIndex {
     /// Active operations depending on any of `keys`.
     pub fn ops_for_keys<'a>(
         &self,
-        keys: impl IntoIterator<Item = &'a EntityKey>,
+        keys: impl IntoIterator<Item = &'a EntityKey<'static>>,
     ) -> BTreeSet<OpId> {
         let mut out = BTreeSet::new();
         for key in keys {
@@ -77,7 +77,7 @@ mod tests {
     use super::*;
 
     fn key(s: &str) -> EntityKey {
-        EntityKey(s.to_string())
+        EntityKey(s.into())
     }
 
     #[test]
