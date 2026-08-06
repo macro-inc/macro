@@ -200,10 +200,9 @@ async fn handle_refresh(
     if let Err(e) = sync_contacts(
         link,
         &ctx.db,
-        &ctx.gmail_client,
+        &ctx.email_api,
         &ctx.sqs_client,
         &ctx.macro_event_broker,
-        gmail_access_token,
     )
     .await
     {

@@ -1,22 +1,20 @@
+use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload,
     JobScopedPayload,
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 
 /// This step is invoked by ListThreads for each thread being backfilled.
 /// Creates the thread object in the database, fetches the message ids for the thread
 /// from the gmail api, and sends a BackfillMessage message for each message_id.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn backfill_thread(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<BackfillThreadPayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
@@ -45,31 +43,12 @@ pub async fn backfill_thread(
         return Ok(());
     }
 
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::ThreadsGet,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
     // fetch all message_ids of the thread
-    let message_ids = match ctx
-        .gmail_client
-        .get_message_ids_for_thread(access_token, &thread_provider_id)
+    let message_ids = ctx
+        .email_api
+        .get_message_ids_for_thread(link.id, &thread_provider_id)
         .await
-    {
-        Ok(ids) => ids,
-        Err(error) => {
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::Error::new(error).context(format!(
-                    "Gmail API failed to get message IDs for thread {}",
-                    thread_provider_id
-                )),
-            }));
-        }
-    };
+        .map_err(|error| map_email_api_error(error, "Failed to get provider thread message IDs"))?;
 
     ctx.redis_client
         .init_backfill_thread_progress(scope.job_id, &thread_provider_id, message_ids.len() as i32)

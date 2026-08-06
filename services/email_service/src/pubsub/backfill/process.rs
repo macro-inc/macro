@@ -85,35 +85,28 @@ async fn inner_process_message(
 ) -> Result<(), ProcessingError> {
     match &data.backfill_operation {
         BackfillOperation::Init(scope) => {
-            let Some(JobContext {
-                link,
-                backfill_job,
-                access_token,
-            }) = fetch_job_context(ctx, scope, false).await?
+            let Some(JobContextNoToken { link, backfill_job }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            init::init_backfill(ctx, &access_token, scope, &link, &backfill_job).await
+            init::init_backfill(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::ListThreads(scope) => {
-            let Some(JobContext {
-                link,
-                backfill_job,
-                access_token,
-            }) = fetch_job_context(ctx, scope, false).await?
+            let Some(JobContextNoToken { link, backfill_job }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            list_threads::list_threads(ctx, &access_token, scope, &link, &backfill_job).await
+            list_threads::list_threads(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::BackfillThread(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope, false).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            backfill_thread::backfill_thread(ctx, &access_token, scope, &link).await
+            backfill_thread::backfill_thread(ctx, scope, &link).await
         }
         BackfillOperation::BackfillMessage(scope) => {
             let Some(JobContext {
@@ -195,13 +188,12 @@ async fn inner_process_message(
             increment_counters::finalize_backfill(ctx, scope.link_id, scope.job_id).await
         }
         BackfillOperation::SeedSentContact(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope, false).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            seed_sent_contact::seed_sent_contact(ctx, &access_token, scope, &link).await
+            seed_sent_contact::seed_sent_contact(ctx, scope, &link).await
         }
         BackfillOperation::PopulateCrmContact(scope) => {
             let link = fetch_link(ctx, scope.link_id).await?;
@@ -226,7 +218,6 @@ async fn inner_process_message(
 /// handlers that talk to Gmail.
 struct JobContext {
     link: link::Link,
-    backfill_job: BackfillJob,
     access_token: String,
 }
 
@@ -293,7 +284,7 @@ async fn fetch_job_context<P>(
     scope: &JobScopedPayload<P>,
     allow_complete: bool,
 ) -> Result<Option<JobContext>, ProcessingError> {
-    let Some(JobContextNoToken { link, backfill_job }) =
+    let Some(JobContextNoToken { link, .. }) =
         fetch_job_context_no_token(ctx, scope, allow_complete).await?
     else {
         return Ok(None);
@@ -314,11 +305,7 @@ async fn fetch_job_context<P>(
         })
     })?;
 
-    Ok(Some(JobContext {
-        link,
-        backfill_job,
-        access_token,
-    }))
+    Ok(Some(JobContext { link, access_token }))
 }
 
 /// Looks up a link by id, mapping the absence into a NonRetryable error

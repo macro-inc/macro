@@ -1,16 +1,11 @@
-use crate::convert::map_message_resource_to_service;
+use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{
-    CheckGmailRateLimitArgs, CrmContactRecipient, check_gmail_rate_limit,
-    enqueue_populate_crm_contacts,
-};
+use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
-use anyhow::Context;
 use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
@@ -23,43 +18,15 @@ pub async fn backfill_message(
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::MessagesGet,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
-
-    // get message from gmail
-    let message_resource = match ctx
-        .gmail_client
-        .get_message(access_token, &p.message_provider_id)
+    let mut message = ctx
+        .email_api
+        .get_message(link.id, &p.message_provider_id)
         .await
-    {
-        Ok(Some(message)) => message,
-        Ok(None) => {
-            return Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::MessageNotFoundInProvider,
-                source: anyhow::anyhow!("Message {} not found in Gmail", p.message_provider_id),
-            }));
-        }
-        Err(error) => {
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::Error::new(error).context("Gmail API failed to get message"),
-            }));
-        }
-    };
-
-    // Map Gmail resource to service model (IDs are generated in the parse function)
-    let mut message = map_message_resource_to_service(message_resource, link.id)
-        .context("Failed to map message resource to service")
-        .map_err(|e| {
+        .map_err(|error| map_email_api_error(error, "Failed to get provider message"))?
+        .ok_or_else(|| {
             ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e,
+                reason: FailureReason::MessageNotFoundInProvider,
+                source: anyhow::anyhow!("Message {} not found in provider", p.message_provider_id),
             })
         })?;
 
