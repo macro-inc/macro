@@ -802,6 +802,7 @@
           taplo
           bun
           pnpm
+          postgresql
           sqlx-cli
           typescript-language-server
           nodejs_24
