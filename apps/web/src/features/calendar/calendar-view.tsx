@@ -20,6 +20,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CalendarMonthDrawer } from './CalendarMonthDrawer';
 import { CalendarPage } from './CalendarPage';
 import {
   CALENDAR_PAGE_IDS,
@@ -189,9 +190,19 @@ function CalendarWorkspace() {
     <>
       <SplitHeaderLeft>
         <HeaderIsland class="shrink">
-          <span class="min-w-0 truncate text-base font-semibold text-ink">
-            {dateTitle()}
-          </span>
+          <Show
+            when={isMobile()}
+            fallback={
+              <span class="min-w-0 truncate text-base font-semibold text-ink">
+                {dateTitle()}
+              </span>
+            }
+          >
+            <CalendarMonthDrawer
+              month={currentDate()}
+              onChange={calendarPager.gotoDate}
+            />
+          </Show>
         </HeaderIsland>
       </SplitHeaderLeft>
 

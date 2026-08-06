@@ -211,7 +211,7 @@ function DesktopCalendarSettings(props: {
 }
 
 const DRAWER_ROW_CLASS =
-  'flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:mb-px';
+  "relative flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:after:absolute not-last:after:inset-x-2 not-last:after:bottom-0 not-last:after:h-px not-last:after:bg-edge-muted not-last:after:content-['']";
 
 function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
   const controls = props.controls;
