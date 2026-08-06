@@ -77,14 +77,20 @@ async fn initialize_backfill(
     tracing::info!("Initializing backfill job");
 
     // ensure we have the user's labels in the db
-    sync_labels(&ctx.db, &ctx.gmail_client, access_token, link.id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to sync labels"),
-            })
-        })?;
+    sync_labels(
+        &ctx.db,
+        &ctx.gmail_client,
+        access_token,
+        link.id,
+        &ctx.caches.label_ids_by_link,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to sync labels"),
+        })
+    })?;
 
     if let Err(e) = sync_contacts(
         link,

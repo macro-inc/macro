@@ -68,14 +68,20 @@ pub async fn gmail_message(
         is_backfill: false,
     })
     .await?;
-    sync_labels(&ctx.db, &ctx.gmail_client, &gmail_access_token, link.id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to sync labels"),
-            })
-        })?;
+    sync_labels(
+        &ctx.db,
+        &ctx.gmail_client,
+        &gmail_access_token,
+        link.id,
+        &ctx.caches.label_ids_by_link,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: e.context("Failed to sync labels"),
+        })
+    })?;
 
     // the history.list call in gmail api fetches all changes SINCE the history_id we pass to it.
     // we pass the db_history_id, aka history_id at the time of the last update. once

@@ -45,6 +45,31 @@ pub async fn insert_thread_and_messages_returning_ids(
     service_thread: thread::Thread,
     link_id: Uuid,
 ) -> anyhow::Result<(Uuid, HashMap<String, (Uuid, Uuid)>)> {
+    let resolved_label_ids = HashMap::new();
+    insert_thread_and_messages_returning_ids_with_label_ids(
+        pool,
+        service_thread,
+        link_id,
+        &resolved_label_ids,
+    )
+    .await
+}
+
+/// Inserts a thread and its messages using pre-resolved provider label IDs when available.
+#[tracing::instrument(
+    skip(pool, service_thread, resolved_label_ids),
+    fields(
+        thread_provider_id = %service_thread.provider_id.clone().unwrap_or_default(),
+        link_id = %link_id
+    ),
+    err
+)]
+pub async fn insert_thread_and_messages_returning_ids_with_label_ids(
+    pool: &PgPool,
+    service_thread: thread::Thread,
+    link_id: Uuid,
+    resolved_label_ids: &HashMap<String, Uuid>,
+) -> anyhow::Result<(Uuid, HashMap<String, (Uuid, Uuid)>)> {
     let mut recipient_map: HashMap<String, UpsertedRecipients> = HashMap::new();
 
     // we have to insert addresses before inserting the messages. these values are shared
@@ -77,6 +102,7 @@ pub async fn insert_thread_and_messages_returning_ids(
                 &mut message,
                 link_id,
                 recipient_map.remove(&provider_id).unwrap(),
+                Some(resolved_label_ids),
                 false,
             )
             .await?;

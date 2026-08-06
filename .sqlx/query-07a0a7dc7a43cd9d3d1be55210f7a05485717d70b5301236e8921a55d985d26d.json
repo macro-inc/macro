@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_labels (message_id, label_id)\n        SELECT * FROM unnest($1::uuid[], $2::uuid[])\n        ON CONFLICT (message_id, label_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07a0a7dc7a43cd9d3d1be55210f7a05485717d70b5301236e8921a55d985d26d"
+}

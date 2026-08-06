@@ -6,6 +6,7 @@ use crate::pubsub::util::{
     CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
 };
 use crate::pubsub::util::{cg_refresh_email, publish_email_event};
+use crate::util::process_pre_insert::sync_labels::resolve_label_ids;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::models::messages::ContactConnection;
@@ -633,15 +634,30 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads {
+        let provider_label_ids: Vec<String> = thread
+            .messages
+            .iter()
+            .flat_map(|message| &message.labels)
+            .map(|label| label.provider_label_id.clone())
+            .collect();
+        let label_ids = resolve_label_ids(
+            &ctx.db,
+            &ctx.caches.label_ids_by_link,
+            link_id,
+            &provider_label_ids,
+        )
+        .await?;
         let (_, message_ids) =
-            threads::insert::insert_thread_and_messages_returning_ids(&ctx.db, thread, link_id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to insert thread and messages".to_string()),
-                    })
-                })?;
+            threads::insert::insert_thread_and_messages_returning_ids_with_label_ids(
+                &ctx.db, thread, link_id, &label_ids,
+            )
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to insert thread and messages".to_string()),
+                })
+            })?;
 
         if let Some(ids) = message_ids.get(&payload.provider_message_id) {
             return Ok(*ids);
@@ -665,11 +681,24 @@ async fn process_and_insert_message(
 ) -> anyhow::Result<(Uuid, Uuid)> {
     process_message_pre_insert(message).await;
 
-    let ids = email_db_client::messages::insert::insert_message(
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+    let label_ids = resolve_label_ids(
+        &ctx.db,
+        &ctx.caches.label_ids_by_link,
+        link_id,
+        &provider_label_ids,
+    )
+    .await?;
+    let ids = email_db_client::messages::insert::insert_message_with_label_ids(
         &ctx.db,
         thread_db_id,
         message,
         link_id,
+        &label_ids,
         true,
     )
     .await

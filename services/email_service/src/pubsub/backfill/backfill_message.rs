@@ -3,6 +3,7 @@ use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
+use crate::util::process_pre_insert::sync_labels::resolve_label_ids;
 use anyhow::Context;
 use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
 use models_email::email::service::link;
@@ -55,22 +56,43 @@ pub async fn backfill_message(
 
     process_message_pre_insert(&mut message).await;
 
-    // insert message into database
-    let (message_db_id, persisted_thread_id) = email_db_client::messages::insert::insert_message(
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+    let label_ids = resolve_label_ids(
         &ctx.db,
-        p.thread_db_id,
-        &mut message,
+        &ctx.caches.label_ids_by_link,
         link.id,
-        // we update the thread metadata once all messages in the thread have been backfilled
-        false,
+        &provider_label_ids,
     )
     .await
-    .map_err(|e| {
+    .map_err(|error| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to insert final message into database"),
+            source: error.context("Failed to resolve message labels"),
         })
     })?;
+
+    // insert message into database
+    let (message_db_id, persisted_thread_id) =
+        email_db_client::messages::insert::insert_message_with_label_ids(
+            &ctx.db,
+            p.thread_db_id,
+            &mut message,
+            link.id,
+            &label_ids,
+            // we update the thread metadata once all messages in the thread have been backfilled
+            false,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to insert final message into database"),
+            })
+        })?;
 
     if ctx.calendar_sync_enabled {
         crate::calendar_ingest::ingest_calendar_parts(

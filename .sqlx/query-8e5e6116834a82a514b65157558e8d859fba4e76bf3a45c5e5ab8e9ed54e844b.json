@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, provider_label_id\n        FROM email_labels\n        WHERE link_id = $1 AND provider_label_id = ANY($2)\n        ",
+  "query": "\n            SELECT id, provider_label_id\n            FROM email_labels\n            WHERE link_id = $1 AND provider_label_id = ANY($2)\n            ",
   "describe": {
     "columns": [
       {
@@ -25,5 +25,5 @@
       false
     ]
   },
-  "hash": "ae83e71bca66496aa73ef46a875f60a2fed05e3d27e6e1b12c35f6cebae2c534"
+  "hash": "8e5e6116834a82a514b65157558e8d859fba4e76bf3a45c5e5ab8e9ed54e844b"
 }

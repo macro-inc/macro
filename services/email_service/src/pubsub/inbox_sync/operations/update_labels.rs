@@ -418,6 +418,7 @@ async fn apply_message_label_diff(
                 link.id,
                 message_db_id,
                 labels_to_add,
+                None,
                 false,
                 false,
             )

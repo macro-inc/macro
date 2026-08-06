@@ -181,6 +181,29 @@ pub async fn find_missing_provider_labels(
     Ok(missing_labels)
 }
 
+/// Fetches the complete provider-label-to-database-ID mapping for a link.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_label_id_map(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<HashMap<String, Uuid>> {
+    let labels = sqlx::query!(
+        r#"
+        SELECT provider_label_id, id
+        FROM email_labels
+        WHERE link_id = $1
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(labels
+        .into_iter()
+        .map(|label| (label.provider_label_id, label.id))
+        .collect())
+}
+
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_labels_by_link_id(
     pool: &PgPool,

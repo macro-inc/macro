@@ -7,6 +7,7 @@ use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod test;
@@ -27,6 +28,7 @@ pub(crate) async fn insert_message_with_tx(
     // addresses (and labels) need to be inserted ahead of time outside the tx, as they are shared
     // across messages and can cause deadlocks if inserted within.
     recipents: UpsertedRecipients,
+    resolved_label_ids: Option<&HashMap<String, Uuid>>,
     // determines whether to update thread metadata (inbox_visible, timestamps). set to false when:
     // 1. inserting thread simultaneously (thread already has latest values)
     // 2. backfilling messages (metadata gets updated once after all messages complete)
@@ -59,6 +61,7 @@ pub(crate) async fn insert_message_with_tx(
         link_id,
         outcome.message_id,
         &provider_label_ids,
+        resolved_label_ids,
         true,
         outcome.inserted,
     )
@@ -172,6 +175,28 @@ pub async fn insert_message(
     link_id: Uuid,
     update_thread_metadata: bool,
 ) -> anyhow::Result<(Uuid, Uuid)> {
+    let resolved_label_ids = HashMap::new();
+    insert_message_with_label_ids(
+        pool,
+        thread_id,
+        message,
+        link_id,
+        &resolved_label_ids,
+        update_thread_metadata,
+    )
+    .await
+}
+
+/// Inserts a single message using pre-resolved provider label IDs when available.
+#[tracing::instrument(skip(pool, message, resolved_label_ids), fields(link_id = %message.link_id), err)]
+pub async fn insert_message_with_label_ids(
+    pool: &PgPool,
+    thread_id: Uuid,
+    message: &mut message::Message,
+    link_id: Uuid,
+    resolved_label_ids: &HashMap<String, Uuid>,
+    update_thread_metadata: bool,
+) -> anyhow::Result<(Uuid, Uuid)> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
     let addresses = addresses_from_message(message);
@@ -188,6 +213,7 @@ pub async fn insert_message(
         message,
         link_id,
         recipients,
+        Some(resolved_label_ids),
         update_thread_metadata,
     )
     .await

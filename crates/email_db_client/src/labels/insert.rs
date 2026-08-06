@@ -1,6 +1,7 @@
 use models_email::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
+use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 mod test;
@@ -268,51 +269,68 @@ pub async fn insert_message_labels(
     link_id: Uuid,
     message_id: Uuid,
     provider_label_ids: &[String],
+    resolved_label_ids: Option<&HashMap<String, Uuid>>,
     delete_old: bool,
     message_inserted: bool,
 ) -> anyhow::Result<()> {
-    // get back label ids to use in junction table insert
-    #[derive(Debug)]
-    struct LabelMapping {
-        id: Uuid,
-        provider_label_id: String,
+    let requested_provider_label_ids: HashSet<&str> =
+        provider_label_ids.iter().map(String::as_str).collect();
+    let mut label_ids_by_provider = HashMap::with_capacity(requested_provider_label_ids.len());
+
+    if let Some(resolved_label_ids) = resolved_label_ids {
+        for provider_label_id in &requested_provider_label_ids {
+            if let Some(label_id) = resolved_label_ids.get(*provider_label_id) {
+                label_ids_by_provider.insert(*provider_label_id, *label_id);
+            }
+        }
     }
 
-    let label_mappings: Vec<LabelMapping> = sqlx::query_as!(
-        LabelMapping,
-        r#"
-        SELECT id, provider_label_id
-        FROM email_labels
-        WHERE link_id = $1 AND provider_label_id = ANY($2)
-        "#,
-        link_id,
-        &provider_label_ids
-    )
-    .fetch_all(&mut *tx)
-    .await?;
+    // Callers without a resolved map, and labels absent from a stale map, fall back to the DB.
+    let unresolved_provider_label_ids: Vec<String> = requested_provider_label_ids
+        .iter()
+        .copied()
+        .filter(|provider_label_id| !label_ids_by_provider.contains_key(provider_label_id))
+        .map(str::to_owned)
+        .collect();
+    if !unresolved_provider_label_ids.is_empty() {
+        let mappings = sqlx::query!(
+            r#"
+            SELECT id, provider_label_id
+            FROM email_labels
+            WHERE link_id = $1 AND provider_label_id = ANY($2)
+            "#,
+            link_id,
+            &unresolved_provider_label_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?;
 
-    // labels can be missing if they were created after the last label sync; skip them
-    if label_mappings.len() != provider_label_ids.len() {
-        let found: std::collections::HashSet<&str> = label_mappings
-            .iter()
-            .map(|m| m.provider_label_id.as_str())
-            .collect();
-        let missing: Vec<&String> = provider_label_ids
-            .iter()
-            .filter(|id| !found.contains(id.as_str()))
-            .collect();
+        for mapping in mappings {
+            if let Some(provider_label_id) =
+                requested_provider_label_ids.get(mapping.provider_label_id.as_str())
+            {
+                label_ids_by_provider.insert(*provider_label_id, mapping.id);
+            }
+        }
+    }
+
+    let missing_provider_label_ids: Vec<&str> = requested_provider_label_ids
+        .iter()
+        .copied()
+        .filter(|provider_label_id| !label_ids_by_provider.contains_key(provider_label_id))
+        .collect();
+    if !missing_provider_label_ids.is_empty() {
         tracing::warn!(
             link_id = %link_id,
             message_id = %message_id,
-            missing_provider_label_ids = ?missing,
+            missing_provider_label_ids = ?missing_provider_label_ids,
             "Some message labels not found in database, skipping them"
         );
     }
 
-    // insert into junction table
+    let label_db_ids: Vec<Uuid> = label_ids_by_provider.into_values().collect();
     let message_ids_repeated: Vec<Uuid> =
-        std::iter::repeat_n(message_id, label_mappings.len()).collect();
-    let label_db_ids: Vec<Uuid> = label_mappings.iter().map(|m| m.id).collect();
+        std::iter::repeat_n(message_id, label_db_ids.len()).collect();
 
     // deleting records that don't match the ones to insert first in case we are doing an
     // upsert and some of the old ones got removed
@@ -332,19 +350,19 @@ pub async fn insert_message_labels(
         .await?;
     }
 
-    if label_mappings.is_empty() {
+    if label_db_ids.is_empty() {
         return Ok(());
     }
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO email_message_labels (message_id, label_id)
         SELECT * FROM unnest($1::uuid[], $2::uuid[])
         ON CONFLICT (message_id, label_id) DO NOTHING
         "#,
+        &message_ids_repeated,
+        &label_db_ids
     )
-    .bind(&message_ids_repeated)
-    .bind(&label_db_ids)
     .execute(&mut *tx)
     .await?;
 
