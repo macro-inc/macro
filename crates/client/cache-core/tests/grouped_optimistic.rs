@@ -122,6 +122,15 @@ fn mutation_response(option: &str) -> Json {
     json!({ "setEntityProperty": property(option) })
 }
 
+fn group_page_without_destination() -> Json {
+    let mut page = group_page();
+    page["user"]["groupSoup"]["bins"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(1);
+    page
+}
+
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
         query: GROUP_QUERY.into(),
@@ -151,6 +160,37 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     }
 }
 
+fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
+    OptimisticLinkPatch {
+        query: GROUP_QUERY.into(),
+        operation_name: Some("GroupSoup".into()),
+        variables_json: serde_json::to_string(&query_variables()).unwrap(),
+        path: vec![
+            LinkPathSegment::Field {
+                field: "user".into(),
+            },
+            LinkPathSegment::Field {
+                field: "groupSoup".into(),
+            },
+            LinkPathSegment::Field {
+                field: "bins".into(),
+            },
+        ],
+        operation: LinkOperation::UpsertEmbeddedLink {
+            list_item: ListItemByScalar {
+                where_field: "key".into(),
+                equals: json!(bin),
+            },
+            link_field: "items".into(),
+            entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
+            insert_fields: std::collections::HashMap::from([
+                ("totalCount".into(), json!(1)),
+                ("nextCursor".into(), Json::Null),
+            ]),
+        },
+    }
+}
+
 async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {
     match engine
         .read_query(None, GROUP_QUERY, Some("GroupSoup"), &query_variables())
@@ -163,6 +203,10 @@ async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {
 }
 
 async fn setup() -> Engine<InMemoryStorage> {
+    setup_with_page(group_page()).await
+}
+
+async fn setup_with_page(page: Json) -> Engine<InMemoryStorage> {
     let mut engine = Engine::new(InMemoryStorage::new());
     engine
         .write_query(
@@ -170,7 +214,7 @@ async fn setup() -> Engine<InMemoryStorage> {
             GROUP_QUERY,
             Some("GroupSoup"),
             &query_variables(),
-            &group_page(),
+            &page,
             None,
         )
         .await
@@ -349,6 +393,50 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             committed["user"]["groupSoup"]["bins"][1]["items"][1]["id"],
             json!("task-2")
         );
+    });
+}
+
+#[test]
+fn missing_destination_is_created_with_the_updated_item() {
+    block_on(async {
+        let mut engine = setup_with_page(group_page_without_destination()).await;
+        let patches = [
+            patch(
+                "in-progress",
+                LinkOperation::Remove {
+                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
+                },
+            ),
+            upsert_bin_patch("completed"),
+        ];
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_variables("completed"),
+                    data: &mutation_response("completed"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+
+        let optimistic = read_group(&mut engine).await;
+        let bins = optimistic["user"]["groupSoup"]["bins"].as_array().unwrap();
+        assert_eq!(bins.len(), 2);
+        assert_eq!(bins[0]["key"], json!("completed"));
+        assert_eq!(bins[0]["totalCount"], json!(1));
+        assert_eq!(bins[0]["nextCursor"], Json::Null);
+        assert_eq!(bins[0]["items"][0]["id"], json!("task-1"));
+        assert_eq!(
+            bins[0]["items"][0]["properties"][0]["value"]["optionIds"],
+            json!(["completed"])
+        );
+        assert!(bins[1]["items"].as_array().unwrap().is_empty());
     });
 }
 
