@@ -33,6 +33,7 @@ pub struct LocalEnv {
     storage: StorageEnv,
     queues: QueueEnv,
     mail: MailEnv,
+    agent_harness: AgentHarnessEnv,
     service_auth: ServiceAuthEnv,
     fusionauth: FusionAuthEnv,
     boot_stubs: BootStubEnv,
@@ -56,6 +57,7 @@ impl LocalEnv {
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
+            agent_harness: AgentHarnessEnv::local(),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -77,6 +79,7 @@ impl LocalEnv {
         self.storage.write(&mut env);
         self.queues.write(&mut env);
         self.mail.write(&mut env);
+        self.agent_harness.write(&mut env);
         self.service_auth.write(&mut env);
         self.fusionauth.write(&mut env);
         env
@@ -236,6 +239,36 @@ impl MailEnv {
             "SENDER_BASE_ADDRESS".into(),
             self.sender_base_address.into(),
         );
+    }
+}
+
+/// The agent harness: which bot it answers for, and the Daytona sandbox
+/// credentials.
+///
+/// The bot id and snapshot name are deterministic (the bot is seeded by
+/// migration). The two secrets are seeded EMPTY so the keys exist for the
+/// process-env overlay - `DAYTONA_API_KEY=... just run_local` - because that
+/// overlay only overrides keys already present. With no key the service still
+/// starts; it just fails (with a clear error) when a session is opened.
+struct AgentHarnessEnv {
+    bot_id: &'static str,
+    snapshot: &'static str,
+}
+
+impl AgentHarnessEnv {
+    fn local() -> Self {
+        AgentHarnessEnv {
+            // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
+            bot_id: "00000000-0000-0000-0000-00000000a9e7",
+            snapshot: "macro-agent-harness",
+        }
+    }
+
+    fn write(&self, env: &mut BTreeMap<String, String>) {
+        env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
+        env.insert("DAYTONA_API_KEY".into(), String::new());
+        env.insert("GITHUB_TOKEN".into(), String::new());
     }
 }
 

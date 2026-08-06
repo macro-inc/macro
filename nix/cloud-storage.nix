@@ -660,9 +660,103 @@
         }) lambdaNames
       );
 
+      # The Namespace CLI, the other sandbox provider crates/agent_harness
+      # talks to. Only used to mint the bearer tokens its Compute API wants
+      # (`just namespace-token`); the harness itself speaks the API directly.
+      # Not in nixpkgs either, and shipped as goreleaser tarballs rather than
+      # bare binaries, so this unpacks and takes just the nsc binary.
+      nsc =
+        let
+          version = "0.0.551";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux_amd64";
+                hash = "sha256-2Ip69WLe+VgbF2E74r4A4ZFfygMfiV+SMqgtGs87b7I=";
+              };
+              aarch64-linux = {
+                arch = "linux_arm64";
+                hash = "sha256-0+KpniE+7nQsFip1Tg5Z42xjAOlhPpdfmwEhQh5Ep4c=";
+              };
+              x86_64-darwin = {
+                arch = "darwin_amd64";
+                hash = "sha256-tpv81Cu1/7b2vq4Tiw4Z7pqCI3SCCiEKRRgJ2rEcX+g=";
+              };
+              aarch64-darwin = {
+                arch = "darwin_arm64";
+                hash = "sha256-x3FYe8DT+5U4D506ioSUfmiT5unG6CGMiGf4r/9jPpc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "nsc";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/namespacelabs/foundation/releases/download/v${version}/nsc_${version}_${asset.arch}.tar.gz";
+            inherit (asset) hash;
+          };
+          sourceRoot = ".";
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 nsc $out/bin/nsc
+            runHook postInstall
+          '';
+        };
+
+      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
+      # nixpkgs and is only published as prebuilt release binaries, so this
+      # installs the asset rather than building from source. Pinned instead of
+      # tracking `latest` so the shell stays reproducible; bump the version and
+      # the four hashes together.
+      daytona =
+        let
+          version = "0.203.0";
+          asset =
+            {
+              x86_64-linux = {
+                arch = "linux-amd64";
+                hash = "sha256-5r+K1OgFcw1BF1sNJwdlbc0rGAVZSy16eEiCvQ/X8DI=";
+              };
+              aarch64-linux = {
+                arch = "linux-arm64";
+                hash = "sha256-bQa4KpU3gYf2m9+6ClG1qiCa5W+MjX/XgiCv59b1ptA=";
+              };
+              x86_64-darwin = {
+                arch = "darwin-amd64";
+                hash = "sha256-mcygBoN89RsMDmakGy8LEi1XgNc/+g4ImqaTEuPZrW4=";
+              };
+              aarch64-darwin = {
+                arch = "darwin-arm64";
+                hash = "sha256-X29vyGaEGQZN9bNb17SCrIlf3zmtMgaJmKThK7cY2kc=";
+              };
+            }
+            .${system};
+        in
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "daytona";
+          inherit version;
+          src = pkgs.fetchurl {
+            url = "https://github.com/daytona/clients/releases/download/v${version}/daytona-${asset.arch}";
+            inherit (asset) hash;
+          };
+          dontUnpack = true;
+          # The Linux builds are cgo, so they need their interpreter and
+          # libc rewritten to the store.
+          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 $src $out/bin/daytona
+            runHook postInstall
+          '';
+        };
+
       shellTools =
         with pkgs;
         [
+          daytona
+          nsc
           parallel
           docker-compose
           curl
@@ -711,6 +805,7 @@
           bun
           brotli
           pnpm
+          postgresql
           sqlx-cli
           typescript-language-server
           nodejs_24

@@ -9,6 +9,12 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
+export type Activity = {
+    Document: BasicDocument;
+} | {
+    Chat: Chat;
+};
+
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -47,6 +53,60 @@ export type AddPinRequest = {
      * The type of the pin
      */
     pinType: string;
+};
+
+/**
+ * Response body describing an agent session.
+ */
+export type AgentSessionResponse = {
+    /**
+     * The ACP session id, if one exists.
+     */
+    acpSessionId?: string | null;
+    /**
+     * The bot running the agent.
+     */
+    botId: string;
+    /**
+     * The session's dedicated channel.
+     */
+    channelId: string;
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * Harness slug.
+     */
+    harness: string;
+    /**
+     * The session id.
+     */
+    id: string;
+    /**
+     * Model slug.
+     */
+    model: string;
+    /**
+     * When the session was last modified.
+     */
+    modifiedAt: string;
+    /**
+     * The exact message that invoked the bot, if any.
+     */
+    originatingMessageId?: string | null;
+    /**
+     * The repository the session works with.
+     */
+    repoUrl: string;
+    /**
+     * The session's status.
+     */
+    status: SessionStatusDto;
+    /**
+     * The root message of the thread the session was created from, if any.
+     */
+    threadId?: string | null;
 };
 
 export type Anchor = PdfAnchor;
@@ -1027,6 +1087,10 @@ export type Bot = {
      */
     handle: string;
     /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
+    /**
      * Bot id.
      */
     id: BotId;
@@ -1203,7 +1267,6 @@ export type CalendarEvent = {
      * projections stored before calendars were attributed.
      */
     calendarId?: string | null;
-    conferenceProvider?: null | ConferenceProvider;
     /**
      * Direct join URL when known.
      */
@@ -2529,22 +2592,6 @@ export type CommentThread = {
 };
 
 /**
- * The conferencing system backing an event's join URL.
- *
- * Macro generates only Google Meet conferences, so this distinguishes one it
- * created from a third party's — Zoom and friends arriving as `addOn`
- * conference data, or a legacy classic Hangout. Clients use it to label the
- * conference and to tell whether the Meet toggle reflects a Macro-managed
- * conference.
- *
- * It does not gate mutation. An explicit request replaces or detaches any
- * conference, third-party included, exactly as deleting the event would;
- * what protects a conference is that omitting the field leaves it untouched,
- * so an unrelated edit never disturbs it.
- */
-export type ConferenceProvider = 'google_meet' | 'other';
-
-/**
  * Query parameters for the copy document endpoint.
  */
 export type CopyDocumentQueryParams = {
@@ -3081,10 +3128,6 @@ export type CreateTaskResponse = {
      * Metadata for the created document
      */
     documentMetadata: DocumentResponseMetadata;
-    /**
-     * Base64-encoded canonical Loro snapshot used to initialize the task.
-     */
-    initialSnapshot: string;
     /**
      * The team this task number is scoped to.
      */
@@ -4878,6 +4921,17 @@ export type GenericSuccessResponse = {
 };
 
 /**
+ * @deprecated
+ */
+export type GetActivitiesResponse = {
+    data?: null | UserActivitiesResponse;
+    /**
+     * Indicates if an error occurred
+     */
+    error: boolean;
+};
+
+/**
  * Response from the attachment-references endpoint.
  */
 export type GetAttachmentReferencesResponse = {
@@ -5494,11 +5548,6 @@ export type LeaveCallResponse = {
      */
     callEnded: boolean;
 };
-
-/**
- * Defines who can access an item through its share link.
- */
-export type LinkShare = 'PUBLIC' | 'TEAM';
 
 /**
  * Webhooks visible to the caller across their personal and team workspaces.
@@ -6492,6 +6541,22 @@ export type SaveDocumentResponseData = {
 };
 
 /**
+ * Transport representation of a session's status, mirroring
+ * [`SessionStatus`].
+ */
+export type SessionStatusDto = {
+    kind: 'no_messages';
+} | {
+    /**
+     * The wire name of the system event, e.g. `acp_ready`.
+     */
+    event: string;
+    kind: 'event';
+} | {
+    kind: 'disconnected';
+};
+
+/**
  * Request body for `PUT /companies/{company_id}/hidden`.
  */
 export type SetCompanyHiddenRequest = {
@@ -6614,12 +6679,15 @@ export type SharePermissionV2 = {
      * The share permission id
      */
     id: string;
-    linkShare?: null | LinkShare;
-    linkShareAccessLevel?: null | AccessLevel;
+    /**
+     * If the item is publicly accessible
+     */
+    isPublic: boolean;
     /**
      * The owner of the item
      */
     owner: string;
+    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6747,10 +6815,6 @@ export type SoupCalendarEventTime = {
  * A canonical calendar event entity in Soup.
  */
 export type SoupCalendarEventSoupPropertiesField = {
-    /**
-     * Which conferencing system backs `conference_url`.
-     */
-    conferenceProvider?: string | null;
     /**
      * Direct conference join URL.
      */
@@ -7976,6 +8040,57 @@ export type UnthreadedPdfUuidRequest = {
     uuid: string;
 };
 
+/**
+ * Request body for replacing an agent session. This is full-resource `PUT`
+ * semantics: fetch the session, modify it, and send the whole thing back.
+ * `channelId` and `createdAt` are immutable; echo the values returned by the
+ * get endpoint.
+ */
+export type UpdateAgentSessionRequest = {
+    /**
+     * The ACP session id, if one exists.
+     */
+    acpSessionId?: string | null;
+    /**
+     * The bot running the agent.
+     */
+    botId: string;
+    /**
+     * The session's dedicated channel. Immutable; echo the value returned
+     * by the get endpoint.
+     */
+    channelId: string;
+    /**
+     * When the session was created. Immutable; echo the value returned by
+     * the get endpoint.
+     */
+    createdAt: string;
+    /**
+     * Harness slug.
+     */
+    harness: string;
+    /**
+     * Model slug.
+     */
+    model: string;
+    /**
+     * The exact message that invoked the bot, if any.
+     */
+    originatingMessageId?: string | null;
+    /**
+     * The repository the session works with.
+     */
+    repoUrl: string;
+    /**
+     * The session's status.
+     */
+    status: SessionStatusDto;
+    /**
+     * The root message of the thread the session was created from, if any.
+     */
+    threadId?: string | null;
+};
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -8051,8 +8166,11 @@ export type UpdateSharePermissionRequestV2 = {
      * Any channel share permissions to be created/updated/removed
      */
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
-    linkShare?: null | LinkShare;
-    linkShareAccessLevel?: null | AccessLevel;
+    /**
+     * If the item is publicly accessible
+     */
+    isPublic?: boolean | null;
+    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -8089,6 +8207,24 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
+};
+
+/**
+ * @deprecated
+ */
+export type UserActivitiesResponse = {
+    /**
+     * The next offset to be used if there is one
+     */
+    next_offset?: number | null;
+    /**
+     * The activities returned from the query
+     */
+    recent: Array<Activity>;
+    /**
+     * The total number of activities the user has
+     */
+    total: number;
 };
 
 /**
@@ -8330,6 +8466,110 @@ export type WithDocumentId = {
 
 export type WithProjectId = {
     id: string;
+};
+
+export type GetRecentActivityHandlerData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The maximum number of items to retreive. Default 10, max 100.
+         */
+        limit: number;
+        /**
+         * The offset to start from. Default 0.
+         */
+        offset: number;
+    };
+    url: '/activity';
+};
+
+export type GetRecentActivityHandlerErrors = {
+    400: GenericErrorResponse;
+    401: GenericErrorResponse;
+    500: GenericErrorResponse;
+};
+
+export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
+
+export type GetRecentActivityHandlerResponses = {
+    200: GetActivitiesResponse;
+};
+
+export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
+
+export type DeleteAgentSessionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type DeleteAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type DeleteAgentSessionError = DeleteAgentSessionErrors[keyof DeleteAgentSessionErrors];
+
+export type DeleteAgentSessionResponses = {
+    200: unknown;
+};
+
+export type GetAgentSessionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type GetAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionError = GetAgentSessionErrors[keyof GetAgentSessionErrors];
+
+export type GetAgentSessionResponses = {
+    200: AgentSessionResponse;
+};
+
+export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type UpdateAgentSessionData = {
+    body: UpdateAgentSessionRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type UpdateAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type UpdateAgentSessionError = UpdateAgentSessionErrors[keyof UpdateAgentSessionErrors];
+
+export type UpdateAgentSessionResponses = {
+    200: unknown;
 };
 
 export type DeleteAnchorData = {
@@ -10605,10 +10845,6 @@ export type CreateTaskHandlerResponses = {
          * Metadata for the created document
          */
         documentMetadata: DocumentResponseMetadata;
-        /**
-         * Base64-encoded canonical Loro snapshot used to initialize the task.
-         */
-        initialSnapshot: string;
         /**
          * The team this task number is scoped to.
          */

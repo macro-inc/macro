@@ -7,6 +7,300 @@
 import * as zod from 'zod';
 
 /**
+ * @deprecated
+ * @summary Gets the users recent activities
+ */
+export const getRecentActivityHandlerQueryParams = zod.object({
+  limit: zod
+    .number()
+    .describe('The maximum number of items to retreive. Default 10, max 100.'),
+  offset: zod.number().describe('The offset to start from. Default 0.'),
+});
+
+export const getRecentActivityHandlerResponse = zod.object({
+  data: zod
+    .union([
+      zod.null(),
+      zod.object({
+        next_offset: zod
+          .number()
+          .nullish()
+          .describe('The next offset to be used if there is one'),
+        recent: zod
+          .array(
+            zod.union([
+              zod.object({
+                Document: zod.object({
+                  branchedFromId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The id of the document this document branched from'
+                    ),
+                  branchedFromVersionId: zod
+                    .number()
+                    .nullish()
+                    .describe(
+                      'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+                    ),
+                  createdAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('The time the document was created'),
+                  deletedAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('The time the document was deleted'),
+                  documentFamilyId: zod
+                    .number()
+                    .nullish()
+                    .describe(
+                      'The id of the document family this document belongs to'
+                    ),
+                  documentVersionId: zod
+                    .number()
+                    .describe(
+                      'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+                    ),
+                  fileType: zod
+                    .string()
+                    .nullish()
+                    .describe('The file type of the document (e.g. pdf, docx)'),
+                  id: zod.string().describe('The document id'),
+                  name: zod.string().describe('The name of the document'),
+                  owner: zod.string().describe('The owner of the document'),
+                  projectId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The id of the project that this document belongs to'
+                    ),
+                  sha: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+                    ),
+                  subType: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .union([
+                          zod
+                            .object({
+                              is_completed: zod
+                                .boolean()
+                                .describe(
+                                  'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                ),
+                              type: zod.enum(['task']),
+                            })
+                            .describe(
+                              'A task document with its associated properties'
+                            ),
+                          zod
+                            .object({
+                              type: zod.enum(['snippet']),
+                            })
+                            .describe('A snippet document — reusable markdown'),
+                          zod
+                            .object({
+                              type: zod.enum(['skill']),
+                            })
+                            .describe(
+                              'A skill document — markdown instructions for AI'
+                            ),
+                        ])
+                        .describe(
+                          'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
+                        ),
+                    ])
+                    .optional(),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'The time the document instance \/ document BOM was updated'
+                    ),
+                  type: zod.enum(['document']),
+                }),
+              }),
+              zod.object({
+                Chat: zod.object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('The time the chat was created'),
+                  deletedAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('The time the chat was deleted'),
+                  id: zod.string().describe('The chat uuid'),
+                  isPersistent: zod.boolean(),
+                  model: zod
+                    .string()
+                    .nullish()
+                    .describe('The model used to generate the chat'),
+                  name: zod.string().describe('The name of the chat'),
+                  projectId: zod
+                    .string()
+                    .nullish()
+                    .describe('The project id of the chat'),
+                  tokenCount: zod.number().nullish(),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('The time the chat was last updated'),
+                  userId: zod.string().describe('Who the chat belongs to'),
+                  type: zod.enum(['chat']),
+                }),
+              }),
+            ])
+          )
+          .describe('The activities returned from the query'),
+        total: zod
+          .number()
+          .describe('The total number of activities the user has'),
+      }),
+    ])
+    .optional(),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * @summary Get an agent session by id.
+ */
+export const getAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+export const getAgentSessionResponse = zod
+  .object({
+    acpSessionId: zod
+      .string()
+      .nullish()
+      .describe('The ACP session id, if one exists.'),
+    botId: zod.uuid().describe('The bot running the agent.'),
+    channelId: zod.uuid().describe("The session's dedicated channel."),
+    createdAt: zod.iso.datetime({}).describe('When the session was created.'),
+    harness: zod.string().describe('Harness slug.'),
+    id: zod.uuid().describe('The session id.'),
+    model: zod.string().describe('Model slug.'),
+    modifiedAt: zod.iso
+      .datetime({})
+      .describe('When the session was last modified.'),
+    originatingMessageId: zod
+      .uuid()
+      .nullish()
+      .describe('The exact message that invoked the bot, if any.'),
+    repoUrl: zod.string().describe('The repository the session works with.'),
+    status: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['no_messages']),
+          })
+          .describe('No status updates received.'),
+        zod
+          .object({
+            event: zod
+              .string()
+              .describe('The wire name of the system event, e.g. `acp_ready`.'),
+            kind: zod.enum(['event']),
+          })
+          .describe('The last system event received from the runtime.'),
+        zod
+          .object({
+            kind: zod.enum(['disconnected']),
+          })
+          .describe('The session disconnected without sending a closed event.'),
+      ])
+      .describe(
+        "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      ),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The root message of the thread the session was created from, if any.'
+      ),
+  })
+  .describe('Response body describing an agent session.');
+
+/**
+ * @summary Replace an agent session.
+ */
+export const updateAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+export const updateAgentSessionBody = zod
+  .object({
+    acpSessionId: zod
+      .string()
+      .nullish()
+      .describe('The ACP session id, if one exists.'),
+    botId: zod.uuid().describe('The bot running the agent.'),
+    channelId: zod
+      .uuid()
+      .describe(
+        "The session's dedicated channel. Immutable; echo the value returned\nby the get endpoint."
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'When the session was created. Immutable; echo the value returned by\nthe get endpoint.'
+      ),
+    harness: zod.string().describe('Harness slug.'),
+    model: zod.string().describe('Model slug.'),
+    originatingMessageId: zod
+      .uuid()
+      .nullish()
+      .describe('The exact message that invoked the bot, if any.'),
+    repoUrl: zod.string().describe('The repository the session works with.'),
+    status: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['no_messages']),
+          })
+          .describe('No status updates received.'),
+        zod
+          .object({
+            event: zod
+              .string()
+              .describe('The wire name of the system event, e.g. `acp_ready`.'),
+            kind: zod.enum(['event']),
+          })
+          .describe('The last system event received from the runtime.'),
+        zod
+          .object({
+            kind: zod.enum(['disconnected']),
+          })
+          .describe('The session disconnected without sending a closed event.'),
+      ])
+      .describe(
+        "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      ),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The root message of the thread the session was created from, if any.'
+      ),
+  })
+  .describe(
+    'Request body for replacing an agent session. This is full-resource `PUT`\nsemantics: fetch the session, modify it, and send the whole thing back.\n`channelId` and `createdAt` are immutable; echo the values returned by the\nget endpoint.'
+  );
+
+/**
+ * @summary Delete an agent session and its dedicated channel.
+ */
+export const deleteAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+/**
  * @summary Deletes a single unthreaded anchor for a document
 If you need to delete a threaded anchor, see the delete comment handler
  */
@@ -682,6 +976,11 @@ export const getSelfBotResponse = zod
       .describe('Soft-delete timestamp.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
     name: zod.string().describe('Display name.'),
@@ -821,16 +1120,6 @@ export const listOccurrencesResponse = zod
                 .describe(
                   'Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed.'
                 ),
-              conferenceProvider: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum(['google_meet', 'other'])
-                    .describe(
-                      "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it."
-                    ),
-                ])
-                .optional(),
               conferenceUrl: zod
                 .string()
                 .nullish()
@@ -1427,17 +1716,11 @@ export const editCallRecordBody = zod
             .describe(
               'Any channel share permissions to be created\/updated\/removed'
             ),
-          linkShare: zod
-            .union([
-              zod.null(),
-              zod
-                .enum(['PUBLIC', 'TEAM'])
-                .describe(
-                  'Defines who can access an item through its share link.'
-                ),
-            ])
-            .optional(),
-          linkShareAccessLevel: zod
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
             .union([
               zod.null(),
               zod
@@ -5036,11 +5319,6 @@ export const createTaskHandlerResponse = zod
         .nullish()
         .describe('The time the document instance \/ document BOM was updated'),
     }),
-    initialSnapshot: zod
-      .string()
-      .describe(
-        'Base64-encoded canonical Loro snapshot used to initialize the task.'
-      ),
     teamId: zod
       .uuid()
       .nullish()
@@ -6244,17 +6522,11 @@ export const editDocumentBody = zod
             .describe(
               'Any channel share permissions to be created\/updated\/removed'
             ),
-          linkShare: zod
-            .union([
-              zod.null(),
-              zod
-                .enum(['PUBLIC', 'TEAM'])
-                .describe(
-                  'Defines who can access an item through its share link.'
-                ),
-            ])
-            .optional(),
-          linkShareAccessLevel: zod
+          isPublic: zod
+            .boolean()
+            .nullish()
+            .describe('If the item is publicly accessible'),
+          publicAccessLevel: zod
             .union([
               zod.null(),
               zod
@@ -9832,12 +10104,6 @@ export const getItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
-                  conferenceProvider: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Which conferencing system backs `conference_url`.'
-                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -13466,12 +13732,6 @@ export const postItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
-                  conferenceProvider: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Which conferencing system backs `conference_url`.'
-                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -16566,12 +16826,6 @@ export const postItemsSoupAstResponse = zod
             .object({
               data: zod
                 .object({
-                  conferenceProvider: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Which conferencing system backs `conference_url`.'
-                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -19991,12 +20245,6 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
-                        conferenceProvider: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            'Which conferencing system backs `conference_url`.'
-                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()
@@ -23094,12 +23342,6 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
-                        conferenceProvider: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            'Which conferencing system backs `conference_url`.'
-                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()
@@ -25905,15 +26147,9 @@ export const getProjectPermissionsV2Response = zod.object({
     .nullish()
     .describe('The channel share permissions for the item'),
   id: zod.string().describe('The share permission id'),
-  linkShare: zod
-    .union([
-      zod.null(),
-      zod
-        .enum(['PUBLIC', 'TEAM'])
-        .describe('Defines who can access an item through its share link.'),
-    ])
-    .optional(),
-  linkShareAccessLevel: zod
+  isPublic: zod.boolean().describe('If the item is publicly accessible'),
+  owner: zod.string().describe('The owner of the item'),
+  publicAccessLevel: zod
     .union([
       zod.null(),
       zod
@@ -25921,7 +26157,6 @@ export const getProjectPermissionsV2Response = zod.object({
         .describe('Ordered from least to most access top -> bottom'),
     ])
     .optional(),
-  owner: zod.string().describe('The owner of the item'),
 });
 
 /**
@@ -26659,17 +26894,11 @@ export const editThreadV2Body = zod.object({
           .describe(
             'Any channel share permissions to be created\/updated\/removed'
           ),
-        linkShare: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['PUBLIC', 'TEAM'])
-              .describe(
-                'Defines who can access an item through its share link.'
-              ),
-          ])
-          .optional(),
-        linkShareAccessLevel: zod
+        isPublic: zod
+          .boolean()
+          .nullish()
+          .describe('If the item is publicly accessible'),
+        publicAccessLevel: zod
           .union([
             zod.null(),
             zod
@@ -26750,15 +26979,9 @@ export const getDocumentPermissionsV2Response = zod.object({
       .nullish()
       .describe('The channel share permissions for the item'),
     id: zod.string().describe('The share permission id'),
-    linkShare: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['PUBLIC', 'TEAM'])
-          .describe('Defines who can access an item through its share link.'),
-      ])
-      .optional(),
-    linkShareAccessLevel: zod
+    isPublic: zod.boolean().describe('If the item is publicly accessible'),
+    owner: zod.string().describe('The owner of the item'),
+    publicAccessLevel: zod
       .union([
         zod.null(),
         zod
@@ -26766,7 +26989,6 @@ export const getDocumentPermissionsV2Response = zod.object({
           .describe('Ordered from least to most access top -> bottom'),
       ])
       .optional(),
-    owner: zod.string().describe('The owner of the item'),
   }),
 });
 
@@ -26808,17 +27030,11 @@ export const editProjectV2Body = zod.object({
           .describe(
             'Any channel share permissions to be created\/updated\/removed'
           ),
-        linkShare: zod
-          .union([
-            zod.null(),
-            zod
-              .enum(['PUBLIC', 'TEAM'])
-              .describe(
-                'Defines who can access an item through its share link.'
-              ),
-          ])
-          .optional(),
-        linkShareAccessLevel: zod
+        isPublic: zod
+          .boolean()
+          .nullish()
+          .describe('If the item is publicly accessible'),
+        publicAccessLevel: zod
           .union([
             zod.null(),
             zod

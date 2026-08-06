@@ -28,6 +28,8 @@ export interface Bot {
   description?: BotDescription;
   /** Stable handle. */
   handle: string;
+  /** Whether mentioning this bot opens a sandboxed coding-agent session. */
+  has_agent: boolean;
   /** Bot id. */
   id: BotId;
   /** Bot kind. */
