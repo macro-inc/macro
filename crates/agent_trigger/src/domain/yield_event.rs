@@ -155,7 +155,7 @@ pub fn yield_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::broker_events::{AgentSessionTopicEvent, ExistingAgentSessionEvent};
+    use crate::domain::broker_events::{AgentTriggerTopicEvent, ExistingAgentSessionEvent};
     use agent_session::domain::model::{AgentSession, AgentSessionId, SessionStatus};
     use channel_sender::ChannelSender;
     use channels::domain::models::{ChannelType, SimpleMention};
@@ -276,7 +276,7 @@ mod tests {
             .expect("opens a session");
         assert!(matches!(
             &event.event().event,
-            AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(_))
+            AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(_))
         ));
     }
 
@@ -287,7 +287,7 @@ mod tests {
         let event = yield_event(&posted, &ChannelSession::None, Some(BotId::TEST_A), true)
             .into_event()
             .expect("opens a session");
-        let AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
+        let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
             &event.event().event
         else {
             panic!("expected a mention-opened session");
@@ -305,7 +305,7 @@ mod tests {
         let event = yield_event(&posted, &ChannelSession::None, Some(BotId::TEST_A), true)
             .into_event()
             .expect("opens a session");
-        let AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
+        let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
             &event.event().event
         else {
             panic!("expected a mention-opened session");
@@ -355,7 +355,7 @@ mod tests {
         )
         .into_event()
         .expect("feeds the session");
-        let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
+        let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
             &event.event().event
         else {
             panic!("expected a channel event");
@@ -378,7 +378,7 @@ mod tests {
         )
         .into_event()
         .expect("feeds the session");
-        let AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
+        let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(channel_event)) =
             &event.event().event
         else {
             panic!("expected a channel event");

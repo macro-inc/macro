@@ -29,7 +29,7 @@ fn message() -> ChannelMessagePostedMetadata {
 
 #[test]
 fn serializes_a_new_top_level_mention() {
-    let event = AgentSessionTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
             message: message(),
@@ -38,14 +38,14 @@ fn serializes_a_new_top_level_mention() {
 
     let value = serde_json::to_value(event).expect("serialize event");
 
-    assert_eq!(value["event_type"], "agent_session.new");
+    assert_eq!(value["event_type"], "agent_trigger.new");
     assert_eq!(value["metadata"]["source"], "top_level_mentioned");
     assert_eq!(value["metadata"]["bot_id"], json!(BotId::TEST_A));
 }
 
 #[test]
 fn serializes_an_existing_channel_event() {
-    let event = AgentSessionTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
@@ -56,7 +56,7 @@ fn serializes_an_existing_channel_event() {
 
     let value = serde_json::to_value(event).expect("serialize event");
 
-    assert_eq!(value["event_type"], "agent_session.existing");
+    assert_eq!(value["event_type"], "agent_trigger.existing");
     assert_eq!(value["metadata"]["source"], "channel");
     assert_eq!(
         value["metadata"]["session_id"],

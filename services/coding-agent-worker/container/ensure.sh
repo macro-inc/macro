@@ -12,8 +12,7 @@ if [ ! -d /workspace/.git ]; then
 fi
 
 # Start the sidecar with the baked repo dev shell first on PATH and the base
-# tools (opencode, gh, github-mcp-server) still reachable. The sidecar reads
-# ACP_TOKEN from the environment to authenticate bridge connections.
+# tools (opencode, gh, github-mcp-server) still reachable.
 if ! curl -sf localhost:8700/ping >/dev/null 2>&1; then
   baked_path="$PATH"
   if [ -f /env/repo-dev-env.sh ]; then

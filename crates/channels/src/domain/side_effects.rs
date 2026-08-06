@@ -52,6 +52,11 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 ///
 /// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
 /// rejected (historical bare-UUID content is normalized by migration).
+///
+/// Public because out-of-process consumers have to derive the same answer: the
+/// in-process path gets [`ChannelBotTrigger::bot_ids`] for free, while anything
+/// reading `channel.message_posted` off Kafka only has the mention list and
+/// would otherwise reimplement these rules.
 pub fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions

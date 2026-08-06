@@ -24,10 +24,9 @@ mod test;
 /// The protocol does not define a full event-name catalog yet, so this enum
 /// is non-exhaustive: unrecognized wire strings still round-trip losslessly
 /// through [`SystemEvent::Unknown`]. [`SystemEvent::AcpReady`] is the one
-/// name the Agent Service actually acts on (see
-/// `agent_proxy::inbound::runtime::RuntimeConnectionDriver`, which waits for
-/// it before starting the ACP `initialize`/`session/new` handshake) rather
-/// than merely forwarding it for observability.
+/// name the Agent Service actually acts on - it waits for it before starting
+/// the ACP `initialize`/`session/new` handshake - rather than merely
+/// forwarding it for observability.
 ///
 /// This has a hand-written [`Serialize`]/[`Deserialize`] impl rather than a
 /// derive, so it cannot derive [`specta::Type`] either: nothing here

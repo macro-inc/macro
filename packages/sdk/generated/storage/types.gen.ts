@@ -55,6 +55,60 @@ export type AddPinRequest = {
     pinType: string;
 };
 
+/**
+ * Response body describing an agent session.
+ */
+export type AgentSessionResponse = {
+    /**
+     * The ACP session id, if one exists.
+     */
+    acpSessionId?: string | null;
+    /**
+     * The bot running the agent.
+     */
+    botId: string;
+    /**
+     * The session's dedicated channel.
+     */
+    channelId: string;
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * Harness slug.
+     */
+    harness: string;
+    /**
+     * The session id.
+     */
+    id: string;
+    /**
+     * Model slug.
+     */
+    model: string;
+    /**
+     * When the session was last modified.
+     */
+    modifiedAt: string;
+    /**
+     * The exact message that invoked the bot, if any.
+     */
+    originatingMessageId?: string | null;
+    /**
+     * The repository the session works with.
+     */
+    repoUrl: string;
+    /**
+     * The session's status.
+     */
+    status: SessionStatusDto;
+    /**
+     * The root message of the thread the session was created from, if any.
+     */
+    threadId?: string | null;
+};
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -1032,6 +1086,10 @@ export type Bot = {
      * Stable handle.
      */
     handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
     /**
      * Bot id.
      */
@@ -6343,6 +6401,22 @@ export type SaveDocumentResponseData = {
 };
 
 /**
+ * Transport representation of a session's status, mirroring
+ * [`SessionStatus`].
+ */
+export type SessionStatusDto = {
+    kind: 'no_messages';
+} | {
+    /**
+     * The wire name of the system event, e.g. `acp_ready`.
+     */
+    event: string;
+    kind: 'event';
+} | {
+    kind: 'disconnected';
+};
+
+/**
  * Request body for `PUT /companies/{company_id}/hidden`.
  */
 export type SetCompanyHiddenRequest = {
@@ -7822,6 +7896,57 @@ export type UnthreadedPdfUuidRequest = {
     uuid: string;
 };
 
+/**
+ * Request body for replacing an agent session. This is full-resource `PUT`
+ * semantics: fetch the session, modify it, and send the whole thing back.
+ * `channelId` and `createdAt` are immutable; echo the values returned by the
+ * get endpoint.
+ */
+export type UpdateAgentSessionRequest = {
+    /**
+     * The ACP session id, if one exists.
+     */
+    acpSessionId?: string | null;
+    /**
+     * The bot running the agent.
+     */
+    botId: string;
+    /**
+     * The session's dedicated channel. Immutable; echo the value returned
+     * by the get endpoint.
+     */
+    channelId: string;
+    /**
+     * When the session was created. Immutable; echo the value returned by
+     * the get endpoint.
+     */
+    createdAt: string;
+    /**
+     * Harness slug.
+     */
+    harness: string;
+    /**
+     * Model slug.
+     */
+    model: string;
+    /**
+     * The exact message that invoked the bot, if any.
+     */
+    originatingMessageId?: string | null;
+    /**
+     * The repository the session works with.
+     */
+    repoUrl: string;
+    /**
+     * The session's status.
+     */
+    status: SessionStatusDto;
+    /**
+     * The root message of the thread the session was created from, if any.
+     */
+    threadId?: string | null;
+};
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -8228,6 +8353,80 @@ export type GetRecentActivityHandlerResponses = {
 };
 
 export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
+
+export type DeleteAgentSessionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type DeleteAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type DeleteAgentSessionError = DeleteAgentSessionErrors[keyof DeleteAgentSessionErrors];
+
+export type DeleteAgentSessionResponses = {
+    200: unknown;
+};
+
+export type GetAgentSessionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type GetAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionError = GetAgentSessionErrors[keyof GetAgentSessionErrors];
+
+export type GetAgentSessionResponses = {
+    200: AgentSessionResponse;
+};
+
+export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type UpdateAgentSessionData = {
+    body: UpdateAgentSessionRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}';
+};
+
+export type UpdateAgentSessionErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type UpdateAgentSessionError = UpdateAgentSessionErrors[keyof UpdateAgentSessionErrors];
+
+export type UpdateAgentSessionResponses = {
+    200: unknown;
+};
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;

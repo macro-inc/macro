@@ -168,6 +168,139 @@ export const getRecentActivityHandlerResponse = zod.object({
 });
 
 /**
+ * @summary Get an agent session by id.
+ */
+export const getAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+export const getAgentSessionResponse = zod
+  .object({
+    acpSessionId: zod
+      .string()
+      .nullish()
+      .describe('The ACP session id, if one exists.'),
+    botId: zod.uuid().describe('The bot running the agent.'),
+    channelId: zod.uuid().describe("The session's dedicated channel."),
+    createdAt: zod.iso.datetime({}).describe('When the session was created.'),
+    harness: zod.string().describe('Harness slug.'),
+    id: zod.uuid().describe('The session id.'),
+    model: zod.string().describe('Model slug.'),
+    modifiedAt: zod.iso
+      .datetime({})
+      .describe('When the session was last modified.'),
+    originatingMessageId: zod
+      .uuid()
+      .nullish()
+      .describe('The exact message that invoked the bot, if any.'),
+    repoUrl: zod.string().describe('The repository the session works with.'),
+    status: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['no_messages']),
+          })
+          .describe('No status updates received.'),
+        zod
+          .object({
+            event: zod
+              .string()
+              .describe('The wire name of the system event, e.g. `acp_ready`.'),
+            kind: zod.enum(['event']),
+          })
+          .describe('The last system event received from the runtime.'),
+        zod
+          .object({
+            kind: zod.enum(['disconnected']),
+          })
+          .describe('The session disconnected without sending a closed event.'),
+      ])
+      .describe(
+        "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      ),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The root message of the thread the session was created from, if any.'
+      ),
+  })
+  .describe('Response body describing an agent session.');
+
+/**
+ * @summary Replace an agent session.
+ */
+export const updateAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+export const updateAgentSessionBody = zod
+  .object({
+    acpSessionId: zod
+      .string()
+      .nullish()
+      .describe('The ACP session id, if one exists.'),
+    botId: zod.uuid().describe('The bot running the agent.'),
+    channelId: zod
+      .uuid()
+      .describe(
+        "The session's dedicated channel. Immutable; echo the value returned\nby the get endpoint."
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe(
+        'When the session was created. Immutable; echo the value returned by\nthe get endpoint.'
+      ),
+    harness: zod.string().describe('Harness slug.'),
+    model: zod.string().describe('Model slug.'),
+    originatingMessageId: zod
+      .uuid()
+      .nullish()
+      .describe('The exact message that invoked the bot, if any.'),
+    repoUrl: zod.string().describe('The repository the session works with.'),
+    status: zod
+      .union([
+        zod
+          .object({
+            kind: zod.enum(['no_messages']),
+          })
+          .describe('No status updates received.'),
+        zod
+          .object({
+            event: zod
+              .string()
+              .describe('The wire name of the system event, e.g. `acp_ready`.'),
+            kind: zod.enum(['event']),
+          })
+          .describe('The last system event received from the runtime.'),
+        zod
+          .object({
+            kind: zod.enum(['disconnected']),
+          })
+          .describe('The session disconnected without sending a closed event.'),
+      ])
+      .describe(
+        "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      ),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The root message of the thread the session was created from, if any.'
+      ),
+  })
+  .describe(
+    'Request body for replacing an agent session. This is full-resource `PUT`\nsemantics: fetch the session, modify it, and send the whole thing back.\n`channelId` and `createdAt` are immutable; echo the values returned by the\nget endpoint.'
+  );
+
+/**
+ * @summary Delete an agent session and its dedicated channel.
+ */
+export const deleteAgentSessionParams = zod.object({
+  session_id: zod.uuid().describe('ID of the agent session'),
+});
+
+/**
  * @summary Deletes a single unthreaded anchor for a document
 If you need to delete a threaded anchor, see the delete comment handler
  */
@@ -843,6 +976,11 @@ export const getSelfBotResponse = zod
       .describe('Soft-delete timestamp.'),
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+      ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
     name: zod.string().describe('Display name.'),

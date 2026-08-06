@@ -230,6 +230,15 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     .await
     .expect("create first log entry");
 
+    let session = repo
+        .get(session_id)
+        .await
+        .expect("get session after system event");
+    assert!(matches!(
+        session.status,
+        SessionStatus::Event(SystemEvent::AcpReady)
+    ));
+
     AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {

@@ -82,6 +82,181 @@
         "deprecated": true
       }
     },
+    "/agent-sessions/{session_id}": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Get an agent session by id.",
+        "operationId": "get_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace an agent session.",
+        "operationId": "update_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "Delete an agent session and its dedicated channel.",
+        "operationId": "delete_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -11163,6 +11338,78 @@
           }
         }
       },
+      "AgentSessionResponse": {
+        "type": "object",
+        "description": "Response body describing an agent session.",
+        "required": [
+          "id",
+          "channelId",
+          "botId",
+          "model",
+          "harness",
+          "repoUrl",
+          "status",
+          "createdAt",
+          "modifiedAt"
+        ],
+        "properties": {
+          "acpSessionId": {
+            "type": ["string", "null"],
+            "description": "The ACP session id, if one exists."
+          },
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot running the agent."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session's dedicated channel."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was created."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness slug."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model slug."
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was last modified."
+          },
+          "originatingMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The exact message that invoked the bot, if any."
+          },
+          "repoUrl": {
+            "type": "string",
+            "description": "The repository the session works with."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatusDto",
+            "description": "The session's status."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The root message of the thread the session was created from, if any."
+          }
+        }
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -12605,7 +12852,8 @@
           "name",
           "handle",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "has_agent"
         ],
         "properties": {
           "avatar_url": {
@@ -12633,6 +12881,10 @@
           "handle": {
             "type": "string",
             "description": "Stable handle."
+          },
+          "has_agent": {
+            "type": "boolean",
+            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -21411,6 +21663,48 @@
           }
         }
       },
+      "SessionStatusDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No status updates received.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["no_messages"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The last system event received from the runtime.",
+            "required": ["event", "kind"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "description": "The wire name of the system event, e.g. `acp_ready`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session disconnected without sending a closed event.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["disconnected"]
+              }
+            }
+          }
+        ],
+        "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
       "SetCompanyHiddenRequest": {
         "type": "object",
         "description": "Request body for `PUT /companies/{company_id}/hidden`.",
@@ -23659,6 +23953,66 @@
             }
           }
         ]
+      },
+      "UpdateAgentSessionRequest": {
+        "type": "object",
+        "description": "Request body for replacing an agent session. This is full-resource `PUT`\nsemantics: fetch the session, modify it, and send the whole thing back.\n`channelId` and `createdAt` are immutable; echo the values returned by the\nget endpoint.",
+        "required": [
+          "channelId",
+          "botId",
+          "model",
+          "harness",
+          "repoUrl",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "acpSessionId": {
+            "type": ["string", "null"],
+            "description": "The ACP session id, if one exists."
+          },
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot running the agent."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session's dedicated channel. Immutable; echo the value returned\nby the get endpoint."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was created. Immutable; echo the value returned by\nthe get endpoint."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness slug."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model slug."
+          },
+          "originatingMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The exact message that invoked the bot, if any."
+          },
+          "repoUrl": {
+            "type": "string",
+            "description": "The repository the session works with."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatusDto",
+            "description": "The session's status."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The root message of the thread the session was created from, if any."
+          }
+        }
       },
       "UpdateChannelSharePermission": {
         "type": "object",

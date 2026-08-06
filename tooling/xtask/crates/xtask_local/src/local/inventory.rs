@@ -245,27 +245,27 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: true,
     },
     RustService {
-        compose_name: "agent_proxy_service",
-        cargo_bin: "agent_proxy_service",
-        package: "agent_proxy_service",
-        host_port: Some(Port::AgentProxy),
-        // No frontend proxy route yet; clients hit the host port directly.
-        // The shared agent-runtime WebSocket endpoint lives on this same
-        // port (route `/runtime`, sessions disambiguated by `?id=`) rather
-        // than a listener of its own.
-        path_prefix: None,
-        is_websocket: true,
-        modes: &[Mode::Local],
-        opt_in: false,
-        no_default_features: false,
-    },
-    RustService {
         compose_name: "agent_trigger_service",
         cargo_bin: "agent_trigger_service",
         package: "agent_trigger_service",
         host_port: None,
         path_prefix: None,
         is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
+        compose_name: "agent_harness_service",
+        cargo_bin: "agent_harness_service",
+        package: "agent_harness_service",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        // Runs by default, but inert without credentials: `LocalEnv` seeds
+        // DAYTONA_API_KEY empty (the service starts and warns), and
+        // `DAYTONA_API_KEY=... just run_local` arms it via the process-env
+        // overlay.
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,

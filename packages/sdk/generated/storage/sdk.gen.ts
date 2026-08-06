@@ -67,6 +67,34 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Delete an agent session and its dedicated channel.
+     */
+    public deleteAgentSession<ThrowOnError extends boolean = false>(options: Options<DeleteAgentSessionData, ThrowOnError>): RequestResult<DeleteAgentSessionResponses, DeleteAgentSessionErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteAgentSessionResponses, DeleteAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
+    }
+    
+    /**
+     * Get an agent session by id.
+     */
+    public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
+    }
+    
+    /**
+     * Replace an agent session.
+     */
+    public updateAgentSession<ThrowOnError extends boolean = false>(options: Options<UpdateAgentSessionData, ThrowOnError>): RequestResult<UpdateAgentSessionResponses, UpdateAgentSessionErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<UpdateAgentSessionResponses, UpdateAgentSessionErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Deletes a single unthreaded anchor for a document
      * If you need to delete a threaded anchor, see the delete comment handler
      */
