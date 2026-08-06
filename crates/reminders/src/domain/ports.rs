@@ -6,8 +6,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CreateReminder, DispatchSummary, DueReminder, NewReminder, Reminder, ReminderBatch,
-    ReminderError, ReminderFilter, ReminderPage, ReminderPatch, ReminderUpdate,
+    CreateReminder, DeliveryOutcome, DueFiring, DueReminder, NewReminder, Reminder, ReminderBatch,
+    ReminderDispatchMessage, ReminderError, ReminderFilter, ReminderPage, ReminderPatch,
+    ReminderUpdate, SweepSummary,
 };
 
 /// Source of the current time.
@@ -90,15 +91,31 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Reminders whose next firing is due at or before `now`, soonest first.
+    /// Every firing due at or before `now`, soonest first.
     ///
-    /// Enabled and not yet completed; the recurring/one-shot distinction is
-    /// left to the caller so the exclusion stays visible in the domain.
-    fn due_reminders(
+    /// Enabled, not yet completed, and not recurring. Returns identifiers
+    /// rather than whole reminders because a sweep only fans these out; the
+    /// row is read at delivery, by which point it may have changed.
+    ///
+    /// Deliberately unbounded — a sweep that silently truncated would strand
+    /// whatever fell off the end until someone noticed. See the note on the
+    /// implementation for where paging goes if a sweep ever grows too large
+    /// to fan out inside one message.
+    fn due_firings(
         &self,
         now: DateTime<Utc>,
-        limit: i64,
-    ) -> impl Future<Output = Result<Vec<DueReminder>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<DueFiring>, Self::Err>> + Send;
+
+    /// Resolve a fanned-out firing back into the reminder to deliver.
+    ///
+    /// `None` when the reminder no longer wants this firing — deleted,
+    /// completed, disabled, or rescheduled since the sweep listed it. Recurring
+    /// reminders are *not* filtered out here; the domain decides what to do
+    /// with those so the gap stays visible.
+    fn find_due_reminder(
+        &self,
+        firing: DueFiring,
+    ) -> impl Future<Output = Result<Option<DueReminder>, Self::Err>> + Send;
 
     /// Claim one firing for delivery, returning whether this caller now owns it.
     ///
@@ -113,6 +130,18 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
         retry_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Give up a claim that was taken but never delivered.
+    ///
+    /// What makes a failed delivery retryable on the queue's own schedule: the
+    /// message is redelivered within the visibility timeout, and without this
+    /// the retry would lose the claim race against itself until `retry_before`
+    /// finally aged the claim out. A delivered firing is never released.
+    fn release_occurrence(
+        &self,
+        reminder_id: Uuid,
+        scheduled_for: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Record the firing as delivered and complete the reminder, atomically.
     ///
     /// Both halves together: a delivered firing must never leave its reminder
@@ -121,6 +150,49 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
         &self,
         reminder_id: Uuid,
         scheduled_for: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// A message as it came off the dispatch queue, still unparsed.
+///
+/// The body stays a string so the worker can ack a message it cannot parse:
+/// decoding in the adapter would leave a poison message to be redelivered
+/// until the redrive policy dead-lettered it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawDispatchMessage {
+    /// The raw JSON body.
+    pub body: String,
+    /// Handle used to delete the message once it has been handled.
+    pub receipt_handle: String,
+}
+
+/// Outbound port for the queue that carries dispatch work.
+///
+/// One port for both directions because it is one queue: a sweep publishes
+/// the `Deliver` messages that the same worker pool then receives.
+pub trait ReminderDispatchQueue: Send + Sync + 'static {
+    /// The error type returned by queue operations.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Publish messages, batching as the transport allows.
+    ///
+    /// All-or-nothing per call: a partial failure is an error, and the caller
+    /// is expected to let the triggering message be redelivered. Re-fanning a
+    /// firing that already went out is harmless — it loses the claim race.
+    fn publish_batch(
+        &self,
+        messages: &[ReminderDispatchMessage],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Receive whatever is waiting, up to the adapter's configured batch size.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawDispatchMessage>, Self::Err>> + Send;
+
+    /// Delete a message that has been handled.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -137,13 +209,20 @@ pub trait ReminderNotifier: Send + Sync + 'static {
     fn notify(&self, due: &DueReminder) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Inbound service port: the dispatch sweep, driven by a scheduled trigger.
+/// Inbound service port: dispatch, driven by the queue worker.
+///
+/// Two use cases rather than one, because they arrive as two different
+/// messages: a scheduled tick fans work out, and each fanned-out message
+/// delivers a single firing.
 pub trait ReminderDispatch: Send + Sync + 'static {
-    /// Deliver every reminder that is currently due, up to `limit`.
-    fn dispatch_due(
+    /// Fan out every firing that is currently due.
+    fn sweep(&self) -> impl Future<Output = Result<SweepSummary, ReminderError>> + Send;
+
+    /// Deliver one fanned-out firing.
+    fn deliver(
         &self,
-        limit: i64,
-    ) -> impl Future<Output = Result<DispatchSummary, ReminderError>> + Send;
+        firing: DueFiring,
+    ) -> impl Future<Output = Result<DeliveryOutcome, ReminderError>> + Send;
 }
 
 /// Inbound service port: the reminders API used by drivers (HTTP).

@@ -5,3 +5,6 @@ pub mod notification_notifier;
 
 #[cfg(feature = "postgres")]
 pub mod pg_reminders_repo;
+
+#[cfg(feature = "dispatch-sqs")]
+pub mod sqs_dispatch_queue;

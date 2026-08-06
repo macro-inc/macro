@@ -12227,29 +12227,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
-name = "reminder_dispatch_handler"
-version = "0.1.0"
-dependencies = [
- "aws-sdk-sqs",
- "aws_lambda_events",
- "lambda_runtime",
- "macro_aws_config",
- "macro_entrypoint",
- "macro_env_var",
- "macro_queues",
- "notification",
- "reminders",
- "rootcause",
- "sqlx",
- "tokio",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "reminders"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-sqs",
  "axum",
  "chrono",
  "chrono-tz",
@@ -12271,6 +12252,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "utoipa",

@@ -80,7 +80,6 @@ members = [
   "services/notification_service",
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
-  "services/reminder_dispatch_handler",
   "services/scheduled_action",
   "services/search_processing_service",
   "services/search_upload_handler",

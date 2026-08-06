@@ -14,8 +14,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DueReminder, InvalidCron, NewReminder, Reminder, ReminderBatch, ReminderCron, ReminderCursor,
-    ReminderFilter, ReminderSchedule, ReminderUpdate,
+    DueFiring, DueReminder, InvalidCron, NewReminder, Reminder, ReminderBatch, ReminderCron,
+    ReminderCursor, ReminderFilter, ReminderSchedule, ReminderUpdate,
 };
 use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 
@@ -493,20 +493,54 @@ impl ReminderDispatchRepo for PgRemindersRepo {
     type Err = RemindersRepoErr;
 
     #[tracing::instrument(err, skip(self))]
-    async fn due_reminders(
-        &self,
-        now: DateTime<Utc>,
-        limit: i64,
-    ) -> Result<Vec<DueReminder>, Self::Err> {
+    async fn due_firings(&self, now: DateTime<Utc>) -> Result<Vec<DueFiring>, Self::Err> {
         // Driven by `reminder_due_idx`: (next_run_at) WHERE enabled AND
         // completed_at IS NULL, with recurring rows filtered out on top.
         //
-        // Recurring reminders are excluded here rather than only in the
-        // dispatch loop because `LIMIT` applies before that loop sees a row.
-        // A recurring reminder is never completed and never has its
-        // next_run_at advanced, so it stays due forever — enough of them
-        // would fill every sweep and starve one-shot reminders permanently.
-        let rows = sqlx::query_as!(
+        // Recurring reminders are excluded here as well as at delivery because
+        // one is never completed and never has its next_run_at advanced, so it
+        // stays due forever — every sweep would re-fan the same rows and pay
+        // for a message each, indefinitely.
+        //
+        // Unbounded on purpose: a sweep publishes ids, so the cost of a large
+        // one is a batch send per ten rows, and the ceiling is the queue's
+        // visibility timeout rather than a row count. Should a sweep ever
+        // outgrow that, page it with a keyset cursor on (next_run_at, id) and
+        // have the handler re-enqueue itself, the way the crm cleanup lister
+        // does — a bare LIMIT here would silently strand the overflow.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, next_run_at
+            FROM reminder
+            WHERE enabled
+              AND completed_at IS NULL
+              AND cron IS NULL
+              AND next_run_at <= $1
+            ORDER BY next_run_at
+            "#,
+            now,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| DueFiring {
+                reminder_id: row.id,
+                scheduled_for: row.next_run_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn find_due_reminder(&self, firing: DueFiring) -> Result<Option<DueReminder>, Self::Err> {
+        // Matching `next_run_at` exactly is what makes a stale message safe: an
+        // edit moves the firing, and this then finds nothing rather than
+        // delivering the reminder at a time the user cancelled.
+        //
+        // `cron IS NULL` is deliberately absent — the domain refuses recurring
+        // reminders itself so the gap stays visible there.
+        let row = sqlx::query_as!(
             DueReminderRow,
             r#"
             SELECT
@@ -524,33 +558,18 @@ impl ReminderDispatchRepo for PgRemindersRepo {
                 created_at,
                 updated_at
             FROM reminder
-            WHERE enabled
+            WHERE id = $1
+              AND next_run_at = $2
+              AND enabled
               AND completed_at IS NULL
-              AND cron IS NULL
-              AND next_run_at <= $1
-            ORDER BY next_run_at
-            LIMIT $2
             "#,
-            now,
-            limit,
+            firing.reminder_id,
+            firing.scheduled_for,
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        // Skip rows that will not decode rather than failing the batch. The
-        // query is ordered and limited, so one poison row would be re-selected
-        // on every sweep and stall delivery for every user, permanently. This
-        // mirrors `list_reminders`, which reports skipped rows rather than
-        // failing the page.
-        let mut due = Vec::with_capacity(rows.len());
-        for row in rows {
-            match row.into_due() {
-                Ok(reminder) => due.push(reminder),
-                Err(e) => tracing::error!(error = ?e, "skipping undecodable due reminder"),
-            }
-        }
-
-        Ok(due)
+        row.map(DueReminderRow::into_due).transpose()
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -587,6 +606,31 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         .await?;
 
         Ok(claimed.is_some())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn release_occurrence(
+        &self,
+        reminder_id: Uuid,
+        scheduled_for: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        // `sent_at IS NULL` guards against releasing a firing that did go out:
+        // completion and release can only race if the same firing is being
+        // handled twice, and the delivered one must win.
+        sqlx::query!(
+            r#"
+            DELETE FROM reminder_occurrence
+            WHERE reminder_id = $1
+              AND scheduled_for = $2
+              AND sent_at IS NULL
+            "#,
+            reminder_id,
+            scheduled_for,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]

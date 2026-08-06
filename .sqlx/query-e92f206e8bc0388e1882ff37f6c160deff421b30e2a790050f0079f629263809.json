@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, next_run_at\n            FROM reminder\n            WHERE enabled\n              AND completed_at IS NULL\n              AND cron IS NULL\n              AND next_run_at <= $1\n            ORDER BY next_run_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e92f206e8bc0388e1882ff37f6c160deff421b30e2a790050f0079f629263809"
+}

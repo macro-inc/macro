@@ -1,4 +1,0 @@
-config:
-  aws-native:region: us-east-1
-  aws:region: us-east-1
-  reminder-dispatch:macro_db_proxy_secret_key: macrodb-rds-proxy-prod

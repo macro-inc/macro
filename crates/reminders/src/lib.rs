@@ -9,16 +9,17 @@
 //! # Architecture
 //!
 //! - **domain**: domain models, ports, and the service implementation.
-//! - **inbound**: driving adapters (Axum HTTP router).
-//! - **outbound**: driven adapters (Postgres repository).
+//! - **inbound**: driving adapters (Axum HTTP router, dispatch queue worker).
+//! - **outbound**: driven adapters (Postgres repository, SQS dispatch queue).
 //!
-//! Delivery lives here too: the dispatch sweep claims due firings, sends the
-//! notification, and records `reminder_occurrence` rows. Recurring schedules
-//! are modelled and stored but not yet dispatched.
+//! Delivery lives here too, as a pub/sub fan-out over a single queue: a
+//! scheduled tick sweeps for due firings and publishes one message each, and
+//! the same pool of workers claims, notifies and completes them in parallel.
+//! Recurring schedules are modelled and stored but not yet dispatched.
 
 pub mod domain;
 
-#[cfg(feature = "inbound")]
+#[cfg(any(feature = "inbound", feature = "dispatch"))]
 pub mod inbound;
 
 #[cfg(feature = "outbound")]

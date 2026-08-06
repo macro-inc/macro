@@ -113,16 +113,6 @@
         "document_upload_finalizer_handler"
       ]
     },
-    "reminder-dispatch": {
-      "source_paths": [
-        "crates/reminders/**",
-        "services/reminder_dispatch_handler/**"
-      ],
-      "stack_path": "infra/stacks/reminder-dispatch/**",
-      "deploy_lambdas": [
-        "reminder_dispatch_handler"
-      ]
-    },
     "document-storage": {
       "source_paths": [
         "services/document_storage_service/**"
