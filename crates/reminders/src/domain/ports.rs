@@ -36,7 +36,7 @@ impl Clock for SystemClock {
 /// id belonging to someone else simply misses rather than erroring.
 pub trait RemindersRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Send + std::fmt::Debug;
+    type Err: std::error::Error + Send + Sync + 'static;
 
     /// Insert a reminder for the user.
     fn create_reminder(
@@ -88,7 +88,7 @@ pub trait RemindersRepo: Send + Sync + 'static {
 /// it in would quietly retire that invariant.
 pub trait ReminderDispatchRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Send + std::fmt::Debug;
+    type Err: std::error::Error + Send + Sync + 'static;
 
     /// Reminders whose next firing is due at or before `now`, soonest first.
     ///
@@ -130,7 +130,7 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
 /// notification is built or delivered.
 pub trait ReminderNotifier: Send + Sync + 'static {
     /// The error type returned by delivery attempts.
-    type Err: Send + std::fmt::Debug;
+    type Err: std::error::Error + Send + Sync + 'static;
 
     /// Notify the reminder's owner. Failure leaves the firing undelivered and
     /// retryable.

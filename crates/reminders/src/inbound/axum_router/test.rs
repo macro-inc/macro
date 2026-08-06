@@ -890,7 +890,7 @@ async fn domain_errors_map_to_their_status_codes() {
             true,
         ),
         (
-            || ReminderError::Internal(anyhow::anyhow!("boom")),
+            || ReminderError::Internal(rootcause::report!("boom").into_dynamic()),
             StatusCode::INTERNAL_SERVER_ERROR,
             false,
         ),

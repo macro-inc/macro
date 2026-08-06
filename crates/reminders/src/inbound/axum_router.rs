@@ -232,7 +232,7 @@ async fn mint_entity_receipt<Eas: EntityAccessService>(
             }
             AccessError::NotFound(_) => ReminderError::EntityNotFound,
             AccessError::BadRequest(msg) => ReminderError::BadRequest(msg.to_string()),
-            other => ReminderError::Internal(anyhow::Error::new(other)),
+            other => ReminderError::Internal(rootcause::Report::new(other).into_dynamic()),
         })
 }
 

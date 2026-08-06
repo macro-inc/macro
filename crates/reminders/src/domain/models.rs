@@ -442,8 +442,14 @@ pub enum ReminderError {
     #[error("you do not have access to this entity")]
     EntityAccessDenied,
     /// Any other internal error.
-    #[error(transparent)]
-    Internal(#[from] anyhow::Error),
+    #[error("internal reminders error: {0:?}")]
+    Internal(rootcause::Report),
+}
+
+impl From<rootcause::Report> for ReminderError {
+    fn from(report: rootcause::Report) -> Self {
+        ReminderError::Internal(report)
+    }
 }
 
 impl From<InvalidCron> for ReminderError {

@@ -34,7 +34,6 @@ impl<R, N> ReminderDispatchService<R, N, SystemClock>
 where
     R: ReminderDispatchRepo,
     N: ReminderNotifier,
-    anyhow::Error: From<R::Err>,
 {
     /// Create a dispatch service reading the current time from the system clock.
     pub fn new(repo: R, notifier: N) -> Self {
@@ -51,7 +50,6 @@ where
     R: ReminderDispatchRepo,
     N: ReminderNotifier,
     C: Clock,
-    anyhow::Error: From<R::Err>,
 {
     /// Create a dispatch service with an explicit clock.
     pub fn with_clock(repo: R, notifier: N, clock: C) -> Self {
@@ -110,7 +108,6 @@ where
     R: ReminderDispatchRepo,
     N: ReminderNotifier,
     C: Clock,
-    anyhow::Error: From<R::Err>,
 {
     #[tracing::instrument(err, skip(self))]
     async fn dispatch_due(&self, limit: i64) -> Result<DispatchSummary, ReminderError> {
@@ -119,7 +116,7 @@ where
             .repo
             .due_reminders(now, limit)
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
 
         let mut summary = DispatchSummary::default();
 

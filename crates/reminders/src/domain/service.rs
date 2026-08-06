@@ -33,7 +33,6 @@ pub struct RemindersServiceImpl<R, C = SystemClock> {
 impl<R> RemindersServiceImpl<R, SystemClock>
 where
     R: RemindersRepo,
-    anyhow::Error: From<R::Err>,
 {
     /// Create a reminders service backed by the provided repository, reading
     /// the current time from the system clock.
@@ -49,7 +48,6 @@ impl<R, C> RemindersServiceImpl<R, C>
 where
     R: RemindersRepo,
     C: Clock,
-    anyhow::Error: From<R::Err>,
 {
     /// Create a reminders service with an explicit clock.
     pub fn with_clock(repo: R, clock: C) -> Self {
@@ -147,7 +145,6 @@ impl<R, C> RemindersService for RemindersServiceImpl<R, C>
 where
     R: RemindersRepo,
     C: Clock,
-    anyhow::Error: From<R::Err>,
 {
     // `user_id` is the auth-provider composite id (it embeds the user's email)
     // and `request`/`patch` carry the user-authored description, so neither is
@@ -179,7 +176,7 @@ where
             .repo
             .create_reminder(user_id, &new)
             .await
-            .map_err(anyhow::Error::from)?)
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?)
     }
 
     #[tracing::instrument(err, skip(self, receipt))]
@@ -191,7 +188,7 @@ where
         self.repo
             .get_reminder(&user_id, id)
             .await
-            .map_err(anyhow::Error::from)?
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?
             .ok_or(ReminderError::NotFound)
     }
 
@@ -224,7 +221,7 @@ where
                 .repo
                 .list_reminders(user_id, &probe, probe_limit)
                 .await
-                .map_err(anyhow::Error::from)?;
+                .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
 
             // `examined`, not the decoded count: a batch whose extra row could
             // not be decoded still proves more rows exist.
@@ -305,7 +302,7 @@ where
         self.repo
             .update_reminder(&user_id, id, &update)
             .await
-            .map_err(anyhow::Error::from)?
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?
             .ok_or(ReminderError::NotFound)
     }
 
@@ -319,7 +316,7 @@ where
             .repo
             .delete_reminder(&user_id, id)
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         if deleted {
             Ok(())
         } else {
