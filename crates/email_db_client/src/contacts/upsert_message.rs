@@ -284,11 +284,8 @@ pub async fn upsert_message_recipients(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
     upserted_recipients: &address::UpsertedRecipients,
+    message_inserted: bool,
 ) -> anyhow::Result<()> {
-    if upserted_recipients.recipients.is_empty() {
-        return Ok(());
-    }
-
     let n = upserted_recipients.recipients.len();
     let mut message_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
     let mut contact_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
@@ -302,24 +299,30 @@ pub async fn upsert_message_recipients(
         recipient_types_to_insert.push(recipient.recipient_type.clone());
     }
 
-    // Delete existing recipients for the message_id that don't match the values we are about to
-    // insert, in case this is an upsert and some values got removed since the last insert (think drafts)
-    sqlx::query!(
-        r#"
-        DELETE FROM email_message_recipients
-        WHERE message_id = $1
-          AND (contact_id, recipient_type) NOT IN (
-              SELECT contact_id, recipient_type
-              FROM unnest($2::uuid[], $3::email_recipient_type[])
-              AS t(contact_id, recipient_type)
-          )
-        "#,
-        message_id,
-        &contact_ids_to_insert,
-        &recipient_types_to_insert as &[db::address::EmailRecipientType]
-    )
-    .execute(&mut *tx)
-    .await?;
+    // Conflict updates may remove recipients from mutable drafts. Fresh inserts have no stale
+    // rows to clean up, so avoid the unnecessary DELETE in that case.
+    if !message_inserted {
+        sqlx::query!(
+            r#"
+            DELETE FROM email_message_recipients
+            WHERE message_id = $1
+              AND (contact_id, recipient_type) NOT IN (
+                  SELECT contact_id, recipient_type
+                  FROM unnest($2::uuid[], $3::email_recipient_type[])
+                  AS t(contact_id, recipient_type)
+              )
+            "#,
+            message_id,
+            &contact_ids_to_insert,
+            &recipient_types_to_insert as &[db::address::EmailRecipientType]
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    if upserted_recipients.recipients.is_empty() {
+        return Ok(());
+    }
 
     sqlx::query!(
         r#"

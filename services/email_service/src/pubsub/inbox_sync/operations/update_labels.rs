@@ -413,14 +413,21 @@ async fn apply_message_label_diff(
 
     let result = async {
         if !labels_to_add.is_empty() {
-            insert::insert_message_labels(&mut tx, link.id, message_db_id, labels_to_add, false)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to insert message labels"),
-                    })
-                })?;
+            insert::insert_message_labels(
+                &mut tx,
+                link.id,
+                message_db_id,
+                labels_to_add,
+                false,
+                false,
+            )
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to insert message labels"),
+                })
+            })?;
 
             if labels_to_add
                 .iter()

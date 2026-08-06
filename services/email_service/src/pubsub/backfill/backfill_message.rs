@@ -56,7 +56,7 @@ pub async fn backfill_message(
     process_message_pre_insert(&mut message).await;
 
     // insert message into database
-    email_db_client::messages::insert::insert_message(
+    let (message_db_id, persisted_thread_id) = email_db_client::messages::insert::insert_message(
         &ctx.db,
         p.thread_db_id,
         &mut message,
@@ -71,19 +71,6 @@ pub async fn backfill_message(
             source: e.context("Failed to insert final message into database"),
         })
     })?;
-    let (message_db_id, persisted_thread_id) =
-        email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
-            &ctx.db,
-            link.id,
-            &p.message_provider_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to resolve persisted calendar invitation message"),
-            })
-        })?;
 
     if ctx.calendar_sync_enabled {
         crate::calendar_ingest::ingest_calendar_parts(

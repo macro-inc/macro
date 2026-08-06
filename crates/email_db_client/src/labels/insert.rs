@@ -2,6 +2,9 @@ use models_email::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
+#[cfg(test)]
+mod test;
+
 #[tracing::instrument(skip(pool), err)]
 pub async fn insert_message_label(
     pool: &PgPool,
@@ -266,11 +269,8 @@ pub async fn insert_message_labels(
     message_id: Uuid,
     provider_label_ids: &[String],
     delete_old: bool,
+    message_inserted: bool,
 ) -> anyhow::Result<()> {
-    if provider_label_ids.is_empty() {
-        return Ok(());
-    }
-
     // get back label ids to use in junction table insert
     #[derive(Debug)]
     struct LabelMapping {
@@ -316,7 +316,7 @@ pub async fn insert_message_labels(
 
     // deleting records that don't match the ones to insert first in case we are doing an
     // upsert and some of the old ones got removed
-    if delete_old {
+    if delete_old && !message_inserted {
         sqlx::query!(
             r#"
         DELETE FROM email_message_labels
@@ -330,6 +330,10 @@ pub async fn insert_message_labels(
         )
         .execute(&mut *tx)
         .await?;
+    }
+
+    if label_mappings.is_empty() {
+        return Ok(());
     }
 
     sqlx::query(

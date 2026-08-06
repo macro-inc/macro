@@ -494,6 +494,49 @@ async fn update_missing_contact_names_empty_input(pool: Pool<Postgres>) -> Resul
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn stale_recipient_cleanup_runs_only_for_conflict_updates(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000d501")?;
+    let contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000cd002")?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+        VALUES ($1, $2, 'TO')
+        "#,
+        message_id,
+        contact_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let recipients = address::UpsertedRecipients::default();
+    let mut tx = pool.begin().await?;
+    upsert_message_recipients(&mut tx, message_id, &recipients, true).await?;
+    let count_after_fresh_insert = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1",
+        message_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    assert_eq!(count_after_fresh_insert, Some(1));
+
+    upsert_message_recipients(&mut tx, message_id, &recipients, false).await?;
+    let count_after_conflict = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM email_message_recipients WHERE message_id = $1",
+        message_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    assert_eq!(count_after_conflict, Some(0));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
 )]
 // should update updated_at timestamp when name is set

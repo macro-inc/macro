@@ -233,45 +233,32 @@ pub async fn upsert_message(
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
-    if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
-        process_and_insert_message(ctx, link.id, *thread_db_id, &mut message)
+    let (message_db_id, thread_db_id) =
+        if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
+            process_and_insert_message(ctx, link.id, *thread_db_id, &mut message)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to process and insert message".to_string()),
+                    })
+                })?
+        } else {
+            fetch_and_insert_thread(
+                ctx,
+                payload,
+                &gmail_access_token,
+                link.id,
+                &provider_thread_id,
+            )
             .await
             .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
+                ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to process and insert message".to_string()),
+                    source: e.context("Failed to fetch and insert thread".to_string()),
                 })
-            })?;
-    } else {
-        fetch_and_insert_thread(
-            ctx,
-            payload,
-            &gmail_access_token,
-            link.id,
-            &provider_thread_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch and insert thread".to_string()),
-            })
-        })?;
-    }
-
-    let (message_db_id, thread_db_id) =
-        email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
-            &ctx.db,
-            link.id,
-            &payload.provider_message_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to get new message db id".to_string()),
-            })
-        })?;
+            })?
+        };
 
     // Publish to the macro.email topic immediately after the committed insert.
     // Drafts publish after every sync because their bodies are mutable. Existing
@@ -607,7 +594,7 @@ async fn fetch_and_insert_thread(
     gmail_access_token: &str,
     link_id: Uuid,
     provider_thread_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(Uuid, Uuid)> {
     // fetch threads
     check_gmail_rate_limit_inbox_sync(
         ctx,
@@ -645,18 +632,27 @@ async fn fetch_and_insert_thread(
     process_threads_pre_insert(&mut threads).await;
 
     // insert threads into db
-    for thread in threads.into_iter() {
-        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to insert thread and messages".to_string()),
-                })
-            })?;
+    for thread in threads {
+        let (_, message_ids) =
+            threads::insert::insert_thread_and_messages_returning_ids(&ctx.db, thread, link_id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to insert thread and messages".to_string()),
+                    })
+                })?;
+
+        if let Some(ids) = message_ids.get(&payload.provider_message_id) {
+            return Ok(*ids);
+        }
     }
 
-    Ok(())
+    anyhow::bail!(
+        "Inserted provider thread {} without target message {}",
+        provider_thread_id,
+        payload.provider_message_id
+    )
 }
 
 /// Process and insert message
@@ -666,10 +662,10 @@ async fn process_and_insert_message(
     link_id: Uuid,
     thread_db_id: Uuid,
     message: &mut Message,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(Uuid, Uuid)> {
     process_message_pre_insert(message).await;
 
-    email_db_client::messages::insert::insert_message(
+    let ids = email_db_client::messages::insert::insert_message(
         &ctx.db,
         thread_db_id,
         message,
@@ -684,7 +680,7 @@ async fn process_and_insert_message(
         })
     })?;
 
-    Ok(())
+    Ok(ids)
 }
 
 /// Notify downstream services about new message in a user's inbox

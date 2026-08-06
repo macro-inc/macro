@@ -8,8 +8,18 @@ use models_email::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
+#[cfg(test)]
+mod test;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MessageInsertionOutcome {
+    pub(crate) message_id: Uuid,
+    pub(crate) thread_id: Uuid,
+    pub(crate) inserted: bool,
+}
+
 /// inserts a message (and all its related parts) into the database using the passed transaction.
-pub async fn insert_message_with_tx(
+pub(crate) async fn insert_message_with_tx(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
     message: &mut message::Message,
@@ -21,8 +31,8 @@ pub async fn insert_message_with_tx(
     // 1. inserting thread simultaneously (thread already has latest values)
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
-) -> anyhow::Result<()> {
-    let message_db_id = insert_db_message(
+) -> anyhow::Result<MessageInsertionOutcome> {
+    let outcome = insert_db_message(
         tx,
         message,
         thread_db_id,
@@ -31,41 +41,46 @@ pub async fn insert_message_with_tx(
     )
     .await?;
 
-    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents).await?;
+    contacts::upsert_message::upsert_message_recipients(
+        tx,
+        outcome.message_id,
+        &recipents,
+        outcome.inserted,
+    )
+    .await?;
 
-    if !message.labels.is_empty() {
-        let provider_label_ids: Vec<String> = message
-            .labels
-            .iter()
-            .map(|label| label.provider_label_id.clone())
-            .collect();
-        labels::insert::insert_message_labels(
-            tx,
-            link_id,
-            message_db_id,
-            &provider_label_ids,
-            true,
-        )
-        .await?;
-    }
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+    labels::insert::insert_message_labels(
+        tx,
+        link_id,
+        outcome.message_id,
+        &provider_label_ids,
+        true,
+        outcome.inserted,
+    )
+    .await?;
 
     if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
+        provider::insert_attachments(tx, outcome.message_id, &mut message.attachments).await?;
     }
 
     if update_thread_metadata {
-        threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;
+        threads::update::update_thread_metadata(tx, outcome.thread_id, link_id).await?;
 
         replying_to_id::update_message_replying_to_from_headers(
             tx,
             message,
-            message_db_id,
+            outcome.message_id,
             link_id,
         )
         .await?;
     }
 
-    Ok(())
+    Ok(outcome)
 }
 
 /// inserts message object into the database
@@ -76,7 +91,7 @@ async fn insert_db_message(
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
     update_thread_metadata: bool,
-) -> anyhow::Result<Uuid> {
+) -> anyhow::Result<MessageInsertionOutcome> {
     let db_message =
         parse::service_to_db::map_service_message_to_db(message, thread_id, from_contact_id);
 
@@ -111,7 +126,7 @@ async fn insert_db_message(
             body_text = EXCLUDED.body_text,
             body_html_sanitized = EXCLUDED.body_html_sanitized,
             updated_at = NOW()
-        RETURNING id
+        RETURNING id, thread_id, (xmax = 0) AS "inserted!"
         "#,
         db_message.id,
         db_message.provider_id,
@@ -141,7 +156,11 @@ async fn insert_db_message(
         .fetch_one(&mut *tx)
         .await?;
 
-    Ok(result.id)
+    Ok(MessageInsertionOutcome {
+        message_id: result.id,
+        thread_id: result.thread_id,
+        inserted: result.inserted,
+    })
 }
 
 /// Inserts a single message into the database with transaction handling
@@ -152,7 +171,7 @@ pub async fn insert_message(
     message: &mut message::Message,
     link_id: Uuid,
     update_thread_metadata: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(Uuid, Uuid)> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
     let addresses = addresses_from_message(message);
@@ -173,9 +192,9 @@ pub async fn insert_message(
     )
     .await
     {
-        Ok(_) => {
+        Ok(outcome) => {
             tx.commit().await?;
-            Ok(())
+            Ok((outcome.message_id, outcome.thread_id))
         }
         Err(e) => {
             if let Err(rollback_err) = tx.rollback().await {
