@@ -50,6 +50,7 @@
         complete.clippy
         complete.rustfmt
         complete.rust-analyzer
+        targets.wasm32-unknown-unknown.latest.rust-std
       ];
 
       jsRustToolchain = with fenix.packages.${system}; combine jsRustComponents;
@@ -77,6 +78,8 @@
         cargo-tauri
         cargo-info
         cargo-udeps
+        wasm-pack
+        wasm-bindgen-cli
         cmake
         nasm
         pulumi
@@ -153,15 +156,18 @@
         );
       }
       // pkgs.lib.optionalAttrs isLinux {
-        js-app-android = jsPkgs.mkShell ({
-          buildInputs = jsAndroidPackages ++ jsLibraries;
-          PKG_CONFIG_PATH = jsPkgConfigPath;
-          shellHook = jsLinuxShellHook;
-          ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
-          NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
-          GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
-          GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
-        } // jsCmakeFixEnv);
+        js-app-android = jsPkgs.mkShell (
+          {
+            buildInputs = jsAndroidPackages ++ jsLibraries;
+            PKG_CONFIG_PATH = jsPkgConfigPath;
+            shellHook = jsLinuxShellHook;
+            ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
+            NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
+            GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
+            GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
+          }
+          // jsCmakeFixEnv
+        );
       };
     };
 }
