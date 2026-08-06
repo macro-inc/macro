@@ -99,7 +99,8 @@ pub async fn gmail_message(
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context(format!("unable to get history for link id: {}", link.id)),
+                source: anyhow::Error::new(e)
+                    .context(format!("unable to get history for link id: {}", link.id)),
             })
         })?;
     let inbox_changes = map_history_list_response_to_history(history_response);

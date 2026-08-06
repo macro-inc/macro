@@ -110,17 +110,13 @@ async fn initialize_backfill(
     })
     .await?;
     // get the total number of threads the user has in their account
-    let total_threads = match ctx
-        .gmail_client
-        .get_profile_threads_total(access_token)
-        .await
-    {
-        Ok(list) => list,
+    let total_threads = match ctx.gmail_client.get_profile(access_token).await {
+        Ok(profile) => profile.threads_total,
         Err(e) => {
             // Construct the structured Retryable error and return immediately.
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get total threads from Gmail API"),
+                source: anyhow::Error::new(e).context("Failed to get total threads from Gmail API"),
             }));
         }
     };

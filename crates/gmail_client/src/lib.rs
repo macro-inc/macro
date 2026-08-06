@@ -56,7 +56,7 @@ use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
 use models_email::gmail::{
-    HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
+    GmailUserProfile, HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
 };
 use uuid::Uuid;
 
@@ -164,19 +164,22 @@ impl GmailClient {
         &self,
         access_token: &str,
         start_history_id: &str,
-    ) -> anyhow::Result<HistoryListResponse> {
+    ) -> Result<HistoryListResponse, GmailApiHttpError> {
         history::get_history(self, access_token, start_history_id).await
     }
 
-    /// Returns the current history id for the user's inbox
+    /// Fetches the user's raw Gmail profile.
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_current_history_id(&self, access_token: &str) -> anyhow::Result<String> {
-        history::get_current_history_id(self, access_token).await
+    pub async fn get_profile(
+        &self,
+        access_token: &str,
+    ) -> Result<GmailUserProfile, GmailApiHttpError> {
+        profile::get_profile(self, access_token).await
     }
 
-    /// Fetches Google's public JWKS keys used for verifying OAuth 2.0 tokens
+    /// Fetches Google's public JWKS keys used for verifying OAuth 2.0 tokens.
     #[tracing::instrument(skip(self), err)]
-    pub async fn get_google_public_keys(&self) -> anyhow::Result<GooglePublicKeys> {
+    pub async fn get_google_public_keys(&self) -> Result<GooglePublicKeys, GmailApiHttpError> {
         fetch_google_public_keys(self).await
     }
 
@@ -273,11 +276,6 @@ impl GmailClient {
         .await
     }
 
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_profile_threads_total(&self, access_token: &str) -> anyhow::Result<i32> {
-        profile::get_profile_threads_total(self, access_token).await
-    }
-
     /// Fetches an attachment from Gmail by its provider ID
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_attachment_data(
@@ -285,7 +283,7 @@ impl GmailClient {
         access_token: &str,
         message_id: &str,
         attachment_id: &str,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>, GmailApiHttpError> {
         attachments::get_attachment_data(self, access_token, message_id, attachment_id).await
     }
 
@@ -319,7 +317,10 @@ impl GmailClient {
     /// Fetches the user's own contact information.
     /// Returns raw Gmail PersonResource - callers should map to service layer Contact.
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_self_contact(&self, access_token: &str) -> anyhow::Result<PersonResource> {
+    pub async fn get_self_contact(
+        &self,
+        access_token: &str,
+    ) -> Result<PersonResource, GmailApiHttpError> {
         get_self_connection(self, access_token).await
     }
 
@@ -331,7 +332,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> anyhow::Result<(Vec<PersonResource>, String)> {
+    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
         contacts::list_connections(self, access_token, sync_token).await
     }
 
@@ -344,7 +345,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> anyhow::Result<(Vec<PersonResource>, String)> {
+    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
         contacts::list_other_contacts(self, access_token, sync_token).await
     }
 
