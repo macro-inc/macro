@@ -44,7 +44,7 @@ fn token_failure_stops_before_rate_limit_and_repository() {
     assert_eq!(result, Err(EmailApiError::AuthRequired));
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![Call::Token(TokenFreshness::Cached)]
+        vec![Call::Token(Uuid::nil(), TokenFreshness::Cached)]
     );
 }
 
@@ -69,8 +69,8 @@ fn rate_limit_refusal_stops_before_repository() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(TokenFreshness::Cached),
-            Call::RateLimit(ApiOperationKind::SendMessage),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::RateLimit(Uuid::nil(), ApiOperationKind::SendMessage),
         ]
     );
 }
@@ -89,7 +89,7 @@ fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
     assert_eq!(result.unwrap().expose_secret(), "access-token");
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![Call::Token(TokenFreshness::Fresh)]
+        vec![Call::Token(Uuid::nil(), TokenFreshness::Fresh)]
     );
 }
 

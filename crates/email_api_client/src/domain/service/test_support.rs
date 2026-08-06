@@ -1,4 +1,6 @@
+use std::future::Future;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
 
 use models_email::email::service::label::Label;
 use models_email::email::service::message::Message;
@@ -17,8 +19,8 @@ use super::super::ports::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Call {
-    Token(TokenFreshness),
-    RateLimit(ApiOperationKind),
+    Token(Uuid, TokenFreshness),
+    RateLimit(Uuid, ApiOperationKind),
     Repository(&'static str),
 }
 
@@ -26,6 +28,25 @@ pub(super) type CallLog = Arc<Mutex<Vec<Call>>>;
 
 pub(super) fn call_log() -> CallLog {
     Arc::new(Mutex::new(Vec::new()))
+}
+
+struct NoopWaker;
+
+impl Wake for NoopWaker {
+    fn wake(self: Arc<Self>) {}
+}
+
+pub(super) fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = Waker::from(Arc::new(NoopWaker));
+    let mut context = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+
+    loop {
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(output) => return output,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -43,10 +64,13 @@ impl FakeTokenSource {
 impl ProviderTokenSource for FakeTokenSource {
     async fn get_access_token(
         &self,
-        _: Uuid,
+        link_id: Uuid,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
-        self.calls.lock().unwrap().push(Call::Token(freshness));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::Token(link_id, freshness));
         self.result.clone()
     }
 }
@@ -66,10 +90,13 @@ impl FakeRateLimiter {
 impl ProviderRateLimiter for FakeRateLimiter {
     async fn check_rate_limit(
         &self,
-        _: Uuid,
+        link_id: Uuid,
         operation: ApiOperationKind,
     ) -> Result<(), RateLimitRefusal> {
-        self.calls.lock().unwrap().push(Call::RateLimit(operation));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::RateLimit(link_id, operation));
         self.result.clone()
     }
 }
