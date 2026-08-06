@@ -53,6 +53,25 @@ function sourceLabel(source: string): string | null {
 }
 
 /**
+ * Header badge text: the file/line anchor of a review comment when the
+ * metadata carries one, else a generic source label. Falls back to the line
+ * the comment was originally left on when later commits outdated it.
+ */
+function commentBadge(
+  comment: GithubPullRequestComment
+): { label: string; isAnchor: boolean } | null {
+  if (comment.source === 'review_comment' && comment.path) {
+    const line = comment.line ?? comment.originalLine;
+    return {
+      label: line != null ? `${comment.path}:${line}` : comment.path,
+      isAnchor: true,
+    };
+  }
+  const label = sourceLabel(comment.source);
+  return label === null ? null : { label, isAnchor: false };
+}
+
+/**
  * Fudge a GitHub comment into the channel message shape: GitHub authors ride
  * the bot-sender path, which carries an explicit display name through
  * `Message.SenderName`.
@@ -140,10 +159,16 @@ function GithubCommentMessage(props: {
           class="flex items-center gap-1 min-w-0 w-full"
         >
           <Message.SenderName />
-          <Show when={!props.isReply && sourceLabel(props.comment.source)}>
-            {(label) => (
-              <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-2 py-0.5 text-xs font-medium leading-none text-ink-muted">
-                {label()}
+          <Show when={!props.isReply && commentBadge(props.comment)}>
+            {(badge) => (
+              <span
+                class={cn(
+                  'inline-flex min-w-0 items-center truncate rounded-sm bg-hover px-2 py-0.5 text-xs font-medium leading-none text-ink-muted',
+                  badge().isAnchor && 'font-mono'
+                )}
+                title={badge().isAnchor ? badge().label : undefined}
+              >
+                {badge().label}
               </span>
             )}
           </Show>

@@ -233,4 +233,58 @@ describe('buildTimeline', () => {
       expect(githubEntries(entries)).toHaveLength(2);
     });
   });
+
+  describe('review adjacency', () => {
+    it('anchors review-comment threads directly after their review summary', () => {
+      const entries = buildTimeline(
+        [
+          comment(3, { createdAt: at(4) }),
+          reviewComment(1, 4, { pullRequestReviewId: 100 }),
+          comment(100, {
+            source: 'review',
+            createdAt: at(5),
+            body: 'LGTM with nits',
+          }),
+        ],
+        []
+      );
+
+      expect(githubEntries(entries).map((entry) => entry.item.id)).toEqual([
+        3, 100, 1,
+      ]);
+    });
+
+    it('keeps threads in place when their review has no summary entry', () => {
+      const entries = buildTimeline(
+        [
+          reviewComment(1, 0, { pullRequestReviewId: 999 }),
+          comment(2, { createdAt: at(1) }),
+        ],
+        []
+      );
+
+      expect(githubEntries(entries).map((entry) => entry.item.id)).toEqual([
+        1, 2,
+      ]);
+    });
+
+    it('orders sibling threads of one review by creation time', () => {
+      const entries = buildTimeline(
+        [
+          reviewComment(11, 3, { pullRequestReviewId: 100 }),
+          reviewComment(10, 2, { pullRequestReviewId: 100 }),
+          comment(100, {
+            source: 'review',
+            createdAt: at(5),
+            body: 'Summary',
+          }),
+        ],
+        []
+      );
+
+      expect(githubEntries(entries).map((entry) => entry.item.id)).toEqual([
+        100, 10, 11,
+      ]);
+    });
+  });
 });

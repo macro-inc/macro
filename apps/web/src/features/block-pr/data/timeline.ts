@@ -88,6 +88,34 @@ export function buildTimeline(
     });
   }
 
+  // A thread submitted as part of a review sorts directly under that
+  // review's summary comment rather than by its own creation time (GitHub
+  // stamps the comments when the review is drafted, so they would otherwise
+  // land before the summary they belong to).
+  const reviewTs = new Map<number, number>();
+  for (const entry of entries) {
+    if (entry.kind === 'github-comment' && entry.item.source === 'review') {
+      reviewTs.set(entry.item.id, entry.ts);
+    }
+  }
+  type GithubEntry = Extract<TimelineEntry, { kind: 'github-comment' }>;
+  const anchored: { entry: GithubEntry; anchor: number }[] = [];
+  for (const entry of entries) {
+    if (entry.kind !== 'github-comment') continue;
+    const anchor =
+      entry.item.pullRequestReviewId != null
+        ? reviewTs.get(entry.item.pullRequestReviewId)
+        : undefined;
+    if (anchor !== undefined) anchored.push({ entry, anchor });
+  }
+  // Snap in creation order so sibling threads of one review keep their
+  // relative order.
+  anchored.sort((a, b) => a.entry.ts - b.entry.ts);
+  let anchorOffset = 0;
+  for (const { entry, anchor } of anchored) {
+    entry.ts = anchor + ++anchorOffset;
+  }
+
   for (const thread of macroThreads) {
     entries.push({
       kind: 'macro-thread',
