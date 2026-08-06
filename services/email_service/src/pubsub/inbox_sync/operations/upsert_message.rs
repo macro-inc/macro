@@ -107,7 +107,8 @@ pub async fn upsert_message(
             // it had to be some sort of internal gmail api error
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get message from gmail api".to_string()),
+                source: anyhow::Error::new(e)
+                    .context("Failed to get message from gmail api".to_string()),
             })
         })? {
         Some(msg) => msg,
@@ -599,7 +600,8 @@ async fn fetch_and_insert_thread(
             // matching the get_message error handling above
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get thread from gmail api".to_string()),
+                source: anyhow::Error::new(e)
+                    .context("Failed to get thread from gmail api".to_string()),
             })
         })?;
 

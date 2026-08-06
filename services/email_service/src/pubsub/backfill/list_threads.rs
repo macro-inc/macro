@@ -6,7 +6,7 @@ use models_email::email::service::backfill::{
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::email::service::thread::ListThreadsPayload;
+use models_email::email::service::thread::{ListThreadsPayload, ThreadList, ThreadSummary};
 use models_email::gmail::labels::SystemLabelID;
 use models_email::gmail::operations::GmailApiOperation;
 use std::cmp::min;
@@ -71,12 +71,22 @@ pub async fn list_threads(
         )
         .await
     {
-        Ok(list) => list,
-        Err(e) => {
+        Ok(response) => ThreadList {
+            threads: response
+                .threads
+                .unwrap_or_default()
+                .into_iter()
+                .map(|thread| ThreadSummary {
+                    provider_id: thread.id,
+                })
+                .collect(),
+            next_page_token: response.next_page_token,
+        },
+        Err(error) => {
             // Construct the structured Retryable error and return immediately.
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to list threads from Gmail API"),
+                source: anyhow::Error::new(error).context("Failed to list threads from Gmail API"),
             }));
         }
     };
@@ -201,11 +211,22 @@ async fn list_priority_threads(
             )
             .await
         {
-            Ok(list) => list,
-            Err(e) => {
+            Ok(response) => ThreadList {
+                threads: response
+                    .threads
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|thread| ThreadSummary {
+                        provider_id: thread.id,
+                    })
+                    .collect(),
+                next_page_token: response.next_page_token,
+            },
+            Err(error) => {
                 return Err(ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::GmailApiFailed,
-                    source: e.context("Failed to list priority threads from Gmail API"),
+                    source: anyhow::Error::new(error)
+                        .context("Failed to list priority threads from Gmail API"),
                 }));
             }
         };

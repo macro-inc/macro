@@ -41,7 +41,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
-use crate::messages::{get_message, get_message_label_ids, get_message_thread_id, list_messages};
+use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
 #[allow(unused_imports)]
@@ -49,14 +49,15 @@ use mockall::automock;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message;
-use models_email::email::service::thread::ThreadList as ServiceThreadList;
 use models_email::gmail::contacts::PersonResource;
 pub use models_email::gmail::error::GmailError;
 pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
-use models_email::gmail::{HistoryListResponse, MessageResource, ThreadResource};
+use models_email::gmail::{
+    HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
+};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -118,7 +119,7 @@ impl GmailClient {
         num_threads: u32,
         next_page_token: Option<&str>,
         label_ids: &[&str],
-    ) -> anyhow::Result<ServiceThreadList> {
+    ) -> Result<ListThreadsResponse, GmailApiHttpError> {
         threads::list_threads(self, access_token, num_threads, next_page_token, label_ids).await
     }
 
@@ -131,7 +132,7 @@ impl GmailClient {
         access_token: &str,
         num_messages: u32,
         label_ids: &[&str],
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, GmailApiHttpError> {
         list_messages(self, access_token, num_messages, label_ids).await
     }
 
@@ -141,7 +142,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         thread_id: &str,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> Result<Vec<String>, GmailApiHttpError> {
         threads::get_message_ids_for_thread(self, access_token, thread_id).await
     }
 
@@ -152,7 +153,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         thread_id: &str,
-    ) -> anyhow::Result<ThreadResource> {
+    ) -> Result<ThreadResource, GmailApiHttpError> {
         get_thread(self, access_token, thread_id).await
     }
 
@@ -238,18 +239,8 @@ impl GmailClient {
         &self,
         access_token: &str,
         message_provider_id: &str,
-    ) -> anyhow::Result<Option<MessageResource>> {
+    ) -> Result<Option<MessageResource>, GmailApiHttpError> {
         get_message(self, access_token, message_provider_id).await
-    }
-
-    /// Fetches a specific message's thread ID from Gmail by its provider ID
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_message_thread_id(
-        &self,
-        access_token: &str,
-        message_provider_id: &str,
-    ) -> anyhow::Result<Option<String>> {
-        get_message_thread_id(self, access_token, message_provider_id).await
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -257,7 +248,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         message_provider_id: &str,
-    ) -> anyhow::Result<Option<Vec<String>>> {
+    ) -> Result<Option<Vec<String>>, GmailApiHttpError> {
         get_message_label_ids(self, access_token, message_provider_id).await
     }
 

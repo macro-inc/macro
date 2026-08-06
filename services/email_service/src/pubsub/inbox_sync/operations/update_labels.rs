@@ -111,7 +111,8 @@ pub async fn update_labels(
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get message from gmail api".to_string()),
+                source: anyhow::Error::new(e)
+                    .context("Failed to get message from gmail api".to_string()),
             })
         })? {
         Some(labels) => labels,

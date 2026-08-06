@@ -60,10 +60,10 @@ pub async fn backfill_thread(
         .await
     {
         Ok(ids) => ids,
-        Err(e) => {
+        Err(error) => {
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context(format!(
+                source: anyhow::Error::new(error).context(format!(
                     "Gmail API failed to get message IDs for thread {}",
                     thread_provider_id
                 )),

@@ -45,10 +45,11 @@ pub async fn seed_sent_contact(
         Ok(Some(message)) => message,
         // The message was deleted between listing and this fetch; nothing to seed.
         Ok(None) => return Ok(()),
-        Err(e) => {
+        Err(error) => {
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Gmail API failed to get sent message for contact seed"),
+                source: anyhow::Error::new(error)
+                    .context("Gmail API failed to get sent message for contact seed"),
             }));
         }
     };

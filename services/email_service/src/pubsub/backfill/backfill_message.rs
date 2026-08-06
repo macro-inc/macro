@@ -45,10 +45,10 @@ pub async fn backfill_message(
                 source: anyhow::anyhow!("Message {} not found in Gmail", p.message_provider_id),
             }));
         }
-        Err(e) => {
+        Err(error) => {
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Gmail API failed to get message"),
+                source: anyhow::Error::new(error).context("Gmail API failed to get message"),
             }));
         }
     };
