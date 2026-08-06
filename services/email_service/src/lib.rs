@@ -8,5 +8,7 @@ pub mod calendar_outbox;
 pub mod calendar_tokens;
 pub mod config;
 pub mod convert;
+/// Outbound infrastructure adapters for email provider capabilities.
+pub mod outbound;
 pub mod pubsub;
 pub mod util;

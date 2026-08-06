@@ -5202,6 +5202,7 @@ dependencies = [
  "doppler-config",
  "ego-tree",
  "email",
+ "email_api_client",
  "email_db_client",
  "email_utils",
  "entity_access",

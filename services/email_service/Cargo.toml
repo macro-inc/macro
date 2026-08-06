@@ -100,6 +100,7 @@ ego-tree = { workspace = true }
 email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
+email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
 filter_ast = { path = "../../crates/filter_ast" }
