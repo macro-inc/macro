@@ -228,11 +228,48 @@ export const [CalendarPagerContextProvider, useCalendarPager] =
       synchronizeBuffers();
     };
 
-    const today = () => {
+    const navigateToDate = (date: Date) => {
       pager.cancel();
-      calendarView.closeEventDetails();
-      activePage()?.api()?.today();
-      synchronizeBuffers();
+
+      const sourceApi = activePage()?.api();
+      if (!sourceApi) return;
+
+      if (
+        date >= sourceApi.view.currentStart &&
+        date < sourceApi.view.currentEnd
+      ) {
+        gotoDate(date);
+        return;
+      }
+
+      const direction =
+        date < sourceApi.view.currentStart ? 'previous' : 'next';
+      const order = pageOrder();
+      const activeIndex = order.indexOf(activePageId());
+      const destinationId =
+        direction === 'previous'
+          ? order[activeIndex - 1]
+          : order[activeIndex + 1];
+      const destinationApi = destinationId
+        ? pageHandle(destinationId)?.api()
+        : undefined;
+
+      if (!destinationApi) {
+        gotoDate(date);
+        return;
+      }
+
+      destinationApi.batchRendering(() => {
+        if (destinationApi.view.type === sourceApi.view.type) {
+          destinationApi.gotoDate(date);
+        } else {
+          destinationApi.changeView(sourceApi.view.type, date);
+        }
+      });
+
+      const transition =
+        direction === 'previous' ? pager.previous() : pager.next();
+      void transition.then(synchronizeBuffers);
     };
 
     const changeView = (view: string) => {
@@ -257,7 +294,8 @@ export const [CalendarPagerContextProvider, useCalendarPager] =
       registerPage,
       updateSize,
       gotoDate,
-      today,
+      navigateToDate,
+      navigateToToday: () => navigateToDate(new Date()),
       changeView,
     };
   });

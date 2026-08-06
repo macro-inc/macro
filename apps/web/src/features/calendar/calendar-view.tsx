@@ -93,7 +93,10 @@ function CalendarPages() {
   return (
     <Layer depth={2}>
       <div class="flex min-w-0 min-h-0 flex-1 flex-col">
-        <CalendarRangeUnavailableBanner />
+        <CalendarRangeUnavailableBanner
+          class={isMobile() ? 'order-last' : undefined}
+          fullWidth={isMobile()}
+        />
         <div
           ref={setViewport}
           class="relative flex min-w-0 min-h-0 flex-1"
@@ -198,10 +201,7 @@ function CalendarWorkspace() {
               </span>
             }
           >
-            <CalendarMonthDrawer
-              month={currentDate()}
-              onChange={calendarPager.gotoDate}
-            />
+            <CalendarMonthDrawer month={currentDate()} />
           </Show>
         </HeaderIsland>
       </SplitHeaderLeft>
@@ -219,7 +219,7 @@ function CalendarWorkspace() {
                     class="rounded-lg px-3"
                     depth={2}
                     label="Go to today"
-                    onClick={calendarPager.today}
+                    onClick={calendarPager.navigateToToday}
                   >
                     Today
                   </Button>
@@ -231,7 +231,7 @@ function CalendarWorkspace() {
                 size="icon-sm"
                 class="rounded-full"
                 label="Go to today"
-                onClick={calendarPager.today}
+                onClick={calendarPager.navigateToToday}
               >
                 <CalendarBlankIcon aria-hidden="true" />
                 <span

@@ -188,6 +188,8 @@ type MonthOptionRange = {
 export type CalendarMonthMenuProps = CalendarMonthSelectorProps & {
   /** Semantic presentation used for month options. */
   presentation?: 'menu' | 'radio-group';
+  /** Action invoked by the drawer's Go To Today button. */
+  onToday?: () => void;
 };
 
 /** Dropdown presentation for selecting a calendar month. */
@@ -459,7 +461,13 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
             depth={3}
             class="rounded-full bg-surface px-3 text-ink shadow-menu"
             label="Go To Today"
-            onClick={() => focusIndex(todayIndex())}
+            onClick={() => {
+              if (props.onToday) {
+                props.onToday();
+                return;
+              }
+              focusIndex(todayIndex());
+            }}
           >
             Go To Today
           </Button>

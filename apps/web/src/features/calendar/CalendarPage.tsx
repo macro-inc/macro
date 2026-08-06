@@ -506,7 +506,7 @@ function CalendarPageHost(props: {
       <FullCalendar.Host
         tabIndex={-1}
         ref={setElement}
-        class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden rounded-xl"
+        class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
       />
       <CalendarScrollIndicators calendarElement={element} />
       <CalendarPageDataStatus data={props.data} />

@@ -1,20 +1,26 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import {
-  Button,
-  CalendarMonthMenu,
-  type CalendarMonthSelectorProps,
-  formatCalendarMonth,
-} from '@ui';
+import { Button, CalendarMonthMenu, formatCalendarMonth } from '@ui';
 import { createSignal } from 'solid-js';
+import { useCalendarPager } from './CalendarPagerContext';
 
-/** Drawer presentation for selecting a calendar month. */
-export function CalendarMonthDrawer(props: CalendarMonthSelectorProps) {
+type CalendarMonthDrawerProps = {
+  month: Date;
+};
+
+/** Drawer presentation for navigating the calendar to a month. */
+export function CalendarMonthDrawer(props: CalendarMonthDrawerProps) {
+  const calendarPager = useCalendarPager();
   const [open, setOpen] = createSignal(false);
 
   const selectMonth = (month: Date) => {
-    props.onChange(month);
     setOpen(false);
+    calendarPager.navigateToDate(month);
+  };
+
+  const goToToday = () => {
+    setOpen(false);
+    calendarPager.navigateToToday();
   };
 
   return (
@@ -43,6 +49,7 @@ export function CalendarMonthDrawer(props: CalendarMonthSelectorProps) {
               month={props.month}
               presentation="radio-group"
               onChange={selectMonth}
+              onToday={goToToday}
             />
           </MobileDrawer.Section>
         </MobileDrawer.Content>
