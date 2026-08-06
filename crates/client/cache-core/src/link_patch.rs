@@ -1019,6 +1019,13 @@ mod tests {
         let patch = upsert_bin_patch("urgent");
 
         apply_link_patches(&mut effective, &mut updates, &[patch.clone(), patch], false).unwrap();
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            &[upsert_bin_patch("completed")],
+            false,
+        )
+        .unwrap();
 
         let CacheValue::Object(grouped) = &effective[&parent].fields["groupSoup"] else {
             panic!()
@@ -1037,6 +1044,15 @@ mod tests {
         assert_eq!(urgent["nextCursor"], CacheValue::Null);
         assert_eq!(
             urgent["items"],
+            CacheValue::List(vec![CacheValue::Ref(EntityKey(
+                "GraphqlSoupItem:task-1".into()
+            ))])
+        );
+        let CacheValue::Object(completed) = &bins[2] else {
+            panic!()
+        };
+        assert_eq!(
+            completed["items"],
             CacheValue::List(vec![CacheValue::Ref(EntityKey(
                 "GraphqlSoupItem:task-1".into()
             ))])
