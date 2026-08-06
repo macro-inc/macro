@@ -644,15 +644,30 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         // outgrow that, page it with a keyset cursor on (next_run_at, id) and
         // have the handler re-enqueue itself, the way the crm cleanup lister
         // does — a bare LIMIT here would silently strand the overflow.
+        //
+        // Two separate exclusions, because they mean different things. A
+        // `completed_at` reminder is one the owner has finished with and does
+        // not want. A sent occurrence is one this firing already delivered —
+        // that is what makes a delivered reminder stop being due, and it is
+        // keyed on `next_run_at`, so rescheduling makes it due again without
+        // anything having to clear it. Covered by
+        // `reminder_occurrence_firing_idx`.
         let rows = sqlx::query!(
             r#"
-            SELECT id, next_run_at
-            FROM reminder
-            WHERE enabled
-              AND completed_at IS NULL
-              AND cron IS NULL
-              AND next_run_at <= $1
-            ORDER BY next_run_at
+            SELECT r.id, r.next_run_at
+            FROM reminder r
+            WHERE r.enabled
+              AND r.completed_at IS NULL
+              AND r.cron IS NULL
+              AND r.next_run_at <= $1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM reminder_occurrence o
+                  WHERE o.reminder_id = r.id
+                    AND o.scheduled_for = r.next_run_at
+                    AND o.sent_at IS NOT NULL
+              )
+            ORDER BY r.next_run_at
             "#,
             now,
         )
@@ -775,10 +790,10 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         reminder_id: Uuid,
         scheduled_for: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
-        // Both halves in one transaction: a delivered firing whose reminder is
-        // still uncompleted would be sent again on the next sweep.
-        let mut tx = self.pool.begin().await?;
-
+        // Only the occurrence. Delivery is not completion: `completed_at` means
+        // the owner is finished with the reminder, and a reminder that has just
+        // arrived in their inbox plainly is not. What stops a delivered firing
+        // being sent twice is this row, which `due_firings` excludes on.
         sqlx::query!(
             r#"
             UPDATE reminder_occurrence
@@ -788,21 +803,8 @@ impl ReminderDispatchRepo for PgRemindersRepo {
             reminder_id,
             scheduled_for,
         )
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await?;
-
-        sqlx::query!(
-            r#"
-            UPDATE reminder
-            SET completed_at = now(), updated_at = now()
-            WHERE id = $1
-            "#,
-            reminder_id,
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        tx.commit().await?;
 
         Ok(())
     }

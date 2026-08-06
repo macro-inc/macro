@@ -168,10 +168,13 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
         scheduled_for: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Record the firing as delivered and complete the reminder, atomically.
+    /// Record the firing as delivered.
     ///
-    /// Both halves together: a delivered firing must never leave its reminder
-    /// still due, or the next sweep sends it again.
+    /// Marks the occurrence, not the reminder: delivery is not completion.
+    /// `completed_at` is the owner saying they are finished with a reminder,
+    /// and one that has just landed in their inbox is not. The sent occurrence
+    /// is what stops [`ReminderDispatchRepo::due_firings`] returning the firing
+    /// again.
     fn complete_occurrence(
         &self,
         reminder_id: Uuid,

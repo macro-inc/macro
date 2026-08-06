@@ -160,7 +160,8 @@ pub struct Reminder {
     pub next_run_at: DateTime<Utc>,
     /// When false, the dispatcher skips this reminder.
     pub enabled: bool,
-    /// Set once a one-shot reminder has fired.
+    /// Set once the owner marks the reminder as dealt with. Firing does not
+    /// set it — a delivered reminder is waiting on its owner, not finished.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
     /// When the reminder was created.
@@ -366,9 +367,8 @@ pub struct ReminderPatch {
     /// Mark the reminder as dealt with (`true`) or live again (`false`).
     ///
     /// Separate from `enabled`: a disabled reminder is one the dispatcher
-    /// skips, while a completed one has been handled. The dispatcher sets this
-    /// itself when a one-shot fires; this lets the owner do it by hand without
-    /// deleting the reminder.
+    /// skips, while a completed one has been handled. Only the owner sets it —
+    /// firing does not, or a reminder would arrive already dealt with.
     pub completed: Option<bool>,
 }
 

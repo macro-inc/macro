@@ -1249,7 +1249,8 @@ export function applyEntitiesDoneOptimistic(args: {
       })
     );
     // Stamping `completedAt` is what drops a reminder out of the Upcoming
-    // tab, whose client predicate is `!entity.completedAt`.
+    // tab, which requires `!entity.completedAt` — so this takes effect before
+    // any refetch, whether or not the reminder had already fired.
     reminderRowTxns = reminderIds.map((id) =>
       optimisticUpdateSoupEntity({
         tag: 'reminder',
