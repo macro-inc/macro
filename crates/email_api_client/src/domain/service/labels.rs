@@ -18,6 +18,19 @@ where
         self.repository.list_labels(&access_token, link_id).await
     }
 
+    /// Creates a user label.
+    pub async fn create_label(
+        &self,
+        link_id: Uuid,
+        label_name: &str,
+    ) -> Result<Label, EmailApiError> {
+        let access_token = self.prepare(link_id, ApiOperationKind::CreateLabel).await?;
+
+        self.repository
+            .create_label(&access_token, link_id, label_name)
+            .await
+    }
+
     /// Deletes a provider label.
     pub async fn delete_label(
         &self,

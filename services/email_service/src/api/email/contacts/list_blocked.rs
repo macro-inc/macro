@@ -3,19 +3,19 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use gmail_client::GmailApiHttpError;
+use email_api_client::domain::models::EmailApiError;
 use model::response::ErrorResponse;
-use strum_macros::AsRefStr;
+use models_email::service::link::Link;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-#[derive(Debug, Error, AsRefStr)]
+#[derive(Debug, Error)]
 pub enum ListBlockedError {
     #[error("Insufficient Gmail permissions. Please re-authenticate to grant the required scope.")]
     Forbidden,
 
-    #[error("Gmail API error: {0}")]
-    GmailError(String),
+    #[error("Email provider error: {0}")]
+    Provider(EmailApiError),
 
     #[error("Internal error")]
     InternalError(#[from] anyhow::Error),
@@ -25,9 +25,10 @@ impl IntoResponse for ListBlockedError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             ListBlockedError::Forbidden => StatusCode::FORBIDDEN,
-            ListBlockedError::GmailError(_) | ListBlockedError::InternalError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
+            ListBlockedError::Provider(error) => {
+                crate::api::email::provider_error::provider_error_status(error)
             }
+            ListBlockedError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (
@@ -40,12 +41,12 @@ impl IntoResponse for ListBlockedError {
     }
 }
 
-impl From<GmailApiHttpError> for ListBlockedError {
-    fn from(error: GmailApiHttpError) -> Self {
-        if error.status() == Some(StatusCode::FORBIDDEN) {
+impl From<EmailApiError> for ListBlockedError {
+    fn from(error: EmailApiError) -> Self {
+        if matches!(error, EmailApiError::Forbidden) {
             return ListBlockedError::Forbidden;
         }
-        ListBlockedError::GmailError(error.to_string())
+        ListBlockedError::Provider(error)
     }
 }
 
@@ -69,25 +70,12 @@ pub struct ListBlockedResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, gmail_token), err)]
+#[tracing::instrument(skip(ctx, link), fields(link_id = %link.id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    gmail_token: Extension<String>,
+    link: Extension<Link>,
 ) -> Result<Json<ListBlockedResponse>, ListBlockedError> {
-    let blocked_emails = ctx
-        .gmail_client
-        .list_filters(&gmail_token)
-        .await?
-        .into_iter()
-        .filter(|filter| {
-            filter
-                .action
-                .add_label_ids
-                .as_ref()
-                .is_some_and(|labels| labels.iter().any(|label| label == "TRASH"))
-        })
-        .filter_map(|filter| filter.criteria.from)
-        .collect();
+    let blocked_emails = ctx.email_api.list_blocked_senders(link.id).await?;
 
     Ok(Json(ListBlockedResponse { blocked_emails }))
 }

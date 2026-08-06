@@ -10,6 +10,7 @@ use crate::domain::models::{AccessToken, TokenFreshness};
 #[derive(Clone, Default)]
 struct LabelClient {
     arguments: Arc<Mutex<Option<(String, Uuid)>>>,
+    created_label_name: Arc<Mutex<Option<String>>>,
     deleted_label_id: Arc<Mutex<Option<String>>>,
 }
 
@@ -27,9 +28,10 @@ impl MailboxLabelClient for LabelClient {
         &self,
         _: &AccessToken,
         _: Uuid,
-        _: &str,
+        label_name: &str,
     ) -> Result<Label, EmailApiError> {
-        unreachable!()
+        *self.created_label_name.lock().unwrap() = Some(label_name.to_string());
+        Err(expected_error())
     }
 
     async fn delete_label(
@@ -70,6 +72,32 @@ fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
         vec![
             Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::ListLabels),
+        ]
+    );
+}
+
+#[test]
+fn create_label_uses_create_quota_and_forwards_name() {
+    let calls = call_log();
+    let repository = LabelClient::default();
+    let created_label_name = repository.created_label_name.clone();
+    let link_id = Uuid::new_v4();
+    let service = EmailApiClientServiceImpl::new(
+        repository,
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
+        FakeRateLimiter::new(calls.clone(), Ok(())),
+    );
+
+    assert!(matches!(
+        block_on(service.create_label(link_id, "Projects")),
+        Err(error) if error == expected_error()
+    ));
+    assert_eq!(*created_label_name.lock().unwrap(), Some("Projects".into()));
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            Call::Token(link_id, TokenFreshness::Cached),
+            Call::RateLimit(link_id, ApiOperationKind::CreateLabel),
         ]
     );
 }
