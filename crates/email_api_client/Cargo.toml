@@ -1,0 +1,32 @@
+[package]
+edition = "2024"
+name = "email_api_client"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+ports = ["dep:async-trait"]
+outbound-gmail = [
+  "ports",
+  "dep:gmail_client",
+  "dep:html-escape",
+  "dep:lol_html",
+  "dep:regex",
+  "dep:serde_json",
+]
+
+[dependencies]
+async-trait = { workspace = true, optional = true }
+chrono = { workspace = true }
+gmail_client = { path = "../gmail_client", optional = true }
+html-escape = { version = "0.2", optional = true }
+lol_html = { workspace = true, optional = true }
+mail-builder = "0.4.3"
+models_email = { path = "../models_email" }
+regex = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
