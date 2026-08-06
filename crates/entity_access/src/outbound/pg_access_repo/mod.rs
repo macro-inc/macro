@@ -202,7 +202,9 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    // A macro user id embeds the user's email, so it stays out of the span; the
+    // reminder id is what identifies the lookup anyway.
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_reminder_access(
         &self,
         reminder_id: &str,

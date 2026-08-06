@@ -63,12 +63,15 @@ pub enum RemindersRepoErr {
         value: String,
     },
     /// A stored owner is not a parseable macro user id.
-    #[error("invalid user id {value:?} stored for reminder {reminder_id}")]
+    ///
+    /// Identified by reminder rather than by the offending value: a macro user
+    /// id is `macro|someone@example.com`, so echoing it would put an email
+    /// address into every log line this error reaches. The row id is enough to
+    /// find it.
+    #[error("invalid user id stored for reminder {reminder_id}")]
     InvalidUserId {
         /// The reminder carrying the bad value.
         reminder_id: Uuid,
-        /// The value that could not be parsed.
-        value: String,
     },
 }
 
@@ -162,10 +165,7 @@ impl DueReminderRow {
         let owner_id = match MacroUserIdStr::parse_from_str(&self.user_id) {
             Ok(owner_id) => owner_id.into_owned(),
             Err(_) => {
-                return Err(RemindersRepoErr::InvalidUserId {
-                    reminder_id,
-                    value: self.user_id,
-                });
+                return Err(RemindersRepoErr::InvalidUserId { reminder_id });
             }
         };
 
@@ -231,7 +231,7 @@ fn schedule_columns(
 impl RemindersRepo for PgRemindersRepo {
     type Err = RemindersRepoErr;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id, new))]
     async fn create_reminder(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -282,7 +282,7 @@ impl RemindersRepo for PgRemindersRepo {
         row.into_reminder()
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_reminder(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -316,7 +316,7 @@ impl RemindersRepo for PgRemindersRepo {
         row.map(ReminderRow::into_reminder).transpose()
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn list_reminders(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -405,7 +405,7 @@ impl RemindersRepo for PgRemindersRepo {
         Ok(batch)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id, update))]
     async fn update_reminder(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -471,7 +471,7 @@ impl RemindersRepo for PgRemindersRepo {
         row.map(ReminderRow::into_reminder).transpose()
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn delete_reminder(
         &self,
         user_id: &MacroUserIdStr<'_>,

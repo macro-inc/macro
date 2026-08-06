@@ -37,7 +37,10 @@ pub struct NotifyError;
 impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I> {
     type Err = NotifyError;
 
-    #[tracing::instrument(err, skip(self))]
+    // `DueReminder` carries both the owner's macro user id — which embeds their
+    // email — and the description, which is the user's own note. Only the
+    // reminder id is safe to put in a span.
+    #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder.id))]
     async fn notify(&self, due: &DueReminder) -> Result<(), Self::Err> {
         // A standalone reminder has no entity to hang the notification on, so
         // it is addressed at the user themselves — the same shape
