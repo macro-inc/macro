@@ -24004,6 +24004,443 @@ export const recentlyDeletedResponse = zod.object({
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
 
+/**
+ * @summary List the caller's reminders, soonest firing first.
+ */
+export const listRemindersQueryLimitMin = 0;
+
+export const listRemindersQueryParams = zod.object({
+  entityType: zod
+    .enum([
+      'user',
+      'chat',
+      'channel',
+      'channel_message',
+      'document',
+      'project',
+      'email_thread',
+      'calendar_event',
+      'team',
+      'call',
+      'foreign_entity',
+      'static_file',
+      'crm_company',
+      'crm_contact',
+    ])
+    .optional()
+    .describe(
+      'Restrict to reminders attached to this entity type. Requires `entityId`.'
+    ),
+  entityId: zod
+    .string()
+    .optional()
+    .describe(
+      'Restrict to reminders attached to this entity id. Requires `entityType`.'
+    ),
+  includeCompleted: zod
+    .boolean()
+    .optional()
+    .describe('Include reminders that have already fired.'),
+  limit: zod
+    .number()
+    .min(listRemindersQueryLimitMin)
+    .optional()
+    .describe(
+      'Page size. Defaults to 100; larger values are capped at 500. A value\nthat is not a non-negative integer is rejected by the query extractor.'
+    ),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('`nextCursor` from a previous page.'),
+});
+
+export const listRemindersResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe(
+        'Pass back as `cursor` to fetch the next page. Absent on the last page —\nits absence is the only end-of-list signal, since a page can be short.'
+      ),
+    reminders: zod
+      .array(
+        zod
+          .object({
+            completedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Set once a one-shot reminder has fired.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the reminder was created.'),
+            description: zod
+              .string()
+              .describe('What to remind the user about.'),
+            enabled: zod
+              .boolean()
+              .describe('When false, the dispatcher skips this reminder.'),
+            entityId: zod
+              .string()
+              .nullish()
+              .describe(
+                'Id of the associated entity, when the reminder is attached to one.'
+              ),
+            entityType: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'user',
+                    'chat',
+                    'channel',
+                    'channel_message',
+                    'document',
+                    'project',
+                    'email_thread',
+                    'calendar_event',
+                    'team',
+                    'call',
+                    'foreign_entity',
+                    'static_file',
+                    'crm_company',
+                    'crm_contact',
+                  ])
+                  .describe('The type of an entity in Macro'),
+              ])
+              .optional()
+              .describe(
+                'Type of the associated entity, when the reminder is attached to one.'
+              ),
+            id: zod.uuid().describe('Reminder id.'),
+            nextRunAt: zod.iso
+              .datetime({})
+              .describe('The next firing, derived from `schedule` on write.'),
+            schedule: zod
+              .union([
+                zod
+                  .object({
+                    remindAt: zod.iso
+                      .datetime({})
+                      .describe('The instant to fire at.'),
+                    type: zod.enum(['once']),
+                  })
+                  .describe('Fires once, at a fixed instant.'),
+                zod
+                  .object({
+                    cron: zod
+                      .string()
+                      .describe(
+                        'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+                      ),
+                    timezone: zod
+                      .string()
+                      .describe(
+                        'The timezone the cron expression is evaluated in.'
+                      ),
+                    type: zod.enum(['recurring']),
+                  })
+                  .describe(
+                    'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+                  ),
+              ])
+              .describe('When a reminder fires.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the reminder was last modified.'),
+          })
+          .describe(
+            'A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.'
+          )
+      )
+      .describe('The reminders.'),
+  })
+  .describe("The caller's reminders, soonest firing first.");
+
+/**
+ * @summary Create a reminder, optionally attached to an entity the caller can view.
+ */
+export const createReminderBody = zod
+  .object({
+    description: zod.string().describe('What to remind the caller about.'),
+    entityId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Id of the entity to attach the reminder to. Requires `entityType`.'
+      ),
+    entityType: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'user',
+            'chat',
+            'channel',
+            'channel_message',
+            'document',
+            'project',
+            'email_thread',
+            'calendar_event',
+            'team',
+            'call',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
+          ])
+          .describe('The type of an entity in Macro'),
+      ])
+      .optional()
+      .describe(
+        'Type of the entity to attach the reminder to. Requires `entityId`.'
+      ),
+    schedule: zod
+      .union([
+        zod
+          .object({
+            remindAt: zod.iso.datetime({}).describe('The instant to fire at.'),
+            type: zod.enum(['once']),
+          })
+          .describe('Fires once, at a fixed instant.'),
+        zod
+          .object({
+            cron: zod
+              .string()
+              .describe(
+                'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+              ),
+            timezone: zod
+              .string()
+              .describe('The timezone the cron expression is evaluated in.'),
+            type: zod.enum(['recurring']),
+          })
+          .describe(
+            'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+          ),
+      ])
+      .describe('When a reminder fires.'),
+  })
+  .describe('Request body for creating a reminder.');
+
+/**
+ * @summary Fetch one of the caller's reminders.
+ */
+export const getReminderParams = zod.object({
+  id: zod.uuid().describe('The reminder id.'),
+});
+
+export const getReminderResponse = zod
+  .object({
+    completedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Set once a one-shot reminder has fired.'),
+    createdAt: zod.iso.datetime({}).describe('When the reminder was created.'),
+    description: zod.string().describe('What to remind the user about.'),
+    enabled: zod
+      .boolean()
+      .describe('When false, the dispatcher skips this reminder.'),
+    entityId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Id of the associated entity, when the reminder is attached to one.'
+      ),
+    entityType: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'user',
+            'chat',
+            'channel',
+            'channel_message',
+            'document',
+            'project',
+            'email_thread',
+            'calendar_event',
+            'team',
+            'call',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
+          ])
+          .describe('The type of an entity in Macro'),
+      ])
+      .optional()
+      .describe(
+        'Type of the associated entity, when the reminder is attached to one.'
+      ),
+    id: zod.uuid().describe('Reminder id.'),
+    nextRunAt: zod.iso
+      .datetime({})
+      .describe('The next firing, derived from `schedule` on write.'),
+    schedule: zod
+      .union([
+        zod
+          .object({
+            remindAt: zod.iso.datetime({}).describe('The instant to fire at.'),
+            type: zod.enum(['once']),
+          })
+          .describe('Fires once, at a fixed instant.'),
+        zod
+          .object({
+            cron: zod
+              .string()
+              .describe(
+                'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+              ),
+            timezone: zod
+              .string()
+              .describe('The timezone the cron expression is evaluated in.'),
+            type: zod.enum(['recurring']),
+          })
+          .describe(
+            'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+          ),
+      ])
+      .describe('When a reminder fires.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the reminder was last modified.'),
+  })
+  .describe(
+    'A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.'
+  );
+
+/**
+ * @summary Delete one of the caller's reminders.
+ */
+export const deleteReminderParams = zod.object({
+  id: zod.uuid().describe('The reminder id.'),
+});
+
+/**
+ * @summary Modify one of the caller's reminders.
+ */
+export const updateReminderParams = zod.object({
+  id: zod.uuid().describe('The reminder id.'),
+});
+
+export const updateReminderBody = zod
+  .object({
+    description: zod.string().optional().describe('Replacement description.'),
+    enabled: zod
+      .boolean()
+      .optional()
+      .describe('Whether the reminder should fire at all.'),
+    schedule: zod
+      .union([
+        zod
+          .object({
+            remindAt: zod.iso.datetime({}).describe('The instant to fire at.'),
+            type: zod.enum(['once']),
+          })
+          .describe('Fires once, at a fixed instant.'),
+        zod
+          .object({
+            cron: zod
+              .string()
+              .describe(
+                'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+              ),
+            timezone: zod
+              .string()
+              .describe('The timezone the cron expression is evaluated in.'),
+            type: zod.enum(['recurring']),
+          })
+          .describe(
+            'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+          ),
+      ])
+      .optional()
+      .describe('When a reminder fires.'),
+  })
+  .describe(
+    'Request body for modifying a reminder. Omitted fields are left unchanged;\nthe entity association is not modifiable.\n\nEvery field is optional but \*\*not\*\* nullable. `Option` here means \"absent\",\nand serde cannot tell an explicit `null` from an omitted key — so a body of\n`{\"enabled\": null}` would deserialize to an empty patch and be rejected as\nhaving no fields to update. `nullable = false` keeps the schema from\nadvertising a value the API has no meaning for; the deserializer still\ntolerates `null` rather than erroring on it.'
+  );
+
+export const updateReminderResponse = zod
+  .object({
+    completedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Set once a one-shot reminder has fired.'),
+    createdAt: zod.iso.datetime({}).describe('When the reminder was created.'),
+    description: zod.string().describe('What to remind the user about.'),
+    enabled: zod
+      .boolean()
+      .describe('When false, the dispatcher skips this reminder.'),
+    entityId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Id of the associated entity, when the reminder is attached to one.'
+      ),
+    entityType: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'user',
+            'chat',
+            'channel',
+            'channel_message',
+            'document',
+            'project',
+            'email_thread',
+            'calendar_event',
+            'team',
+            'call',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
+          ])
+          .describe('The type of an entity in Macro'),
+      ])
+      .optional()
+      .describe(
+        'Type of the associated entity, when the reminder is attached to one.'
+      ),
+    id: zod.uuid().describe('Reminder id.'),
+    nextRunAt: zod.iso
+      .datetime({})
+      .describe('The next firing, derived from `schedule` on write.'),
+    schedule: zod
+      .union([
+        zod
+          .object({
+            remindAt: zod.iso.datetime({}).describe('The instant to fire at.'),
+            type: zod.enum(['once']),
+          })
+          .describe('Fires once, at a fixed instant.'),
+        zod
+          .object({
+            cron: zod
+              .string()
+              .describe(
+                'Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-\/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 \* \* \*` and\n`0 0 9 \* \* \*` are the same schedule and both read back as the latter.'
+              ),
+            timezone: zod
+              .string()
+              .describe('The timezone the cron expression is evaluated in.'),
+            type: zod.enum(['recurring']),
+          })
+          .describe(
+            'Fires repeatedly, on a cron schedule evaluated in `timezone`.'
+          ),
+      ])
+      .describe('When a reminder fires.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the reminder was last modified.'),
+  })
+  .describe(
+    'A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.'
+  );
+
 export const getViewsHandlerResponse = zod.object({
   excludedDefaultViews: zod.array(
     zod

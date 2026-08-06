@@ -93,6 +93,10 @@ use properties::{
     inbound::axum_router::PropertiesRouterState,
 };
 use readonly_pool::ReadOnlyPool;
+use reminders::{
+    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
+    outbound::pg_reminders_repo::PgRemindersRepo,
+};
 use search_service::SearchHandlerState;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -412,6 +416,13 @@ pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the reminders service.
+pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
+
+/// Type alias for the reminders router state.
+pub(crate) type DssRemindersState =
+    RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -461,6 +472,7 @@ pub(crate) struct ApiContext {
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
+    pub reminders_state: DssRemindersState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,

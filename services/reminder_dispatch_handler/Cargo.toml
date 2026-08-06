@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "reminder_dispatch_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-sdk-sqs = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+notification = { path = "../../crates/notification" }
+reminders = { path = "../../crates/reminders", default-features = false, features = [
+  "notify",
+  "postgres",
+] }
+rootcause = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = []

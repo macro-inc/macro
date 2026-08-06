@@ -124,6 +124,8 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
+use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
+use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -305,6 +307,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
+        // reminders
+        reminders::inbound::axum_router::list_reminders_handler,
+        reminders::inbound::axum_router::create_reminder_handler,
+        reminders::inbound::axum_router::get_reminder_handler,
+        reminders::inbound::axum_router::update_reminder_handler,
+        reminders::inbound::axum_router::delete_reminder_handler,
+
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
 
@@ -436,6 +445,11 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            Reminder,
+            RemindersList,
+            ReminderSchedule,
+            CreateReminderRequest,
+            UpdateReminderRequest,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,

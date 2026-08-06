@@ -29,6 +29,7 @@ import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
+import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
 import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -245,6 +246,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <UserPlusIcon class="size-4" />
     ))
     .with('call_started', () => () => <PhoneIcon class="size-4" />)
+    .with('reminder', () => () => <BellSimpleIcon class="size-4" />)
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',

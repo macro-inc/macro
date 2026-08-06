@@ -105,6 +105,10 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
+use reminders::{
+    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
+    outbound::pg_reminders_repo::PgRemindersRepo,
+};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -997,6 +1001,8 @@ async fn main() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let reminders_service = Arc::new(RemindersServiceImpl::new(PgRemindersRepo::new(db.clone())));
+
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let graphql_entity_mutation_service =
@@ -1034,6 +1040,11 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
+        reminders_state: RemindersRouterState::new(
+            reminders_service,
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,

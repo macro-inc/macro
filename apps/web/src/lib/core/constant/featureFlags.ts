@@ -170,6 +170,28 @@ export function ENABLE_CRM(): boolean {
   return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
 }
 
+// Reminders: the "Remind me about this" entry in the command menu, the soup
+// context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
+// Every surface routes through `makeCreateReminderAction().canExecute`, so this
+// is the single gate for all of them. PostHog-gated with a dev-mode default.
+export const ENABLE_REMINDERS_FLAG = 'enable-reminders';
+// Honor an explicit VITE_ENABLE_REMINDERS=false (the `|| undefined` form used by
+// older flags here coerces that to undefined and falls through to PostHog).
+export const ENABLE_REMINDERS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_REMINDERS') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_REMINDERS_FLAG, { enabledOverride: ENABLE_REMINDERS_OVERRIDE })`.
+ */
+export function ENABLE_REMINDERS(): boolean {
+  if (ENABLE_REMINDERS_OVERRIDE !== undefined) {
+    return ENABLE_REMINDERS_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_REMINDERS_FLAG) ?? false;
+}
+
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
   true

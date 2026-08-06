@@ -706,3 +706,50 @@ fn call_started_deserializes_from_legacy_kebab_case_tag() {
     };
     assert_eq!(actual.channel_name.as_deref(), Some("general"));
 }
+
+#[test]
+fn reminder_notif_event_round_trips_and_renders_without_a_sender() {
+    let reminder_id = Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let value = serde_json::json!({
+        "tag": "reminder",
+        "content": { "reminderId": reminder_id, "description": "Follow up on the contract" },
+    });
+
+    let event: crate::NotifEvent = serde_json::from_value(value.clone()).unwrap();
+
+    // A reminder is self-set, so the dispatcher passes no sender. Formatting
+    // must not depend on one.
+    assert_eq!(event.format_title(None).unwrap(), "Reminder");
+    assert_eq!(
+        event.format_body(None).unwrap(),
+        "Follow up on the contract"
+    );
+
+    let crate::NotifEvent::Reminder(actual) = event.clone() else {
+        panic!("expected reminder variant");
+    };
+    assert_eq!(actual.reminder_id, reminder_id);
+    assert_eq!(actual.description, "Follow up on the contract");
+
+    assert_eq!(serde_json::to_value(&event).unwrap(), value);
+}
+
+#[test]
+fn reminder_collapse_key_is_per_reminder_not_per_entity() {
+    let entity = EntityType::Document.with_entity_str("doc-1");
+    let key = |id: &str| {
+        ReminderMetadata {
+            reminder_id: Uuid::parse_str(id).unwrap(),
+            description: "x".to_string(),
+        }
+        .collapse_key(&entity)
+        .into_hashed()
+        .into_inner()
+    };
+
+    // Two reminders on the same document must not collapse into one alert.
+    assert_ne!(
+        key("22222222-2222-4222-8222-222222222222"),
+        key("33333333-3333-4333-8333-333333333333")
+    );
+}

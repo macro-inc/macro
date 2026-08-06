@@ -68,6 +68,7 @@ import type { CreateInstructionsDocumentResponse } from './generated/schemas/cre
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
+import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
 import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
 import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequest';
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
@@ -132,6 +133,7 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { PostTypingRequest } from './generated/schemas/postTypingRequest';
 import type { Project } from './generated/schemas/project';
+import type { Reminder } from './generated/schemas/reminder';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
@@ -2325,6 +2327,14 @@ export const storageServiceClient = {
     async reorderFavorites(params: ReorderFavoritesRequest) {
       return await dssFetch('/favorites/reorder', {
         method: 'PATCH',
+        body: JSON.stringify(params),
+      });
+    },
+  },
+  reminders: {
+    async createReminder(params: CreateReminderRequest) {
+      return await dssFetch<Reminder>('/reminders', {
+        method: 'POST',
         body: JSON.stringify(params),
       });
     },

@@ -23,6 +23,10 @@ import {
   DocumentUploadFinalizerLambda,
   type DocumentUploadFinalizerLambdaEnvVars,
 } from './document-upload-finalizer-lambda';
+import {
+  ReminderDispatchLambda,
+  type ReminderDispatchLambdaEnvVars,
+} from './reminder-dispatch-lambda';
 
 const tags = {
   environment: stack,
@@ -373,6 +377,27 @@ const documentUploadFinalizer = new DocumentUploadFinalizerLambda(
 export const documentUploadFinalizerRoleArn = documentUploadFinalizer.role.arn;
 export const documentUploadFinalizerName = documentUploadFinalizer.lambda.name;
 export const documentUploadFinalizerArn = documentUploadFinalizer.lambda.arn;
+
+// ------------------------------------------- Reminder Dispatch -------------------------------------------
+const reminderDispatchEnvVars: ReminderDispatchLambdaEnvVars = {
+  DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
+  ENVIRONMENT: stack,
+  RUST_LOG: 'reminder_dispatch_handler=info,reminders=info,notification=info',
+};
+
+const reminderDispatch = new ReminderDispatchLambda(
+  `reminder-dispatch-${stack}`,
+  {
+    envVars: reminderDispatchEnvVars,
+    queueArns: [notificationIngressQueueArn],
+    vpc: coparse_api_vpc,
+    tags,
+  }
+);
+
+export const reminderDispatchRoleArn = reminderDispatch.role.arn;
+export const reminderDispatchName = reminderDispatch.lambda.name;
+export const reminderDispatchArn = reminderDispatch.lambda.arn;
 
 // attach lambda to s3 event
 // disabling in dev to test theory of editor crash in web app and potentially use a new paradigm for docx file upload

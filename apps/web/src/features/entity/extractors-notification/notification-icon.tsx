@@ -4,6 +4,7 @@ import PhoneIcon from '@icon/wide-call.svg';
 import type { NotificationStack } from '@notifications';
 import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import BellIcon from '@phosphor/bell-simple.svg';
 import ChatIcon from '@phosphor/chat.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
@@ -52,6 +53,7 @@ function getNotificationIcon(
       () => GithubIcon
     )
     .with('call_started', () => PhoneIcon)
+    .with('reminder', () => BellIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
     .exhaustive();
 }

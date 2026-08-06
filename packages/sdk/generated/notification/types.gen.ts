@@ -817,6 +817,12 @@ export type NotifEvent = {
     tag: 'task_assigned';
 } | {
     /**
+     * A reminder the user set for themselves came due.
+     */
+    content: ReminderMetadata;
+    tag: 'reminder';
+} | {
+    /**
      * An AI assistant responded to a chat.
      */
     content: AiResponseMetadata;
@@ -899,6 +905,29 @@ export type PushNotificationData = {
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Metadata for a reminder the user set for themselves coming due.
+ *
+ * There is no sender: a reminder is self-set, so the dispatcher sends it with
+ * `sender_id: None` (a recipient who is also the sender is filtered out of
+ * their own notification). Every formatter here must therefore work without
+ * one.
+ *
+ * The associated entity, when there is one, lives on the notification row
+ * rather than in here, and clients resolve its name from that — so the
+ * dispatcher does not have to look up a name across five entity types.
+ */
+export type ReminderMetadata = {
+    /**
+     * What the user asked to be reminded about.
+     */
+    description: string;
+    /**
+     * The reminder that fired.
+     */
+    reminderId: string;
 };
 
 /**

@@ -4505,6 +4505,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -12226,6 +12227,59 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
+name = "reminder_dispatch_handler"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_entrypoint",
+ "macro_env_var",
+ "macro_queues",
+ "notification",
+ "reminders",
+ "rootcause",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "reminders"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "entity_access",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "remote_env_var"
 version = "0.1.0"
 dependencies = [
@@ -16853,6 +16907,7 @@ dependencies = [
  "percent-encoding",
  "phf 0.13.1",
  "phf_shared 0.10.0",
+ "phf_shared 0.11.3",
  "phf_shared 0.13.1",
  "prettyplease",
  "proc-macro2",
@@ -16861,6 +16916,7 @@ dependencies = [
  "rand 0.10.1",
  "rand 0.8.6",
  "rand 0.9.4",
+ "rand_core 0.6.4",
  "redis",
  "regex",
  "regex-automata",

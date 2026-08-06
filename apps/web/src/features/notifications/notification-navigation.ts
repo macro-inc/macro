@@ -15,13 +15,14 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
-import type { NotificationType } from '@core/types';
+import type { EntityType, NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
+import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
 import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -358,6 +359,26 @@ function getSupportedHandler(
           params,
           sourceHandle,
         });
+    })
+    .with('reminder', () => {
+      // A reminder carries no entity details of its own — it points at
+      // whatever it was set on, and that lives on the notification. A
+      // standalone reminder is addressed at the user and has nothing to open.
+      const entityType = notification.entity_type as EntityType;
+      if (entityType === 'user') return null;
+
+      return async (lm: SplitManager, newSplit: boolean = false) => {
+        const blockName = await DefaultNotificationBlockNameResolver(
+          notification.entity_id,
+          entityType
+        );
+        if (!blockName) return;
+
+        openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+          newSplit,
+          sourceHandle,
+        });
+      };
     })
     .with('inbox_reauth_required', () => null)
     .exhaustive();
