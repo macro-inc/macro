@@ -356,18 +356,19 @@ fn apply_one(
         LinkOperation::PrependUnique { entity_key } => {
             prepend_unique(normalized_links(target)?, entity_key.borrow());
         }
-        LinkOperation::UpsertEmbeddedLink {
-            list_item,
-            link_field,
-            entity_key,
-            insert_fields,
-        } => upsert_embedded_link(
-            target,
-            list_item,
-            link_field,
-            entity_key.borrow(),
-            insert_fields,
-        )?,
+        LinkOperation::UpsertEmbeddedLink { entity_key, .. } => {
+            let fields = resolved
+                .embedded_link
+                .as_ref()
+                .ok_or(LinkPatchError::WrongShape)?;
+            upsert_embedded_link(
+                target,
+                &fields.list_item,
+                &fields.link_field,
+                entity_key.borrow(),
+                &fields.insert_fields,
+            )?;
+        }
     }
 
     record
@@ -489,6 +490,14 @@ struct ResolvedTarget {
     parent_entity_key: EntityKey<'static>,
     field_key: FieldKey,
     path: Vec<LinkPathSegment>,
+    embedded_link: Option<ResolvedEmbeddedLink>,
+}
+
+#[derive(Debug)]
+struct ResolvedEmbeddedLink {
+    list_item: ListItemByScalar,
+    link_field: FieldKey,
+    insert_fields: HashMap<FieldKey, Json>,
 }
 
 /// Returns the next normalized record required to resolve one query-rooted
@@ -521,6 +530,7 @@ fn resolve_target(
         &operation.selection_set,
         &variables,
         &patch.path,
+        &patch.operation,
     )
 }
 
@@ -531,6 +541,7 @@ fn resolve_from_record(
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     path: &[LinkPathSegment],
+    operation: &LinkOperation,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let Some(LinkPathSegment::Field {
         field: response_key,
@@ -564,6 +575,7 @@ fn resolve_from_record(
             selections: &selected.selection_set,
         },
         &path[1..],
+        operation,
     )
 }
 
@@ -581,12 +593,19 @@ fn resolve_from_value(
     variables: &serde_json::Map<String, Json>,
     cursor: ValueCursor<'_>,
     path: &[LinkPathSegment],
+    operation: &LinkOperation,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     if path.is_empty() {
         return Ok(ResolvedTarget {
             parent_entity_key: cursor.owner,
             field_key: cursor.anchor_field,
             path: cursor.relative_path,
+            embedded_link: resolve_embedded_link_fields(
+                cursor.selections,
+                cursor.type_name,
+                variables,
+                operation,
+            )?,
         });
     }
 
@@ -598,6 +617,7 @@ fn resolve_from_value(
             cursor.selections,
             variables,
             path,
+            operation,
         );
     }
 
@@ -634,6 +654,7 @@ fn resolve_from_value(
                     selections: &selected.selection_set,
                 },
                 &path[1..],
+                operation,
             )
         }
         (LinkPathSegment::ListItem { list_item }, CacheValue::List(items)) => {
@@ -681,10 +702,62 @@ fn resolve_from_value(
                     selections: cursor.selections,
                 },
                 &path[1..],
+                operation,
             )
         }
         _ => Err(LinkPatchError::WrongShape),
     }
+}
+
+fn resolve_embedded_link_fields(
+    selections: &[Selection],
+    concrete: &str,
+    variables: &serde_json::Map<String, Json>,
+    operation: &LinkOperation,
+) -> Result<Option<ResolvedEmbeddedLink>, LinkPatchError> {
+    let LinkOperation::UpsertEmbeddedLink {
+        list_item,
+        link_field,
+        insert_fields,
+        ..
+    } = operation
+    else {
+        return Ok(None);
+    };
+
+    let selector_key = selected_storage_key(
+        selected_field(selections, concrete, &list_item.where_field)?,
+        variables,
+    )?;
+    let resolved_link_field =
+        selected_storage_key(selected_field(selections, concrete, link_field)?, variables)?;
+    let resolved_insert_fields = insert_fields
+        .iter()
+        .map(|(field, value)| {
+            Ok((
+                selected_storage_key(selected_field(selections, concrete, field)?, variables)?,
+                value.clone(),
+            ))
+        })
+        .collect::<Result<HashMap<_, _>, LinkPatchError>>()?;
+
+    if resolved_insert_fields.contains_key(&selector_key) {
+        return Err(LinkPatchError::ConflictingInsertField(selector_key));
+    }
+    if resolved_insert_fields.contains_key(&resolved_link_field)
+        || selector_key == resolved_link_field
+    {
+        return Err(LinkPatchError::ConflictingInsertField(resolved_link_field));
+    }
+
+    Ok(Some(ResolvedEmbeddedLink {
+        list_item: ListItemByScalar {
+            where_field: selector_key,
+            equals: list_item.equals.clone(),
+        },
+        link_field: resolved_link_field,
+        insert_fields: resolved_insert_fields,
+    }))
 }
 
 fn selected_field<'a>(
@@ -782,7 +855,8 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
-    const QUERY: &str = "query { user { groupSoup { bins { key items { id } } } } }";
+    const QUERY: &str =
+        "query { user { groupSoup { bins { key totalCount nextCursor items { id } } } } }";
 
     fn record() -> (EntityKey<'static>, Record) {
         let parent = EntityKey("GraphqlUser:user-1".into());
