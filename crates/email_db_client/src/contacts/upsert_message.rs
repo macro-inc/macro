@@ -112,20 +112,29 @@ async fn upsert_message_contacts(
     // Step 1: Fetch existing (fast, no locks)
     let existing = fetch_contacts_by_emails(pool, link_id, &emails).await?;
 
-    let mut result_map: HashMap<String, Uuid> = existing
+    let existing_by_email: HashMap<_, _> = existing
         .into_iter()
-        .map(|r| (r.email_address, r.id))
+        .map(|contact| (contact.email_address.clone(), contact))
+        .collect();
+    let mut result_map: HashMap<String, Uuid> = existing_by_email
+        .iter()
+        .map(|(email, contact)| (email.clone(), contact.id))
         .collect();
 
-    // Update names for existing contacts that don't have one yet
+    // Only send updates for contacts whose stored name is missing. The UPDATE also checks for NULL
+    // so the first non-NULL name wins if another message fills it concurrently.
     let name_updates: Vec<_> = contacts
         .iter()
-        .filter_map(|c| {
-            c.name.as_ref().and_then(|name| {
-                result_map
-                    .get(&c.email_address)
-                    .map(|id| (*id, name.clone()))
-            })
+        .filter_map(|contact| {
+            let existing = existing_by_email.get(&contact.email_address)?;
+            if existing.name.is_some() {
+                return None;
+            }
+
+            contact
+                .name
+                .as_ref()
+                .map(|name| (existing.id, name.clone()))
         })
         .collect();
 
@@ -164,9 +173,23 @@ async fn upsert_message_contacts(
 
     if !still_missing.is_empty() {
         let fetched = fetch_contacts_by_emails(pool, link_id, &still_missing).await?;
+        let incoming_names: HashMap<&str, Option<&String>> = new_contacts
+            .iter()
+            .map(|contact| (contact.email_address.as_str(), contact.name.as_ref()))
+            .collect();
+        let mut raced_name_updates = Vec::new();
 
         for row in fetched {
+            if row.name.is_none()
+                && let Some(Some(name)) = incoming_names.get(row.email_address.as_str())
+            {
+                raced_name_updates.push((row.id, (*name).clone()));
+            }
             result_map.insert(row.email_address, row.id);
+        }
+
+        if !raced_name_updates.is_empty() {
+            update_missing_contact_names(pool, &raced_name_updates).await?;
         }
     }
 
@@ -182,7 +205,7 @@ async fn fetch_contacts_by_emails(
     let results = sqlx::query_as!(
         address::FetchedAddressId,
         r#"
-        SELECT id, email_address
+        SELECT id, email_address, name
         FROM email_contacts
         WHERE link_id = $1 AND email_address = ANY($2)
         "#,
@@ -243,7 +266,7 @@ async fn insert_new_contacts(
         INSERT INTO email_contacts (id, link_id, email_address, name)
         SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::text[])
         ON CONFLICT (link_id, email_address) DO NOTHING
-        RETURNING id, email_address
+        RETURNING id, email_address, name
         "#,
         &ids,
         &link_ids,

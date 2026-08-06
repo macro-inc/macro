@@ -42,6 +42,7 @@ pub struct UpsertedRecipients {
 pub struct FetchedAddressId {
     pub email_address: String,
     pub id: Uuid,
+    pub name: Option<String>,
 }
 
 #[derive(Type, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

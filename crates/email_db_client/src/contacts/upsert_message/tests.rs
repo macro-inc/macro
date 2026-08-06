@@ -33,6 +33,10 @@ async fn fetch_contacts_by_emails_returns_existing_contacts(pool: Pool<Postgres>
     assert!(ids.contains(&expected_id_1));
     assert!(ids.contains(&expected_id_2));
 
+    let names: Vec<Option<&str>> = res.iter().map(|row| row.name.as_deref()).collect();
+    assert!(names.contains(&Some("Existing Contact One")));
+    assert!(names.contains(&Some("Existing Contact Two")));
+
     Ok(())
 }
 
@@ -320,6 +324,70 @@ async fn insert_new_contacts_allows_same_email_different_links(pool: Pool<Postgr
     // Both should exist with different IDs
     assert_eq!(res_a[0].id, new_contact_id_a);
     assert_eq!(res_b[0].id, new_contact_id_b);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("upsert_message_contacts"))
+)]
+async fn upsert_message_contacts_only_updates_contacts_without_names(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let named_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0001")?;
+    let unnamed_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0003")?;
+    let original_updated_at =
+        chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")?.with_timezone(&chrono::Utc);
+
+    sqlx::query!(
+        "UPDATE email_contacts SET updated_at = $1 WHERE id = ANY($2)",
+        original_updated_at,
+        &[named_id, unnamed_id]
+    )
+    .execute(&pool)
+    .await?;
+
+    let contacts = vec![
+        ContactPhotoless {
+            id: macro_uuid::generate_uuid_v7(),
+            link_id,
+            email_address: "existing1@example.com".to_string(),
+            name: Some("Replacement Name".to_string()),
+        },
+        ContactPhotoless {
+            id: macro_uuid::generate_uuid_v7(),
+            link_id,
+            email_address: "noname@example.com".to_string(),
+            name: Some("New Name".to_string()),
+        },
+    ];
+
+    let ids = upsert_message_contacts(&pool, contacts).await?;
+
+    assert_eq!(ids.get("existing1@example.com"), Some(&named_id));
+    assert_eq!(ids.get("noname@example.com"), Some(&unnamed_id));
+
+    let named = sqlx::query!(
+        "SELECT name, updated_at FROM email_contacts WHERE id = $1",
+        named_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(named.name.as_deref(), Some("Existing Contact One"));
+    assert_eq!(named.updated_at, original_updated_at);
+
+    let unnamed = sqlx::query!(
+        "SELECT name, updated_at FROM email_contacts WHERE id = $1",
+        unnamed_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(unnamed.name.as_deref(), Some("New Name"));
+    assert!(unnamed.updated_at > original_updated_at);
 
     Ok(())
 }
