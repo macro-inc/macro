@@ -3,7 +3,7 @@
 mod rate_limiter;
 mod token_source;
 
-pub use rate_limiter::EmailServiceRateLimiter;
+pub use rate_limiter::{RateBudget, RedisProviderRateLimiter};
 pub use token_source::{EmailServiceTokenSource, StaticTokenSource};
 
 use email_api_client::GmailApiClientRepository;
@@ -13,5 +13,5 @@ use email_api_client::domain::service::EmailApiClientServiceImpl;
 pub type GmailApi = EmailApiClientServiceImpl<
     GmailApiClientRepository,
     EmailServiceTokenSource,
-    EmailServiceRateLimiter,
+    RedisProviderRateLimiter,
 >;
