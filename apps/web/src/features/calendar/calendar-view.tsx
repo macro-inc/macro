@@ -212,26 +212,28 @@ function CalendarWorkspace() {
         <HeaderIsland class="px-1">
           <div class="flex items-center gap-1">
             <CalendarPeriodSelector />
-            <div class="flex shrink-0 items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-lg"
-                label="Previous period"
-                onClick={() => void pager.previous()}
-              >
-                <CaretLeftIcon class="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-lg"
-                label="Next period"
-                onClick={() => void pager.next()}
-              >
-                <CaretRightIcon class="size-4" />
-              </Button>
-            </div>
+            <Show when={!isMobile()}>
+              <div class="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="rounded-lg"
+                  label="Previous period"
+                  onClick={() => void pager.previous()}
+                >
+                  <CaretLeftIcon class="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="rounded-lg"
+                  label="Next period"
+                  onClick={() => void pager.next()}
+                >
+                  <CaretRightIcon class="size-4" />
+                </Button>
+              </div>
+            </Show>
             <CalendarSettingsDropdown />
           </div>
         </HeaderIsland>
