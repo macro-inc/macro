@@ -17,7 +17,6 @@ use tokio_util::sync::CancellationToken;
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
-    gmail_client: gmail_client::GmailClient,
     email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
@@ -30,7 +29,6 @@ pub async fn run_worker(
     run_worker_with_cancellation(
         worker,
         db,
-        gmail_client,
         email_api,
         auth_service_client,
         redis_client,
@@ -51,7 +49,6 @@ pub async fn run_worker(
 pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
-    gmail_client: gmail_client::GmailClient,
     email_api: GmailApi,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
@@ -65,7 +62,6 @@ pub async fn run_worker_with_cancellation(
     let ctx = LinkManagerContext {
         db,
         sqs_worker: worker.clone(),
-        gmail_client,
         email_api,
         auth_service_client,
         redis_client,

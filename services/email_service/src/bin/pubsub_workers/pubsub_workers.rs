@@ -574,7 +574,6 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let db_link_manager = db.clone();
-    let gmail_client_link_manager = gmail_client.clone();
     let email_api_link_manager = email_api_live.clone();
     let auth_service_client_link_manager = auth_service_client.clone();
     let redis_client_link_manager = redis_client.clone();
@@ -589,7 +588,6 @@ async fn main() -> anyhow::Result<()> {
         email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
             link_manager_worker,
             db_link_manager,
-            gmail_client_link_manager,
             email_api_link_manager,
             auth_service_client_link_manager,
             redis_client_link_manager,

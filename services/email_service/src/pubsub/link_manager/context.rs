@@ -3,7 +3,6 @@ use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEven
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use gmail_client::GmailClient;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::sync::Arc;
@@ -12,8 +11,6 @@ use std::sync::Arc;
 pub struct LinkManagerContext {
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
-    pub gmail_client: GmailClient,
-    #[allow(dead_code, reason = "available for staged worker migration")]
     pub email_api: GmailApi,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
