@@ -24,17 +24,128 @@ async fn update_db_thread_metadata(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        UPDATE email_threads
+        WITH metadata AS (
+            SELECT
+                $1::boolean AS inbox_visible,
+                $2::boolean AS is_read,
+                $3::timestamptz AS latest_inbound_message_ts,
+                $4::timestamptz AS latest_outbound_message_ts,
+                $5::timestamptz AS latest_non_spam_message_ts,
+                EXISTS (
+                    SELECT 1
+                    FROM email_messages m
+                    WHERE m.thread_id = $6
+                      AND NOT EXISTS (
+                          SELECT 1 FROM email_message_labels ml
+                          JOIN email_labels l ON ml.label_id = l.id
+                          WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                      )
+                      AND (
+                          (
+                              EXISTS (
+                                  SELECT 1
+                                  FROM email_contacts sender_c
+                                  JOIN email_filters ef
+                                    ON ef.link_id = m.link_id
+                                   AND ef.email_address IS NOT NULL
+                                   AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                                  WHERE sender_c.id = m.from_contact_id
+                                    AND ef.is_important = TRUE
+                              )
+                              OR EXISTS (
+                                  SELECT 1
+                                  FROM email_contacts sender_c
+                                  JOIN email_filters ef
+                                    ON ef.link_id = m.link_id
+                                   AND ef.email_domain IS NOT NULL
+                                   AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                                  WHERE sender_c.id = m.from_contact_id
+                                    AND ef.is_important = TRUE
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM email_filters ef_addr
+                                        WHERE ef_addr.link_id = m.link_id
+                                          AND ef_addr.email_address IS NOT NULL
+                                          AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                          AND ef_addr.is_important = FALSE
+                                    )
+                              )
+                          )
+                          OR (
+                              NOT (
+                                  EXISTS (
+                                      SELECT 1
+                                      FROM email_contacts sender_c
+                                      JOIN email_filters ef
+                                        ON ef.link_id = m.link_id
+                                       AND ef.email_address IS NOT NULL
+                                       AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                                      WHERE sender_c.id = m.from_contact_id
+                                        AND ef.is_important = FALSE
+                                  )
+                                  OR EXISTS (
+                                      SELECT 1
+                                      FROM email_contacts sender_c
+                                      JOIN email_filters ef
+                                        ON ef.link_id = m.link_id
+                                       AND ef.email_domain IS NOT NULL
+                                       AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                                      WHERE sender_c.id = m.from_contact_id
+                                        AND ef.is_important = FALSE
+                                        AND NOT EXISTS (
+                                            SELECT 1 FROM email_filters ef_addr
+                                            WHERE ef_addr.link_id = m.link_id
+                                              AND ef_addr.email_address IS NOT NULL
+                                              AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                              AND ef_addr.is_important = TRUE
+                                        )
+                                  )
+                              )
+                              AND (
+                                  m.is_draft = TRUE
+                                  OR EXISTS (
+                                      SELECT 1 FROM email_message_labels ml
+                                      JOIN email_labels l ON ml.label_id = l.id
+                                      WHERE ml.message_id = m.id
+                                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                                  )
+                                  OR NOT EXISTS (
+                                      SELECT 1 FROM email_message_labels ml
+                                      JOIN email_labels l ON ml.label_id = l.id
+                                      WHERE ml.message_id = m.id
+                                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                                  )
+                              )
+                          )
+                      )
+                ) AS is_signal
+        )
+        UPDATE email_threads t
         SET
-            inbox_visible = $1,
-            is_read = $2,
-            latest_inbound_message_ts = $3,
-            latest_outbound_message_ts = $4,
-            latest_non_spam_message_ts = $5,
+            inbox_visible = metadata.inbox_visible,
+            is_read = metadata.is_read,
+            latest_inbound_message_ts = metadata.latest_inbound_message_ts,
+            latest_outbound_message_ts = metadata.latest_outbound_message_ts,
+            latest_non_spam_message_ts = metadata.latest_non_spam_message_ts,
+            is_signal = metadata.is_signal,
             updated_at = NOW()
-        WHERE
-            id = $6 AND
-            link_id = $7
+        FROM metadata
+        WHERE t.id = $6
+          AND t.link_id = $7
+          AND ROW(
+              t.inbox_visible,
+              t.is_read,
+              t.latest_inbound_message_ts,
+              t.latest_outbound_message_ts,
+              t.latest_non_spam_message_ts,
+              t.is_signal
+          ) IS DISTINCT FROM ROW(
+              metadata.inbox_visible,
+              metadata.is_read,
+              metadata.latest_inbound_message_ts,
+              metadata.latest_outbound_message_ts,
+              metadata.latest_non_spam_message_ts,
+              metadata.is_signal
+          )
         "#,
         inbox_visible,
         is_read,
@@ -354,8 +465,6 @@ pub async fn update_thread_metadata(
         latest_non_spam_message_ts,
     )
     .await?;
-
-    sync_thread_signal_flag(&mut *tx, thread_db_id).await?;
 
     Ok(())
 }
