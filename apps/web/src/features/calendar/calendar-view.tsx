@@ -188,10 +188,15 @@ function CalendarWorkspace() {
     <>
       <SplitHeaderLeft>
         <HeaderIsland class="shrink">
-          <div class="flex min-w-0 items-center gap-2">
-            <span class="min-w-0 truncate text-base font-semibold text-ink">
-              {dateTitle()}
-            </span>
+          <span class="min-w-0 truncate text-base font-semibold text-ink">
+            {dateTitle()}
+          </span>
+        </HeaderIsland>
+      </SplitHeaderLeft>
+
+      <SplitHeaderRight>
+        <HeaderIsland class="px-1">
+          <div class="flex items-center gap-1">
             <Show when={!isTodayVisible()}>
               <Button
                 variant="active"
@@ -204,13 +209,6 @@ function CalendarWorkspace() {
                 Today
               </Button>
             </Show>
-          </div>
-        </HeaderIsland>
-      </SplitHeaderLeft>
-
-      <SplitHeaderRight>
-        <HeaderIsland class="px-1">
-          <div class="flex items-center gap-1">
             <CalendarPeriodSelector />
             <Show when={!isMobile()}>
               <div class="flex shrink-0 items-center gap-1">
