@@ -500,6 +500,11 @@ export type AttachmentForwarded = {
     size_bytes?: number | null;
 };
 
+/**
+ * RSVP state for an attendee.
+ */
+export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
 export type BackfillJob = {
     created_at: string;
     fusionauth_user_id: string;
@@ -529,6 +534,155 @@ export type BlockSenderRequest = {
     email_address: string;
 };
 
+/**
+ * An attendee on a calendar event.
+ */
+export type CalendarAttendee = {
+    /**
+     * Optional attendee comment.
+     */
+    comment?: string | null;
+    /**
+     * Provider display name.
+     */
+    displayName?: string | null;
+    /**
+     * Normalized email address.
+     */
+    email: string;
+    /**
+     * Whether attendance is optional.
+     */
+    isOptional: boolean;
+    /**
+     * Whether this attendee is the organizer.
+     */
+    isOrganizer: boolean;
+    /**
+     * Whether this attendee represents the connected account.
+     */
+    isSelf: boolean;
+    /**
+     * RSVP state.
+     */
+    responseStatus: AttendeeResponseStatus;
+};
+
+/**
+ * An attendee supplied to a calendar mutation.
+ */
+export type CalendarAttendeeInputBody = {
+    /**
+     * Attendee email address.
+     */
+    email: string;
+    /**
+     * Whether attendance is optional.
+     */
+    isOptional?: boolean;
+};
+
+/**
+ * A stable, first-class Macro calendar event entity.
+ */
+export type CalendarEvent = {
+    /**
+     * Attendees, keyed by email during persistence.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Direct join URL when known.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Entity creation time.
+     */
+    createdAt: string;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * RFC 5545 UID used to reconcile provider and email sources.
+     */
+    icalUid: string;
+    /**
+     * Macro entity identifier.
+     */
+    id: string;
+    /**
+     * Whether the current user can edit the canonical source.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Macro user who owns this event entity.
+     */
+    ownerId: string;
+    /**
+     * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+     */
+    recurrenceLines: Array<string>;
+    /**
+     * Provider/iCalendar sequence number.
+     */
+    sequence: number;
+    /**
+     * Event status.
+     */
+    status: EventStatus;
+    /**
+     * Timed or all-day shape.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Entity update time.
+     */
+    updatedAt: string;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
+ * HTTP error body returned by calendar mutation endpoints.
+ */
+export type CalendarMutationApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarMutationErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable failure category for calendar mutations.
+ */
+export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+
 export type CancelBackfillParams = {
     job_id: string;
 };
@@ -557,6 +711,43 @@ export type ContactInfoLegacy = {
 
 export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
+};
+
+/**
+ * Request body creating a calendar event on the requester's calendar.
+ */
+export type CreateCalendarEventRequest = {
+    /**
+     * Invited attendees.
+     */
+    attendees?: Array<CalendarAttendeeInputBody>;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Connected inbox whose primary calendar receives the event; defaults
+     * to the requester's primary inbox.
+     */
+    emailLinkId?: string | null;
+    /**
+     * Optional location label.
+     */
+    location?: string | null;
+    /**
+     * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+     */
+    recurrenceLines?: Array<string>;
+    /**
+     * Timed or all-day shape.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    transparency?: null | EventTransparency;
+    visibility?: null | EventVisibility;
 };
 
 /**
@@ -614,6 +805,54 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * Canonical event status.
+ */
+export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
+
+/**
+ * The mutually exclusive time shape of a calendar event.
+ *
+ * Fields are renamed per variant rather than with `rename_all_fields`
+ * because utoipa only honors variant-level serde renames when it
+ * derives the OpenAPI schema.
+ */
+export type EventTime = {
+    /**
+     * Exclusive end instant.
+     */
+    endsAt: string;
+    kind: 'timed';
+    /**
+     * Inclusive start instant.
+     */
+    startsAt: string;
+    /**
+     * Original IANA time-zone identifier, when supplied.
+     */
+    timeZone?: string | null;
+} | {
+    /**
+     * Exclusive local end date.
+     */
+    endDate: string;
+    kind: 'allDay';
+    /**
+     * Inclusive local start date.
+     */
+    startDate: string;
+};
+
+/**
+ * Whether an event blocks availability.
+ */
+export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Visibility of event details.
+ */
+export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
 
 /**
  * The response returned from the get backfill job endpoint
@@ -920,6 +1159,16 @@ export type ResyncResponse = {
 };
 
 /**
+ * Request body setting the requester's RSVP on an event.
+ */
+export type RsvpCalendarEventRequest = {
+    /**
+     * The response to record for the connected account.
+     */
+    response: AttendeeResponseStatus;
+};
+
+/**
  * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).
  */
 export type SendMessageRequest = {
@@ -1040,6 +1289,35 @@ export type UnresolvedSignatureImagesError = {
     unresolved_image_count: number;
 };
 
+/**
+ * Request body patching an event; omitted fields are left untouched.
+ */
+export type UpdateCalendarEventRequest = {
+    /**
+     * Replacement attendee list.
+     */
+    attendees?: Array<CalendarAttendeeInputBody> | null;
+    /**
+     * Replacement description; an empty string clears it.
+     */
+    description?: string | null;
+    /**
+     * Replacement location; an empty string clears it.
+     */
+    location?: string | null;
+    /**
+     * Replacement recurrence properties; an empty list clears them.
+     */
+    recurrenceLines?: Array<string> | null;
+    time?: null | EventTime;
+    /**
+     * Replacement title.
+     */
+    title?: string | null;
+    transparency?: null | EventTransparency;
+    visibility?: null | EventVisibility;
+};
+
 export type UpdateLabelBatchRequest = {
     label_id: string;
     message_ids: Array<string>;
@@ -1128,6 +1406,189 @@ export type UpsertScheduledResponse = {
 export type UserProvider = 'GMAIL';
 
 export type Value = unknown;
+
+export type CreateCalendarEventData = {
+    body: CreateCalendarEventRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar/events';
+};
+
+export type CreateCalendarEventErrors = {
+    /**
+     * Invalid event fields
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * No writable calendar or the provider rejected the event
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CreateCalendarEventError = CreateCalendarEventErrors[keyof CreateCalendarEventErrors];
+
+export type CreateCalendarEventResponses = {
+    /**
+     * The created calendar event
+     */
+    201: CalendarEvent;
+};
+
+export type CreateCalendarEventResponse = CreateCalendarEventResponses[keyof CreateCalendarEventResponses];
+
+export type DeleteCalendarEventData = {
+    body?: never;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar/events/{event_id}';
+};
+
+export type DeleteCalendarEventErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event not found
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The provider rejected the deletion
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type DeleteCalendarEventError = DeleteCalendarEventErrors[keyof DeleteCalendarEventErrors];
+
+export type DeleteCalendarEventResponses = {
+    /**
+     * The event was deleted
+     */
+    204: void;
+};
+
+export type DeleteCalendarEventResponse = DeleteCalendarEventResponses[keyof DeleteCalendarEventResponses];
+
+export type UpdateCalendarEventData = {
+    body: UpdateCalendarEventRequest;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar/events/{event_id}';
+};
+
+export type UpdateCalendarEventErrors = {
+    /**
+     * Invalid event fields
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event not found
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The provider rejected the update
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type UpdateCalendarEventError = UpdateCalendarEventErrors[keyof UpdateCalendarEventErrors];
+
+export type UpdateCalendarEventResponses = {
+    /**
+     * The updated calendar event
+     */
+    200: CalendarEvent;
+};
+
+export type UpdateCalendarEventResponse = UpdateCalendarEventResponses[keyof UpdateCalendarEventResponses];
+
+export type RsvpCalendarEventData = {
+    body: RsvpCalendarEventRequest;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar/events/{event_id}/rsvp';
+};
+
+export type RsvpCalendarEventErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event not found
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The connected account is not an attendee
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type RsvpCalendarEventError = RsvpCalendarEventErrors[keyof RsvpCalendarEventErrors];
+
+export type RsvpCalendarEventResponses = {
+    /**
+     * The updated calendar event
+     */
+    200: CalendarEvent;
+};
+
+export type RsvpCalendarEventResponse = RsvpCalendarEventResponses[keyof RsvpCalendarEventResponses];
 
 export type GetAttachmentData = {
     body?: never;

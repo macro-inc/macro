@@ -468,13 +468,15 @@ where
                 .sync_events(
                     access_token,
                     GoogleEventSyncContext {
-                        owner_id: owner_id.to_string(),
-                        email_link_id: key.email_link_id,
-                        account_id,
-                        calendar_id,
-                        provider_calendar_id,
-                        is_read_only,
-                        range: range.clone(),
+                        target: super::models::GoogleCalendarTarget {
+                            owner_id: owner_id.to_string(),
+                            email_link_id: key.email_link_id,
+                            account_id,
+                            calendar_id,
+                            provider_calendar_id,
+                            is_read_only,
+                            range: range.clone(),
+                        },
                         sync_token: stored_calendar.sync_token,
                         plan,
                     },

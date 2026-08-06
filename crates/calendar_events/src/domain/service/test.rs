@@ -2,11 +2,12 @@ use super::*;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarEvent,
-        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
-        ProviderCalendar, StoredGoogleCalendar,
+        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
+        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
+        CalendarSyncStatus, EventStatus, EventTime, EventTransparency, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource,
+        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
+        StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -34,6 +35,7 @@ impl CalendarRepository for FakeRepo {
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill { upsert, .. }
+            | CalendarEventWrite::UserMutation(upsert)
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
@@ -53,6 +55,31 @@ impl CalendarRepository for FakeRepo {
 
     async fn sync_status(&self, _requester_id: &str) -> Result<CalendarSyncStatus, Report> {
         Ok(CalendarSyncStatus::Ready)
+    }
+
+    async fn get_event_mutation_target(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<CalendarEventMutationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_creation_target(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+    ) -> Result<Option<CalendarCreationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn remove_google_source(
+        &self,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+        _provider_event_id: &str,
+    ) -> Result<(), Report> {
+        unreachable!("mutation cleanup is not exercised by sync tests")
     }
 
     async fn upsert_google_calendar(
@@ -226,7 +253,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
             upserts: Vec::new(),
             observed_provider_event_ids: Some(Vec::new()),
             next_sync_token: "next".to_string(),
-            materialized_range: Some(context.range),
+            materialized_range: Some(context.target.range),
             cancelled_provider_event_ids: Vec::new(),
         })
     }

@@ -159,7 +159,9 @@ export const emailExcluded = [
 export const emailBacklog = [
   'addDraftAttachment',
   'addForwardedAttachment',
+  'createCalendarEvent',
   'createDraft',
+  'deleteCalendarEvent',
   'deleteDraft',
   'deleteEmailFilter',
   'deleteScheduledDraft',
@@ -168,6 +170,8 @@ export const emailBacklog = [
   'listEmailFilters',
   'removeDraftAttachment',
   'removeForwardedAttachment',
+  'rsvpCalendarEvent',
+  'updateCalendarEvent',
   'upsertEmailFilter',
   'upsertScheduledMessage',
 ] as const satisfies readonly (keyof EmailSdk)[];

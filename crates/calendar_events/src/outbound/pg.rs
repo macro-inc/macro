@@ -12,11 +12,13 @@ use crate::domain::{
     models::{
         AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
-        CalendarBackfillJobKey, CalendarBackfillKind, CalendarEvent, CalendarEventOverride,
-        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, CalendarOccurrenceCursor,
-        CalendarSyncStatus, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
+        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
+        CalendarOccurrenceCursor, CalendarSyncStatus, EventStart, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
+        GoogleScopeSet, GoogleWatchChannel, OccurrenceRange, ProviderCalendar,
+        StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
@@ -473,6 +475,7 @@ impl CalendarRepository for PgCalendarRepository {
                     .await?;
                 upsert
             }
+            CalendarEventWrite::UserMutation(upsert) => upsert,
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
@@ -1112,6 +1115,180 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        tx.commit().await.map_err(report)
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn get_event_mutation_target(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventMutationTarget>, Report> {
+        // Rank Google sources exactly like source restoration so mutations
+        // address the same provider copy reads are projected from.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                event.id AS event_id,
+                event.owner_id,
+                event.is_read_only,
+                source.provider_event_id AS "provider_event_id!",
+                source.provider_recurring_event_id,
+                source.account_id AS "account_id!",
+                source.calendar_id AS "calendar_id!",
+                calendar.provider_calendar_id,
+                account.email_link_id,
+                link.fusionauth_user_id,
+                link.email_address,
+                link.provider::text AS "provider!"
+            FROM calendar_events event
+            JOIN calendar_event_sources source
+                ON source.event_id = event.id
+               AND source.source_kind = 'google'
+            JOIN calendars calendar ON calendar.id = source.calendar_id
+            JOIN calendar_accounts account ON account.id = source.account_id
+            JOIN email_links link ON link.id = account.email_link_id
+            WHERE event.id = $1
+              AND NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+              AND (
+                    event.owner_id = $2
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links delegation
+                        WHERE delegation.link_id = account.email_link_id
+                          AND delegation.primary_macro_id = $2
+                    )
+              )
+            ORDER BY
+                source.source_sequence DESC,
+                source.source_updated_at DESC,
+                source.last_seen_at DESC,
+                source.id DESC
+            LIMIT 1
+            "#,
+            event_id,
+            requester_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(row.map(|row| CalendarEventMutationTarget {
+            event_id: row.event_id,
+            is_read_only: row.is_read_only,
+            provider_event_id: row.provider_event_id,
+            provider_recurring_event_id: row.provider_recurring_event_id,
+            owner_id: row.owner_id,
+            email_link_id: row.email_link_id,
+            account_id: row.account_id,
+            calendar_id: row.calendar_id,
+            provider_calendar_id: row.provider_calendar_id,
+            token_identity: CalendarLinkTokenIdentity {
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+            },
+        }))
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn get_creation_target(
+        &self,
+        requester_id: &str,
+        email_link_id: Option<Uuid>,
+    ) -> Result<Option<CalendarCreationTarget>, Report> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                link.macro_id AS owner_id,
+                link.id AS email_link_id,
+                account.id AS account_id,
+                calendar.id AS calendar_id,
+                calendar.provider_calendar_id,
+                calendar.access_role,
+                link.fusionauth_user_id,
+                link.email_address,
+                link.provider::text AS "provider!"
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN calendars calendar ON calendar.account_id = account.id
+            WHERE calendar.is_primary
+              AND NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+              AND ($2::uuid IS NULL OR link.id = $2)
+              AND (
+                    link.macro_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links delegation
+                        WHERE delegation.link_id = link.id
+                          AND delegation.primary_macro_id = $1
+                    )
+              )
+            ORDER BY
+                (link.macro_id = $1) DESC,
+                link.is_primary DESC,
+                link.created_at ASC
+            LIMIT 1
+            "#,
+            requester_id,
+            email_link_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(row.map(|row| CalendarCreationTarget {
+            owner_id: row.owner_id,
+            email_link_id: row.email_link_id,
+            account_id: row.account_id,
+            calendar_id: row.calendar_id,
+            provider_calendar_id: row.provider_calendar_id,
+            is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+            token_identity: CalendarLinkTokenIdentity {
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+            },
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_google_source(
+        &self,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        provider_event_id: &str,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let cancelled = [provider_event_id.to_string()];
+        // A deleted recurring master retires its expanded instances via
+        // provider_recurring_event_id, matching Google's tombstone shape.
+        let affected_event_ids = sqlx::query_scalar!(
+            r#"
+            WITH deleted_sources AS (
+                DELETE FROM calendar_event_sources source
+                WHERE source.source_kind = 'google'
+                  AND source.account_id = $1
+                  AND source.calendar_id = $2
+                  AND (
+                        source.provider_event_id = ANY($3::text[])
+                        OR source.provider_recurring_event_id = ANY($3::text[])
+                  )
+                RETURNING source.event_id
+            )
+            SELECT DISTINCT event_id AS "event_id!"
+            FROM deleted_sources
+            "#,
+            account_id,
+            calendar_id,
+            &cancelled,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+        for event_id in affected_event_ids {
+            restore_best_source_or_delete(&mut tx, event_id).await?;
+        }
         tx.commit().await.map_err(report)
     }
 }

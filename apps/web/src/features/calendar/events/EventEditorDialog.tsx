@@ -1,0 +1,341 @@
+import { toast } from '@core/component/Toast/Toast';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import XIcon from '@phosphor/x.svg';
+import {
+  useCreateCalendarEventMutation,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
+import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
+import type { CalendarEvent } from './types';
+
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+function toLocalDateValue(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function toLocalDateTimeValue(date: Date) {
+  return `${toLocalDateValue(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function shiftDateValue(value: string, days: number) {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year ?? 0, (month ?? 1) - 1, (day ?? 1) + days);
+  return toLocalDateValue(date);
+}
+
+/** Default editor slot: the next full hour, one hour long. */
+function defaultEditorTimes(reference: Date) {
+  const start = new Date(reference);
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() + 1);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+  return { start, end };
+}
+
+interface EditorState {
+  title: string;
+  allDay: boolean;
+  /** `datetime-local` value, or `date` value in all-day mode. */
+  start: string;
+  /** Inclusive end shown to the user; all-day submissions add the exclusive day. */
+  end: string;
+  location: string;
+  description: string;
+  guests: string;
+}
+
+function initialEditorState(event: CalendarEvent | undefined): EditorState {
+  if (!event) {
+    const { start, end } = defaultEditorTimes(new Date());
+    return {
+      title: '',
+      allDay: false,
+      start: toLocalDateTimeValue(start),
+      end: toLocalDateTimeValue(end),
+      location: '',
+      description: '',
+      guests: '',
+    };
+  }
+  if (event.allDay) {
+    const start = DATE_ONLY_REGEX.test(event.start)
+      ? event.start
+      : toLocalDateValue(new Date(event.start));
+    const exclusiveEnd = DATE_ONLY_REGEX.test(event.end)
+      ? event.end
+      : toLocalDateValue(new Date(event.end));
+    return {
+      title: event.title,
+      allDay: true,
+      start,
+      end: shiftDateValue(exclusiveEnd, -1),
+      location: event.location ?? '',
+      description: event.description ?? '',
+      guests: '',
+    };
+  }
+  return {
+    title: event.title,
+    allDay: false,
+    start: toLocalDateTimeValue(new Date(event.start)),
+    end: toLocalDateTimeValue(new Date(event.end)),
+    location: event.location ?? '',
+    description: event.description ?? '',
+    guests: '',
+  };
+}
+
+function buildEventTime(state: EditorState): EventTime | undefined {
+  if (state.allDay) {
+    if (!state.start || !state.end || state.end < state.start) {
+      return undefined;
+    }
+    return {
+      kind: 'allDay',
+      startDate: state.start,
+      endDate: shiftDateValue(state.end, 1),
+    };
+  }
+  const start = new Date(state.start);
+  const end = new Date(state.end);
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    end <= start
+  ) {
+    return undefined;
+  }
+  return {
+    kind: 'timed',
+    startsAt: start.toISOString(),
+    endsAt: end.toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+}
+
+function parseGuestEmails(value: string) {
+  return [...new Set(value.split(/[\s,;]+/).filter((email) => email !== ''))];
+}
+
+/** Both editor times switch representation when all-day toggles. */
+function convertTimesForAllDay(state: EditorState, allDay: boolean) {
+  if (allDay === state.allDay) return state;
+  if (allDay) {
+    return {
+      ...state,
+      allDay,
+      start: state.start.slice(0, 10),
+      end: state.end.slice(0, 10),
+    };
+  }
+  const { start, end } = defaultEditorTimes(new Date(`${state.start}T00:00`));
+  return {
+    ...state,
+    allDay,
+    start: toLocalDateTimeValue(start),
+    end: toLocalDateTimeValue(end),
+  };
+}
+
+/**
+ * Create/edit form for a calendar event. Editing a recurring event changes
+ * the entire series; guests can only be invited at creation, because a
+ * patch replaces the whole attendee list and would reset RSVPs.
+ */
+export function EventEditorDialog(props: {
+  open: boolean;
+  /** Present when editing; absent when creating. */
+  event?: CalendarEvent;
+  onClose: () => void;
+}) {
+  const [state, setState] = createSignal(initialEditorState(props.event));
+  const isEdit = () => props.event !== undefined;
+  const isRecurring = () =>
+    (props.event?.recurrenceLines.length ?? 0) > 0 ||
+    props.event?.recurrenceId !== undefined;
+
+  const invalidGuests = createMemo(() =>
+    parseGuestEmails(state().guests).filter((email) => !email.includes('@'))
+  );
+  const eventTime = createMemo(() => buildEventTime(state()));
+  const canSave = () =>
+    eventTime() !== undefined && invalidGuests().length === 0;
+
+  const create = useCreateCalendarEventMutation({
+    onSuccess: () => props.onClose(),
+    onError: (error) => {
+      toast.failure('Failed to create event', { subtext: error.message });
+    },
+  });
+  const update = useUpdateCalendarEventMutation({
+    onSuccess: () => props.onClose(),
+    onError: (error) => {
+      toast.failure('Failed to update event', { subtext: error.message });
+    },
+  });
+  const pending = () => create.isPending || update.isPending;
+
+  const save = () => {
+    const time = eventTime();
+    if (!time || pending()) return;
+
+    const current = state();
+    const event = props.event;
+    if (event) {
+      update.mutate({
+        eventId: event.eventId,
+        patch: {
+          title: current.title,
+          time,
+          location: current.location,
+          description: current.description,
+        },
+      });
+      return;
+    }
+    create.mutate({
+      title: current.title,
+      time,
+      location: current.location === '' ? undefined : current.location,
+      description: current.description === '' ? undefined : current.description,
+      attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
+    });
+  };
+
+  return (
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && !pending() && props.onClose()}
+    >
+      <Panel
+        depth={2}
+        class="w-[26rem] max-w-[calc(100vw-2rem)] rounded-xl text-ink"
+      >
+        <Panel.Header class="gap-1 px-2">
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-sm"
+            disabled={pending()}
+          >
+            <XIcon />
+          </Dialog.CloseButton>
+          <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
+            {isEdit() ? 'Edit event' : 'New event'}
+          </Dialog.Title>
+        </Panel.Header>
+        <Panel.Body class="flex flex-col gap-3 p-3">
+          <input
+            type="text"
+            value={state().title}
+            onInput={(e) =>
+              setState({ ...state(), title: e.currentTarget.value })
+            }
+            placeholder="Add title"
+            class="settings-input w-full"
+          />
+          <div class="flex items-center justify-between gap-2 text-xs text-ink-muted">
+            <ToggleSwitch
+              label="All day"
+              checked={state().allDay}
+              onChange={(allDay) =>
+                setState(convertTimesForAllDay(state(), allDay))
+              }
+            />
+            <Show when={isRecurring()}>
+              <span class="text-ink-extra-muted">
+                Changes apply to all occurrences
+              </span>
+            </Show>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              type={state().allDay ? 'date' : 'datetime-local'}
+              value={state().start}
+              onInput={(e) =>
+                setState({ ...state(), start: e.currentTarget.value })
+              }
+              aria-label="Start"
+              class="settings-input min-w-0 flex-1"
+            />
+            <span class="shrink-0 text-xs text-ink-extra-muted">to</span>
+            <input
+              type={state().allDay ? 'date' : 'datetime-local'}
+              value={state().end}
+              onInput={(e) =>
+                setState({ ...state(), end: e.currentTarget.value })
+              }
+              aria-label="End"
+              class="settings-input min-w-0 flex-1"
+            />
+          </div>
+          <Show when={!isEdit()}>
+            <div class="flex flex-col gap-1">
+              <input
+                type="text"
+                value={state().guests}
+                onInput={(e) =>
+                  setState({ ...state(), guests: e.currentTarget.value })
+                }
+                placeholder="Add guests (comma-separated emails)"
+                class="settings-input w-full"
+                aria-invalid={invalidGuests().length > 0}
+              />
+              <Show when={invalidGuests().length > 0}>
+                <span class="text-xs text-failure">
+                  Invalid email: {invalidGuests().join(', ')}
+                </span>
+              </Show>
+            </div>
+          </Show>
+          <input
+            type="text"
+            value={state().location}
+            onInput={(e) =>
+              setState({ ...state(), location: e.currentTarget.value })
+            }
+            placeholder="Add location"
+            class="settings-input w-full"
+          />
+          <textarea
+            value={state().description}
+            onInput={(e) =>
+              setState({ ...state(), description: e.currentTarget.value })
+            }
+            placeholder="Add description"
+            rows={3}
+            class="settings-input min-h-20 w-full resize-y py-2"
+          />
+          <div class="flex justify-end gap-1 pt-1">
+            <Button
+              variant="ghost"
+              class="rounded-lg"
+              disabled={pending()}
+              label="Cancel"
+              onClick={props.onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="cta"
+              class="rounded-lg"
+              disabled={!canSave() || pending()}
+              label="Save"
+              onClick={save}
+            >
+              <Show when={pending()} fallback="Save">
+                <SpinnerIcon class="size-4 animate-spin" />
+              </Show>
+            </Button>
+          </div>
+        </Panel.Body>
+      </Panel>
+    </Dialog>
+  );
+}

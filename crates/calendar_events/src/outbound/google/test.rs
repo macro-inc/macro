@@ -23,7 +23,7 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
 
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|readonly@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -31,10 +31,8 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
         provider_calendar_id: "primary".to_string(),
         is_read_only: true,
         range,
-        sync_token: None,
-        plan: GoogleSyncPlan::FullSnapshot,
     };
-    let upsert = map_upsert(&context, master, Vec::new(), Vec::new()).unwrap();
+    let upsert = map_upsert(&target, master, Vec::new(), Vec::new()).unwrap();
 
     assert!(upsert.event.is_read_only);
 }
@@ -70,7 +68,7 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         start_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|recurring@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -78,11 +76,9 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         provider_calendar_id: "primary".to_string(),
         is_read_only: false,
         range,
-        sync_token: None,
-        plan: GoogleSyncPlan::FullSnapshot,
     };
 
-    let upsert = map_upsert(&context, master, Vec::new(), vec![malformed_instance]).unwrap();
+    let upsert = map_upsert(&target, master, Vec::new(), vec![malformed_instance]).unwrap();
     assert!(upsert.occurrences.is_empty());
 }
 
@@ -107,7 +103,7 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
     let ends_at = DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
         .unwrap()
         .with_timezone(&Utc);
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|quarantine@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -120,11 +116,9 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
             start_date: starts_at.date_naive(),
             end_date: ends_at.date_naive(),
         },
-        sync_token: Some("token".to_string()),
-        plan: GoogleSyncPlan::FullSnapshot,
     };
 
-    let mapped = map_snapshot(&context, vec![valid, malformed], Vec::new());
+    let mapped = map_snapshot(&target, vec![valid, malformed], Vec::new());
 
     assert_eq!(mapped.upserts.len(), 1);
     assert_eq!(

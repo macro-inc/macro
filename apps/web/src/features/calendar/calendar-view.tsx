@@ -9,6 +9,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Layer } from '@ui';
 import { Pager, PagerSwipeGestures, usePager } from '@ui/components/Pager';
@@ -39,6 +40,7 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
+import { EventEditorDialog } from './events/EventEditorDialog';
 import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -173,6 +175,7 @@ function CalendarWorkspace() {
   const calendarView = useCalendarView();
   const initialDate = new Date();
   const today = createLocalToday();
+  const [createEventOpen, setCreateEventOpen] = createSignal(false);
 
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
@@ -246,6 +249,16 @@ function CalendarWorkspace() {
               </Button>
             </Show>
             <Show when={!isMobile()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="rounded-lg px-2"
+                label="New event"
+                onClick={() => setCreateEventOpen(true)}
+              >
+                <PlusIcon class="size-3.5" />
+                New event
+              </Button>
               <CalendarPeriodSelector />
               <div class="flex shrink-0 items-center gap-1">
                 <Button
@@ -281,6 +294,10 @@ function CalendarWorkspace() {
         timeFormat={() => calendarView.displaySettings.timeFormat}
         onClose={calendarView.closeEventDetails}
       />
+
+      <Show when={createEventOpen()}>
+        <EventEditorDialog open onClose={() => setCreateEventOpen(false)} />
+      </Show>
 
       <main class="calendar-view flex size-full min-h-0">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">

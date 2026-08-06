@@ -518,6 +518,177 @@ pub struct CalendarEventUpsert {
     pub occurrences: Vec<CalendarOccurrence>,
 }
 
+/// Stable identity of one provider calendar targeted by a sync or mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoogleCalendarTarget {
+    /// Macro user who owns the resulting entities.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Whether the provider role prohibits event mutation.
+    pub is_read_only: bool,
+    /// Occurrence window to materialize.
+    pub range: OccurrenceRange,
+}
+
+/// An attendee supplied to a user-initiated event mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarAttendeeInput {
+    /// Attendee email address.
+    pub email: String,
+    /// Whether attendance is optional.
+    pub is_optional: bool,
+}
+
+/// User-supplied fields for a new provider event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventDraft {
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional location label.
+    pub location: Option<String>,
+    /// Timed or all-day shape.
+    pub time: EventTime,
+    /// Invited attendees.
+    pub attendees: Vec<CalendarAttendeeInput>,
+    /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+    pub recurrence_lines: Vec<String>,
+    /// Event visibility.
+    pub visibility: Option<EventVisibility>,
+    /// Availability behavior.
+    pub transparency: Option<EventTransparency>,
+}
+
+/// User-supplied changes to an existing provider event. `None` fields are
+/// left untouched at the provider; `Some` fields replace the stored value.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CalendarEventPatch {
+    /// Replacement title.
+    pub title: Option<String>,
+    /// Replacement description; an empty string clears it.
+    pub description: Option<String>,
+    /// Replacement location; an empty string clears it.
+    pub location: Option<String>,
+    /// Replacement time.
+    pub time: Option<EventTime>,
+    /// Replacement attendee list.
+    pub attendees: Option<Vec<CalendarAttendeeInput>>,
+    /// Replacement recurrence properties; an empty list clears them.
+    pub recurrence_lines: Option<Vec<String>>,
+    /// Replacement visibility.
+    pub visibility: Option<EventVisibility>,
+    /// Replacement transparency.
+    pub transparency: Option<EventTransparency>,
+}
+
+impl CalendarEventPatch {
+    /// Whether the patch changes anything at all.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+/// OAuth identity used to mint an access token for a connected inbox.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarLinkTokenIdentity {
+    /// FusionAuth user holding the refresh token.
+    pub fusionauth_user_id: String,
+    /// Connected inbox address.
+    pub email_address: String,
+    /// Provider discriminator stored on the link.
+    pub provider: String,
+}
+
+/// Everything a user mutation needs to address an event at its provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventMutationTarget {
+    /// Macro entity identifier.
+    pub event_id: Uuid,
+    /// Whether the canonical source prohibits mutation.
+    pub is_read_only: bool,
+    /// Google event identifier of the best-ranked provider source.
+    pub provider_event_id: String,
+    /// Recurring master identifier when the stored source is an instance.
+    pub provider_recurring_event_id: Option<String>,
+    /// Provider calendar identity for the mutation request.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Token identity of the connected inbox.
+    pub token_identity: CalendarLinkTokenIdentity,
+}
+
+impl CalendarEventMutationTarget {
+    /// Provider identifier the mutation must address: the recurring master
+    /// when the stored source is an expanded instance acting as canonical.
+    pub fn master_provider_event_id(&self) -> &str {
+        self.provider_recurring_event_id
+            .as_deref()
+            .unwrap_or(&self.provider_event_id)
+    }
+
+    /// Build the provider target for a mutation over the supplied window.
+    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
+        GoogleCalendarTarget {
+            owner_id: self.owner_id.clone(),
+            email_link_id: self.email_link_id,
+            account_id: self.account_id,
+            calendar_id: self.calendar_id,
+            provider_calendar_id: self.provider_calendar_id.clone(),
+            is_read_only: self.is_read_only,
+            range,
+        }
+    }
+}
+
+/// The writable calendar a new user-created event lands in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarCreationTarget {
+    /// Macro user who will own the created entity.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Whether the provider role prohibits event creation.
+    pub is_read_only: bool,
+    /// Token identity of the connected inbox.
+    pub token_identity: CalendarLinkTokenIdentity,
+}
+
+impl CalendarCreationTarget {
+    /// Build the provider target for a creation over the supplied window.
+    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
+        GoogleCalendarTarget {
+            owner_id: self.owner_id.clone(),
+            email_link_id: self.email_link_id,
+            account_id: self.account_id,
+            calendar_id: self.calendar_id,
+            provider_calendar_id: self.provider_calendar_id.clone(),
+            is_read_only: self.is_read_only,
+            range,
+        }
+    }
+}
+
 /// Persisted state needed to choose an incremental or full provider sync.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredGoogleCalendar {

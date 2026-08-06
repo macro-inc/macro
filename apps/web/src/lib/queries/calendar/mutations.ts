@@ -1,0 +1,242 @@
+import { throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { emailClient } from '@service-email/client';
+import type { CalendarEvent as CalendarEventEntity } from '@service-email/generated/schemas/calendarEvent';
+import type { CreateCalendarEventRequest } from '@service-email/generated/schemas/createCalendarEventRequest';
+import type { UpdateCalendarEventRequest } from '@service-email/generated/schemas/updateCalendarEventRequest';
+import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
+import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import type { EventTime } from '@service-storage/generated/schemas/eventTime';
+import { useMutation } from '@tanstack/solid-query';
+import { calendarKeys } from './keys';
+import {
+  type CalendarOccurrencesData,
+  invalidateCalendarOccurrences,
+} from './occurrences';
+
+export type {
+  CreateCalendarEventRequest,
+  UpdateCalendarEventRequest,
+} from '@service-email/generated/schemas';
+
+type CalendarMutationContext = { rollback: () => void };
+
+/**
+ * Optimistically rewrite every cached occurrence viewport (each visible
+ * range is its own cache entry) and return a rollback that restores the
+ * exact snapshots.
+ */
+async function patchOccurrenceCaches(
+  update: (items: CalendarOccurrenceItem[]) => CalendarOccurrenceItem[]
+): Promise<CalendarMutationContext> {
+  await queryClient.cancelQueries({
+    queryKey: calendarKeys.occurrences._def,
+  });
+  const previous = queryClient.getQueriesData<CalendarOccurrencesData>({
+    queryKey: calendarKeys.occurrences._def,
+  });
+  queryClient.setQueriesData<CalendarOccurrencesData>(
+    { queryKey: calendarKeys.occurrences._def },
+    (old) => old && { ...old, items: update(old.items) }
+  );
+  return {
+    rollback: () => {
+      for (const [queryKey, data] of previous) {
+        queryClient.setQueryData(queryKey, data);
+      }
+    },
+  };
+}
+
+function patchEventItems(
+  eventId: string,
+  patch: (item: CalendarOccurrenceItem) => CalendarOccurrenceItem
+) {
+  return (items: CalendarOccurrenceItem[]) =>
+    items.map((item) => (item.event.id === eventId ? patch(item) : item));
+}
+
+export interface RsvpCalendarEventArgs {
+  eventId: string;
+  response: Exclude<AttendeeResponseStatus, 'needs_action'>;
+}
+
+type RsvpCallbacks = MutationCallbacks<
+  CalendarEventEntity,
+  Error,
+  RsvpCalendarEventArgs,
+  CalendarMutationContext
+>;
+
+/** Sets the viewer's RSVP; recurring events respond for the whole series. */
+export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (args: RsvpCalendarEventArgs) =>
+      await throwOnErr(() =>
+        emailClient.rsvpCalendarEvent(args.eventId, {
+          response: args.response,
+        })
+      ),
+    ...withCallbacks<
+      CalendarEventEntity,
+      Error,
+      RsvpCalendarEventArgs,
+      CalendarMutationContext
+    >(
+      {
+        onMutate: (args) =>
+          patchOccurrenceCaches(
+            patchEventItems(args.eventId, (item) => ({
+              ...item,
+              event: {
+                ...item.event,
+                attendees: item.event.attendees.map((attendee) =>
+                  attendee.isSelf
+                    ? { ...attendee, responseStatus: args.response }
+                    : attendee
+                ),
+              },
+            }))
+          ),
+        onError: (_error, _args, context) => context?.rollback(),
+        onSettled: () => invalidateCalendarOccurrences(),
+      },
+      callbacks
+    ),
+  }));
+}
+
+export interface DeleteCalendarEventArgs {
+  eventId: string;
+}
+
+type DeleteCallbacks = MutationCallbacks<
+  unknown,
+  Error,
+  DeleteCalendarEventArgs,
+  CalendarMutationContext
+>;
+
+/** Deletes an event (a recurring event's entire series) at the provider. */
+export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (args: DeleteCalendarEventArgs) =>
+      await throwOnErr(() => emailClient.deleteCalendarEvent(args.eventId)),
+    ...withCallbacks<
+      unknown,
+      Error,
+      DeleteCalendarEventArgs,
+      CalendarMutationContext
+    >(
+      {
+        onMutate: (args) =>
+          patchOccurrenceCaches((items) =>
+            items.filter((item) => item.event.id !== args.eventId)
+          ),
+        onError: (_error, _args, context) => context?.rollback(),
+        onSettled: () => invalidateCalendarOccurrences(),
+      },
+      callbacks
+    ),
+  }));
+}
+
+export interface UpdateCalendarEventArgs {
+  eventId: string;
+  patch: UpdateCalendarEventRequest;
+}
+
+type UpdateCallbacks = MutationCallbacks<
+  CalendarEventEntity,
+  Error,
+  UpdateCalendarEventArgs,
+  CalendarMutationContext
+>;
+
+/**
+ * Applies the field patch to a cached item. Times are only patched through
+ * to standalone occurrences — recurring expansion is the provider's job, so
+ * recurring series keep their cached instances until the refetch lands.
+ */
+function applyEventPatch(
+  item: CalendarOccurrenceItem,
+  patch: UpdateCalendarEventRequest
+): CalendarOccurrenceItem {
+  const event = { ...item.event };
+  if (patch.title !== undefined && patch.title !== null) {
+    event.title = patch.title;
+  }
+  if (patch.description !== undefined) {
+    event.description = patch.description;
+  }
+  if (patch.location !== undefined) {
+    event.location = patch.location;
+  }
+  const time = patch.time ?? undefined;
+  const isStandalone =
+    event.recurrenceLines.length === 0 &&
+    (item.occurrence.recurrenceId === undefined ||
+      item.occurrence.recurrenceId === null);
+  let occurrence = item.occurrence;
+  if (time) {
+    event.time = time as EventTime;
+    if (isStandalone) {
+      occurrence = { ...occurrence, time: time as EventTime };
+    }
+  }
+  return { ...item, event, occurrence };
+}
+
+/** Patches event fields; recurring events update the whole series. */
+export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (args: UpdateCalendarEventArgs) =>
+      await throwOnErr(() =>
+        emailClient.updateCalendarEvent(args.eventId, args.patch)
+      ),
+    ...withCallbacks<
+      CalendarEventEntity,
+      Error,
+      UpdateCalendarEventArgs,
+      CalendarMutationContext
+    >(
+      {
+        onMutate: (args) =>
+          patchOccurrenceCaches(
+            patchEventItems(args.eventId, (item) =>
+              applyEventPatch(item, args.patch)
+            )
+          ),
+        onError: (_error, _args, context) => context?.rollback(),
+        onSettled: () => invalidateCalendarOccurrences(),
+      },
+      callbacks
+    ),
+  }));
+}
+
+type CreateCallbacks = MutationCallbacks<
+  CalendarEventEntity,
+  Error,
+  CreateCalendarEventRequest,
+  unknown
+>;
+
+/**
+ * Creates an event on the requester's primary calendar. There is no
+ * optimistic insert — the entity id is only known once the provider echo
+ * lands — so the viewport refetches on settle.
+ */
+export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (args: CreateCalendarEventRequest) =>
+      await throwOnErr(() => emailClient.createCalendarEvent(args)),
+    ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
+      {
+        onSettled: () => invalidateCalendarOccurrences(),
+      },
+      callbacks
+    ),
+  }));
+}
