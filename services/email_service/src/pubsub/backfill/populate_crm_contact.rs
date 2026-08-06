@@ -1,8 +1,14 @@
+use crate::pubsub::cache::TtlCache;
 use crate::pubsub::context::PubSubContext;
 use crm::domain::service::CrmService;
 use models_email::email::service::backfill::PopulateCrmContactPayload;
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use std::future::Future;
+use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Records a CRM interaction for one `(link, contact_email)` —
 /// possibly inserting new `crm_companies` / `crm_contacts` /
@@ -29,16 +35,13 @@ pub async fn populate_crm_contact(
 ) -> Result<(), ProcessingError> {
     let macro_user_id = link.macro_id.to_string();
 
-    let team_id = ctx
-        .crm_service
-        .get_team_id_for_user(&macro_user_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::from(e).context("Failed to look up team for link.macro_id"),
-            })
-        })?;
+    let team_id = load_team_id(&ctx.caches.crm_team_ids, macro_user_id.clone(), || async {
+        ctx.crm_service
+            .get_team_id_for_user(&macro_user_id)
+            .await
+            .map_err(anyhow::Error::from)
+    })
+    .await?;
 
     let Some(team_id) = team_id else {
         return Ok(());
@@ -64,4 +67,25 @@ pub async fn populate_crm_contact(
         })?;
 
     Ok(())
+}
+
+async fn load_team_id<F, Fut>(
+    cache: &TtlCache<String, Option<Uuid>>,
+    macro_user_id: String,
+    loader: F,
+) -> Result<Option<Uuid>, ProcessingError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<Uuid>>>,
+{
+    cache
+        .get_or_load(macro_user_id, || async {
+            loader().await.map_err(|error| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: error.context("Failed to look up team for link.macro_id"),
+                })
+            })
+        })
+        .await
 }

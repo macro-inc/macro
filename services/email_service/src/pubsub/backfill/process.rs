@@ -4,6 +4,7 @@ use crate::pubsub::backfill::{
     increment_counters, init, list_threads, populate_crm_contact, populate_crm_for_user,
     seed_sent_contact, update_metadata,
 };
+use crate::pubsub::cache::TtlCache;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::gmail::auth::{
@@ -287,20 +288,12 @@ async fn fetch_job_context_no_token<P>(
     scope: &JobScopedPayload<P>,
     allow_complete: bool,
 ) -> Result<Option<JobContextNoToken>, ProcessingError> {
-    let backfill_job = email_db_client::backfill::job::get::get_backfill_job(&ctx.db, scope.job_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch backfill job"),
-            })
-        })?
-        .ok_or_else(|| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::BackfillJobNotFound,
-                source: anyhow::anyhow!("Backfill job not found"),
-            })
-        })?;
+    let backfill_job = load_backfill_job(&ctx.caches.backfill_jobs, scope.job_id, || async {
+        email_db_client::backfill::job::get::get_backfill_job(&ctx.db, scope.job_id)
+            .await
+            .map_err(anyhow::Error::from)
+    })
+    .await?;
 
     if matches!(
         backfill_job.status,
@@ -357,24 +350,74 @@ async fn fetch_job_context<P>(
     }))
 }
 
+async fn load_backfill_job<F, Fut>(
+    cache: &TtlCache<Uuid, BackfillJob>,
+    job_id: Uuid,
+    loader: F,
+) -> Result<BackfillJob, ProcessingError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<BackfillJob>>>,
+{
+    cache
+        .get_or_load(job_id, || async {
+            loader()
+                .await
+                .map_err(|error| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: error.context("Failed to fetch backfill job"),
+                    })
+                })?
+                .ok_or_else(|| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::BackfillJobNotFound,
+                        source: anyhow::anyhow!("Backfill job not found"),
+                    })
+                })
+        })
+        .await
+}
+
 /// Looks up a link by id, mapping the absence into a NonRetryable error
 /// (the message names a link that doesn't exist; retrying won't help).
 async fn fetch_link(ctx: &PubSubContext, link_id: Uuid) -> Result<link::Link, ProcessingError> {
-    match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
-        Ok(Some(link)) => Ok(link),
-        Ok(None) => {
-            let err_msg = format!("Link not found for link_id: {link_id}");
-            tracing::error!("{}", err_msg);
-            Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::LinkNotFound,
-                source: anyhow::anyhow!(err_msg),
-            }))
-        }
-        Err(e) => Err(ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e,
-        })),
-    }
+    load_link(&ctx.caches.links, link_id, || async {
+        email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id)
+            .await
+            .map_err(anyhow::Error::from)
+    })
+    .await
+}
+
+async fn load_link<F, Fut>(
+    cache: &TtlCache<Uuid, link::Link>,
+    link_id: Uuid,
+    loader: F,
+) -> Result<link::Link, ProcessingError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = anyhow::Result<Option<link::Link>>>,
+{
+    cache
+        .get_or_load(link_id, || async {
+            match loader().await {
+                Ok(Some(link)) => Ok(link),
+                Ok(None) => {
+                    let message = format!("Link not found for link_id: {link_id}");
+                    tracing::error!("{message}");
+                    Err(ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::LinkNotFound,
+                        source: anyhow::anyhow!(message),
+                    }))
+                }
+                Err(error) => Err(ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: error,
+                })),
+            }
+        })
+        .await
 }
 
 /// Extracts backfill message from the SQS message body

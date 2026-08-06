@@ -1,6 +1,7 @@
 use crate::pubsub::backfill::increment_counters::{
     incr_completed_messages, incr_completed_threads,
 };
+use crate::pubsub::cache::PubSubCaches;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
 use calendar_events::domain::{
@@ -150,11 +151,16 @@ async fn mark_job_failed(ctx: &PubSubContext, job_id: Uuid) -> anyhow::Result<()
             &ctx.db, job_id,
         )
         .await?;
+    invalidate_failed_job(&ctx.caches, job_id);
 
     if transitioned {
         notify_job_failed(ctx, job_id).await;
     }
     Ok(())
+}
+
+fn invalidate_failed_job(caches: &PubSubCaches, job_id: Uuid) {
+    caches.backfill_jobs.invalidate(&job_id);
 }
 
 /// Resolves the failed job's link and signals the failure over the connection

@@ -1,3 +1,4 @@
+use crate::pubsub::cache::PubSubCaches;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
 use contacts::domain::models::messages::ContactConnection;
@@ -121,7 +122,21 @@ pub(crate) async fn handle_job_completed(
             })
         })?;
 
+    invalidate_job_after_completion(&ctx.caches, job_id, outcome);
     completion_result(job_id, outcome)
+}
+
+fn invalidate_job_after_completion(
+    caches: &PubSubCaches,
+    job_id: Uuid,
+    outcome: BackfillCompletion,
+) {
+    if matches!(
+        outcome,
+        BackfillCompletion::Completed | BackfillCompletion::AlreadyTerminal
+    ) {
+        caches.backfill_jobs.invalidate(&job_id);
+    }
 }
 
 fn completion_result(job_id: Uuid, outcome: BackfillCompletion) -> Result<(), ProcessingError> {
