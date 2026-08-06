@@ -398,7 +398,7 @@ export function EventAttendeesSection(props: {
         defaultOpen
         class="border-edge-muted border-t text-xs text-ink-muted"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-hover hover:text-ink">
+        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-hover hover:text-ink">
           <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
           <span>
             {props.attendees.length}{' '}

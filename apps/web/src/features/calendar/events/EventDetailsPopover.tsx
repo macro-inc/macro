@@ -1,3 +1,5 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
 import CloseIcon from '@phosphor/x.svg';
 import { Button, Layer } from '@ui';
@@ -5,18 +7,16 @@ import { type Accessor, createMemo, Show } from 'solid-js';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
-interface SelectedEventDetailsPopoverProps {
+interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;
   event: Accessor<CalendarEvent | undefined>;
   timeFormat: Accessor<CalendarTimeFormat>;
   onClose: () => void;
 }
 
-/** Renders selected event details without retaining stale narrowing accessors. */
-export function SelectedEventDetailsPopover(
-  props: SelectedEventDetailsPopoverProps
-) {
-  const selection = createMemo(() => {
+/** Renders selected event details in a mobile drawer or anchored popover. */
+export function SelectedEventDetails(props: SelectedEventDetailsProps) {
+  const popoverSelection = createMemo(() => {
     const event = props.event();
     const anchor = props.anchor();
 
@@ -24,26 +24,83 @@ export function SelectedEventDetailsPopover(
   });
 
   return (
-    <Show keyed when={selection()}>
-      {(selected) => (
-        <EventDetailsPopover
-          anchor={selected.anchor}
-          event={selected.event}
-          timeFormat={props.timeFormat()}
-          onOpenChange={(open) => {
-            if (!open) props.onClose();
-          }}
-        />
-      )}
+    <Show
+      when={isMobile()}
+      fallback={
+        <Show keyed when={popoverSelection()}>
+          {(selected) => (
+            <EventDetailsPopover
+              anchor={selected.anchor}
+              event={selected.event}
+              timeFormat={props.timeFormat()}
+              onOpenChange={(open) => {
+                if (!open) props.onClose();
+              }}
+            />
+          )}
+        </Show>
+      }
+    >
+      <Show keyed when={props.event()}>
+        {(event) => (
+          <EventDetailsDrawer
+            event={event}
+            timeFormat={props.timeFormat()}
+            onOpenChange={(open) => {
+              if (!open) props.onClose();
+            }}
+          />
+        )}
+      </Show>
     </Show>
   );
 }
 
-interface EventDetailsPopoverProps {
-  anchor: HTMLElement;
+interface EventDetailsOverlayProps {
   event: CalendarEvent;
   timeFormat: CalendarTimeFormat;
   onOpenChange: (open: boolean) => void;
+}
+
+function EventDetailsDrawer(props: EventDetailsOverlayProps) {
+  return (
+    <MobileDrawer
+      side="bottom"
+      open
+      onOpenChange={props.onOpenChange}
+      preventScroll={false}
+      preventScrollbarShift={false}
+    >
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Content
+          aria-label={props.event.title}
+          class="overflow-hidden"
+        >
+          <MobileDrawer.Handle />
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            <div class="px-3 pb-3">
+              <EventDetails event={props.event} timeFormat={props.timeFormat} />
+            </div>
+            <EventAttendeesSection attendees={props.event.attendees} />
+          </div>
+          <MobileDrawer.Close
+            as={Button}
+            aria-label="Close event details"
+            variant="ghost"
+            size="icon-sm"
+            class="absolute right-2 top-2 rounded-full text-ink-muted"
+          >
+            <CloseIcon class="size-3" />
+          </MobileDrawer.Close>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+}
+
+interface EventDetailsPopoverProps extends EventDetailsOverlayProps {
+  anchor: HTMLElement;
 }
 
 /** Anchors read-only event details to a rendered calendar event. */

@@ -36,7 +36,7 @@ import {
   CalendarViewContextProvider,
   useCalendarView,
 } from './CalendarViewContext';
-import { SelectedEventDetailsPopover } from './events/EventDetailsPopover';
+import { SelectedEventDetails } from './events/EventDetailsPopover';
 import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -261,7 +261,7 @@ function CalendarWorkspace() {
 
       <CalendarSidePanelSections />
 
-      <SelectedEventDetailsPopover
+      <SelectedEventDetails
         anchor={calendarView.selectedEventAnchor}
         event={calendarView.selectedEvent}
         timeFormat={() => calendarView.displaySettings.timeFormat}
