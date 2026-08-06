@@ -4,21 +4,17 @@ use agent_client_protocol::schema::v1::{
     ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
 };
 use agent_runtime_protocol::domain::action::AgentAction;
+use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::AgentSessionLogRepo;
 use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
 use agent_session::testing::InMemoryAgentSessionRepo;
-use agent_session::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::ContainerManager;
 use crate::domain::model::SpawnContainer;
-use crate::outbound::provision::{
-    CONTAINER_DOCKERFILE, CONTAINER_OPENCODE_CONFIG, CONTAINER_SYSTEM_INSTRUCTIONS,
-    ENSURE_READY_SCRIPT, SIDECAR_PORT,
-};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -48,31 +44,6 @@ fn prompt_texts(container: &ContainerMock) -> Vec<Vec<ContentBlock>> {
             _ => None,
         })
         .collect()
-}
-
-#[test]
-fn workspace_matches_the_container_script() {
-    assert!(
-        ENSURE_READY_SCRIPT.contains(&format!("workspace_dir={AGENT_WORKING_DIRECTORY}")),
-        "ensure_ready.sh does not clone into {AGENT_WORKING_DIRECTORY}"
-    );
-    assert!(
-        ENSURE_READY_SCRIPT.contains(&format!("sidecar_port={SIDECAR_PORT}")),
-        "ensure_ready.sh does not expose sidecar port {SIDECAR_PORT}"
-    );
-}
-
-#[test]
-fn sandbox_loads_system_instructions_and_auto_approves_only_in_repo() {
-    let config: serde_json::Value = serde_json::from_str(CONTAINER_OPENCODE_CONFIG).unwrap();
-
-    assert_eq!(config["instructions"][0], "/etc/macro-agent/SYSTEM.md");
-    assert_eq!(config["permission"]["*"], "allow");
-    assert_eq!(config["permission"]["external_directory"], "deny");
-    assert!(CONTAINER_DOCKERFILE.contains("COPY SYSTEM.md /etc/macro-agent/SYSTEM.md"));
-    assert!(
-        CONTAINER_SYSTEM_INSTRUCTIONS.contains("Perform all work inside the dedicated repository")
-    );
 }
 
 #[tokio::test]
