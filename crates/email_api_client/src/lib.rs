@@ -4,3 +4,7 @@
 
 /// Provider-neutral domain types and, when enabled, capability ports.
 pub mod domain;
+
+/// Provider-specific outbound adapters.
+#[cfg(feature = "outbound-gmail")]
+pub mod outbound;

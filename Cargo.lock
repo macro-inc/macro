@@ -5065,14 +5065,18 @@ checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
 name = "email_api_client"
 version = "0.1.0"
 dependencies = [
+ "ammonia",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "gmail_client",
  "html-escape",
  "lol_html",
  "mail-builder",
+ "mailparse",
  "models_email",
  "regex",
+ "scraper",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

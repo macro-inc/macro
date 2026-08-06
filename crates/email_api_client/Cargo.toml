@@ -9,22 +9,30 @@ default = []
 ports = ["dep:async-trait"]
 outbound-gmail = [
   "ports",
+  "dep:ammonia",
+  "dep:base64",
   "dep:gmail_client",
   "dep:html-escape",
   "dep:lol_html",
+  "dep:mailparse",
   "dep:regex",
+  "dep:scraper",
   "dep:serde_json",
 ]
 
 [dependencies]
+ammonia = { version = "4.1.4", optional = true }
 async-trait = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
 gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { version = "0.2", optional = true }
 lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
+mailparse = { version = "0.16.1", optional = true }
 models_email = { path = "../models_email" }
 regex = { workspace = true, optional = true }
+scraper = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
