@@ -153,7 +153,11 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
-        changed: result.changed.into_iter().map(|k| k.0).collect(),
+        changed: result
+            .changed
+            .into_iter()
+            .map(|key| key.0.into_owned())
+            .collect(),
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
@@ -431,7 +435,8 @@ impl EngineHandle {
 
     /// Evicts records by entity key; returns the affected registered op ids.
     pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.invalidate_keys(keys.iter());
@@ -441,7 +446,8 @@ impl EngineHandle {
     /// Deletes stale records from durable and hot storage and returns the
     /// registered operations that traversed them.
     pub async fn delete_records(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;

@@ -163,7 +163,7 @@ async fn claim_head(
 async fn durable_value(engine: &Engine<InMemoryStorage>) -> Option<String> {
     let records = engine
         .storage()
-        .get_batch(&[EntityKey(PROPERTY_KEY.to_string())])
+        .get_batch(&[EntityKey(PROPERTY_KEY.to_string().into())])
         .await
         .unwrap();
     let record = records.into_iter().next().flatten()?;

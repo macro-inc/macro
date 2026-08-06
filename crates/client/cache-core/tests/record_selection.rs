@@ -19,11 +19,11 @@ fn record(type_name: &str, fields: impl IntoIterator<Item = (&'static str, Cache
     Record { fields: values }
 }
 
-fn key(value: &str) -> EntityKey {
-    EntityKey(value.to_string())
+fn key(value: &str) -> EntityKey<'static> {
+    EntityKey(value.to_string().into())
 }
 
-fn linked_document(id: &str, property: Option<EntityKey>) -> (EntityKey, Record) {
+fn linked_document(id: &str, property: Option<EntityKey<'static>>) -> (EntityKey<'static>, Record) {
     let mut fields = vec![("id", CacheValue::String(id.to_string()))];
     if let Some(property) = property {
         fields.push((
@@ -37,7 +37,7 @@ fn linked_document(id: &str, property: Option<EntityKey>) -> (EntityKey, Record)
     )
 }
 
-fn property(id: &str, name: &str) -> (EntityKey, Record) {
+fn property(id: &str, name: &str) -> (EntityKey<'static>, Record) {
     (
         key(&format!("GraphqlProperty:{id}")),
         record(
@@ -50,7 +50,7 @@ fn property(id: &str, name: &str) -> (EntityKey, Record) {
     )
 }
 
-fn document(id: &str, name: &str) -> (EntityKey, Record) {
+fn document(id: &str, name: &str) -> (EntityKey<'static>, Record) {
     (
         key(&format!("GraphqlSoupDocument:{id}")),
         record(

@@ -327,7 +327,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -377,7 +381,11 @@ impl CacheEngine {
                 .map_err(err_js)?;
             to_js(&JsOptimisticWriteResult {
                 transaction_id: transaction.to_string(),
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -525,7 +533,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -556,7 +568,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -572,7 +588,8 @@ impl CacheEngine {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+            let keys: Vec<EntityKey<'static>> =
+                keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
             to_js(&ops.borrow().names(affected))
@@ -586,7 +603,8 @@ impl CacheEngine {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+            let keys: Vec<EntityKey<'static>> =
+                keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let affected = engine
                 .lock()
                 .await
@@ -611,7 +629,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|key| key.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,

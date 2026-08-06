@@ -88,7 +88,10 @@ struct OwnerOnlyStorage(InMemoryStorage);
 impl Storage for OwnerOnlyStorage {
     type Error = std::convert::Infallible;
 
-    async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(
+        &self,
+        keys: &[EntityKey<'static>],
+    ) -> Result<Vec<Option<Record>>, Self::Error> {
         assert!(
             keys.iter()
                 .all(|key| key.is_root() || key.0 == "GraphqlUser:user-1"),
@@ -97,11 +100,14 @@ impl Storage for OwnerOnlyStorage {
         self.0.get_batch(keys).await
     }
 
-    async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
         self.0.put_batch(entries).await
     }
 
-    async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.0.delete_batch(keys).await
     }
 
@@ -148,7 +154,7 @@ impl Storage for OwnerOnlyStorage {
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         self.0.complete_mutation(id, claim, entries).await
     }

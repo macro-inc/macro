@@ -248,7 +248,7 @@ fn referenced_variable(value: &ArgValue) -> Option<&str> {
     }
 }
 
-fn encode_cursor(entity_key: &EntityKey) -> String {
+fn encode_cursor(entity_key: &EntityKey<'_>) -> String {
     let encoded: String = entity_key
         .0
         .as_bytes()

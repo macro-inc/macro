@@ -167,7 +167,7 @@ impl Storage for InMemoryStorage {
         let mut records: Vec<_> = self
             .records
             .iter()
-            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > &after))
+            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > after))
             .filter(|(key, _)| {
                 key.0
                     .split_once(':')

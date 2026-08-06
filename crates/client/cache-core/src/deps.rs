@@ -58,7 +58,7 @@ impl DepIndex {
     }
 
     /// Keys pinned by at least one active operation (future: eviction).
-    pub fn pinned(&self) -> impl Iterator<Item = &EntityKey> {
+    pub fn pinned(&self) -> impl Iterator<Item = &EntityKey<'static>> {
         self.by_key.keys()
     }
 
@@ -76,8 +76,8 @@ impl DepIndex {
 mod tests {
     use super::*;
 
-    fn key(s: &str) -> EntityKey {
-        EntityKey(s.into())
+    fn key(s: &str) -> EntityKey<'static> {
+        EntityKey(s.to_owned().into())
     }
 
     #[test]

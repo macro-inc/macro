@@ -31,7 +31,6 @@ use lru::LruCache;
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
-use std::ops::Deref;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -210,7 +209,7 @@ impl<S: Storage> Engine<S> {
         let after = effective_records(&bases, &replacement, &candidates);
         self.optimistic = replacement;
         self.optimistic_hydrated = true;
-        let changed: BTreeSet<EntityKey> = candidates
+        let changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before_all.get(key) != after.get(key))
             .collect();
@@ -255,7 +254,7 @@ impl<S: Storage> Engine<S> {
                     detail: error.to_string(),
                 }
             })?;
-            let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+            let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches)
                 .await?;
@@ -357,7 +356,7 @@ impl<S: Storage> Engine<S> {
         // touched keys and is never promoted into the hot tier — the durable
         // LRU base must stay free of optimistic values.
         let optimistic = merged_optimistic(&self.optimistic);
-        let mut composed: HashMap<EntityKey, Record> = HashMap::new();
+        let mut composed: HashMap<EntityKey<'static>, Record> = HashMap::new();
         for (key, update) in &optimistic {
             if let Some(base) = self.hot.peek(key) {
                 let mut merged = base.clone();
@@ -368,8 +367,8 @@ impl<S: Storage> Engine<S> {
 
         // Durable records fetched from storage this read (pre-merge — safe
         // to promote into the hot tier afterwards).
-        let mut fetched_base: HashMap<EntityKey, Record> = HashMap::new();
-        let mut known_absent: BTreeSet<EntityKey> = BTreeSet::new();
+        let mut fetched_base: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        let mut known_absent: BTreeSet<EntityKey<'static>> = BTreeSet::new();
         let mut deps = BTreeSet::new();
 
         let outcome = loop {
@@ -383,7 +382,7 @@ impl<S: Storage> Engine<S> {
                 ReadOutcome::Complete(data) => break ReadResult::Hit { data },
                 ReadOutcome::Miss { .. } => break ReadResult::Miss,
                 ReadOutcome::NeedRecords(missing) => {
-                    let to_fetch: Vec<EntityKey> = missing
+                    let to_fetch: Vec<EntityKey<'static>> = missing
                         .into_iter()
                         .filter(|k| {
                             !known_absent.contains(k)
@@ -460,7 +459,7 @@ impl<S: Storage> Engine<S> {
             .keys()
             .filter(|key| {
                 after.as_ref().is_none_or(|after| *key > after)
-                    && record_key_type(*key).is_some_and(|name| type_names.contains(name))
+                    && record_key_type(key).is_some_and(|name| type_names.contains(name))
             })
             .cloned()
             .collect();
@@ -484,7 +483,7 @@ impl<S: Storage> Engine<S> {
                 storage_after = Some(high_key.clone());
             }
 
-            let mut candidates: BTreeMap<EntityKey, Option<Record>> = rows
+            let mut candidates: BTreeMap<EntityKey<'static>, Option<Record>> = rows
                 .into_iter()
                 .map(|(key, record)| (key, Some(record)))
                 .collect();
@@ -533,7 +532,7 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         candidates: BTreeMap<EntityKey<'static>, Option<Record>>,
         optimistic: &BTreeMap<EntityKey<'static>, Record>,
-    ) -> Result<Vec<(EntityKey, Json)>, EngineError<S::Error>> {
+    ) -> Result<Vec<(EntityKey<'static>, Json)>, EngineError<S::Error>> {
         let candidate_keys: Vec<_> = candidates.keys().cloned().collect();
         let optimistic_only_candidates: BTreeSet<_> = candidates
             .iter()
@@ -696,7 +695,7 @@ impl<S: Storage> Engine<S> {
         }
         let bases_after = self.load_bases(&candidates).await?;
         let after = effective_records(&bases_after, &self.optimistic, &candidates);
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -723,13 +722,13 @@ impl<S: Storage> Engine<S> {
     async fn persist_updates(
         &mut self,
         updates: RecordUpdates,
-    ) -> Result<BTreeSet<EntityKey>, EngineError<S::Error>> {
+    ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey, Record> = HashMap::new();
-        let mut missing: Vec<EntityKey> = Vec::new();
+        let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        let mut missing: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -752,7 +751,7 @@ impl<S: Storage> Engine<S> {
         }
 
         let mut changed = BTreeSet::new();
-        let mut to_persist: Vec<(EntityKey, Record)> = Vec::new();
+        let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
         for (key, update) in updates {
             let merged = match staging.remove(&key) {
                 Some(mut existing) => {
@@ -811,7 +810,7 @@ impl<S: Storage> Engine<S> {
                 .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
         );
 
-        let candidates: BTreeSet<EntityKey> = updates.keys().cloned().collect();
+        let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
         let optimistic = self.optimistic.clone();
         let (candidates, bases) = self
             .load_link_patch_bases(candidates, &optimistic, &updates, &patches)
@@ -859,7 +858,7 @@ impl<S: Storage> Engine<S> {
         });
 
         let after = effective_records(&bases, &self.optimistic, &candidates);
-        let changed: BTreeSet<EntityKey> = candidates
+        let changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -974,7 +973,7 @@ impl<S: Storage> Engine<S> {
         let settled_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&settled_bases, &replacement, &candidates);
         self.optimistic = replacement;
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -1020,7 +1019,7 @@ impl<S: Storage> Engine<S> {
         let current_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&current_bases, &replacement, &candidates);
         self.optimistic = replacement;
-        let visible_changed: BTreeSet<EntityKey> = candidates
+        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
@@ -1041,7 +1040,13 @@ impl<S: Storage> Engine<S> {
         layers: &[OptimisticLayer],
         pending_updates: &RecordUpdates,
         patches: &[OptimisticLinkPatch],
-    ) -> Result<(BTreeSet<EntityKey>, HashMap<EntityKey, Record>), EngineError<S::Error>> {
+    ) -> Result<
+        (
+            BTreeSet<EntityKey<'static>>,
+            HashMap<EntityKey<'static>, Record>,
+        ),
+        EngineError<S::Error>,
+    > {
         if !patches.is_empty() {
             candidates.insert(EntityKey::root());
         }
@@ -1069,7 +1074,7 @@ impl<S: Storage> Engine<S> {
         keys: &BTreeSet<EntityKey<'static>>,
     ) -> Result<HashMap<EntityKey<'static>, Record>, EngineError<S::Error>> {
         let mut out = HashMap::new();
-        let mut missing: Vec<EntityKey> = Vec::new();
+        let mut missing: Vec<EntityKey<'static>> = Vec::new();
         for key in keys {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -1108,20 +1113,20 @@ impl<S: Storage> Engine<S> {
         let prepared = prepare(&operation, &inspection.path)?;
 
         let mut candidates = BTreeSet::from([EntityKey::root()]);
-        let owner = loop {
+        let variants = loop {
             let bases = self.load_bases(&candidates).await?;
             let effective =
                 present_records(effective_records(&bases, &self.optimistic, &candidates));
             match resolve_owner(&effective, &operation, &inspection.path)? {
-                OwnerResolution::Owner(owner) => break owner,
+                OwnerResolution::Owner(owner) => break recover_variants(&owner, &prepared)?,
                 OwnerResolution::Absent => return Ok(Vec::new()),
-                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
-                    candidates.insert(key);
+                OwnerResolution::NeedRecord(key) if !candidates.contains(key.as_ref()) => {
+                    candidates.insert(key.into_owned());
                 }
                 OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),
             }
         };
-        Ok(recover_variants(&owner, &prepared)?
+        Ok(variants
             .into_iter()
             .map(|variables| CachedQueryVariant { variables })
             .collect())
@@ -1185,7 +1190,7 @@ impl<S: Storage> Engine<S> {
     /// storage, and returns the local active operations that depend on them.
     pub fn invalidate_keys<'k>(
         &mut self,
-        keys: impl IntoIterator<Item = &'k EntityKey>,
+        keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
@@ -1277,7 +1282,7 @@ impl RecordSource for EngineSource<'_> {
 /// All active optimistic layers' updates merged in creation order (later
 /// layers override earlier ones field-by-field).
 fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey<'static>, Record> {
-    let mut out: BTreeMap<EntityKey, Record> = BTreeMap::new();
+    let mut out: BTreeMap<EntityKey<'static>, Record> = BTreeMap::new();
     for layer in layers {
         for (key, record) in &layer.updates {
             out.entry(key.clone()).or_default().merge(record.clone());
@@ -1290,7 +1295,7 @@ fn merged_optimistic(layers: &[OptimisticLayer]) -> BTreeMap<EntityKey<'static>,
 /// mutating the hot tier or storage. The caller can then atomically settle a
 /// queued mutation before publishing the staged records in memory.
 fn stage_updates(
-    bases: &HashMap<EntityKey, Record>,
+    bases: &HashMap<EntityKey<'static>, Record>,
     updates: RecordUpdates,
 ) -> (
     BTreeSet<EntityKey<'static>>,
@@ -1320,9 +1325,9 @@ fn stage_updates(
 /// Effective visible records for `keys`: durable base + every active layer
 /// merged in order. `None` when the key exists nowhere.
 fn effective_records(
-    bases: &HashMap<EntityKey, Record>,
+    bases: &HashMap<EntityKey<'static>, Record>,
     layers: &[OptimisticLayer],
-    keys: &BTreeSet<EntityKey>,
+    keys: &BTreeSet<EntityKey<'static>>,
 ) -> HashMap<EntityKey<'static>, Option<Record>> {
     keys.iter()
         .map(|key| {
@@ -1339,7 +1344,9 @@ fn effective_records(
         .collect()
 }
 
-fn present_records(records: HashMap<EntityKey, Option<Record>>) -> HashMap<EntityKey, Record> {
+fn present_records(
+    records: HashMap<EntityKey<'static>, Option<Record>>,
+) -> HashMap<EntityKey<'static>, Record> {
     records
         .into_iter()
         .filter_map(|(key, record)| record.map(|record| (key, record)))
@@ -1347,7 +1354,7 @@ fn present_records(records: HashMap<EntityKey, Option<Record>>) -> HashMap<Entit
 }
 
 fn merge_updates_into_effective(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &RecordUpdates,
 ) {
     for (key, update) in updates {

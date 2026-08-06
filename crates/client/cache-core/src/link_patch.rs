@@ -13,7 +13,6 @@ use crate::query_path::{
 use crate::value::{CacheNumber, CacheValue, EntityKey, FieldKey, Record, canonical_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
-use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 use thiserror::Error;
 
@@ -249,7 +248,7 @@ fn is_json_scalar(value: &Json) -> bool {
 /// mode is used during hydration and successful settlement, where stale query
 /// fields must never be recreated.
 pub fn apply_link_patches(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
@@ -273,7 +272,7 @@ pub fn apply_link_patches(
 }
 
 fn apply_one(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
@@ -307,9 +306,11 @@ fn apply_one(
     }
 
     let entity_key = patch.operation.entity_key();
-    links.retain(|value| !matches!(value, CacheValue::Ref(key) if key == entity_key));
+    links.retain(
+        |value| !matches!(value, CacheValue::Ref(key) if key.0.as_ref() == entity_key.0.as_ref()),
+    );
     if matches!(patch.operation, LinkOperation::PrependUnique { .. }) {
-        links.insert(0, CacheValue::Ref(entity_key.clone()));
+        links.insert(0, CacheValue::Ref(entity_key.into_owned()));
     }
 
     record
@@ -334,7 +335,7 @@ struct ResolvedTarget {
 /// update. Engines use this to hydrate graph links from cold storage before
 /// applying the update.
 pub fn missing_patch_record(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Option<EntityKey<'static>> {
     match resolve_target(effective, patch) {
@@ -344,7 +345,7 @@ pub fn missing_patch_record(
 }
 
 fn resolve_target(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let variables = validate_entrypoint(patch)?;
@@ -364,8 +365,8 @@ fn resolve_target(
 }
 
 fn resolve_from_record(
-    effective: &HashMap<EntityKey, Record>,
-    owner: &EntityKey,
+    effective: &HashMap<EntityKey<'static>, Record>,
+    owner: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
@@ -416,7 +417,7 @@ struct ValueCursor<'a> {
 }
 
 fn resolve_from_value(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     variables: &serde_json::Map<String, Json>,
     cursor: ValueCursor<'_>,
     path: &[LinkPathSegment],
@@ -623,7 +624,7 @@ mod tests {
 
     const QUERY: &str = "query { user { groupSoup { bins { key items { id } } } } }";
 
-    fn record() -> (EntityKey, Record) {
+    fn record() -> (EntityKey<'static>, Record) {
         let parent = EntityKey("GraphqlUser:user-1".into());
         let bin = |key: &str, items: Vec<CacheValue>| {
             CacheValue::Object(BTreeMap::from([

@@ -36,8 +36,25 @@ impl<'a> EntityKey<'a> {
         self.0 == ROOT_QUERY
     }
 
-    pub fn borrow<'b>(&'b self) -> EntityKey<'b> {
-        EntityKey(Cow::Borrowed(&self.0))
+    pub fn borrow(&self) -> EntityKey<'_> {
+        EntityKey(Cow::Borrowed(self.0.as_ref()))
+    }
+
+    /// Converts this key into an owned key that can be stored independently.
+    pub fn into_owned(self) -> EntityKey<'static> {
+        EntityKey(Cow::Owned(self.0.into_owned()))
+    }
+}
+
+impl Borrow<str> for EntityKey<'_> {
+    fn borrow(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for EntityKey<'_> {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
     }
 }
 
