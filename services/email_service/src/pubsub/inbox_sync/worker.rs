@@ -1,3 +1,4 @@
+use crate::pubsub::cache::PubSubCaches;
 use crate::pubsub::context::{
     CalendarBackfillServices, CrmServiceType, NotificationIngressType, PubSubContext,
     PubSubEventBroker,
@@ -87,6 +88,7 @@ pub async fn run_worker_with_cancellation(
     let calendar_backfills =
         CalendarBackfillServices::new(db.clone(), sqs_client.clone(), redis_client.clone());
     let ctx = PubSubContext {
+        caches: PubSubCaches::new(),
         db,
         sqs_worker: worker.clone(),
         sqs_client,

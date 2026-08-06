@@ -1,3 +1,4 @@
+use crate::pubsub::cache::PubSubCaches;
 use crate::pubsub::calendar_backfill_adapters::{
     PgEmailCalendarBackfillRepository, RedisCalendarRequestGate, SqsEmailCalendarBackfillPublisher,
 };
@@ -142,6 +143,7 @@ pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataRes
 
 #[derive(Clone)]
 pub struct PubSubContext {
+    pub caches: PubSubCaches,
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,

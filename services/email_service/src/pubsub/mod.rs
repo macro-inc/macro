@@ -1,4 +1,5 @@
 pub mod backfill;
+pub mod cache;
 /// Outbound adapters used by calendar backfill application services.
 pub mod calendar_backfill_adapters;
 pub mod context;
