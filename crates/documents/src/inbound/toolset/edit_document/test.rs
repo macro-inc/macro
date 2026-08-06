@@ -2,6 +2,7 @@ use super::*;
 
 use std::sync::{Arc, Mutex};
 
+use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
     CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
@@ -27,16 +28,30 @@ use uuid::Uuid;
 const TEST_USER_ID: &str = "macro|editor@example.com";
 const TEST_DOCUMENT_ID: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813b";
 
+fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
+    DocumentBasic {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: "Test document".to_string(),
+        owner: MacroUserIdStr::try_from(TEST_USER_ID.to_string())
+            .expect("test user id should be valid"),
+        file_type: file_type.map(str::to_string),
+        sub_type: None,
+        branched_from_id: None,
+        branched_from_version_id: None,
+        document_family_id: None,
+        project_id: None,
+        deleted_at: None,
+    }
+}
+
 struct FakeDocumentService {
     file_type: Option<String>,
-    content: DocumentContent,
 }
 
 impl FakeDocumentService {
-    fn new(file_type: &str, content: DocumentContent) -> Self {
+    fn new(file_type: &str) -> Self {
         Self {
             file_type: Some(file_type.to_string()),
-            content,
         }
     }
 }
@@ -44,28 +59,19 @@ impl FakeDocumentService {
 impl DocumentService for FakeDocumentService {
     async fn internal_get_basic_document(
         &self,
-        document_id: &str,
+        _document_id: &str,
     ) -> Result<DocumentBasic, DocumentError> {
-        Ok(DocumentBasic {
-            document_id: document_id.to_string(),
-            document_name: "Test code file".to_string(),
-            owner: MacroUserIdStr::try_from(TEST_USER_ID.to_string())
-                .expect("test user id should be valid"),
-            file_type: self.file_type.clone(),
-            sub_type: None,
-            branched_from_id: None,
-            branched_from_version_id: None,
-            document_family_id: None,
-            project_id: None,
-            deleted_at: None,
-        })
+        Ok(document_with_file_type(self.file_type.as_deref()))
     }
 
+    // The guard reads the file type, which the basic document already carries.
+    // Resolving the content location would be a second read of the same row --
+    // and a racy one while an upload is still being finalized into sync-service.
     async fn get_document_content(
         &self,
         _document_context: &DocumentBasic,
     ) -> Result<DocumentContent, DocumentError> {
-        Ok(self.content.clone())
+        panic!("unexpected get_document_content call")
     }
 
     async fn get_document_by_team_slug(
@@ -433,7 +439,6 @@ fn request_context() -> RequestContext {
 }
 
 async fn call_edit_document(
-    content: DocumentContent,
     file_type: &str,
 ) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
     let editing = FakeEditingWorker::default();
@@ -444,10 +449,7 @@ async fn call_edit_document(
 
     let result = tool
         .call(
-            tool_context(
-                FakeDocumentService::new(file_type, content),
-                editing.clone(),
-            ),
+            tool_context(FakeDocumentService::new(file_type), editing.clone()),
             request_context(),
         )
         .await;
@@ -456,17 +458,13 @@ async fn call_edit_document(
 }
 
 #[tokio::test]
-async fn rejects_object_storage_document_without_calling_the_worker() {
-    let (result, editing) = call_edit_document(
-        DocumentContent::ready(DocumentContentLocation::ObjectStorage),
-        "py",
-    )
-    .await;
+async fn rejects_non_markdown_document_without_calling_the_worker() {
+    let (result, editing) = call_edit_document("py").await;
 
-    let error = result.expect_err("object-storage document should be rejected");
+    let error = result.expect_err("a source file should be rejected");
     assert!(
-        error.description.contains("object_storage"),
-        "description should name the content location: {}",
+        error.description.contains("`py`"),
+        "description should name the file type: {}",
         error.description
     );
     assert!(
@@ -484,15 +482,16 @@ async fn rejects_object_storage_document_without_calling_the_worker() {
     );
 }
 
+/// Also pins the mid-finalization case: the fake panics on
+/// `get_document_content`, so reaching the worker proves the guard never
+/// consulted the content location. Markdown uploaded to S3 is only initialized
+/// into sync-service when its upload finalizes, and a location check during
+/// that window would reject an edit the sync handshake is designed to serve.
 #[tokio::test]
-async fn allows_sync_service_backed_document() {
-    let (result, editing) = call_edit_document(
-        DocumentContent::ready(DocumentContentLocation::SyncService),
-        "md",
-    )
-    .await;
+async fn allows_markdown_document() {
+    let (result, editing) = call_edit_document("md").await;
 
-    let response = result.expect("sync-service document should be editable");
+    let response = result.expect("a markdown document should be editable");
     assert_eq!(response.summary, "Applied 1 edit(s) to the document.");
     assert_eq!(
         *editing.edit_calls.lock().expect("edit calls lock poisoned"),
@@ -501,28 +500,18 @@ async fn allows_sync_service_backed_document() {
 }
 
 #[test]
-fn only_sync_service_content_is_editable() {
-    assert!(
-        ensure_sync_service_backed(&DocumentContent::ready(
-            DocumentContentLocation::SyncService
-        ))
-        .is_ok()
-    );
+fn only_markdown_is_editable() {
+    assert!(ensure_markdown(&document_with_file_type(Some("md"))).is_ok());
 
-    for location in [
-        DocumentContentLocation::ObjectStorage,
-        DocumentContentLocation::ConvertedPdf,
-        DocumentContentLocation::DocxBomParts,
-        DocumentContentLocation::Unknown,
-    ] {
+    for file_type in ["py", "pdf", "docx", "png", "csv", "not-a-file-type"] {
         assert!(
-            ensure_sync_service_backed(&DocumentContent::ready(location)).is_err(),
-            "{location:?} has no Loro doc and must be rejected"
+            ensure_markdown(&document_with_file_type(Some(file_type))).is_err(),
+            "{file_type} never gets a Loro doc and must be rejected"
         );
     }
 
     assert!(
-        ensure_sync_service_backed(&DocumentContent::pending()).is_err(),
-        "content with no known location must be rejected"
+        ensure_markdown(&document_with_file_type(None)).is_err(),
+        "a document with no file type must be rejected"
     );
 }

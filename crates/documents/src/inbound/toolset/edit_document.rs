@@ -1,6 +1,5 @@
 //! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
 
-use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
@@ -11,6 +10,7 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
+use model::document::{DocumentBasic, FileType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -37,22 +37,28 @@ pub struct EditDocument {
 }
 
 /// The editing worker opens a sync-service session and blocks on the initial
-/// Loro snapshot. Content that lives anywhere else has no Loro doc, so nothing
-/// is ever sent and the worker fails with an opaque gateway error once its
-/// handshake times out. Reject those documents up front instead.
-fn ensure_sync_service_backed(content: &DocumentContent) -> Result<(), ToolCallError> {
-    if content.location == Some(DocumentContentLocation::SyncService) {
+/// Loro snapshot. Only markdown documents ever get a Loro doc, so anything else
+/// waits out the worker's handshake timeout and surfaces as an opaque gateway
+/// error. Reject those up front instead.
+///
+/// This gates on the file type rather than the document's current content
+/// location on purpose. Markdown uploaded to S3 is initialized into sync-service
+/// when its upload finalizes, so its location is legitimately `object_storage`
+/// for the width of that window while the Loro doc is still being created. The
+/// sync session tolerates that -- the server broadcasts the snapshot to sockets
+/// already waiting once `/initialize` lands. Gating on location would reject an
+/// edit that window is designed to serve; the file type does not move.
+fn ensure_markdown(document: &DocumentBasic) -> Result<(), ToolCallError> {
+    if document.try_file_type() == Some(FileType::Md) {
         return Ok(());
     }
 
-    let location = content.location_db_value().unwrap_or("unknown");
+    let file_type = document.file_type.as_deref().unwrap_or("unknown");
     Err(ToolCallError {
         description: format!(
-            "this document cannot be edited: its content is stored as `{location}`, not in Macro's collaborative markdown editor. Only Macro markdown documents support AI editing -- uploaded files (PDFs, DOCX, images, source files, and so on) do not. Report this back to the user rather than retrying."
+            "this document cannot be edited: it is a `{file_type}` file, not a Macro markdown document. AI editing only works on markdown documents authored in Macro's collaborative editor -- uploaded files (PDFs, DOCX, images, source files, and so on) are readable but not editable. Report this back to the user rather than retrying."
         ),
-        internal_error: anyhow::anyhow!(
-            "document content location {location} is not backed by sync-service"
-        ),
+        internal_error: anyhow::anyhow!("document file type {file_type} is not markdown"),
     })
 }
 
@@ -102,17 +108,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        let content = ctx
-            .service
-            .get_document_content(&document)
-            .await
-            .map_err(|e| ToolCallError {
-                description: "unable to determine where this document's content is stored"
-                    .to_string(),
-                internal_error: e.into(),
-            })?;
-
-        ensure_sync_service_backed(&content)?;
+        ensure_markdown(&document)?;
 
         let document_token = encode_permission_token(
             Some(request_context.user_id.to_string()),
