@@ -15,7 +15,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::get,
 };
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{AgentSession, AgentSessionId, AgentSessionLog, Message, SessionStatus};
+use crate::domain::model::{AgentSession, AgentSessionId, SessionStatus};
 use crate::domain::service::AgentSessionService;
 
 /// Shared state for the agent session router: the agent session service plus
@@ -77,10 +77,6 @@ where
             get(get_agent_session_handler::<T, Auth>)
                 .put(update_agent_session_handler::<T, Auth>)
                 .delete(delete_agent_session_handler::<T, Auth>),
-        )
-        .route(
-            "/{session_id}/events",
-            post(append_event_handler::<T, Auth>),
         )
         .with_state(state)
 }
@@ -338,52 +334,6 @@ pub async fn delete_agent_session_handler<
     state
         .service
         .delete_session(AgentSessionId::new_from_uuid(session_id))
-        .await?;
-
-    Ok(StatusCode::OK)
-}
-
-#[utoipa::path(
-    post,
-    path = "/agent-sessions/{session_id}/events",
-    tag = "agent-sessions",
-    operation_id = "append_agent_session_event",
-    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
-    request_body(content = Object, description = "One protocol frame, tagged with `direction`/`content`"),
-    responses(
-        (status = 200),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Append a protocol event to a session's log.
-///
-/// The event is attributed to the caller's acting user when there is one: a
-/// directly authenticated user, or the user a bot acts for.
-#[tracing::instrument(
-    skip(state, caller, message),
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
-    err(Debug)
-)]
-pub async fn append_event_handler<T: AgentSessionService, Auth: MacroAuthorizationService>(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
-    Path(session_id): Path<Uuid>,
-    Json(message): Json<Message>,
-) -> Result<StatusCode, AgentSessionApiError> {
-    let user_id = caller
-        .authorization
-        .acting_user()
-        .map(|user| user.macro_user_id.clone());
-
-    state
-        .service
-        .append_event(AgentSessionLog {
-            agent_session_id: AgentSessionId::new_from_uuid(session_id),
-            user_id,
-            content: message,
-        })
         .await?;
 
     Ok(StatusCode::OK)

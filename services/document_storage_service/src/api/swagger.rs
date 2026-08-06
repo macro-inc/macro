@@ -217,7 +217,6 @@ use utoipa::OpenApi;
         agent_session::inbound::axum_router::get_agent_session_handler,
         agent_session::inbound::axum_router::update_agent_session_handler,
         agent_session::inbound::axum_router::delete_agent_session_handler,
-        agent_session::inbound::axum_router::append_event_handler,
 
         // channel list (comms hex)
         channels::inbound::list_router::get_channels_handler,

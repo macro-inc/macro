@@ -13,7 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
-use super::model::{AgentSession, AgentSessionId, AgentSessionLog, CreateAgentSessionParams};
+use super::model::{AgentSession, AgentSessionId, CreateAgentSessionParams};
 use super::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo};
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
@@ -42,9 +42,6 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
-
-    /// Append a protocol event to a session's durable log.
-    fn append_event(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 
     /// Attach a new transport to an existing persisted session.
     fn attach_session<Connector>(
@@ -126,10 +123,6 @@ where
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
-    }
-
-    async fn append_event(&self, log: AgentSessionLog) -> Result<()> {
-        AgentSessionLogRepo::create(&self.repo, log).await
     }
 
     async fn attach_session<Connector>(
