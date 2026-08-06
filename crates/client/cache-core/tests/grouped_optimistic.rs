@@ -39,6 +39,22 @@ query GroupSoup($input: GroupedSoupInput!) {
 }
 "#;
 
+const GROUP_MEMBERSHIP_QUERY: &str = r#"
+query GroupSoupMembership($input: GroupedSoupInput!) {
+  user {
+    id
+    groupSoup(input: $input) {
+      bins {
+        key
+        totalCount
+        nextCursor
+        items { __typename id }
+      }
+    }
+  }
+}
+"#;
+
 const MUTATION: &str = r#"
 mutation SetEntityProperty($input: SetEntityPropertyInput!) {
   setEntityProperty(input: $input) {
@@ -133,8 +149,8 @@ fn group_page_without_destination() -> Json {
 
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
-        query: GROUP_QUERY.into(),
-        operation_name: Some("GroupSoup".into()),
+        query: GROUP_MEMBERSHIP_QUERY.into(),
+        operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
         path: vec![
             LinkPathSegment::Field {
@@ -162,8 +178,8 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
 
 fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
-        query: GROUP_QUERY.into(),
-        operation_name: Some("GroupSoup".into()),
+        query: GROUP_MEMBERSHIP_QUERY.into(),
+        operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
         path: vec![
             LinkPathSegment::Field {
