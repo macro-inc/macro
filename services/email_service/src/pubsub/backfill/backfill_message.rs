@@ -1,16 +1,12 @@
 use crate::convert::map_message_resource_to_service;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{
-    CheckGmailRateLimitArgs, CrmContactRecipient, check_gmail_rate_limit,
-    enqueue_populate_crm_contacts,
-};
+use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
 use anyhow::Context;
 use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
@@ -23,14 +19,6 @@ pub async fn backfill_message(
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::MessagesGet,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
 
     // get message from gmail
     let message_resource = match ctx

@@ -5,6 +5,7 @@ use crate::pubsub::backfill::{
     seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::gmail::auth::{
     fetch_token_or_mark_reauth, fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
 };
@@ -14,7 +15,9 @@ use models_email::email::service::backfill::{
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_email::gmail::operations::GmailApiOperation;
 use sqs_worker::cleanup_message;
+use std::future::Future;
 use uuid::Uuid;
 
 /// When calendar sync is disabled, return the delivery's outbox row to the
@@ -117,24 +120,36 @@ async fn inner_process_message(
             backfill_thread::backfill_thread(ctx, &access_token, scope, &link).await
         }
         BackfillOperation::BackfillMessage(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope, false).await?
-            else {
-                // BackfillMessage owns per-thread progress in addition to
-                // the job-level progress that fetch_job_context already
-                // cleared on cancellation. Drop it so a re-run of the
-                // cancelled job doesn't see stale thread counters.
-                let _ = ctx
-                    .redis_client
-                    .delete_backfill_thread_progress(
-                        scope.job_id,
-                        &scope.payload.thread_provider_id,
-                    )
-                    .await;
-                return Ok(());
-            };
-            backfill_message::backfill_message(ctx, &access_token, scope, &link).await
+            dispatch_backfill_message(
+                check_gmail_rate_limit(CheckGmailRateLimitArgs {
+                    redis_client: &ctx.redis_client,
+                    link_id: scope.link_id,
+                    gmail_operation: GmailApiOperation::MessagesGet,
+                    retryable: true,
+                    is_backfill: true,
+                }),
+                async {
+                    let Some(JobContext {
+                        link, access_token, ..
+                    }) = fetch_job_context(ctx, scope, false).await?
+                    else {
+                        // BackfillMessage owns per-thread progress in addition to
+                        // the job-level progress that fetch_job_context already
+                        // cleared on cancellation. Drop it so a re-run of the
+                        // cancelled job doesn't see stale thread counters.
+                        let _ = ctx
+                            .redis_client
+                            .delete_backfill_thread_progress(
+                                scope.job_id,
+                                &scope.payload.thread_provider_id,
+                            )
+                            .await;
+                        return Ok(());
+                    };
+                    backfill_message::backfill_message(ctx, &access_token, scope, &link).await
+                },
+            )
+            .await
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
             // UpdateThreadMetadata is a DB-only step; skip the Gmail token
@@ -227,6 +242,18 @@ async fn inner_process_message(
             depopulate_crm_for_user::depopulate_crm_for_user(ctx, payload).await
         }
     }
+}
+
+async fn dispatch_backfill_message<RateLimitFuture, WorkFuture>(
+    rate_limit: RateLimitFuture,
+    work: WorkFuture,
+) -> Result<(), ProcessingError>
+where
+    RateLimitFuture: Future<Output = Result<(), ProcessingError>>,
+    WorkFuture: Future<Output = Result<(), ProcessingError>>,
+{
+    rate_limit.await?;
+    work.await
 }
 
 /// The pre-fetched context every job-scoped handler used to receive from
@@ -363,3 +390,6 @@ fn extract_backfill_message(
 
     Ok(backfill_message)
 }
+
+#[cfg(test)]
+mod test;
