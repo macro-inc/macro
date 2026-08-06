@@ -280,7 +280,7 @@ export function upsertEmbeddedLink<
       entityKey: normalizedEntityKey(args.entity),
       insertFields: args.insertFields,
     },
-  } as OptimisticUpdate;
+  } as unknown as OptimisticUpdate;
 }
 
 /**
