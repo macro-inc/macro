@@ -5233,7 +5233,6 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
- "mail-builder",
  "mailparse",
  "mime_guess",
  "model",

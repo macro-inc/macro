@@ -602,10 +602,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let db_scheduled = db.clone();
-    let gmail_client_scheduled = gmail_client.clone();
     let email_api_scheduled = email_api_live;
-    let auth_service_client_scheduled = auth_service_client.clone();
-    let redis_client_scheduled = redis_client.clone();
     let s3_client_scheduled = s3_client.clone();
     let attachment_bucket_scheduled = config.attachment_bucket.to_string();
     let macro_event_broker_scheduled = macro_event_broker.clone();
@@ -615,10 +612,7 @@ async fn main() -> anyhow::Result<()> {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
             scheduled_worker,
             db_scheduled,
-            gmail_client_scheduled,
             email_api_scheduled,
-            auth_service_client_scheduled,
-            redis_client_scheduled,
             s3_client_scheduled,
             attachment_bucket_scheduled,
             macro_event_broker_scheduled,

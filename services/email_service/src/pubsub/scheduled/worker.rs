@@ -3,21 +3,15 @@ use crate::pubsub::context::PubSubEventBroker;
 use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::pubsub::scheduled::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
-use crate::util::redis::RedisClient;
-use authentication_service_client::AuthServiceClient;
 use futures::StreamExt;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
-#[expect(clippy::too_many_arguments, reason = "matches the other workers")]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
-    gmail_client: gmail_client::GmailClient,
     email_api: GmailApi,
-    auth_service_client: AuthServiceClient,
-    redis_client: RedisClient,
     s3_client: s3_client::S3,
     attachment_bucket: String,
     macro_event_broker: PubSubEventBroker,
@@ -25,10 +19,7 @@ pub async fn run_worker(
     run_worker_with_cancellation(
         worker,
         db,
-        gmail_client,
         email_api,
-        auth_service_client,
-        redis_client,
         s3_client,
         attachment_bucket,
         macro_event_broker,
@@ -40,14 +31,10 @@ pub async fn run_worker(
 /// Ingests SQS messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
-#[expect(clippy::too_many_arguments, reason = "matches the other workers")]
 pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
-    gmail_client: gmail_client::GmailClient,
     email_api: GmailApi,
-    auth_service_client: AuthServiceClient,
-    redis_client: RedisClient,
     s3_client: s3_client::S3,
     attachment_bucket: String,
     macro_event_broker: PubSubEventBroker,
@@ -56,10 +43,7 @@ pub async fn run_worker_with_cancellation(
     let ctx = ScheduledContext {
         db,
         sqs_worker: worker.clone(),
-        gmail_client,
         email_api,
-        auth_service_client,
-        redis_client,
         s3_client,
         attachment_bucket,
         macro_event_broker,
