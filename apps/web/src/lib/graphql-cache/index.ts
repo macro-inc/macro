@@ -5,8 +5,10 @@
 
 export {
   type CachedSelection,
+  type CachedVariant,
   type InspectionSelection,
   inspect,
+  inspectVariants,
   selectAll,
 } from './exchange/inspection';
 export {
