@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use async_graphql::{Context, Object};
 use graphql_email::{
-    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader, load_email_messages,
-    load_latest_email_message,
+    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader,
+    email_message_selection_requires_full_payload, load_email_messages, load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
@@ -207,7 +207,12 @@ where
         limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlSoupEmailMessage>> {
         let (offset, limit) = parse_email_message_pagination(offset, limit)?;
-        load_email_messages::<ER>(ctx, EmailContentKey::page(self.thread_id, offset, limit)).await
+        let key = if email_message_selection_requires_full_payload(ctx) {
+            EmailContentKey::page_full(self.thread_id, offset, limit)
+        } else {
+            EmailContentKey::page(self.thread_id, offset, limit)
+        };
+        load_email_messages::<ER>(ctx, key).await
     }
 
     /// The newest non-draft content message in this thread.

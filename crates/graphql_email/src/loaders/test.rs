@@ -150,7 +150,9 @@ impl EntityAccessService for TestAccessService {
 #[derive(Default)]
 struct RecordingContentService {
     latest_calls: AtomicUsize,
+    latest_full_calls: AtomicUsize,
     page_calls: AtomicUsize,
+    page_full_calls: AtomicUsize,
     pagination: Mutex<Vec<(i64, i64)>>,
 }
 
@@ -163,6 +165,14 @@ impl EmailContentService for RecordingContentService {
         Ok(HashMap::new())
     }
 
+    async fn get_latest_messages_full(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, Message>, EmailErr> {
+        self.latest_full_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(HashMap::new())
+    }
+
     async fn get_messages_parsed(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -170,6 +180,17 @@ impl EmailContentService for RecordingContentService {
         limit: i64,
     ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
         self.page_calls.fetch_add(1, Ordering::SeqCst);
+        self.pagination.lock().unwrap().push((offset, limit));
+        Ok(Some(Vec::new()))
+    }
+
+    async fn get_messages_full(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Option<Vec<Message>>, EmailErr> {
+        self.page_full_calls.fetch_add(1, Ordering::SeqCst);
         self.pagination.lock().unwrap().push((offset, limit));
         Ok(Some(Vec::new()))
     }
@@ -242,6 +263,7 @@ async fn authorized_keys_reach_the_email_domain() {
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
     assert_eq!(content.latest_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(content.latest_full_calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
         loaded.get(&requested),
         Some(EmailContentLoad::Missing)
@@ -261,10 +283,40 @@ async fn paginated_keys_forward_offset_and_limit_to_the_email_domain() {
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
     assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.latest_full_calls.load(Ordering::SeqCst), 0);
     assert_eq!(content.page_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(content.page_full_calls.load(Ordering::SeqCst), 0);
     assert_eq!(*content.pagination.lock().unwrap(), vec![(7, 9)]);
     assert!(matches!(
         loaded.get(&requested),
+        Some(EmailContentLoad::Found(messages)) if messages.is_empty()
+    ));
+}
+
+#[tokio::test]
+async fn full_keys_use_only_the_full_email_domain_path() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: true }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let latest = EmailContentKey::latest_full(Uuid::from_u128(1));
+    let page = EmailContentKey::page_full(Uuid::from_u128(2), 4, 6);
+
+    let loaded = reader.get_email_content(&user_id, vec![latest, page]).await;
+
+    assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.latest_full_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(content.page_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.page_full_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(*content.pagination.lock().unwrap(), vec![(4, 6)]);
+    assert!(matches!(
+        loaded.get(&latest),
+        Some(EmailContentLoad::Missing)
+    ));
+    assert!(matches!(
+        loaded.get(&page),
         Some(EmailContentLoad::Found(messages)) if messages.is_empty()
     ));
 }
@@ -282,7 +334,9 @@ async fn unauthorized_keys_do_not_reach_the_email_domain() {
     let loaded = reader.get_email_content(&user_id, vec![requested]).await;
 
     assert_eq!(content.latest_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.latest_full_calls.load(Ordering::SeqCst), 0);
     assert_eq!(content.page_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(content.page_full_calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
         loaded.get(&requested),
         Some(EmailContentLoad::Missing)

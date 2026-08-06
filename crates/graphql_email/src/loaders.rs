@@ -4,7 +4,10 @@ use std::{
 };
 
 use async_graphql::dataloader::{DataLoader, Loader};
-use email::domain::{models::ParsedMessage, ports::EmailContentService};
+use email::domain::{
+    models::{Message, ParsedMessage},
+    ports::EmailContentService,
+};
 use entity_access::domain::{models::AccessError, ports::EntityAccessService};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,11 +16,43 @@ use uuid::Uuid;
 pub(crate) const MAX_EMAIL_CONTENT_KEYS: usize = 20;
 pub(crate) const MAX_EMAIL_CONTENT_MESSAGES: usize = 100;
 
-/// Result of loading parsed content messages for one email thread.
+/// A message returned by the email-content edge.
+#[derive(Debug, Clone)]
+pub struct EmailContentMessage {
+    parsed: ParsedMessage,
+    full: Option<Message>,
+}
+
+impl EmailContentMessage {
+    pub(crate) fn parsed(&self) -> &ParsedMessage {
+        &self.parsed
+    }
+
+    pub(crate) fn full(&self) -> Option<&Message> {
+        self.full.as_ref()
+    }
+}
+
+impl From<ParsedMessage> for EmailContentMessage {
+    fn from(parsed: ParsedMessage) -> Self {
+        Self { parsed, full: None }
+    }
+}
+
+impl From<Message> for EmailContentMessage {
+    fn from(full: Message) -> Self {
+        Self {
+            parsed: ParsedMessage::from(&full),
+            full: Some(full),
+        }
+    }
+}
+
+/// Result of loading content messages for one email thread.
 #[derive(Debug, Clone)]
 pub enum EmailContentLoad {
-    /// The thread has a parsed content-message page, which may be empty.
-    Found(Vec<ParsedMessage>),
+    /// The thread has a content-message page, which may be empty.
+    Found(Vec<EmailContentMessage>),
     /// The thread is absent or inaccessible.
     Missing,
     /// An internal failure occurred. Details are logged, never exposed.
@@ -30,12 +65,19 @@ enum EmailContentRequest {
     Page { offset: u32, limit: u32 },
 }
 
-/// A request for parsed content messages belonging to an email thread.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+enum EmailContentHydration {
+    Parsed,
+    Full,
+}
+
+/// A request for content messages belonging to an email thread.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct EmailContentKey {
     /// Email thread ID.
     pub thread_id: Uuid,
     request: EmailContentRequest,
+    hydration: EmailContentHydration,
 }
 
 impl EmailContentKey {
@@ -44,15 +86,40 @@ impl EmailContentKey {
         Self {
             thread_id,
             request: EmailContentRequest::Latest,
+            hydration: EmailContentHydration::Parsed,
         }
     }
 
-    /// Request a paginated content-message page for a thread.
+    /// Request the newest fully hydrated non-draft content message for a thread.
+    pub fn latest_full(thread_id: Uuid) -> Self {
+        Self {
+            thread_id,
+            request: EmailContentRequest::Latest,
+            hydration: EmailContentHydration::Full,
+        }
+    }
+
+    /// Request a paginated lightweight content-message page for a thread.
     pub fn page(thread_id: Uuid, offset: u32, limit: u32) -> Self {
         Self {
             thread_id,
             request: EmailContentRequest::Page { offset, limit },
+            hydration: EmailContentHydration::Parsed,
         }
+    }
+
+    /// Request a paginated fully hydrated content-message page for a thread.
+    pub fn page_full(thread_id: Uuid, offset: u32, limit: u32) -> Self {
+        Self {
+            thread_id,
+            request: EmailContentRequest::Page { offset, limit },
+            hydration: EmailContentHydration::Full,
+        }
+    }
+
+    /// Whether this request requires fully hydrated messages.
+    pub fn requires_full_payload(self) -> bool {
+        self.hydration == EmailContentHydration::Full
     }
 
     fn requested_message_count(self) -> usize {
@@ -160,7 +227,8 @@ where
         }
 
         let mut loads = HashMap::with_capacity(keys.len());
-        let mut latest_requests = Vec::new();
+        let mut latest_parsed_requests = Vec::new();
+        let mut latest_full_requests = Vec::new();
         let mut page_requests = Vec::new();
 
         for key in keys {
@@ -175,14 +243,19 @@ where
                 continue;
             };
 
-            match key.request {
-                EmailContentRequest::Latest => latest_requests.push((key, receipt)),
-                EmailContentRequest::Page { .. } => page_requests.push((key, receipt)),
+            match (key.request, key.hydration) {
+                (EmailContentRequest::Latest, EmailContentHydration::Parsed) => {
+                    latest_parsed_requests.push((key, receipt));
+                }
+                (EmailContentRequest::Latest, EmailContentHydration::Full) => {
+                    latest_full_requests.push((key, receipt));
+                }
+                (EmailContentRequest::Page { .. }, _) => page_requests.push((key, receipt)),
             }
         }
 
-        if !latest_requests.is_empty() {
-            let receipts = latest_requests
+        if !latest_parsed_requests.is_empty() {
+            let receipts = latest_parsed_requests
                 .iter()
                 .map(|(_, receipt)| receipt.clone())
                 .collect();
@@ -192,19 +265,46 @@ where
                 .await
             {
                 Ok(mut messages) => {
-                    for (key, _) in latest_requests {
+                    for (key, _) in latest_parsed_requests {
                         let load = messages
                             .remove(&key.thread_id)
                             .map_or(EmailContentLoad::Missing, |message| {
-                                EmailContentLoad::Found(vec![message])
+                                EmailContentLoad::Found(vec![message.into()])
                             });
                         loads.insert(key, load);
                     }
                 }
                 Err(error) => {
-                    tracing::error!(error = ?error, "bulk latest email content load failed");
+                    tracing::error!(error = ?error, "bulk latest parsed email content load failed");
                     loads.extend(
-                        latest_requests
+                        latest_parsed_requests
+                            .into_iter()
+                            .map(|(key, _)| (key, EmailContentLoad::Failed)),
+                    );
+                }
+            }
+        }
+
+        if !latest_full_requests.is_empty() {
+            let receipts = latest_full_requests
+                .iter()
+                .map(|(_, receipt)| receipt.clone())
+                .collect();
+            match self.email_service.get_latest_messages_full(receipts).await {
+                Ok(mut messages) => {
+                    for (key, _) in latest_full_requests {
+                        let load = messages
+                            .remove(&key.thread_id)
+                            .map_or(EmailContentLoad::Missing, |message| {
+                                EmailContentLoad::Found(vec![message.into()])
+                            });
+                        loads.insert(key, load);
+                    }
+                }
+                Err(error) => {
+                    tracing::error!(error = ?error, "bulk latest full email content load failed");
+                    loads.extend(
+                        latest_full_requests
                             .into_iter()
                             .map(|(key, _)| (key, EmailContentLoad::Failed)),
                     );
@@ -218,9 +318,30 @@ where
                 let (offset, limit) = key
                     .page_params()
                     .expect("page requests always have pagination parameters");
-                let result = email_service
-                    .get_messages_parsed(receipt, offset, limit)
-                    .await;
+                let result = match key.hydration {
+                    EmailContentHydration::Parsed => email_service
+                        .get_messages_parsed(receipt, offset, limit)
+                        .await
+                        .map(|messages| {
+                            messages.map(|messages| {
+                                messages
+                                    .into_iter()
+                                    .map(EmailContentMessage::from)
+                                    .collect()
+                            })
+                        }),
+                    EmailContentHydration::Full => email_service
+                        .get_messages_full(receipt, offset, limit)
+                        .await
+                        .map(|messages| {
+                            messages.map(|messages| {
+                                messages
+                                    .into_iter()
+                                    .map(EmailContentMessage::from)
+                                    .collect()
+                            })
+                        }),
+                };
                 (key, offset, limit, result)
             }
         }))
@@ -248,7 +369,7 @@ where
     }
 }
 
-/// DataLoader for parsed content messages attached to Soup email threads.
+/// DataLoader for adaptively hydrated content messages attached to Soup email threads.
 pub struct EmailContentLoader<R> {
     user_id: MacroUserIdStr<'static>,
     reader: R,

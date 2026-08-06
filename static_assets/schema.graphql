@@ -2762,6 +2762,74 @@ type GraphqlSoupEmailContact {
 }
 
 """
+An uploaded attachment embedded in a draft email message.
+"""
+type GraphqlSoupEmailDraftAttachment {
+	"""
+	The attachment's canonical identifier.
+	"""
+	id: ID!
+	"""
+	The draft message identifier.
+	"""
+	draftId: ID!
+	"""
+	The original filename.
+	"""
+	fileName: String!
+	"""
+	The MIME type.
+	"""
+	contentType: String!
+	"""
+	The SHA-256 content digest.
+	"""
+	sha: String!
+	"""
+	The attachment size in bytes.
+	"""
+	size: Int!
+	"""
+	The storage key containing the uploaded attachment.
+	"""
+	s3Key: String!
+}
+
+"""
+A forwarded provider attachment embedded in a draft email message.
+"""
+type GraphqlSoupEmailForwardedAttachment {
+	"""
+	The original attachment identifier.
+	"""
+	attachmentId: ID!
+	"""
+	The draft message identifier.
+	"""
+	draftId: ID!
+	"""
+	The attachment identifier assigned by the email provider.
+	"""
+	providerAttachmentId: String
+	"""
+	The provider identifier of the original message.
+	"""
+	messageProviderId: String!
+	"""
+	The original filename.
+	"""
+	filename: String
+	"""
+	The MIME type.
+	"""
+	mimeType: String
+	"""
+	The attachment size in bytes.
+	"""
+	sizeBytes: Int
+}
+
+"""
 Canonical normalized GraphQL email label used by both email threads and
 the authenticated user's label catalog.
 """
@@ -2801,7 +2869,7 @@ type GraphqlSoupEmailLabel {
 }
 
 """
-A lightweight email content projection for Soup queries.
+An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
 	"""
@@ -2809,9 +2877,17 @@ type GraphqlSoupEmailMessage {
 	"""
 	id: ID!
 	"""
+	The identifier assigned by the email provider.
+	"""
+	providerId: String
+	"""
 	The identifier of the containing thread.
 	"""
 	threadId: ID!
+	"""
+	The identifier of the message this message replies to.
+	"""
+	replyingToId: ID
 	"""
 	The identifier of the linked email account.
 	"""
@@ -2853,6 +2929,10 @@ type GraphqlSoupEmailMessage {
 	"""
 	hasAttachments: Boolean!
 	"""
+	When this draft is scheduled to be sent, in RFC 3339 format.
+	"""
+	scheduledSendTime: String
+	"""
 	The sender of the message.
 	"""
 	from: GraphqlSoupEmailContact
@@ -2893,6 +2973,18 @@ type GraphqlSoupEmailMessage {
 	"""
 	bodyReplyless: String
 	"""
+	Provider-hosted attachments on the message.
+	"""
+	attachments: [GraphqlSoupEmailMessageAttachment!]!
+	"""
+	Uploaded attachments belonging to a draft message.
+	"""
+	attachmentsDraft: [GraphqlSoupEmailDraftAttachment!]!
+	"""
+	Forwarded provider attachments belonging to a draft message.
+	"""
+	attachmentsForwarded: [GraphqlSoupEmailForwardedAttachment!]!
+	"""
 	The creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
@@ -2900,6 +2992,40 @@ type GraphqlSoupEmailMessage {
 	The last-updated timestamp in RFC 3339 format.
 	"""
 	updatedAt: String!
+}
+
+"""
+A provider-hosted attachment embedded in an email message.
+"""
+type GraphqlSoupEmailMessageAttachment {
+	"""
+	The attachment's canonical database identifier.
+	"""
+	id: ID!
+	"""
+	The attachment identifier assigned by the email provider.
+	"""
+	providerId: String
+	"""
+	The original filename.
+	"""
+	filename: String
+	"""
+	The MIME type.
+	"""
+	mimeType: String
+	"""
+	The attachment size in bytes.
+	"""
+	sizeBytes: Int
+	"""
+	The corresponding static-file-service identifier, when uploaded.
+	"""
+	sfsId: ID
+	"""
+	The content identifier used by inline attachments.
+	"""
+	contentId: String
 }
 
 """

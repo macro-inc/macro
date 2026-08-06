@@ -1,11 +1,11 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
     CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadPreview,
-    EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment,
-    MessageLabel, MessageRow, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
-    RecipientType, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
-    UserProvider,
+    EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel, Message,
+    MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage, ParsedThread,
+    PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo,
+    Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts,
+    UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -387,6 +387,12 @@ pub trait EmailContentService: Send + Sync + 'static {
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
 
+    /// Fetch the newest non-draft fully hydrated message for each authorized thread.
+    fn get_latest_messages_full(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Message>, EmailErr>> + Send;
+
     /// Fetch one page of parsed messages for an authorized thread.
     fn get_messages_parsed(
         &self,
@@ -394,6 +400,14 @@ pub trait EmailContentService: Send + Sync + 'static {
         offset: i64,
         limit: i64,
     ) -> impl Future<Output = Result<Option<Vec<ParsedMessage>>, EmailErr>> + Send;
+
+    /// Fetch one page of fully hydrated messages for an authorized thread.
+    fn get_messages_full(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<Vec<Message>>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -785,12 +799,28 @@ impl EmailContentService for NoOpEmailService {
         Err(no_op_email_err())
     }
 
+    async fn get_latest_messages_full(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, Message>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
     async fn get_messages_parsed(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
         _offset: i64,
         _limit: i64,
     ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_messages_full(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Vec<Message>>, EmailErr> {
         Err(no_op_email_err())
     }
 }

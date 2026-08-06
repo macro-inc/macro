@@ -4,10 +4,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
-    CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailSyncStatus,
-    EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility, LabelType, Link, LinkLabel,
-    MessageListVisibility, ParsedMessage, ParsedThread, Thread, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
+    AttachmentDraft, AttachmentForwarded, CreateDraftInput, CreatedDraft, EmailErr, EmailFilter,
+    EmailSyncStatus, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility, LabelType,
+    Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
+    ParsedThread, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink,
+    UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -445,10 +446,12 @@ impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
         keys.into_iter()
             .map(|key| {
                 let thread_id = key.thread_id;
-                (
-                    key,
-                    graphql_email::EmailContentLoad::Found(vec![parsed_message(thread_id)]),
-                )
+                let message = if key.requires_full_payload() {
+                    full_message(thread_id).into()
+                } else {
+                    parsed_message(thread_id).into()
+                };
+                (key, graphql_email::EmailContentLoad::Found(vec![message]))
             })
             .collect()
     }
@@ -478,6 +481,71 @@ fn parsed_message(thread_id: Uuid) -> ParsedMessage {
         is_sent: false,
         is_draft: false,
         has_attachments: false,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+
+fn full_message(thread_id: Uuid) -> Message {
+    let message_id = Uuid::from_u128(100);
+    let draft_attachment_id = Uuid::from_u128(102);
+    Message {
+        db_id: message_id,
+        provider_id: Some("provider-message".to_owned()),
+        thread_db_id: thread_id,
+        provider_thread_id: Some("provider-thread".to_owned()),
+        replying_to_id: Some(Uuid::from_u128(101)),
+        global_id: Some("global-message".to_owned()),
+        link_id: Uuid::from_u128(200),
+        subject: Some("Direct thread subject".to_owned()),
+        snippet: Some("Direct thread snippet".to_owned()),
+        provider_history_id: None,
+        internal_date_ts: Some(Default::default()),
+        sent_at: Some(Default::default()),
+        size_estimate: None,
+        is_read: true,
+        is_starred: false,
+        is_sent: false,
+        is_draft: true,
+        has_attachments: true,
+        scheduled_send_time: Some(Default::default()),
+        from: None,
+        to: Vec::new(),
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: Vec::new(),
+        body_text: Some("Direct thread body".to_owned()),
+        body_html_sanitized: None,
+        body_macro: None,
+        body_replyless: Some("Direct thread body".to_owned()),
+        attachments: vec![MessageAttachment {
+            db_id: Uuid::from_u128(103),
+            provider_id: Some("provider-attachment".to_owned()),
+            filename: Some("provider.txt".to_owned()),
+            mime_type: Some("text/plain".to_owned()),
+            size_bytes: Some(10),
+            sfs_id: Some(Uuid::from_u128(104)),
+            content_id: Some("inline-content".to_owned()),
+        }],
+        attachments_draft: vec![AttachmentDraft {
+            id: draft_attachment_id,
+            draft_id: message_id,
+            file_name: "draft.txt".to_owned(),
+            content_type: "text/plain".to_owned(),
+            sha: "sha256".to_owned(),
+            size: 20,
+            s3_key: "draft/key".to_owned(),
+        }],
+        attachments_forwarded: vec![AttachmentForwarded {
+            attachment_id: Uuid::from_u128(105),
+            draft_id: message_id,
+            provider_attachment_id: Some("forwarded-attachment".to_owned()),
+            message_provider_id: "original-provider-message".to_owned(),
+            filename: Some("forwarded.txt".to_owned()),
+            mime_type: Some("text/plain".to_owned()),
+            size_bytes: Some(30),
+        }],
+        headers_json: None,
         created_at: Default::default(),
         updated_at: Default::default(),
     }
@@ -1186,6 +1254,80 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
             .lock()
             .expect("email content calls lock"),
         vec![vec![graphql_email::EmailContentKey::page(thread_id, 7, 20)]]
+    );
+}
+
+#[tokio::test]
+async fn email_message_full_fields_request_the_full_edge_payload() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(43);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread(thread_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime bodyParsed attachments {{ id providerId sfsId }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let message = &data["user"]["emailThread"]["messages"][0];
+    assert_eq!(message["providerId"], "provider-message");
+    assert_eq!(message["replyingToId"], Uuid::from_u128(101).to_string());
+    assert!(message["scheduledSendTime"].as_str().is_some());
+    assert_eq!(message["bodyParsed"], "Direct thread body");
+    assert_eq!(
+        message["attachments"][0]["sfsId"],
+        Uuid::from_u128(104).to_string()
+    );
+    assert_eq!(message["attachmentsDraft"][0]["fileName"], "draft.txt");
+    assert_eq!(
+        message["attachmentsForwarded"][0]["providerAttachmentId"],
+        "forwarded-attachment"
+    );
+    assert_eq!(
+        *harness
+            .email_content_reader
+            .calls
+            .lock()
+            .expect("email content calls lock"),
+        vec![vec![graphql_email::EmailContentKey::page_full(
+            thread_id, 2, 4
+        )]]
+    );
+}
+
+#[tokio::test]
+async fn latest_email_message_full_fields_request_the_full_edge_payload() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(44);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread(thread_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ latestContentMessage {{ providerId attachments {{ sfsId }} }} }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let message =
+        &response.data.into_json().unwrap()["user"]["emailThread"]["latestContentMessage"];
+    assert_eq!(message["providerId"], "provider-message");
+    assert_eq!(
+        message["attachments"][0]["sfsId"],
+        Uuid::from_u128(104).to_string()
+    );
+    assert_eq!(
+        *harness
+            .email_content_reader
+            .calls
+            .lock()
+            .expect("email content calls lock"),
+        vec![vec![graphql_email::EmailContentKey::latest_full(thread_id)]]
     );
 }
 
