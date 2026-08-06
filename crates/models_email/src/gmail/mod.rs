@@ -1,5 +1,4 @@
 pub mod contacts;
-pub mod error;
 pub mod filters;
 pub mod gmail_ops;
 pub mod history;

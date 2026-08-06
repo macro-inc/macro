@@ -28,14 +28,14 @@ const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn compose_email_api(
     db: PgPool,
-    gmail_client: gmail_client::GmailClient,
+    subscription_topic: String,
     auth_service_client: authentication_service_client::AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: sqs_client::SQS,
     rate_budget: RateBudget,
 ) -> GmailApi {
     GmailApi::new(
-        GmailApiClientRepository::new(gmail_client),
+        GmailApiClientRepository::from_subscription_topic(subscription_topic),
         EmailServiceTokenSource::new(db, redis_client.clone(), auth_service_client, sqs_client),
         RedisProviderRateLimiter::new(redis_client, rate_budget),
     )
@@ -251,8 +251,6 @@ async fn main() -> anyhow::Result<()> {
         AuthServiceUrl::new()?.to_string(),
     );
 
-    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.to_string());
-
     let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
         .inspect(|client| {
             client
@@ -282,7 +280,7 @@ async fn main() -> anyhow::Result<()> {
 
     let email_api_live = compose_email_api(
         db.clone(),
-        gmail_client.clone(),
+        config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
         redis_client.clone(),
         sqs_client.clone(),
@@ -290,7 +288,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let email_api_backfill = compose_email_api(
         db_backfill.clone(),
-        gmail_client.clone(),
+        config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
         redis_client.clone(),
         sqs_client.clone(),

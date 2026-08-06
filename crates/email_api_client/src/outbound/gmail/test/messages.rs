@@ -52,6 +52,8 @@ async fn discovers_inline_and_attachment_calendar_parts() {
             "historyId": "1",
             "internalDate": "1",
             "labelIds": [],
+            "snippet": "",
+            "sizeEstimate": 0,
             "payload": {
                 "partId": "",
                 "mimeType": "multipart/mixed",

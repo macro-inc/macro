@@ -59,8 +59,8 @@ fn send_uses_send_cost_and_returns_ids_without_mutating_message() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(TokenFreshness::Cached),
-            Call::RateLimit(super::ApiOperationKind::SendMessage),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::RateLimit(Uuid::nil(), super::ApiOperationKind::SendMessage),
             Call::Repository("send_message"),
         ]
     );

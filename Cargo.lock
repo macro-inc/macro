@@ -5233,7 +5233,6 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
- "mailparse",
  "mime_guess",
  "model",
  "model-entity",
@@ -6315,7 +6314,6 @@ name = "gmail_client"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "chrono",
  "jsonwebtoken 10.3.0",
  "models_email",
  "regex",
@@ -6324,7 +6322,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "uuid",
  "wiremock",
  "workspace-hack",
 ]

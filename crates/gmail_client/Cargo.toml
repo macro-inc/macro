@@ -6,17 +6,15 @@ version = "0.1.0"
 
 [dependencies]
 base64 = { workspace = true }
-chrono = { workspace = true }
 jsonwebtoken = { workspace = true }
 models_email = { path = "../models_email" }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }
 wiremock = { workspace = true }
