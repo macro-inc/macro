@@ -10,10 +10,9 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
 /// the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn backfill_message(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<BackfillMessagePayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError> {

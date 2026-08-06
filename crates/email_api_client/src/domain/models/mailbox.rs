@@ -4,6 +4,21 @@ use serde::{Deserialize, Serialize};
 
 use super::SyncCursor;
 
+/// Provider-neutral calendar invitation part discovered in a message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalendarPart {
+    /// Provider MIME-part identifier, when available.
+    pub part_id: Option<String>,
+    /// Original filename, when supplied by the sender.
+    pub filename: Option<String>,
+    /// Declared media type.
+    pub mime_type: String,
+    /// Decoded inline bytes, if the provider included the part inline.
+    pub inline_data: Option<Vec<u8>>,
+    /// Provider attachment identifier when a separate download is required.
+    pub provider_attachment_id: Option<String>,
+}
+
 /// An active provider notification subscription and its synchronization cursor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSubscription {

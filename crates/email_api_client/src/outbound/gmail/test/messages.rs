@@ -4,7 +4,7 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::repository;
 use crate::domain::models::{AccessToken, EmailApiError};
-use crate::domain::ports::MailboxMessageClient;
+use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient};
 
 #[tokio::test]
 async fn normalizes_messages_and_preserves_deletion_races() {
@@ -38,6 +38,60 @@ async fn normalizes_messages_and_preserves_deletion_races() {
             .await
             .unwrap()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn discovers_inline_and_attachment_calendar_parts() {
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/calendar"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "calendar",
+            "threadId": "thread",
+            "historyId": "1",
+            "internalDate": "1",
+            "labelIds": [],
+            "payload": {
+                "partId": "",
+                "mimeType": "multipart/mixed",
+                "filename": "",
+                "headers": [],
+                "parts": [
+                    {
+                        "partId": "inline",
+                        "mimeType": "text/calendar; method=REQUEST",
+                        "filename": "",
+                        "headers": [],
+                        "body": {"size": 5, "data": "aGVsbG8"}
+                    },
+                    {
+                        "partId": "attachment",
+                        "mimeType": "application/octet-stream",
+                        "filename": "invite.ics",
+                        "headers": [],
+                        "body": {"size": 10, "attachmentId": "attachment-id"}
+                    }
+                ]
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let parts = repository
+        .get_calendar_parts(&AccessToken::new("token"), "calendar")
+        .await
+        .unwrap();
+    assert_eq!(parts.len(), 2);
+    assert!(
+        parts
+            .iter()
+            .any(|part| part.inline_data.as_deref() == Some(b"hello".as_slice()))
+    );
+    assert!(
+        parts
+            .iter()
+            .any(|part| part.provider_attachment_id.as_deref() == Some("attachment-id"))
     );
 }
 

@@ -369,9 +369,7 @@ async fn main() -> anyhow::Result<()> {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
         let email_api_inbox_sync = email_api_live.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
@@ -387,9 +385,7 @@ async fn main() -> anyhow::Result<()> {
                 worker,
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
-                gmail_client_inbox_sync,
                 email_api_inbox_sync,
-                auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
@@ -416,9 +412,7 @@ async fn main() -> anyhow::Result<()> {
         let db_inbox_sync = db.clone();
         let sqs_client_inbox_sync = sqs_client.clone();
         let contacts_ingress_inbox_sync = contacts_ingress.clone();
-        let gmail_client_inbox_sync = gmail_client.clone();
         let email_api_inbox_sync = email_api_live.clone();
-        let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
         let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
@@ -434,9 +428,7 @@ async fn main() -> anyhow::Result<()> {
                 worker,
                 sqs_client_inbox_sync,
                 contacts_ingress_inbox_sync,
-                gmail_client_inbox_sync,
                 email_api_inbox_sync,
-                auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
                 notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
@@ -509,9 +501,7 @@ async fn main() -> anyhow::Result<()> {
         let db_backfill = db_backfill.clone();
         let sqs_client_backfill = sqs_client.clone();
         let contacts_ingress_backfill = contacts_ingress.clone();
-        let gmail_client_backfill = gmail_client.clone();
         let email_api_backfill = email_api_backfill.clone();
-        let auth_service_client_backfill = auth_service_client.clone();
         let redis_client_backfill = redis_client.clone();
         let notification_ingress_service_backfill = notification_ingress_service.clone();
         let sfs_client_backfill = sfs_client.clone();
@@ -527,9 +517,7 @@ async fn main() -> anyhow::Result<()> {
                 worker,
                 sqs_client_backfill,
                 contacts_ingress_backfill,
-                gmail_client_backfill,
                 email_api_backfill,
-                auth_service_client_backfill,
                 redis_client_backfill,
                 notification_ingress_service_backfill,
                 sfs_client_backfill,

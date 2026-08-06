@@ -1,14 +1,71 @@
 //! Gmail message capability implementation.
 
+use base64::{
+    Engine as _,
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+};
 use models_email::email::service::message::Message;
 use models_email::email::service::thread::ThreadSummary;
+use models_email::gmail::MessagePart;
 use uuid::Uuid;
 
-use crate::domain::models::{AccessToken, EmailApiError, ThreadListPage};
-use crate::domain::ports::MailboxMessageClient;
+use crate::domain::models::{AccessToken, CalendarPart, EmailApiError, ThreadListPage};
+use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient};
 
 use super::convert::{map_message_resource_to_service, map_thread_resource_to_service};
 use super::{GmailApiClientRepository, map_gmail_error};
+
+impl MailboxCalendarClient for GmailApiClientRepository {
+    async fn get_calendar_parts(
+        &self,
+        access_token: &AccessToken,
+        provider_message_id: &str,
+    ) -> Result<Vec<CalendarPart>, EmailApiError> {
+        let Some(message) = self
+            .client
+            .get_message(access_token.expose_secret(), provider_message_id)
+            .await
+            .map_err(map_gmail_error)?
+        else {
+            return Ok(Vec::new());
+        };
+
+        collect_calendar_parts(&message.payload)
+    }
+}
+
+fn collect_calendar_parts(root: &MessagePart) -> Result<Vec<CalendarPart>, EmailApiError> {
+    let mut result = Vec::new();
+    let mut stack = vec![root];
+    while let Some(part) = stack.pop() {
+        let mime_type = part.mime_type.split(';').next().unwrap_or_default().trim();
+        let is_calendar = mime_type.eq_ignore_ascii_case("text/calendar")
+            || mime_type.eq_ignore_ascii_case("application/ics")
+            || part.filename.to_ascii_lowercase().ends_with(".ics");
+        if is_calendar {
+            let body = part.body.as_ref();
+            let inline_data =
+                body.and_then(|body| body.data_base64.as_deref())
+                    .and_then(|encoded| {
+                        URL_SAFE_NO_PAD
+                            .decode(encoded)
+                            .or_else(|_| URL_SAFE.decode(encoded))
+                            .ok()
+                    });
+            result.push(CalendarPart {
+                part_id: (!part.part_id.is_empty()).then(|| part.part_id.clone()),
+                filename: (!part.filename.is_empty()).then(|| part.filename.clone()),
+                mime_type: part.mime_type.clone(),
+                inline_data,
+                provider_attachment_id: body.and_then(|body| body.attachment_id.clone()),
+            });
+        }
+        if let Some(children) = &part.parts {
+            stack.extend(children);
+        }
+    }
+    Ok(result)
+}
 
 impl MailboxMessageClient for GmailApiClientRepository {
     async fn get_message(

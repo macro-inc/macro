@@ -4,10 +4,8 @@ use crate::pubsub::backfill::{
     list_threads, populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
-use crate::util::gmail::auth::{
-    fetch_token_or_mark_reauth, fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
-};
 use anyhow::Context;
+use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use models_email::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
@@ -109,9 +107,8 @@ async fn inner_process_message(
             backfill_thread::backfill_thread(ctx, scope, &link).await
         }
         BackfillOperation::BackfillMessage(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope, false).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 // BackfillMessage owns per-thread progress in addition to
                 // the job-level progress that fetch_job_context already
@@ -126,7 +123,7 @@ async fn inner_process_message(
                     .await;
                 return Ok(());
             };
-            backfill_message::backfill_message(ctx, &access_token, scope, &link).await
+            backfill_message::backfill_message(ctx, scope, &link).await
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
             // UpdateThreadMetadata is a DB-only step; skip the Gmail token
@@ -155,28 +152,26 @@ async fn inner_process_message(
             // Calendar jobs can be created immediately after an incremental
             // Google scope grant. Bypass the Gmail token cache so this job does
             // not reuse a pre-consent access token that lacks calendar scopes.
-            let access_token = fetch_token_or_mark_reauth_no_cache(
-                &link,
-                &ctx.db,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-                &ctx.sqs_client,
-            )
-            .await
-            .map_err(|e| {
-                let detail = DetailedError {
-                    reason: FailureReason::AccessTokenFetchFailed,
-                    source: e.context("failed to fetch token for Google Calendar backfill"),
-                };
-                if is_reauth_required_error(&detail.source) {
-                    ProcessingError::NonRetryable(detail)
-                } else {
-                    ProcessingError::Retryable(detail)
-                }
-            })?;
+            let access_token = ctx
+                .email_api
+                .get_access_token(link.id, TokenFreshness::Fresh)
+                .await
+                .map_err(|error| {
+                    let is_auth_required = matches!(error, EmailApiError::AuthRequired);
+                    let detail = DetailedError {
+                        reason: FailureReason::AccessTokenFetchFailed,
+                        source: anyhow::anyhow!(error)
+                            .context("failed to fetch token for Google Calendar backfill"),
+                    };
+                    if is_auth_required {
+                        ProcessingError::NonRetryable(detail)
+                    } else {
+                        ProcessingError::Retryable(detail)
+                    }
+                })?;
             calendar_google_backfill::calendar_google_backfill(
                 ctx,
-                &access_token,
+                access_token.expose_secret(),
                 &link,
                 &scope.payload,
             )
@@ -208,15 +203,6 @@ async fn inner_process_message(
             depopulate_crm_for_user::depopulate_crm_for_user(ctx, payload).await
         }
     }
-}
-
-/// The pre-fetched context every job-scoped handler used to receive from
-/// the top-level dispatcher: the link the operation targets, the backfill
-/// job it belongs to, and a fresh Gmail access token for the link. Used by
-/// handlers that still require a raw Gmail access token.
-struct JobContext {
-    link: link::Link,
-    access_token: String,
 }
 
 /// Same as [`JobContext`] but without a Gmail access token. Used by
@@ -269,37 +255,6 @@ async fn fetch_job_context_no_token<P>(
     let link = fetch_link(ctx, scope.link_id).await?;
 
     Ok(Some(JobContextNoToken { link, backfill_job }))
-}
-
-/// As [`fetch_job_context_no_token`], plus a fresh Gmail access token for
-/// handlers that still call an API requiring the raw token.
-async fn fetch_job_context<P>(
-    ctx: &PubSubContext,
-    scope: &JobScopedPayload<P>,
-    allow_complete: bool,
-) -> Result<Option<JobContext>, ProcessingError> {
-    let Some(JobContextNoToken { link, .. }) =
-        fetch_job_context_no_token(ctx, scope, allow_complete).await?
-    else {
-        return Ok(None);
-    };
-
-    let access_token = fetch_token_or_mark_reauth(
-        &link,
-        &ctx.db,
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-        &ctx.sqs_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch access token from link"),
-        })
-    })?;
-
-    Ok(Some(JobContext { link, access_token }))
 }
 
 /// Looks up a link by id, mapping the absence into a NonRetryable error

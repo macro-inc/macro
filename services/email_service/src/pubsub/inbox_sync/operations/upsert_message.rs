@@ -1,7 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::email_api_error::{
-    handle_gmail_message_error, handle_operation_error,
-};
+use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
     CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
 };
@@ -17,7 +15,6 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
-use email_api_client::domain::models::TokenFreshness;
 use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
@@ -88,12 +85,6 @@ pub async fn upsert_message(
     link: &link::Link,
     payload: &UpsertMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let gmail_access_token = ctx
-        .email_api
-        .get_access_token(link.id, TokenFreshness::Cached)
-        .await
-        .map_err(handle_gmail_message_error)?;
-
     let provider_message = ctx
         .email_api
         .get_message(link.id, &payload.provider_message_id)

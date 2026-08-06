@@ -1,8 +1,10 @@
 use models_email::email::service::message::Message;
 use uuid::Uuid;
 
-use super::super::models::{EmailApiError, ThreadListPage};
-use super::super::ports::{MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource};
+use super::super::models::{CalendarPart, EmailApiError, ThreadListPage};
+use super::super::ports::{
+    MailboxCalendarClient, MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource,
+};
 use super::{ApiOperationKind, EmailApiClientServiceImpl};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
@@ -113,6 +115,25 @@ where
                 labels_to_add,
                 labels_to_remove,
             )
+            .await
+    }
+}
+
+impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
+where
+    R: MailboxCalendarClient,
+    T: ProviderTokenSource,
+    L: ProviderRateLimiter,
+{
+    /// Finds calendar invitation parts in one provider message.
+    pub async fn get_calendar_parts(
+        &self,
+        link_id: Uuid,
+        provider_message_id: &str,
+    ) -> Result<Vec<CalendarPart>, EmailApiError> {
+        let access_token = self.prepare(link_id, ApiOperationKind::GetMessage).await?;
+        self.repository
+            .get_calendar_parts(&access_token, provider_message_id)
             .await
     }
 }

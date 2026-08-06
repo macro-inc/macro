@@ -3,17 +3,17 @@
 #[cfg(test)]
 mod test;
 
-use authentication_service_client::AuthServiceClient;
+use anyhow::Context;
+use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
 use email_api_client::domain::ports::ProviderTokenSource;
+use models_email::email::service::cache::TokenCacheKey;
+use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::link::Link;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use uuid::Uuid;
 
-use crate::util::gmail::auth::{
-    fetch_token_or_mark_reauth, fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
-};
 use crate::util::redis::RedisClient;
 
 /// Token source that resolves linked mailboxes through the email database and
@@ -70,32 +70,92 @@ impl ProviderTokenSource for EmailServiceTokenSource {
         link: &Link,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
-        let result = match freshness {
-            TokenFreshness::Cached => {
-                fetch_token_or_mark_reauth(
-                    link,
-                    &self.db,
-                    &self.redis_client,
-                    &self.auth_service_client,
-                    &self.sqs_client,
-                )
-                .await
-            }
-            TokenFreshness::Fresh => {
-                fetch_token_or_mark_reauth_no_cache(
-                    link,
-                    &self.db,
-                    &self.redis_client,
-                    &self.auth_service_client,
-                    &self.sqs_client,
-                )
-                .await
-            }
-        };
+        let result = self.fetch_token(link, freshness).await;
+        let result = self.record_token_health(link, result).await;
 
         result
             .map(AccessToken::new)
             .map_err(map_token_acquisition_error)
+    }
+}
+
+impl EmailServiceTokenSource {
+    async fn fetch_token(&self, link: &Link, freshness: TokenFreshness) -> anyhow::Result<String> {
+        let key = TokenCacheKey::new(
+            &link.fusionauth_user_id,
+            link.email_address.0.as_ref(),
+            link.provider.as_str(),
+        );
+        let connection = self
+            .redis_client
+            .inner
+            .get_multiplexed_async_connection()
+            .await
+            .context("unable to connect to redis")?;
+
+        match freshness {
+            TokenFreshness::Cached => {
+                email::outbound::fetch_gmail_access_token(
+                    &key,
+                    &connection,
+                    &self.auth_service_client,
+                )
+                .await
+            }
+            TokenFreshness::Fresh => {
+                email::outbound::fetch_gmail_access_token_no_cache(
+                    &key,
+                    &connection,
+                    &self.auth_service_client,
+                )
+                .await
+            }
+        }
+    }
+
+    async fn record_token_health(
+        &self,
+        link: &Link,
+        result: anyhow::Result<String>,
+    ) -> anyhow::Result<String> {
+        match result {
+            Ok(token) => {
+                email_db_client::links::update::clear_link_needs_reauth(&self.db, link.id)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(error=?error, link_id=%link.id, "Failed to clear needs_reauth after successful token fetch");
+                    })
+                    .ok();
+                Ok(token)
+            }
+            Err(error) if is_reauth_required_error(&error) => {
+                tracing::warn!(
+                    link_id=%link.id,
+                    fusionauth_user_id=%link.fusionauth_user_id,
+                    "Gmail grant no longer yields a token - marking link as needing reauth"
+                );
+                match email_db_client::links::update::set_link_needs_reauth(&self.db, link.id).await
+                {
+                    Ok(true) => {
+                        self.sqs_client
+                            .enqueue_link_manager_notification(
+                                LinkManagerMessage::NotifyReauthRequired { link_id: link.id },
+                            )
+                            .await
+                            .inspect_err(|enqueue_error| {
+                                tracing::error!(error=?enqueue_error, link_id=%link.id, "Failed to enqueue reauth notification");
+                            })
+                            .ok();
+                    }
+                    Ok(false) => {}
+                    Err(update_error) => {
+                        tracing::error!(error=?update_error, link_id=%link.id, "Failed to mark link as needing reauth");
+                    }
+                }
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -134,6 +194,19 @@ fn map_token_acquisition_error(error: anyhow::Error) -> TokenError {
 
     tracing::warn!(error=?error, "Transient access-token acquisition failure");
     transient_error("email provider access token is temporarily unavailable")
+}
+
+fn is_reauth_required_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<AuthServiceClientError>()
+            .is_some_and(|error| {
+                matches!(
+                    error,
+                    AuthServiceClientError::Forbidden | AuthServiceClientError::NotFound
+                )
+            })
+    })
 }
 
 fn transient_error(message: impl Into<String>) -> TokenError {

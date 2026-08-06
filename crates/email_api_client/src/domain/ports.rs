@@ -9,7 +9,7 @@ use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{
-    AccessToken, ApiOperationKind, ChangeBatch, EmailApiError, ProviderSubscription,
+    AccessToken, ApiOperationKind, CalendarPart, ChangeBatch, EmailApiError, ProviderSubscription,
     RateLimitRefusal, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
 
@@ -140,6 +140,16 @@ pub trait MailboxLabelClient: Send + Sync + 'static {
         access_token: &AccessToken,
         provider_label_id: &str,
     ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
+}
+
+/// Calendar invitation discovery capability.
+pub trait MailboxCalendarClient: Send + Sync + 'static {
+    /// Finds provider-neutral calendar parts in one message.
+    fn get_calendar_parts(
+        &self,
+        access_token: &AccessToken,
+        provider_message_id: &str,
+    ) -> impl Future<Output = Result<Vec<CalendarPart>, EmailApiError>> + Send;
 }
 
 /// Message attachment download capability.
