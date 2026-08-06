@@ -28,7 +28,7 @@ pub async fn delete_label(
         .await
     {
         Ok(()) => {}
-        Err(models_email::gmail::error::GmailError::NotFound(_)) => {
+        Err(error) if error.status() == Some(reqwest::StatusCode::NOT_FOUND) => {
             tracing::warn!(
                 provider_label_id = %payload.provider_label_id,
                 "Label not found in Gmail when attempting to delete, ignoring"

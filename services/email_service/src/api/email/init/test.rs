@@ -109,23 +109,44 @@ fn other_token_fetch_failures_stay_bad_request() {
     }
 }
 
+fn gmail_http_error(status: StatusCode, body: &str) -> GmailApiHttpError {
+    GmailApiHttpError::Http {
+        status,
+        body: body.to_string(),
+        retry_after: None,
+    }
+}
+
 #[test]
 fn watch_forbidden_classifies_as_no_gmail_grant() {
     assert!(matches!(
-        classify_watch_error(GmailError::Forbidden),
+        classify_watch_error(gmail_http_error(StatusCode::FORBIDDEN, "missing scope")),
         InitError::NoGmailGrant
     ));
 }
 
 #[test]
+fn watch_conflict_requires_the_expected_status_and_body() {
+    let conflict = gmail_http_error(
+        StatusCode::BAD_REQUEST,
+        "Only one user push notification client allowed",
+    );
+    assert!(is_watch_conflict(&conflict));
+    assert!(!is_watch_conflict(&gmail_http_error(
+        StatusCode::BAD_REQUEST,
+        "another bad request",
+    )));
+}
+
+#[test]
 fn other_watch_failures_stay_gmail_errors() {
-    for err in [
-        GmailError::Unauthorized,
-        GmailError::RateLimitExceeded,
-        GmailError::ApiError("(500): boom".to_string()),
+    for error in [
+        gmail_http_error(StatusCode::UNAUTHORIZED, "unauthorized"),
+        gmail_http_error(StatusCode::TOO_MANY_REQUESTS, "rate limited"),
+        GmailApiHttpError::InvalidResponse("missing history id".to_string()),
     ] {
         assert!(matches!(
-            classify_watch_error(err),
+            classify_watch_error(error),
             InitError::GmailError(_)
         ));
     }
@@ -150,7 +171,7 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
         InitError::NoGmailGrant,
         InitError::EnqueueError,
         InitError::BadRequest("bad".to_string()),
-        InitError::GmailError(GmailError::Unauthorized),
+        InitError::GmailError(gmail_http_error(StatusCode::UNAUTHORIZED, "unauthorized")),
     ] {
         assert!(
             should_clean_up_in_progress_link(&err),

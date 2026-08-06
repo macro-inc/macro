@@ -19,9 +19,13 @@ pub async fn sync_labels(
         .context("Failed to fetch labels from database")?;
 
     let gmail_labels = gmail_client
-        .fetch_user_labels(access_token, link_id)
+        .fetch_user_labels(access_token)
         .await
-        .context("Failed to fetch labels from Gmail API")?;
+        .context("Failed to fetch labels from Gmail API")?
+        .into_iter()
+        .map(|label| label.to_service_label(link_id))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| anyhow::anyhow!("Failed to convert Gmail labels: {error}"))?;
 
     // Create maps for easier comparison
     let db_label_map: HashMap<String, Label> = db_labels

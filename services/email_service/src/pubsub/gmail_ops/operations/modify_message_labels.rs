@@ -1,7 +1,7 @@
 use crate::pubsub::gmail_ops::process::{check_gmail_rate_limit, fetch_gmail_token};
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::Context;
-use models_email::gmail::error::GmailError;
+use gmail_client::GmailApiHttpError;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
@@ -38,11 +38,7 @@ pub async fn modify_message_labels(
 
     match result {
         Ok(()) => Ok(()),
-        Err(
-            e @ (GmailError::ServerError(..)
-            | GmailError::HttpRequest(_)
-            | GmailError::RateLimitExceeded),
-        ) => {
+        Err(e) if is_transient_gmail_error(&e) => {
             tracing::warn!(
                 error = ?e,
                 db_message_id = %payload.db_message_id,
@@ -69,6 +65,16 @@ pub async fn modify_message_labels(
                 source: anyhow::anyhow!("{}", e),
             }))
         }
+    }
+}
+
+fn is_transient_gmail_error(error: &GmailApiHttpError) -> bool {
+    match error {
+        GmailApiHttpError::Transport(_) => true,
+        GmailApiHttpError::Http { status, .. } => {
+            *status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+        }
+        GmailApiHttpError::Decode(_) | GmailApiHttpError::InvalidResponse(_) => false,
     }
 }
 

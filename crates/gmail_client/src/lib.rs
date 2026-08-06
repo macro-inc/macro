@@ -13,7 +13,6 @@ pub(crate) mod watch;
 #[cfg(test)]
 mod test;
 
-use crate::labels::delete_gmail_label;
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -46,7 +45,6 @@ use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
 #[allow(unused_imports)]
 use mockall::automock;
-use models_email::email::service;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message;
 use models_email::gmail::contacts::PersonResource;
@@ -55,10 +53,10 @@ pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
+use models_email::gmail::labels::GmailLabel;
 use models_email::gmail::{
     GmailUserProfile, HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
 };
-use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct GmailClient {
@@ -200,13 +198,13 @@ impl GmailClient {
     pub async fn register_watch(
         &self,
         access_token: &str,
-    ) -> Result<models_email::gmail::history::WatchResponse, GmailError> {
+    ) -> Result<models_email::gmail::history::WatchResponse, GmailApiHttpError> {
         watch::register_watch(self, access_token).await
     }
 
     /// Stops push notifications by revoking the notification watch
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn stop_watch(&self, access_token: &str) -> anyhow::Result<()> {
+    pub async fn stop_watch(&self, access_token: &str) -> Result<(), GmailApiHttpError> {
         watch::stop_watch(self, access_token).await
     }
 
@@ -222,7 +220,7 @@ impl GmailClient {
         provider_message_id: &str,
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
-    ) -> Result<(), GmailError> {
+    ) -> Result<(), GmailApiHttpError> {
         labels::modify_message_labels(
             self,
             access_token,
@@ -292,26 +290,28 @@ impl GmailClient {
     pub async fn fetch_user_labels(
         &self,
         access_token: &str,
-        link_id: uuid::Uuid,
-    ) -> anyhow::Result<Vec<service::label::Label>> {
-        labels::fetch_user_labels(self, access_token, link_id).await
+    ) -> Result<Vec<GmailLabel>, GmailApiHttpError> {
+        labels::fetch_user_labels(self, access_token).await
     }
 
-    /// Creates a new Gmail label for the user
+    /// Creates a new Gmail label from a raw Gmail label request.
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn create_label(
         &self,
         access_token: &str,
-        link_id: Uuid,
-        label_name: &str,
-    ) -> Result<service::label::Label, GmailError> {
-        labels::create_label(self, access_token, link_id, label_name).await
+        request: &GmailLabel,
+    ) -> Result<GmailLabel, GmailApiHttpError> {
+        labels::create_label(self, access_token, request).await
     }
 
-    /// Deletes a Gmail label by its ID
+    /// Deletes a Gmail label by its ID.
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn delete_label(&self, access_token: &str, label_id: &str) -> Result<(), GmailError> {
-        delete_gmail_label(self, access_token, label_id).await
+    pub async fn delete_label(
+        &self,
+        access_token: &str,
+        label_id: &str,
+    ) -> Result<(), GmailApiHttpError> {
+        labels::delete_gmail_label(self, access_token, label_id).await
     }
 
     /// Fetches the user's own contact information.
@@ -349,41 +349,20 @@ impl GmailClient {
         contacts::list_other_contacts(self, access_token, sync_token).await
     }
 
-    /// Blocks a sender by creating a filter that sends their emails to SPAM.
-    /// This replicates the "Block Sender" functionality in the Gmail UI.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn block_sender(
-        &self,
-        access_token: &str,
-        email_to_block: &str,
-    ) -> Result<Filter, GmailError> {
-        filters::block_sender(self, access_token, email_to_block).await
-    }
-
     /// Creates a new Gmail filter.
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn create_filter(
         &self,
         access_token: &str,
         filter: Filter,
-    ) -> Result<Filter, GmailError> {
+    ) -> Result<Filter, GmailApiHttpError> {
         filters::create_filter(self, access_token, filter).await
     }
 
     /// Lists all filters for the user.
     #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn list_filters(&self, access_token: &str) -> Result<Vec<Filter>, GmailError> {
+    pub async fn list_filters(&self, access_token: &str) -> Result<Vec<Filter>, GmailApiHttpError> {
         filters::list_filters(self, access_token).await
-    }
-
-    /// Gets a specific filter by ID.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_filter(
-        &self,
-        access_token: &str,
-        filter_id: &str,
-    ) -> Result<Filter, GmailError> {
-        filters::get_filter(self, access_token, filter_id).await
     }
 
     /// Deletes a filter by ID.
@@ -392,39 +371,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         filter_id: &str,
-    ) -> Result<(), GmailError> {
+    ) -> Result<(), GmailApiHttpError> {
         filters::delete_filter(self, access_token, filter_id).await
-    }
-
-    /// Finds and returns any existing "block" filters for a specific email address.
-    /// This can be used to check if a user is already blocked.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn find_block_filter_for_sender(
-        &self,
-        access_token: &str,
-        email_address: &str,
-    ) -> Result<Option<Filter>, GmailError> {
-        filters::find_block_filter_for_sender(self, access_token, email_address).await
-    }
-
-    /// Unblocks a sender by finding and deleting their block filter.
-    /// Returns true if a filter was found and deleted, false if no filter existed.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn unblock_sender(
-        &self,
-        access_token: &str,
-        email_address: &str,
-    ) -> Result<bool, GmailError> {
-        filters::unblock_sender(self, access_token, email_address).await
-    }
-
-    /// Lists all blocked senders by finding filters that send emails to TRASH.
-    /// Returns a list of email addresses that are currently blocked.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn list_blocked_senders(
-        &self,
-        access_token: &str,
-    ) -> Result<Vec<String>, GmailError> {
-        filters::list_blocked_senders(self, access_token).await
     }
 }

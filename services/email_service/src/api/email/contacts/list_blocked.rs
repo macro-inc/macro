@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use gmail_client::GmailError;
+use gmail_client::GmailApiHttpError;
 use model::response::ErrorResponse;
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -40,12 +40,12 @@ impl IntoResponse for ListBlockedError {
     }
 }
 
-impl From<GmailError> for ListBlockedError {
-    fn from(e: GmailError) -> Self {
-        match e {
-            GmailError::Forbidden => ListBlockedError::Forbidden,
-            _ => ListBlockedError::GmailError(e.to_string()),
+impl From<GmailApiHttpError> for ListBlockedError {
+    fn from(error: GmailApiHttpError) -> Self {
+        if error.status() == Some(StatusCode::FORBIDDEN) {
+            return ListBlockedError::Forbidden;
         }
+        ListBlockedError::GmailError(error.to_string())
     }
 }
 
@@ -74,7 +74,20 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     gmail_token: Extension<String>,
 ) -> Result<Json<ListBlockedResponse>, ListBlockedError> {
-    let blocked_emails = ctx.gmail_client.list_blocked_senders(&gmail_token).await?;
+    let blocked_emails = ctx
+        .gmail_client
+        .list_filters(&gmail_token)
+        .await?
+        .into_iter()
+        .filter(|filter| {
+            filter
+                .action
+                .add_label_ids
+                .as_ref()
+                .is_some_and(|labels| labels.iter().any(|label| label == "TRASH"))
+        })
+        .filter_map(|filter| filter.criteria.from)
+        .collect();
 
     Ok(Json(ListBlockedResponse { blocked_emails }))
 }

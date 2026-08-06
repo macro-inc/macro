@@ -15,6 +15,7 @@ use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_service::pubsub::publish_email_event;
 use email_utils::token_cache_key::TokenCacheKey;
+use gmail_client::GmailApiHttpError;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -22,7 +23,6 @@ use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
-use models_email::gmail::error::GmailError;
 use models_email::service::link;
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -48,7 +48,7 @@ pub enum InitError {
     DatabaseError(#[from] anyhow::Error),
 
     #[error("Gmail API error")]
-    GmailError(#[from] models_email::gmail::error::GmailError),
+    GmailError(#[from] GmailApiHttpError),
 
     #[error("Bad request")]
     BadRequest(String),
@@ -874,7 +874,7 @@ async fn register_watch_recovering(
 ) -> Result<models_email::gmail::history::WatchResponse, InitError> {
     match client.register_watch(access_token).await {
         Ok(response) => Ok(response),
-        Err(GmailError::Conflict(_)) => {
+        Err(error) if is_watch_conflict(&error) => {
             tracing::warn!("Stale Gmail watch blocks registration; stopping it and retrying");
             client
                 .stop_watch(access_token)
@@ -893,12 +893,19 @@ async fn register_watch_recovering(
 /// regardless of granted scopes, so a grant missing the Gmail scope passes the
 /// token fetch and is first rejected here with a 403 — an expected outcome
 /// (scope declined at consent), logged at debug so it doesn't page.
-fn classify_watch_error(e: GmailError) -> InitError {
-    if matches!(e, GmailError::Forbidden) {
+fn is_watch_conflict(error: &GmailApiHttpError) -> bool {
+    error.status() == Some(StatusCode::BAD_REQUEST)
+        && error
+            .body()
+            .is_some_and(|body| body.contains("push notification client allowed"))
+}
+
+fn classify_watch_error(error: GmailApiHttpError) -> InitError {
+    if error.status() == Some(StatusCode::FORBIDDEN) {
         tracing::debug!("gmail watch rejected for insufficient scope, no usable gmail grant");
         return InitError::NoGmailGrant;
     }
-    e.into()
+    error.into()
 }
 
 /// Fetches a Gmail access token scoped to a specific linked email. Use this instead

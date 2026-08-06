@@ -1,5 +1,6 @@
 use crate::pubsub::gmail_ops::process::{check_gmail_rate_limit, fetch_gmail_token};
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
+use models_email::gmail::filters::{Filter, FilterAction, FilterCriteria};
 use models_email::gmail::gmail_ops::BlockSenderPayload;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::Link;
@@ -22,10 +23,9 @@ pub async fn block_sender(
 
     let gmail_access_token = fetch_gmail_token(ctx, link).await?;
 
-    // Check if already blocked
-    let existing_filter = ctx
+    let filters = ctx
         .gmail_client
-        .find_block_filter_for_sender(&gmail_access_token, &payload.email_address)
+        .list_filters(&gmail_access_token)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -34,13 +34,42 @@ pub async fn block_sender(
             })
         })?;
 
-    if existing_filter.is_some() {
+    let is_already_blocked = filters.iter().any(|filter| {
+        filter
+            .criteria
+            .from
+            .as_deref()
+            .is_some_and(|from| from.eq_ignore_ascii_case(&payload.email_address))
+            && filter
+                .action
+                .add_label_ids
+                .as_ref()
+                .is_some_and(|labels| labels.iter().any(|label| label == "TRASH"))
+    });
+    if is_already_blocked {
         tracing::debug!("Sender is already blocked, skipping");
         return Ok(());
     }
 
+    let filter = Filter {
+        id: None,
+        criteria: FilterCriteria {
+            from: Some(payload.email_address.clone()),
+            to: None,
+            subject: None,
+            query: None,
+            negated_query: None,
+            has_attachment: None,
+            exclude_chats: None,
+        },
+        action: FilterAction {
+            add_label_ids: Some(vec!["TRASH".to_string()]),
+            remove_label_ids: None,
+            forward: None,
+        },
+    };
     ctx.gmail_client
-        .block_sender(&gmail_access_token, &payload.email_address)
+        .create_filter(&gmail_access_token, filter)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
