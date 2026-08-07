@@ -338,7 +338,7 @@ async fn tagged_calendar_event_participates_in_grouped_property_soup(
         )
         VALUES (
             $1, $2, $3, 'grouped@example.com', 'Grouped calendar event',
-            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'email_ics',
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google',
             '2026-07-24T12:00:00Z'
         )
         "#,
