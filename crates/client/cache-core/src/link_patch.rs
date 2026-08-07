@@ -205,9 +205,12 @@ pub enum LinkPatchError {
     /// Too many scalar fields were supplied for an embedded item insertion.
     #[error("embedded insert field count {actual} exceeds limit {maximum}")]
     TooManyInsertFields { actual: usize, maximum: usize },
-    /// An embedded item insertion field conflicts with a selector or link field.
+    /// An embedded item insertion field conflicts with a managed field.
     #[error("embedded insert field `{0}` conflicts with a managed field")]
     ConflictingInsertField(String),
+    /// Two managed embedded-item fields resolve to the same storage key.
+    #[error("embedded managed fields `{first}` and `{second}` conflict")]
+    ConflictingManagedField { first: String, second: String },
     /// Embedded item insertion values must be JSON scalars.
     #[error("embedded insert field values must be JSON scalars")]
     NonScalarInsertField,
@@ -293,10 +296,22 @@ fn validate_embedded_link_fields(
         return Err(LinkPatchError::NonScalarSelector);
     }
     if list_item.where_field == *link_field {
-        return Err(LinkPatchError::ConflictingInsertField(link_field.clone()));
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: list_item.where_field.clone(),
+            second: link_field.clone(),
+        });
     }
-    if list_item.where_field == *count_field || link_field == count_field {
-        return Err(LinkPatchError::ConflictingInsertField(count_field.clone()));
+    if list_item.where_field == *count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: list_item.where_field.clone(),
+            second: count_field.clone(),
+        });
+    }
+    if link_field == count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: link_field.clone(),
+            second: count_field.clone(),
+        });
     }
     Ok(())
 }
@@ -883,27 +898,40 @@ fn resolve_embedded_link_fields(
         selected_field(selections, concrete, count_field)?,
         variables,
     )?;
-    let resolved_insert_fields = insert_fields
-        .into_iter()
-        .flat_map(|fields| fields.iter())
-        .map(|(field, value)| {
-            Ok((
-                selected_storage_key(selected_field(selections, concrete, field)?, variables)?,
-                value.clone(),
-            ))
-        })
-        .collect::<Result<HashMap<_, _>, LinkPatchError>>()?;
+    let mut resolved_insert_fields = HashMap::new();
+    if let Some(insert_fields) = insert_fields {
+        for (field, value) in insert_fields {
+            let storage_key =
+                selected_storage_key(selected_field(selections, concrete, field)?, variables)?;
+            if resolved_insert_fields.contains_key(&storage_key) {
+                return Err(LinkPatchError::ConflictingInsertField(storage_key));
+            }
+            resolved_insert_fields.insert(storage_key, value.clone());
+        }
+    }
 
     for managed in [&selector_key, &resolved_link_field, &resolved_count_field] {
         if resolved_insert_fields.contains_key(managed) {
             return Err(LinkPatchError::ConflictingInsertField(managed.clone()));
         }
     }
-    if selector_key == resolved_link_field
-        || selector_key == resolved_count_field
-        || resolved_link_field == resolved_count_field
-    {
-        return Err(LinkPatchError::ConflictingInsertField(resolved_count_field));
+    if selector_key == resolved_link_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: selector_key,
+            second: resolved_link_field,
+        });
+    }
+    if selector_key == resolved_count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: selector_key,
+            second: resolved_count_field,
+        });
+    }
+    if resolved_link_field == resolved_count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: resolved_link_field,
+            second: resolved_count_field,
+        });
     }
 
     Ok(Some(ResolvedEmbeddedLink {
@@ -1132,6 +1160,82 @@ mod tests {
                 entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
             },
         }
+    }
+
+    #[test]
+    fn rejects_conflicting_embedded_managed_fields() {
+        let mut direct_conflict = upsert_bin_patch("urgent");
+        let LinkOperation::UpsertEmbeddedLink { link_field, .. } = &mut direct_conflict.operation
+        else {
+            panic!()
+        };
+        *link_field = "key".into();
+        assert_eq!(
+            deduplicate_patches(&[direct_conflict]).unwrap_err(),
+            LinkPatchError::ConflictingManagedField {
+                first: "key".into(),
+                second: "key".into(),
+            }
+        );
+
+        let (parent, initial) = record();
+        let effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial),
+        ]);
+        let mut resolved_conflict = upsert_bin_patch("urgent");
+        resolved_conflict.query = "query { user { groupSoup { bins { selector: key link: key totalCount nextCursor items { id } } } } }".into();
+        let LinkOperation::UpsertEmbeddedLink {
+            list_item,
+            link_field,
+            ..
+        } = &mut resolved_conflict.operation
+        else {
+            panic!()
+        };
+        list_item.where_field = "selector".into();
+        *link_field = "link".into();
+        assert_eq!(
+            resolve_target(&effective, &resolved_conflict).unwrap_err(),
+            LinkPatchError::ConflictingManagedField {
+                first: "key".into(),
+                second: "key".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_insert_fields_resolving_to_the_same_storage_key() {
+        let (parent, initial) = record();
+        let effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial),
+        ]);
+        let mut duplicate = upsert_bin_patch("urgent");
+        duplicate.query = "query { user { groupSoup { bins { key totalCount firstCursor: nextCursor secondCursor: nextCursor items { id } } } } }".into();
+        let LinkOperation::UpsertEmbeddedLink { insert_fields, .. } = &mut duplicate.operation
+        else {
+            panic!()
+        };
+        *insert_fields = HashMap::from([
+            ("firstCursor".into(), Json::Null),
+            ("secondCursor".into(), Json::Null),
+        ]);
+
+        assert_eq!(
+            resolve_target(&effective, &duplicate).unwrap_err(),
+            LinkPatchError::ConflictingInsertField("nextCursor".into())
+        );
     }
 
     #[test]

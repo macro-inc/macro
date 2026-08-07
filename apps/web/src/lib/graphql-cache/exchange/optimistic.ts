@@ -42,8 +42,11 @@ type ScalarKey<T> = {
 type NumberKey<T> = {
   [K in StringKey<T>]-?: Present<T[K]> extends number ? K : never;
 }[StringKey<T>];
-type ScalarInsertFields<T> = Partial<{
-  [K in ScalarKey<T>]: Exclude<T[K], undefined>;
+type ScalarInsertFields<T, TExcluded extends StringKey<T>> = Partial<{
+  [K in Exclude<ScalarKey<T>, TExcluded>]: Extract<
+    Exclude<T[K], undefined>,
+    JsonScalar
+  >;
 }>;
 type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
@@ -184,6 +187,16 @@ function serializeRevalidation(
   };
 }
 
+function definedScalarFields(
+  fields: Readonly<Record<string, JsonScalar | undefined>>
+): Record<string, JsonScalar> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      (entry): entry is [string, JsonScalar] => entry[1] !== undefined
+    )
+  );
+}
+
 function createSelection<T>(state: SelectionState): Selection<T> {
   const selection = {
     ...state,
@@ -265,14 +278,14 @@ export function removeEmbeddedLink<
   args: {
     listItem: {
       whereField: TSelectorField;
-      equals: Present<TItem[TSelectorField]>;
+      equals: Extract<Present<TItem[TSelectorField]>, JsonScalar>;
     };
     linkField: TLinkField;
     countField: TCountField;
     entity: NormalizedEntityIdentity;
   }
 ): OptimisticUpdate {
-  return {
+  const update: OptimisticLinkPatchWire = {
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
@@ -284,7 +297,8 @@ export function removeEmbeddedLink<
       countField: args.countField,
       entityKey: normalizedEntityKey(args.entity),
     },
-  } as unknown as OptimisticUpdate;
+  };
+  return update as OptimisticUpdate;
 }
 
 /**
@@ -302,15 +316,18 @@ export function upsertEmbeddedLink<
   args: {
     listItem: {
       whereField: TSelectorField;
-      equals: Present<TItem[TSelectorField]>;
+      equals: Extract<Present<TItem[TSelectorField]>, JsonScalar>;
     };
     linkField: TLinkField;
     countField: TCountField;
     entity: NormalizedEntityIdentity;
-    insertFields: ScalarInsertFields<TItem>;
+    insertFields: ScalarInsertFields<
+      TItem,
+      TSelectorField | TCountField | TLinkField
+    >;
   }
 ): OptimisticUpdate {
-  return {
+  const update: OptimisticLinkPatchWire = {
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
@@ -321,9 +338,10 @@ export function upsertEmbeddedLink<
       linkField: args.linkField,
       countField: args.countField,
       entityKey: normalizedEntityKey(args.entity),
-      insertFields: args.insertFields,
+      insertFields: definedScalarFields(args.insertFields),
     },
-  } as unknown as OptimisticUpdate;
+  };
+  return update as OptimisticUpdate;
 }
 
 /**

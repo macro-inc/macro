@@ -124,6 +124,24 @@ describe('typed optimistic graph updates', () => {
         entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
         insertFields: { nextCursor: null },
       });
+      upsertEmbeddedLink(bins, {
+        listItem: { whereField: 'key', equals: 'urgent' },
+        // @ts-expect-error Link fields must be generated normalized-entity lists.
+        linkField: 'key',
+        countField: 'totalCount',
+        entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+        insertFields: { nextCursor: null },
+      });
+      upsertEmbeddedLink(bins, {
+        listItem: { whereField: 'key', equals: 'urgent' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+        insertFields: {
+          // @ts-expect-error Managed fields cannot be supplied for insertion.
+          key: 'urgent',
+        },
+      });
     };
 
     expect(typeAssertions).toBeTypeOf('function');
