@@ -238,6 +238,13 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         return result;
       })
+      .with({ kind: 'inspect-query-variants' }, async (request) => {
+        return await this.requireEngine().inspectQueryVariants(
+          request.query,
+          request.operationName,
+          request.path
+        );
+      })
       .with({ kind: 'inspect-query' }, async (request) => {
         return await this.requireEngine().inspectQuery(
           request.query,

@@ -665,6 +665,13 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
       // Calendar soup rendering lands with the calendar FE; skip for now.
       () => null
     )
+    .with(
+      { __typename: 'GraphqlSoupReminder' },
+      // Reminders ship on the REST soup path. `SoupItemFields` has no
+      // `... on GraphqlSoupReminder` selection, so remindAt/completedAt and
+      // the referenced entity aren't available here to build a row from.
+      () => null
+    )
     .exhaustive();
 }
 

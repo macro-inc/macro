@@ -17,8 +17,8 @@ pub use metadata::{
     GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
     GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -212,6 +212,9 @@ define_notif_event!(
         /// A user was assigned to a task.
         TaskAssigned(TaskAssignedMetadata),
 
+        /// A reminder the user set for themselves came due.
+        Reminder(ReminderMetadata),
+
         /// An AI assistant responded to a chat.
         AiResponse(AiResponseMetadata),
 
@@ -272,6 +275,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
             }
+            NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_title(sender_id),
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
@@ -328,6 +332,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)
             }
+            NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_body(sender_id),
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)
             }

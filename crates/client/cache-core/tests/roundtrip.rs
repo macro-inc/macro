@@ -134,7 +134,7 @@ fn response_data() -> Json {
     })
 }
 
-fn write(records: &mut BTreeMap<EntityKey, Record>, doc: &Document, data: &Json) {
+fn write(records: &mut BTreeMap<EntityKey<'static>, Record>, doc: &Document, data: &Json) {
     let op = doc.operation(Some("Soup")).unwrap();
     let updates = normalize(op, &variables(), data).unwrap();
     for (key, record) in updates {
@@ -148,7 +148,7 @@ fn normalizes_expected_records() {
     let mut records = BTreeMap::new();
     write(&mut records, &doc, &response_data());
 
-    let keys: Vec<&str> = records.keys().map(|k| k.0.as_str()).collect();
+    let keys: Vec<&str> = records.keys().map(|k| k.0.as_ref()).collect();
     assert_eq!(
         keys,
         vec![
@@ -211,7 +211,7 @@ fn round_trip_reproduces_response() {
     assert_eq!(data, response_data());
 
     // Dependencies include every entity visited.
-    let dep_keys: Vec<&str> = deps.iter().map(|k| k.0.as_str()).collect();
+    let dep_keys: Vec<&str> = deps.iter().map(|k| k.0.as_ref()).collect();
     assert_eq!(
         dep_keys,
         vec![
@@ -262,7 +262,7 @@ fn entity_update_visible_through_other_query() {
     for (key, record) in updates {
         let entry = records.entry(key.clone()).or_default();
         if entry.merge(record) {
-            changed.push(key.0);
+            changed.push(key.0.into_owned());
         }
     }
     // The document record changed; the soup page (same args) also rewritten.
@@ -316,7 +316,7 @@ fn missing_records_reported_for_batch_fetch() {
         panic!("expected NeedRecords, got {outcome:?}");
     };
     assert_eq!(
-        missing.iter().map(|k| k.0.as_str()).collect::<Vec<_>>(),
+        missing.iter().map(|k| k.0.as_ref()).collect::<Vec<_>>(),
         vec!["GraphqlSoupChannel:ch-1"]
     );
 }

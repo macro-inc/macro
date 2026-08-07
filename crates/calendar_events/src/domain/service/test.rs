@@ -3,15 +3,13 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarEvent,
-        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EmailCalendarBackfillState,
-        EmailCalendarScanAssociation, EmailCalendarScanJob, EmailCalendarScanStatus,
-        EmailIcsSource, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSyncBatch,
-        GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
+        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
+        ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
-        EmailCalendarBackfillPublisher, EmailCalendarBackfillRepository, GoogleCalendarProvider,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
         GoogleEventSyncContext, GoogleProviderError,
     },
 };
@@ -35,8 +33,7 @@ impl CalendarRepository for FakeRepo {
 
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
         let upsert = match write {
-            CalendarEventWrite::EmailIcs(upsert)
-            | CalendarEventWrite::GoogleBackfill { upsert, .. }
+            CalendarEventWrite::GoogleBackfill { upsert, .. }
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
@@ -157,12 +154,13 @@ fn valid_upsert() -> CalendarEventUpsert {
             created_at: starts_at,
             updated_at: starts_at,
         },
-        source: CalendarEventSource::EmailIcs(EmailIcsSource {
+        source: CalendarEventSource::Google(GoogleEventSource {
             email_link_id: Uuid::now_v7(),
-            email_thread_id: None,
-            email_message_id: Uuid::now_v7(),
-            email_attachment_id: None,
-            content_hash: "hash".to_string(),
+            account_id: Uuid::now_v7(),
+            calendar_id: Uuid::now_v7(),
+            provider_event_id: "provider-event".to_string(),
+            provider_recurring_event_id: None,
+            provider_etag: None,
             raw_payload: serde_json::json!({}),
         }),
         overrides: Vec::new(),
@@ -180,21 +178,13 @@ fn valid_upsert() -> CalendarEventUpsert {
     }
 }
 
-#[tokio::test]
-async fn accepts_valid_event() {
-    let repo = FakeRepo::default();
-    let service = CalendarService::new(repo.clone());
-    let upsert = valid_upsert();
-
-    service.upsert_email_event(upsert).await.unwrap();
-
-    assert_eq!(repo.upserts.lock().unwrap().len(), 1);
+#[test]
+fn accepts_valid_event() {
+    assert!(validate_upsert(&valid_upsert()).is_ok());
 }
 
-#[tokio::test]
-async fn rejects_invalid_occurrence_time() {
-    let repo = FakeRepo::default();
-    let service = CalendarService::new(repo.clone());
+#[test]
+fn rejects_invalid_occurrence_time() {
     let mut upsert = valid_upsert();
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
     upsert.occurrences[0].time = EventTime::Timed {
@@ -203,8 +193,7 @@ async fn rejects_invalid_occurrence_time() {
         time_zone: None,
     };
 
-    assert!(service.upsert_email_event(upsert).await.is_err());
-    assert!(repo.upserts.lock().unwrap().is_empty());
+    assert!(validate_upsert(&upsert).is_err());
 }
 
 #[test]
@@ -573,169 +562,4 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
         lifecycle.failures.lock().unwrap().as_slice(),
         &[CalendarBackfillFailureDisposition::CalendarPermissionRequired]
     );
-}
-
-#[derive(Clone)]
-struct FakeEmailLifecycle {
-    state: EmailCalendarBackfillState,
-    active: Option<EmailCalendarScanJob>,
-    associations: Arc<Mutex<usize>>,
-    failures: Arc<Mutex<usize>>,
-}
-
-impl EmailCalendarBackfillRepository for FakeEmailLifecycle {
-    async fn get_email_calendar_backfill_state(
-        &self,
-        _key: CalendarBackfillJobKey,
-    ) -> Result<EmailCalendarBackfillState, Report> {
-        Ok(self.state)
-    }
-
-    async fn get_email_scan_job(
-        &self,
-        _email_link_id: Uuid,
-        _email_job_id: Uuid,
-    ) -> Result<Option<EmailCalendarScanJob>, Report> {
-        Ok(self.active)
-    }
-
-    async fn get_active_email_scan_job(
-        &self,
-        _email_link_id: Uuid,
-    ) -> Result<Option<EmailCalendarScanJob>, Report> {
-        Ok(self.active)
-    }
-
-    async fn create_email_scan_job(
-        &self,
-        _email_link_id: Uuid,
-        _fusionauth_user_id: &str,
-    ) -> Result<EmailCalendarScanJob, Report> {
-        self.active
-            .ok_or_else(|| rootcause::report!("test scan was not configured"))
-    }
-
-    async fn associate_email_scan(
-        &self,
-        _key: CalendarBackfillJobKey,
-        _email_job_id: Uuid,
-        _allow_in_progress: bool,
-    ) -> Result<EmailCalendarScanAssociation, Report> {
-        *self.associations.lock().unwrap() += 1;
-        Ok(EmailCalendarScanAssociation::Associated(
-            self.active.expect("configured scan").status,
-        ))
-    }
-
-    async fn fail_email_calendar_backfill(
-        &self,
-        _key: CalendarBackfillJobKey,
-        _message: &str,
-    ) -> Result<bool, Report> {
-        *self.failures.lock().unwrap() += 1;
-        Ok(true)
-    }
-}
-
-#[derive(Clone, Default)]
-struct FakeEmailPublisher {
-    publications: Arc<Mutex<usize>>,
-}
-
-impl EmailCalendarBackfillPublisher for FakeEmailPublisher {
-    async fn publish_email_scan_init(
-        &self,
-        _email_link_id: Uuid,
-        _email_job_id: Uuid,
-    ) -> Result<(), Report> {
-        *self.publications.lock().unwrap() += 1;
-        Ok(())
-    }
-}
-
-#[tokio::test]
-async fn email_coordinator_waits_instead_of_joining_a_partial_scan() {
-    let repository = FakeEmailLifecycle {
-        state: EmailCalendarBackfillState::Unassociated,
-        active: Some(EmailCalendarScanJob {
-            id: Uuid::now_v7(),
-            status: EmailCalendarScanStatus::InProgress,
-            is_full_scan: true,
-        }),
-        associations: Arc::new(Mutex::new(0)),
-        failures: Arc::new(Mutex::new(0)),
-    };
-    let publisher = FakeEmailPublisher::default();
-    let coordinator = EmailCalendarBackfillCoordinator::new(repository.clone(), publisher.clone());
-
-    let error = coordinator
-        .run(
-            CalendarBackfillJobKey {
-                job_id: Uuid::now_v7(),
-                email_link_id: Uuid::now_v7(),
-            },
-            "fusion-user",
-        )
-        .await
-        .unwrap_err();
-
-    assert!(matches!(error, EmailCalendarBackfillRunError::Busy));
-    assert_eq!(*repository.associations.lock().unwrap(), 0);
-    assert_eq!(*publisher.publications.lock().unwrap(), 0);
-}
-
-#[tokio::test]
-async fn email_coordinator_rejects_a_bounded_scan() {
-    let repository = FakeEmailLifecycle {
-        state: EmailCalendarBackfillState::Unassociated,
-        active: Some(EmailCalendarScanJob {
-            id: Uuid::now_v7(),
-            status: EmailCalendarScanStatus::Init,
-            is_full_scan: false,
-        }),
-        associations: Arc::new(Mutex::new(0)),
-        failures: Arc::new(Mutex::new(0)),
-    };
-    let publisher = FakeEmailPublisher::default();
-    let coordinator = EmailCalendarBackfillCoordinator::new(repository.clone(), publisher.clone());
-
-    let error = coordinator
-        .run(
-            CalendarBackfillJobKey {
-                job_id: Uuid::now_v7(),
-                email_link_id: Uuid::now_v7(),
-            },
-            "fusion-user",
-        )
-        .await
-        .unwrap_err();
-
-    assert!(matches!(error, EmailCalendarBackfillRunError::Busy));
-    assert_eq!(*repository.associations.lock().unwrap(), 0);
-    assert_eq!(*publisher.publications.lock().unwrap(), 0);
-}
-
-#[tokio::test]
-async fn email_coordinator_applies_terminal_failure_through_its_repository() {
-    let repository = FakeEmailLifecycle {
-        state: EmailCalendarBackfillState::NotFound,
-        active: None,
-        associations: Arc::new(Mutex::new(0)),
-        failures: Arc::new(Mutex::new(0)),
-    };
-    let coordinator =
-        EmailCalendarBackfillCoordinator::new(repository.clone(), FakeEmailPublisher::default());
-
-    coordinator
-        .fail_terminal(
-            CalendarBackfillJobKey {
-                job_id: Uuid::now_v7(),
-                email_link_id: Uuid::now_v7(),
-            },
-            "invalid calendar data",
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(*repository.failures.lock().unwrap(), 1);
 }

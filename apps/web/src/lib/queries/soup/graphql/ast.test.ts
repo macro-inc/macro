@@ -205,6 +205,30 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps calendar event id filters', () => {
+    const input = makeGraphqlSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: { calf: { l: { id: 'event-1' } } } as never,
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          calendarEventFilter: { literal: { id: 'event-1' } },
+        },
+      },
+    });
+  });
+
+  it('throws for unsupported calendar literals so callers can fall back', () => {
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { calf: { l: { s: 'confirmed' } } } as never,
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
   it('throws for REST-only file association literals so callers can fall back', () => {
     expect(() =>
       makeInput({
@@ -215,7 +239,6 @@ describe('makeGraphqlSoupInput', () => {
 
   it('throws for REST-only top-level filters instead of silently widening the query', () => {
     for (const body of [
-      { calf: { l: { id: 'event-1' } } },
       { eca: ['person@example.com'] },
       { ecd: ['example.com'] },
     ]) {

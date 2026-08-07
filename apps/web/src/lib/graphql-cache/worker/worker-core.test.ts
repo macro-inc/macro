@@ -274,6 +274,36 @@ describe('CacheWorkerCore', () => {
     ).toHaveLength(2);
   });
 
+  it('dispatches variables-only inspection to the wasm engine', async () => {
+    const variants = [{ variables: { input: { initial: { limit: 20 } } } }];
+    const inspectQueryVariants = vi.fn().mockResolvedValue(variants);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ inspectQueryVariants }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    const query =
+      'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }';
+    const path = [{ field: 'user' }, { field: 'groupSoup' }];
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'inspect-query-variants',
+      query,
+      operationName: 'Views',
+      path,
+    });
+
+    expect(inspectQueryVariants).toHaveBeenCalledWith(query, 'Views', path);
+    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: variants });
+  });
+
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
       changed: ['GraphqlSoupDocument:doc-1'],

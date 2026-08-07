@@ -58,20 +58,20 @@ pub enum LinkOperation {
     Remove {
         /// Normalized entity key to remove.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
     },
     /// Removes every occurrence and inserts one reference at the front.
     PrependUnique {
         /// Normalized entity key to prepend.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
     },
 }
 
 impl LinkOperation {
-    fn entity_key(&self) -> &EntityKey {
+    fn entity_key(&self) -> EntityKey<'_> {
         match self {
-            Self::Remove { entity_key } | Self::PrependUnique { entity_key } => entity_key,
+            Self::Remove { entity_key } | Self::PrependUnique { entity_key } => entity_key.borrow(),
         }
     }
 }
@@ -131,7 +131,7 @@ pub enum LinkPatchError {
     InvalidEntityKey(String),
     /// The selected normalized record is absent.
     #[error("link update record `{0}` is missing")]
-    MissingParent(EntityKey),
+    MissingParent(EntityKey<'static>),
     /// The selected record field is absent.
     #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
@@ -220,16 +220,16 @@ fn validate_entrypoint(
     Ok(variables)
 }
 
-fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
+fn validate_entity_key<'a>(key: EntityKey<'a>) -> Result<(), LinkPatchError> {
     let Some((typename, value)) = key.0.split_once(':') else {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     };
     let valid_name = !typename.is_empty()
         && typename.chars().enumerate().all(|(index, ch)| {
             ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit())
         });
     if !valid_name || value.is_empty() || value.chars().any(char::is_whitespace) {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     }
     Ok(())
 }
@@ -248,7 +248,7 @@ fn is_json_scalar(value: &Json) -> bool {
 /// mode is used during hydration and successful settlement, where stale query
 /// fields must never be recreated.
 pub fn apply_link_patches(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
@@ -272,7 +272,7 @@ pub fn apply_link_patches(
 }
 
 fn apply_one(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
@@ -285,7 +285,7 @@ fn apply_one(
         .get(&resolved.field_key)
         .cloned()
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: resolved.parent_entity_key.0.clone(),
+            parent: resolved.parent_entity_key.0.to_string(),
             field: resolved.field_key.clone(),
         })?;
     let target = traverse(&mut field_value, &resolved.path)?;
@@ -306,9 +306,11 @@ fn apply_one(
     }
 
     let entity_key = patch.operation.entity_key();
-    links.retain(|value| !matches!(value, CacheValue::Ref(key) if key == entity_key));
+    links.retain(
+        |value| !matches!(value, CacheValue::Ref(key) if key.0.as_ref() == entity_key.0.as_ref()),
+    );
     if matches!(patch.operation, LinkOperation::PrependUnique { .. }) {
-        links.insert(0, CacheValue::Ref(entity_key.clone()));
+        links.insert(0, CacheValue::Ref(entity_key.into_owned()));
     }
 
     record
@@ -324,7 +326,7 @@ fn apply_one(
 
 #[derive(Debug)]
 struct ResolvedTarget {
-    parent_entity_key: EntityKey,
+    parent_entity_key: EntityKey<'static>,
     field_key: FieldKey,
     path: Vec<LinkPathSegment>,
 }
@@ -333,9 +335,9 @@ struct ResolvedTarget {
 /// update. Engines use this to hydrate graph links from cold storage before
 /// applying the update.
 pub fn missing_patch_record(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
-) -> Option<EntityKey> {
+) -> Option<EntityKey<'static>> {
     match resolve_target(effective, patch) {
         Err(LinkPatchError::MissingParent(key)) => Some(key),
         _ => None,
@@ -343,7 +345,7 @@ pub fn missing_patch_record(
 }
 
 fn resolve_target(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let variables = validate_entrypoint(patch)?;
@@ -363,8 +365,8 @@ fn resolve_target(
 }
 
 fn resolve_from_record(
-    effective: &HashMap<EntityKey, Record>,
-    owner: &EntityKey,
+    effective: &HashMap<EntityKey<'static>, Record>,
+    owner: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
@@ -386,7 +388,7 @@ fn resolve_from_record(
         .fields
         .get(&storage_key)
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: owner.0.clone(),
+            parent: owner.0.to_string(),
             field: storage_key.clone(),
         })?;
     let named_type = selected_type(concrete, selected)?;
@@ -407,7 +409,7 @@ fn resolve_from_record(
 
 struct ValueCursor<'a> {
     value: &'a CacheValue,
-    owner: EntityKey,
+    owner: EntityKey<'static>,
     anchor_field: FieldKey,
     relative_path: Vec<LinkPathSegment>,
     type_name: &'a str,
@@ -415,7 +417,7 @@ struct ValueCursor<'a> {
 }
 
 fn resolve_from_value(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     variables: &serde_json::Map<String, Json>,
     cursor: ValueCursor<'_>,
     path: &[LinkPathSegment],
@@ -622,7 +624,7 @@ mod tests {
 
     const QUERY: &str = "query { user { groupSoup { bins { key items { id } } } } }";
 
-    fn record() -> (EntityKey, Record) {
+    fn record() -> (EntityKey<'static>, Record) {
         let parent = EntityKey("GraphqlUser:user-1".into());
         let bin = |key: &str, items: Vec<CacheValue>| {
             CacheValue::Object(BTreeMap::from([

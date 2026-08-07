@@ -385,6 +385,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   channels: [],
   calls: [],
   folders: [],
+  // The two tabs already split reminders on the only axis they have; there is
+  // nothing further to refine by.
+  reminders: [],
   search: [],
 };
 

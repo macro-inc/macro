@@ -2,6 +2,8 @@ import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { Query } from './filter-store/types';
 import {
+  filterSoupItemByRequestBody,
+  QUERY_FILTERS_BASE,
   soupItemMatchesProjectMembership,
   soupItemMatchesQuery,
 } from './query-filters';
@@ -23,6 +25,9 @@ const taskItem = (id: string): SoupApiItem =>
 const emailItem = (id: string): SoupApiItem =>
   ({ tag: 'emailThread', data: { id } }) as unknown as SoupApiItem;
 
+const calendarEventItem = (id: string): SoupApiItem =>
+  ({ tag: 'calendarEvent', data: { id } }) as unknown as SoupApiItem;
+
 const chatItem = (id: string, overrides: object = {}): SoupApiItem =>
   ({ tag: 'chat', data: { id, ...overrides } }) as unknown as SoupApiItem;
 
@@ -38,6 +43,9 @@ describe('soupItemMatchesQuery', () => {
     expect(soupItemMatchesQuery(emailItem('thread-1'), query)).toBe(true);
     // A freshly created task/doc must NOT leak into an email-scoped list.
     expect(soupItemMatchesQuery(documentItem('doc-1'), query)).toBe(false);
+    expect(soupItemMatchesQuery(calendarEventItem('event-1'), query)).toBe(
+      false
+    );
     expect(soupItemMatchesQuery(chatItem('chat-1'), query)).toBe(false);
   });
 
@@ -133,6 +141,19 @@ describe('soupItemMatchesQuery', () => {
     ).toBe(true);
     expect(
       soupItemMatchesQuery(taggedTaskItem('doc-one', ['opt-1']), query)
+    ).toBe(false);
+  });
+});
+
+describe('filterSoupItemByRequestBody', () => {
+  it('excludes calendar events from typed queries using the base filters', () => {
+    expect(QUERY_FILTERS_BASE.calendar_event_filters).toEqual({
+      calendar_event_ids: ['00000000-0000-0000-0000-000000000000'],
+    });
+    expect(
+      filterSoupItemByRequestBody(calendarEventItem('event-1'), {
+        ...QUERY_FILTERS_BASE,
+      })
     ).toBe(false);
   });
 });

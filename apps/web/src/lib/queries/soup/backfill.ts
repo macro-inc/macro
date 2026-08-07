@@ -15,7 +15,7 @@ import {
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 3;
+const BACKFILL_VERSION = 4;
 const PAGE_LIMIT = 250;
 // The email-content DataLoader rejects operations with more than 20 threads.
 const EMAIL_CONTENT_PAGE_LIMIT = 20;
@@ -42,6 +42,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
       callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
@@ -63,6 +64,7 @@ export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
       chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
@@ -84,6 +86,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
       chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },

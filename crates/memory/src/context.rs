@@ -109,6 +109,7 @@ pub async fn build_tool_service_context(
         ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     // Document tool context

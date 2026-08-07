@@ -49,7 +49,32 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-sfs-delete-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-sfs-mapper-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name static-file-s3-event-notification-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name reminder-dispatch-queue || true
   @echo "SQS queues created"
+
+# Fan out every reminder that is currently due, once.
+#
+# In dev and prod an EventBridge rule puts this same payload on the queue every
+# minute. There is no EventBridge locally, so nothing fires until you send it —
+# either once with this, or on a loop with `tick_reminder_sweeps`.
+poke_reminder_sweep:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  url=$(aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
+    --queue-name reminder-dispatch-queue --query QueueUrl --output text)
+  aws --endpoint-url=http://localhost:4566 sqs send-message \
+    --queue-url "$url" --message-body '{"operation":"sweep"}' >/dev/null
+  echo "reminder sweep enqueued"
+
+# Stand in for the EventBridge schedule: sweep once a minute until interrupted.
+tick_reminder_sweeps:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "sweeping reminders every 60s; ctrl-c to stop"
+  while true; do
+    just poke_reminder_sweep
+    sleep 60
+  done
 
 # Purge all messages from every SQS queue in LocalStack
 purge_queues:

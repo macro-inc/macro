@@ -7,7 +7,6 @@ import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   type QueryClient,
   type QueryKey,
@@ -15,9 +14,8 @@ import {
   type Updater,
   useMutation,
   useQuery,
-  useQueryClient,
 } from '@tanstack/solid-query';
-import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { readCachedGraphqlHistoryItems } from './graphql';
 import { historyKeys } from './keys';
@@ -29,7 +27,7 @@ export type { HistoryItem } from './types';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
-const HISTORY_CACHE_REFRESH_DEBOUNCE_MS = 250;
+const _HISTORY_CACHE_REFRESH_DEBOUNCE_MS = 250;
 
 type HistoryQueryFnResult = HistoryItem[];
 
@@ -94,30 +92,11 @@ export function useHistoryQuery() {
   const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
     enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
   });
-  const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
     if (!graphqlSoupFlag().enabled) return undefined;
     const cacheHost = getGraphqlSoupCacheHost();
     return cacheHost?.disabled ? undefined : cacheHost;
   };
-
-  createEffect(() => {
-    const cacheHost = graphqlCacheHost();
-    if (!cacheHost) return;
-
-    const scheduleCacheRefresh = debounce(() => {
-      void activeQueryClient.invalidateQueries({
-        queryKey: historyKeys.graphqlList.queryKey,
-      });
-    }, HISTORY_CACHE_REFRESH_DEBOUNCE_MS);
-    const unsubscribeCacheChanges =
-      cacheHost.onCacheChanged(scheduleCacheRefresh);
-
-    onCleanup(() => {
-      unsubscribeCacheChanges();
-      scheduleCacheRefresh.clear();
-    });
-  });
 
   return useQuery<HistoryQueryFnResult, Error, HistoryQueryFnResult, QueryKey>(
     () => {

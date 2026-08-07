@@ -1,8 +1,7 @@
 use crate::pubsub::backfill::{
-    backfill_attachment, backfill_message, backfill_thread, calendar_email_ics_backfill,
-    calendar_google_backfill, depopulate_crm_contact, depopulate_crm_for_user, error_handlers,
-    increment_counters, init, list_threads, populate_crm_contact, populate_crm_for_user,
-    seed_sent_contact, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, calendar_google_backfill,
+    depopulate_crm_contact, depopulate_crm_for_user, error_handlers, increment_counters, init,
+    list_threads, populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use crate::util::gmail::auth::{
@@ -191,14 +190,6 @@ async fn inner_process_message(
                 &scope.payload,
             )
             .await
-        }
-        BackfillOperation::CalendarEmailIcsBackfill(scope) => {
-            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
-                return parked;
-            }
-            let link = fetch_link(ctx, scope.link_id).await?;
-            calendar_email_ics_backfill::calendar_email_ics_backfill(ctx, &link, &scope.payload)
-                .await
         }
         BackfillOperation::FinalizeBackfill(scope) => {
             increment_counters::finalize_backfill(ctx, scope.link_id, scope.job_id).await

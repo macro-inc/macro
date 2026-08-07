@@ -19,6 +19,7 @@ mod foreign_entity;
 mod history;
 mod pin;
 mod project;
+mod reminder;
 mod team;
 mod thread;
 
@@ -32,6 +33,7 @@ pub use foreign_entity::ForeignEntityAccessLevelExtractor;
 pub use history::HistoryAccessExtractor;
 pub use pin::PinAccessLevelExtractor;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
+pub use reminder::ReminderAccessExtractor;
 pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
 pub use thread::ThreadAccessLevelExtractor;
 

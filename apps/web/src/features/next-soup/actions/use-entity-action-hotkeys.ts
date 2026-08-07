@@ -24,6 +24,7 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
   makeFavoriteAction,
   makeMarkDoneAction,
@@ -86,6 +87,7 @@ export const useEntityActionHotkeys = (
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
 
   const shareAction = makeShareAction();
 
@@ -474,6 +476,34 @@ export const useEntityActionHotkeys = (
         entities.length === 1 && copyEntityIdAction.canExecute(entities[0])
       );
     },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Set a reminder - 'h'. This shares the scope with the list's 'h' ("Collapse
+  // item", handlerPriority 4), so 'add' keeps both registered instead of one
+  // evicting the other. Collapse sorts first and returns false when there is
+  // nothing to collapse, which falls through to here.
+  registerHotkey({
+    hotkey: ['h'],
+    hotkeyToken: TOKENS.entity.action.createReminder,
+    scopeId,
+    description: 'Remind me',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length !== 1) return false;
+      if (!createReminderAction.canExecute(entities[0])) return false;
+      createReminderAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length === 1 && createReminderAction.canExecute(entities[0])
+      );
+    },
+    registrationType: 'add',
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);

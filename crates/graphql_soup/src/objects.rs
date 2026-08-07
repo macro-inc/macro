@@ -23,6 +23,7 @@ use models_soup::{
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     project::SoupProject,
+    reminder::{SoupReminder, SoupReminderSchedule},
 };
 use serde_json::Value;
 use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
@@ -183,6 +184,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::ForeignEntity(entity) => entity.2 = score,
             // Calendar events carry no frecency slot; scores never target them.
             Self::CalendarEvent(_) => {}
+            Self::Reminder(entity) => entity.2 = score,
         }
         self
     }
@@ -284,6 +286,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     CrmCompany(GraphqlSoupCrmCompany<E>),
     /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity<E>),
+    /// Reminder entity.
+    Reminder(GraphqlSoupReminder<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -307,6 +311,7 @@ where
                 GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
+                GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -374,6 +379,12 @@ where
                     model_entity::EntityType::ForeignEntity.with_entity_string(item.id.to_string()),
                 );
                 Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges, None))
+            }
+            SoupItem::Reminder(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Reminder.with_entity_string(item.id.to_string()),
+                );
+                Self::Reminder(GraphqlSoupReminder(item, edges, None))
             }
         }
     }
@@ -1774,6 +1785,140 @@ where
     }
 }
 
+/// How often a reminder fires.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlReminderScheduleType {
+    /// Fires once, at `remindAt`.
+    Once,
+    /// Fires repeatedly, on `cron` evaluated in `timezone`.
+    Recurring,
+}
+
+/// GraphQL reminder entity.
+pub struct GraphqlSoupReminder<E: SoupEntityEdges>(SoupReminder<()>, E, Option<f64>);
+
+/// GraphQL representation of the soup reminder.
+#[Object(name = "GraphqlSoupReminder")]
+impl<E> GraphqlSoupReminder<E>
+where
+    E: SoupEntityEdges,
+{
+    /// The unique identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Reminder
+    }
+
+    /// User-visible display name — a reminder's description is its name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.description.clone())
+    }
+
+    /// Common reminder metadata.
+    ///
+    /// `owner_id` is absent because a reminder is only ever readable by its
+    /// owner, and `parent` because a reminder is not contained by the entity it
+    /// references — see [`Self::referenced_entity`].
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: None,
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The entity this reminder is about, when it is attached to one.
+    ///
+    /// Only the reference is returned; the client resolves it into a Soup item
+    /// through the edges that already exist for that entity type.
+    async fn referenced_entity(&self) -> Option<GraphqlEntity<'static>> {
+        self.0
+            .referenced_entity
+            .as_ref()
+            .map(|r| graphql_entity(r.entity_type, &r.id))
+    }
+
+    /// What to remind the user about.
+    async fn description(&self) -> &str {
+        &self.0.description
+    }
+
+    /// Whether the reminder fires once or repeatedly.
+    async fn schedule_type(&self) -> GraphqlReminderScheduleType {
+        match self.0.schedule {
+            SoupReminderSchedule::Once { .. } => GraphqlReminderScheduleType::Once,
+            SoupReminderSchedule::Recurring { .. } => GraphqlReminderScheduleType::Recurring,
+        }
+    }
+
+    /// The instant a one-shot reminder fires at, in RFC 3339 format.
+    async fn remind_at(&self) -> Option<String> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Once { remind_at } => Some(remind_at.to_rfc3339()),
+            SoupReminderSchedule::Recurring { .. } => None,
+        }
+    }
+
+    /// The cron expression a recurring reminder fires on.
+    async fn cron(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { cron, .. } => Some(cron),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The timezone a recurring reminder's cron is evaluated in.
+    async fn timezone(&self) -> Option<&str> {
+        match &self.0.schedule {
+            SoupReminderSchedule::Recurring { timezone, .. } => Some(timezone),
+            SoupReminderSchedule::Once { .. } => None,
+        }
+    }
+
+    /// The next firing, in RFC 3339 format. Soup orders reminders on this.
+    async fn next_run_at(&self) -> String {
+        self.0.next_run_at.to_rfc3339()
+    }
+
+    /// When false, the dispatcher skips this reminder.
+    async fn enabled(&self) -> bool {
+        self.0.enabled
+    }
+
+    /// When a one-shot reminder fired, in RFC 3339 format.
+    async fn completed_at(&self) -> Option<String> {
+        self.0.completed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    #[graphql(flatten)]
+    /// The edges.
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
 /// Implement interface-only dispatch methods for fields whose concrete
 /// GraphQL definitions are supplied by the flattened edge object.
 macro_rules! impl_common_interface_edges {
@@ -1828,6 +1973,7 @@ impl_common_interface_edges!(
     GraphqlSoupCall,
     GraphqlSoupCrmCompany,
     GraphqlSoupForeignEntity,
+    GraphqlSoupReminder,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

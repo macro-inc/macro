@@ -1,4 +1,5 @@
-import { inspect, selectAll } from '@graphql-cache/exchange/inspection';
+import { documentOperationName } from '@graphql-cache/exchange/generated-selection';
+import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
   prependUnique,
@@ -8,6 +9,7 @@ import {
   update,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { stringifyDocument } from '@urql/core';
 import {
   type GroupedSoupInput,
   GroupSoupMembershipDocument,
@@ -101,27 +103,14 @@ export async function buildOptimisticGroupedPropertyUpdates(
     return { updates: [], revalidations: [] };
   }
 
-  const relevantGroupBy = {
-    field: 'PROPERTY' as const,
-    propertyDefinitionId: args.propertyDefinitionId,
-  };
-  const cachedViews = await inspect(
-    args.host,
-    selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup'),
-    {
-      // Filter inside cache-core before each variant is denormalized. Without
-      // this, editing one property reads every cached grouped view first and
-      // discards unrelated groupings only after crossing the worker boundary.
-      variableFilters: [
-        { input: { initial: { groupBy: relevantGroupBy } } },
-        { input: { continuation: { groupBy: relevantGroupBy } } },
-      ],
-    }
-  );
-  const relevantViews = cachedViews.filter(({ variables }) =>
+  const selection = selectAll(GroupSoupMembershipDocument)
+    .field('user')
+    .field('groupSoup');
+  const variants = await inspectVariants(args.host, selection);
+  const relevantVariants = variants.filter(({ variables }) =>
     isRelevantPropertyGrouping(variables.input, args.propertyDefinitionId)
   );
-  const revalidations: QueryRevalidation[] = relevantViews.map(
+  const revalidations: QueryRevalidation[] = relevantVariants.map(
     ({ variables }) => ({
       document: GroupSoupMembershipDocument,
       variables,
@@ -131,10 +120,23 @@ export async function buildOptimisticGroupedPropertyUpdates(
     return { updates: [], revalidations };
   }
 
+  const query = stringifyDocument(selection.document);
+  const operationName = documentOperationName(selection.document);
+  const loadedPages = await Promise.all(
+    relevantVariants.map(async ({ variables }): Promise<GroupPage | null> => {
+      const result = await args.host.readQuery({
+        query,
+        operationName,
+        variables,
+        priority: 'user-visible',
+      });
+      if (result.kind === 'miss') return null;
+      const data = result.data as GroupSoupMembershipQuery;
+      return { input: variables.input, bins: data.user.groupSoup.bins };
+    })
+  );
   const views = groupPagesByLogicalView(
-    relevantViews.flatMap(({ variables, value }) =>
-      value ? [{ input: variables.input, bins: value.bins }] : []
-    )
+    loadedPages.filter((page): page is GroupPage => page !== null)
   );
   const { removed, added } = changes;
   const updates: OptimisticUpdate[] = [];

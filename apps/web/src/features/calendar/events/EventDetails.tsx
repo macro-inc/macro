@@ -1,6 +1,10 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { emailToMacroId, useDisplayName } from '@core/user';
+import {
+  emailToMacroId,
+  getInitialsFromName,
+  useDisplayName,
+} from '@core/user';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
@@ -17,8 +21,15 @@ import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
-import { Button } from '@ui';
-import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
+import { Avatar, Button } from '@ui';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -92,65 +103,108 @@ function resolveCalendarAttendee(
   return { attendee, displayName, iconProps };
 }
 
-function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
-  const response =
-    props.item.attendee.responseStatus === 'needs_action'
-      ? undefined
-      : ATTENDEE_RESPONSE[props.item.attendee.responseStatus];
-  const hasSecondaryLabel =
-    props.item.attendee.isOrganizer || props.item.attendee.isOptional;
+function CalendarUserItem(props: {
+  displayName: Accessor<string>;
+  iconProps?: UserIconProps;
+  isSelf: boolean;
+  secondaryLabel?: JSX.Element;
+  secondaryLabelPosition?: 'above' | 'below';
+  details?: JSX.Element;
+  trailing?: JSX.Element;
+}) {
+  const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
 
   return (
     <div class="flex min-w-0 items-center gap-3">
-      <UserIcon
-        {...props.item.iconProps}
-        isDeleted={false}
-        size="md"
-        suppressClick
-        showTooltip={false}
-      />
-      <div class="min-w-0 flex-1">
-        <div class="min-w-0">
-          <span class="block select-text truncate text-ink-muted">
-            {props.item.displayName()}
-            <Show when={props.item.attendee.isSelf}> (you)</Show>
-          </span>
-        </div>
-        <Show when={hasSecondaryLabel}>
-          <div class="flex gap-1 text-xxs text-ink-extra-muted">
-            <Show when={props.item.attendee.isOrganizer}>
-              <span>Organizer</span>
-            </Show>
-            <Show when={props.item.attendee.isOptional}>
-              <span>Optional</span>
-            </Show>
-          </div>
-        </Show>
-        <Show when={props.item.attendee.comment}>
-          {(comment) => (
-            <div class="line-clamp-2 select-text text-xxs italic text-ink-extra-muted">
-              {comment()}
-            </div>
-          )}
-        </Show>
-      </div>
-      <Show when={response}>
-        {(attendeeResponse) => (
-          <span
-            role="img"
-            aria-label={attendeeResponse().label}
-            title={attendeeResponse().label}
-            class={`shrink-0 ${attendeeResponse().class}`}
-          >
-            <Dynamic
-              component={attendeeResponse().icon}
-              aria-hidden="true"
-              class="size-3.5"
-            />
-          </span>
+      <Show
+        keyed
+        when={props.iconProps}
+        fallback={
+          <Avatar size="md">
+            <Avatar.Fallback class="font-semibold">
+              {getInitialsFromName(props.displayName(), '')}
+            </Avatar.Fallback>
+          </Avatar>
+        }
+      >
+        {(iconProps) => (
+          <UserIcon
+            {...iconProps}
+            isDeleted={false}
+            size="md"
+            suppressClick
+            showTooltip={false}
+          />
         )}
       </Show>
+      <div class="min-w-0 flex-1">
+        <Show
+          when={secondaryLabelPosition() === 'above' && props.secondaryLabel}
+        >
+          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+            {props.secondaryLabel}
+          </div>
+        </Show>
+        <span class="block select-text truncate text-ink-muted">
+          {props.displayName()}
+          <Show when={props.isSelf}> (you)</Show>
+        </span>
+        <Show
+          when={secondaryLabelPosition() === 'below' && props.secondaryLabel}
+        >
+          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+            {props.secondaryLabel}
+          </div>
+        </Show>
+        {props.details}
+      </div>
+      {props.trailing}
     </div>
+  );
+}
+
+function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
+  const attendee = props.item.attendee;
+  const response =
+    attendee.responseStatus === 'needs_action'
+      ? undefined
+      : ATTENDEE_RESPONSE[attendee.responseStatus];
+  const secondaryLabel =
+    attendee.isOrganizer || attendee.isOptional ? (
+      <>
+        <Show when={attendee.isOrganizer}>
+          <span>Organizer</span>
+        </Show>
+        <Show when={attendee.isOptional}>
+          <span>Optional</span>
+        </Show>
+      </>
+    ) : undefined;
+  const details = attendee.comment ? (
+    <div class="line-clamp-2 select-text text-xxs italic text-ink-extra-muted">
+      {attendee.comment}
+    </div>
+  ) : undefined;
+  const trailing = response ? (
+    <span
+      role="img"
+      aria-label={response.label}
+      title={response.label}
+      class={`shrink-0 ${response.class}`}
+    >
+      <Dynamic component={response.icon} aria-hidden="true" class="size-3.5" />
+    </span>
+  ) : undefined;
+
+  return (
+    <CalendarUserItem
+      displayName={props.item.displayName}
+      iconProps={props.item.iconProps}
+      isSelf={attendee.isSelf}
+      secondaryLabel={secondaryLabel}
+      details={details}
+      trailing={trailing}
+    />
   );
 }
 
@@ -237,16 +291,63 @@ function safeConferenceUrl(value: string | undefined) {
   }
 }
 
-function findOrganizer(event: CalendarEvent) {
+interface CalendarOrganizer {
+  displayName?: string;
+  email?: string;
+  isSelf: boolean;
+}
+
+function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
   const organizerAttendee = event.attendees.find(
     (attendee) => attendee.isOrganizer
   );
-  const name =
-    event.organizerName ??
-    organizerAttendee?.displayName ??
-    event.organizerEmail ??
-    organizerAttendee?.email;
-  return name;
+  const displayName =
+    event.organizerName ?? organizerAttendee?.displayName ?? undefined;
+  const email = event.organizerEmail ?? organizerAttendee?.email;
+
+  return displayName || email
+    ? { displayName, email, isSelf: organizerAttendee?.isSelf ?? false }
+    : undefined;
+}
+
+function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
+  const macroId = props.organizer.email
+    ? emailToMacroId(props.organizer.email)
+    : undefined;
+  const [macroDisplayName] = useDisplayName(macroId);
+  const displayName = () => {
+    const email = props.organizer.email ?? '';
+    const macroName = macroDisplayName().trim();
+    if (isUsableDisplayName(macroName, email)) return macroName;
+
+    const providerName = props.organizer.displayName?.trim() ?? '';
+    if (providerName && (!email || isUsableDisplayName(providerName, email))) {
+      return providerName;
+    }
+
+    return email || providerName;
+  };
+
+  const iconProps: UserIconProps | undefined = props.organizer.email
+    ? macroId
+      ? { id: macroId }
+      : { email: props.organizer.email }
+    : undefined;
+
+  return (
+    <div class="-ml-7 flex min-w-0 items-center gap-3">
+      <PersonIcon class="size-4 shrink-0 text-ink-extra-muted" />
+      <div class="min-w-0 flex-1">
+        <CalendarUserItem
+          displayName={displayName}
+          iconProps={iconProps}
+          isSelf={props.organizer.isSelf}
+          secondaryLabel="Organizer"
+          secondaryLabelPosition="above"
+        />
+      </div>
+    </div>
+  );
 }
 
 function formatOriginalTimeZone(
@@ -370,15 +471,7 @@ export function EventDetails(props: {
 
             <Show when={organizer()}>
               {(eventOrganizer) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <PersonIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
-                  <div class="min-w-0">
-                    <div class="text-xxs text-ink-extra-muted">Organizer</div>
-                    <div class="select-text truncate text-ink-muted">
-                      {eventOrganizer()}
-                    </div>
-                  </div>
-                </div>
+                <CalendarOrganizerItem organizer={eventOrganizer()} />
               )}
             </Show>
           </div>
@@ -398,7 +491,7 @@ export function EventAttendeesSection(props: {
         defaultOpen
         class="border-edge-muted border-t text-xs text-ink-muted"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-hover hover:text-ink">
+        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-hover hover:text-ink">
           <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
           <span>
             {props.attendees.length}{' '}

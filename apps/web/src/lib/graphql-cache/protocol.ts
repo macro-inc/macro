@@ -80,8 +80,11 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'prependUnique'; entityKey: string };
 };
 
-export type CachedQueryInstanceWire = {
+export type CachedQueryVariantWire = {
   variables: Record<string, unknown>;
+};
+
+export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   /** Selected value; omitted when the reconstructed query is a cache miss. */
   value?: unknown;
 };
@@ -223,6 +226,13 @@ export type CacheRequest = { id: number } & (
       path: Array<{ field: string }>;
       /** OR-ed recursive partial matches applied before result materialization. */
       variableFilters?: QueryVariableFilter[];
+    }
+  | {
+      kind: 'inspect-query-variants';
+      query: string;
+      operationName?: string;
+      /** Response-key field path from the query root. */
+      path: Array<{ field: string }>;
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */

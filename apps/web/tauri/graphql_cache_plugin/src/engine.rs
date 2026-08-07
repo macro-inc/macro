@@ -14,7 +14,7 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
 use cache_core::value::EntityKey;
@@ -153,7 +153,11 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
-        changed: result.changed.into_iter().map(|k| k.0).collect(),
+        changed: result
+            .changed
+            .into_iter()
+            .map(|key| key.0.into_owned())
+            .collect(),
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
@@ -215,8 +219,8 @@ impl EngineHandle {
         cursor: Option<RecordCursor>,
         limit: u32,
     ) -> Result<SelectedRecordPage, String> {
-        let selection = RecordSelection::parse(&document, &fragment_name)
-            .map_err(|error| error.to_string())?;
+        let selection =
+            RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
         self.inner
             .lock()
             .await
@@ -226,7 +230,28 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Enumerates cached variants of one generated query field.
+    /// Recovers cached query variables without materializing each variant.
+    pub async fn inspect_query_variants(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        path: Vec<String>,
+    ) -> Result<Vec<CachedQueryVariant>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .inspect_query_variants(&QueryInspection {
+                query,
+                operation_name,
+                path,
+                variable_filters: Vec::new(),
+            })
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Enumerates and materializes cached variants of one generated query field.
     pub async fn inspect_query(
         &self,
         query: String,
@@ -410,7 +435,8 @@ impl EngineHandle {
 
     /// Evicts records by entity key; returns the affected registered op ids.
     pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.invalidate_keys(keys.iter());
@@ -420,7 +446,8 @@ impl EngineHandle {
     /// Deletes stale records from durable and hot storage and returns the
     /// registered operations that traversed them.
     pub async fn delete_records(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;

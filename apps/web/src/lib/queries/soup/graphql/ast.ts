@@ -1,4 +1,5 @@
 import type {
+  GraphqlCalendarEventLiteral as GraphqlCalendarEventLiteralInput,
   GraphqlCallLiteral as GraphqlCallLiteralInput,
   GraphqlCallStatus,
   GraphqlChannelLiteral as GraphqlChannelLiteralInput,
@@ -47,6 +48,7 @@ type RestAst =
   | { l: unknown };
 
 type TargetAstKey =
+  | 'calf'
   | 'df'
   | 'pf'
   | 'cf'
@@ -59,8 +61,7 @@ type TargetAstKey =
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
-  /** Calendar, CRM-address, and CRM-domain filters are REST-only today. */
-  calf?: unknown;
+  /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
   emailView?: 'inbox' | 'drafts' | 'sent' | 'all';
@@ -196,6 +197,18 @@ function mapEmailValue(value: unknown): GraphqlEmailValueInput {
   if (typeof value.domain === 'string') return { domain: value.domain };
 
   unsupported('expected partial/complete/domain email value');
+}
+
+function mapCalendarEventLiteral(
+  literal: unknown
+): GraphqlCalendarEventLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'id':
+      return { id: mapString(value, 'id') };
+    default:
+      unsupported(`calendar event literal ${field}`);
+  }
 }
 
 function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
@@ -460,6 +473,19 @@ function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   unsupported('expected property value so or er');
 }
 
+function mapSortDirection(
+  sortDirection: SoupParams['sort_direction']
+): GraphqlSoupInitialInput['sortDirection'] {
+  switch (sortDirection) {
+    case 'asc':
+      return 'ASC';
+    case 'desc':
+      return 'DESC';
+    case undefined:
+      return undefined;
+  }
+}
+
 function mapSortMethod(
   sortMethod: SoupParams['sort_method']
 ): GraphqlSoupInitialInput['sortMethod'] {
@@ -499,9 +525,6 @@ function mapEmailView(
 }
 
 function assertGraphqlCompatibleBody(body: AstBody): void {
-  if (body.calf !== undefined) {
-    unsupported('calendar filters are not supported by GraphQL Soup yet');
-  }
   if (body.eca !== undefined) {
     unsupported(
       'CRM-scoped email address filters are not supported by GraphQL Soup yet'
@@ -518,6 +541,12 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
 
+  if (body.calf) {
+    filters.calendarEventFilter = compileExpr(
+      body.calf,
+      mapCalendarEventLiteral
+    );
+  }
   if (body.df)
     filters.documentFilter = compileExpr(body.df, mapDocumentLiteral);
   if (body.pf) filters.projectFilter = compileExpr(body.pf, mapProjectLiteral);
@@ -558,12 +587,17 @@ export function makeGraphqlSoupInput(args: {
   assertGraphqlCompatibleBody(body);
   const emailView = mapEmailView(body.emailView);
 
+  // The cursor does not carry the direction, so the continuation has to
+  // re-send it or page two comes back in the opposite order.
+  const sortDirection = mapSortDirection(args.params.sort_direction);
+
   if (args.cursor != null) {
     return {
       continuation: {
         cursor: args.cursor,
         expand: true,
         emailView,
+        sortDirection,
       },
     };
   }
@@ -573,6 +607,7 @@ export function makeGraphqlSoupInput(args: {
       limit: args.params.limit ?? undefined,
       expand: true,
       sortMethod: mapSortMethod(args.params.sort_method),
+      sortDirection,
       emailView,
       filters: makeGraphqlFilters(body),
     },

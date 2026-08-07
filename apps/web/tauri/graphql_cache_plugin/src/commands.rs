@@ -16,7 +16,7 @@ use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
 };
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::CachedQueryInstance;
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
 use cache_sqlite::SqliteStorage;
 use serde::Deserialize;
@@ -175,7 +175,24 @@ pub struct InspectionPathSegment {
     pub field: String,
 }
 
-/// Enumerates cached variants of one generated query field.
+/// Recovers cached query variables without materializing each variant.
+#[tauri::command]
+pub async fn graphql_cache_inspect_query_variants(
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    path: Vec<InspectionPathSegment>,
+) -> Result<Vec<CachedQueryVariant>, String> {
+    engine_handle(&state)?
+        .inspect_query_variants(
+            query,
+            operation_name,
+            path.into_iter().map(|segment| segment.field).collect(),
+        )
+        .await
+}
+
+/// Enumerates and materializes cached variants of one generated query field.
 #[tauri::command]
 pub async fn graphql_cache_inspect_query(
     state: State<'_, CacheState>,

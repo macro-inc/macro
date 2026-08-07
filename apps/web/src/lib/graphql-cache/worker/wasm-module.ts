@@ -10,6 +10,7 @@
 
 import type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   ClaimedMutation,
   OptimisticLinkPatchWire,
   OptimisticWriteResult,
@@ -52,6 +53,11 @@ export interface CacheEngine {
     revalidations: QueryRevalidationWire[] | undefined,
     createdAtMs: number
   ): Promise<OptimisticWriteResult>;
+  inspectQueryVariants(
+    query: string,
+    operationName: string | undefined,
+    path: Array<{ field: string }>
+  ): Promise<CachedQueryVariantWire[]>;
   inspectQuery(
     query: string,
     operationName: string | undefined,

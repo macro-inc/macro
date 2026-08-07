@@ -1,0 +1,19 @@
+query SoupNotifications($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...SoupNotificationsEntityFields
+			}
+			nextCursor
+		}
+	}
+}
+
+fragment SoupNotificationsEntityFields on GraphqlSoupEntity {
+	__typename
+	id
+	notifications {
+		...SoupNotificationFields
+	}
+}

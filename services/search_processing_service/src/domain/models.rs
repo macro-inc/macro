@@ -214,6 +214,10 @@ pub struct ProjectBackfillCursor {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct EmailBackfillRequest {
+    /// Reindex exactly these threads, ignoring `since`. Pages over the given
+    /// ids rather than scanning the table, so a targeted repair costs one
+    /// primary-key lookup per page.
+    pub thread_ids: Vec<uuid::Uuid>,
     /// Only backfill threads updated at or after this instant.
     pub since: Option<DateTime<Utc>>,
     pub index_override: Option<String>,

@@ -41,7 +41,9 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::ForeignEntity => {
+        | EntityType::ForeignEntity
+        // Reminders own no entity_access rows to delete.
+        | EntityType::Reminder => {
             anyhow::bail!("invalid entity type")
         }
         EntityType::Project => {

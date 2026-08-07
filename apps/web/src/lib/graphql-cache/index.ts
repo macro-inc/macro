@@ -5,8 +5,10 @@
 
 export {
   type CachedSelection,
+  type CachedVariant,
   type InspectionSelection,
   inspect,
+  inspectVariants,
   selectAll,
 } from './exchange/inspection';
 export {
@@ -36,10 +38,12 @@ export type {
   CacheReadArgs,
   CacheWriteArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './host/types';
 export { createWorkerCacheHost } from './host/worker-host';
 export type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   CachePush,
   CacheReadPriority,
   CacheRequest,

@@ -11,6 +11,8 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  NamedSubType,
+  ReminderEntity,
 } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import WideAutomation from '@icon/wide-automation.svg';
@@ -36,6 +38,7 @@ import WideStar from '@icon/wide-star.svg';
 import WideTask from '@icon/wide-task.svg';
 import WideUnknown from '@icon/wide-unknown.svg';
 import WideVideo from '@icon/wide-video.svg';
+import BellSimple from '@phosphor/bell-simple.svg';
 import Building from '@phosphor/building.svg';
 import Chat from '@phosphor/chat.svg';
 import Check from '@phosphor/check-fat.svg';
@@ -85,7 +88,8 @@ export type EntityWithValidIcon =
   | 'archive'
   | 'files'
   | 'crm_company'
-  | 'html';
+  | 'html'
+  | 'reminder';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -298,6 +302,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Company',
   },
+  reminder: {
+    icon: BellSimple,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Reminder',
+  },
 };
 
 // this will match fall-through cases like code files which match multiple extensions
@@ -363,6 +373,9 @@ const WIDE_ICONS: Record<
   automation: WideAutomation,
   crm_company: AnimatedCompanyIcon,
   company: AnimatedCompanyIcon,
+  // No wide bell asset exists; the phosphor one carries over, as it does for
+  // `organization` and the github icons.
+  reminder: BellSimple,
 };
 
 const ICON_SIZES = {
@@ -494,6 +507,8 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
+  /** Reminders icon as the entity they reference. */
+  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
@@ -503,6 +518,26 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
+    // A reminder shows the icon of what it is about. The referenced entity's
+    // fileType/subType are resolved server-side precisely so this stays
+    // synchronous — every icon call site is.
+    //
+    // A standalone reminder is about nothing else, so it falls back to a bell
+    // rather than to `default`, whose wide variant is the unknown-file glyph.
+    .with({ type: 'reminder' }, (e) =>
+      e.referencedEntity
+        ? (itemToBlockName(
+            {
+              type: e.referencedEntity.type,
+              fileType: e.referencedEntity.fileType,
+              subType: e.referencedEntity.subType
+                ? { type: e.referencedEntity.subType as NamedSubType }
+                : undefined,
+            },
+            true
+          ) ?? 'reminder')
+        : 'reminder'
+    )
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);

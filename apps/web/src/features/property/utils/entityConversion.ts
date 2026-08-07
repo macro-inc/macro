@@ -88,5 +88,8 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
+    .with({ type: 'reminder' }, () => {
+      throw new Error('reminders do not support properties');
+    })
     .exhaustive();
 }

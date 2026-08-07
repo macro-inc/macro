@@ -23,6 +23,7 @@ import {
   DocumentUploadFinalizerLambda,
   type DocumentUploadFinalizerLambdaEnvVars,
 } from './document-upload-finalizer-lambda';
+import { ReminderDispatchQueue } from './reminder-dispatch-queue';
 
 const tags = {
   environment: stack,
@@ -219,6 +220,14 @@ export const deleteChatHandlerLambdaName = deleteChatHandler.lambda.name;
 export const deleteChatQueueArn = deleteChatHandler.queue.arn;
 export const deleteChatQueueName = deleteChatHandler.queue.name;
 
+const reminderDispatchQueue = new ReminderDispatchQueue(
+  `reminder-dispatch-${stack}`,
+  { tags }
+);
+
+export const reminderDispatchQueueArn = reminderDispatchQueue.queue.arn;
+export const reminderDispatchQueueName = reminderDispatchQueue.queue.name;
+
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
@@ -266,6 +275,8 @@ const cloudStorageService = new CloudStorageService(
       contactsQueueArn,
       emailScheduledQueueArn,
       gmailOpsQueueArn,
+      // Both directions: the sweep publishes onto it and the workers read it.
+      reminderDispatchQueue.queue.arn,
     ],
     vpc: coparse_api_vpc,
     platform: {

@@ -7,6 +7,7 @@
 
 import type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   CacheReadPriority,
   ClaimedMutation,
   MutationClaim,
@@ -40,6 +41,12 @@ export interface InspectQueryArgs {
   variableFilters?: QueryVariableFilter[];
 }
 
+/** Variables-only inspection always discovers every cached variant. */
+export type InspectQueryVariantsArgs = Omit<
+  InspectQueryArgs,
+  'variableFilters'
+>;
+
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
   /** Opaque session tag; see protocol.ts `identity`. */
@@ -66,7 +73,11 @@ export interface CacheHost {
   beginOptimisticWrite(
     args: BeginOptimisticWriteArgs
   ): Promise<OptimisticWriteResult>;
-  /** Enumerates cached variants of one generated query field selection. */
+  /** Recovers variables for cached variants without materializing values. */
+  inspectQueryVariants(
+    args: InspectQueryVariantsArgs
+  ): Promise<CachedQueryVariantWire[]>;
+  /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(

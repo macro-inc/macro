@@ -203,6 +203,7 @@ const EXAMPLES: {
 
 const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
   PostSoupRequest,
+  | 'calendar_event_filters'
   | 'call_filters'
   | 'channel_filters'
   | 'channel_thread_filters'
@@ -212,6 +213,7 @@ const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
   | 'foreign_entity_filters'
   | 'project_filters'
 > = {
+  calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
   call_filters: { call_ids: [NIL_UUID] },
   channel_filters: { channel_ids: [NIL_UUID] },
   channel_thread_filters: { thread_ids: [NIL_UUID] },
@@ -223,6 +225,7 @@ const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
 };
 
 const AST_SOUP_DOCUMENT_ONLY_FILTERS: Query['include'] = {
+  calendarEventId: [NIL_UUID],
   callId: [NIL_UUID],
   channelId: [NIL_UUID],
   channelThreadId: [NIL_UUID],

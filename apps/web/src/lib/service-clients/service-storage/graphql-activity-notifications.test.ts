@@ -134,6 +134,31 @@ describe('channel activity and notification GraphQL cache separation', () => {
     });
     expect(updated[0].__typename).toBe('GraphqlSoupNotification');
     expect(updated[0].id).toBe('notification-1');
+    expect(mutationMock).toHaveBeenLastCalledWith(
+      UpdateNotificationsDocument,
+      {
+        input: {
+          notificationIds: ['notification-1'],
+          operation: 'MARK_SEEN',
+        },
+      },
+      {
+        normalizedCacheOptimistic: {
+          optimisticResponse: {
+            updateNotifications: [
+              {
+                __typename: 'GraphqlSoupNotification',
+                id: 'notification-1',
+                seen: true,
+                viewedAt: expect.any(String),
+              },
+            ],
+          },
+          linkPatches: [],
+          revalidations: [],
+        },
+      }
+    );
     expect(unreadFilterFn(channel)).toBe(false);
   });
 

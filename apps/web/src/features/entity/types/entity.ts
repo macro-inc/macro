@@ -298,6 +298,43 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+export type ReminderEntity = EntityBase & {
+  type: 'reminder';
+  /** What to remind the user about. Doubles as {@link EntityBase.name}. */
+  description: string;
+  /** The entity the reminder is about, when it is attached to one. Clicking a
+   * reminder navigates here rather than to the reminder itself, and the row
+   * borrows this entity's icon.
+   *
+   * `type` is already mapped to the display {@link EntityType} (`email`,
+   * `foreign`), not the canonical API names (`email_thread`,
+   * `foreign_entity`). `fileType`/`subType` are resolved server-side and only
+   * present for documents — without them a referenced document has no
+   * resolvable block, since the icon and open paths are both synchronous.
+   *
+   * A reminder never references another reminder — the mapper yields
+   * `undefined` for that — so the type excludes it and the reference stays
+   * assignable to the preview/open helpers, which only know real targets. */
+  referencedEntity?: {
+    id: string;
+    type: Exclude<EntityType, 'reminder'>;
+    fileType?: string;
+    subType?: string;
+  };
+  /** Whether the reminder fires once or on a cron schedule. */
+  scheduleType: 'once' | 'recurring';
+  /** Cron expression, for a recurring reminder. */
+  cron?: string;
+  /** Timezone the cron is evaluated in, for a recurring reminder. */
+  timezone?: string;
+  /** The next firing. Soup orders reminders on this. */
+  nextRunAt: DateValue;
+  /** When false, the dispatcher skips this reminder. */
+  enabled: boolean;
+  /** Set once a one-shot reminder has fired. */
+  completedAt?: DateValue | null;
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -312,6 +349,7 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | AutomationEntity
+  | ReminderEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -326,6 +364,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'automation',
+  'reminder',
   'foreign',
 ]);
 

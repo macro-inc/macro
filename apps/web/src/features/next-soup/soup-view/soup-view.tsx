@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
@@ -925,6 +926,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     const entity = (
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
+
+    markReminderSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {

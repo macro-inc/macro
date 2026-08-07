@@ -20,6 +20,7 @@ type BackendAst =
 
 type QueryTarget =
   | 'df'
+  | 'calf'
   | 'ef'
   | 'chanf'
   | 'cthf'
@@ -28,6 +29,7 @@ type QueryTarget =
   | 'callf'
   | 'fef'
   | 'ccf'
+  | 'remf'
   | 'propf';
 
 export type TargetAstMap = {
@@ -88,6 +90,7 @@ const FIELD_CONFIG: Record<
   documentSeen: { target: 'df', field: 'ns' },
   documentDone: { target: 'df', field: 'nd' },
   isEmailAttachment: { target: 'df', field: 'iea' },
+  calendarEventId: { target: 'calf', field: 'id' },
   threadId: { target: 'ef', field: 'ThreadId' },
   emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
@@ -135,6 +138,10 @@ const FIELD_CONFIG: Record<
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
+  reminderId: { target: 'remf', field: 'id' },
+  reminderCompleted: { target: 'remf', field: 'comp' },
+  reminderFired: { target: 'remf', field: 'fired' },
+  includeReminders: { target: 'remf', field: 'inc', unit: true },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -186,6 +193,7 @@ export const queryStateFrom = (query: Query): QueryState => ({
 
 const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   df: [],
+  calf: [],
   ef: [],
   chanf: [],
   cthf: [],
@@ -194,6 +202,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   callf: [],
   fef: [],
   ccf: [],
+  remf: [],
   propf: [],
 });
 
@@ -405,7 +414,17 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
-  // Unless explicitly includes/excluded, channel threads are excluded by default
+  // Calendar events are not rendered by Soup yet. Persisted query states from
+  // before the calendar target existed do not carry its NIL id filter, so keep
+  // them scoped unless a calendar filter is explicitly present.
+  if (
+    !('calendarEventId' in state.include) &&
+    !('calendarEventId' in state.exclude)
+  ) {
+    result.calf ??= AST.literal('id', NIL_UUID);
+  }
+
+  // Unless explicitly included/excluded, channel threads are excluded by default
   if (
     !('channelThreadId' in state.include) &&
     !('channelThreadId' in state.exclude)
@@ -422,6 +441,7 @@ export function compileToAst(state: QueryState): TargetAstMap {
 
 const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   df: 'documentId',
+  calf: 'calendarEventId',
   ef: 'threadId',
   chanf: 'channelId',
   cthf: 'channelThreadId',

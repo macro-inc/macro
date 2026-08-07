@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   type CachedQueryInstanceWire,
+  type CachedQueryVariantWire,
   type ClaimedMutation,
   type MutationClaim,
   type MutationSettlement,
@@ -27,6 +28,7 @@ import type {
   CacheReadArgs,
   CacheWriteArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './types';
 
 /** Keep in sync with `OPS_AFFECTED_EVENT` in graphql_cache_plugin. */
@@ -193,6 +195,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
           createdAtMs: Date.now(),
+        }
+      );
+    },
+
+    async inspectQueryVariants(
+      args: InspectQueryVariantsArgs
+    ): Promise<CachedQueryVariantWire[]> {
+      await ready;
+      return await request<CachedQueryVariantWire[]>(
+        'graphql_cache_inspect_query_variants',
+        {
+          query: args.query,
+          operationName: args.operationName,
+          path: args.path,
         }
       );
     },

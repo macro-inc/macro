@@ -1093,6 +1093,10 @@ export type EntityFilters = {
      */
     property_filters?: Array<PropertyFilter>;
     /**
+     * the bundled [ReminderFilters]
+     */
+    reminder_filters?: ReminderFilters;
+    /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
      */
@@ -1432,6 +1436,40 @@ export type PropertyValue = {
      * Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
      */
     value: Array<string>;
+};
+
+/**
+ * Filters for reminders.
+ */
+export type ReminderFilters = {
+    /**
+     * Filter on whether the owner has marked the reminder done. `None` returns
+     * both.
+     */
+    completed?: boolean | null;
+    /**
+     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+     */
+    entities?: Array<string>;
+    /**
+     * Filter on whether the reminder's next run has come due, i.e. it has
+     * fired and is awaiting its owner. `None` returns both.
+     *
+     * Evaluated server-side against the database clock rather than a
+     * timestamp supplied by the caller: a timestamp would land in the query
+     * cache key and change on every render.
+     */
+    fired?: boolean | null;
+    /**
+     * Reminder ids to filter by. Empty to include all of the caller's reminders.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into reminders at all. Reminders are off by default —
+     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
+     * specific `ids` or `entities` also opts in.
+     */
+    include?: boolean;
 };
 
 export type SearchHighlight = {

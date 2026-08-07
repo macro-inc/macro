@@ -164,6 +164,12 @@ redis = { workspace = true, features = [
   "tokio-rustls-comp",
 ] }
 regex = { workspace = true }
+reminders = { path = "../../crates/reminders", features = [
+  "dispatch-sqs",
+  "inbound",
+  "notify",
+  "postgres",
+] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }

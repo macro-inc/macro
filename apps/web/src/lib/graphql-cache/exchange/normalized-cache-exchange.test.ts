@@ -220,6 +220,9 @@ function makeFakeHost(): FakeHost {
         reset: false,
       };
     },
+    async inspectQueryVariants() {
+      return [];
+    },
     async inspectQuery() {
       return [];
     },

@@ -59,6 +59,7 @@ export const TOKENS = {
       copyBranchName: 'entity.action.copyBranchName',
       copyEntityId: 'entity.action.copyEntityId',
       favorite: 'entity.action.favorite',
+      createReminder: 'entity.action.createReminder',
       properties: 'entity.action.properties',
       tags: 'entity.action.tags',
       priority: 'entity.action.priority',
@@ -110,6 +111,7 @@ export const TOKENS = {
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
+      reminders: 'sidebar.goTo.reminders',
     },
   },
 

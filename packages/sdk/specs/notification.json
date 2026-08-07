@@ -1504,7 +1504,8 @@
           "foreign_entity",
           "static_file",
           "crm_company",
-          "crm_contact"
+          "crm_contact",
+          "reminder"
         ]
       },
       "ErrorResponse": {
@@ -2223,6 +2224,21 @@
           },
           {
             "type": "object",
+            "description": "A reminder the user set for themselves came due.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ReminderMetadata",
+                "description": "A reminder the user set for themselves came due."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "An AI assistant responded to a chat.",
             "required": ["content", "tag"],
             "properties": {
@@ -2389,6 +2405,22 @@
           "senderProfilePictureUrl": {
             "type": ["string", "null"],
             "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
+          }
+        }
+      },
+      "ReminderMetadata": {
+        "type": "object",
+        "description": "Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.",
+        "required": ["reminderId", "description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the user asked to be reminded about."
+          },
+          "reminderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The reminder that fired."
           }
         }
       },

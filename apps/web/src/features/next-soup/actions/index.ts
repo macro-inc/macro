@@ -3,6 +3,7 @@ export { makeCopyAction } from './make-copy-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
+export { makeCreateReminderAction } from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
 export { makeFavoriteAction } from './make-favorite-action';
 export { makeHideCompanyAction } from './make-hide-company-action';

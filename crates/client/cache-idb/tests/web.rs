@@ -24,8 +24,8 @@ fn record(name: &str) -> Record {
     r
 }
 
-fn key(s: &str) -> EntityKey {
-    EntityKey(s.to_string())
+fn key(s: &str) -> EntityKey<'static> {
+    EntityKey(s.to_string().into())
 }
 
 fn queued(name: &str) -> NewQueuedMutation {
@@ -96,7 +96,7 @@ async fn scans_selected_record_types_in_key_order() {
     assert_eq!(
         first
             .iter()
-            .map(|(key, _)| key.0.as_str())
+            .map(|(key, _)| key.0.as_ref())
             .collect::<Vec<_>>(),
         vec!["TypeA:1", "TypeA:2"]
     );
@@ -107,7 +107,7 @@ async fn scans_selected_record_types_in_key_order() {
     assert_eq!(
         second
             .iter()
-            .map(|(key, _)| key.0.as_str())
+            .map(|(key, _)| key.0.as_ref())
             .collect::<Vec<_>>(),
         vec!["TypeB:2"]
     );

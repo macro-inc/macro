@@ -17,6 +17,7 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
   makeFavoriteAction,
   makeHideCompanyAction,
@@ -33,7 +34,11 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
-import { openEntityInSplitFromUnifiedList } from '../utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+  reminderSplitTarget,
+} from '../utils';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -120,6 +125,7 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -209,6 +215,15 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
+      // A reminder opens what it references. A standalone one references
+      // nothing, so there is nothing to open.
+      if (entity.type === 'reminder') {
+        const target = reminderSplitTarget(entity);
+        if (!target) return undefined;
+        const open = splitManager.getSplitByContent(target.type, target.id);
+        if (open && open.id !== splitHandle?.viewerId()) return undefined;
+        return entity;
+      }
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -230,6 +245,8 @@ export function createSoupEntityActions(): {
             from: 'soup_view_entity_actions_menu',
           });
         }
+
+        markReminderSeenOnOpen(entity, notificationSource);
 
         // Same path as shift/opt+click, so the menu inherits Preview Pair
         // routing (new split when it fits; replacing the pair outright) and
@@ -284,6 +301,16 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    // Single-entity only: a reminder points at one thing.
+    if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'create-reminder',
+        label: 'Remind me',
+        hotkeyToken: TOKENS.entity.action.createReminder,
+        onClick: handle(createReminderAction.executeWithSoup),
       });
     }
 

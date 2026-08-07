@@ -4,6 +4,7 @@ import {
   getIconConfig,
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
@@ -16,6 +17,7 @@ import type {
   ChannelEntity,
   EntityData,
   GithubPullRequestEntity,
+  NamedSubType,
 } from '../types/entity';
 import {
   isCallEntity,
@@ -107,28 +109,48 @@ function GithubPullRequestIcon(props: {
 
 export function EntityIcon(props: EntityIconProps) {
   const iconType = () => {
-    return match(props.entity)
-      .when(isChannelEntity, ({ channelType }) => channelType)
-      .when(isChannelMessageEntity, ({ channelType }) => channelType)
-      .when(isTaskEntity, () => 'task')
-      .when(isSnippetEntity, () => 'snippet')
-      .with({ type: 'document' }, ({ fileType }) => {
-        return fileType ?? 'default';
-      })
-      .with({ type: 'chat' }, () => 'chat')
-      .with({ type: 'project' }, () => 'project')
-      .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
-        hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
-      )
-      .when(isCallEntity, () => 'call')
-      .with({ type: 'automation' }, () => 'automation')
-      .with(
-        { type: 'foreign', foreignSource: 'github_pull_request' },
-        () => 'githubPullRequest'
-      )
-      .with({ type: 'foreign' }, () => 'default')
-      .with({ type: 'crm_company' }, () => 'crm_company')
-      .otherwise(() => 'default');
+    return (
+      match(props.entity)
+        .when(isChannelEntity, ({ channelType }) => channelType)
+        .when(isChannelMessageEntity, ({ channelType }) => channelType)
+        .when(isTaskEntity, () => 'task')
+        .when(isSnippetEntity, () => 'snippet')
+        .with({ type: 'document' }, ({ fileType }) => {
+          return fileType ?? 'default';
+        })
+        .with({ type: 'chat' }, () => 'chat')
+        .with({ type: 'project' }, () => 'project')
+        .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
+          hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'
+        )
+        .when(isCallEntity, () => 'call')
+        .with({ type: 'automation' }, () => 'automation')
+        .with(
+          { type: 'foreign', foreignSource: 'github_pull_request' },
+          () => 'githubPullRequest'
+        )
+        .with({ type: 'foreign' }, () => 'default')
+        .with({ type: 'crm_company' }, () => 'crm_company')
+        // A reminder shows the icon of what it references; `fileType` comes
+        // resolved from the server so this stays synchronous. With nothing
+        // referenced there is no such icon, so it falls back to the bell rather
+        // than to `default`, whose wide variant is the unknown-file glyph.
+        .with({ type: 'reminder' }, ({ referencedEntity }) =>
+          referencedEntity
+            ? (itemToBlockName(
+                {
+                  type: referencedEntity.type,
+                  fileType: referencedEntity.fileType,
+                  subType: referencedEntity.subType
+                    ? { type: referencedEntity.subType as NamedSubType }
+                    : undefined,
+                },
+                true
+              ) ?? 'reminder')
+            : 'reminder'
+        )
+        .otherwise(() => 'default')
+    );
   };
 
   const validIconType = () => {

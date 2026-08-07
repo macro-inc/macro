@@ -31,7 +31,7 @@ async fn frecency_fallback_keeps_calendar_events_with_aggregates(
         )
         VALUES (
             $1, $2, $3, 'calendar-frecency@example.com', 'Frecency event',
-            now(), now() + interval '1 hour', 'email_ics', now()
+            now(), now() + interval '1 hour', 'google', now()
         )
         "#,
         event_id,

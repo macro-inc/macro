@@ -97,28 +97,32 @@ export function getUniqueGithubLogins(notifications: Notification[]): string[] {
  * @internal
  */
 export function getActionVerb(type: NotificationType): string {
-  return match(type)
-    .with('channel_mention', () => 'mentioned you')
-    .with('document_mention', () => 'shared with you')
-    .with('mentioned_in_document_comment', () => 'mentioned you')
-    .with('replied_to_document_comment_thread', () => 'replied')
-    .with('commented_on_document', () => 'commented')
-    .with('channel_message_reply', () => 'replied')
-    .with('channel_message_send', () => 'sent a message')
-    .with('ai_response', () => 'AI responded')
-    .with('new_email', () => 'sent an email')
-    .with('channel_invite', () => 'invited you')
-    .with('invite_to_team', () => 'invited you')
-    .with('task_assigned', () => 'assigned you')
-    .with('github_pr_status_changed', () => 'updated a pull request')
-    .with('github_pr_check_run', () => 'completed a check')
-    .with('github_review_requested', () => 'requested your review')
-    .with('github_pr_comment', () => 'commented on a pull request')
-    .with('github_pr_mention', () => 'mentioned you on a pull request')
-    .with('github_pr_review', () => 'reviewed your pull request')
-    .with('call_started', () => 'started a call')
-    .with('inbox_reauth_required', () => 'needs reconnection')
-    .exhaustive();
+  return (
+    match(type)
+      .with('channel_mention', () => 'mentioned you')
+      .with('document_mention', () => 'shared with you')
+      .with('mentioned_in_document_comment', () => 'mentioned you')
+      .with('replied_to_document_comment_thread', () => 'replied')
+      .with('commented_on_document', () => 'commented')
+      .with('channel_message_reply', () => 'replied')
+      .with('channel_message_send', () => 'sent a message')
+      .with('ai_response', () => 'AI responded')
+      .with('new_email', () => 'sent an email')
+      .with('channel_invite', () => 'invited you')
+      .with('invite_to_team', () => 'invited you')
+      .with('task_assigned', () => 'assigned you')
+      .with('github_pr_status_changed', () => 'updated a pull request')
+      .with('github_pr_check_run', () => 'completed a check')
+      .with('github_review_requested', () => 'requested your review')
+      .with('github_pr_comment', () => 'commented on a pull request')
+      .with('github_pr_mention', () => 'mentioned you on a pull request')
+      .with('github_pr_review', () => 'reviewed your pull request')
+      .with('call_started', () => 'started a call')
+      // Reads as a standalone phrase, not an actor's action — nobody sent it.
+      .with('reminder', () => 'reminder')
+      .with('inbox_reauth_required', () => 'needs reconnection')
+      .exhaustive()
+  );
 }
 
 /**
@@ -156,6 +160,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('github_pr_review', () => (count === 1 ? 'review' : 'reviews'))
     .with('call_started', () => (count === 1 ? 'call' : 'calls'))
+    .with('reminder', () => (count === 1 ? 'reminder' : 'reminders'))
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .exhaustive();
 }

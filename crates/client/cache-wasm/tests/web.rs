@@ -91,8 +91,20 @@ async fn write_then_read_through_js_boundary() {
     assert_eq!(read["kind"], "hit");
     assert_eq!(read["data"], data);
 
-    // Generated-query inspection crosses the wasm boundary with one wire
-    // shape and recovers the operation variables from the normalized field.
+    // Variables-only inspection crosses the wasm boundary without
+    // materializing the selected value.
+    let variants = JsFuture::from(engine.inspect_query_variants(
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!([{"field": "user"}, {"field": "soup"}])),
+    ))
+    .await
+    .unwrap();
+    let variants: serde_json::Value = serde_wasm_bindgen::from_value(variants).unwrap();
+    assert_eq!(variants[0]["variables"], vars);
+    assert!(variants[0].get("value").is_none());
+
+    // Full generated-query inspection also materializes the selected value.
     let inspected = JsFuture::from(engine.inspect_query(
         QUERY.into(),
         Some("Soup".into()),
