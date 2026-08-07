@@ -164,6 +164,7 @@ dependencies = [
  "chrono",
  "futures",
  "kafka_util",
+ "lockable",
  "macro_env_var",
  "macro_event_broker",
  "macro_user_id",
@@ -887,7 +888,7 @@ dependencies = [
  "handlebars",
  "http 1.4.0",
  "indexmap 2.14.0",
- "lru",
+ "lru 0.16.4",
  "mime",
  "multer",
  "num-traits",
@@ -1625,7 +1626,7 @@ dependencies = [
  "http 0.2.12",
  "http 1.4.0",
  "http-body 1.0.1",
- "lru",
+ "lru 0.16.4",
  "percent-encoding",
  "regex-lite",
  "sha2 0.11.0",
@@ -2572,7 +2573,7 @@ version = "0.1.0"
 dependencies = [
  "apollo-compiler",
  "apollo-parser",
- "lru",
+ "lru 0.16.4",
  "maybe_send",
  "pollster",
  "postcard",
@@ -8470,6 +8471,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lockable"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b0f35193d57711b7b4730a3b888a5033347fb7be1ee9a64a755fa4ee013ef80"
+dependencies = [
+ "derive_more 2.1.1",
+ "futures",
+ "itertools 0.14.0",
+ "lru 0.14.0",
+ "tokio",
+]
+
+[[package]]
 name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8666,6 +8680,15 @@ dependencies = [
  "once_cell",
  "rand 0.8.6",
  "serde",
+]
+
+[[package]]
+name = "lru"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f8cc7106155f10bdf99a6f379688f543ad6596a415375b36a59a054ceda1198"
+dependencies = [
+ "hashbrown 0.15.5",
 ]
 
 [[package]]

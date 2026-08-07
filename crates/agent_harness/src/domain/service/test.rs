@@ -4,10 +4,10 @@
 
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
-    ResumeSessionResponse, SessionCapabilities, SessionResumeCapabilities,
+    ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
 };
 use agent_session::PROTOCOL_VERSION;
-use agent_session::domain::model::{AgentSessionId, Message};
+use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::InMemoryAgentSessionRepo;
@@ -16,7 +16,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
-use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession, SessionDefaults};
+use crate::domain::model::{
+    ForwardMessage, MentionOrigin, OpenSession, SessionDefaults, SpawnContainer,
+};
+use crate::domain::ports::ContainerManager as _;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
@@ -104,6 +107,40 @@ fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
             _ => None,
         })
         .collect()
+}
+
+async fn disconnected_session(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+) -> AgentSessionId {
+    let OpenSession { bot_id, origin } = open_command();
+    let id = AgentSessionId::new();
+    agent_session::domain::ports::AgentSessionRepo::create(
+        repo,
+        CreateAgentSessionParams {
+            id,
+            owner_id: origin.sender,
+            bot_id,
+            thread_id: Some(origin.thread_id),
+            originating_message_id: Some(origin.message_id),
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    )
+    .await
+    .expect("the disconnected session should persist");
+    repo.set_acp_session_id(id, SessionId::new("acp-test"))
+        .await
+        .expect("the ACP session id should persist");
+    containers
+        .spawn(SpawnContainer {
+            session_id: id,
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        })
+        .await
+        .expect("the original sandbox should exist");
+    id
 }
 
 #[tokio::test]
@@ -217,10 +254,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 }
 
 #[tokio::test]
-async fn forward_to_a_disconnected_session_resumes_acp_and_retries_the_prompt() {
-    let (service, repo, containers, _announcer) = harness();
+async fn a_delivery_failure_is_not_automatically_resumed() {
+    let (service, _repo, containers, _announcer) = harness();
     let open = service.open(open_command());
-    let drive_open = async {
+    let drive = async {
         loop {
             if containers.spawned() == 1 {
                 break;
@@ -233,10 +270,26 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_retries_the_prompt() 
         complete_handshake(&container).await;
         container
     };
-    let (opened, original) = tokio::join!(open, drive_open);
+    let (opened, container) = tokio::join!(open, drive);
     let id = opened.expect("open should succeed");
-    original.fails_sends_after(0);
-    original.disconnects();
+    container.fails_sends_after(0);
+
+    let result = service
+        .forward(ForwardMessage {
+            session_id: id,
+            sender: Some(sender()),
+            content: "do not retry this".to_owned(),
+        })
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Session(_))));
+    assert_eq!(containers.resumed(), 0);
+}
+
+#[tokio::test]
+async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = disconnected_session(&repo, &containers).await;
 
     let forward = service.forward(ForwardMessage {
         session_id: id,
@@ -282,7 +335,44 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_retries_the_prompt() 
             )
         })
         .count();
-    assert_eq!(prompt_logs, 2, "each user prompt is logged exactly once");
+    assert_eq!(prompt_logs, 1);
+}
+
+#[tokio::test]
+async fn concurrent_forwards_share_one_session_recovery() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    let first = service.forward(ForwardMessage {
+        session_id: id,
+        sender: Some(sender()),
+        content: "first".to_owned(),
+    });
+    let second = service.forward(ForwardMessage {
+        session_id: id,
+        sender: Some(sender()),
+        content: "second".to_owned(),
+    });
+    let drive_resume = async {
+        loop {
+            if containers.resumed() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed.agent().wait_for_requests(4).await;
+        resumed
+    };
+
+    let (first, second, resumed) = tokio::join!(first, second, drive_resume);
+
+    first.expect("the first message should be delivered");
+    second.expect("the second message should be delivered");
+    assert_eq!(containers.resumed(), 1);
+    assert_eq!(prompts(&resumed.agent()).len(), 2);
 }
 
 #[tokio::test]

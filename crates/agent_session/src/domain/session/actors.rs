@@ -36,7 +36,6 @@ pub(crate) struct SessionCommand {
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     pub(crate) action: AgentAction,
     pub(crate) completed: oneshot::Sender<Result<()>>,
-    pub(crate) log: bool,
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
@@ -115,11 +114,10 @@ where
     pub(crate) async fn step(&mut self) -> Stepped {
         let input = tokio::select! {
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, completed, log }) => Input::Command {
+                Some(SessionCommand { user_id, action, completed }) => Input::Command {
                     from: user_id,
                     action,
                     token: completed,
-                    log,
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),
@@ -147,19 +145,15 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
-                Effect::Send { from, message, log } => {
-                    if let Err(error) = self.deliver(from, message, log).await {
+                Effect::Send { from, message } => {
+                    if let Err(error) = self.deliver(from, message).await {
                         tracing::error!(
                             error = ?error,
                             id = %self.machine.id(),
                             "agent session failed to deliver an action"
                         );
                         if let Some(Effect::Complete { token, .. }) = effects.pop_front() {
-                            let _ = token.send(Err(
-                                crate::domain::error::AgentSessionError::DeliveryFailed(
-                                    self.machine.id(),
-                                ),
-                            ));
+                            let _ = token.send(Err(error));
                         }
                         effects.clear();
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::SendFailed)));
@@ -206,11 +200,8 @@ where
         &self,
         from: Option<MacroUserIdStr<'static>>,
         message: ToRuntimeMessage,
-        log: bool,
     ) -> Result<()> {
-        if log {
-            self.log(from, Message::ToRuntime(message.clone())).await?;
-        }
+        self.log(from, Message::ToRuntime(message.clone())).await?;
         self.connector.send(message).await?;
         Ok(())
     }

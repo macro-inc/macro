@@ -93,8 +93,7 @@ impl<Token> SessionMachine<Token> {
                 from,
                 action,
                 token,
-                log,
-            } => self.on_command(from, action, token, log),
+            } => self.on_command(from, action, token),
             Input::Inbound(message) => self.on_inbound(message),
             Input::Closed(reason) => self.on_closed(reason),
         }
@@ -105,7 +104,6 @@ impl<Token> SessionMachine<Token> {
         from: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
         token: Token,
-        log: bool,
     ) -> Vec<Effect<Token>> {
         let session_id = match &self.phase {
             SessionPhase::Booting
@@ -115,7 +113,6 @@ impl<Token> SessionMachine<Token> {
                     from,
                     action,
                     token,
-                    log,
                 });
                 return Vec::new();
             }
@@ -135,7 +132,6 @@ impl<Token> SessionMachine<Token> {
             from,
             action,
             token,
-            log,
         });
         let mut effects = Vec::new();
         self.flush(&session_id, &mut effects);
@@ -180,7 +176,6 @@ impl<Token> SessionMachine<Token> {
                 effects.push(Effect::Send {
                     from: None,
                     message: ToRuntimeMessage::Acp(AcpMessage(initialize)),
-                    log: true,
                 });
                 self.phase = SessionPhase::Initializing { request_id };
             }
@@ -251,7 +246,6 @@ impl<Token> SessionMachine<Token> {
                 effects.push(Effect::Send {
                     from: None,
                     message: ToRuntimeMessage::Acp(AcpMessage(open)),
-                    log: true,
                 });
                 self.phase = SessionPhase::Opening { request_id, kind };
             }
@@ -431,7 +425,6 @@ impl<Token> SessionMachine<Token> {
                 request.id.clone(),
                 Ok(result),
             ))),
-            log: true,
         });
     }
 
@@ -447,7 +440,6 @@ impl<Token> SessionMachine<Token> {
                     effects.push(Effect::Send {
                         from: queued.from,
                         message,
-                        log: queued.log,
                     });
                     effects.push(Effect::Complete {
                         token: queued.token,
@@ -466,15 +458,10 @@ impl<Token> SessionMachine<Token> {
     /// last so the shell resolves waiting callers before it tears down.
     fn die(&mut self, reason: StopReason, effects: &mut Vec<Effect<Token>>) {
         self.phase = SessionPhase::Dead;
-        let delivery_failed = matches!(reason, StopReason::Closed(CloseReason::SendFailed));
         while let Some(queued) = self.pending.pop_front() {
             effects.push(Effect::Complete {
                 token: queued.token,
-                result: Err(if delivery_failed {
-                    AgentSessionError::DeliveryFailed(self.id)
-                } else {
-                    AgentSessionError::Disconnected(self.id)
-                }),
+                result: Err(AgentSessionError::Disconnected(self.id)),
             });
         }
         effects.push(Effect::Stop { reason });

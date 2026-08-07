@@ -60,14 +60,6 @@ pub trait AgentSessionService: Send + Sync + 'static {
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
     ) -> impl Future<Output = Result<()>> + Send;
-
-    /// Retry an action whose log entry was persisted before transport delivery failed.
-    fn retry_action(
-        &self,
-        id: AgentSessionId,
-        user_id: Option<MacroUserIdStr<'static>>,
-        action: AgentAction,
-    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -100,12 +92,12 @@ impl<R> AgentSessionServiceImpl<R> {
         match self.active.entry(id) {
             Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
             Entry::Vacant(entry) => {
-                entry.insert(commands);
+                entry.insert(commands.clone());
             }
         }
 
         let actor = SessionActor::new(id, acp_session_id, connector, self.repo.clone(), command_rx);
-        tokio::spawn(run_session(actor, Arc::downgrade(&self.active)));
+        tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
     }
 
@@ -114,7 +106,6 @@ impl<R> AgentSessionServiceImpl<R> {
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
-        log: bool,
     ) -> Result<()> {
         let commands = self
             .active
@@ -123,18 +114,27 @@ impl<R> AgentSessionServiceImpl<R> {
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
-        commands
+        if commands
             .send(SessionCommand {
                 user_id,
                 action,
                 completed,
-                log,
             })
             .await
-            .map_err(|_| AgentSessionError::Disconnected(id))?;
-        result
-            .await
-            .map_err(|_| AgentSessionError::Disconnected(id))?
+            .is_err()
+        {
+            self.active
+                .remove_if(&id, |_, active| active.same_channel(&commands));
+            return Err(AgentSessionError::Disconnected(id));
+        }
+        match result.await {
+            Ok(result) => result,
+            Err(_) => {
+                self.active
+                    .remove_if(&id, |_, active| active.same_channel(&commands));
+                Err(AgentSessionError::Disconnected(id))
+            }
+        }
     }
 }
 
@@ -189,16 +189,7 @@ where
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
     ) -> Result<()> {
-        self.deliver_action(id, user_id, action, true).await
-    }
-
-    async fn retry_action(
-        &self,
-        id: AgentSessionId,
-        user_id: Option<MacroUserIdStr<'static>>,
-        action: AgentAction,
-    ) -> Result<()> {
-        self.deliver_action(id, user_id, action, false).await
+        self.deliver_action(id, user_id, action).await
     }
 }
 
@@ -206,6 +197,7 @@ where
 async fn run_session<Connector, Logs>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
+    commands: mpsc::Sender<SessionCommand>,
 ) where
     Connector: AgentConnector + Clone,
     Logs: AgentSessionLogRepo + AgentSessionRepo,
@@ -220,6 +212,6 @@ async fn run_session<Connector, Logs>(
     // Tear down the old transport before allowing another actor to attach.
     drop(actor);
     if let Some(active) = active.upgrade() {
-        active.remove(&id);
+        active.remove_if(&id, |_, current| current.same_channel(&commands));
     }
 }
