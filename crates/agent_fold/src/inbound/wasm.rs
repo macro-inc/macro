@@ -1,10 +1,13 @@
 //! The fold, as the browser calls it.
 //!
-//! One entry point, [`fold_session`]: hand it a session id and that session's
-//! log, get back the messages it derives. The log arrives in exactly the shape
-//! the raw-log endpoint serves and a recording stores - `{userId?, direction,
-//! content}` per frame - so the caller passes the response through rather than
-//! translating it.
+//! Two entry points over one fold. [`fold_session`] takes a session id and
+//! that session's whole log and gives back the messages it derives.
+//! [`FoldStream`] is the same fold kept open: construct one per live session,
+//! push frames as they arrive, and each push reports the single message it
+//! changed. The log arrives in exactly the shape the raw-log endpoint serves,
+//! a recording stores, and the realtime event carries - `{userId?, direction,
+//! content}` per frame - so a caller passes bytes through rather than
+//! translating them, and catching up and following are the same code.
 //!
 //! # Why the types are written out again
 //!
@@ -15,20 +18,23 @@
 //! `apps/web/src/lib/core/agent-fold/types.ts`, which is hand-written against
 //! these - enums tagged with `kind`, fields camelCase.
 //!
-//! # Why it returns everything at once
+//! # Why catching up is not a loop of pushes
 //!
-//! The incremental machine ([`crate::domain::fold::FoldMachineImpl`]) is the
-//! better fit for a live session and this will grow a push-shaped entry point
-//! to match. A channel load is a different job: it has the whole log in hand
-//! and wants the whole answer, and folding 6500 frames takes single-digit
-//! milliseconds, so there is nothing to stream yet.
+//! [`FoldStream::extend`] exists rather than leaving a caller to push a
+//! fetched log frame by frame. A push serializes the message it changed
+//! across the boundary, and a session's frames overwhelmingly change the same
+//! agent message over and over - so replaying 6500 frames one at a time would
+//! serialize 6500 whole messages to produce one. `extend` folds them all and
+//! serializes the answer once.
 
-use crate::domain::fold::fold;
+use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, FileDiff, FoldedMessage, MessagePart, Permission, PermissionOption, PermissionOutcome,
-    StopReason, ToolDetail, ToolStatus, ToolUse, composite_message_id,
+    Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
+    PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
+    ToolUse, composite_message_id,
 };
+use crate::domain::ports::FoldMachine;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -48,20 +54,133 @@ use wasm_bindgen::prelude::*;
 /// Returns a JS string describing what could not be read.
 #[wasm_bindgen]
 pub fn fold_session(session_id: &str, entries: JsValue) -> Result<JsValue, JsValue> {
-    let session = session_id
+    let session = parse_session(session_id)?;
+    let messages = fold(parse_log(session, entries)?);
+    encode_messages(session, messages)
+}
+
+/// One live session's fold, held open between frames.
+///
+/// The streaming counterpart to [`fold_session`], wrapping the same
+/// [`FoldMachineImpl`] the server folds with. A caller following a session
+/// keeps one of these per session for as long as the session lasts: frames
+/// must arrive in log order, and the machine only ever grows.
+///
+/// A client that opens a channel mid-session catches up with [`Self::extend`]
+/// and then follows with [`Self::push`] on the *same* machine. Refolding the
+/// fetched log into a throwaway and then pushing live frames into a second
+/// machine would derive the same messages twice from different halves of the
+/// log; there is one machine per session precisely so that cannot happen.
+#[wasm_bindgen]
+pub struct FoldStream {
+    /// Half of the composite id every message this machine derives is keyed
+    /// by, and the reason the session id is taken once rather than per frame.
+    session: AgentSessionId,
+    machine: FoldMachineImpl,
+}
+
+#[wasm_bindgen]
+impl FoldStream {
+    /// A machine for `session_id` that has folded nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string when the session id is not a UUID.
+    #[wasm_bindgen(constructor)]
+    pub fn new(session_id: &str) -> Result<FoldStream, JsValue> {
+        Ok(Self {
+            session: parse_session(session_id)?,
+            machine: FoldMachineImpl::new(),
+        })
+    }
+
+    /// Fold a run of frames in one go, answering with every message derived
+    /// so far - the catch-up path. See the module docs for why this is not a
+    /// loop of [`Self::push`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string when the entries are not log frames.
+    pub fn extend(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
+        for entry in parse_log(self.session, entries)? {
+            let _ = self.machine.push(entry);
+        }
+        self.messages()
+    }
+
+    /// Fold one more frame, reporting the message it changed as
+    /// `{kind: "new" | "update", message}`.
+    ///
+    /// `null` for a frame that changes nothing renderable - a handshake, a
+    /// token-usage report, an update this fold does not model - which is most
+    /// of them.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string when the entry is not a log frame.
+    pub fn push(&mut self, entry: JsValue) -> Result<JsValue, JsValue> {
+        let entry: LogEntry = serde_wasm_bindgen::from_value(entry)
+            .map_err(|error| JsValue::from_str(&format!("log entry is not readable: {error}")))?;
+
+        let result = self.machine.push(entry.into_log(self.session));
+        let Some(change) = JsFoldedMessageChange::new(self.session, result) else {
+            return Ok(JsValue::NULL);
+        };
+
+        serde_wasm_bindgen::to_value(&change).map_err(|error| {
+            JsValue::from_str(&format!("folded message is not encodable: {error}"))
+        })
+    }
+
+    /// Every message folded so far, oldest first.
+    ///
+    /// The same answer [`fold_session`] gives for the frames pushed so far -
+    /// they are one fold - which is what a reader relies on when a channel
+    /// that has been following a session is reopened.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string describing what could not be encoded.
+    pub fn messages(&self) -> Result<JsValue, JsValue> {
+        let messages: Vec<JsFoldedMessage> = self
+            .machine
+            .messages()
+            .iter()
+            .cloned()
+            .map(|message| JsFoldedMessage::new(self.session, message))
+            .collect();
+
+        serde_wasm_bindgen::to_value(&messages).map_err(|error| {
+            JsValue::from_str(&format!("folded messages are not encodable: {error}"))
+        })
+    }
+}
+
+/// The session a caller named, or a JS string saying it is not a session id.
+fn parse_session(session_id: &str) -> Result<AgentSessionId, JsValue> {
+    session_id
         .parse()
         .map(AgentSessionId::new_from_uuid)
-        .map_err(|error| JsValue::from_str(&format!("session id is not a uuid: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("session id is not a uuid: {error}")))
+}
 
+/// Read an array of served log entries as this session's log frames.
+fn parse_log(session: AgentSessionId, entries: JsValue) -> Result<Vec<AgentSessionLog>, JsValue> {
     let entries: Vec<LogEntry> = serde_wasm_bindgen::from_value(entries)
         .map_err(|error| JsValue::from_str(&format!("log entries are not readable: {error}")))?;
 
-    let log = entries
+    Ok(entries
         .into_iter()
         .map(|entry| entry.into_log(session))
-        .collect::<Vec<_>>();
+        .collect())
+}
 
-    let messages: Vec<JsFoldedMessage> = fold(log)
+/// Encode folded messages for the browser.
+fn encode_messages(
+    session: AgentSessionId,
+    messages: Vec<FoldedMessage>,
+) -> Result<JsValue, JsValue> {
+    let messages: Vec<JsFoldedMessage> = messages
         .into_iter()
         .map(|message| JsFoldedMessage::new(session, message))
         .collect();
@@ -133,6 +252,37 @@ impl JsFoldedMessage {
     }
 }
 
+/// What one pushed frame changed, mirroring [`IncrementalFoldResult`].
+///
+/// The message is carried whole rather than as a delta, so a reader applies
+/// either kind the same way - replace whatever it holds under this
+/// `agentSessionMessageId`. `kind` is what tells it whether a row for that id
+/// exists yet: a session streaming into a channel has no placeholder message
+/// for a turn until the fold first derives it, and `new` is the one moment
+/// the client can create one.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsFoldedMessageChange {
+    /// `"new"` the first time a message is reported, `"update"` after.
+    kind: &'static str,
+    message: JsFoldedMessage,
+}
+
+impl JsFoldedMessageChange {
+    /// `None` for [`IncrementalFoldResult::Unchanged`] - nothing to report.
+    fn new(session: AgentSessionId, result: IncrementalFoldResult<'_>) -> Option<Self> {
+        let (kind, message) = match result {
+            IncrementalFoldResult::NewMessage(message) => ("new", message),
+            IncrementalFoldResult::MessageUpdate(message) => ("update", message),
+            IncrementalFoldResult::Unchanged => return None,
+        };
+        Some(Self {
+            kind,
+            message: JsFoldedMessage::new(session, message.clone()),
+        })
+    }
+}
+
 /// Who produced a message, mirroring [`Author`].
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -188,7 +338,9 @@ enum JsMessagePart {
         tool_call: String,
         /// The choices offered, in the order ACP listed them.
         options: Vec<JsPermissionOption>,
-        /// What the user chose. Absent while the request is outstanding.
+        /// What the user chose. Absent while the request is outstanding, or
+        /// when it resolved into something the wire does not model - see
+        /// [`permission_outcome`].
         #[serde(skip_serializing_if = "Option::is_none")]
         outcome: Option<JsPermissionOutcome>,
     },
@@ -217,7 +369,7 @@ impl From<MessagePart> for JsMessagePart {
             }) => Self::Permission {
                 tool_call: tool_call.0,
                 options: options.into_iter().map(Into::into).collect(),
-                outcome: outcome.map(Into::into),
+                outcome: permission_outcome(outcome),
             },
         }
     }
@@ -353,8 +505,20 @@ impl From<PermissionOption> for JsPermissionOption {
         Self {
             id: option.id,
             name: option.name,
-            kind: option.kind,
+            kind: permission_option_kind_wire(option.kind).to_owned(),
         }
+    }
+}
+
+/// [`PermissionOption::kind`]'s wire string, the vocabulary
+/// `apps/web/src/lib/core/agent-fold/types.ts`'s `PermissionOption.kind` is
+/// hand-written against.
+fn permission_option_kind_wire(kind: PermissionOptionKind) -> &'static str {
+    match kind {
+        PermissionOptionKind::AllowOnce => "allow_once",
+        PermissionOptionKind::AllowAlways => "allow_always",
+        PermissionOptionKind::RejectOnce => "reject_once",
+        PermissionOptionKind::RejectAlways => "reject_always",
     }
 }
 
@@ -372,12 +536,25 @@ enum JsPermissionOutcome {
     Cancelled,
 }
 
-impl From<PermissionOutcome> for JsPermissionOutcome {
-    fn from(outcome: PermissionOutcome) -> Self {
-        match outcome {
-            PermissionOutcome::Selected { option_id } => Self::Selected { option_id },
-            PermissionOutcome::Cancelled => Self::Cancelled,
+/// [`PermissionOutcome`] as the wire sees it: whether an option was chosen,
+/// collapsing every way it was not into absence.
+///
+/// The wire does not yet distinguish *why* nothing was chosen -
+/// [`PermissionOutcome::Pending`], [`PermissionOutcome::Errored`] and
+/// [`PermissionOutcome::Unrecognized`] all read as "no outcome" to a reader
+/// today. That is a real loss (an errored or unrecognized request will not
+/// resolve further, unlike a pending one), but widening the wire to say so is
+/// a frontend change of its own, not implied by giving the fold's own state
+/// machine a name for each case.
+fn permission_outcome(outcome: PermissionOutcome) -> Option<JsPermissionOutcome> {
+    match outcome {
+        PermissionOutcome::Selected { option_id } => {
+            Some(JsPermissionOutcome::Selected { option_id })
         }
+        PermissionOutcome::Cancelled => Some(JsPermissionOutcome::Cancelled),
+        PermissionOutcome::Pending
+        | PermissionOutcome::Errored
+        | PermissionOutcome::Unrecognized => None,
     }
 }
 

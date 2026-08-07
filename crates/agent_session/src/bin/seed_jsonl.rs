@@ -37,7 +37,7 @@
 use agent_session::domain::model::{
     AgentSessionId, AgentSessionLog, CreateAgentSessionParams, Message,
 };
-use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, NoOpRealtime};
 use agent_session::domain::service::PlaceholderSyncingLogs;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use bots::domain::models::BotId;
@@ -262,12 +262,16 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     // advanced a frame at a time. Rebuilding it per frame - or going through
     // `append_event`, which folds the stored log afresh every call - is what
     // made long recordings crawl.
-    let logs = PlaceholderSyncingLogs::new(repo.clone(), repo.clone());
+    //
+    // Nothing streams: a recording has no viewers to be live for, and pushing
+    // its thousands of frames at a channel would only make the gateway replay
+    // a session nobody is watching.
+    let logs = PlaceholderSyncingLogs::new(repo.clone(), repo.clone(), NoOpRealtime);
 
     let total = log.len();
     let started = Instant::now();
     for (index, entry) in log.into_iter().enumerate() {
-        logs.create(entry)
+        AgentSessionLogRepo::create(&logs, entry)
             .await
             .map_err(|source| SeedError::WriteLog {
                 entry: index + 1,

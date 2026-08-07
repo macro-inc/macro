@@ -1,5 +1,6 @@
 //! Postgres implementation of the agent session and agent session log
-//! repositories, the fold's log source, and the comms placeholder writer.
+//! repositories, the fold's log source, the comms placeholder writer, and the
+//! channel audience a streamed frame is addressed to.
 
 #[cfg(test)]
 mod test;
@@ -7,10 +8,11 @@ mod test;
 use crate::domain::error::Result;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, Message, MessageId, SessionStatus, composite_message_id,
+    CreateAgentSessionParams, Message, MessageId, SessionBot, SessionStatus, composite_message_id,
     parse_composite_message_id,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
+use crate::outbound::connection_gateway_realtime::ChannelAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
@@ -290,6 +292,33 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        let bot = sqlx::query!(
+            r#"SELECT name, avatar_url FROM bots WHERE id = $1"#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the session's bot")?;
+
+        // A deleted bot still has messages in the channel. Naming it after
+        // itself renders those as from an unknown agent rather than failing
+        // the whole log.
+        Ok(match bot {
+            Some(bot) => SessionBot {
+                id,
+                name: bot.name,
+                avatar_url: bot.avatar_url,
+            },
+            None => SessionBot {
+                id,
+                name: "Agent".to_owned(),
+                avatar_url: None,
+            },
+        })
+    }
+
     async fn update(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
         let result = sqlx::query!(
@@ -483,6 +512,32 @@ impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
             .await
             .map_err(|error| rootcause::report!(error))?;
         Ok(log.into())
+    }
+}
+
+/// Who a channel's frames go to: everyone still in it.
+///
+/// A participant who has left keeps their row, with `left_at` set - so the
+/// filter is what stops a former member being sent a session they can no
+/// longer open.
+impl ChannelAudience for PgAgentSessionRepo {
+    async fn participants(
+        &self,
+        channel_id: Uuid,
+    ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        let participants = sqlx::query_scalar!(
+            r#"
+            SELECT user_id AS "user_id: MacroUserIdStr"
+            FROM comms_channel_participants
+            WHERE channel_id = $1 AND left_at IS NULL
+            "#,
+            channel_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| rootcause::report!(error))?;
+
+        Ok(participants)
     }
 }
 

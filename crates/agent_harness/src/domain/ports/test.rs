@@ -8,7 +8,7 @@ use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
-use agent_session::domain::ports::AgentSessionLogRepo;
+use agent_session::domain::ports::{AgentSessionLogRepo, NoOpRealtime};
 use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingComms};
 use bot_id::BotId;
@@ -55,6 +55,7 @@ async fn container_session_runs_and_logs_end_to_end() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         RecordingComms::new(),
+        NoOpRealtime,
     ));
     let containers = MockContainerManager::new();
     let container = containers
@@ -133,6 +134,7 @@ async fn a_live_sessions_frames_place_holders_in_its_channel() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         comms.clone(),
+        NoOpRealtime,
     ));
     let containers = MockContainerManager::new();
     let container = containers
@@ -194,6 +196,7 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
         store.clone(),
         FoldedMessageService::new(store),
         RecordingComms::new(),
+        NoOpRealtime,
     );
     let first = ContainerMock::default();
     let second = ContainerMock::default();

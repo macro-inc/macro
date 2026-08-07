@@ -19,6 +19,7 @@ use agent_harness::outbound::daytona::{
     GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
+use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
@@ -85,15 +86,25 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    // Sessions: persistence and live actors. The same repo answers all three
+    // Built before the sessions rather than beside the other channel plumbing
+    // below: this service owns the live actors, so it is where a session's
+    // frames are streamed from.
+    let connection_gateway = Arc::new(ConnectionGatewayClient::new(
+        config.internal_api_key.clone(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    ));
+
+    // Sessions: persistence and live actors. The same repo answers all four
     // ports, as in the `document_storage_service` root - a session's actor
     // writes its log through the fold and comms so the frames it records show
-    // up as placeholder messages in the session's channel.
+    // up as placeholder messages in the session's channel, and pushes each
+    // frame at the channel's participants so a viewer sees it happen.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
-        session_repo,
+        session_repo.clone(),
+        ConnectionGatewayAgentSessionRealtime::new(connection_gateway.clone(), session_repo),
     );
 
     // Containers: Daytona sandboxes.
@@ -118,10 +129,6 @@ async fn main() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let connection_gateway = Arc::new(ConnectionGatewayClient::new(
-        config.internal_api_key.clone(),
-        ConnectionGatewayUrl::new()?.to_string(),
-    ));
     let broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,

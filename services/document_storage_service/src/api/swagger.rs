@@ -499,6 +499,7 @@ use utoipa::OpenApi;
             agent_session::inbound::axum_router::SessionStatusDto,
             agent_session::inbound::axum_router::AgentChannelLogResponse,
             agent_session::inbound::axum_router::AgentSessionLogEntryDto,
+            agent_session::inbound::axum_router::SessionBotDto,
             agent_session::inbound::axum_router::LogFrameDto,
             agent_session::inbound::axum_router::LogDirectionDto,
             channels::domain::models::GetOrCreateAction,

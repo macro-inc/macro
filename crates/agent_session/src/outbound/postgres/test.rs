@@ -475,3 +475,55 @@ async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
     .expect("count agent channels after duplicate create");
     assert_eq!(channel_count_after, channel_count_before);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_audience_is_the_participants_who_have_not_left(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+
+    let watcher = "macro|agent-session-watcher@example.com";
+    let departed = "macro|agent-session-departed@example.com";
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, role, user_id, left_at)
+        VALUES ($1, 'member', $2, NULL), ($1, 'member', $3, now())
+        "#,
+        session.channel_id,
+        watcher,
+        departed,
+    )
+    .execute(&pool)
+    .await
+    .expect("add channel participants");
+
+    let mut audience = repo
+        .participants(session.channel_id)
+        .await
+        .expect("read the channel audience")
+        .into_iter()
+        .map(|user| user.to_string())
+        .collect::<Vec<_>>();
+    audience.sort();
+
+    assert_eq!(
+        audience,
+        vec![
+            "macro|agent-session-channel-owner@example.com".to_string(),
+            watcher.to_string(),
+        ],
+        "the owner and the watcher are streamed to; the one who left is not"
+    );
+}
+
+/// A channel nobody is in resolves to nobody, rather than failing - the
+/// publisher's own early return is what turns that into no gateway call.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_empty_channel_has_no_audience(pool: PgPool) {
+    let audience = PgAgentSessionRepo::new(pool)
+        .participants(macro_uuid::generate_uuid_v7())
+        .await
+        .expect("read the channel audience");
+
+    assert!(audience.is_empty());
+}

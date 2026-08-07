@@ -86,9 +86,9 @@ fn folds_a_complete_turn() {
     assert_eq!(permission.options.len(), 2);
     assert_eq!(
         permission.outcome,
-        Some(PermissionOutcome::Selected {
+        PermissionOutcome::Selected {
             option_id: "allow".to_owned()
-        })
+        }
     );
 
     let MessagePart::ToolUse(write) = &parts[3] else {
@@ -142,7 +142,11 @@ fn folds_an_interrupted_turn() {
     let MessagePart::Permission(permission) = &parts[2] else {
         panic!("permission is present: {:?}", parts[2]);
     };
-    assert_eq!(permission.outcome, None, "still awaiting an answer");
+    assert_eq!(
+        permission.outcome,
+        PermissionOutcome::Pending,
+        "still awaiting an answer"
+    );
 }
 
 /// A patch for a tool call that was never opened is logged, not fatal.

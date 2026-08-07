@@ -64,14 +64,14 @@
 //! let mut machine = FoldMachineImpl::new();
 //! for frame in frames {
 //!     match machine.push(frame) {
-//!         Some(IncrementalFoldResult::NewMessage(message)) => {
+//!         IncrementalFoldResult::NewMessage(message) => {
 //!             println!("new {}", message.id());
 //!         }
-//!         Some(IncrementalFoldResult::MessageUpdate(message)) => {
+//!         IncrementalFoldResult::MessageUpdate(message) => {
 //!             println!("redraw {}", message.id());
 //!         }
 //!         // Most frames are handshake or bookkeeping traffic.
-//!         None => {}
+//!         IncrementalFoldResult::Unchanged => {}
 //!     }
 //! }
 //! # }

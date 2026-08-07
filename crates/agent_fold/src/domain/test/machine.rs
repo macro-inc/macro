@@ -28,29 +28,28 @@ struct Consumer {
 }
 
 impl Consumer {
-    fn apply(&mut self, result: Option<IncrementalFoldResult<'_>>) {
-        let Some(result) = result else { return };
-        let message = result.message().clone();
+    fn apply(&mut self, result: IncrementalFoldResult<'_>) {
+        let (is_new, message) = match result {
+            IncrementalFoldResult::NewMessage(message) => (true, message.clone()),
+            IncrementalFoldResult::MessageUpdate(message) => (false, message.clone()),
+            IncrementalFoldResult::Unchanged => return,
+        };
         let id = message.id();
+        self.reports.push((is_new, id));
 
-        match result {
-            IncrementalFoldResult::NewMessage(_) => {
-                self.reports.push((true, id));
-                assert!(
-                    !self.messages.iter().any(|held| held.id() == id),
-                    "{id} was reported new twice"
-                );
-                self.messages.push(message);
-            }
-            IncrementalFoldResult::MessageUpdate(_) => {
-                self.reports.push((false, id));
-                let held = self
-                    .messages
-                    .iter_mut()
-                    .find(|held| held.id() == id)
-                    .unwrap_or_else(|| panic!("{id} was updated before it was reported new"));
-                *held = message;
-            }
+        if is_new {
+            assert!(
+                !self.messages.iter().any(|held| held.id() == id),
+                "{id} was reported new twice"
+            );
+            self.messages.push(message);
+        } else {
+            let held = self
+                .messages
+                .iter_mut()
+                .find(|held| held.id() == id)
+                .unwrap_or_else(|| panic!("{id} was updated before it was reported new"));
+            *held = message;
         }
     }
 
@@ -121,7 +120,7 @@ fn the_agent_message_is_announced_before_its_turn_ends() {
     let mut machine = FoldMachineImpl::new();
     let mut announced_at = None;
     for (index, entry) in log.into_iter().enumerate() {
-        if let Some(IncrementalFoldResult::NewMessage(message)) = machine.push(entry)
+        if let IncrementalFoldResult::NewMessage(message) = machine.push(entry)
             && message.author == Author::Agent
         {
             announced_at = Some((index, message.clone()));
@@ -161,8 +160,9 @@ fn frames_that_change_nothing_report_nothing() {
 
     let mut machine = FoldMachineImpl::new();
     for entry in quiet {
-        assert!(
-            machine.push(entry).is_none(),
+        assert_eq!(
+            machine.push(entry),
+            IncrementalFoldResult::Unchanged,
             "a frame with nothing renderable reported a change"
         );
     }

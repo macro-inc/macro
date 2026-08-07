@@ -9,7 +9,39 @@
  */
 
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
-import type { FoldedMessage } from './types';
+import type { FoldedMessage, FoldedMessageChange } from './types';
+
+/**
+ * One live session's fold, held open between frames.
+ *
+ * Mirrors `agent_fold::inbound::wasm::FoldStream`. Frames must be handed over
+ * in log order, and one machine serves a session for its whole life — the
+ * fetched log and the streamed frames after it go into the same instance, so
+ * that a channel opened mid-session continues the fold rather than starting a
+ * second one beside it.
+ */
+export interface FoldStream {
+  /**
+   * Fold a run of frames and answer with every message derived so far.
+   *
+   * The catch-up path. Not a loop of {@link push}: a push serializes the
+   * message it changed, and a session's frames change the same agent message
+   * over and over, so replaying a fetched log one frame at a time would
+   * serialize thousands of whole messages to produce a handful.
+   */
+  extend: (entries: AgentSessionLogEntryDto[]) => FoldedMessage[];
+  /**
+   * Fold one more frame, reporting the message it changed.
+   *
+   * `null` for the frames that change nothing renderable — handshakes, token
+   * accounting — which is most of them.
+   */
+  push: (entry: AgentSessionLogEntryDto) => FoldedMessageChange | null;
+  /** Every message folded so far, oldest first. */
+  messages: () => FoldedMessage[];
+  /** Releases the machine's wasm memory. */
+  free: () => void;
+}
 
 interface AgentFoldWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
@@ -25,6 +57,10 @@ interface AgentFoldWasmModule {
     sessionId: string,
     entries: AgentSessionLogEntryDto[]
   ) => FoldedMessage[];
+  /** Opens a fold for one session. Throws when the id is not a UUID. */
+  FoldStream: new (
+    sessionId: string
+  ) => FoldStream;
 }
 
 let modulePromise: Promise<AgentFoldWasmModule> | undefined;

@@ -184,8 +184,27 @@ export const getAgentChannelLogResponse = zod
       .uuid()
       .nullish()
       .describe(
-        'The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks: a client has no\ncheap way to know whether a channel is an agent channel before it looks\n- the channel record it would have to consult is only ever fetched as\npart of a list, which can predate the channel. \"No session here\" is\ntherefore an ordinary answer to an ordinary question, not a failure.'
+        'The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks. A client has\nno cheap way to know whether a channel is an agent channel before it\nlooks: the channel record it would have to consult is only ever\nfetched as part of a list, which can predate the channel. So \"no\nsession here\" is an ordinary answer to an ordinary question, not a\nfailure.'
       ),
+    bot: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatarUrl: zod
+              .string()
+              .nullish()
+              .describe('Avatar, when it has one.'),
+            id: zod
+              .uuid()
+              .describe(
+                'The bot\'s id. A message it sent has `\"bot|{id}\"` as its sender.'
+              ),
+            name: zod.string().describe('Display name.'),
+          })
+          .describe('The agent behind a session, mirroring [`SessionBot`].'),
+      ])
+      .optional(),
     entries: zod
       .array(
         zod

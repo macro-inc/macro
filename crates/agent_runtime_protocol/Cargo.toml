@@ -28,6 +28,5 @@ tokio-tungstenite = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-# The `mock_container` example spawns a real agent.
-agent-client-protocol = { workspace = true, features = ["subprocess"] }
+agent-client-protocol = { workspace = true }
 tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "rt-multi-thread", "time"] }

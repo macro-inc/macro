@@ -10896,7 +10896,18 @@
           "agentSessionId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks: a client has no\ncheap way to know whether a channel is an agent channel before it looks\n- the channel record it would have to consult is only ever fetched as\npart of a list, which can predate the channel. \"No session here\" is\ntherefore an ordinary answer to an ordinary question, not a failure."
+            "description": "The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks. A client has\nno cheap way to know whether a channel is an agent channel before it\nlooks: the channel record it would have to consult is only ever\nfetched as part of a list, which can predate the channel. So \"no\nsession here\" is an ordinary answer to an ordinary question, not a\nfailure."
+          },
+          "bot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBotDto",
+                "description": "The agent whose messages the log derives, absent for the same reason\nthe session id is.\n\nHere because a client renders those messages and cannot otherwise work\nout who sent them: the sender of an agent message is this session's\nbot, and no other response a channel fetches names it. Asking for the\nchannel's bots is the wrong question - those are bots explicitly added\nto a channel, which a session's agent need not be."
+              }
+            ]
           },
           "entries": {
             "type": "array",
@@ -20941,6 +20952,26 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "SessionBotDto": {
+        "type": "object",
+        "description": "The agent behind a session, mirroring [`SessionBot`].",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Avatar, when it has one."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot's id. A message it sent has `\"bot|{id}\"` as its sender."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
           }
         }
       },

@@ -7,9 +7,10 @@
 //! it would have on the server.
 
 use super::*;
-use crate::domain::model::AgentSessionLog;
+use crate::domain::model::{AgentSessionLog, SessionBot};
 use agent_fold::domain::fold::fold;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
+use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
@@ -32,6 +33,11 @@ struct WireEntry {
 fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<WireEntry> {
     let response = AgentChannelLogResponse::from(ChannelSessionLog {
         agent_session_id: test_session(),
+        bot: SessionBot {
+            id: BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xb07)),
+            name: "Test Agent".to_owned(),
+            avatar_url: None,
+        },
         entries,
     });
     let json = serde_json::to_string(&response).expect("the response serializes");

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentChannelLogResponseAgentSessionId } from './agentChannelLogResponseAgentSessionId';
+import type { AgentChannelLogResponseBot } from './agentChannelLogResponseBot';
 import type { AgentSessionLogEntryDto } from './agentSessionLogEntryDto';
 
 /**
@@ -16,12 +17,14 @@ export interface AgentChannelLogResponse {
   /** The session the entries belong to, absent when no agent session owns
 the channel.
 
-Absent rather than a `404`, because every channel asks: a client has no
-cheap way to know whether a channel is an agent channel before it looks
-- the channel record it would have to consult is only ever fetched as
-part of a list, which can predate the channel. "No session here" is
-therefore an ordinary answer to an ordinary question, not a failure. */
+Absent rather than a `404`, because every channel asks. A client has
+no cheap way to know whether a channel is an agent channel before it
+looks: the channel record it would have to consult is only ever
+fetched as part of a list, which can predate the channel. So "no
+session here" is an ordinary answer to an ordinary question, not a
+failure. */
   agentSessionId?: AgentChannelLogResponseAgentSessionId;
+  bot?: AgentChannelLogResponseBot;
   /** Every logged frame, oldest first. Folding depends on this order. Empty
 when there is no session. */
   entries: AgentSessionLogEntryDto[];

@@ -136,3 +136,17 @@ export interface FoldedMessage {
    */
   stop?: StopReason | null;
 }
+
+/**
+ * What folding one more log frame changed.
+ *
+ * The message comes whole rather than as a delta, so either kind is applied
+ * the same way — replace whatever is held under this `agentSessionMessageId`.
+ * `kind` says whether a channel row for it exists yet: a turn has no
+ * placeholder message until the fold first derives it, and `'new'` is the one
+ * moment a client can synthesize one.
+ */
+export interface FoldedMessageChange {
+  kind: 'new' | 'update';
+  message: FoldedMessage;
+}

@@ -276,11 +276,11 @@ fn render_permission(permission: &Permission) -> String {
         let _ = writeln!(
             out,
             "{}",
-            indent(&format!("- {} ({})", option.name, option.kind))
+            indent(&format!("- {} ({:?})", option.name, option.kind))
         );
     }
     let outcome = match &permission.outcome {
-        Some(PermissionOutcome::Selected { option_id }) => {
+        PermissionOutcome::Selected { option_id } => {
             let name = permission
                 .options
                 .iter()
@@ -288,8 +288,10 @@ fn render_permission(permission: &Permission) -> String {
                 .map_or(option_id.as_str(), |option| option.name.as_str());
             format!("chose: {name}")
         }
-        Some(PermissionOutcome::Cancelled) => "cancelled".to_owned(),
-        None => "unanswered".to_owned(),
+        PermissionOutcome::Cancelled => "cancelled".to_owned(),
+        PermissionOutcome::Pending => "pending".to_owned(),
+        PermissionOutcome::Errored => "errored".to_owned(),
+        PermissionOutcome::Unrecognized => "unrecognized".to_owned(),
     };
     let _ = writeln!(out, "{}", indent(&format!("→ {outcome}")));
     out

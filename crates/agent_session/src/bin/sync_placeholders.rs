@@ -17,6 +17,7 @@
 
 use agent_fold::domain::service::FoldedMessageService;
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use clap::Parser;
@@ -59,10 +60,15 @@ async fn main() -> ExitCode {
     };
 
     // The same repo answers all three ports, as the composition root in
-    // `document_storage_service` wires them.
+    // `document_storage_service` wires them. Nothing streams: repairing
+    // placeholders appends no frames, so there is nothing to publish.
     let repo = PgAgentSessionRepo::new(pool);
-    let service =
-        AgentSessionServiceImpl::new(repo.clone(), FoldedMessageService::new(repo.clone()), repo);
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        repo,
+        NoOpRealtime,
+    );
 
     let mut failed = 0usize;
     for id in &args.sessions {

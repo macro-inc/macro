@@ -7,9 +7,9 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, MessageId, SessionStatus,
+    CreateAgentSessionParams, LogAppended, MessageId, SessionBot, SessionStatus,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
+use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, Comms};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
@@ -29,6 +29,7 @@ pub struct InMemoryAgentSessionRepo {
     sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<AgentSessionLog>>>>,
     log_reads: Arc<AtomicUsize>,
+    session_reads: Arc<AtomicUsize>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -54,6 +55,16 @@ impl InMemoryAgentSessionRepo {
     #[must_use]
     pub fn log_reads(&self) -> usize {
         self.log_reads.load(Ordering::Relaxed)
+    }
+
+    /// How many times a session row has been read back.
+    ///
+    /// A writer needs the session's channel to address a streamed frame at
+    /// it, so this is how a test tells "looked it up once and kept it" from
+    /// "a read per frame".
+    #[must_use]
+    pub fn session_reads(&self) -> usize {
+        self.session_reads.load(Ordering::Relaxed)
     }
 
     /// Seed log entries, in the order they should be read back.
@@ -100,6 +111,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.session_reads.fetch_add(1, Ordering::Relaxed);
         self.sessions
             .lock()
             .expect("in-memory session store is not poisoned")
@@ -144,6 +156,14 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             (Some(session), None) => ChannelSession::InDedicatedChannel(session),
             (None, Some(session)) => ChannelSession::CreatedFromThread(session),
             (None, None) => ChannelSession::None,
+        })
+    }
+
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        Ok(SessionBot {
+            id,
+            name: "Test Agent".to_owned(),
+            avatar_url: None,
         })
     }
 
@@ -298,6 +318,59 @@ impl RecordingComms {
     #[must_use]
     pub fn offered(&self) -> usize {
         self.offered.load(Ordering::Relaxed)
+    }
+}
+
+/// An in-memory [`AgentSessionRealtime`] that records what was published, and
+/// can be told to fail.
+///
+/// Failing is worth having in the kit rather than in one test: the port is
+/// best-effort by contract, so "a publisher that is down changes nothing about
+/// the durable append" is the property every caller of it has to hold.
+///
+/// Cheap to clone - clones share one store.
+#[derive(Debug, Clone, Default)]
+pub struct RecordingRealtime {
+    published: Arc<Mutex<Vec<LogAppended>>>,
+    down: bool,
+}
+
+impl RecordingRealtime {
+    /// A publisher that accepts everything.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A publisher that refuses everything, recording nothing.
+    #[must_use]
+    pub fn down() -> Self {
+        Self {
+            published: Arc::default(),
+            down: true,
+        }
+    }
+
+    /// Everything published, in order.
+    #[must_use]
+    pub fn published(&self) -> Vec<LogAppended> {
+        self.published
+            .lock()
+            .expect("in-memory realtime store is not poisoned")
+            .clone()
+    }
+}
+
+impl AgentSessionRealtime for RecordingRealtime {
+    async fn publish(&self, event: LogAppended) -> std::result::Result<(), rootcause::Report> {
+        if self.down {
+            return Err(rootcause::report!("the connection gateway is down"));
+        }
+        self.published
+            .lock()
+            .expect("in-memory realtime store is not poisoned")
+            .push(event);
+        Ok(())
     }
 }
 

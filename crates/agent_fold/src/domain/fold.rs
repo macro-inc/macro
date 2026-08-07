@@ -54,15 +54,16 @@ use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
     AnsiText, Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
-    PermissionOption, PermissionOutcome, StopReason, ToolDetail, ToolStatus, ToolUse, ToolUseId,
-    TurnId,
+    PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
+    ToolUse, ToolUseId, TurnId,
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, Meta, RequestId, Response, SessionUpdate, ToolCall, ToolCallContent,
-    ToolCallStatus, ToolCallUpdate, ToolKind,
+    ContentBlock, Meta, PromptRequest, RequestId, RequestPermissionOutcome,
+    RequestPermissionRequest, RequestPermissionResponse, Response, SessionNotification,
+    SessionUpdate, ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolKind,
 };
-use agent_client_protocol::{RawJsonRpcMessage, RawJsonRpcParams};
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
@@ -129,13 +130,17 @@ impl FoldMachineImpl {
 }
 
 impl FoldMachine for FoldMachineImpl {
-    fn push(&mut self, log: AgentSessionLog) -> Option<IncrementalFoldResult<'_>> {
-        let changed = self.state.step(log)?;
-        let message = self.state.messages.get(changed.message)?;
-        Some(match changed.kind {
+    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_> {
+        let Some(changed) = self.state.step(log) else {
+            return IncrementalFoldResult::Unchanged;
+        };
+        let Some(message) = self.state.messages.get(changed.message) else {
+            return IncrementalFoldResult::Unchanged;
+        };
+        match changed.kind {
             Change::New => IncrementalFoldResult::NewMessage(message),
             Change::Updated => IncrementalFoldResult::MessageUpdate(message),
-        })
+        }
     }
 }
 
@@ -247,7 +252,9 @@ impl FoldState {
         match &entry.content {
             Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
                 // A user's prompt opens a turn.
-                RawJsonRpcMessage::Request(request) if &*request.method == "session/prompt" => {
+                RawJsonRpcMessage::Request(request)
+                    if PromptRequest::matches_method(&request.method) =>
+                {
                     self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
                 }
                 // The user's answer to a permission request.
@@ -264,13 +271,13 @@ impl FoldState {
             Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
                 // The bulk of the log: streamed content and tool activity.
                 RawJsonRpcMessage::Notification(notification)
-                    if &*notification.method == "session/update" =>
+                    if SessionNotification::matches_method(&notification.method) =>
                 {
                     self.apply_session_update(notification.params.as_ref())
                 }
                 // The agent asking to proceed.
                 RawJsonRpcMessage::Request(request)
-                    if &*request.method == "session/request_permission" =>
+                    if RequestPermissionRequest::matches_method(&request.method) =>
                 {
                     self.request_permission(&request.id, request.params.as_ref())
                 }
@@ -311,12 +318,17 @@ impl FoldState {
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
 
-        let text = param(params, "prompt")
-            .and_then(|prompt| prompt.as_array())
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .filter_map(|block| ContentBlock::deserialize(block).ok())
+        // A params shape this fold does not recognize derives no text, same
+        // as an empty prompt - see the module docs on why a mismatch here
+        // degrades rather than warns: `PromptRequest`'s own fields (a session
+        // id, an optional `_meta`) carry nothing this fold renders, so there
+        // is nothing to warn *about* beyond "no text," which showing no user
+        // message already says.
+        let text = deserialize_params::<PromptRequest>(params)
+            .map(|request| {
+                request
+                    .prompt
+                    .into_iter()
                     .filter_map(content_block_text)
                     .collect::<Vec<_>>()
                     .join("")
@@ -536,26 +548,17 @@ impl FoldState {
         request_id: &RequestId,
         params: Option<&RawJsonRpcParams>,
     ) -> Option<Changed> {
-        let tool_call = param(params, "toolCall")
-            .and_then(|call| call.get("toolCallId"))
-            .and_then(|id| id.as_str())
-            .map(|id| ToolUseId(id.to_owned()))?;
-
-        let options = param(params, "options")
-            .and_then(|options| options.as_array())
-            .map(|options| {
-                options
-                    .iter()
-                    .filter_map(|option| {
-                        Some(PermissionOption {
-                            id: option.get("optionId")?.as_str()?.to_owned(),
-                            name: option.get("name")?.as_str()?.to_owned(),
-                            kind: option.get("kind")?.as_str()?.to_owned(),
-                        })
-                    })
-                    .collect()
+        let request = deserialize_params::<RequestPermissionRequest>(params)?;
+        let tool_call = ToolUseId(request.tool_call.tool_call_id.0.to_string());
+        let options = request
+            .options
+            .into_iter()
+            .map(|option| PermissionOption {
+                id: option.option_id.0.to_string(),
+                name: option.name,
+                kind: permission_option_kind(option.kind),
             })
-            .unwrap_or_default();
+            .collect();
 
         // Recorded even with no turn open, so a late response is still
         // recognized as an answer rather than an uncorrelated frame.
@@ -565,7 +568,7 @@ impl FoldState {
         let (changed, position) = self.push_agent_part(MessagePart::Permission(Permission {
             tool_call: tool_call.clone(),
             options,
-            outcome: None,
+            outcome: PermissionOutcome::Pending,
         }))?;
         self.open_turn()
             .permission_positions
@@ -581,19 +584,28 @@ impl FoldState {
     ) -> Option<Changed> {
         let tool_call = self.pending_permissions.remove(response_id)?;
 
-        // `{"outcome": {"outcome": "selected", "optionId": "..."}}`
-        let outcome =
-            value
-                .and_then(|value| value.get("outcome"))
-                .and_then(|outcome| {
-                    match outcome.get("outcome").and_then(|kind| kind.as_str())? {
-                        "selected" => Some(PermissionOutcome::Selected {
-                            option_id: outcome.get("optionId")?.as_str()?.to_owned(),
-                        }),
-                        "cancelled" => Some(PermissionOutcome::Cancelled),
-                        _ => None,
-                    }
-                });
+        let outcome = match value {
+            // A JSON-RPC error, not a result: the harness failed to answer
+            // rather than resolving the request.
+            None => PermissionOutcome::Errored,
+            Some(value) => {
+                match serde_json::from_value::<RequestPermissionResponse>(value.clone()) {
+                    Ok(response) => match response.outcome {
+                        RequestPermissionOutcome::Selected(selected) => {
+                            PermissionOutcome::Selected {
+                                option_id: selected.option_id.0.to_string(),
+                            }
+                        }
+                        RequestPermissionOutcome::Cancelled => PermissionOutcome::Cancelled,
+                        // `#[non_exhaustive]`; reaching this means ACP added
+                        // an outcome after this was written.
+                        _ => PermissionOutcome::Unrecognized,
+                    },
+                    // The result did not match ACP's response shape.
+                    Err(_) => PermissionOutcome::Unrecognized,
+                }
+            }
+        };
 
         let position = *self.turn.as_ref()?.permission_positions.get(&tool_call)?;
         let (message, parts) = self.agent_parts_mut()?;
@@ -829,6 +841,23 @@ fn read_paths(raw_input: Option<&serde_json::Value>) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+fn permission_option_kind(
+    kind: agent_client_protocol::schema::v1::PermissionOptionKind,
+) -> PermissionOptionKind {
+    use agent_client_protocol::schema::v1::PermissionOptionKind as Acp;
+    match kind {
+        Acp::AllowOnce => PermissionOptionKind::AllowOnce,
+        Acp::AllowAlways => PermissionOptionKind::AllowAlways,
+        Acp::RejectOnce => PermissionOptionKind::RejectOnce,
+        Acp::RejectAlways => PermissionOptionKind::RejectAlways,
+        // `#[non_exhaustive]`, and unreachable in practice: this only ever
+        // runs on a `kind` that already deserialized successfully, and a
+        // wire value ACP added after this was written would have failed
+        // that deserialize instead of reaching here - see the type's docs.
+        _ => PermissionOptionKind::RejectOnce,
+    }
+}
+
 fn tool_status(status: ToolCallStatus) -> ToolStatus {
     match status {
         ToolCallStatus::Pending => ToolStatus::Pending,
@@ -859,12 +888,39 @@ fn tool_kind_name(kind: ToolKind) -> &'static str {
 
 /// A named JSON-RPC param, borrowed. `None` for positional params - every
 /// frame this fold reads carries an object.
+///
+/// Only [`State::apply_session_update`] still uses this, to reach the one
+/// field it wants (`update`) without paying to deserialize the rest of the
+/// notification - `session/update` is most of any log, so that is the
+/// difference between one clone per log and one clone per frame. Everywhere
+/// else, [`deserialize_params`] reads the whole params object as ACP's own
+/// type, because those frames are rare enough that the clone is free and the
+/// typed struct is far harder to get wrong than a chain of `.get(key)`s.
 fn param<'params>(
     params: Option<&'params RawJsonRpcParams>,
     key: &str,
 ) -> Option<&'params serde_json::Value> {
     match params? {
         RawJsonRpcParams::Object(map) => map.get(key),
+        RawJsonRpcParams::Array(_) => None,
+    }
+}
+
+/// Deserialize a request's or notification's params as a specific ACP type.
+///
+/// `None` for positional params (nothing this fold reads uses those) or when
+/// the object does not match `T`'s shape - the crate's total-by-construction
+/// design point: a mismatch here is a state to render around, not a reason
+/// to fail. Callers that want that mismatch to warn do so themselves; most
+/// do not, because the alternative to a malformed prompt or permission
+/// request is simply deriving less from it, same as any other partial frame.
+fn deserialize_params<T: serde::de::DeserializeOwned>(
+    params: Option<&RawJsonRpcParams>,
+) -> Option<T> {
+    match params? {
+        RawJsonRpcParams::Object(map) => {
+            serde_json::from_value(serde_json::Value::Object(map.clone())).ok()
+        }
         RawJsonRpcParams::Array(_) => None,
     }
 }

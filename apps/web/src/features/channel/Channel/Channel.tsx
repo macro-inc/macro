@@ -8,7 +8,6 @@ import {
   makeInputValuePersistenceKey,
 } from '@channel/Input/utils/persistence';
 import {
-  FoldedMessagesProvider,
   type MessageData,
   SearchHighlightTermsProvider,
 } from '@channel/Message';
@@ -47,10 +46,6 @@ import {
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import {
-  createFoldedMessages,
-  type FoldedMessageLookup,
-} from '@queries/channel/folded-messages';
-import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
   useSendMessageMutation,
@@ -72,7 +67,6 @@ import {
   on,
   onCleanup,
   onMount,
-  type Resource,
   Show,
   Switch,
 } from 'solid-js';
@@ -95,6 +89,7 @@ import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelKeyboardHandler } from './create-channel-keyboard-handler';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
+import { createFoldedMessagesScope } from './create-folded-messages-scope';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import {
@@ -102,6 +97,7 @@ import {
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
+import { duplicatePromptRowIds } from './hide-duplicate-prompts';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { createStickyScrollEffect } from './sticky-scroll';
@@ -229,14 +225,30 @@ export function Channel(props: ChannelProps) {
   // The dumb agent viewer: for an agent channel, fetch the session's protocol
   // log, fold it, and hand a message-id lookup down the message tree so
   // placeholder rows (null content + agent_session_message_id) render their
-  // folded side.
-  //
-  // Reading `foldedMessages()` below suspends `Channel.root`, so an agent
-  // channel does not appear until its messages are folded rather than
-  // appearing empty and filling in. Ordinary channels never trigger it.
-  const messages = createMemo(() => [...messageIndex.items]);
+  // folded side. See `FoldedMessagesScope` for what wrapping the tree in
+  // `foldedMessages.Provider` below does.
+  const foldedMessages = createFoldedMessagesScope(() => props.channelId);
 
-  const foldedMessages = createFoldedMessages(() => props.channelId);
+  // A prompt typed into an agent channel arrives twice - posted, and folded
+  // out of the ACP frame it became. Hidden here rather than never rendered,
+  // because the copy to keep depends on whether the other one exists: a
+  // session opened from a mention elsewhere has only the folded one. See
+  // `hide-duplicate-prompts`, which is a stopgap.
+  //
+  // Read through `readyLookup` rather than the fold's `Provider`: this memo is
+  // the whole channel's message list, and suspending it on the fold would mean
+  // an unresolved fold empties the list instead of just leaving prompts
+  // unhidden until it lands.
+  const hiddenPromptRows = createMemo(() =>
+    duplicatePromptRowIds([...messageIndex.items], foldedMessages.readyLookup())
+  );
+  const messages = createMemo(() =>
+    messageIndex.items.filter((message) => !hiddenPromptRows().has(message.id))
+  );
+  // The list renders from keys, so the same decision has to reach them too.
+  const visibleMessageKeys = createMemo(() =>
+    messageIndex.keys.filter((key) => !hiddenPromptRows().has(key))
+  );
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
@@ -634,14 +646,7 @@ export function Channel(props: ChannelProps) {
       <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
-          {/*
-            The read that makes `Channel.root` wait for the fold. The provider
-            below is handed the accessor rather than its value, so nothing else
-            in the tree reads the resource, and without this the channel would
-            paint before its messages had bodies.
-          */}
-          <AwaitFold fold={foldedMessages} />
-          <FoldedMessagesProvider value={foldedMessages}>
+          <foldedMessages.Provider>
             <MaybeMessageActionDrawerManager>
               <ChannelDropZone dragState={dragState}>
                 <div
@@ -670,7 +675,7 @@ export function Channel(props: ChannelProps) {
                       >
                         <ThreadList
                           channelId={props.channelId}
-                          keys={() => messageIndex.keys}
+                          keys={visibleMessageKeys}
                           initialScrollTarget={threadListInitialScrollTarget()}
                           initialScrollHandledByTargetElement={
                             targetMessageController.pendingScrollTargetId() !==
@@ -900,23 +905,9 @@ export function Channel(props: ChannelProps) {
                 </DebugSuspense>
               </ChannelDropZone>
             </MaybeMessageActionDrawerManager>
-          </FoldedMessagesProvider>
+          </foldedMessages.Provider>
         </SearchHighlightTermsProvider>
       </StaticMarkdownContext>
     </DebugSuspense>
   );
-}
-
-/**
- * Reads the fold so the enclosing `<Suspense>` waits on it, and renders
- * nothing.
- *
- * The fold has two jobs that pull in opposite directions: the channel should
- * not paint until it is done, and the messages must re-read it when it lands.
- * The second needs an accessor in context; the first needs somebody to
- * actually call it. This is that caller.
- */
-function AwaitFold(props: { fold: Resource<FoldedMessageLookup> }) {
-  props.fold();
-  return null;
 }

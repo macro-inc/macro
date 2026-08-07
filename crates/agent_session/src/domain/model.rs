@@ -79,6 +79,37 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
+/// The agent behind a session, as much of it as rendering a message needs.
+#[derive(Debug, Clone)]
+pub struct SessionBot {
+    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Avatar, when it has one.
+    pub avatar_url: Option<String>,
+}
+
+/// One frame appended to a live session's log, for anyone watching.
+///
+/// The streaming counterpart of [`ChannelSessionLog`]: that is the whole log
+/// for a reader arriving late, this is one frame for a reader already here.
+/// Both carry the same entry shape, so a client folds them the same way -
+/// catching up on the log and then following it is one fold, not two.
+///
+/// Addressed by channel rather than by session because that is what a viewer
+/// has: they opened a channel, and may not know a session exists.
+#[derive(Debug, Clone)]
+pub struct LogAppended {
+    /// The channel whose viewers should see this.
+    pub channel_id: Uuid,
+    /// The session the entry belongs to. The fold keys its messages on this,
+    /// so a client must pass it through unchanged.
+    pub agent_session_id: AgentSessionId,
+    /// The frame, exactly as the log stored it.
+    pub entry: AgentSessionLog,
+}
+
 /// A session's raw protocol log, looked up by its dedicated channel.
 ///
 /// Served rather than the messages it derives: the reader folds it. The web
@@ -89,6 +120,14 @@ pub struct AgentSession {
 pub struct ChannelSessionLog {
     /// The session the entries belong to.
     pub agent_session_id: AgentSessionId,
+    /// The agent whose messages the log derives.
+    ///
+    /// Sent because a reader has to render those messages and cannot work out
+    /// who sent them: the sender of an agent message is this session's bot,
+    /// and nothing else a client fetches names it. Asking the channel's bots
+    /// is the wrong question - those are bots explicitly added to a channel,
+    /// which a session's agent need not be.
+    pub bot: SessionBot,
     /// Every logged frame, oldest first. Folding depends on this order.
     pub entries: Vec<AgentSessionLog>,
 }

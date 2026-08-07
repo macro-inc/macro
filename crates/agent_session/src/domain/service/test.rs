@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::model::{Message, TurnId};
-use crate::testing::{InMemoryAgentSessionRepo, RecordingComms, test_agent_session};
+use crate::domain::ports::NoOpRealtime;
+use crate::testing::{
+    InMemoryAgentSessionRepo, RecordingComms, RecordingRealtime, test_agent_session,
+};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::model::{Author, AuthorKind, FoldedMessage, MessageId, MessagePart};
 use agent_fold::domain::service::FoldedMessageService;
@@ -86,7 +89,12 @@ fn both_sides(channel: Uuid, turn: u32) -> Vec<(Uuid, MessageId)> {
 }
 
 struct Fixture {
-    service: AgentSessionServiceImpl<InMemoryAgentSessionRepo, StaticMessages, RecordingComms>,
+    service: AgentSessionServiceImpl<
+        InMemoryAgentSessionRepo,
+        StaticMessages,
+        RecordingComms,
+        NoOpRealtime,
+    >,
     repo: InMemoryAgentSessionRepo,
     turns: StaticMessages,
     comms: RecordingComms,
@@ -103,7 +111,14 @@ fn fixture() -> Fixture {
     repo.insert_session(test_agent_session(session, channel));
 
     Fixture {
-        service: AgentSessionServiceImpl::new(repo.clone(), turns.clone(), comms.clone()),
+        // Nothing here is about streaming: `append_event` is the path for a
+        // session with no live actor, so there are no viewers to publish to.
+        service: AgentSessionServiceImpl::new(
+            repo.clone(),
+            turns.clone(),
+            comms.clone(),
+            NoOpRealtime,
+        ),
         repo,
         turns,
         comms,
@@ -227,6 +242,7 @@ async fn appends_place_one_comms_placeholder_per_folded_message() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         comms.clone(),
+        NoOpRealtime,
     );
 
     let mut prompt_seen = false;
@@ -264,16 +280,25 @@ async fn appends_place_one_comms_placeholder_per_folded_message() {
 // than asking what the whole log derives. These pin that path.
 
 /// A `PlaceholderSyncingLogs` over the given store, as `register_transport`
-/// builds one for a connection.
+/// builds one for a connection - with nobody watching its channel.
 fn connection<C: Comms + Clone + Send + Sync + 'static>(
     repo: InMemoryAgentSessionRepo,
     comms: C,
-) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C> {
-    PlaceholderSyncingLogs {
-        repo,
-        comms,
-        state: tokio::sync::Mutex::new(PlaceholderState::default()),
-    }
+) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C, NoOpRealtime> {
+    streaming_connection(repo, comms, NoOpRealtime)
+}
+
+/// The same connection, publishing its frames somewhere a test can read them.
+fn streaming_connection<C, Rt>(
+    repo: InMemoryAgentSessionRepo,
+    comms: C,
+    realtime: Rt,
+) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C, Rt>
+where
+    C: Comms + Clone + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+{
+    PlaceholderSyncingLogs::new(repo, comms, realtime)
 }
 
 /// A [`Comms`] that refuses the first `n` placeholder writes, so a test can
@@ -339,7 +364,7 @@ async fn a_connections_frames_place_one_placeholder_per_folded_message() {
     let logs = connection(repo.clone(), comms.clone());
 
     for entry in parse_log_as(test_session(), TURN) {
-        logs.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
 
         let created = comms.created();
         let unique: std::collections::HashSet<_> = created.iter().collect();
@@ -366,7 +391,7 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     assert!(frames > 5, "the fixture is worth counting reads over");
 
     for entry in log {
-        logs.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
     }
 
     assert_eq!(
@@ -399,7 +424,7 @@ async fn the_agents_placeholder_appears_before_its_turn_ends() {
 
     let mut placed_at = None;
     for (index, entry) in log.into_iter().enumerate() {
-        logs.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
         if placed_at.is_none() && comms.created().contains(&agent_side) {
             placed_at = Some(index);
         }
@@ -430,7 +455,7 @@ async fn re_attaching_does_not_place_a_message_twice() {
     // A first connection folds the whole recording.
     let first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        first.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&first, entry).await.expect("append succeeds");
     }
     let after_first = comms.created();
     assert_eq!(after_first, both_sides(channel, 0));
@@ -438,8 +463,7 @@ async fn re_attaching_does_not_place_a_message_twice() {
     // A second connection over the same log, as an attach would build.
     let offered_before = comms.offered();
     let second = connection(repo.clone(), comms.clone());
-    second
-        .create(any_event(test_session()))
+    AgentSessionLogRepo::create(&second, any_event(test_session()))
         .await
         .expect("append succeeds");
 
@@ -470,7 +494,7 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     let mut log = parse_log_as(test_session(), TURN).into_iter();
     for entry in log.by_ref() {
         let is_prompt = entry.user_id.is_some();
-        logs.create(entry)
+        AgentSessionLogRepo::create(&logs, entry)
             .await
             .expect("a refused placeholder does not fail the append");
         if is_prompt {
@@ -487,7 +511,7 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     // Everything the fixture derives still lands, the refused message
     // included.
     for entry in log {
-        logs.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
     }
     assert_eq!(
         comms.inner.created(),
@@ -516,14 +540,14 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
 
     let first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        first.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&first, entry).await.expect("append succeeds");
     }
     assert_eq!(comms.created(), both_sides(channel, 0));
 
     // A second connection over the same log, then a fresh prompt.
     let second = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), SECOND_PROMPT) {
-        second.create(entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&second, entry).await.expect("append succeeds");
     }
 
     let mut expected = both_sides(channel, 0);
@@ -541,6 +565,119 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
     );
 }
 
+// Streaming: the same writer that keeps the channel's placeholders in step
+// pushes each frame at whoever is watching the channel right now.
+
+/// Every frame a connection writes goes out once, addressed at the session's
+/// channel and carrying the frame verbatim - a viewer folds what it is sent
+/// with the same code that folds the fetched log, so anything altered on the
+/// way out would fold to something else.
+#[tokio::test]
+async fn a_connections_frames_are_published_to_its_channel() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let realtime = RecordingRealtime::new();
+    let logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime.clone());
+
+    let log = parse_log_as(test_session(), TURN);
+    for entry in log.clone() {
+        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+    }
+
+    let published = realtime.published();
+    assert_eq!(published.len(), log.len(), "one event per frame, no more");
+    assert!(
+        published
+            .iter()
+            .all(|event| event.channel_id == channel && event.agent_session_id == test_session()),
+        "every event names the session's channel and the session"
+    );
+    // Compared as the JSON they are published as: the client folds these
+    // bytes with the same code it folds the fetched log with.
+    let frame = |entry: AgentSessionLog| {
+        (
+            entry.user_id.map(|user| user.to_string()),
+            serde_json::to_value(entry.content).expect("a frame serializes"),
+        )
+    };
+    assert_eq!(
+        published
+            .into_iter()
+            .map(|event| frame(event.entry))
+            .collect::<Vec<_>>(),
+        log.into_iter().map(frame).collect::<Vec<_>>(),
+        "the frames go out as they were logged"
+    );
+}
+
+/// Streaming costs the connection one session lookup, not one per frame.
+///
+/// A frame names only its session and streaming addresses a channel, so the
+/// obvious implementation reads the session every time - and most frames are
+/// stream chunks that otherwise cost nothing but the log insert. The writer
+/// remembers the channel instead, and takes it from the read `place` was
+/// making anyway when there is one.
+#[tokio::test]
+async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
+    /// Replay the fixture through a connection publishing to `realtime`, and
+    /// report what it read and how many frames it took to get there.
+    async fn replay<Rt>(realtime: Rt) -> (usize, usize)
+    where
+        Rt: AgentSessionRealtime + Send + Sync + 'static,
+    {
+        let repo = InMemoryAgentSessionRepo::new();
+        repo.insert_session(test_agent_session(test_session(), Uuid::from_u128(0xc4a2)));
+        let logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime);
+
+        let log = parse_log_as(test_session(), TURN);
+        let frames = log.len();
+        for entry in log {
+            AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        }
+        (repo.session_reads(), frames)
+    }
+
+    let (streamed, frames) = replay(RecordingRealtime::new()).await;
+    let (silent, _) = replay(NoOpRealtime).await;
+
+    assert!(frames > 5, "the fixture is worth counting reads over");
+    assert!(
+        streamed <= silent + 1,
+        "{frames} streamed frames read the session {streamed} times against \
+         {silent} unstreamed - that is a lookup per frame, not one per connection"
+    );
+}
+
+/// A publisher that is down costs a viewer some liveness and nothing else:
+/// the append succeeds, the log is written, and the channel is still placed.
+#[tokio::test]
+async fn a_failed_publish_does_not_fail_the_append() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = RecordingComms::new();
+    let logs = streaming_connection(repo.clone(), comms.clone(), RecordingRealtime::down());
+
+    let log = parse_log_as(test_session(), TURN);
+    let frames = log.len();
+    for entry in log {
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("a refused publish does not fail the append");
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .expect("in-memory repo cannot fail");
+    assert_eq!(stored.len(), frames, "every frame is still durable");
+    assert_eq!(
+        comms.created(),
+        both_sides(channel, 0),
+        "and the channel is still placed"
+    );
+}
+
 /// `channel_log` resolves a dedicated channel to its session and hands back
 /// the log unfolded, in order.
 #[tokio::test]
@@ -555,6 +692,7 @@ async fn channel_log_returns_the_sessions_frames_in_order() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         RecordingComms::new(),
+        NoOpRealtime,
     );
 
     let log = service

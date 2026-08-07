@@ -1,26 +1,43 @@
-import { foldSession } from '@core/agent-fold/client';
 import type { FoldedMessage } from '@core/agent-fold/types';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
-import type { AgentChannelLogResponse } from '@service-storage/generated/schemas/agentChannelLogResponse';
 import { useQueryClient } from '@tanstack/solid-query';
-import { type Accessor, createResource, type Resource } from 'solid-js';
+import {
+  type Accessor,
+  createResource,
+  onCleanup,
+  type Resource,
+} from 'solid-js';
+import { createStore, produce, reconcile } from 'solid-js/store';
+import { rememberSessionBot } from './agent-session-placeholders';
+import {
+  abandonAgentSessionStream,
+  beginAgentSessionStream,
+  followAgentSession,
+} from './agent-session-stream';
 import { channelKeys } from './keys';
 
 /**
  * Look up the folded agent-session message a placeholder channel message
  * renders, by the placeholder's `agent_session_message_id`.
+ *
+ * **Reactive.** The lookup reads a store the live stream writes into, so a
+ * caller reading it inside a tracking scope re-runs when the session appends
+ * to the message it is showing. That is the whole rendering path for a live
+ * agent turn: no message is refetched, the fold just gets longer.
  */
 export type FoldedMessageLookup = (
   messageId: string
 ) => FoldedMessage | undefined;
 
 /**
- * Fetch an agent channel's protocol log and fold it, as one thing to wait on.
+ * Fetch an agent channel's protocol log, fold it, and keep folding it.
  *
  * The server does not fold any more — it serves the frames and this folds
  * them — so both halves live behind one resource and an agent channel has a
- * single "ready" to gate on.
+ * single "ready" to gate on. Once the log is folded, the channel follows the
+ * session over the websocket through the same fold machine, so nothing is
+ * refetched for the rest of the session.
  *
  * Asked of **every** channel, agent or not. Knowing which is which first
  * would mean consulting the channel record, and nothing fetches that per
@@ -45,9 +62,56 @@ export function createFoldedMessages(
 ): Resource<FoldedMessageLookup> {
   const queryClient = useQueryClient();
 
+  // The store, not the resource, is what makes a folded message reactive: the
+  // resource resolves once per channel, while a live turn changes its message
+  // hundreds of times. Consumers read through the lookup below, so the read
+  // lands in their own tracking scope and only the rows whose message changed
+  // re-render.
+  const [byMessageId, setByMessageId] = createStore<
+    Record<string, FoldedMessage>
+  >({});
+  const lookup: FoldedMessageLookup = (messageId) => byMessageId[messageId];
+
+  const remember = (messages: FoldedMessage[]) =>
+    setByMessageId(
+      produce((current) => {
+        for (const message of messages) {
+          current[message.agentSessionMessageId] = message;
+        }
+      })
+    );
+
+  let unfollow: (() => void) | undefined;
+  const stopFollowing = () => {
+    unfollow?.();
+    unfollow = undefined;
+  };
+
+  // Opening a fold is async and following one holds a machine open, so both
+  // ends of a run have to be able to tell that the run is over: the channel
+  // moved on to another id, or the view closed while the log was in flight.
+  // Without this a superseded run leaks its reader and its machine.
+  let generation = 0;
+  let closed = false;
+  onCleanup(() => {
+    closed = true;
+    stopFollowing();
+  });
+
   const [folded] = createResource(
     channelId,
     async (id): Promise<FoldedMessageLookup> => {
+      const run = ++generation;
+      const superseded = () => closed || generation !== run;
+
+      stopFollowing();
+      setByMessageId(reconcile({}));
+
+      // Before the fetch, deliberately: frames that arrive while it is in
+      // flight belong after the snapshot it returns, and only a buffered
+      // frame can be told apart from one the snapshot already contains.
+      beginAgentSessionStream(id);
+
       const log = await queryClient
         .fetchQuery({
           queryKey: channelKeys.foldedMessages(id).queryKey,
@@ -58,8 +122,8 @@ export function createFoldedMessages(
                   channel_id: id,
                 })
             ),
-          // Nothing invalidates this over the websocket yet, so a short stale
-          // time keeps reopened channels reasonably fresh.
+          // The websocket keeps this channel's fold current, so the cached log
+          // only matters for a channel reopened after its stream was dropped.
           staleTime: 30_000,
         })
         .catch((error: unknown) => {
@@ -76,50 +140,49 @@ export function createFoldedMessages(
         acpMessages: log?.entries.length ?? 0,
       });
 
-      return await foldToLookup(log);
+      // Before following, so the first frame of the first turn already has an
+      // agent to attribute its message to.
+      rememberSessionBot(id, log?.bot);
+
+      // No session id means no agent session owns this channel - the ordinary
+      // answer for most channels, and nothing to fold or follow.
+      const sessionId = log?.agentSessionId;
+      if (!sessionId || superseded()) {
+        abandonAgentSessionStream(id);
+        return lookup;
+      }
+
+      try {
+        const followed = await followAgentSession({
+          channelId: id,
+          sessionId,
+          fetched: log.entries,
+          sink: remember,
+        });
+        if (superseded()) {
+          followed.unfollow();
+          return lookup;
+        }
+        unfollow = followed.unfollow;
+        remember(followed.messages);
+
+        console.info('[agent-fold] folded', {
+          acpMessages: log.entries.length,
+          messages: followed.messages.length,
+          ids: followed.messages.map(
+            (message) => message.agentSessionMessageId
+          ),
+        });
+      } catch (error) {
+        // Same trade as a failed fetch: an unfoldable log leaves the
+        // placeholders bodyless rather than taking the channel down with it.
+        console.error('[agent-fold] log could not be folded', error);
+        abandonAgentSessionStream(id);
+      }
+
+      return lookup;
     }
   );
 
   return folded;
-}
-
-/**
- * Fold a session's log and index it by `agentSessionMessageId`.
- *
- * The fold is `agent_fold` compiled to WASM, run in a worker — the same code
- * the server folds with, so a channel and a reload cannot disagree about what
- * a log means.
- *
- * Every folded message is indexed, user prompts included: placeholders are
- * keyed per message rather than per turn, so a turn's prompt and its reply are
- * separate channel rows and each resolves to its own side.
- */
-async function foldToLookup(
-  log: AgentChannelLogResponse | undefined
-): Promise<FoldedMessageLookup> {
-  const byMessageId = new Map<string, FoldedMessage>();
-
-  // No session id means no agent session owns this channel - the ordinary
-  // answer for most channels, and nothing to fold.
-  const sessionId = log?.agentSessionId;
-  if (sessionId) {
-    try {
-      const folded = await foldSession(sessionId, log.entries);
-      console.info('[agent-fold] folded', {
-        acpMessages: log.entries.length,
-        messages: folded.length,
-        ids: folded.map((message) => message.agentSessionMessageId),
-        result: folded,
-      });
-      for (const message of folded) {
-        byMessageId.set(message.agentSessionMessageId, message);
-      }
-    } catch (error) {
-      // Same trade as a failed fetch: an unfoldable log leaves the
-      // placeholders bodyless rather than taking the channel down with it.
-      console.error('[agent-fold] log could not be folded', error);
-    }
-  }
-
-  return (messageId) => byMessageId.get(messageId);
 }

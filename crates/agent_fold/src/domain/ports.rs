@@ -65,9 +65,10 @@ pub trait FoldSession {
 /// [`FoldMachineImpl`](crate::domain::fold::FoldMachineImpl) for the whole
 /// list when a caller wants it all rather than the changes.
 pub trait FoldMachine {
-    /// Advance the machine by one log entry, returning the message it
-    /// changed, or `None` when the frame changes nothing renderable.
-    fn push(&mut self, log: AgentSessionLog) -> Option<IncrementalFoldResult<'_>>;
+    /// Advance the machine by one log entry, reporting what it changed -
+    /// [`IncrementalFoldResult::Unchanged`] when the frame changes nothing
+    /// renderable.
+    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_>;
 }
 
 /// Query a session's messages as if they were stored.

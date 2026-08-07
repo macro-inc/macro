@@ -316,11 +316,8 @@ pub struct Permission {
     pub tool_call: ToolUseId,
     /// The choices offered, in the order ACP listed them.
     pub options: Vec<PermissionOption>,
-    /// What the user chose.
-    ///
-    /// `None` while the request is outstanding, or when the session ended
-    /// before anyone answered.
-    pub outcome: Option<PermissionOutcome>,
+    /// How the request has resolved so far.
+    pub outcome: PermissionOutcome,
 }
 
 /// One choice offered for a [`Permission`] request.
@@ -330,14 +327,43 @@ pub struct PermissionOption {
     pub id: String,
     /// Label to show.
     pub name: String,
-    /// ACP's option kind, as its wire string - `allow_once`, `reject_once`,
-    /// `allow_always`, `reject_always`.
-    pub kind: String,
+    /// What kind of choice this is.
+    pub kind: PermissionOptionKind,
 }
 
-/// How a [`Permission`] request resolved.
+/// What kind of choice a [`PermissionOption`] offers, mirroring ACP's
+/// `PermissionOptionKind`.
+///
+/// ACP's enum is `#[non_exhaustive]`, but unlike [`StopReason`] there is no
+/// wire string worth preserving for a variant this fold does not model: the
+/// fold only ever sees one of these once the whole permission request has
+/// already deserialized successfully, and a wire value ACP added after this
+/// was written would have failed that deserialize already - so an unmatched
+/// kind here cannot happen in practice, not "happens and is rendered
+/// unlabeled."
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionOptionKind {
+    /// Allow this operation only this time.
+    AllowOnce,
+    /// Allow this operation and remember the choice.
+    AllowAlways,
+    /// Reject this operation only this time.
+    RejectOnce,
+    /// Reject this operation and remember the choice.
+    RejectAlways,
+}
+
+/// How a [`Permission`] request has resolved so far.
+///
+/// Not just "chosen or not": nothing chosen has more than one cause, and a
+/// reader deciding whether to still show the options needs to tell them
+/// apart. [`Self::Pending`] may still resolve; [`Self::Errored`] and
+/// [`Self::Unrecognized`] have already resolved, just not into anything this
+/// fold can show as a choice.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionOutcome {
+    /// No response has arrived yet - the request is still outstanding.
+    Pending,
     /// An option was chosen.
     Selected {
         /// The chosen option's id.
@@ -345,6 +371,13 @@ pub enum PermissionOutcome {
     },
     /// The request was cancelled without a choice.
     Cancelled,
+    /// The response was a JSON-RPC error rather than a result: the harness
+    /// failed to answer the request rather than resolving it.
+    Errored,
+    /// A result arrived, but this fold could not make sense of it - a
+    /// payload that did not match ACP's response shape, or an outcome ACP
+    /// added after this was written.
+    Unrecognized,
 }
 
 /// Why a turn stopped.
@@ -375,11 +408,12 @@ pub enum StopReason {
 /// [`FoldMachine`](crate::domain::ports::FoldMachine) changed.
 ///
 /// Most frames change nothing - handshakes, token accounting, an unmodelled
-/// update - so a push yields `Option<IncrementalFoldResult>` and the quiet
-/// ones report `None`. A frame changes at most one message: the only push
-/// that touches two messages is a prompt arriving while a previous turn is
-/// still open, and closing that turn is a no-op because its agent message is
-/// already emitted with the `stop: None` it will keep.
+/// update - and [`Self::Unchanged`] is what a push reports for them, rather
+/// than an `Option` a caller has to unwrap before it can even ask what
+/// happened. A frame changes at most one message: the only push that touches
+/// two messages is a prompt arriving while a previous turn is still open, and
+/// closing that turn is a no-op because its agent message is already emitted
+/// with the `stop: None` it will keep.
 ///
 /// The message is borrowed from the machine rather than cloned. Folding a
 /// whole log discards every result, so cloning here would make the batch path
@@ -387,9 +421,9 @@ pub enum StopReason {
 /// serialize it across a WASM boundary, or to write a comms placeholder -
 /// clones only the ones it uses.
 ///
-/// Both variants carry the whole message as it now stands rather than a
-/// delta, so a consumer applies an update by replacing whatever it holds
-/// under the same [`FoldedMessage::id`].
+/// [`Self::NewMessage`] and [`Self::MessageUpdate`] carry the whole message as
+/// it now stands rather than a delta, so a consumer applies an update by
+/// replacing whatever it holds under the same [`FoldedMessage::id`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IncrementalFoldResult<'a> {
     /// A message the machine had not derived before. Reported exactly once
@@ -397,14 +431,18 @@ pub enum IncrementalFoldResult<'a> {
     NewMessage(&'a FoldedMessage),
     /// A message the machine had already reported, whose content changed.
     MessageUpdate(&'a FoldedMessage),
+    /// The frame changed nothing renderable - a handshake, bookkeeping, or an
+    /// update this fold does not model.
+    Unchanged,
 }
 
 impl<'a> IncrementalFoldResult<'a> {
-    /// The message that changed, whichever way it changed.
+    /// The message that changed, or `None` for [`Self::Unchanged`].
     #[must_use]
-    pub fn message(self) -> &'a FoldedMessage {
+    pub fn message(self) -> Option<&'a FoldedMessage> {
         match self {
-            Self::NewMessage(message) | Self::MessageUpdate(message) => message,
+            Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message),
+            Self::Unchanged => None,
         }
     }
 }
