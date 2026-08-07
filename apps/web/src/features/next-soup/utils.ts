@@ -1041,10 +1041,18 @@ export function resolveMarkEntitiesDoneVariables(args: {
   } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
+    // GraphQL Soup rows carry their own notification edge. Prefer that edge
+    // over the global notification query, which may not have paged far enough
+    // to include this entity yet.
+    const attachedNotifications = isWithNotification(entity)
+      ? entity.notifications?.()
+      : undefined;
     const notificationsForEntity =
+      attachedNotifications ??
       notificationSource.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))
-      ] ?? [];
+      ] ??
+      [];
 
     return notificationsForMarkDone(
       entity,

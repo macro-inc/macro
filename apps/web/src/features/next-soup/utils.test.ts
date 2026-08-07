@@ -24,13 +24,14 @@ import type {
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import type { ChannelEntityTarget, EntityData } from '@entity';
-import type { UnifiedNotification } from '@notifications';
+import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { previewSourceEntityId } from './preview-history';
 import {
   getChannelEntityTarget,
   getRowClickFallbackLocation,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
+  resolveMarkEntitiesDoneVariables,
 } from './utils';
 
 afterEach(() => {
@@ -110,6 +111,22 @@ const channelThreadRow = (opts?: {
     ...(opts?.target ? { target: opts.target } : {}),
     ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
+
+describe('resolveMarkEntitiesDoneVariables', () => {
+  it('uses notifications attached to a GraphQL Soup entity', () => {
+    const notification = sendNotification('notification-1', 'message-1');
+    const notificationSource = {
+      notificationsByEntity: () => ({}),
+    } as NotificationSource;
+
+    expect(
+      resolveMarkEntitiesDoneVariables({
+        entities: [channelRow({ notifications: [notification] })],
+        notificationSource,
+      })
+    ).toEqual({ emailIds: [], notificationIds: ['notification-1'] });
+  });
+});
 
 describe('preview duplicate navigation', () => {
   it('rejects content owned by a different preview viewer and notifies', () => {
