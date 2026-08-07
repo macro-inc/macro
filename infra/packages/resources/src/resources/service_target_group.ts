@@ -47,7 +47,7 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
     this.tags = args.tags;
 
     this.target_group = new aws.lb.TargetGroup(
-      'target-group',
+      `${name}-target-group`,
       {
         name: `${name}-tg`,
         port: args.containerPort,
@@ -73,7 +73,7 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
     );
 
     this.listener_rule = new aws.lb.ListenerRule(
-      'listener-rule',
+      `${name}-listener-rule`,
       {
         listenerArn: args.listenerArn,
         priority: args.priority,
@@ -102,7 +102,7 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
 
     // Update service and alb security groups to support traffic
     new aws.vpc.SecurityGroupIngressRule(
-      'security-group-ingress-service-to-alb',
+      `${name}-security-group-ingress-service-to-alb`,
       {
         securityGroupId: args.serviceSecurityGroupId,
         description: 'Allow inbound traffic from ALB',
@@ -116,7 +116,7 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
     );
 
     new aws.vpc.SecurityGroupEgressRule(
-      'security-group-egress-alb-to-service',
+      `${name}-security-group-egress-alb-to-service`,
       {
         description: `Allow traffic to ${name}`,
         securityGroupId: args.albSecurityGroupId,
