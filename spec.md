@@ -174,7 +174,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### Tests
 
-- [ ] **P1.11 Pin the load-bearing policy and health tables.** inbox_sync `email_api_error/test.rs` covers 2 paths; backfill pins all 8 variants — mirror that (`processing_error` outcome per `EmailApiError` variant, plus the retry-worker branch of `handle_operation_error`). Add token-health transition tests in `token_source/test.rs`: success clears a set flag; first reauth failure enqueues `NotifyReauthRequired` exactly once; repeat failure doesn't re-enqueue; transient error leaves health untouched.
+- [x] **P1.11 Pin the load-bearing policy and health tables.** (done: inbox_sync full variant table; token-health decision table via pure `token_health_action`; edge-triggered notify-once already pinned in email_db_client) inbox_sync `email_api_error/test.rs` covers 2 paths; backfill pins all 8 variants — mirror that (`processing_error` outcome per `EmailApiError` variant, plus the retry-worker branch of `handle_operation_error`). Add token-health transition tests in `token_source/test.rs`: success clears a set flag; first reauth failure enqueues `NotifyReauthRequired` exactly once; repeat failure doesn't re-enqueue; transient error leaves health untouched.
 
 ### Port design papercuts
 

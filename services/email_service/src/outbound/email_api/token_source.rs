@@ -148,12 +148,13 @@ impl EmailServiceTokenSource {
         result: anyhow::Result<String>,
         row_may_need_reauth: bool,
     ) -> anyhow::Result<String> {
-        match result {
-            Ok(token) => {
-                clear_stale_reauth_flag(&self.db, link.id, row_may_need_reauth).await;
-                Ok(token)
+        match token_health_action(&result, row_may_need_reauth) {
+            TokenHealthAction::None => result,
+            TokenHealthAction::ClearReauth => {
+                clear_stale_reauth_flag(&self.db, link.id).await;
+                result
             }
-            Err(error) if is_reauth_required_error(&error) => {
+            TokenHealthAction::MarkReauth => {
                 tracing::warn!(
                     link_id=%link.id,
                     fusionauth_user_id=%link.fusionauth_user_id,
@@ -161,6 +162,8 @@ impl EmailServiceTokenSource {
                 );
                 match email_db_client::links::update::set_link_needs_reauth(&self.db, link.id).await
                 {
+                    // Edge-triggered: the notification fans out only on the
+                    // false→true transition, so repeat failures don't re-notify.
                     Ok(true) => {
                         self.sqs_client
                             .enqueue_link_manager_notification(
@@ -177,24 +180,40 @@ impl EmailServiceTokenSource {
                         tracing::error!(error=?update_error, link_id=%link.id, "Failed to mark link as needing reauth");
                     }
                 }
-                Err(error)
+                result
             }
-            Err(error) => Err(error),
         }
+    }
+}
+
+/// The health side effect implied by a token acquisition outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TokenHealthAction {
+    /// No health write: transient failures leave health untouched, and a
+    /// success against a known-healthy row skips the redundant UPDATE.
+    None,
+    /// Clear a possibly-set `needs_reauth` flag after a successful fetch.
+    ClearReauth,
+    /// Mark the link as needing reauthorization (revoked/missing grant).
+    MarkReauth,
+}
+
+fn token_health_action(
+    result: &anyhow::Result<String>,
+    row_may_need_reauth: bool,
+) -> TokenHealthAction {
+    match result {
+        Ok(_) if row_may_need_reauth => TokenHealthAction::ClearReauth,
+        Ok(_) => TokenHealthAction::None,
+        Err(error) if is_reauth_required_error(error) => TokenHealthAction::MarkReauth,
+        Err(_) => TokenHealthAction::None,
     }
 }
 
 /// Clears the link's reauth flag after a successful token fetch.
 ///
-/// Skipped when the caller has just read the row and it is already healthy
-/// (`row_may_need_reauth: false`), so the hot path does not pay an UPDATE per
-/// provider call. A failed clear is logged and swallowed: the next acquisition
-/// retries it.
-async fn clear_stale_reauth_flag(db: &PgPool, link_id: Uuid, row_may_need_reauth: bool) {
-    if !row_may_need_reauth {
-        return;
-    }
-
+/// A failed clear is logged and swallowed: the next acquisition retries it.
+async fn clear_stale_reauth_flag(db: &PgPool, link_id: Uuid) {
     email_db_client::links::update::clear_link_needs_reauth(db, link_id)
         .await
         .inspect_err(|error| {

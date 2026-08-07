@@ -5,7 +5,10 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{StaticTokenSource, clear_stale_reauth_flag, map_token_acquisition_error};
+use super::{
+    StaticTokenSource, TokenHealthAction, clear_stale_reauth_flag, map_token_acquisition_error,
+    token_health_action,
+};
 
 async fn insert_link_needing_reauth(pool: &PgPool) -> Uuid {
     let link_id = Uuid::now_v7();
@@ -37,23 +40,50 @@ async fn needs_reauth(pool: &PgPool, link_id: Uuid) -> bool {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn healthy_row_skips_the_clear_update(pool: PgPool) {
-    let link_id = insert_link_needing_reauth(&pool).await;
-
-    // A caller that just read a healthy row passes false; the UPDATE must be
-    // skipped entirely (observable here because the flag stays set).
-    clear_stale_reauth_flag(&pool, link_id, false).await;
-
-    assert!(needs_reauth(&pool, link_id).await);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reauth_flagged_row_is_cleared_after_a_successful_fetch(pool: PgPool) {
     let link_id = insert_link_needing_reauth(&pool).await;
 
-    clear_stale_reauth_flag(&pool, link_id, true).await;
+    clear_stale_reauth_flag(&pool, link_id).await;
 
     assert!(!needs_reauth(&pool, link_id).await);
+}
+
+/// Pins the full token-health decision table. The DB effects of each action
+/// are covered by `clear_stale_reauth_flag` above and by email_db_client's
+/// `set_needs_reauth_is_edge_triggered` (notify fires only on the false→true
+/// transition, so repeat failures never re-enqueue).
+#[test]
+fn token_health_actions_cover_success_reauth_and_transient_outcomes() {
+    // Success against a row that may be flagged clears the flag.
+    assert_eq!(
+        token_health_action(&Ok("token".to_string()), true),
+        TokenHealthAction::ClearReauth
+    );
+    // Success against a known-healthy row skips the redundant UPDATE.
+    assert_eq!(
+        token_health_action(&Ok("token".to_string()), false),
+        TokenHealthAction::None
+    );
+    // A revoked or missing grant marks the link for reauthorization.
+    assert_eq!(
+        token_health_action(
+            &Err(anyhow::Error::new(AuthServiceClientError::Forbidden)),
+            true,
+        ),
+        TokenHealthAction::MarkReauth
+    );
+    assert_eq!(
+        token_health_action(
+            &Err(anyhow::Error::new(AuthServiceClientError::NotFound)),
+            false,
+        ),
+        TokenHealthAction::MarkReauth
+    );
+    // Transient infrastructure failures leave health untouched.
+    assert_eq!(
+        token_health_action(&Err(anyhow::anyhow!("redis unavailable")), true),
+        TokenHealthAction::None
+    );
 }
 
 #[test]
