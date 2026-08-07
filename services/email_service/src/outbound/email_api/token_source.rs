@@ -249,6 +249,14 @@ impl ProviderTokenSource for StaticTokenSource {
         Ok(self.token.clone())
     }
 
+    async fn get_access_token_for_link(
+        &self,
+        _link: &Link,
+        _freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        Ok(self.token.clone())
+    }
+
     async fn get_access_token_health_neutral(
         &self,
         _link: &Link,

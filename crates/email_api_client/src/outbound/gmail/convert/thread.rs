@@ -21,6 +21,11 @@ pub(crate) fn map_thread_resource_to_service(
     resource: ThreadResource,
     link_id: Uuid,
 ) -> Result<service::thread::Thread, EmailApiError> {
+    // Accepted trade-off: messages convert sequentially (main spawned a task
+    // per message). Conversion is dominated by ammonia sanitization, which is
+    // fast relative to the surrounding provider fetch; if profiling ever shows
+    // large threads stalling runtime workers, batch the conversions through
+    // spawn_blocking rather than reintroducing spawn-per-message.
     let mut messages = resource
         .messages
         .into_iter()

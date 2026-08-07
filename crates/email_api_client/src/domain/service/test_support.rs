@@ -75,6 +75,18 @@ impl ProviderTokenSource for FakeTokenSource {
         self.result.clone()
     }
 
+    async fn get_access_token_for_link(
+        &self,
+        link: &models_email::service::link::Link,
+        freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::Token(link.id, freshness));
+        self.result.clone()
+    }
+
     async fn get_access_token_health_neutral(
         &self,
         link: &models_email::service::link::Link,

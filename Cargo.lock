@@ -5066,7 +5066,6 @@ name = "email_api_client"
 version = "0.1.0"
 dependencies = [
  "ammonia",
- "async-trait",
  "base64 0.22.1",
  "chrono",
  "gmail_client",

@@ -178,10 +178,10 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### Port design papercuts
 
-- [ ] **P1.12** Remove the default body of `ProviderTokenSource::get_access_token_for_link` (`ports.rs:250`) — it delegates to the id-based lookup, contradicting its documented "not yet persisted" purpose; a future implementor relying on the default breaks mailbox init silently. Make it required (or document the default's real behavior).
-- [ ] **P1.13** Drop the unused `dep:async-trait` from the `ports` feature (`crates/email_api_client/Cargo.toml:9`) — all traits use native async fn.
-- [ ] **P1.14** Thread conversion went parallel → sequential (`convert/thread.rs:24-29` vs main's spawn-per-message): serial ammonia sanitization of large threads on runtime worker threads. Restore concurrency (`spawn_blocking` batch is better than main's approach) **if profiling shows it matters**; otherwise record the accepted trade-off.
-- [ ] **P1.15** `SendRequest::build_mime` (`domain/models/send.rs:46-53`) clones attachment bytes main moved — doubles peak memory for large-attachment sends. Take/move the buffers.
+- [x] **P1.12** (done: default removed; explicit impls added) Remove the default body of `ProviderTokenSource::get_access_token_for_link` (`ports.rs:250`) — it delegates to the id-based lookup, contradicting its documented "not yet persisted" purpose; a future implementor relying on the default breaks mailbox init silently. Make it required (or document the default's real behavior).
+- [x] **P1.13** (done) Drop the unused `dep:async-trait` from the `ports` feature (`crates/email_api_client/Cargo.toml:9`) — all traits use native async fn.
+- [x] **P1.14** (done: trade-off recorded in convert/thread.rs; no profiling evidence it matters) Thread conversion went parallel → sequential (`convert/thread.rs:24-29` vs main's spawn-per-message): serial ammonia sanitization of large threads on runtime worker threads. Restore concurrency (`spawn_blocking` batch is better than main's approach) **if profiling shows it matters**; otherwise record the accepted trade-off.
+- [x] **P1.15** (done: buffers borrowed via Cow, no clone) `SendRequest::build_mime` (`domain/models/send.rs:46-53`) clones attachment bytes main moved — doubles peak memory for large-attachment sends. Take/move the buffers.
 
 ---
 

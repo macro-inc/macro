@@ -255,13 +255,16 @@ pub trait ProviderTokenSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send;
 
     /// Returns an access token for a link that may not have been persisted yet.
+    ///
+    /// Required (no default): a default delegating to the id-based lookup
+    /// would contradict this method's purpose — the link's row may not exist
+    /// yet — and an implementor silently relying on it would break mailbox
+    /// initialization.
     fn get_access_token_for_link(
         &self,
         link: &Link,
         freshness: TokenFreshness,
-    ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send {
-        self.get_access_token(link.id, freshness)
-    }
+    ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send;
 
     /// Returns an access token without recording token-health side effects.
     ///
@@ -475,6 +478,16 @@ impl ProviderTokenSource for NoOpProviderTokenSource {
     async fn get_access_token(
         &self,
         _: Uuid,
+        _: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        Err(TokenError::Permanent {
+            message: "email provider token source is not configured".to_string(),
+        })
+    }
+
+    async fn get_access_token_for_link(
+        &self,
+        _: &Link,
         _: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
         Err(TokenError::Permanent {

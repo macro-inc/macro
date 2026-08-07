@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = []
-ports = ["dep:async-trait"]
+ports = []
 outbound-gmail = [
   "ports",
   "dep:ammonia",
@@ -23,7 +23,6 @@ outbound-gmail = [
 
 [dependencies]
 ammonia = { workspace = true, optional = true }
-async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
 gmail_client = { path = "../gmail_client", optional = true }

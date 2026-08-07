@@ -45,10 +45,12 @@ impl SendRequest {
         }
         if let Some(attachments) = &self.message.attachments {
             for attachment in attachments {
+                // Borrow the attachment buffers: cloning them would double
+                // peak memory for large-attachment sends.
                 builder = builder.attachment(
-                    attachment.content_type.clone(),
-                    attachment.file_name.clone(),
-                    attachment.data.clone(),
+                    attachment.content_type.as_str(),
+                    attachment.file_name.as_str(),
+                    &attachment.data[..],
                 );
             }
         }
