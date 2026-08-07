@@ -89,8 +89,8 @@ pub async fn upsert_message(
         .email_api
         .get_message(link.id, &payload.provider_message_id)
         .await;
-    let mut message = match provider_message {
-        Ok(Some(message)) => message,
+    let fetched = match provider_message {
+        Ok(Some(fetched)) => fetched,
         Ok(None) => {
             tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
                 "Message not found in gmail when attempting to upsert");
@@ -106,6 +106,8 @@ pub async fn upsert_message(
             .await);
         }
     };
+    let mut message = fetched.message;
+
     let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it

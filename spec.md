@@ -78,7 +78,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.4 Extract calendar parts from the already-fetched message (no second `messages.get`)
 
-- [ ] **Status**
+- [x] **Status** — done (get_message now returns `MessageWithCalendarParts`; `get_thread` untouched since ingest only needs the trigger message's parts)
 
 **Problem.** `MailboxCalendarClient::get_calendar_parts` (`crates/email_api_client/src/domain/ports.rs:146`) takes only `(token, provider_message_id)`, so the Gmail adapter re-fetches the full message (`outbound/gmail/messages.rs:24`) and the domain service charges a second `GetMessage` (5 quota units, `domain/service/messages.rs:129-138`). Both ingest callers (`upsert_message.rs:305`, `backfill_message.rs:64-65`) invoke it unconditionally when `calendar_sync_enabled` — for a payload they fetched moments earlier. Main passed the payload in (`payload: &MessagePart`) at zero provider cost.
 

@@ -1,8 +1,22 @@
 use chrono::{DateTime, Utc};
+use models_email::email::service::message::Message;
 use models_email::email::service::thread::ThreadSummary;
 use serde::{Deserialize, Serialize};
 
 use super::SyncCursor;
+
+/// A normalized message paired with the calendar invitation parts discovered
+/// in the same provider fetch.
+///
+/// Surfacing both from one wire read lets callers ingest inline invites
+/// without a second per-message provider fetch (and its quota charge).
+#[derive(Debug, Clone)]
+pub struct MessageWithCalendarParts {
+    /// The normalized provider message.
+    pub message: Message,
+    /// Calendar invitation parts found in the message payload.
+    pub calendar_parts: Vec<CalendarPart>,
+}
 
 /// Provider-neutral calendar invitation part discovered in a message.
 #[derive(Debug, Clone, PartialEq, Eq)]

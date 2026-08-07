@@ -9,7 +9,9 @@ use models_email::email::service::thread::ThreadSummary;
 use models_email::gmail::MessagePart;
 use uuid::Uuid;
 
-use crate::domain::models::{AccessToken, CalendarPart, EmailApiError, ThreadListPage};
+use crate::domain::models::{
+    AccessToken, CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
+};
 use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient};
 
 use super::convert::{map_message_resource_to_service, map_thread_resource_to_service};
@@ -73,13 +75,25 @@ impl MailboxMessageClient for GmailApiClientRepository {
         access_token: &AccessToken,
         link_id: Uuid,
         provider_message_id: &str,
-    ) -> Result<Option<Message>, EmailApiError> {
-        self.client
+    ) -> Result<Option<MessageWithCalendarParts>, EmailApiError> {
+        let Some(resource) = self
+            .client
             .get_message(access_token.expose_secret(), provider_message_id)
             .await
             .map_err(map_gmail_error)?
-            .map(|message| map_message_resource_to_service(message, link_id))
-            .transpose()
+        else {
+            return Ok(None);
+        };
+
+        // Extract calendar parts from the wire resource we already hold so
+        // ingest never needs a second messages.get for the same message.
+        let calendar_parts = collect_calendar_parts(&resource.payload)?;
+        let message = map_message_resource_to_service(resource, link_id)?;
+
+        Ok(Some(MessageWithCalendarParts {
+            message,
+            calendar_parts,
+        }))
     }
 
     async fn get_message_label_ids(

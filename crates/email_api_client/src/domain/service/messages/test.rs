@@ -37,7 +37,7 @@ impl MailboxMessageClient for MessageClient {
         access_token: &AccessToken,
         link_id: Uuid,
         message_id: &str,
-    ) -> Result<Option<Message>, EmailApiError> {
+    ) -> Result<Option<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         Err(self.record(
             access_token,
             MessageCall::Message(link_id, message_id.to_string()),

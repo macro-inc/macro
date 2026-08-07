@@ -1,7 +1,9 @@
 use models_email::email::service::message::Message;
 use uuid::Uuid;
 
-use super::super::models::{CalendarPart, EmailApiError, ThreadListPage};
+use super::super::models::{
+    CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
+};
 use super::super::ports::{
     MailboxCalendarClient, MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource,
 };
@@ -13,12 +15,13 @@ where
     T: ProviderTokenSource,
     L: ProviderRateLimiter,
 {
-    /// Fetches and normalizes one provider message.
+    /// Fetches and normalizes one provider message, including any calendar
+    /// invitation parts, in a single provider read.
     pub async fn get_message(
         &self,
         link_id: Uuid,
         provider_message_id: &str,
-    ) -> Result<Option<Message>, EmailApiError> {
+    ) -> Result<Option<MessageWithCalendarParts>, EmailApiError> {
         let access_token = self.prepare(link_id, ApiOperationKind::GetMessage).await?;
 
         self.repository
@@ -125,7 +128,12 @@ where
     T: ProviderTokenSource,
     L: ProviderRateLimiter,
 {
-    /// Finds calendar invitation parts in one provider message.
+    /// Finds calendar invitation parts in one provider message via a fresh
+    /// provider fetch.
+    ///
+    /// This charges a full message read; ingest paths that already fetched the
+    /// message should consume [`MessageWithCalendarParts::calendar_parts`]
+    /// instead. This lookup exists for durable re-extraction jobs.
     pub async fn get_calendar_parts(
         &self,
         link_id: Uuid,

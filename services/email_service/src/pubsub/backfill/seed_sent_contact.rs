@@ -25,7 +25,7 @@ pub async fn seed_sent_contact(
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
 
-    let Some(message) = ctx
+    let Some(fetched) = ctx
         .email_api
         .get_message(link.id, &p.message_provider_id)
         .await
@@ -36,6 +36,7 @@ pub async fn seed_sent_contact(
         // The message was deleted between listing and this fetch; nothing to seed.
         return Ok(());
     };
+    let message = fetched.message;
 
     let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
 

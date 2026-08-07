@@ -24,14 +24,15 @@ async fn normalizes_messages_and_preserves_deletion_races() {
         .await;
 
     let link_id = Uuid::now_v7();
-    let message = repository
+    let fetched = repository
         .get_message(&AccessToken::new("token"), link_id, "message-1")
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(message.link_id, link_id);
-    assert_eq!(message.subject.as_deref(), Some("Fixture message"));
-    assert!(!message.is_read);
+    assert_eq!(fetched.message.link_id, link_id);
+    assert_eq!(fetched.message.subject.as_deref(), Some("Fixture message"));
+    assert!(!fetched.message.is_read);
+    assert!(fetched.calendar_parts.is_empty());
     assert!(
         repository
             .get_message(&AccessToken::new("token"), link_id, "deleted")
@@ -41,12 +42,8 @@ async fn normalizes_messages_and_preserves_deletion_races() {
     );
 }
 
-#[tokio::test]
-async fn discovers_inline_and_attachment_calendar_parts() {
-    let (server, repository) = repository().await;
-    Mock::given(method("GET"))
-        .and(path("/users/me/messages/calendar"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+fn calendar_message_body() -> serde_json::Value {
+    serde_json::json!({
             "id": "calendar",
             "threadId": "thread",
             "historyId": "1",
@@ -76,14 +73,10 @@ async fn discovers_inline_and_attachment_calendar_parts() {
                     }
                 ]
             }
-        })))
-        .mount(&server)
-        .await;
+    })
+}
 
-    let parts = repository
-        .get_calendar_parts(&AccessToken::new("token"), "calendar")
-        .await
-        .unwrap();
+fn assert_calendar_parts(parts: &[crate::domain::models::CalendarPart]) {
     assert_eq!(parts.len(), 2);
     assert!(
         parts
@@ -95,6 +88,43 @@ async fn discovers_inline_and_attachment_calendar_parts() {
             .iter()
             .any(|part| part.provider_attachment_id.as_deref() == Some("attachment-id"))
     );
+}
+
+#[tokio::test]
+async fn discovers_inline_and_attachment_calendar_parts() {
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/calendar"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(calendar_message_body()))
+        .mount(&server)
+        .await;
+
+    let parts = repository
+        .get_calendar_parts(&AccessToken::new("token"), "calendar")
+        .await
+        .unwrap();
+    assert_calendar_parts(&parts);
+}
+
+#[tokio::test]
+async fn get_message_surfaces_calendar_parts_from_a_single_wire_fetch() {
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/calendar"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(calendar_message_body()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let fetched = repository
+        .get_message(&AccessToken::new("token"), Uuid::now_v7(), "calendar")
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_calendar_parts(&fetched.calendar_parts);
+    // Dropping the server verifies the .expect(1) call count: the calendar
+    // parts came from the same messages.get as the normalized message.
 }
 
 #[tokio::test]

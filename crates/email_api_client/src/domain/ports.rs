@@ -9,8 +9,9 @@ use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{
-    AccessToken, ApiOperationKind, CalendarPart, ChangeBatch, EmailApiError, ProviderSubscription,
-    RateLimitRefusal, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
+    AccessToken, ApiOperationKind, CalendarPart, ChangeBatch, EmailApiError,
+    MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, SendRequest, SentIds,
+    SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
 
 #[cfg(test)]
@@ -49,13 +50,14 @@ pub trait MailboxSubscriptionClient: Send + Sync + 'static {
 
 /// Message and thread read/write capabilities, excluding message sending.
 pub trait MailboxMessageClient: Send + Sync + 'static {
-    /// Fetches and normalizes one provider message.
+    /// Fetches and normalizes one provider message, surfacing any calendar
+    /// invitation parts found in the same wire fetch.
     fn get_message(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         provider_message_id: &str,
-    ) -> impl Future<Output = Result<Option<Message>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<Option<MessageWithCalendarParts>, EmailApiError>> + Send;
 
     /// Fetches the provider label identifiers currently attached to a message.
     fn get_message_label_ids(
@@ -143,6 +145,12 @@ pub trait MailboxLabelClient: Send + Sync + 'static {
 }
 
 /// Calendar invitation discovery capability.
+///
+/// This id-based lookup issues a fresh provider fetch (and pays its quota
+/// charge). Ingest paths that already hold the fetched message should use the
+/// calendar parts surfaced by [`MailboxMessageClient::get_message`] instead;
+/// this port exists for durable re-extraction jobs where a fresh fetch is
+/// correct.
 pub trait MailboxCalendarClient: Send + Sync + 'static {
     /// Finds provider-neutral calendar parts in one message.
     fn get_calendar_parts(
@@ -314,7 +322,7 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Option<Message>, EmailApiError> {
+    ) -> Result<Option<MessageWithCalendarParts>, EmailApiError> {
         Err(unavailable())
     }
 

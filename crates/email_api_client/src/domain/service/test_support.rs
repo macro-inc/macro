@@ -149,7 +149,7 @@ impl MailboxMessageClient for FakeRepository {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Option<Message>, EmailApiError> {
+    ) -> Result<Option<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         self.unavailable("get_message")
     }
 

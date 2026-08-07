@@ -17,7 +17,7 @@ pub async fn backfill_message(
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
-    let mut message = ctx
+    let fetched = ctx
         .email_api
         .get_message(link.id, &p.message_provider_id)
         .await
@@ -28,6 +28,7 @@ pub async fn backfill_message(
                 source: anyhow::anyhow!("Message {} not found in provider", p.message_provider_id),
             })
         })?;
+    let mut message = fetched.message;
 
     process_message_pre_insert(&mut message).await;
 
