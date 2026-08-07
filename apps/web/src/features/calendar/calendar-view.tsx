@@ -19,6 +19,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import { CalendarMonthDrawer } from './CalendarMonthDrawer';
 import { CalendarPage } from './CalendarPage';
@@ -107,10 +108,12 @@ function CalendarPages() {
             <For each={CALENDAR_PAGE_IDS}>
               {(pageId) => (
                 <Pager.Page id={pageId}>
-                  <CalendarPage
-                    id={pageId}
-                    initialDate={calendarPager.initialDateFor(pageId)}
-                  />
+                  <Suspense>
+                    <CalendarPage
+                      id={pageId}
+                      initialDate={calendarPager.initialDateFor(pageId)}
+                    />
+                  </Suspense>
                 </Pager.Page>
               )}
             </For>
