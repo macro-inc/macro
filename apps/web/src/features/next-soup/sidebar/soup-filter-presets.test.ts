@@ -17,3 +17,19 @@ describe('mail view presets', () => {
     }
   });
 });
+
+describe('calendar event scoping', () => {
+  it('excludes calendar events from views that do not render them', () => {
+    const nilId = '00000000-0000-0000-0000-000000000000';
+
+    expect(
+      getViewPreset('mail', 'important')?.filters.include?.calendarEventId
+    ).toEqual([nilId]);
+    expect(
+      getViewPreset('inbox', 'all')?.filters.include?.calendarEventId
+    ).toEqual([nilId]);
+    expect(
+      getViewPreset('search', 'all')?.filters.include?.calendarEventId
+    ).toEqual([nilId]);
+  });
+});

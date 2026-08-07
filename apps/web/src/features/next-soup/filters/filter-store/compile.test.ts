@@ -12,6 +12,7 @@ describe('defineQueryFilters', () => {
     expect(query.include?.threadId).toBeUndefined();
     // ...while other entity targets are still excluded.
     expect(query.include?.documentId).toEqual([NIL_UUID]);
+    expect(query.include?.calendarEventId).toEqual([NIL_UUID]);
     expect(query.include?.chatId).toEqual([NIL_UUID]);
   });
 
@@ -20,10 +21,36 @@ describe('defineQueryFilters', () => {
 
     expect(query.include?.threadId).toEqual([NIL_UUID]);
     expect(query.include?.documentId).toEqual([NIL_UUID]);
+    expect(query.include?.calendarEventId).toEqual([NIL_UUID]);
+  });
+
+  it('treats calendar event ids as referencing the calendar target', () => {
+    const query = defineQueryFilters({
+      exclude: { calendarEventId: [NIL_UUID] },
+    });
+
+    expect(query.include?.calendarEventId).toBeUndefined();
+    expect(query.include?.documentId).toEqual([NIL_UUID]);
   });
 });
 
 describe('compileToAst', () => {
+  it('NIL-excludes calendar events from query states that predate the target', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { threadId: ['thread-1'] } })
+    );
+
+    expect(ast.calf).toEqual({ l: { id: NIL_UUID } });
+  });
+
+  it('compiles calendar event ids to the calendar AST target', () => {
+    const ast = compileToAst(
+      queryStateFrom({ include: { calendarEventId: ['event-1'] } })
+    );
+
+    expect(ast.calf).toEqual({ l: { id: 'event-1' } });
+  });
+
   it('keeps existing flat include and exclude document filters unchanged', () => {
     const state: QueryState = {
       include: {

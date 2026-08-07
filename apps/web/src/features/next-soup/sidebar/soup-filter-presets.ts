@@ -137,8 +137,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: {
-          // crm companies aren't surfaced outside the Companies view.
+          // Calendar events are not rendered by Soup, and CRM companies are
+          // not surfaced outside the Companies view.
           include: {
+            calendarEventId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
               ? { foreignEntitySource: ['github_pull_request'] }
@@ -488,13 +490,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. CRM rows and non-displayable channel-thread rows are
+        // them. Calendar, CRM, and non-displayable channel-thread rows are
         // NIL-excluded the same way. `search-supported` mirrors these
         // exclusions client-side so entities that enter the soup cache outside
         // this query (e.g. websocket-driven inserts) don't surface in the
         // search feed.
         filters: {
           include: {
+            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],

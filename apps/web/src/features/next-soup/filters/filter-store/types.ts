@@ -32,6 +32,7 @@ export type ArrayFieldFilters = {
   subType?: string[];
   projectId?: string[];
   documentOwnerId?: string[];
+  calendarEventId?: string[];
   threadId?: string[];
   emailLinkId?: string[];
   emailProjectId?: string[];

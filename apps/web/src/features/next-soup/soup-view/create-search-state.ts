@@ -67,6 +67,18 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
   const { include } = data;
 
+  // Calendar events are not displayed in Soup search. Older restored query
+  // states predate calendarEventId, so treat a missing field as match-nothing;
+  // an explicit include/exclude remains authoritative.
+  const calendarEventIds =
+    include.calendarEventId ??
+    (data.exclude.calendarEventId === undefined ? [NIL_UUID] : undefined);
+  if (calendarEventIds?.length) {
+    filters.calendar_event_filters = {
+      calendar_event_ids: calendarEventIds,
+    };
+  }
+
   // Document filters
   if (
     include.documentId?.length ||

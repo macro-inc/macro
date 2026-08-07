@@ -30,6 +30,7 @@ export function useCompanyEmailsQuery(
   return useSoupAstItemsQuery(
     () => {
       const base = {
+        calf: { l: { id: NIL_UUID } },
         df: { l: { id: NIL_UUID } },
         chanf: { l: { ChannelId: NIL_UUID } },
         cthf: { l: { ThreadId: NIL_UUID } },
