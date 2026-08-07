@@ -8292,6 +8292,15 @@
             }
           },
           {
+            "name": "sort_direction",
+            "in": "query",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SoupApiSortDirection"
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "description": "Base64 encoded cursor value.",
@@ -19510,6 +19519,17 @@
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -20999,7 +21019,7 @@
         "properties": {
           "completed": {
             "type": ["boolean", "null"],
-            "description": "Filter on whether the reminder has already fired. `None` returns both."
+            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
           },
           "entities": {
             "type": "array",
@@ -21007,6 +21027,10 @@
               "type": "string"
             },
             "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "fired": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
           },
           "ids": {
             "type": "array",
@@ -21538,6 +21562,11 @@
           "viewed_updated",
           "frecency"
         ]
+      },
+      "SoupApiSortDirection": {
+        "type": "string",
+        "description": "Sort direction accepted by non-grouped soup API endpoints.",
+        "enum": ["asc", "desc"]
       },
       "SoupAttachment": {
         "type": "object",

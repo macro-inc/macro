@@ -2854,7 +2854,7 @@
         "properties": {
           "completed": {
             "type": ["boolean", "null"],
-            "description": "Filter on whether the reminder has already fired. `None` returns both."
+            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
           },
           "entities": {
             "type": "array",
@@ -2862,6 +2862,10 @@
               "type": "string"
             },
             "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "fired": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
           },
           "ids": {
             "type": "array",

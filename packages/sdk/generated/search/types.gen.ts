@@ -1443,13 +1443,23 @@ export type PropertyValue = {
  */
 export type ReminderFilters = {
     /**
-     * Filter on whether the reminder has already fired. `None` returns both.
+     * Filter on whether the owner has marked the reminder done. `None` returns
+     * both.
      */
     completed?: boolean | null;
     /**
      * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
      */
     entities?: Array<string>;
+    /**
+     * Filter on whether the reminder's next run has come due, i.e. it has
+     * fired and is awaiting its owner. `None` returns both.
+     *
+     * Evaluated server-side against the database clock rather than a
+     * timestamp supplied by the caller: a timestamp would land in the query
+     * cache key and change on every render.
+     */
+    fired?: boolean | null;
     /**
      * Reminder ids to filter by. Empty to include all of the caller's reminders.
      */

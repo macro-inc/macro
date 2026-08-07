@@ -5434,6 +5434,7 @@ export type Params = {
      * Limit the number of items returned. Defaults to 20. Max 500.
      */
     limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | SoupApiSort;
 };
 
@@ -6124,13 +6125,23 @@ export type Reminder = {
  */
 export type ReminderFilters = {
     /**
-     * Filter on whether the reminder has already fired. `None` returns both.
+     * Filter on whether the owner has marked the reminder done. `None` returns
+     * both.
      */
     completed?: boolean | null;
     /**
      * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
      */
     entities?: Array<string>;
+    /**
+     * Filter on whether the reminder's next run has come due, i.e. it has
+     * fired and is awaiting its owner. `None` returns both.
+     *
+     * Evaluated server-side against the database clock rather than a
+     * timestamp supplied by the caller: a timestamp would land in the query
+     * cache key and change on every render.
+     */
+    fired?: boolean | null;
     /**
      * Reminder ids to filter by. Empty to include all of the caller's reminders.
      */
@@ -6470,6 +6481,11 @@ export type SoupApiItem = SoupItem & {
  * Sort options accepted by non-grouped soup API endpoints.
  */
 export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency';
+
+/**
+ * Sort direction accepted by non-grouped soup API endpoints.
+ */
+export type SoupApiSortDirection = 'asc' | 'desc';
 
 /**
  * An email attachment as displayed in Soup.
@@ -11453,6 +11469,17 @@ export type GetItemsSoupData = {
          * Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
+        /**
+         * Sort direction. Options are asc, desc. Defaults to desc.
+         *
+         * Re-send this with every page: it is not carried in the cursor.
+         *
+         * Applies to the timestamp sort methods only. `asc` combined with
+         * `frecency` is rejected rather than ignored: frecency pages are ordered
+         * by relevance score and the cursor comparison assumes descending, so
+         * there is no ascending frecency order to give.
+         */
+        sort_direction?: SoupApiSortDirection;
         /**
          * Base64 encoded cursor value.
          */
