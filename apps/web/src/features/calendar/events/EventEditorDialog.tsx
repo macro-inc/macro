@@ -7,35 +7,32 @@ import {
 } from '@queries/calendar/mutations';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
+import {
+  addDays,
+  addHours,
+  format,
+  isMatch,
+  parseISO,
+  startOfHour,
+} from 'date-fns';
 import { createMemo, createSignal, Show } from 'solid-js';
 import type { CalendarEvent } from './types';
 
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+/** `<input type="date">` value. */
+const DATE_VALUE = 'yyyy-MM-dd';
+/** `<input type="datetime-local">` value. */
+const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
 
-const pad = (value: number) => String(value).padStart(2, '0');
-
-function toLocalDateValue(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function toLocalDateTimeValue(date: Date) {
-  return `${toLocalDateValue(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+const isDateOnly = (value: string) => isMatch(value, DATE_VALUE);
 
 function shiftDateValue(value: string, days: number) {
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(year ?? 0, (month ?? 1) - 1, (day ?? 1) + days);
-  return toLocalDateValue(date);
+  return format(addDays(parseISO(value), days), DATE_VALUE);
 }
 
 /** Default editor slot: the next full hour, one hour long. */
 function defaultEditorTimes(reference: Date) {
-  const start = new Date(reference);
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
-  return { start, end };
+  const start = addHours(startOfHour(reference), 1);
+  return { start, end: addHours(start, 1) };
 }
 
 interface EditorState {
@@ -56,20 +53,20 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
     return {
       title: '',
       allDay: false,
-      start: toLocalDateTimeValue(start),
-      end: toLocalDateTimeValue(end),
+      start: format(start, DATETIME_VALUE),
+      end: format(end, DATETIME_VALUE),
       location: '',
       description: '',
       guests: '',
     };
   }
   if (event.allDay) {
-    const start = DATE_ONLY_REGEX.test(event.start)
+    const start = isDateOnly(event.start)
       ? event.start
-      : toLocalDateValue(new Date(event.start));
-    const exclusiveEnd = DATE_ONLY_REGEX.test(event.end)
+      : format(new Date(event.start), DATE_VALUE);
+    const exclusiveEnd = isDateOnly(event.end)
       ? event.end
-      : toLocalDateValue(new Date(event.end));
+      : format(new Date(event.end), DATE_VALUE);
     return {
       title: event.title,
       allDay: true,
@@ -83,8 +80,8 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
   return {
     title: event.title,
     allDay: false,
-    start: toLocalDateTimeValue(new Date(event.start)),
-    end: toLocalDateTimeValue(new Date(event.end)),
+    start: format(new Date(event.start), DATETIME_VALUE),
+    end: format(new Date(event.end), DATETIME_VALUE),
     location: event.location ?? '',
     description: event.description ?? '',
     guests: '',
@@ -134,12 +131,12 @@ function convertTimesForAllDay(state: EditorState, allDay: boolean) {
       end: state.end.slice(0, 10),
     };
   }
-  const { start, end } = defaultEditorTimes(new Date(`${state.start}T00:00`));
+  const { start, end } = defaultEditorTimes(parseISO(state.start));
   return {
     ...state,
     allDay,
-    start: toLocalDateTimeValue(start),
-    end: toLocalDateTimeValue(end),
+    start: format(start, DATETIME_VALUE),
+    end: format(end, DATETIME_VALUE),
   };
 }
 
