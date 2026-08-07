@@ -14,7 +14,7 @@ use axum::{
     extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, patch, post, put},
+    routing::{get, patch, post, put},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
@@ -61,7 +61,8 @@ impl<S, Auth> FromRef<CalendarMutationRouterState<S, Auth>> for MacroAuthorizati
     }
 }
 
-/// Build the authenticated calendar mutation router, rooted at `/events`.
+/// Build the authenticated calendar mutation router, exposing `/calendars`
+/// and `/events` (mounted under `/calendar` by the service).
 pub fn calendar_mutation_router<S, Auth, T>(
     state: CalendarMutationRouterState<S, Auth>,
 ) -> Router<T>
@@ -75,11 +76,7 @@ where
         .route("/events", post(create_calendar_event::<S, Auth>))
         .route(
             "/events/{event_id}",
-            patch(update_calendar_event::<S, Auth>),
-        )
-        .route(
-            "/events/{event_id}",
-            delete(delete_calendar_event::<S, Auth>),
+            patch(update_calendar_event::<S, Auth>).delete(delete_calendar_event::<S, Auth>),
         )
         .route(
             "/events/{event_id}/rsvp",
@@ -142,7 +139,7 @@ pub struct CreateCalendarEventRequest {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCalendarEventRequest {
-    /// Replacement title.
+    /// Replacement title; an empty string clears it.
     pub title: Option<String>,
     /// Replacement description; an empty string clears it.
     pub description: Option<String>,
@@ -194,7 +191,7 @@ pub struct RsvpCalendarEventRequest {
 }
 
 /// Machine-readable failure category for calendar mutations.
-#[derive(Clone, Copy, Debug, Serialize, utoipa::ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarMutationErrorCode {
     /// The event does not exist or is not visible to the requester.
@@ -237,11 +234,7 @@ impl std::fmt::Display for CalendarMutationApiError {
 
 impl IntoResponse for CalendarMutationApiError {
     fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(serde_json::json!({ "code": self.code, "message": self.message })),
-        )
-            .into_response()
+        (self.status, Json(&self)).into_response()
     }
 }
 

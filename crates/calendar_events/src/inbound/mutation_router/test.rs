@@ -1,46 +1,65 @@
 use super::*;
 
-fn status_of(error: CalendarMutationError) -> StatusCode {
-    CalendarMutationApiError::from(error).status
+fn transport_of(error: CalendarMutationError) -> (StatusCode, CalendarMutationErrorCode) {
+    let api_error = CalendarMutationApiError::from(error);
+    (api_error.status, api_error.code)
 }
 
 #[test]
 fn domain_errors_map_to_distinct_transport_semantics() {
     assert_eq!(
-        status_of(CalendarMutationError::NotFound),
-        StatusCode::NOT_FOUND
+        transport_of(CalendarMutationError::NotFound),
+        (StatusCode::NOT_FOUND, CalendarMutationErrorCode::NotFound)
     );
     assert_eq!(
-        status_of(CalendarMutationError::ReadOnly),
-        StatusCode::FORBIDDEN
+        transport_of(CalendarMutationError::ReadOnly),
+        (StatusCode::FORBIDDEN, CalendarMutationErrorCode::ReadOnly)
     );
     assert_eq!(
-        status_of(CalendarMutationError::NoWritableCalendar),
-        StatusCode::CONFLICT
+        transport_of(CalendarMutationError::NoWritableCalendar),
+        (
+            StatusCode::CONFLICT,
+            CalendarMutationErrorCode::NoWritableCalendar
+        )
     );
     assert_eq!(
-        status_of(CalendarMutationError::NotAttendee),
-        StatusCode::CONFLICT
+        transport_of(CalendarMutationError::NotAttendee),
+        (StatusCode::CONFLICT, CalendarMutationErrorCode::NotAttendee)
     );
     assert_eq!(
-        status_of(CalendarMutationError::InvalidInput("bad".to_string())),
-        StatusCode::BAD_REQUEST
+        transport_of(CalendarMutationError::InvalidInput("bad".to_string())),
+        (
+            StatusCode::BAD_REQUEST,
+            CalendarMutationErrorCode::InvalidInput
+        )
     );
     assert_eq!(
-        status_of(CalendarMutationError::ReauthRequired("expired".to_string())),
-        StatusCode::FORBIDDEN
+        transport_of(CalendarMutationError::ReauthRequired("expired".to_string())),
+        (
+            StatusCode::FORBIDDEN,
+            CalendarMutationErrorCode::ReauthRequired
+        )
     );
     assert_eq!(
-        status_of(CalendarMutationError::ProviderRejected("no".to_string())),
-        StatusCode::CONFLICT
+        transport_of(CalendarMutationError::ProviderRejected("no".to_string())),
+        (
+            StatusCode::CONFLICT,
+            CalendarMutationErrorCode::ProviderRejected
+        )
     );
     assert_eq!(
-        status_of(CalendarMutationError::Retryable("later".to_string())),
-        StatusCode::SERVICE_UNAVAILABLE
+        transport_of(CalendarMutationError::Retryable("later".to_string())),
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            CalendarMutationErrorCode::Retryable
+        )
     );
     assert_eq!(
-        status_of(CalendarMutationError::PersistFailed("lag".to_string())),
-        StatusCode::INTERNAL_SERVER_ERROR
+        transport_of(CalendarMutationError::PersistFailed("lag".to_string())),
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            CalendarMutationErrorCode::PersistFailed
+        )
     );
 }
 
