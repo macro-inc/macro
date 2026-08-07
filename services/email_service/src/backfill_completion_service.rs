@@ -116,7 +116,7 @@ pub(crate) async fn handle_job_completed(
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to complete email and calendar backfill jobs"),
+            source: e.context("Failed to complete email backfill job"),
         })
     })?;
 
