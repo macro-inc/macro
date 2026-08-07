@@ -1,8 +1,10 @@
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+};
 use models_email::gmail::{Header, MessagePart, MessagePartBody};
 
 use super::parse_gmail_payload;
-use crate::domain::models::EmailApiError;
 
 fn payload(mime_type: &str, data: &str) -> MessagePart {
     MessagePart {
@@ -39,10 +41,49 @@ fn decodes_headers_and_text_body() {
 }
 
 #[test]
-fn rejects_invalid_base64_as_a_permanent_failure() {
-    let result = parse_gmail_payload(&payload("text/plain", "%%%"), "message");
+fn skips_undecodable_body_data_but_keeps_the_message() {
+    let parsed = parse_gmail_payload(&payload("text/plain", "%%%"), "message").unwrap();
 
-    assert!(matches!(result, Err(EmailApiError::Permanent { .. })));
+    assert_eq!(parsed.body_text, None);
+    assert_eq!(parsed.global_id, "global-id");
+    assert_eq!(parsed.from.unwrap().email, "ada@example.com");
+}
+
+#[test]
+fn accepts_unpadded_base64url_bodies() {
+    let encoded = URL_SAFE_NO_PAD.encode("Hello");
+    assert!(encoded.len() % 4 != 0, "fixture must exercise unpadded input");
+
+    let parsed = parse_gmail_payload(&payload("text/plain", &encoded), "message").unwrap();
+
+    assert_eq!(parsed.body_text.as_deref(), Some("Hello"));
+}
+
+#[test]
+fn one_bad_part_does_not_sink_sibling_parts() {
+    let mut root = payload("multipart/alternative", "");
+    root.body = None;
+
+    let mut bad = payload("text/plain", "%%%");
+    bad.headers.clear();
+    bad.part_id = "bad-part".into();
+
+    let mut good = payload("text/html", &URL_SAFE.encode("<p>Hello</p>"));
+    good.headers.clear();
+    good.part_id = "good-part".into();
+
+    root.parts = Some(vec![bad, good]);
+
+    let parsed = parse_gmail_payload(&root, "message").unwrap();
+
+    assert_eq!(parsed.body_text, None);
+    assert!(
+        parsed
+            .body_html_sanitized
+            .as_deref()
+            .unwrap()
+            .contains("<p>Hello</p>")
+    );
 }
 
 #[test]

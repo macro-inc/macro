@@ -1,4 +1,7 @@
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+};
 use chrono::{DateTime, TimeZone, Utc};
 use models_email::email::service;
 use models_email::gmail::{Header, MessagePart};
@@ -71,7 +74,7 @@ pub(super) fn parse_gmail_payload(
 
     let mut part_stack = vec![message_payload];
     while let Some(part) = part_stack.pop() {
-        parse_part(part, message_id, &mut parsed)?;
+        parse_part(part, message_id, &mut parsed);
         if let Some(parts) = &part.parts {
             part_stack.extend(parts.iter().rev());
         }
@@ -80,11 +83,7 @@ pub(super) fn parse_gmail_payload(
     Ok(parsed)
 }
 
-fn parse_part(
-    part: &MessagePart,
-    message_id: &str,
-    parsed: &mut ParsedGmailPayload,
-) -> Result<(), EmailApiError> {
+fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayload) {
     let mime_type = part.mime_type.to_lowercase();
     let is_multipart = mime_type.starts_with("multipart/alternative")
         || mime_type.starts_with("multipart/related")
@@ -99,20 +98,37 @@ fn parse_part(
         || (!part.filename.is_empty() && !is_multipart && !mime_type.starts_with("text/"));
 
     let Some(body) = &part.body else {
-        return Ok(());
+        return;
     };
 
     if let Some(encoded) = &body.data_base64 {
-        let bytes = URL_SAFE
-            .decode(encoded)
-            .map_err(|error| EmailApiError::Permanent {
-                message: format!("invalid base64 body for Gmail message {message_id}: {error}"),
-            })?;
-        if mime_type == "text/plain" && parsed.body_text.is_none() {
-            parsed.body_text = Some(String::from_utf8_lossy(&bytes).into_owned());
-        } else if mime_type == "text/html" && parsed.body_html_sanitized.is_none() {
-            parsed.body_html_sanitized =
-                Some(sanitize_email_html(&String::from_utf8_lossy(&bytes)));
+        let wants_text = mime_type == "text/plain" && parsed.body_text.is_none();
+        let wants_html = mime_type == "text/html" && parsed.body_html_sanitized.is_none();
+        if wants_text || wants_html {
+            // Gmail emits both padded and unpadded base64url in practice.
+            match URL_SAFE_NO_PAD
+                .decode(encoded)
+                .or_else(|_| URL_SAFE.decode(encoded))
+            {
+                Ok(bytes) if wants_text => {
+                    parsed.body_text = Some(String::from_utf8_lossy(&bytes).into_owned());
+                }
+                Ok(bytes) => {
+                    parsed.body_html_sanitized =
+                        Some(sanitize_email_html(&String::from_utf8_lossy(&bytes)));
+                }
+                // A single undecodable part must not sink the message (or its
+                // whole thread): keep the rest of the message and move on.
+                Err(error) => {
+                    tracing::warn!(
+                        message_id = %message_id,
+                        part_id = %part.part_id,
+                        mime = %part.mime_type,
+                        error = %error,
+                        "failed to decode base64 body data"
+                    );
+                }
+            }
         }
     }
 
@@ -126,8 +142,6 @@ fn parse_part(
             content_id: find_header(&part.headers, "Content-ID").map(str::to_owned),
         });
     }
-
-    Ok(())
 }
 
 fn contact_info(name: Option<String>, email: String) -> service::address::ContactInfo {

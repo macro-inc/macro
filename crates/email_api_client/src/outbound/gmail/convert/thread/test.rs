@@ -38,6 +38,26 @@ fn message(id: &str, timestamp: i64, labels: Vec<String>) -> MessageResource {
 }
 
 #[test]
+fn thread_with_an_undecodable_message_body_still_converts() {
+    let mut broken = message("broken", 1_000, vec!["INBOX".into()]);
+    broken.payload.body = Some(MessagePartBody {
+        attachment_id: None,
+        size: 3,
+        data_base64: Some("%%%".into()),
+    });
+    let resource = ThreadResource {
+        id: "thread".into(),
+        messages: vec![broken, message("fine", 2_000, vec![])],
+    };
+
+    let thread = map_thread_resource_to_service(resource, Uuid::now_v7()).unwrap();
+
+    assert_eq!(thread.messages.len(), 2);
+    assert_eq!(thread.messages[0].provider_id.as_deref(), Some("broken"));
+    assert_eq!(thread.messages[0].body_text, None);
+}
+
+#[test]
 fn sorts_messages_and_derives_thread_state() {
     let resource = ThreadResource {
         id: "thread".into(),

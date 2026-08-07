@@ -61,7 +61,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.3 Restore warn-and-skip for undecodable MIME part bodies
 
-- [ ] **Status**
+- [x] **Status** — done
 
 **Problem.** `crates/email_api_client/src/outbound/gmail/convert/payload.rs:105-110` returns `EmailApiError::Permanent` when any part's `body.data_base64` fails to decode — the decode runs for every data-carrying part, including parts whose bytes are then discarded. Both sync and backfill map `Permanent` to non-retryable, and `thread.rs:28` collects with `.collect::<Result<Vec<_>,_>>()?`, so one bad part permanently blocks the message **and its whole thread**. Main warned and continued (`git show 9362a31c5:services/email_service/src/convert/payload.rs`, lines 105-121). The strict `URL_SAFE` engine also rejects non-canonical/unpadded input that this PR's own calendar path tolerates (`outbound/gmail/messages.rs:50-53`).
 
