@@ -851,6 +851,36 @@ pub struct GoogleCalendarSyncSnapshot {
     pub cancelled_provider_event_ids: Vec<String>,
 }
 
+/// What one Google backfill run changed, for change-driven notifications.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GoogleBackfillRunReport {
+    /// Events written through the ingestion upsert this run.
+    pub events_upserted: usize,
+    /// Cancellation tombstones the change feed reported this run.
+    pub cancellations_observed: usize,
+}
+
+impl GoogleBackfillRunReport {
+    /// Whether the run plausibly changed the local projection. Quiet
+    /// token-only polls report nothing and skip client notifications.
+    pub fn changed(&self) -> bool {
+        self.events_upserted > 0 || self.cancellations_observed > 0
+    }
+}
+
+/// Realtime signal that a connected inbox's calendar projection changed.
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum RefreshCalendarEvent {
+    /// A sync run committed changes for `link_id`; viewers should refetch.
+    #[serde(rename_all = "snake_case")]
+    Synced {
+        /// Connected inbox whose calendars changed.
+        link_id: Uuid,
+    },
+}
+
 /// Kind of idempotent historical work triggered by a Google grant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalendarBackfillKind {

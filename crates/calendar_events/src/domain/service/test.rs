@@ -5,9 +5,9 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
         CalendarSyncStatus, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource,
-        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
-        StoredGoogleCalendar,
+        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
+        ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -428,7 +428,7 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         .await
         .unwrap();
 
-    assert_eq!(count, 0);
+    assert_eq!(count, GoogleBackfillRunReport::default());
     assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
 }
 
@@ -500,7 +500,7 @@ async fn freshly_synced_system_calendars_are_skipped() {
         .await
         .unwrap();
 
-    assert_eq!(count, 0);
+    assert_eq!(count, GoogleBackfillRunReport::default());
     assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
 }
 

@@ -9,7 +9,8 @@ use super::{
     models::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarOccurrenceCursor, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarOccurrenceCursor, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
@@ -285,7 +286,7 @@ where
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<usize, GoogleCalendarBackfillRunError> {
+    ) -> Result<GoogleBackfillRunReport, GoogleCalendarBackfillRunError> {
         let (lease_token, account_id) = match self
             .lifecycle
             .claim_google_backfill(key)
@@ -296,7 +297,7 @@ where
                 lease_token,
                 account_id,
             } => (lease_token, account_id),
-            CalendarBackfillClaim::Complete => return Ok(0),
+            CalendarBackfillClaim::Complete => return Ok(GoogleBackfillRunReport::default()),
             CalendarBackfillClaim::Busy => return Err(GoogleCalendarBackfillRunError::Busy),
             CalendarBackfillClaim::Failed => {
                 return Err(GoogleCalendarBackfillRunError::AlreadyFailed);
@@ -341,12 +342,12 @@ where
         };
 
         match result {
-            Ok(count) => {
+            Ok(report) => {
                 self.lifecycle
                     .complete_google_backfill(key, lease_token)
                     .await
                     .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
-                Ok(count)
+                Ok(report)
             }
             Err(error) => {
                 let provider_error = error
@@ -430,7 +431,7 @@ where
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<usize, Report> {
+    ) -> Result<GoogleBackfillRunReport, Report> {
         if !range.is_valid_for_backfill() {
             return Err(rootcause::report!(CalendarValidationError::InvalidRange).into());
         }
@@ -439,7 +440,7 @@ where
             .list_calendars(access_token, key.email_link_id)
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
-        let mut count = 0;
+        let mut report = GoogleBackfillRunReport::default();
         let mut calendar_ids = Vec::with_capacity(calendars.len());
 
         for provider_calendar in calendars {
@@ -505,7 +506,8 @@ where
                     .await?;
                 calendar_count += 1;
             }
-            count += calendar_count;
+            report.events_upserted += calendar_count;
+            report.cancellations_observed += batch.cancelled_provider_event_ids.len();
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
@@ -579,7 +581,7 @@ where
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
 
-        Ok(count)
+        Ok(report)
     }
 }
 

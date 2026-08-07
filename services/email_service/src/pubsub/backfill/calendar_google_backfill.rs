@@ -1,4 +1,5 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::cg_refresh_calendar;
 use calendar_events::domain::{
     models::{CalendarBackfillJobKey, OccurrenceRange},
     service::GoogleCalendarBackfillRunError,
@@ -18,7 +19,8 @@ pub async fn calendar_google_backfill(
     link: &Link,
     payload: &CalendarBackfillPayload,
 ) -> Result<(), ProcessingError> {
-    ctx.calendar_backfills
+    let report = ctx
+        .calendar_backfills
         .google
         .run(
             CalendarBackfillJobKey {
@@ -30,8 +32,19 @@ pub async fn calendar_google_backfill(
             OccurrenceRange::maintenance_horizon(Utc::now()),
         )
         .await
-        .map(|_| ())
-        .map_err(map_run_error)
+        .map_err(map_run_error)?;
+    // Quiet token-only polls change nothing; only real changes nudge
+    // active viewers to refetch.
+    if report.changed() {
+        cg_refresh_calendar(
+            &ctx.connection_gateway_client,
+            &ctx.db,
+            link.macro_id.as_ref(),
+            link.id,
+        )
+        .await;
+    }
+    Ok(())
 }
 
 fn map_run_error(error: GoogleCalendarBackfillRunError) -> ProcessingError {

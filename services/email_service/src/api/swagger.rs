@@ -208,7 +208,8 @@ use utoipa::OpenApi;
             calendar_events::domain::models::EventTime,
             calendar_events::domain::models::EventStatus,
             calendar_events::domain::models::EventVisibility,
-            calendar_events::domain::models::EventTransparency
+            calendar_events::domain::models::EventTransparency,
+            calendar_events::domain::models::RefreshCalendarEvent
         ),
     ),
     tags(

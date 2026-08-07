@@ -1,0 +1,29 @@
+import { queryClient } from '@queries/client';
+import { calendarKeys } from './keys';
+import { invalidateCalendarOccurrences } from './occurrences';
+
+/**
+ * Handles `refresh_calendar` websocket events: a sync run committed
+ * provider-side changes for one of the viewer's (owned or delegated)
+ * inboxes, so mounted calendar viewports refetch. The calendar list is
+ * invalidated too, since the same sync discovers new calendars and
+ * renames/recolors existing ones.
+ *
+ * Macro-originated mutations don't need this signal in the acting tab —
+ * they persist the provider echo synchronously — but their sync echo
+ * flows through here, which is what keeps other tabs and devices fresh.
+ */
+export function handleRefreshCalendar(payload: unknown): void {
+  const event =
+    typeof payload === 'object' &&
+    payload !== null &&
+    typeof (payload as { event?: unknown }).event === 'string'
+      ? (payload as { event: string })
+      : undefined;
+  if (event?.event !== 'synced') return;
+
+  invalidateCalendarOccurrences();
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.visibleCalendars.queryKey,
+  });
+}
