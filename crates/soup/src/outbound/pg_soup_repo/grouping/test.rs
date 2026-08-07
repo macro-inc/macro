@@ -3,7 +3,10 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
     GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup_grouped,
 };
 use filter_ast::Expr;
-use item_filters::ast::{EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral};
+use item_filters::ast::{
+    EntityFilterAst, calendar_event::CalendarEventLiteral, chat::ChatLiteral,
+    document::DocumentLiteral,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_grouping::date_bucket_sql_key;
@@ -487,6 +490,52 @@ async fn grouped_soup_runs_when_document_arm_excluded(pool: Pool<Postgres>) -> a
     assert!(
         items.iter().all(|item| item.key != "document"),
         "documents must be filtered out"
+    );
+
+    Ok(())
+}
+
+/// Every Soup query sends a NIL calendar id to scope calendar events out. The
+/// calendar arm was the one leg with no impossible-filter gate, so it stayed in
+/// the union and pushed its id through `push_bind` — whose $1 collided with the
+/// hand-numbered user id, failing with "operator does not exist: text = uuid".
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_soup_runs_when_calendar_arm_excluded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let filter = EntityFilterAst {
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(
+            uuid::Uuid::nil(),
+        )))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+
+    assert!(!items.is_empty(), "documents and chats should remain");
+    assert!(
+        items.iter().all(|item| item.key != "calendar_event"),
+        "calendar events must be filtered out"
     );
 
     Ok(())
