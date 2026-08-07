@@ -112,7 +112,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.6 Stop paying a link SELECT + new Redis connection + health UPDATE on every Gmail call
 
-- [ ] **Status**
+- [x] **Status** — done (required fixes 1+2; recommended fix 3 — threading `&Link` through hot paths — left as the immediate follow-up the spec allows; `get_access_token_for_link` already skips the SELECT)
 
 **Problem.** `EmailApiClientServiceImpl::prepare()` runs per operation, and `EmailServiceTokenSource::get_access_token` (`services/email_service/src/outbound/email_api/token_source.rs:57-63, 89-94, 122-129`) performs, per Gmail API call: a `fetch_link_by_id` Postgres SELECT (for a link every call site already holds), `get_multiplexed_async_connection()` — which **dials a new Redis TCP connection per call** (redis-rs is not a pool), a Redis GET, and a guarded-but-unconditional `clear_link_needs_reauth` UPDATE. Main amortized this once per SQS message / HTTP request. A 50-change history batch: 1 token dance → 50; a message with N attachments: 1 → N+2; backfills multiply by thousands, against DB pools sized 15/25, at peak load.
 

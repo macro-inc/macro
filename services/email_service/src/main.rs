@@ -190,7 +190,7 @@ async fn main() -> anyhow::Result<()> {
         gmail_api_repository,
         EmailServiceTokenSource::new(
             db.clone(),
-            redis_client.clone(),
+            redis_conn.clone(),
             auth_service_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
         ),

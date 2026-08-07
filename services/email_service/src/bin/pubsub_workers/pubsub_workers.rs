@@ -31,12 +31,13 @@ fn compose_email_api(
     subscription_topic: String,
     auth_service_client: authentication_service_client::AuthServiceClient,
     redis_client: RedisClient,
+    redis_conn: redis::aio::MultiplexedConnection,
     sqs_client: sqs_client::SQS,
     rate_budget: RateBudget,
 ) -> GmailApi {
     GmailApi::new(
         GmailApiClientRepository::from_subscription_topic(subscription_topic),
-        EmailServiceTokenSource::new(db, redis_client.clone(), auth_service_client, sqs_client),
+        EmailServiceTokenSource::new(db, redis_conn, auth_service_client, sqs_client),
         RedisProviderRateLimiter::new(redis_client, rate_budget),
     )
 }
@@ -278,11 +279,20 @@ async fn main() -> anyhow::Result<()> {
         config.redis_rate_limit_window_secs,
     );
 
+    // One long-lived multiplexed connection shared by both token sources;
+    // cloning it is an Arc bump, not a new TCP dial per provider call.
+    let redis_conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for token sources")?;
+
     let email_api_live = compose_email_api(
         db.clone(),
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
         redis_client.clone(),
+        redis_conn.clone(),
         sqs_client.clone(),
         RateBudget::Live,
     );
@@ -291,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
         redis_client.clone(),
+        redis_conn,
         sqs_client.clone(),
         RateBudget::Backfill,
     );

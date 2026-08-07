@@ -3,18 +3,16 @@
 #[cfg(test)]
 mod test;
 
-use anyhow::Context;
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
 use email_api_client::domain::ports::ProviderTokenSource;
 use models_email::email::service::cache::TokenCacheKey;
 use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::link::Link;
+use redis::aio::MultiplexedConnection;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use uuid::Uuid;
-
-use crate::util::redis::RedisClient;
 
 /// Token source that resolves linked mailboxes through the email database and
 /// acquires Gmail grants through Redis and the authentication service.
@@ -25,22 +23,26 @@ use crate::util::redis::RedisClient;
 #[derive(Clone)]
 pub struct EmailServiceTokenSource {
     db: PgPool,
-    redis_client: RedisClient,
+    redis_conn: MultiplexedConnection,
     auth_service_client: AuthServiceClient,
     sqs_client: SQS,
 }
 
 impl EmailServiceTokenSource {
     /// Creates an email-service token source from its infrastructure clients.
+    ///
+    /// The [`MultiplexedConnection`] is cheap to clone and designed to be
+    /// shared, so token acquisition never dials a new Redis TCP connection
+    /// per provider call.
     pub fn new(
         db: PgPool,
-        redis_client: RedisClient,
+        redis_conn: MultiplexedConnection,
         auth_service_client: AuthServiceClient,
         sqs_client: SQS,
     ) -> Self {
         Self {
             db,
-            redis_client,
+            redis_conn,
             auth_service_client,
             sqs_client,
         }
@@ -62,7 +64,9 @@ impl ProviderTokenSource for EmailServiceTokenSource {
             .map_err(|_| transient_error("unable to load the linked mailbox"))?
             .ok_or_else(|| transient_error("linked mailbox was not found"))?;
 
-        self.get_access_token_for_link(&link, freshness).await
+        // The row was just read, so the health-clear UPDATE can be gated on
+        // its needs_reauth value instead of running unconditionally per call.
+        self.acquire(&link, freshness, link.needs_reauth).await
     }
 
     async fn get_access_token_for_link(
@@ -70,34 +74,42 @@ impl ProviderTokenSource for EmailServiceTokenSource {
         link: &Link,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
+        // Caller-supplied Link values cannot gate the health clear: callers
+        // like attach_link_context hardcode needs_reauth: false, which would
+        // wrongly skip the UPDATE. Always attempt the clear on this path.
+        self.acquire(link, freshness, true).await
+    }
+}
+
+impl EmailServiceTokenSource {
+    async fn acquire(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+        row_may_need_reauth: bool,
+    ) -> Result<AccessToken, TokenError> {
         let result = self.fetch_token(link, freshness).await;
-        let result = self.record_token_health(link, result).await;
+        let result = self
+            .record_token_health(link, result, row_may_need_reauth)
+            .await;
 
         result
             .map(AccessToken::new)
             .map_err(map_token_acquisition_error)
     }
-}
 
-impl EmailServiceTokenSource {
     async fn fetch_token(&self, link: &Link, freshness: TokenFreshness) -> anyhow::Result<String> {
         let key = TokenCacheKey::new(
             &link.fusionauth_user_id,
             link.email_address.0.as_ref(),
             link.provider.as_str(),
         );
-        let connection = self
-            .redis_client
-            .inner
-            .get_multiplexed_async_connection()
-            .await
-            .context("unable to connect to redis")?;
 
         match freshness {
             TokenFreshness::Cached => {
                 email::outbound::fetch_gmail_access_token(
                     &key,
-                    &connection,
+                    &self.redis_conn,
                     &self.auth_service_client,
                 )
                 .await
@@ -105,7 +117,7 @@ impl EmailServiceTokenSource {
             TokenFreshness::Fresh => {
                 email::outbound::fetch_gmail_access_token_no_cache(
                     &key,
-                    &connection,
+                    &self.redis_conn,
                     &self.auth_service_client,
                 )
                 .await
@@ -117,15 +129,11 @@ impl EmailServiceTokenSource {
         &self,
         link: &Link,
         result: anyhow::Result<String>,
+        row_may_need_reauth: bool,
     ) -> anyhow::Result<String> {
         match result {
             Ok(token) => {
-                email_db_client::links::update::clear_link_needs_reauth(&self.db, link.id)
-                    .await
-                    .inspect_err(|error| {
-                        tracing::warn!(error=?error, link_id=%link.id, "Failed to clear needs_reauth after successful token fetch");
-                    })
-                    .ok();
+                clear_stale_reauth_flag(&self.db, link.id, row_may_need_reauth).await;
                 Ok(token)
             }
             Err(error) if is_reauth_required_error(&error) => {
@@ -157,6 +165,25 @@ impl EmailServiceTokenSource {
             Err(error) => Err(error),
         }
     }
+}
+
+/// Clears the link's reauth flag after a successful token fetch.
+///
+/// Skipped when the caller has just read the row and it is already healthy
+/// (`row_may_need_reauth: false`), so the hot path does not pay an UPDATE per
+/// provider call. A failed clear is logged and swallowed: the next acquisition
+/// retries it.
+async fn clear_stale_reauth_flag(db: &PgPool, link_id: Uuid, row_may_need_reauth: bool) {
+    if !row_may_need_reauth {
+        return;
+    }
+
+    email_db_client::links::update::clear_link_needs_reauth(db, link_id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error=?error, %link_id, "Failed to clear needs_reauth after successful token fetch");
+        })
+        .ok();
 }
 
 /// Token source that returns one preconfigured access token.
