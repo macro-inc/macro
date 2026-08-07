@@ -230,10 +230,17 @@ describe('createWorkerCacheHost', () => {
     const readResult = expect(
       host.readQuery({ query: 'query Read { user { id } }' })
     ).rejects.toThrow('cache worker timeout: read');
-    const mutationResult = host.beginOptimisticWrite({
-      query: 'mutation Rename { rename { id } }',
-      data: { rename: { id: 'doc-1' } },
-    });
+    const mutationResult = host.enqueueOptimisticMutation(
+      {
+        query: 'mutation Rename { rename { id } }',
+        data: { rename: { id: 'doc-1' } },
+      },
+      {
+        owner: 'runner-1',
+        nowMs: 123,
+        leaseExpiresAtMs: 1_123,
+      }
+    );
     let mutationSettled = false;
     void mutationResult.then(
       () => {
@@ -248,11 +255,21 @@ describe('createWorkerCacheHost', () => {
     await readResult;
     expect(mutationSettled).toBe(false);
     expect(
-      requests.filter((request) => request.kind === 'begin-optimistic-write')
+      requests.filter(
+        (request) => request.kind === 'enqueue-optimistic-mutation'
+      )
     ).toHaveLength(1);
 
     const mutationRequest = requests.find(
-      (request) => request.kind === 'begin-optimistic-write'
+      (request) => request.kind === 'enqueue-optimistic-mutation'
+    );
+    expect(mutationRequest).toEqual(
+      expect.objectContaining({
+        owner: 'runner-1',
+        nowMs: 123,
+        createdAtMs: 123,
+        leaseExpiresAtMs: 1_123,
+      })
     );
     expect(mutationRequest?.id).toBeTypeOf('number');
     const result = {
@@ -260,6 +277,7 @@ describe('createWorkerCacheHost', () => {
       changed: [],
       affectedOps: [],
       reset: false,
+      initialClaim: { kind: 'not-runnable' as const },
     };
     respond(mutationRequest?.id as number, result);
     await expect(mutationResult).resolves.toEqual(result);

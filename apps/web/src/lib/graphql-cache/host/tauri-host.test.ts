@@ -124,9 +124,10 @@ describe('createTauriCacheHost', () => {
       changed: ['A:1'],
       affectedOps: [],
       reset: false,
+      initialClaim: { kind: 'not-runnable' as const },
     };
     invokeMock.mockImplementation((command: string) => {
-      if (command === 'graphql_cache_begin_optimistic_write') {
+      if (command === 'graphql_cache_enqueue_optimistic_mutation') {
         return Promise.resolve(optimistic);
       }
       if (
@@ -149,15 +150,28 @@ describe('createTauriCacheHost', () => {
       ],
       operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
     };
-    const begun = await host.beginOptimisticWrite({
-      query: 'mutation { m }',
-      data: { m: 1 },
-      linkPatches: [patch],
-    });
+    const begun = await host.enqueueOptimisticMutation(
+      {
+        query: 'mutation { m }',
+        data: { m: 1 },
+        linkPatches: [patch],
+      },
+      {
+        owner: 'runner',
+        nowMs: 123,
+        leaseExpiresAtMs: 1_123,
+      }
+    );
     expect(begun).toEqual(optimistic);
     expect(invokeMock).toHaveBeenCalledWith(
-      'graphql_cache_begin_optimistic_write',
-      expect.objectContaining({ linkPatches: [patch] })
+      'graphql_cache_enqueue_optimistic_mutation',
+      expect.objectContaining({
+        linkPatches: [patch],
+        createdAtMs: 123,
+        owner: 'runner',
+        nowMs: 123,
+        leaseExpiresAtMs: 1_123,
+      })
     );
 
     const claim = { owner: 'runner', generation: '2' };

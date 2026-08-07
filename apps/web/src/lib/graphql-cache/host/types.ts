@@ -10,10 +10,10 @@ import type {
   CachedQueryVariantWire,
   CacheReadPriority,
   ClaimedMutation,
+  EnqueueOptimisticMutationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
-  OptimisticWriteResult,
   QueryRevalidationWire,
   QueryVariableFilter,
   ReadRecordsArgs,
@@ -59,6 +59,13 @@ export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
   revalidations?: QueryRevalidationWire[];
 }
 
+/** Lease request used for the claim attempted immediately after enqueue. */
+export interface InitialMutationClaimArgs {
+  owner: string;
+  nowMs: number;
+  leaseExpiresAtMs: number;
+}
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
@@ -69,10 +76,11 @@ export interface CacheHost {
   /** Projects normalized records through a named GraphQL fragment. */
   readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
-  /** Durably queues a mutation and its optimistic response. */
-  beginOptimisticWrite(
-    args: BeginOptimisticWriteArgs
-  ): Promise<OptimisticWriteResult>;
+  /** Durably queues an optimistic mutation and claims the strict head. */
+  enqueueOptimisticMutation(
+    args: BeginOptimisticWriteArgs,
+    claim: InitialMutationClaimArgs
+  ): Promise<EnqueueOptimisticMutationResult>;
   /** Recovers variables for cached variants without materializing values. */
   inspectQueryVariants(
     args: InspectQueryVariantsArgs

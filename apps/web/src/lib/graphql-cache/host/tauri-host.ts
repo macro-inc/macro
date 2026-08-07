@@ -13,9 +13,9 @@ import {
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
   type MutationClaim,
   type MutationSettlement,
-  type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
   type SelectedRecordPageWire,
@@ -27,6 +27,7 @@ import type {
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  InitialMutationClaimArgs,
   InspectQueryArgs,
   InspectQueryVariantsArgs,
 } from './types';
@@ -180,12 +181,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async beginOptimisticWrite(
-      args: BeginOptimisticWriteArgs
-    ): Promise<OptimisticWriteResult> {
+    async enqueueOptimisticMutation(
+      args: BeginOptimisticWriteArgs,
+      claim: InitialMutationClaimArgs
+    ): Promise<EnqueueOptimisticMutationResult> {
       await ready;
-      return await request<OptimisticWriteResult>(
-        'graphql_cache_begin_optimistic_write',
+      return await request<EnqueueOptimisticMutationResult>(
+        'graphql_cache_enqueue_optimistic_mutation',
         {
           originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
           query: args.query,
@@ -194,7 +196,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
-          createdAtMs: Date.now(),
+          createdAtMs: claim.nowMs,
+          owner: claim.owner,
+          nowMs: claim.nowMs,
+          leaseExpiresAtMs: claim.leaseExpiresAtMs,
         }
       );
     },

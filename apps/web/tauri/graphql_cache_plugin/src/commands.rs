@@ -10,7 +10,8 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire, ReadResultWire,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -136,10 +137,11 @@ pub async fn graphql_cache_write<R: Runtime>(
     Ok(result)
 }
 
-/// Durably queues a mutation and its optimistic response. The one engine is
-/// shared by all webviews, so visible changes are broadcast too.
+/// Durably queues an optimistic mutation and attempts to claim the strict
+/// queue head before broadcasting visible changes to every webview.
 #[tauri::command]
-pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
+#[allow(clippy::too_many_arguments)]
+pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
@@ -150,9 +152,12 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
     created_at_ms: i64,
-) -> Result<OptimisticWriteResultWire, String> {
+    owner: String,
+    now_ms: i64,
+    lease_expires_at_ms: i64,
+) -> Result<EnqueueOptimisticMutationResultWire, String> {
     let result = engine_handle(&state)?
-        .begin_optimistic_write(
+        .enqueue_optimistic_mutation(
             origin_op_id,
             query,
             operation_name,
@@ -161,6 +166,9 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             link_patches.unwrap_or_default(),
             revalidations.unwrap_or_default(),
             created_at_ms,
+            owner,
+            now_ms,
+            lease_expires_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);

@@ -66,21 +66,22 @@ describe('CacheWorkerCore', () => {
       }
       return { kind: 'hit' as const, data: { opId } };
     });
-    const beginOptimisticWrite = vi.fn(
+    const enqueueOptimisticMutation = vi.fn(
       async (_originOpId: string | undefined, query: string) => {
-        order.push(`begin:${query}`);
+        order.push(`enqueue:${query}`);
         return {
           transactionId: query,
           changed: [],
           affectedOps: [],
           reset: false,
+          initialClaim: { kind: 'not-runnable' as const },
         };
       }
     );
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
         readQuery,
-        beginOptimisticWrite,
+        enqueueOptimisticMutation,
       }),
     });
     const messages: unknown[] = [];
@@ -112,19 +113,25 @@ describe('CacheWorkerCore', () => {
       opId: 'client:child',
       query: 'query Child { child }',
     });
-    const firstBegin = core.handleRequest(port, {
+    const firstEnqueue = core.handleRequest(port, {
       id: 5,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation First { first }',
       data: { first: true },
       createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
     });
-    const secondBegin = core.handleRequest(port, {
+    const secondEnqueue = core.handleRequest(port, {
       id: 6,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation Second { second }',
       data: { second: true },
       createdAtMs: 2,
+      owner: 'runner',
+      nowMs: 2,
+      leaseExpiresAtMs: 1_002,
     });
     const affectedDuplicate = core.handleRequest(port, {
       id: 7,
@@ -140,15 +147,15 @@ describe('CacheWorkerCore', () => {
       running,
       ordinaryDuplicate,
       incidental,
-      firstBegin,
-      secondBegin,
+      firstEnqueue,
+      secondEnqueue,
       affectedDuplicate,
     ]);
 
     expect(order).toEqual([
       'read:client:blocker',
-      'begin:mutation First { first }',
-      'begin:mutation Second { second }',
+      'enqueue:mutation First { first }',
+      'enqueue:mutation Second { second }',
       'read:client:group-soup',
       'read:client:child',
     ]);
@@ -196,20 +203,21 @@ describe('CacheWorkerCore', () => {
     const teardownOperation = vi.fn(async (opId: string) => {
       order.push(`teardown:${opId}`);
     });
-    const beginOptimisticWrite = vi.fn(async () => {
-      order.push('begin');
+    const enqueueOptimisticMutation = vi.fn(async () => {
+      order.push('enqueue');
       return {
         transactionId: '1',
         changed: [],
         affectedOps: [],
         reset: false,
+        initialClaim: { kind: 'not-runnable' as const },
       };
     });
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
         readQuery,
         teardownOperation,
-        beginOptimisticWrite,
+        enqueueOptimisticMutation,
       }),
     });
     const port = { postMessage: vi.fn() };
@@ -238,12 +246,15 @@ describe('CacheWorkerCore', () => {
       kind: 'teardown',
       opId: 'client:group-soup',
     });
-    const begin = core.handleRequest(port, {
+    const enqueue = core.handleRequest(port, {
       id: 5,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
     });
     const readAfterTeardown = core.handleRequest(port, {
       id: 6,
@@ -258,7 +269,7 @@ describe('CacheWorkerCore', () => {
       running,
       readBeforeTeardown,
       teardown,
-      begin,
+      enqueue,
       readAfterTeardown,
     ]);
 
@@ -266,7 +277,7 @@ describe('CacheWorkerCore', () => {
       'read:client:blocker',
       'read:client:group-soup',
       'teardown:client:group-soup',
-      'begin',
+      'enqueue',
       'read:client:group-soup',
     ]);
     expect(

@@ -9,10 +9,10 @@ import {
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
   isCachePush,
   type MutationClaim,
   type MutationSettlement,
-  type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
   type SelectedRecordPageWire,
@@ -26,6 +26,7 @@ import type {
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  InitialMutationClaimArgs,
   InspectQueryArgs,
   InspectQueryVariantsArgs,
 } from './types';
@@ -213,12 +214,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as WriteResult;
     },
 
-    async beginOptimisticWrite(
-      args: BeginOptimisticWriteArgs
-    ): Promise<OptimisticWriteResult> {
+    async enqueueOptimisticMutation(
+      args: BeginOptimisticWriteArgs,
+      claim: InitialMutationClaimArgs
+    ): Promise<EnqueueOptimisticMutationResult> {
       await ready;
       return (await request({
-        kind: 'begin-optimistic-write',
+        kind: 'enqueue-optimistic-mutation',
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
         query: args.query,
         operationName: args.operationName,
@@ -226,8 +228,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         data: args.data,
         linkPatches: args.linkPatches,
         revalidations: args.revalidations,
-        createdAtMs: Date.now(),
-      })) as OptimisticWriteResult;
+        createdAtMs: claim.nowMs,
+        owner: claim.owner,
+        nowMs: claim.nowMs,
+        leaseExpiresAtMs: claim.leaseExpiresAtMs,
+      })) as EnqueueOptimisticMutationResult;
     },
 
     async inspectQueryVariants(

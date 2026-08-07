@@ -20,8 +20,8 @@ import {
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
+  EnqueueOptimisticMutationResult,
   MutationClaim,
-  OptimisticWriteResult,
   ReadResult,
   WriteResult,
 } from '../protocol';
@@ -144,7 +144,9 @@ type FakeHost = CacheHost & {
   cacheActions: Array<{ kind: 'write' | 'delete'; value: unknown }>;
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
-  seedQueued: (args: Parameters<CacheHost['beginOptimisticWrite']>[0]) => void;
+  seedQueued: (
+    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]
+  ) => void;
   pushAffected: (opKeys: number[]) => void;
 };
 
@@ -153,7 +155,7 @@ function makeFakeHost(): FakeHost {
   const subscribers = new Set<(opKeys: number[]) => void>();
   const queue: Array<{
     transactionId: string;
-    args: Parameters<CacheHost['beginOptimisticWrite']>[0];
+    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0];
     attemptCount: number;
     leased: boolean;
     nextAttemptAtMs?: number;
@@ -205,7 +207,10 @@ function makeFakeHost(): FakeHost {
       host.cacheActions.push({ kind: 'write', value: args.data });
       return { changed: [], affectedOps: [], reset: false };
     },
-    async beginOptimisticWrite(args): Promise<OptimisticWriteResult> {
+    async enqueueOptimisticMutation(
+      args,
+      claim
+    ): Promise<EnqueueOptimisticMutationResult> {
       host.begins.push({
         query: args.query,
         data: args.data,
@@ -213,11 +218,35 @@ function makeFakeHost(): FakeHost {
       });
       const transactionId = `txn-${host.begins.length}`;
       queue.push({ transactionId, args, attemptCount: 0, leased: false });
+      const head = queue[0];
+      let mutation: ClaimedMutation | undefined;
+      if (
+        head &&
+        !head.leased &&
+        (head.nextAttemptAtMs === undefined ||
+          head.nextAttemptAtMs <= claim.nowMs)
+      ) {
+        head.leased = true;
+        head.nextAttemptAtMs = undefined;
+        head.attemptCount += 1;
+        host.claims.push(head.transactionId);
+        mutation = {
+          transactionId: head.transactionId,
+          leaseGeneration: String(head.attemptCount),
+          query: head.args.query,
+          operationName: head.args.operationName,
+          variables: head.args.variables ?? {},
+          attemptCount: head.attemptCount,
+        };
+      }
       return {
         transactionId,
         changed: [],
         affectedOps: [],
         reset: false,
+        initialClaim: mutation
+          ? { kind: 'claimed', mutation }
+          : { kind: 'not-runnable' },
       };
     },
     async inspectQueryVariants() {
@@ -903,11 +932,11 @@ describe('normalizedCacheExchange', () => {
 
     it('installs the optimistic layer before forwarding to the network', async () => {
       const { ops, results, forwarded } = harness(host);
-      const begin = host.beginOptimisticWrite.bind(host);
-      host.beginOptimisticWrite = async (args) => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => {
         // The mutation must not have hit the network yet.
         expect(forwarded).toHaveLength(0);
-        return begin(args);
+        return enqueue(args, claim);
       };
       ops.next(makeMutationOp(1, optimistic));
       await tick();
@@ -977,10 +1006,10 @@ describe('normalizedCacheExchange', () => {
           revalidations: [],
         },
       });
-      const begin = host.beginOptimisticWrite.bind(host);
-      host.beginOptimisticWrite = async (args) => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => {
         if (args.linkPatches?.length) throw new Error('stale bin');
-        return begin(args);
+        return enqueue(args, claim);
       };
       const onCacheError = vi.fn();
       const { ops } = harness(host, undefined, { onCacheError });
@@ -1416,7 +1445,7 @@ describe('normalizedCacheExchange', () => {
     });
 
     it('degrades to a plain network mutation when the optimistic setup fails', async () => {
-      host.beginOptimisticWrite = async () => {
+      host.enqueueOptimisticMutation = async () => {
         throw new Error('idb exploded');
       };
       const onCacheError = vi.fn();
