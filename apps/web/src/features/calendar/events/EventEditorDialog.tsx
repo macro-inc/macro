@@ -170,10 +170,16 @@ export function EventEditorDialog(props: {
     name: string;
     emailAddress: string;
     isPrimary: boolean;
-  }) =>
-    spansInboxes()
+  }) => {
+    // Google names primary calendars after the account email; avoid
+    // "gab@… — gab@…" labels.
+    if (calendar.isPrimary || calendar.name === calendar.emailAddress) {
+      return calendar.emailAddress;
+    }
+    return spansInboxes()
       ? `${calendar.name} — ${calendar.emailAddress}`
       : calendar.name;
+  };
   const isRecurring = () =>
     (props.event?.recurrenceLines.length ?? 0) > 0 ||
     props.event?.recurrenceId !== undefined;
