@@ -21,7 +21,7 @@ async fn registers_watch_with_the_configured_topic() {
     Mock::given(method("POST"))
         .and(path("/users/me/watch"))
         .and(body_json(
-            json!({"topic_name": "projects/project/topics/gmail"}),
+            json!({"topicName": "projects/project/topics/gmail"}),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "historyId": "123", "expiration": "456"

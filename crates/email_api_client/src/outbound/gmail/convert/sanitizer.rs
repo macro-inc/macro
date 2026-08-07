@@ -213,11 +213,13 @@ static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| {
     // Tag-specific attributes
     // 'name' is used for anchor links within the email (e.g., Table of Contents)
     cleaner.add_tag_attributes("a", &["href", "title", "target", "name"]);
+    // NOTE: `srcset` is deliberately absent — ammonia scheme-filters `src`
+    // but not the URL list inside `srcset`, so allowing it would let
+    // non-allowlisted schemes through. Images still render via `src`.
     cleaner.add_tag_attributes(
         "img",
         &[
             "src", "alt", "title", "width", "height", "border", "align", "vspace", "hspace",
-            "srcset", "sizes",
         ],
     );
     cleaner.add_tag_attributes("font", &["color", "size", "face"]);

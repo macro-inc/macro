@@ -60,6 +60,36 @@ fn accepts_unpadded_base64url_bodies() {
 }
 
 #[test]
+fn honors_declared_non_utf8_charsets() {
+    // "café" in ISO-8859-1: the 0xE9 byte is invalid UTF-8 and would become
+    // U+FFFD under a blind lossy conversion.
+    let encoded = URL_SAFE.encode([b'c', b'a', b'f', 0xE9]);
+    let mut part = payload("text/plain", &encoded);
+    part.headers.push(Header {
+        name: "Content-Type".into(),
+        value: "text/plain; charset=\"ISO-8859-1\"".into(),
+    });
+
+    let parsed = parse_gmail_payload(&part, "message").unwrap();
+
+    assert_eq!(parsed.body_text.as_deref(), Some("café"));
+}
+
+#[test]
+fn unknown_charsets_fall_back_to_lossy_utf8() {
+    let encoded = URL_SAFE.encode("Hello");
+    let mut part = payload("text/plain", &encoded);
+    part.headers.push(Header {
+        name: "Content-Type".into(),
+        value: "text/plain; charset=not-a-real-charset".into(),
+    });
+
+    let parsed = parse_gmail_payload(&part, "message").unwrap();
+
+    assert_eq!(parsed.body_text.as_deref(), Some("Hello"));
+}
+
+#[test]
 fn one_bad_part_does_not_sink_sibling_parts() {
     let mut root = payload("multipart/alternative", "");
     root.body = None;

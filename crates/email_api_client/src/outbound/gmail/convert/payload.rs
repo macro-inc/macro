@@ -111,11 +111,11 @@ fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayl
                 .or_else(|_| URL_SAFE.decode(encoded))
             {
                 Ok(bytes) if wants_text => {
-                    parsed.body_text = Some(String::from_utf8_lossy(&bytes).into_owned());
+                    parsed.body_text = Some(decode_part_text(&bytes, part));
                 }
                 Ok(bytes) => {
                     parsed.body_html_sanitized =
-                        Some(sanitize_email_html(&String::from_utf8_lossy(&bytes)));
+                        Some(sanitize_email_html(&decode_part_text(&bytes, part)));
                 }
                 // A single undecodable part must not sink the message (or its
                 // whole thread): keep the rest of the message and move on.
@@ -142,6 +142,30 @@ fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayl
             content_id: find_header(&part.headers, "Content-ID").map(str::to_owned),
         });
     }
+}
+
+/// Decodes part bytes honoring the part's declared `charset`, so non-UTF-8
+/// bodies (e.g. ISO-8859-1, Windows-1252, Shift_JIS) are not mangled by a
+/// blind lossy UTF-8 conversion. Unknown or missing charsets fall back to
+/// lossy UTF-8.
+fn decode_part_text(bytes: &[u8], part: &MessagePart) -> String {
+    let encoding = find_header(&part.headers, "Content-Type")
+        .and_then(content_type_charset)
+        .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()));
+
+    match encoding {
+        Some(encoding) => encoding.decode(bytes).0.into_owned(),
+        None => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
+fn content_type_charset(content_type: &str) -> Option<&str> {
+    content_type.split(';').skip(1).find_map(|parameter| {
+        let (key, value) = parameter.split_once('=')?;
+        key.trim()
+            .eq_ignore_ascii_case("charset")
+            .then(|| value.trim().trim_matches('"'))
+    })
 }
 
 fn contact_info(name: Option<String>, email: String) -> service::address::ContactInfo {

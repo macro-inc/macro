@@ -100,6 +100,7 @@ impl fmt::Display for SystemLabelID {
 
 /// Represents the color information for a Gmail label
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GmailLabelColor {
     pub text_color: Option<String>,
     pub background_color: Option<String>,

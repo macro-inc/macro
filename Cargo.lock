@@ -5068,6 +5068,7 @@ dependencies = [
  "ammonia",
  "base64 0.22.1",
  "chrono",
+ "encoding_rs",
  "gmail_client",
  "html-escape",
  "http 1.4.0",

@@ -197,7 +197,7 @@ pub async fn handler(
 
 /// Uploads the data for a single attachment to S3, updates the attachment's metadata,
 /// and returns a presigned URL for accessing the attachment
-#[tracing::instrument(skip(state, attachment_data), level = "info", err)]
+#[tracing::instrument(skip(state, attachment_data), err)]
 pub async fn upload_single_attachment(
     state: &ApiContext,
     bucket: &str,

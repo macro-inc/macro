@@ -217,6 +217,7 @@ pub struct HistoryMessage {
 
 /// Request body for registering a watch notification
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WatchRequest {
     pub topic_name: String,
 }
