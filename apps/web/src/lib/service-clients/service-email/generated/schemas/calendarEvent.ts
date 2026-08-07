@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarAttendee } from './calendarAttendee';
+import type { CalendarEventCalendarId } from './calendarEventCalendarId';
 import type { CalendarEventConferenceUrl } from './calendarEventConferenceUrl';
 import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
@@ -21,6 +22,9 @@ import type { EventVisibility } from './eventVisibility';
 export interface CalendarEvent {
   /** Attendees, keyed by email during persistence. */
   attendees: CalendarAttendee[];
+  /** Calendar the canonical source belongs to, when known. Absent only in
+projections stored before calendars were attributed. */
+  calendarId?: CalendarEventCalendarId;
   /** Direct join URL when known. */
   conferenceUrl?: CalendarEventConferenceUrl;
   /** Entity creation time. */

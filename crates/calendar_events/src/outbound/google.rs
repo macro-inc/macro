@@ -1249,6 +1249,7 @@ fn map_upsert(
         id: event_id,
         owner_id: target.owner_id.clone(),
         ical_uid: master.ical_uid.clone(),
+        calendar_id: Some(target.calendar_id),
         title: master.summary.clone().unwrap_or_default(),
         description: master.description.clone(),
         location: master.location.clone(),

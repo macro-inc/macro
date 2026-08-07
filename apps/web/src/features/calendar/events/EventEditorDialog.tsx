@@ -17,6 +17,7 @@ import {
   startOfHour,
 } from 'date-fns';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
 import type { CalendarEvent } from './types';
 
 /** `<input type="date">` value. */
@@ -161,25 +162,14 @@ export function EventEditorDialog(props: {
   const writableCalendars = createMemo(
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
   );
-  const spansInboxes = createMemo(
-    () =>
-      new Set(writableCalendars().map((calendar) => calendar.emailAddress))
-        .size > 1
+  const spansInboxes = createMemo(() =>
+    spansMultipleInboxes(writableCalendars())
   );
   const calendarLabel = (calendar: {
     name: string;
     emailAddress: string;
     isPrimary: boolean;
-  }) => {
-    // Google names primary calendars after the account email; avoid
-    // "gab@… — gab@…" labels.
-    if (calendar.isPrimary || calendar.name === calendar.emailAddress) {
-      return calendar.emailAddress;
-    }
-    return spansInboxes()
-      ? `${calendar.name} — ${calendar.emailAddress}`
-      : calendar.name;
-  };
+  }) => calendarDisplayLabel(calendar, spansInboxes());
   const isRecurring = () =>
     (props.event?.recurrenceLines.length ?? 0) > 0 ||
     props.event?.recurrenceId !== undefined;

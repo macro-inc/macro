@@ -60,6 +60,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             id,
             owner_id: target_owner.to_string(),
             ical_uid: "echo@example.com".to_string(),
+            calendar_id: Some(Uuid::now_v7()),
             title: "Echo".to_string(),
             description: None,
             location: None,

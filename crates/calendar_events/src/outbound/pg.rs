@@ -267,6 +267,7 @@ struct StoredCalendarRow {
 
 struct OccurrenceJoinRow {
     event_id: Uuid,
+    canonical_calendar_id: Option<Uuid>,
     occurrence_key: String,
     recurrence_id: Option<String>,
     occurrence_starts_at: Option<DateTime<Utc>>,
@@ -652,6 +653,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             SELECT
                 occurrence.event_id,
+                canonical_source.calendar_id AS "canonical_calendar_id?",
                 occurrence.occurrence_key,
                 occurrence.recurrence_id,
                 occurrence.starts_at AS occurrence_starts_at,
@@ -682,6 +684,17 @@ impl CalendarRepository for PgCalendarRepository {
                 event.updated_at
             FROM calendar_event_occurrences occurrence
             JOIN calendar_events event ON event.id = occurrence.event_id
+            LEFT JOIN LATERAL (
+                SELECT source.calendar_id
+                FROM calendar_event_sources source
+                WHERE source.event_id = event.id
+                ORDER BY
+                    source.source_sequence DESC,
+                    source.source_updated_at DESC,
+                    source.last_seen_at DESC,
+                    source.id DESC
+                LIMIT 1
+            ) canonical_source ON true
             WHERE occurrence.owner_id IN (
                     SELECT $1::text
                     UNION
@@ -2390,6 +2403,7 @@ fn event_from_join(
         id: row.event_id,
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
+        calendar_id: row.canonical_calendar_id,
         title: row.title,
         description: row.description,
         location: row.location,

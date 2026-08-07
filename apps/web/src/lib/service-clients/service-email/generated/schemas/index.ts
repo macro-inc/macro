@@ -148,6 +148,7 @@ export * from './calendarAttendeeComment';
 export * from './calendarAttendeeDisplayName';
 export * from './calendarAttendeeInputBody';
 export * from './calendarEvent';
+export * from './calendarEventCalendarId';
 export * from './calendarEventConferenceUrl';
 export * from './calendarEventDescription';
 export * from './calendarEventLocation';

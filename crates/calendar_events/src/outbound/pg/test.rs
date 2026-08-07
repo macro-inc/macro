@@ -122,6 +122,7 @@ fn timed_upsert(
             id,
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
+            calendar_id: Some(calendar_id),
             title: title.to_string(),
             description: None,
             location: None,

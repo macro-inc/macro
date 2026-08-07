@@ -160,6 +160,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             id: event_id,
             owner_id: "macro|calendar@example.com".to_string(),
             ical_uid: "meeting@example.com".to_string(),
+            calendar_id: None,
             title: "Meeting".to_string(),
             description: None,
             location: None,

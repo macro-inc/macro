@@ -255,6 +255,10 @@ pub struct CalendarEvent {
     pub owner_id: String,
     /// RFC 5545 UID used to reconcile provider and email sources.
     pub ical_uid: String,
+    /// Calendar the canonical source belongs to, when known. Absent only in
+    /// projections stored before calendars were attributed.
+    #[serde(default)]
+    pub calendar_id: Option<Uuid>,
     /// Display title.
     pub title: String,
     /// Optional event body.
