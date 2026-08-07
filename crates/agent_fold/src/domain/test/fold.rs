@@ -1,10 +1,12 @@
 use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
-use crate::domain::log::AgentSessionLog;
+use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
     Author, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
     TurnId,
 };
+use agent_client_protocol::RawJsonRpcMessage;
+use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 
 /// Fold a log while capturing anything it logs at `WARN`.
 fn fold_capturing_warnings(
@@ -180,6 +182,22 @@ fn folds_nothing() {
     assert_eq!(warnings, vec![]);
 }
 
+/// How many `session/update` notifications a log carries - the frames that
+/// stream the agent's own content, and so the sign that a recording has
+/// something for the fold to find.
+fn agent_updates(log: &[AgentSessionLog]) -> usize {
+    log.iter()
+        .filter(|entry| match &entry.content {
+            Message::ToServer(ToServerMessage::Acp(acp)) => matches!(
+                &acp.0,
+                RawJsonRpcMessage::Notification(notification)
+                    if &*notification.method == "session/update"
+            ),
+            _ => false,
+        })
+        .count()
+}
+
 /// Replays every locally recorded session, when any exist.
 ///
 /// The recordings live outside the repository (`~/.agent_runtime_sessions`),
@@ -205,7 +223,9 @@ fn replays_local_recordings() {
             continue;
         }
         let jsonl = std::fs::read_to_string(&path).expect("recording is readable");
-        let (messages, warnings) = fold_capturing_warnings(parse_log(&jsonl));
+        let log = parse_log(&jsonl);
+        let streamed = agent_updates(&log);
+        let (messages, warnings) = fold_capturing_warnings(log);
 
         assert_eq!(
             warnings,
@@ -217,6 +237,19 @@ fn replays_local_recordings() {
             assert!(
                 !message.parts.is_empty(),
                 "recording {} folded an empty message",
+                path.display()
+            );
+        }
+
+        // Folding to nothing is the failure the other assertions cannot see:
+        // they are all "for each message", so zero messages passes them all.
+        // A recording that streamed agent content and derived none of it is
+        // the shape of a fold that has stopped understanding the protocol -
+        // which is exactly what a `session/load` recording used to do.
+        if streamed > 0 {
+            assert!(
+                !messages.is_empty(),
+                "recording {} streams {streamed} agent updates but folds to no messages",
                 path.display()
             );
         }

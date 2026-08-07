@@ -157,9 +157,6 @@ fn frames_that_change_nothing_report_nothing() {
         "\n",
         // Token accounting, deliberately dropped by the fold.
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"usage_update","usage":{"inputTokens":1,"outputTokens":2}}}}}"#,
-        "\n",
-        // Agent prose with no turn open: nothing to belong to.
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"orphan"}}}}}"#,
     ));
 
     let mut machine = FoldMachineImpl::new();
@@ -241,4 +238,66 @@ fn the_machine_holds_the_whole_fold() {
 
     assert_eq!(machine.messages(), fold(parse_log(TURN)));
     assert_eq!(machine.into_messages(), fold(parse_log(TURN)));
+}
+
+/// A resumed session: the agent talks with no prompt in this log, because the
+/// prompt is in the log of the session it resumed through `session/load`.
+///
+/// The fold used to drop every such frame for want of an open turn, so a
+/// recording of hundreds of frames of real work folded to nothing and its
+/// channel rendered empty. It opens a turn instead - one with no user message,
+/// since there is no prompt to attribute one to.
+#[test]
+fn content_without_a_prompt_still_folds() {
+    let resumed = parse_log(concat!(
+        // The load that picks the conversation up mid-flight.
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"l","method":"session/load","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"picking up where we left off"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"l","result":{"stopReason":"end_turn"}}}"#,
+    ));
+    let consumer = Consumer::drive(resumed);
+
+    let agent_side = MessageId {
+        turn: TurnId(0),
+        author: AuthorKind::Agent,
+    };
+    assert_eq!(
+        consumer.reports,
+        vec![(true, agent_side), (false, agent_side)],
+        "the agent's side is announced and then closed; there is no prompt to \
+         derive a user side from"
+    );
+
+    let agent = &consumer.messages[0];
+    assert_eq!(
+        *agent.parts,
+        vec![MessagePart::Text("picking up where we left off".to_owned())]
+    );
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::EndTurn),
+        "a turn nothing prompted is closed by the first response that stops"
+    );
+}
+
+/// A tool call is as good a reason to open a turn as prose is. Every route the
+/// agent has to contribute content goes through the same place, so none of
+/// them can be the one that still drops a resumed session's frames.
+#[test]
+fn a_tool_call_without_a_prompt_opens_a_turn() {
+    let resumed = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Bash","kind":"execute","status":"pending","rawInput":{"command":"ls"},"content":[],"locations":[]}}}}"#,
+    );
+    let consumer = Consumer::drive(resumed);
+
+    assert_eq!(consumer.messages.len(), 1, "the call opened a turn");
+    let agent = &consumer.messages[0];
+    assert_eq!(agent.id, TurnId(0));
+    assert!(
+        matches!(&agent.parts[0], MessagePart::ToolUse(tool) if tool.label == "Bash"),
+        "and the call is its first part: {:?}",
+        agent.parts[0]
+    );
 }

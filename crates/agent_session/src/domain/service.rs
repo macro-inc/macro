@@ -47,7 +47,7 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelFoldedMessages, ChannelSession,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession, ChannelSessionLog,
     CreateAgentSessionParams, MessageId,
 };
 use super::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo, Comms};
@@ -113,12 +113,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn sync_placeholders(&self, session: AgentSessionId)
     -> impl Future<Output = Result<()>> + Send;
 
-    /// The folded messages of the agent session behind a channel, or `None`
+    /// The raw protocol log of the agent session behind a channel, or `None`
     /// when no session owns the channel.
-    fn channel_messages(
+    ///
+    /// Served unfolded because nothing here folds for a reader any more: the
+    /// web client runs the same fold compiled to WASM, so a streamed session
+    /// and a reloaded one are rendered by one implementation rather than two
+    /// that have to be kept agreeing. See [`ChannelSessionLog`].
+    fn channel_log(
         &self,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ChannelFoldedMessages>>> + Send;
+    ) -> impl Future<Output = Result<Option<ChannelSessionLog>>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -212,6 +217,28 @@ impl<R, Folds, C> AgentSessionServiceImpl<R, Folds, C> {
             }
         }
     }
+
+    /// The session a channel renders, or `None` when no session owns it.
+    ///
+    /// A channel load carries no thread or bot context, so only the
+    /// dedicated-channel relation can match; thread-scoped sessions are
+    /// rendered by their own dedicated channels.
+    async fn session_for_channel(&self, channel_id: Uuid) -> Result<Option<AgentSessionId>>
+    where
+        R: AgentSessionRepo,
+    {
+        Ok(
+            match self.repo.find_for_channel(channel_id, None, None).await? {
+                ChannelSession::None => None,
+                ChannelSession::InDedicatedChannel(session)
+                | ChannelSession::CreatedFromThread(session) => Some(session.id),
+                ChannelSession::ThreadInDedicatedChannel {
+                    dedicated_channel_agent_session,
+                    ..
+                } => Some(dedicated_channel_agent_session.id),
+            },
+        )
+    }
 }
 
 impl<R, Folds, C> AgentSessionService for AgentSessionServiceImpl<R, Folds, C>
@@ -283,24 +310,15 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn channel_messages(&self, channel_id: Uuid) -> Result<Option<ChannelFoldedMessages>> {
-        // A channel load carries no thread or bot context, so only the
-        // dedicated-channel relation can match; thread-scoped sessions are
-        // rendered by their own dedicated channels.
-        let session = match self.repo.find_for_channel(channel_id, None, None).await? {
-            ChannelSession::None => return Ok(None),
-            ChannelSession::InDedicatedChannel(session)
-            | ChannelSession::CreatedFromThread(session) => session,
-            ChannelSession::ThreadInDedicatedChannel {
-                dedicated_channel_agent_session,
-                ..
-            } => dedicated_channel_agent_session,
+    async fn channel_log(&self, channel_id: Uuid) -> Result<Option<ChannelSessionLog>> {
+        let Some(session) = self.session_for_channel(channel_id).await? else {
+            return Ok(None);
         };
 
-        let messages = self.folds.messages(session.id).await?;
-        Ok(Some(ChannelFoldedMessages {
-            agent_session_id: session.id,
-            messages,
+        let entries = AgentSessionLogRepo::list_by_session(&self.repo, session).await?;
+        Ok(Some(ChannelSessionLog {
+            agent_session_id: session,
+            entries,
         }))
     }
 }

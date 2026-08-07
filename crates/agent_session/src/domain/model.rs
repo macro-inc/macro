@@ -1,4 +1,3 @@
-use agent_fold::domain::model::FoldedMessage;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -13,7 +12,13 @@ pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 // Folded messages are derived, but a `MessageId` is also what a comms
 // placeholder persists (inside its `agent_session_message_id`) to say which
 // message it renders.
-pub use agent_fold::domain::model::{Author, AuthorKind, MessageId, TurnId};
+// `composite_message_id` comes with them: the composite is how a comms row
+// names the folded message it renders, and the fold now has two readers - this
+// service and the browser, which folds the same log in WASM - so the one
+// definition lives with the ids it is built from.
+pub use agent_fold::domain::model::{
+    Author, AuthorKind, MessageId, TurnId, composite_message_id, parse_composite_message_id,
+};
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -74,39 +79,18 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
-/// The composite id a placeholder comms message stores in its
-/// `agent_session_message_id` column:
-/// `"{agent_session_id}:{turn}:{author}"`.
+/// A session's raw protocol log, looked up by its dedicated channel.
 ///
-/// Folded messages have no table of their own, so this composite is the whole
-/// mapping between a comms row and the message it renders. Comms writes it
-/// when placing a placeholder, and readers joining folded messages back onto
-/// comms rows reproduce it from the same parts.
-///
-/// Keyed per message rather than per turn: a turn yields a prompt and a
-/// reply with different senders, and each needs its own row.
-#[must_use]
-pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
-    format!("{}:{id}", session.as_uuid())
-}
-
-/// The message key inside a [`composite_message_id`] built for `session`, or
-/// `None` when the composite names a different session or is malformed.
-#[must_use]
-pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
-    composite
-        .strip_prefix(&format!("{}:", session.as_uuid()))?
-        .parse()
-        .ok()
-}
-
-/// A session's folded messages, looked up by its dedicated channel.
+/// Served rather than the messages it derives: the reader folds it. The web
+/// client runs the same fold compiled to WASM, so a streamed session and a
+/// reloaded one are rendered by one implementation rather than two that have
+/// to be kept agreeing.
 #[derive(Debug, Clone)]
-pub struct ChannelFoldedMessages {
-    /// The session whose log derived the messages.
+pub struct ChannelSessionLog {
+    /// The session the entries belong to.
     pub agent_session_id: AgentSessionId,
-    /// The folded messages, oldest first.
-    pub messages: Vec<FoldedMessage>,
+    /// Every logged frame, oldest first. Folding depends on this order.
+    pub entries: Vec<AgentSessionLog>,
 }
 
 /// How an incoming channel context relates to an agent session.

@@ -214,7 +214,12 @@ struct FoldState {
 struct Turn {
     id: TurnId,
     /// The `session/prompt` request whose response will close this turn.
-    prompt_id: RequestId,
+    ///
+    /// `None` for a turn opened without one - see
+    /// [`State::begin_turn_without_prompt`]. Such a turn has no id to
+    /// correlate against, so [`State::end_turn`] closes it on the first
+    /// response that reports a stop reason instead.
+    prompt_id: Option<RequestId>,
     /// Where this turn's agent message sits in [`State::messages`].
     ///
     /// `None` until the agent produces its first part, because a
@@ -333,7 +338,7 @@ impl FoldState {
 
         self.turn = Some(Turn {
             id,
-            prompt_id: prompt_id.clone(),
+            prompt_id: Some(prompt_id.clone()),
             agent: None,
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
@@ -348,25 +353,32 @@ impl FoldState {
         response_id: &RequestId,
         value: Option<&serde_json::Value>,
     ) -> Option<Changed> {
-        let is_current_turn = self
-            .turn
-            .as_ref()
-            .is_some_and(|turn| &turn.prompt_id == response_id);
-
-        if !is_current_turn {
-            // Responses to `initialize`, `session/new` and `session/load`
-            // land here. Only flag one that looks like a turn ending.
-            if value.is_some_and(|value| value.get("stopReason").is_some()) {
-                self.warn(FoldError::UncorrelatedResponse);
-            }
-            return None;
-        }
-
         let stop = value
             .and_then(|value| value.get("stopReason"))
             .and_then(|reason| reason.as_str())
             // Infallible: `StopReason`'s unmodelled variant is strum's default.
             .and_then(|reason| reason.parse().ok());
+
+        let closes_the_open_turn = match self.turn.as_ref() {
+            Some(turn) => match &turn.prompt_id {
+                // The ordinary case: the response to the prompt that opened it.
+                Some(prompt_id) => prompt_id == response_id,
+                // A turn nothing prompted has no id to match against, so the
+                // first response reporting a stop reason is taken as its
+                // answer - the prompt it belongs to is in an earlier log.
+                None => stop.is_some(),
+            },
+            None => false,
+        };
+
+        if !closes_the_open_turn {
+            // Responses to `initialize`, `session/new` and `session/load`
+            // land here. Only flag one that looks like a turn ending.
+            if stop.is_some() {
+                self.warn(FoldError::UncorrelatedResponse);
+            }
+            return None;
+        }
 
         self.close_turn(stop)
     }
@@ -453,8 +465,14 @@ impl FoldState {
         };
 
         // A repeated open for the same id patches in place rather than
-        // duplicating the row.
-        if let Some(&position) = self.turn.as_ref()?.tool_positions.get(&id) {
+        // duplicating the row. Looked up without `?` so that a call arriving
+        // with no turn open falls through to `push_agent_part`, which opens
+        // one, rather than being dropped.
+        let opened = self
+            .turn
+            .as_ref()
+            .and_then(|turn| turn.tool_positions.get(&id).copied());
+        if let Some(position) = opened {
             let (message, parts) = self.agent_parts_mut()?;
             if let Some(MessagePart::ToolUse(existing)) = parts.get_mut(position) {
                 *existing = tool;
@@ -624,11 +642,15 @@ impl FoldState {
     }
 
     /// Add a part to the open turn's agent message, creating that message if
-    /// this is the first part the agent has produced in the turn.
+    /// this is the first part the agent has produced in the turn - and the
+    /// turn itself if the agent is talking without one.
     ///
-    /// Returns what changed and where the part landed, or `None` when no turn
-    /// is open - content outside a turn has no message to belong to.
+    /// Every way the agent contributes content comes through here, which is
+    /// why opening the turn belongs here rather than in each caller.
     fn push_agent_part(&mut self, part: MessagePart) -> Option<(Changed, usize)> {
+        if self.turn.is_none() {
+            self.begin_turn_without_prompt();
+        }
         let turn = self.turn.as_ref()?;
         let turn_id = turn.id;
         let agent = turn.agent;
@@ -656,6 +678,31 @@ impl FoldState {
     fn agent_parts_mut(&mut self) -> Option<(usize, &mut NonEmpty<Vec<MessagePart>>)> {
         let message = self.turn.as_ref()?.agent?;
         Some((message, &mut self.messages[message].parts))
+    }
+
+    /// Open a turn for agent content that arrived without a prompt.
+    ///
+    /// A session resumed through `session/load` picks up mid-conversation: the
+    /// prompt the agent is answering is in the log of the session it resumed,
+    /// not this one. Dropping the content for want of a prompt folded such a
+    /// session to nothing at all - hundreds of frames of real work rendering
+    /// as an empty channel - and showing the reply without the question is
+    /// plainly better than showing neither.
+    ///
+    /// The turn is numbered like any other and produces no user message, since
+    /// there is no prompt to attribute one to. It is closed by the first
+    /// response carrying a stop reason; see [`State::end_turn`].
+    fn begin_turn_without_prompt(&mut self) {
+        let id = TurnId(self.turns_opened);
+        self.turns_opened += 1;
+
+        self.turn = Some(Turn {
+            id,
+            prompt_id: None,
+            agent: None,
+            tool_positions: HashMap::new(),
+            permission_positions: HashMap::new(),
+        });
     }
 
     /// The open turn, for the handlers that have already established there is

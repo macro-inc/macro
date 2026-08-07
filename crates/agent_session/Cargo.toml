@@ -37,6 +37,8 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+# The `agent_session_recorder` example spawns a real agent.
+agent-client-protocol = { workspace = true, features = ["subprocess"] }
 non_empty = { path = "../non_empty" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }

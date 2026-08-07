@@ -23,11 +23,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  useChannel,
-  useChannelActivity,
-  useChannelName,
-} from '@core/context/channels';
+import { useChannelActivity, useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
@@ -51,8 +47,8 @@ import {
   useChannelMessagesQuery,
 } from '@queries/channel/channel-messages';
 import {
-  createFoldedMessageLookup,
-  useFoldedMessagesQuery,
+  createFoldedMessages,
+  type FoldedMessageLookup,
 } from '@queries/channel/folded-messages';
 import {
   useDeleteMessageMutation,
@@ -76,6 +72,7 @@ import {
   on,
   onCleanup,
   onMount,
+  type Resource,
   Show,
   Switch,
 } from 'solid-js';
@@ -229,19 +226,17 @@ export function Channel(props: ChannelProps) {
     () => messagesQuery.data as ChannelMessagesData | undefined
   );
 
-  // The dumb agent viewer: for an agent channel, fetch the session's folded
-  // messages and hand a message-id lookup down the message tree so placeholder
-  // rows (null content + agent_session_message_id) render their folded side.
-  const channel = useChannel(props.channelId);
-  const foldedMessagesQuery = useFoldedMessagesQuery(
-    () => props.channelId,
-    () => channel()?.kind === 'agent'
-  );
-  const foldedMessageLookup = createFoldedMessageLookup(
-    () => foldedMessagesQuery.data
-  );
-
+  // The dumb agent viewer: for an agent channel, fetch the session's protocol
+  // log, fold it, and hand a message-id lookup down the message tree so
+  // placeholder rows (null content + agent_session_message_id) render their
+  // folded side.
+  //
+  // Reading `foldedMessages()` below suspends `Channel.root`, so an agent
+  // channel does not appear until its messages are folded rather than
+  // appearing empty and filling in. Ordinary channels never trigger it.
   const messages = createMemo(() => [...messageIndex.items]);
+
+  const foldedMessages = createFoldedMessages(() => props.channelId);
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
@@ -639,7 +634,14 @@ export function Channel(props: ChannelProps) {
       <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
-          <FoldedMessagesProvider value={foldedMessageLookup}>
+          {/*
+            The read that makes `Channel.root` wait for the fold. The provider
+            below is handed the accessor rather than its value, so nothing else
+            in the tree reads the resource, and without this the channel would
+            paint before its messages had bodies.
+          */}
+          <AwaitFold fold={foldedMessages} />
+          <FoldedMessagesProvider value={foldedMessages}>
             <MaybeMessageActionDrawerManager>
               <ChannelDropZone dragState={dragState}>
                 <div
@@ -903,4 +905,18 @@ export function Channel(props: ChannelProps) {
       </StaticMarkdownContext>
     </DebugSuspense>
   );
+}
+
+/**
+ * Reads the fold so the enclosing `<Suspense>` waits on it, and renders
+ * nothing.
+ *
+ * The fold has two jobs that pull in opposite directions: the channel should
+ * not paint until it is done, and the messages must re-read it when it lands.
+ * The second needs an accessor in context; the first needs somebody to
+ * actually call it. This is that caller.
+ */
+function AwaitFold(props: { fold: Resource<FoldedMessageLookup> }) {
+  props.fold();
+  return null;
 }

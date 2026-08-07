@@ -83,8 +83,6 @@ dependencies = [
 [[package]]
 name = "agent-client-protocol"
 version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882b815ffa67b023e1b40e7ea3bab3f05869654e8565d6811870c5545285e1d3"
 dependencies = [
  "agent-client-protocol-derive",
  "agent-client-protocol-schema",
@@ -140,12 +138,13 @@ dependencies = [
  "non_empty",
  "rootcause",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "workspace-hack",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3661,7 +3660,6 @@ dependencies = [
  "bot_id",
  "either",
  "macro_user_id",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9081,7 +9079,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9090,7 +9087,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10105,7 +10101,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "workspace-hack",
 ]
 
 [[package]]

@@ -107,7 +107,10 @@ members = [
 anyhow = "1.0.100"
 apollo-compiler = "1"
 apollo-parser = "0.8"
-agent-client-protocol = "1.2.0"
+# Locally forked (see third_party/README.md). Defaults off so the fold's
+# dependency chain stays wasm-reachable; whoever spawns an agent as a
+# subprocess asks for `features = ["subprocess"]`.
+agent-client-protocol = { version = "1.2.0", default-features = false }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -306,6 +309,12 @@ zip = "=2.4.2"
 # The Cloudflare sync worker is size-sensitive. Package manifests cannot own
 # profiles once they are workspace members, so keep its former release profile
 # here without changing release optimization for the backend services.
+
+# Local forks, vendored under third_party/ rather than pushed as fork repos.
+# See third_party/README.md for why each one exists.
+[patch.crates-io]
+agent-client-protocol = { path = "third_party/agent-client-protocol" }
+
 [profile.sync-service-release]
 inherits = "release"
 lto = true

@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::model::{Message, TurnId};
 use crate::testing::{InMemoryAgentSessionRepo, RecordingComms, test_agent_session};
+use agent_fold::domain::fold::fold;
 use agent_fold::domain::model::{Author, AuthorKind, FoldedMessage, MessageId, MessagePart};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
@@ -258,49 +259,6 @@ async fn appends_place_one_comms_placeholder_per_folded_message() {
     );
 }
 
-/// `channel_messages` resolves a dedicated channel to its session and folds
-/// that session's log.
-#[tokio::test]
-async fn channel_messages_folds_the_channels_session() {
-    let store = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    store.insert_session(test_agent_session(test_session(), channel));
-    store.extend_log(parse_log_as(test_session(), TURN));
-
-    let service = AgentSessionServiceImpl::new(
-        store.clone(),
-        FoldedMessageService::new(store.clone()),
-        RecordingComms::new(),
-    );
-
-    let folded = service
-        .channel_messages(channel)
-        .await
-        .expect("lookup succeeds")
-        .expect("the channel belongs to a session");
-
-    assert_eq!(folded.agent_session_id, test_session());
-    assert!(
-        !folded.messages.is_empty(),
-        "the recorded turn folds to messages"
-    );
-}
-
-/// A channel no session owns yields `None`, not an error.
-#[tokio::test]
-async fn channel_messages_without_a_session_is_none() {
-    let fx = fixture();
-    let unowned_channel = Uuid::from_u128(0xffff);
-
-    let folded = fx
-        .service
-        .channel_messages(unowned_channel)
-        .await
-        .expect("lookup succeeds");
-
-    assert!(folded.is_none());
-}
-
 // A live connection's frames do not come through `append_event` - the actor
 // writes them into `PlaceholderSyncingLogs`, which folds incrementally rather
 // than asking what the whole log derives. These pin that path.
@@ -332,6 +290,12 @@ impl FlakyComms {
             inner: RecordingComms::new(),
             refusals: Arc::new(Mutex::new(n)),
         }
+    }
+
+    /// Refusals still owed. Zero means every one budgeted has been spent, so
+    /// a test can tell "refused" from "never asked".
+    fn refusals_left(&self) -> usize {
+        *self.refusals.lock().expect("not poisoned")
     }
 }
 
@@ -501,13 +465,24 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     let comms = FlakyComms::refusing(1);
     let logs = connection(repo.clone(), comms.clone());
 
+    // Drive up to and including the prompt - the fixture opens with handshake
+    // traffic, and the prompt is the first frame that derives anything.
     let mut log = parse_log_as(test_session(), TURN).into_iter();
-
-    // The prompt derives the user's message, and comms refuses it.
-    logs.create(log.next().expect("the fixture opens with a prompt"))
-        .await
-        .expect("a refused placeholder does not fail the append");
-    assert_eq!(comms.inner.created(), vec![], "the write was refused");
+    for entry in log.by_ref() {
+        let is_prompt = entry.user_id.is_some();
+        logs.create(entry)
+            .await
+            .expect("a refused placeholder does not fail the append");
+        if is_prompt {
+            break;
+        }
+    }
+    assert_eq!(
+        comms.refusals_left(),
+        0,
+        "the prompt's placeholder was offered, and refused"
+    );
+    assert_eq!(comms.inner.created(), vec![], "so nothing was written");
 
     // Everything the fixture derives still lands, the refused message
     // included.
@@ -564,4 +539,58 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
         expected,
         "the prompt after a re-attach is turn 1, not turn 0 over again"
     );
+}
+
+/// `channel_log` resolves a dedicated channel to its session and hands back
+/// the log unfolded, in order.
+#[tokio::test]
+async fn channel_log_returns_the_sessions_frames_in_order() {
+    let store = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    store.insert_session(test_agent_session(test_session(), channel));
+    let recorded = parse_log_as(test_session(), TURN);
+    store.extend_log(recorded.clone());
+
+    let service = AgentSessionServiceImpl::new(
+        store.clone(),
+        FoldedMessageService::new(store.clone()),
+        RecordingComms::new(),
+    );
+
+    let log = service
+        .channel_log(channel)
+        .await
+        .expect("lookup succeeds")
+        .expect("the channel belongs to a session");
+
+    assert_eq!(log.agent_session_id, test_session());
+    assert_eq!(
+        log.entries.len(),
+        recorded.len(),
+        "every frame is served, none folded away"
+    );
+
+    // The order is the contract: folding is a left fold from the first frame,
+    // so a reordered log derives different turn numbering.
+    let served = fold(log.entries);
+    assert_eq!(
+        served,
+        fold(recorded),
+        "the served log folds to what the stored one does"
+    );
+}
+
+/// A channel no session owns yields `None`, not an error - same as the folded
+/// endpoint.
+#[tokio::test]
+async fn channel_log_without_a_session_is_none() {
+    let fx = fixture();
+
+    let log = fx
+        .service
+        .channel_log(Uuid::from_u128(0xffff))
+        .await
+        .expect("lookup succeeds");
+
+    assert!(log.is_none());
 }

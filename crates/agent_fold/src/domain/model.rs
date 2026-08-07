@@ -12,6 +12,7 @@
 //! recognize as the story of the session: what they asked, what the agent
 //! said, what it ran, and what it wanted permission to do.
 
+use crate::domain::log::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use std::path::PathBuf;
@@ -69,6 +70,34 @@ impl std::str::FromStr for MessageId {
             author: author.parse().map_err(|_| ())?,
         })
     }
+}
+
+/// The composite id a placeholder comms message stores in its
+/// `agent_session_message_id` column: `"{agent_session_id}:{turn}:{author}"`.
+///
+/// Folded messages have no table of their own, so this composite is the whole
+/// mapping between a comms row and the message it renders. Whoever writes a
+/// placeholder builds it, and whoever renders one reproduces it from the same
+/// parts - which now includes the browser, folding the same log through this
+/// crate compiled to WASM. It lives here, with the ids it is made of, so those
+/// two cannot drift; the string is persisted, so drift would silently
+/// unrender a channel.
+///
+/// Keyed per message rather than per turn: a turn yields a prompt and a reply
+/// with different senders, and each needs its own row.
+#[must_use]
+pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
+    format!("{}:{id}", session.as_uuid())
+}
+
+/// The message key inside a [`composite_message_id`] built for `session`, or
+/// `None` when the composite names a different session or is malformed.
+#[must_use]
+pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
+    composite
+        .strip_prefix(&format!("{}:", session.as_uuid()))?
+        .parse()
+        .ok()
 }
 
 /// Which side of the conversation produced a message.
