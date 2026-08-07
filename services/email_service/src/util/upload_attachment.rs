@@ -26,7 +26,7 @@ pub enum UploadAttachmentError {
     RateLimited,
 
     #[error("Failed to fetch attachment data from Gmail: {0}")]
-    GmailFetchFailed(String),
+    GmailFetchFailed(EmailApiError),
 
     #[error("Failed to upload media to SFS: {0}")]
     SfsUploadFailed(String),
@@ -178,7 +178,9 @@ async fn fetch_gmail_attachment_data(
         .await
         .map_err(|error| match error {
             EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited,
-            _ => UploadAttachmentError::GmailFetchFailed(error.to_string()),
+            // Preserve the provider error so API handlers can map it to the
+            // right status instead of collapsing everything to 500.
+            error => UploadAttachmentError::GmailFetchFailed(error),
         })
 }
 

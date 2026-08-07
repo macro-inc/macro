@@ -42,6 +42,11 @@ impl IntoResponse for GetAttachmentDocumentIdError {
             GetAttachmentDocumentIdError::UploadError(UploadAttachmentError::RateLimited) => {
                 StatusCode::TOO_MANY_REQUESTS
             }
+            // Provider failures keep their meaning (401/403/404/409/429)
+            // instead of collapsing to 500.
+            GetAttachmentDocumentIdError::UploadError(UploadAttachmentError::GmailFetchFailed(
+                provider_error,
+            )) => crate::api::email::provider_error::provider_error_status(provider_error),
             GetAttachmentDocumentIdError::DatabaseError(_)
             | GetAttachmentDocumentIdError::UploadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
