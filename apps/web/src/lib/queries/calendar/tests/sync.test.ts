@@ -34,7 +34,12 @@ describe('handleRefreshCalendar', () => {
     handleRefreshCalendar(undefined);
     handleRefreshCalendar('synced');
     handleRefreshCalendar({ event: 42 });
-    handleRefreshCalendar({ event: 'unknown_kind' });
+    handleRefreshCalendar({
+      event: 'unknown_kind',
+      link_id: '019fdd65-dcc1-74fb-a9c6-8162c11c5854',
+    });
+    handleRefreshCalendar({ event: 'synced' });
+    handleRefreshCalendar({ event: 'synced', link_id: 42 });
 
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
     expect(invalidateQueriesMock).not.toHaveBeenCalled();

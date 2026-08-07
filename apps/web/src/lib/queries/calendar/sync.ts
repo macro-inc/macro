@@ -15,12 +15,10 @@ import { invalidateCalendarOccurrences } from './occurrences';
  */
 export function handleRefreshCalendar(payload: unknown): void {
   const event =
-    typeof payload === 'object' &&
-    payload !== null &&
-    typeof (payload as { event?: unknown }).event === 'string'
-      ? (payload as { event: string })
+    typeof payload === 'object' && payload !== null
+      ? (payload as { event?: unknown; link_id?: unknown })
       : undefined;
-  if (event?.event !== 'synced') return;
+  if (event?.event !== 'synced' || typeof event.link_id !== 'string') return;
 
   invalidateCalendarOccurrences();
   queryClient.invalidateQueries({
