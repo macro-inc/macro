@@ -12,6 +12,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Fetches the linked mailbox owner's contact record.
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_self_contact(&self, link_id: Uuid) -> Result<Contact, EmailApiError> {
         let access_token = self
             .prepare(link_id, ApiOperationKind::ListContacts)
@@ -23,6 +24,7 @@ where
     }
 
     /// Lists primary contacts, optionally continuing an incremental synchronization.
+    #[tracing::instrument(skip(self, sync_token), err)]
     pub async fn list_contacts(
         &self,
         link_id: Uuid,
@@ -38,6 +40,7 @@ where
     }
 
     /// Lists automatically collected contacts, optionally continuing a synchronization.
+    #[tracing::instrument(skip(self, sync_token), err)]
     pub async fn list_other_contacts(
         &self,
         link_id: Uuid,

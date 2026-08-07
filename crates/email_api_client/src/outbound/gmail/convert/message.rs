@@ -95,15 +95,32 @@ pub(crate) fn map_message_resource_to_service(
 pub(super) fn parse_address_header(header_value: &str) -> Vec<(Option<String>, String)> {
     match addrparse(header_value) {
         Ok(addresses) => process_parsed_addresses(&addresses),
-        Err(_) if header_value.contains(">,") => {
+        Err(error) if header_value.contains(">,") => {
             let Some(index) = header_value.rfind(">,") else {
                 return Vec::new();
             };
             addrparse(&header_value[..=index])
                 .map(|addresses| process_parsed_addresses(&addresses))
-                .unwrap_or_default()
+                .unwrap_or_else(|salvage_error| {
+                    // From/To information is silently lost past this point, so
+                    // leave a trace. The raw header stays out of the log (PII).
+                    tracing::warn!(
+                        error = %salvage_error,
+                        original_error = %error,
+                        header_len = header_value.len(),
+                        "address header failed to parse even after truncation salvage"
+                    );
+                    Vec::new()
+                })
         }
-        Err(_) => Vec::new(),
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                header_len = header_value.len(),
+                "address header failed to parse; sender/recipient will be missing"
+            );
+            Vec::new()
+        }
     }
 }
 

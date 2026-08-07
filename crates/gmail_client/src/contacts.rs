@@ -17,7 +17,7 @@ pub(crate) async fn get_self_connection(
         .query(&[("personFields", PERSON_FIELDS)])
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -55,7 +55,7 @@ pub(crate) async fn list_connections(
             request = request.query(&[("pageToken", token)]);
         }
 
-        let response = request.send().await.map_err(GmailApiHttpError::Transport)?;
+        let response = request.send().await.map_err(GmailApiHttpError::transport)?;
         if !response.status().is_success() {
             return Err(unsuccessful_response(response).await);
         }
@@ -111,7 +111,7 @@ pub(crate) async fn list_other_contacts(
             request = request.query(&[("pageToken", token)]);
         }
 
-        let response = request.send().await.map_err(GmailApiHttpError::Transport)?;
+        let response = request.send().await.map_err(GmailApiHttpError::transport)?;
         if !response.status().is_success() {
             return Err(unsuccessful_response(response).await);
         }

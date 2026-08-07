@@ -27,6 +27,18 @@ pub enum GmailApiHttpError {
 }
 
 impl GmailApiHttpError {
+    /// Wraps a send failure, stripping the request URL so query parameters
+    /// (e.g. People-API `syncToken`s) cannot leak into logs via `Display`.
+    pub(crate) fn transport(error: reqwest::Error) -> Self {
+        Self::Transport(error.without_url())
+    }
+
+    /// Wraps a decode failure, stripping the request URL so query parameters
+    /// cannot leak into logs via `Display`.
+    pub(crate) fn decode(error: reqwest::Error) -> Self {
+        Self::Decode(error.without_url())
+    }
+
     /// Returns the HTTP status when the endpoint returned an unsuccessful response.
     pub fn status(&self) -> Option<StatusCode> {
         match self {
@@ -91,16 +103,37 @@ pub(crate) async fn unsuccessful_response(response: reqwest::Response) -> GmailA
         .and_then(|value| value.to_str().ok())
         .and_then(parse_retry_after);
 
-    let body = match response.text().await {
-        Ok(body) => sanitize_error_body(&body),
-        Err(error) => sanitize_error_body(&format!("Unable to read response body: {error}")),
-    };
+    let body = sanitize_error_body(&read_error_body_capped(response).await);
 
     GmailApiHttpError::Http {
         status,
         body,
         retry_after,
     }
+}
+
+/// The most we will *read* of an error body (not just retain after
+/// truncation): a hostile or misbehaving endpoint must not make us buffer an
+/// arbitrarily large response just to report a failure.
+const MAX_ERROR_BODY_READ_BYTES: usize = 8 * 1024;
+
+async fn read_error_body_capped(mut response: reqwest::Response) -> String {
+    let mut collected: Vec<u8> = Vec::new();
+    loop {
+        match response.chunk().await {
+            Ok(Some(chunk)) => {
+                let remaining = MAX_ERROR_BODY_READ_BYTES - collected.len();
+                collected.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+                if collected.len() >= MAX_ERROR_BODY_READ_BYTES {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            Err(error) => return format!("Unable to read response body: {error}"),
+        }
+    }
+
+    String::from_utf8_lossy(&collected).into_owned()
 }
 
 /// Parses a `Retry-After` header value in either of its RFC 9110 forms:
@@ -127,7 +160,7 @@ where
     response
         .json::<T>()
         .await
-        .map_err(GmailApiHttpError::Decode)
+        .map_err(GmailApiHttpError::decode)
 }
 
 #[cfg(test)]

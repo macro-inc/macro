@@ -19,7 +19,7 @@ pub(crate) async fn register_watch(
         .json(&request)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -41,7 +41,7 @@ pub(crate) async fn stop_watch(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

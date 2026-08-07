@@ -11,6 +11,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Returns the number of threads reported by a linked mailbox.
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_thread_count(&self, link_id: Uuid) -> Result<u64, EmailApiError> {
         let access_token = self.prepare(link_id, ApiOperationKind::GetProfile).await?;
 
@@ -18,6 +19,7 @@ where
     }
 
     /// Lists mailbox changes following `cursor`.
+    #[tracing::instrument(skip(self), err)]
     pub async fn list_changes(
         &self,
         link_id: Uuid,

@@ -16,7 +16,7 @@ pub(crate) async fn fetch_google_public_keys(
         .get(&client.certs_url)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

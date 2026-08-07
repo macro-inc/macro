@@ -12,6 +12,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Lists all labels for a linked mailbox.
+    #[tracing::instrument(skip(self), err)]
     pub async fn list_labels(&self, link_id: Uuid) -> Result<Vec<Label>, EmailApiError> {
         let access_token = self.prepare(link_id, ApiOperationKind::ListLabels).await?;
 
@@ -19,6 +20,7 @@ where
     }
 
     /// Creates a user label.
+    #[tracing::instrument(skip(self), err)]
     pub async fn create_label(
         &self,
         link_id: Uuid,
@@ -32,6 +34,7 @@ where
     }
 
     /// Deletes a provider label.
+    #[tracing::instrument(skip(self), err)]
     pub async fn delete_label(
         &self,
         link_id: Uuid,

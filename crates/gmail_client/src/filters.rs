@@ -16,7 +16,7 @@ pub(crate) async fn create_filter(
         .json(&filter)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -37,7 +37,7 @@ pub(crate) async fn list_filters(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -63,7 +63,7 @@ pub(crate) async fn delete_filter(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

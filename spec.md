@@ -170,7 +170,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### Observability
 
-- [ ] **P1.10 Restore lost signals; instrument the domain service.** Add `tracing` + `#[tracing::instrument(skip(...), err)]` (never `level = "info"`) to `EmailApiClientServiceImpl` public methods with `link_id` + operation kind in scope (sibling domain crates do this). Restore dropped warns: address-parse double-failure (`convert/message.rs:95-107` — From/To loss is now fully silent), watch-conflict recovery (`outbound/gmail/subscription.rs:16-29`), "no block filter found" on unblock. Render reqwest transport/decode errors with `.without_url()` in `GmailApiHttpError`'s `Display` (`gmail_client/src/error.rs:61-62`) — full URLs currently leak People-API `syncToken`s into `instrument(err)` logs. Cap error-body *reads* (not just retention) at a few KB in `unsuccessful_response` (`error.rs:95`).
+- [x] **P1.10 Restore lost signals; instrument the domain service.** (done; unblock warn landed with P0.5) Add `tracing` + `#[tracing::instrument(skip(...), err)]` (never `level = "info"`) to `EmailApiClientServiceImpl` public methods with `link_id` + operation kind in scope (sibling domain crates do this). Restore dropped warns: address-parse double-failure (`convert/message.rs:95-107` — From/To loss is now fully silent), watch-conflict recovery (`outbound/gmail/subscription.rs:16-29`), "no block filter found" on unblock. Render reqwest transport/decode errors with `.without_url()` in `GmailApiHttpError`'s `Display` (`gmail_client/src/error.rs:61-62`) — full URLs currently leak People-API `syncToken`s into `instrument(err)` logs. Cap error-body *reads* (not just retention) at a few KB in `unsuccessful_response` (`error.rs:95`).
 
 ### Tests
 

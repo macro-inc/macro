@@ -31,7 +31,7 @@ pub async fn modify_message_labels(
         .json(&payload)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -52,7 +52,7 @@ pub async fn fetch_user_labels(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -76,7 +76,7 @@ pub async fn create_label(
         .json(request)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -98,7 +98,7 @@ pub async fn delete_gmail_label(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

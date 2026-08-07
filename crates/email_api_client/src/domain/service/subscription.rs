@@ -12,6 +12,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Registers or renews the linked mailbox's notification subscription.
+    #[tracing::instrument(skip(self), err)]
     pub async fn register_subscription(
         &self,
         link_id: Uuid,
@@ -24,6 +25,7 @@ where
     ///
     /// This is intended for mailbox initialization, where a cached access token
     /// could outlive a revoked provider grant.
+    #[tracing::instrument(skip(self, link), fields(link_id = %link.id), err)]
     pub async fn register_subscription_without_cache(
         &self,
         link: &Link,
@@ -42,6 +44,7 @@ where
     }
 
     /// Stops the linked mailbox's notification subscription.
+    #[tracing::instrument(skip(self), err)]
     pub async fn stop_subscription(&self, link_id: Uuid) -> Result<(), EmailApiError> {
         let access_token = self.prepare(link_id, ApiOperationKind::Unsubscribe).await?;
         self.repository.unsubscribe(&access_token).await
@@ -52,6 +55,7 @@ where
     /// This is intended for link teardown: a grant that died since the last
     /// probe must not set `needs_reauth` or fan out a reauthorization
     /// notification for an inbox that is being intentionally removed.
+    #[tracing::instrument(skip(self, link), fields(link_id = %link.id), err)]
     pub async fn stop_subscription_for_link(&self, link: &Link) -> Result<(), EmailApiError> {
         self.rate_limiter
             .check_rate_limit(link.id, ApiOperationKind::Unsubscribe)

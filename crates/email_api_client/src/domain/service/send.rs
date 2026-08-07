@@ -11,6 +11,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Sends a message through the linked mailbox.
+    #[tracing::instrument(skip(self, request), err)]
     pub async fn send_message(
         &self,
         link_id: Uuid,

@@ -29,7 +29,7 @@ pub(crate) async fn get_history(
             request = request.query(&[("pageToken", token)]);
         }
 
-        let response = request.send().await.map_err(GmailApiHttpError::Transport)?;
+        let response = request.send().await.map_err(GmailApiHttpError::transport)?;
         if !response.status().is_success() {
             return Err(unsuccessful_response(response).await);
         }

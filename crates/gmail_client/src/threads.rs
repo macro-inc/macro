@@ -49,7 +49,7 @@ pub(crate) async fn list_threads(
         .query(&query_params)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -73,7 +73,7 @@ async fn fetch_thread<T: DeserializeOwned>(
         .query(&[("format", format)])
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

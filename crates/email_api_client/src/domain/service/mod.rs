@@ -48,6 +48,7 @@ where
     /// Normal email operations acquire tokens internally. This explicit escape
     /// hatch supports callers that need to verify a grant or use the same grant
     /// with another Google API.
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_access_token(
         &self,
         link_id: Uuid,

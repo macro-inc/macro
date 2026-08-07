@@ -45,7 +45,7 @@ pub(crate) async fn list_messages(
         .query(&query_params)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);
@@ -76,7 +76,7 @@ pub(crate) async fn get_message(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
@@ -106,7 +106,7 @@ pub(crate) async fn get_message_label_ids(
         .query(&[("format", "minimal")])
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
@@ -140,7 +140,7 @@ pub(crate) async fn send_message(
         .json(&payload)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

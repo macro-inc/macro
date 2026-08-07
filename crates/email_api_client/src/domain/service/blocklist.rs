@@ -11,6 +11,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Ensures messages from an email address are sent to trash.
+    #[tracing::instrument(skip(self, email_address), err)]
     pub async fn block_sender(
         &self,
         link_id: Uuid,
@@ -24,6 +25,7 @@ where
     }
 
     /// Removes the blocked-sender rule for an email address, when present.
+    #[tracing::instrument(skip(self, email_address), err)]
     pub async fn unblock_sender(
         &self,
         link_id: Uuid,
@@ -39,6 +41,7 @@ where
     }
 
     /// Lists email addresses covered by blocked-sender rules.
+    #[tracing::instrument(skip(self), err)]
     pub async fn list_blocked_senders(&self, link_id: Uuid) -> Result<Vec<String>, EmailApiError> {
         let access_token = self
             .prepare(link_id, ApiOperationKind::ListBlockedSenders)

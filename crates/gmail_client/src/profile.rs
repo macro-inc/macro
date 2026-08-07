@@ -13,7 +13,7 @@ pub(crate) async fn get_profile(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(GmailApiHttpError::Transport)?;
+        .map_err(GmailApiHttpError::transport)?;
 
     if !response.status().is_success() {
         return Err(unsuccessful_response(response).await);

@@ -16,6 +16,10 @@ impl MailboxSubscriptionClient for GmailApiClientRepository {
         let watch = match self.client.register_watch(token).await {
             Ok(watch) => watch,
             Err(error) if is_watch_conflict(&error) => {
+                tracing::warn!(
+                    error = %error,
+                    "Gmail watch conflict; stopping the existing watch and retrying once"
+                );
                 self.client
                     .stop_watch(token)
                     .await
