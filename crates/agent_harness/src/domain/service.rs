@@ -12,12 +12,15 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
+const RESUME_LOCKS: usize = 64;
+
 /// Turns trigger commands into running, announced agent sessions.
 pub struct AgentHarnessService<Sessions, Containers, Announcer> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     defaults: SessionDefaults,
+    resume_locks: [tokio::sync::Mutex<()>; RESUME_LOCKS],
 }
 
 impl<Sessions, Containers, Announcer> AgentHarnessService<Sessions, Containers, Announcer>
@@ -38,6 +41,7 @@ where
             containers,
             announcer,
             defaults,
+            resume_locks: std::array::from_fn(|_| tokio::sync::Mutex::new(())),
         }
     }
 
@@ -106,15 +110,46 @@ where
         } = command;
         let action = AgentAction::prompt(content);
 
-        match self
+        let mut already_logged = match self
             .sessions
             .send_action(session_id, sender.clone(), action.clone())
             .await
         {
-            Err(AgentSessionError::Disconnected(_)) => {
-                todo!("resuming containers not implemented yet")
-            }
-            result => Ok(result?),
+            Ok(()) => return Ok(()),
+            Err(AgentSessionError::Disconnected(_)) => false,
+            Err(AgentSessionError::DeliveryFailed(_)) => true,
+            Err(error) => return Err(error.into()),
+        };
+        let lock = session_id.as_uuid().as_u128() as usize % RESUME_LOCKS;
+        let _guard = self.resume_locks[lock].lock().await;
+
+        let recheck = if already_logged {
+            self.sessions
+                .retry_action(session_id, sender.clone(), action.clone())
+                .await
+        } else {
+            self.sessions
+                .send_action(session_id, sender.clone(), action.clone())
+                .await
+        };
+        match recheck {
+            Ok(()) => return Ok(()),
+            Err(AgentSessionError::Disconnected(_)) => {}
+            Err(AgentSessionError::DeliveryFailed(_)) => already_logged = true,
+            Err(error) => return Err(error.into()),
         }
+
+        let container = self.containers.resume(session_id).await?;
+        self.sessions.attach_session(session_id, container).await?;
+        if already_logged {
+            self.sessions
+                .retry_action(session_id, sender, action)
+                .await?;
+        } else {
+            self.sessions
+                .send_action(session_id, sender, action)
+                .await?;
+        }
+        Ok(())
     }
 }

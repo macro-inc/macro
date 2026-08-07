@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::AgentAction;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -59,6 +60,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Retry an action whose log entry was persisted before transport delivery failed.
+    fn retry_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        action: AgentAction,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -76,9 +85,14 @@ impl<R> AgentSessionServiceImpl<R> {
         }
     }
 
-    fn register_transport<Connector>(&self, id: AgentSessionId, connector: Connector) -> Result<()>
+    fn register_transport<Connector>(
+        &self,
+        id: AgentSessionId,
+        acp_session_id: Option<SessionId>,
+        connector: Connector,
+    ) -> Result<()>
     where
-        R: AgentSessionLogRepo + Clone,
+        R: AgentSessionRepo + AgentSessionLogRepo + Clone,
         Connector: AgentConnector + Clone,
     {
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
@@ -90,9 +104,37 @@ impl<R> AgentSessionServiceImpl<R> {
             }
         }
 
-        let actor = SessionActor::new(id, connector, self.repo.clone(), command_rx);
+        let actor = SessionActor::new(id, acp_session_id, connector, self.repo.clone(), command_rx);
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active)));
         Ok(())
+    }
+
+    async fn deliver_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        action: AgentAction,
+        log: bool,
+    ) -> Result<()> {
+        let commands = self
+            .active
+            .get(&id)
+            .map(|entry| entry.value().clone())
+            .ok_or(AgentSessionError::Disconnected(id))?;
+
+        let (completed, result) = oneshot::channel();
+        commands
+            .send(SessionCommand {
+                user_id,
+                action,
+                completed,
+                log,
+            })
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))?;
+        result
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))?
     }
 }
 
@@ -109,7 +151,7 @@ where
         Connector: AgentConnector + Clone,
     {
         let session = AgentSessionRepo::create(&self.repo, params).await?;
-        self.register_transport(session.id, connector)?;
+        self.register_transport(session.id, None, connector)?;
         Ok(session)
     }
 
@@ -134,7 +176,11 @@ where
         Connector: AgentConnector + Clone,
     {
         let session = self.repo.get(id).await?;
-        self.register_transport(session.id, connector)
+        self.register_transport(
+            session.id,
+            session.acp_session_id.map(Into::into),
+            connector,
+        )
     }
 
     async fn send_action(
@@ -143,24 +189,16 @@ where
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
     ) -> Result<()> {
-        let commands = self
-            .active
-            .get(&id)
-            .map(|entry| entry.value().clone())
-            .ok_or(AgentSessionError::Disconnected(id))?;
+        self.deliver_action(id, user_id, action, true).await
+    }
 
-        let (completed, result) = oneshot::channel();
-        commands
-            .send(SessionCommand {
-                user_id,
-                action,
-                completed,
-            })
-            .await
-            .map_err(|_| AgentSessionError::Disconnected(id))?;
-        result
-            .await
-            .map_err(|_| AgentSessionError::Disconnected(id))?
+    async fn retry_action(
+        &self,
+        id: AgentSessionId,
+        user_id: Option<MacroUserIdStr<'static>>,
+        action: AgentAction,
+    ) -> Result<()> {
+        self.deliver_action(id, user_id, action, false).await
     }
 }
 
@@ -170,7 +208,7 @@ async fn run_session<Connector, Logs>(
     active: std::sync::Weak<ActiveSessions>,
 ) where
     Connector: AgentConnector + Clone,
-    Logs: AgentSessionLogRepo,
+    Logs: AgentSessionLogRepo + AgentSessionRepo,
 {
     while actor.step().await == Stepped::Continue {}
 

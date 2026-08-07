@@ -13,6 +13,7 @@ pub(super) struct PendingAction<Token> {
     pub(super) from: Option<MacroUserIdStr<'static>>,
     pub(super) action: AgentAction,
     pub(super) token: Token,
+    pub(super) log: bool,
 }
 
 pub(super) enum SessionPhase {
@@ -27,11 +28,20 @@ pub(super) enum SessionPhase {
     Opening {
         /// Request id used to recognize the `session/new` response.
         request_id: RequestId,
+        /// How this connection is establishing its ACP session.
+        kind: SessionOpening,
     },
     Live {
         session_id: SessionId,
     },
     Dead,
+}
+
+#[derive(Clone)]
+pub(super) enum SessionOpening {
+    New,
+    Resume(SessionId),
+    Load(SessionId),
 }
 
 /// Observable phase of a session connection.
@@ -106,6 +116,8 @@ pub enum Input<Token> {
         /// Rides along until the action reaches the transport, then comes
         /// back out in [`Effect::Complete`].
         token: Token,
+        /// Whether delivery must first append a durable log entry.
+        log: bool,
     },
     /// The transport produced a message.
     Inbound(ToServerMessage),
@@ -121,11 +133,18 @@ pub enum Effect<Token> {
         from: Option<MacroUserIdStr<'static>>,
         /// The envelope to deliver.
         message: ToRuntimeMessage,
+        /// Whether the shell must log this message before writing it.
+        log: bool,
     },
     /// Persist an inbound message to the session's log stream.
     Log {
         /// The envelope to persist.
         message: ToServerMessage,
+    },
+    /// Persist the ACP session id before allowing prompts onto the wire.
+    PersistAcpSession {
+        /// Agent-assigned session identifier.
+        session_id: SessionId,
     },
     /// Resolve a caller's delivery future.
     Complete {
@@ -157,6 +176,8 @@ pub enum StopReason {
     InitializationRefused,
     /// The agent answered `initialize` with an invalid response.
     InitializationUnintelligible(String),
+    /// The agent cannot restore a previously opened ACP session.
+    ResumeUnsupported,
     /// The agent refused `session/new`.
     SessionRefused,
     /// The agent answered `session/new` with something unintelligible; the
@@ -177,6 +198,9 @@ impl std::fmt::Display for StopReason {
                     formatter,
                     "the agent returned an invalid initialize response: {detail}"
                 )
+            }
+            Self::ResumeUnsupported => {
+                formatter.write_str("the agent supports neither session/resume nor session/load")
             }
             Self::SessionRefused => formatter.write_str("the agent refused session/new"),
             Self::SessionUnintelligible(detail) => {

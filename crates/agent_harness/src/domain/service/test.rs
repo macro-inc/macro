@@ -3,11 +3,12 @@
 //! recording announcer. Only the edges are doubles.
 
 use agent_client_protocol::schema::v1::{
-    ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
+    AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
+    ResumeSessionResponse, SessionCapabilities, SessionResumeCapabilities,
 };
 use agent_session::PROTOCOL_VERSION;
-use agent_session::domain::model::AgentSessionId;
-use agent_session::domain::ports::AgentSessionRepo as _;
+use agent_session::domain::model::{AgentSessionId, Message};
+use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
@@ -16,8 +17,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession, SessionDefaults};
-// Cold-session resume is `todo!()` in `forward` for now; its tests return
-// with the implementation.
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
@@ -77,6 +76,25 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.opens_session(NewSessionResponse::new("acp-test"));
 }
 
+async fn complete_resume(container: &ContainerMock) {
+    let agent = container.agent();
+    container.sends_ready();
+    agent.wait_for_requests(1).await;
+    agent.completes_initialize(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    );
+    agent.wait_for_requests(2).await;
+    assert!(matches!(
+        &agent.received_requests()[1],
+        ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
+    ));
+    agent.resumes_session(ResumeSessionResponse::new());
+}
+
 fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
     agent
         .received_requests()
@@ -116,6 +134,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     // The row exists, carries the origin, and was announced with its real
     // dedicated channel id.
     let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.acp_session_id.as_deref(), Some("acp-test"));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
     let announced = announcer.announced();
@@ -195,6 +214,75 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
     assert_eq!(prompts(&container.agent()).len(), 2);
+}
+
+#[tokio::test]
+async fn forward_to_a_disconnected_session_resumes_acp_and_retries_the_prompt() {
+    let (service, repo, containers, _announcer) = harness();
+    let open = service.open(open_command());
+    let drive_open = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, original) = tokio::join!(open, drive_open);
+    let id = opened.expect("open should succeed");
+    original.fails_sends_after(0);
+    original.disconnects();
+
+    let forward = service.forward(ForwardMessage {
+        session_id: id,
+        sender: Some(sender()),
+        content: "continue after reconnecting".to_owned(),
+    });
+    let drive_resume = async {
+        loop {
+            if containers.resumed() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed.agent().wait_for_requests(3).await;
+        resumed
+    };
+    let (forwarded, resumed) = tokio::join!(forward, drive_resume);
+    forwarded.expect("forward should resume and deliver the prompt");
+
+    assert_eq!(containers.spawned(), 1, "resume must not spawn a sandbox");
+    assert_eq!(containers.resumed(), 1);
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [vec![ContentBlock::from("continue after reconnecting")]]
+    );
+    let prompt_logs = repo
+        .list_by_session(id)
+        .await
+        .expect("session logs should be readable")
+        .into_iter()
+        .filter(|log| {
+            matches!(
+                &log.content,
+                Message::ToRuntime(agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage::Acp(
+                    agent_runtime_protocol::domain::schema::v0::AcpMessage(
+                        agent_client_protocol::RawJsonRpcMessage::Request(request)
+                    )
+                )) if request.method.as_ref() == "session/prompt"
+            )
+        })
+        .count();
+    assert_eq!(prompt_logs, 2, "each user prompt is logged exactly once");
 }
 
 #[tokio::test]

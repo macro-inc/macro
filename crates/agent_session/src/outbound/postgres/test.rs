@@ -179,6 +179,29 @@ async fn update_persists_event_status(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+    let mut session = repo.get(id).await.expect("get agent session");
+    session.status = SessionStatus::Event(SystemEvent::AcpReady);
+    repo.update(session).await.expect("update agent session");
+
+    repo.set_acp_session_id(id, SessionId::from("acp-session-1"))
+        .await
+        .expect("persist ACP session id");
+
+    let updated = repo.get(id).await.expect("get updated agent session");
+    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
+    assert!(matches!(
+        updated.status,
+        SessionStatus::Event(SystemEvent::AcpReady)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();

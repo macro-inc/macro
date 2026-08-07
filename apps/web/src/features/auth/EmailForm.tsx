@@ -9,6 +9,8 @@ import { Stage } from './Shared';
 // in "dev" (local) we use http otherwise https
 const protocol = import.meta.hot ? 'http' : 'https';
 const REDIRECT_URI = `${protocol}://${window.location.host}/app`;
+type PasswordlessResult = boolean | { autoCode: string };
+const passwordlessRequests = new Map<string, Promise<PasswordlessResult>>();
 
 async function isPasswordLogin(email?: string | null) {
   if (!email) return false;
@@ -24,28 +26,9 @@ async function isPasswordLogin(email?: string | null) {
   );
 }
 
-// Initiates the passwordless login flow.
-// Redirecting to the requested identity provider endpoint.
-export const sendEmailCode = action(async (formData: FormData) => {
-  const email = formData.get('email');
-  if (!email || typeof email !== 'string') throw new Error('Invalid email');
-
-  if (typeof email === 'string' && (await isPasswordLogin(email))) {
-    const password = formData.get('password');
-    if (!password || typeof password !== 'string') return 'isPasswordLogin';
-
-    const maybeTokens = await authServiceClient.passwordLogin({
-      password,
-      email,
-    });
-    if (maybeTokens.isErr())
-      throw new Error(
-        'Failed to login. Check your email and password then try again.'
-      );
-
-    return 'LoggedIn';
-  }
-
+async function sendPasswordlessCode(
+  email: string
+): Promise<PasswordlessResult> {
   const url = new URL(window.location.href);
   const referral_code = url.searchParams.get('referral_code');
 
@@ -95,6 +78,43 @@ export const sendEmailCode = action(async (formData: FormData) => {
   }
 
   return true;
+}
+
+// Initiates the passwordless login flow.
+// Redirecting to the requested identity provider endpoint.
+export const sendEmailCode = action(async (formData: FormData) => {
+  const email = formData.get('email');
+  if (!email || typeof email !== 'string') throw new Error('Invalid email');
+
+  if (typeof email === 'string' && (await isPasswordLogin(email))) {
+    const password = formData.get('password');
+    if (!password || typeof password !== 'string') return 'isPasswordLogin';
+
+    const maybeTokens = await authServiceClient.passwordLogin({
+      password,
+      email,
+    });
+    if (maybeTokens.isErr())
+      throw new Error(
+        'Failed to login. Check your email and password then try again.'
+      );
+
+    return 'LoggedIn';
+  }
+
+  const requestKey = email.toLowerCase();
+  const inFlight = passwordlessRequests.get(requestKey);
+  if (inFlight) return inFlight;
+
+  const request = sendPasswordlessCode(email);
+  passwordlessRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    if (passwordlessRequests.get(requestKey) === request) {
+      passwordlessRequests.delete(requestKey);
+    }
+  }
 }, 'passwordless-login');
 
 /// True when the email step succeeded and the verify step should show.

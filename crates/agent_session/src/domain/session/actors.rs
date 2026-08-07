@@ -15,6 +15,7 @@
 
 use std::collections::VecDeque;
 
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::ports::TransportError;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
@@ -23,7 +24,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domain::error::Result;
 use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::ports::{AgentConnector, AgentSessionLogRepo};
+use crate::domain::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo};
 
 use super::{CloseReason, Effect, Input, SessionMachine};
 
@@ -35,6 +36,7 @@ pub(crate) struct SessionCommand {
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     pub(crate) action: AgentAction,
     pub(crate) completed: oneshot::Sender<Result<()>>,
+    pub(crate) log: bool,
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
@@ -62,10 +64,11 @@ pub(crate) struct SessionActor<Connector, Logs> {
 impl<Connector, Logs> SessionActor<Connector, Logs>
 where
     Connector: AgentConnector + Clone,
-    Logs: AgentSessionLogRepo,
+    Logs: AgentSessionLogRepo + AgentSessionRepo,
 {
     pub(crate) fn new(
         id: AgentSessionId,
+        acp_session_id: Option<SessionId>,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
@@ -85,7 +88,10 @@ where
         });
 
         Self {
-            machine: SessionMachine::new(id),
+            machine: acp_session_id.map_or_else(
+                || SessionMachine::new(id),
+                |session_id| SessionMachine::resume(id, session_id),
+            ),
             connector,
             logs,
             commands,
@@ -109,10 +115,11 @@ where
     pub(crate) async fn step(&mut self) -> Stepped {
         let input = tokio::select! {
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, completed }) => Input::Command {
+                Some(SessionCommand { user_id, action, completed, log }) => Input::Command {
                     from: user_id,
                     action,
                     token: completed,
+                    log,
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),
@@ -140,13 +147,20 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
-                Effect::Send { from, message } => {
-                    if let Err(error) = self.deliver(from, message).await {
+                Effect::Send { from, message, log } => {
+                    if let Err(error) = self.deliver(from, message, log).await {
                         tracing::error!(
                             error = ?error,
                             id = %self.machine.id(),
                             "agent session failed to deliver an action"
                         );
+                        if let Some(Effect::Complete { token, .. }) = effects.pop_front() {
+                            let _ = token.send(Err(
+                                crate::domain::error::AgentSessionError::DeliveryFailed(
+                                    self.machine.id(),
+                                ),
+                            ));
+                        }
                         effects.clear();
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::SendFailed)));
                     }
@@ -157,6 +171,17 @@ where
                             error = ?error,
                             id = %self.machine.id(),
                             "agent session failed to persist an inbound message"
+                        );
+                        effects.clear();
+                        effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
+                    }
+                }
+                Effect::PersistAcpSession { session_id } => {
+                    if let Err(error) = self.persist_acp_session(session_id).await {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its ACP session id"
                         );
                         effects.clear();
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
@@ -181,19 +206,30 @@ where
         &self,
         from: Option<MacroUserIdStr<'static>>,
         message: ToRuntimeMessage,
+        log: bool,
     ) -> Result<()> {
-        self.log(from, Message::ToRuntime(message.clone())).await?;
+        if log {
+            self.log(from, Message::ToRuntime(message.clone())).await?;
+        }
         self.connector.send(message).await?;
         Ok(())
     }
 
     async fn log(&self, user_id: Option<MacroUserIdStr<'static>>, content: Message) -> Result<()> {
-        self.logs
-            .create(AgentSessionLog {
+        AgentSessionLogRepo::create(
+            &self.logs,
+            AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
-            })
+            },
+        )
+        .await
+    }
+
+    async fn persist_acp_session(&self, acp_session_id: SessionId) -> Result<()> {
+        self.logs
+            .set_acp_session_id(self.machine.id(), acp_session_id)
             .await
     }
 }

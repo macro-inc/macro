@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use super::errors::{DaytonaError, Result};
 use super::types::{DaytonaApiKey, Env, Labels, PortPreview, Snapshot};
 
+#[cfg(test)]
+mod test;
+
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -24,6 +27,11 @@ struct SandboxDto {
     id: String,
     state: SandboxState,
     error_reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SandboxListDto {
+    items: Vec<SandboxDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,7 +120,7 @@ impl DaytonaClient {
     pub async fn find_by_label(&self, label: &str, value: &str) -> Result<Option<String>> {
         let labels = Labels::from(HashMap::from([(label.to_owned(), value.to_owned())]));
         let filter = serde_json::to_string(&labels).map_err(DaytonaError::EncodeLabelFilter)?;
-        let sandboxes: Vec<SandboxDto> = self
+        let response: SandboxListDto = self
             .json(
                 self.http
                     .get(format!("{}/sandbox", self.base))
@@ -120,6 +128,7 @@ impl DaytonaClient {
                 "list sandboxes",
             )
             .await?;
+        let sandboxes = response.items;
 
         if sandboxes.len() > 1 {
             tracing::warn!(
@@ -167,6 +176,32 @@ impl DaytonaClient {
             }
             tokio::time::sleep(POLL_INTERVAL).await;
         }
+    }
+
+    /// Start a stopped or archived sandbox.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn start(&self, sandbox_id: &str) -> Result<()> {
+        let operation = "start sandbox";
+        let response = self
+            .http
+            .post(format!("{}/sandbox/{sandbox_id}/start", self.base))
+            .bearer_auth(self.api_key.expose())
+            .send()
+            .await
+            .map_err(|source| DaytonaError::Request { operation, source })?;
+        let status = response.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        let body = response
+            .text()
+            .await
+            .map_err(|source| DaytonaError::ReadResponse { operation, source })?;
+        Err(DaytonaError::Api {
+            operation,
+            status,
+            body,
+        })
     }
 
     /// Execute one command in a sandbox.

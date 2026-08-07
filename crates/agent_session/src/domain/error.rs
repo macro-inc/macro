@@ -12,6 +12,12 @@ pub enum AgentSessionError {
     Handshake(String),
     #[error("agent session {0} is no longer connected")]
     Disconnected(AgentSessionId),
+    #[error("agent session {0} disconnected after its action was logged but before delivery")]
+    DeliveryFailed(AgentSessionId),
+    #[error(
+        "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
+    )]
+    ResumeUnsupported(AgentSessionId),
     #[error(transparent)]
     Transport(#[from] TransportError),
     #[error(transparent)]
