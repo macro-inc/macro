@@ -6,6 +6,6 @@
  */
 
 /**
- * Replacement title.
+ * Replacement title; an empty string clears it.
  */
 export type UpdateCalendarEventRequestTitle = string | null;

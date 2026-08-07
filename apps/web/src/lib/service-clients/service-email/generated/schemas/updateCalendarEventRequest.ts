@@ -26,7 +26,7 @@ export interface UpdateCalendarEventRequest {
   /** Replacement recurrence properties; an empty list clears them. */
   recurrenceLines?: UpdateCalendarEventRequestRecurrenceLines;
   time?: UpdateCalendarEventRequestTime;
-  /** Replacement title. */
+  /** Replacement title; an empty string clears it. */
   title?: UpdateCalendarEventRequestTitle;
   transparency?: UpdateCalendarEventRequestTransparency;
   visibility?: UpdateCalendarEventRequestVisibility;

@@ -5864,7 +5864,7 @@
           },
           "title": {
             "type": ["string", "null"],
-            "description": "Replacement title."
+            "description": "Replacement title; an empty string clears it."
           },
           "transparency": {
             "oneOf": [

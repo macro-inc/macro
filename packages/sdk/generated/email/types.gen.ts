@@ -1336,7 +1336,7 @@ export type UpdateCalendarEventRequest = {
     recurrenceLines?: Array<string> | null;
     time?: null | EventTime;
     /**
-     * Replacement title.
+     * Replacement title; an empty string clears it.
      */
     title?: string | null;
     transparency?: null | EventTransparency;
