@@ -279,14 +279,19 @@ where
     }
 
     /// Execute one idempotent queue delivery under a fenced renewable lease.
-    #[tracing::instrument(skip(self, owner_id, access_token, range), fields(job_id = %key.job_id), err)]
+    ///
+    /// `report` accumulates durable progress and remains meaningful on
+    /// failure: per-calendar commits that landed before the error survive
+    /// the retry, so callers should act on the report either way.
+    #[tracing::instrument(skip(self, owner_id, access_token, range, report), fields(job_id = %key.job_id), err)]
     pub async fn run(
         &self,
         key: CalendarBackfillJobKey,
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<GoogleBackfillRunReport, GoogleCalendarBackfillRunError> {
+        report: &mut GoogleBackfillRunReport,
+    ) -> Result<(), GoogleCalendarBackfillRunError> {
         let (lease_token, account_id) = match self
             .lifecycle
             .claim_google_backfill(key)
@@ -297,7 +302,7 @@ where
                 lease_token,
                 account_id,
             } => (lease_token, account_id),
-            CalendarBackfillClaim::Complete => return Ok(GoogleBackfillRunReport::default()),
+            CalendarBackfillClaim::Complete => return Ok(()),
             CalendarBackfillClaim::Busy => return Err(GoogleCalendarBackfillRunError::Busy),
             CalendarBackfillClaim::Failed => {
                 return Err(GoogleCalendarBackfillRunError::AlreadyFailed);
@@ -328,7 +333,15 @@ where
             self.provider.clone(),
             self.watch.clone(),
         );
-        let work = backfill.backfill(key, lease_token, account_id, owner_id, access_token, range);
+        let work = backfill.backfill(
+            key,
+            lease_token,
+            account_id,
+            owner_id,
+            access_token,
+            range,
+            report,
+        );
         let lease = self
             .lifecycle
             .maintain_google_backfill_lease(key, lease_token);
@@ -342,12 +355,12 @@ where
         };
 
         match result {
-            Ok(report) => {
+            Ok(()) => {
                 self.lifecycle
                     .complete_google_backfill(key, lease_token)
                     .await
                     .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
-                Ok(report)
+                Ok(())
             }
             Err(error) => {
                 let provider_error = error
@@ -422,7 +435,13 @@ where
     }
 
     /// Fetch and reconcile calendars and events for a connected inbox.
-    #[tracing::instrument(skip(self, owner_id, access_token, range), err)]
+    ///
+    /// Progress accumulates into `report` as each calendar commits, so a
+    /// caller observes durable partial progress even when a later calendar
+    /// fails the run: those commits survive the retry, whose quiet re-run
+    /// would never report them again.
+    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(self, owner_id, access_token, range, report), err)]
     pub async fn backfill(
         &self,
         key: CalendarBackfillJobKey,
@@ -431,7 +450,8 @@ where
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<GoogleBackfillRunReport, Report> {
+        report: &mut GoogleBackfillRunReport,
+    ) -> Result<(), Report> {
         if !range.is_valid_for_backfill() {
             return Err(rootcause::report!(CalendarValidationError::InvalidRange).into());
         }
@@ -440,7 +460,6 @@ where
             .list_calendars(access_token, key.email_link_id)
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
-        let mut report = GoogleBackfillRunReport::default();
         let mut calendar_ids = Vec::with_capacity(calendars.len());
 
         for provider_calendar in calendars {
@@ -506,8 +525,10 @@ where
                     .await?;
                 calendar_count += 1;
             }
+            // The upserts above committed individually, so they count even
+            // if this calendar's snapshot commit below fails.
             report.events_upserted += calendar_count;
-            report.cancellations_observed += batch.cancelled_provider_event_ids.len();
+            let cancellation_count = batch.cancelled_provider_event_ids.len();
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
@@ -526,6 +547,9 @@ where
                     calendar_count,
                 )
                 .await?;
+            // Tombstones only apply inside the snapshot commit, so they
+            // count once it succeeds.
+            report.cancellations_observed += cancellation_count;
 
             // Channel upkeep is best-effort: the poll remains the backstop,
             // so a failed watch call must not fail the sync that just
@@ -581,7 +605,7 @@ where
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
 
-        Ok(report)
+        Ok(())
     }
 }
 
