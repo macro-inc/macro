@@ -22,6 +22,7 @@ export {
   prependUnique,
   type QueryRevalidation,
   remove,
+  removeEmbeddedLink,
   type Selection,
   select,
   update,

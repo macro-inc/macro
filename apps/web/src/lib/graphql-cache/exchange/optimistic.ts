@@ -39,6 +39,9 @@ type JsonScalar = string | number | boolean | null;
 type ScalarKey<T> = {
   [K in StringKey<T>]-?: Present<T[K]> extends JsonScalar ? K : never;
 }[StringKey<T>];
+type NumberKey<T> = {
+  [K in StringKey<T>]-?: Present<T[K]> extends number ? K : never;
+}[StringKey<T>];
 type ScalarInsertFields<T> = Partial<{
   [K in ScalarKey<T>]: Exclude<T[K], undefined>;
 }>;
@@ -249,13 +252,14 @@ export function update<TItem extends object>(
 }
 
 /**
- * Prepends an entity link inside a selected embedded list item, creating the
- * embedded item from scalar fields when its selector does not exist.
+ * Removes an entity link from a selected embedded list item and decrements
+ * its count only when the link was present.
  */
-export function upsertEmbeddedLink<
+export function removeEmbeddedLink<
   TItem extends object,
   TSelectorField extends ScalarKey<TItem>,
   TLinkField extends NormalizedEntityListKey<TItem>,
+  TCountField extends NumberKey<TItem>,
 >(
   selection: ListSelection<TItem>,
   args: {
@@ -264,6 +268,44 @@ export function upsertEmbeddedLink<
       equals: Present<TItem[TSelectorField]>;
     };
     linkField: TLinkField;
+    countField: TCountField;
+    entity: NormalizedEntityIdentity;
+  }
+): OptimisticUpdate {
+  return {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'removeEmbeddedLink',
+      listItem: args.listItem,
+      linkField: args.linkField,
+      countField: args.countField,
+      entityKey: normalizedEntityKey(args.entity),
+    },
+  } as unknown as OptimisticUpdate;
+}
+
+/**
+ * Prepends an entity link inside a selected embedded list item, creating the
+ * embedded item from scalar fields when its selector does not exist. Its
+ * count is initialized or incremented only when the link is newly inserted.
+ */
+export function upsertEmbeddedLink<
+  TItem extends object,
+  TSelectorField extends ScalarKey<TItem>,
+  TLinkField extends NormalizedEntityListKey<TItem>,
+  TCountField extends NumberKey<TItem>,
+>(
+  selection: ListSelection<TItem>,
+  args: {
+    listItem: {
+      whereField: TSelectorField;
+      equals: Present<TItem[TSelectorField]>;
+    };
+    linkField: TLinkField;
+    countField: TCountField;
     entity: NormalizedEntityIdentity;
     insertFields: ScalarInsertFields<TItem>;
   }
@@ -277,6 +319,7 @@ export function upsertEmbeddedLink<
       kind: 'upsertEmbeddedLink',
       listItem: args.listItem,
       linkField: args.linkField,
+      countField: args.countField,
       entityKey: normalizedEntityKey(args.entity),
       insertFields: args.insertFields,
     },

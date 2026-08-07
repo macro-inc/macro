@@ -2,11 +2,9 @@ import { documentOperationName } from '@graphql-cache/exchange/generated-selecti
 import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
-  prependUnique,
   type QueryRevalidation,
-  remove,
+  removeEmbeddedLink,
   select,
-  update,
   upsertEmbeddedLink,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -94,7 +92,8 @@ export function groupPagesByLogicalView(
 /**
  * Discovers every cached property-grouped field and creates constrained link
  * recipes only where the loaded membership proves the move is applicable.
- * Missing bins/pages are left untouched and revalidated after success.
+ * Missing destination bins are created on initial pages; missing pages are
+ * left untouched and revalidated after success.
  */
 export async function buildOptimisticGroupedPropertyUpdates(
   args: BuildArgs
@@ -174,15 +173,20 @@ export async function buildOptimisticGroupedPropertyUpdates(
       for (const key of removed) {
         const source = page.bins.find((bin) => bin.key === key);
         if (!source?.items.some((item) => item.id === args.entityId)) continue;
-        const items = select(GroupSoupMembershipDocument, {
+        const bins = select(GroupSoupMembershipDocument, {
           input: page.input,
         })
           .field('user')
           .field('groupSoup')
-          .field('bins')
-          .item('key', key)
-          .field('items');
-        updates.push(update(items, remove(entity)));
+          .field('bins');
+        updates.push(
+          removeEmbeddedLink(bins, {
+            listItem: { whereField: 'key', equals: key },
+            linkField: 'items',
+            countField: 'totalCount',
+            entity,
+          })
+        );
       }
     }
     for (const page of destinationPages) {
@@ -193,21 +197,15 @@ export async function buildOptimisticGroupedPropertyUpdates(
           .field('user')
           .field('groupSoup')
           .field('bins');
-        const destination = page.bins.find((bin) => bin.key === key);
-        if (destination) {
-          updates.push(
-            update(bins.item('key', key).field('items'), prependUnique(entity))
-          );
-        } else {
-          updates.push(
-            upsertEmbeddedLink(bins, {
-              listItem: { whereField: 'key', equals: key },
-              linkField: 'items',
-              entity,
-              insertFields: { totalCount: 1, nextCursor: null },
-            })
-          );
-        }
+        updates.push(
+          upsertEmbeddedLink(bins, {
+            listItem: { whereField: 'key', equals: key },
+            linkField: 'items',
+            countField: 'totalCount',
+            entity,
+            insertFields: { nextCursor: null },
+          })
+        );
       }
     }
   }

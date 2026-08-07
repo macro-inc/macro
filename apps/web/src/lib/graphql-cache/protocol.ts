@@ -79,12 +79,23 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string }
     | {
+        kind: 'removeEmbeddedLink';
+        listItem: {
+          whereField: string;
+          equals: string | number | boolean | null;
+        };
+        linkField: string;
+        countField: string;
+        entityKey: string;
+      }
+    | {
         kind: 'upsertEmbeddedLink';
         listItem: {
           whereField: string;
           equals: string | number | boolean | null;
         };
         linkField: string;
+        countField: string;
         entityKey: string;
         /** Scalar fields used only when the embedded item must be created. */
         insertFields: Record<string, string | number | boolean | null>;
