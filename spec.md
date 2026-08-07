@@ -195,7 +195,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 - [x] **P2.6** (done) Port the address-parser regression corpus (main had 7 cases: quoted display names with commas, truncation salvage, "(withheld recipients)", still-invalid-after-truncation, real-world truncated header; new file keeps 2).
 - [x] **P2.7** (done) Docs: delete the leftover batch-API doc block above `get_message` (`gmail_client/src/lib.rs:229-231`); document that `RateBudget` live/backfill are **two thresholds over one shared Redis window** (`rate_limiter.rs:14-21`) so nobody "fixes" the key split later and resets deployed quota state; fix the `EmailApiClientRepository` doc claiming "eight capabilities" while excluding `MailboxCalendarClient`.
 - [x] **P2.8** (done) Pre-existing, fix opportunistically: `GmailLabelColor` missing `#[serde(rename_all = "camelCase")]` (label colors always deserialize `None`); `WatchRequest.topic_name` serialized snake_case (works only via proto-JSON leniency); `level = "info"` on `upload_single_attachment`'s instrument (repo rule: never); `srcset` not scheme-filtered by ammonia; non-UTF-8 charsets mangled by `from_utf8_lossy`.
-- [ ] **P2.9** New service modules use `anyhow` where CS-46 prefers `rootcause` (partially forced by `DetailedError.source: anyhow::Error`) — align where feasible or record the exception.
+- [x] **P2.9** (done: exception recorded on DetailedError) New service modules use `anyhow` where CS-46 prefers `rootcause` (partially forced by `DetailedError.source: anyhow::Error`) — align where feasible or record the exception.
 
 ---
 
