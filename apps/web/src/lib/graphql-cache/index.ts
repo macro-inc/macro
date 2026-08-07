@@ -48,6 +48,8 @@ export type {
   CacheReadPriority,
   CacheRequest,
   CacheResponse,
+  EnqueueOptimisticMutationResult,
+  InitialMutationClaim,
   MutationSettlement,
   OptimisticWriteResult,
   QueryVariableFilter,

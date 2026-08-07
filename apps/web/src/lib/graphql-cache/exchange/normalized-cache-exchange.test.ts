@@ -948,6 +948,73 @@ describe('normalizedCacheExchange', () => {
       expect(results[0]?.data).toEqual({ from: 'network' });
     });
 
+    it('replays an older returned claim and reports the new caller as queued', async () => {
+      host.seedQueued({
+        query: stringifyDocument(MUTATION),
+        operationName: 'SetEntityProperty',
+        variables: { input: { restored: true } },
+        data: optimistic,
+      });
+      const { ops, results, forwarded } = harness(host);
+
+      ops.next(makeMutationOp(2, optimistic));
+      await tick();
+
+      expect(host.claims[0]).toBe('restored-1');
+      expect(forwarded[0]?.kind).toBe('mutation');
+      const liveResult = results.find((result) => result.operation.key === 2);
+      expect(liveResult).toBeDefined();
+      expect(optimisticMutationDispositionOf(liveResult!)).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+    });
+
+    it('keeps the new mutation queued when the initial head is not runnable', async () => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => ({
+        ...(await enqueue(args, claim)),
+        initialClaim: { kind: 'not-runnable' },
+      });
+      const { ops, results, forwarded } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.begins).toHaveLength(1);
+      expect(forwarded).toHaveLength(0);
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+    });
+
+    it('reports a nested initial claim failure without bypassing or duplicating enqueue', async () => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => ({
+        ...(await enqueue(args, claim)),
+        initialClaim: { kind: 'failed', error: 'claim storage failed' },
+      });
+      const onCacheError = vi.fn();
+      const { ops, results, forwarded } = harness(host, undefined, {
+        onCacheError,
+      });
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.begins).toHaveLength(1);
+      expect(forwarded).toHaveLength(0);
+      expect(onCacheError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'claim storage failed' }),
+        expect.objectContaining({ key: 1 })
+      );
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-1',
+      });
+    });
+
     it('passes declarative link patches into the durable begin call', async () => {
       const base = makeMutationOp(1, optimistic);
       const patch = {

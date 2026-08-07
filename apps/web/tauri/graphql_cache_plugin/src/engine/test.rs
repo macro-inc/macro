@@ -231,6 +231,12 @@ fn optimistic_layer_commits_durably() {
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
+    let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["initialClaim"]["kind"], "claimed");
+    assert_eq!(
+        serialized["initialClaim"]["mutation"]["transactionId"],
+        optimistic.transaction_id
+    );
     let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
         panic!("new queue head should be claimed")
     };
