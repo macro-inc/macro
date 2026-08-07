@@ -61,9 +61,7 @@ impl MailboxBlocklistClient for GmailApiClientRepository {
         }
 
         if !found {
-            tracing::warn!(
-                "no blocked-sender filter found to delete for the requested address"
-            );
+            tracing::warn!("no blocked-sender filter found to delete for the requested address");
         }
 
         Ok(())

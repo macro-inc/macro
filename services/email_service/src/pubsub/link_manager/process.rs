@@ -23,7 +23,8 @@ use std::time::Duration;
 mod test;
 
 /// Backoff schedule for teardown provider calls: three attempts total.
-const TEARDOWN_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(200), Duration::from_millis(400)];
+const TEARDOWN_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(200), Duration::from_millis(400)];
 
 /// Runs a teardown provider call with a bounded retry (3 attempts, 200/400ms).
 ///

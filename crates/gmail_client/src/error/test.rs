@@ -76,8 +76,8 @@ fn retry_after_parses_delta_seconds_and_http_dates() {
     assert_eq!(parse_retry_after("  37  "), Some(Duration::from_secs(37)));
 
     let future = std::time::SystemTime::now() + Duration::from_secs(120);
-    let parsed = parse_retry_after(&httpdate::fmt_http_date(future))
-        .expect("http-date form should parse");
+    let parsed =
+        parse_retry_after(&httpdate::fmt_http_date(future)).expect("http-date form should parse");
     assert!(
         parsed <= Duration::from_secs(120) && parsed >= Duration::from_secs(110),
         "expected roughly two minutes, got {parsed:?}"

@@ -98,21 +98,22 @@ async fn refresh_existing_thread(
         .await
         .map_err(|error| map_email_api_error(error, "Failed to get provider thread message IDs"))?;
 
-    let existing_message_ids = email_db_client::messages::get::filter_existing_provider_message_ids(
-        &ctx.db,
-        link.id,
-        &message_ids,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context(format!(
-                "DB check for existing messages of thread {} failed",
-                p.thread_provider_id
-            )),
-        })
-    })?;
+    let existing_message_ids =
+        email_db_client::messages::get::filter_existing_provider_message_ids(
+            &ctx.db,
+            link.id,
+            &message_ids,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context(format!(
+                    "DB check for existing messages of thread {} failed",
+                    p.thread_provider_id
+                )),
+            })
+        })?;
 
     let missing_message_ids: Vec<String> = message_ids
         .into_iter()
@@ -138,7 +139,11 @@ async fn enqueue_backfill_messages(
     let p = &scope.payload;
 
     ctx.redis_client
-        .init_backfill_thread_progress(scope.job_id, &p.thread_provider_id, message_ids.len() as i32)
+        .init_backfill_thread_progress(
+            scope.job_id,
+            &p.thread_provider_id,
+            message_ids.len() as i32,
+        )
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {

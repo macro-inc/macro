@@ -1,4 +1,3 @@
-
 use uuid::Uuid;
 
 use super::super::super::models::{AccessToken, EmailApiError, TokenFreshness};
@@ -58,12 +57,14 @@ async fn blocklist_methods_use_their_matching_costs_and_operations() {
         let service = service(calls.clone());
 
         match operation {
-            super::ApiOperationKind::BlockSender => {
-                service.block_sender(Uuid::nil(), "blocked@example.com").await.unwrap()
-            }
-            super::ApiOperationKind::UnblockSender => {
-                service.unblock_sender(Uuid::nil(), "blocked@example.com").await.unwrap()
-            }
+            super::ApiOperationKind::BlockSender => service
+                .block_sender(Uuid::nil(), "blocked@example.com")
+                .await
+                .unwrap(),
+            super::ApiOperationKind::UnblockSender => service
+                .unblock_sender(Uuid::nil(), "blocked@example.com")
+                .await
+                .unwrap(),
             super::ApiOperationKind::ListBlockedSenders => {
                 assert_eq!(
                     service.list_blocked_senders(Uuid::nil()).await.unwrap(),
@@ -95,4 +96,3 @@ fn service(
         FakeRateLimiter::new(calls, Ok(())),
     )
 }
-

@@ -2,7 +2,9 @@ use email_api_client::domain::models::ApiOperationKind;
 use models_email::gmail::operations::GmailApiOperation;
 use uuid::Uuid;
 
-use super::{RateBudget, RedisProviderRateLimiter, gmail_operation, rate_limit_args, rate_limit_result};
+use super::{
+    RateBudget, RedisProviderRateLimiter, gmail_operation, rate_limit_args, rate_limit_result,
+};
 
 /// Redis being unreachable must fail open: quota accounting degrades, mail
 /// flow does not.
@@ -23,7 +25,10 @@ async fn unreachable_redis_fails_open() {
     )
     .await;
 
-    assert!(result.is_ok(), "redis outage must not refuse provider calls");
+    assert!(
+        result.is_ok(),
+        "redis outage must not refuse provider calls"
+    );
 }
 
 #[test]

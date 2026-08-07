@@ -2,6 +2,7 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_gmail_message_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use email_api_client::domain::models::{EmailApiError, InboxChanges, SyncCursor};
+use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
@@ -9,7 +10,6 @@ use models_email::gmail::inbox_sync::{
     DeleteMessagePayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
     UpdateLabelsPayload, UpsertMessagePayload,
 };
-use models_email::email::service::backfill::BackfillJob;
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;

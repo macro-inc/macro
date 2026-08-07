@@ -52,7 +52,10 @@ fn skips_undecodable_body_data_but_keeps_the_message() {
 #[test]
 fn accepts_unpadded_base64url_bodies() {
     let encoded = URL_SAFE_NO_PAD.encode("Hello");
-    assert!(encoded.len() % 4 != 0, "fixture must exercise unpadded input");
+    assert!(
+        encoded.len() % 4 != 0,
+        "fixture must exercise unpadded input"
+    );
 
     let parsed = parse_gmail_payload(&payload("text/plain", &encoded), "message").unwrap();
 

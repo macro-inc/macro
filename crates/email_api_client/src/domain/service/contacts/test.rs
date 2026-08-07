@@ -103,21 +103,30 @@ async fn contact_reads_use_correct_operation_kinds_and_forward_sync_tokens() {
         ApiOperationKind::ListContacts,
         ContactCall::SelfContact,
         async |service, link_id| service.get_self_contact(link_id).await.map(|_| ()),
-    ).await;
+    )
+    .await;
 
     assert_call(
         ApiOperationKind::ListContacts,
         |link_id| ContactCall::Contacts(link_id, Some("primary-token".into())),
         async |service, link_id| {
-            service.list_contacts(link_id, Some("primary-token")).await.map(|_| ())
+            service
+                .list_contacts(link_id, Some("primary-token"))
+                .await
+                .map(|_| ())
         },
-    ).await;
+    )
+    .await;
 
     assert_call(
         ApiOperationKind::ListContacts,
         |link_id| ContactCall::OtherContacts(link_id, Some("other-token".into())),
         async |service, link_id| {
-            service.list_other_contacts(link_id, Some("other-token")).await.map(|_| ())
+            service
+                .list_other_contacts(link_id, Some("other-token"))
+                .await
+                .map(|_| ())
         },
-    ).await;
+    )
+    .await;
 }

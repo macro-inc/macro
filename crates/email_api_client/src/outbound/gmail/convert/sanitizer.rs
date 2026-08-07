@@ -75,8 +75,9 @@ static CSS_COMMENT: LazyLock<Regex> =
 static CSS_IMPORT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)@import[^;{}]*(;|$)").expect("static regex is valid"));
 /// `<style …> … </style>` in ammonia's already-normalized output.
-static STYLE_BLOCK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?is)(<style\b[^>]*>)(.*?)(</style>)").expect("static regex is valid"));
+static STYLE_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?is)(<style\b[^>]*>)(.*?)(</style>)").expect("static regex is valid")
+});
 
 /// Scrubs the text content of every `<style>` element in sanitized HTML.
 ///
@@ -92,7 +93,12 @@ fn sanitize_style_blocks(html: &str) -> String {
 
     STYLE_BLOCK
         .replace_all(html, |caps: &regex::Captures<'_>| {
-            format!("{}{}{}", &caps[1], sanitize_style_content(&caps[2]), &caps[3])
+            format!(
+                "{}{}{}",
+                &caps[1],
+                sanitize_style_content(&caps[2]),
+                &caps[3]
+            )
         })
         .into_owned()
 }

@@ -8,7 +8,6 @@ use super::super::models::{
 use super::EmailApiClientServiceImpl;
 use super::test_support::{Call, FakeRateLimiter, FakeRepository, FakeTokenSource, call_log};
 
-
 #[tokio::test]
 async fn token_failure_stops_before_repository_after_the_quota_check() {
     let calls = call_log();
@@ -18,7 +17,9 @@ async fn token_failure_stops_before_repository_after_the_quota_check() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = service.prepare(Uuid::nil(), ApiOperationKind::GetMessage).await;
+    let result = service
+        .prepare(Uuid::nil(), ApiOperationKind::GetMessage)
+        .await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));
     assert_eq!(
@@ -40,7 +41,9 @@ async fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
         FakeRateLimiter::new(calls.clone(), Err(RateLimitRefusal::new(Some(retry_after)))),
     );
 
-    let result = service.prepare(Uuid::nil(), ApiOperationKind::SendMessage).await;
+    let result = service
+        .prepare(Uuid::nil(), ApiOperationKind::SendMessage)
+        .await;
 
     assert_eq!(
         result,
@@ -66,7 +69,9 @@ async fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = service.get_access_token(Uuid::nil(), TokenFreshness::Fresh).await;
+    let result = service
+        .get_access_token(Uuid::nil(), TokenFreshness::Fresh)
+        .await;
 
     assert_eq!(result.unwrap().expose_secret(), "access-token");
     assert_eq!(
@@ -103,7 +108,9 @@ async fn token_errors_preserve_transient_and_permanent_classification() {
         );
 
         assert_eq!(
-            service.get_access_token(Uuid::nil(), TokenFreshness::Cached).await,
+            service
+                .get_access_token(Uuid::nil(), TokenFreshness::Cached)
+                .await,
             Err(expected)
         );
     }

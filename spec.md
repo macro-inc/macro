@@ -201,6 +201,12 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ## Open questions — confirm intent, then document in the PR description (or revert)
 
+> Status: these are behavior changes only the PR author can confirm as intended.
+> Not reverted by the fix pass. Note for (2): interactive 429s now at least
+> carry a Retry-After header (P1.7), and gmail_message distinguishes local
+> refusals from provider 429s (P1.5). Please confirm each and copy the
+> decision into the PR description.
+
 1. **Permanent 4xx in gmail_ops/backfill now drop instead of retrying to the DLQ.** Main redelivered to `maxReceiveCount` → DLQ, leaving an inspection trail. E.g. a scope-missing 403 on `BlockSender` now deletes the op: DB says blocked, Gmail has no filter, nothing in the DLQ. If intended, consider revert-or-flag semantics for mutations (as `modify_message_labels` already reverts).
 2. **Interactive API calls now consume the shared live Redis budget** and can 429 (main never throttled handler-path Gmail calls). Presumably the point of centralizing quota — confirm the interactive-vs-worker contention trade-off is accepted.
 3. **link_manager Refresh: transient watch-renewal failure now fails the message** (SQS retry) and skips that pass's contacts sync; main logged and continued. The code comment says deliberate — confirm. Related nit: with a cached-but-revoked token, Refresh retry-loops until the token cache TTL expires (main logged and dropped).

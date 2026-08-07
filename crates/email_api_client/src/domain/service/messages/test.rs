@@ -172,31 +172,47 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
         ApiOperationKind::GetMessage,
         |link_id| MessageCall::Message(link_id, "message".into()),
         async |service, link_id| service.get_message(link_id, "message").await.map(|_| ()),
-    ).await;
+    )
+    .await;
     assert_call(
         ApiOperationKind::GetMessage,
         |_| MessageCall::MessageLabels("message".into()),
-        async |service, link_id| service.get_message_label_ids(link_id, "message").await.map(|_| ()),
-    ).await;
+        async |service, link_id| {
+            service
+                .get_message_label_ids(link_id, "message")
+                .await
+                .map(|_| ())
+        },
+    )
+    .await;
     assert_call(
         ApiOperationKind::ListMessages,
         |_| MessageCall::Messages(25, vec!["inbox".into(), "unread".into()]),
         async |service, link_id| {
-            service.list_messages(link_id, 25, &["inbox", "unread"]).await.map(|_| ())
+            service
+                .list_messages(link_id, 25, &["inbox", "unread"])
+                .await
+                .map(|_| ())
         },
-    ).await;
+    )
+    .await;
     assert_call(
         ApiOperationKind::GetThread,
         |_| MessageCall::MessageIdsForThread("thread".into()),
         async |service, link_id| {
-            service.get_message_ids_for_thread(link_id, "thread").await.map(|_| ())
+            service
+                .get_message_ids_for_thread(link_id, "thread")
+                .await
+                .map(|_| ())
         },
-    ).await;
+    )
+    .await;
     assert_call(
         ApiOperationKind::GetThread,
         |link_id| MessageCall::Thread(link_id, "thread".into()),
         async |service, link_id| service.get_thread(link_id, "thread").await.map(|_| ()),
-    ).await;
+    )
+    .await;
     assert_call(
         ApiOperationKind::ListThreads,
         |_| {
@@ -207,10 +223,13 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
             )
         },
         async |service, link_id| {
-            service.list_threads(link_id, 50, Some("next-page"), &["inbox", "starred"]).await
+            service
+                .list_threads(link_id, 50, Some("next-page"), &["inbox", "starred"])
+                .await
                 .map(|_| ())
         },
-    ).await;
+    )
+    .await;
     assert_call(
         ApiOperationKind::ModifyMessageLabels,
         |_| {
@@ -221,12 +240,10 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
             )
         },
         async |service, link_id| {
-            service.modify_message_labels(
-                link_id,
-                "message",
-                &["starred".into()],
-                &["unread".into()],
-            ).await
+            service
+                .modify_message_labels(link_id, "message", &["starred".into()], &["unread".into()])
+                .await
         },
-    ).await;
+    )
+    .await;
 }

@@ -39,7 +39,9 @@ async fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = service.get_attachment(link_id, "message", "attachment").await;
+    let result = service
+        .get_attachment(link_id, "message", "attachment")
+        .await;
 
     assert_eq!(result.unwrap(), vec![1, 2, 3]);
     assert_eq!(

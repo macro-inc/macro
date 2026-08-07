@@ -1,4 +1,3 @@
-
 use chrono::{TimeZone, Utc};
 use models_email::service::link::{Link, UserProvider};
 use uuid::Uuid;
@@ -68,7 +67,10 @@ async fn registration_can_bypass_the_token_cache_for_initialization() {
     let calls = call_log();
     let service = service(calls.clone());
 
-    service.register_subscription_without_cache(&link()).await.unwrap();
+    service
+        .register_subscription_without_cache(&link())
+        .await
+        .unwrap();
 
     assert_eq!(
         *calls.lock().unwrap(),
@@ -124,4 +126,3 @@ fn service(
         FakeRateLimiter::new(calls, Ok(())),
     )
 }
-

@@ -122,17 +122,17 @@ pub async fn message_exists_by_provider_id(
     provider_id: &str,
     link_id: Uuid,
 ) -> anyhow::Result<bool> {
-    let exists: bool = sqlx::query_scalar(
+    let exists = sqlx::query_scalar!(
         r#"
         SELECT EXISTS(
             SELECT 1
             FROM email_messages
             WHERE provider_id = $1 AND link_id = $2
-        )
+        ) AS "exists!"
         "#,
+        provider_id,
+        link_id,
     )
-    .bind(provider_id)
-    .bind(link_id)
     .fetch_one(pool)
     .await?;
 

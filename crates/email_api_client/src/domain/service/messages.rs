@@ -1,9 +1,7 @@
 use models_email::email::service::message::Message;
 use uuid::Uuid;
 
-use super::super::models::{
-    CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
-};
+use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage};
 use super::super::ports::{
     MailboxCalendarClient, MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource,
 };

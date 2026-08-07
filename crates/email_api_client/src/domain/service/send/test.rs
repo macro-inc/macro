@@ -1,4 +1,3 @@
-
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message::MessageToSend;
 use uuid::Uuid;
@@ -46,7 +45,10 @@ async fn send_uses_send_cost_and_returns_ids_without_mutating_message() {
     );
     let request = send_request();
 
-    let sent_ids = service.send_message(Uuid::nil(), &request, Some("thread-1")).await.unwrap();
+    let sent_ids = service
+        .send_message(Uuid::nil(), &request, Some("thread-1"))
+        .await
+        .unwrap();
 
     assert_eq!(sent_ids.provider_message_id, "message-1");
     assert_eq!(sent_ids.provider_thread_id, "thread-1");
@@ -92,4 +94,3 @@ fn send_request() -> SendRequest {
         references: None,
     }
 }
-

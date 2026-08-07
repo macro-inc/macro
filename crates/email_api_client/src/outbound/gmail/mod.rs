@@ -79,9 +79,7 @@ const QUOTA_403_REASONS: [&str; 4] = [
 ];
 
 fn is_quota_403_body(body: &str) -> bool {
-    QUOTA_403_REASONS
-        .iter()
-        .any(|reason| body.contains(reason))
+    QUOTA_403_REASONS.iter().any(|reason| body.contains(reason))
 }
 
 pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {

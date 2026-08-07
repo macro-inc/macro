@@ -48,7 +48,9 @@ async fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
     let link_id = Uuid::new_v4();
 
     assert_eq!(
-        service(SyncClient::default(), &calls).get_thread_count(link_id).await,
+        service(SyncClient::default(), &calls)
+            .get_thread_count(link_id)
+            .await,
         Ok(42)
     );
     assert_eq!(
@@ -68,7 +70,9 @@ async fn list_changes_uses_changes_quota_and_forwards_cursor() {
     let link_id = Uuid::new_v4();
     let cursor = SyncCursor::gmail("cursor");
 
-    let result = service(repository, &calls).list_changes(link_id, &cursor).await;
+    let result = service(repository, &calls)
+        .list_changes(link_id, &cursor)
+        .await;
 
     assert_eq!(result.unwrap().next_cursor, SyncCursor::gmail("next"));
     assert_eq!(*captured_cursor.lock().unwrap(), Some("cursor".into()));

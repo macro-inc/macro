@@ -12,7 +12,14 @@ fn strips_script_svg_math_and_foreign_object_vectors() {
     let sanitized = sanitize_email_html(html);
 
     assert!(sanitized.contains("<p>hello</p>"));
-    for vector in ["<script", "<svg", "<foreignObject", "<math", "<iframe", "steal()"] {
+    for vector in [
+        "<script",
+        "<svg",
+        "<foreignObject",
+        "<math",
+        "<iframe",
+        "steal()",
+    ] {
         assert!(!sanitized.contains(vector), "{vector} must be removed");
     }
 }

@@ -75,9 +75,21 @@ fn processing_error_policy_covers_every_variant() {
             false,
             FailureReason::AccessTokenFetchFailed,
         ),
-        (EmailApiError::Forbidden, false, FailureReason::GmailApiFailed),
-        (EmailApiError::NotFound, false, FailureReason::GmailApiFailed),
-        (EmailApiError::Conflict, false, FailureReason::GmailApiFailed),
+        (
+            EmailApiError::Forbidden,
+            false,
+            FailureReason::GmailApiFailed,
+        ),
+        (
+            EmailApiError::NotFound,
+            false,
+            FailureReason::GmailApiFailed,
+        ),
+        (
+            EmailApiError::Conflict,
+            false,
+            FailureReason::GmailApiFailed,
+        ),
         (
             EmailApiError::OutdatedCursor,
             false,
