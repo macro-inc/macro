@@ -169,12 +169,16 @@ pub(super) async fn cross_inbox_reply_drafts(
 }
 
 /// Insert a new thread record within a transaction.
+///
+/// On conflict the update is skipped entirely when it would be a no-op
+/// (incoming `latest_inbound_message_ts` is NULL or unchanged), so redundant
+/// inserts neither rewrite the row nor wipe a populated timestamp with NULL.
 pub(super) async fn insert_thread(
     tx: &mut sqlx::PgConnection,
     thread: &ThreadRow,
     link_id: Uuid,
 ) -> Result<Uuid, sqlx::Error> {
-    let result = sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read,
                              latest_inbound_message_ts, latest_outbound_message_ts,
@@ -184,6 +188,9 @@ pub(super) async fn insert_thread(
         SET
             latest_inbound_message_ts = EXCLUDED.latest_inbound_message_ts,
             updated_at = NOW()
+        WHERE
+            EXCLUDED.latest_inbound_message_ts IS NOT NULL AND
+            email_threads.latest_inbound_message_ts IS DISTINCT FROM EXCLUDED.latest_inbound_message_ts
         RETURNING id
         "#,
         thread.db_id,
@@ -195,10 +202,24 @@ pub(super) async fn insert_thread(
         thread.latest_outbound_message_ts,
         thread.latest_non_spam_message_ts,
     )
-    .fetch_one(tx)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    Ok(result.id)
+    if let Some(id) = result {
+        return Ok(id);
+    }
+
+    // The conflicting row already holds this data; fetch its id.
+    sqlx::query_scalar!(
+        r#"
+        SELECT id FROM email_threads
+        WHERE link_id = $1 AND provider_id = $2
+        "#,
+        link_id,
+        thread.provider_id,
+    )
+    .fetch_one(tx)
+    .await
 }
 
 // --- Thread metadata update ---
@@ -563,7 +584,9 @@ async fn update_db_thread_metadata(
             updated_at = NOW()
         WHERE
             id = $6 AND
-            link_id = $7
+            link_id = $7 AND
+            (inbox_visible, is_read, latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts)
+                IS DISTINCT FROM ($1, $2, $3, $4, $5)
         "#,
         inbox_visible,
         is_read,
