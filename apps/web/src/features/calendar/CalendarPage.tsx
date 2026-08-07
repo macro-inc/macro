@@ -318,7 +318,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   return (
     <FullCalendar.Root
       plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
-      initialView="timeGridWeek"
+      initialView={calendarView.displaySettings.periodView}
       initialDate={props.initialDate}
       height="100%"
       expandRows

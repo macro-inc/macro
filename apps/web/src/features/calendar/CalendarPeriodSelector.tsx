@@ -9,12 +9,13 @@ import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
+import type { CalendarPeriodView } from './events/types';
 
 const CALENDAR_VIEWS = [
   { value: 'dayGridMonth', label: 'Month' },
   { value: 'timeGridWeek', label: 'Week' },
   { value: 'timeGridDay', label: 'Day' },
-];
+] satisfies Array<{ value: CalendarPeriodView; label: string }>;
 
 const DRAWER_ROW_CLASS =
   "relative flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:after:absolute not-last:after:inset-x-2 not-last:after:bottom-0 not-last:after:h-px not-last:after:bg-edge-muted not-last:after:content-['']";
@@ -33,8 +34,11 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
-  const activeView = createMemo(
-    () => calendarPager.activeDateInfo()?.view.type ?? 'timeGridWeek'
+  const activeView = createMemo<CalendarPeriodView>(
+    () =>
+      (calendarPager.activeDateInfo()?.view.type as
+        | CalendarPeriodView
+        | undefined) ?? calendarView.displaySettings.periodView
   );
 
   const highlightedRange = createMemo(() => {
@@ -54,7 +58,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     setPickerState('open', open);
   };
 
-  const changeView = (view: string) => {
+  const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
     if (calendarPager.activeDateInfo()?.view.type === view) return;
@@ -142,7 +146,7 @@ export function CalendarPeriodSelector() {
         <Dropdown.Group>
           <Dropdown.RadioGroup
             value={controls.activeView()}
-            onChange={controls.changeView}
+            onChange={(view) => controls.changeView(view as CalendarPeriodView)}
           >
             <For each={CALENDAR_VIEWS}>
               {(view) => (

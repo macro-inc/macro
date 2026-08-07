@@ -15,7 +15,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { useCalendarView } from './CalendarViewContext';
-import type { CalendarEvent } from './events/types';
+import type { CalendarEvent, CalendarPeriodView } from './events/types';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
 export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
@@ -41,9 +41,20 @@ export interface CalendarPageHandle {
   data: CalendarPageData;
 }
 
-const shiftedDate = (date: Date, days: number) => {
+const shiftedDateForView = (
+  date: Date,
+  view: CalendarPeriodView,
+  offset: -1 | 1
+) => {
   const shifted = new Date(date);
-  shifted.setDate(shifted.getDate() + days);
+  if (view === 'dayGridMonth') {
+    shifted.setDate(1);
+    shifted.setMonth(shifted.getMonth() + offset);
+  } else {
+    shifted.setDate(
+      shifted.getDate() + (view === 'timeGridDay' ? offset : offset * 7)
+    );
+  }
   return shifted;
 };
 
@@ -52,10 +63,11 @@ export const [CalendarPagerContextProvider, useCalendarPager] =
     const calendarView = useCalendarView();
 
     const initialDate = new Date();
+    const initialView = calendarView.displaySettings.periodView;
     const initialDates: Record<CalendarPageId, Date> = {
-      previous: shiftedDate(initialDate, -7),
+      previous: shiftedDateForView(initialDate, initialView, -1),
       current: initialDate,
-      next: shiftedDate(initialDate, 7),
+      next: shiftedDateForView(initialDate, initialView, 1),
     };
 
     const [pageOrder, setPageOrder] =
@@ -272,7 +284,9 @@ export const [CalendarPagerContextProvider, useCalendarPager] =
       void transition.then(synchronizeBuffers);
     };
 
-    const changeView = (view: string) => {
+    const changeView = (view: CalendarPeriodView) => {
+      calendarView.setPeriodView(view);
+
       const api = activePage()?.api();
       if (!api || api.view.type === view) return;
       pager.cancel();
