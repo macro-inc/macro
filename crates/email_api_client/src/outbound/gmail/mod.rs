@@ -22,7 +22,6 @@ use models_email::gmail::inbox_sync::{
 
 use crate::domain::models::{EmailApiError, RateLimitOrigin};
 
-#[allow(dead_code)]
 const WATCH_CONFLICT_BODY_FRAGMENT: &str = "push notification client allowed";
 
 /// Gmail-backed implementation of the email API capability ports.
@@ -123,7 +122,6 @@ pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) fn map_history_error(error: GmailApiHttpError) -> EmailApiError {
     if error.status().is_some_and(|status| status.as_u16() == 404) {
         return EmailApiError::OutdatedCursor;
@@ -132,7 +130,6 @@ pub(crate) fn map_history_error(error: GmailApiHttpError) -> EmailApiError {
     map_gmail_error(error)
 }
 
-#[allow(dead_code)]
 pub(crate) fn is_watch_conflict(error: &GmailApiHttpError) -> bool {
     error.status().is_some_and(|status| status.as_u16() == 400)
         && error.body().is_some_and(|body| {

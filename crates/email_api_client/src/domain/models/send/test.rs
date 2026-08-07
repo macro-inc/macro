@@ -1,13 +1,10 @@
-use chrono::{Duration, TimeZone, Utc};
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::attachment::AttachmentToSend;
 use models_email::email::service::message::MessageToSend;
 use uuid::Uuid;
 
 use super::SendRequest;
-use crate::domain::models::{
-    AccessToken, EmailApiError, ProviderSubscription, RateLimitOrigin, SyncCursor,
-};
+use crate::domain::models::{AccessToken, EmailApiError, RateLimitOrigin, SyncCursor};
 
 fn contact(email: &str, name: &str) -> ContactInfo {
     ContactInfo {
@@ -55,18 +52,6 @@ fn gmail_cursor_preserves_opaque_history_id() {
 
     assert_eq!(cursor, SyncCursor::Gmail("history-123".to_string()));
     assert_eq!(cursor.as_str(), "history-123");
-}
-
-#[test]
-fn provider_subscription_expires_at_provider_deadline() {
-    let expires_at = Utc
-        .with_ymd_and_hms(2026, 8, 5, 19, 0, 0)
-        .single()
-        .expect("valid timestamp");
-    let subscription = ProviderSubscription::new(SyncCursor::gmail("42"), expires_at);
-
-    assert!(!subscription.is_expired_at(expires_at - Duration::seconds(1)));
-    assert!(subscription.is_expired_at(expires_at));
 }
 
 #[test]

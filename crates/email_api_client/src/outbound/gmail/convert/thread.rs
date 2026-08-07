@@ -7,16 +7,6 @@ use uuid::Uuid;
 use super::message::map_message_resource_to_service;
 use crate::domain::models::EmailApiError;
 
-pub(crate) fn map_thread_resources_to_service(
-    resources: Vec<ThreadResource>,
-    link_id: Uuid,
-) -> Result<Vec<service::thread::Thread>, EmailApiError> {
-    resources
-        .into_iter()
-        .map(|resource| map_thread_resource_to_service(resource, link_id))
-        .collect()
-}
-
 pub(crate) fn map_thread_resource_to_service(
     resource: ThreadResource,
     link_id: Uuid,

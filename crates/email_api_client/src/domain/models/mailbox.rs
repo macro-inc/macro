@@ -47,11 +47,6 @@ impl ProviderSubscription {
     pub fn new(cursor: SyncCursor, expires_at: DateTime<Utc>) -> Self {
         Self { cursor, expires_at }
     }
-
-    /// Returns whether the subscription has expired at `now`.
-    pub fn is_expired_at(&self, now: DateTime<Utc>) -> bool {
-        self.expires_at <= now
-    }
 }
 
 /// One provider page of email thread identifiers.
