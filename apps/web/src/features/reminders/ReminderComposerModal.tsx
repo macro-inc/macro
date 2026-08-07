@@ -10,6 +10,7 @@ import BellIcon from '@phosphor/bell-simple.svg';
 import {
   reminderTarget,
   useCreateReminderMutation,
+  useUpdateReminderMutation,
 } from '@queries/reminders/reminders';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
@@ -37,6 +38,7 @@ import {
 } from 'solid-js';
 import {
   closeReminderComposer,
+  type ReminderDraft,
   reminderComposerOpen,
   reminderComposerState,
 } from './reminder-composer';
@@ -47,6 +49,8 @@ import {
   REMINDER_DEFAULT_TIME,
   REMINDER_DESCRIPTION_MAX_LENGTH,
   reminderDefaultOptions,
+  reminderEditOptions,
+  reminderEditPatch,
   resolveReminderDescription,
 } from './reminder-schedule';
 
@@ -54,15 +58,20 @@ import {
 type Step = 'description' | 'when';
 
 /**
- * Asks two questions — what and when — for a reminder about the entity the
- * command was invoked on.
+ * Asks two questions — what and when — for a reminder, either a new one about
+ * an entity or an existing one being edited.
  *
  * The date step is deliberately the date editor reached by `shift+cmd+o`: the
  * same shell, entity chip, search input and `useDateSearch` list. The
- * description step in front of it is optional, and Enter on an empty field
- * falls straight through to the date list.
+ * description step in front of it is optional when creating, and Enter on an
+ * empty field falls straight through to the date list.
+ *
+ * Editing runs the same two steps prefilled. The difference is that both
+ * answers already have values, so neither step can be skipped into a blank: the
+ * description must stay non-empty, and the date list leads with keeping the
+ * time it already has.
  */
-export function CreateReminderModal() {
+export function ReminderComposerModal() {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('reminder-composer');
   const [step, setStep] = createSignal<Step>('description');
@@ -71,9 +80,11 @@ export function CreateReminderModal() {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const createReminder = useCreateReminderMutation();
+  const updateReminder = useUpdateReminderMutation();
   const keybindings = useListKeyBindings(() => dialogRef());
 
   const entity = () => reminderComposerState.entity;
+  const editing = () => reminderComposerState.editing;
 
   /**
    * Escape steps back to the description before it closes the composer,
@@ -107,30 +118,39 @@ export function CreateReminderModal() {
   createEffect(
     on(reminderComposerOpen, () => {
       setStep('description');
-      setDescription('');
+      // Prefilled when editing, so the field starts from what the reminder
+      // already says rather than asking for it again.
+      setDescription(reminderComposerState.editing?.description ?? '');
       setQuery('');
       setSelectedIndex(0);
     })
   );
+
+  /**
+   * Leave the description step, if the current answer is allowed to.
+   *
+   * Creating treats a blank field as "skip" and derives a name from the entity.
+   * Editing cannot: the field was prefilled, so a blank one is a deletion, and
+   * the API rejects an empty description.
+   */
+  const advanceFromDescription = () => {
+    if (editing() && !description().trim()) {
+      toast.failure('A reminder needs a description');
+      return;
+    }
+    setStep('when');
+  };
 
   // The dialog's Enter binding is a single shared slot, so whichever step is on
   // screen has to claim it or the other step's stale handler stays live.
   createEffect(
     on(step, (current) => {
       if (current !== 'description') return;
-      keybindings(descriptionStepKeybindings(() => setStep('when')));
+      keybindings(descriptionStepKeybindings(advanceFromDescription));
     })
   );
 
-  const submit = async (date: Date, target: EntityData) => {
-    // The options are filtered against the time the list was built, so one can
-    // slip into the past while the composer sits open. Re-check rather than
-    // let the API reject it with an opaque failure.
-    if (date.getTime() <= Date.now()) {
-      toast.failure('That time has already passed — pick another');
-      return;
-    }
-
+  const submitCreate = async (date: Date, target: EntityData) => {
     const resolved = resolveReminderDescription(description(), target);
     const attachTo = reminderTarget(target);
     closeReminderComposer();
@@ -147,6 +167,63 @@ export function CreateReminderModal() {
       toast.failure('Failed to create reminder');
     }
   };
+
+  const submitEdit = async (date: Date, draft: ReminderDraft) => {
+    const patch = reminderEditPatch(draft, {
+      description: description(),
+      remindAt: date,
+    });
+    closeReminderComposer();
+
+    // Neither answer moved. There is nothing to send — and an empty patch is
+    // rejected as having no fields to update.
+    if (!patch) return;
+
+    try {
+      await updateReminder.mutateAsync({ id: draft.id, patch });
+      toast.success(
+        patch.schedule
+          ? `Reminder set for ${formatReminderWhen(date)}`
+          : 'Reminder updated'
+      );
+    } catch {
+      toast.failure('Failed to update reminder');
+    }
+  };
+
+  const submit = async (date: Date) => {
+    const draft = editing();
+
+    // The options are filtered against the time the list was built, so one can
+    // slip into the past while the composer sits open. Re-check rather than
+    // let the API reject it with an opaque failure. Keeping an existing time is
+    // exempt: it sends no schedule, so an overdue reminder stays renamable.
+    const keepsCurrentTime = date.getTime() === draft?.remindAt.getTime();
+    if (!keepsCurrentTime && date.getTime() <= Date.now()) {
+      toast.failure('That time has already passed — pick another');
+      return;
+    }
+
+    if (draft) return await submitEdit(date, draft);
+
+    const target = entity();
+    if (target) return await submitCreate(date, target);
+  };
+
+  /**
+   * Whether there is a reminder to compose at all.
+   *
+   * Both targets are cleared on close, so this unmounts the body while the
+   * dialog animates shut — otherwise the reset back to the description step
+   * would be visible as the date list flicking back to a Continue button.
+   */
+  const hasTarget = () => entity() !== undefined || editing() !== undefined;
+
+  // The chip row carries the entity a new reminder is about, and — on the date
+  // step — the description typed so far as a way back to it. Editing has no
+  // entity, so the row is only there once something has been typed.
+  const showsToolbar = () =>
+    entity() !== undefined || (step() === 'when' && !!description().trim());
 
   return (
     <Dialog
@@ -169,7 +246,11 @@ export function CreateReminderModal() {
           <Switch>
             <Match when={step() === 'description'}>
               <StepInput
-                placeholder="What's the reminder? (optional)"
+                placeholder={
+                  editing()
+                    ? 'Reminder description'
+                    : "What's the reminder? (optional)"
+                }
                 value={description()}
                 onInput={setDescription}
                 // Counts UTF-16 code units where the service counts characters,
@@ -187,46 +268,49 @@ export function CreateReminderModal() {
             </Match>
           </Switch>
         </CommandMenuShell.Header>
-        <Show when={entity()}>
-          {(target) => (
-            <>
-              <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0 gap-2">
-                <div class="bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded max-w-[50%]">
-                  <InlineEntity entity={target()} />
-                </div>
-                {/* Sized to the space the entity chip leaves rather than to a
-                    share of its own, so the pair can never overflow. */}
-                <Show when={step() === 'when' && description().trim()}>
-                  {(typed) => (
-                    <button
-                      type="button"
-                      class="bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded min-w-0 flex-1 text-left text-ink-muted hover:text-ink"
-                      title="Edit the description"
-                      onClick={() => setStep('description')}
-                    >
-                      {typed()}
-                    </button>
-                  )}
-                </Show>
-              </CommandMenuShell.Toolbar>
-              <Switch>
-                <Match when={step() === 'description'}>
-                  <DescriptionStep onContinue={() => setStep('when')} />
-                </Match>
-                <Match when={step() === 'when'}>
-                  <CommandMenuShell.Body>
-                    <WhenList
-                      query={query}
-                      selectedIndex={selectedIndex}
-                      setSelectedIndex={setSelectedIndex}
-                      onSubmit={(date) => void submit(date, target())}
-                      setKeybindings={keybindings}
-                    />
-                  </CommandMenuShell.Body>
-                </Match>
-              </Switch>
-            </>
-          )}
+        <Show when={hasTarget()}>
+          <Show when={showsToolbar()}>
+            <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0 gap-2">
+              <Show when={entity()}>
+                {(target) => (
+                  <div class="bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded max-w-[50%]">
+                    <InlineEntity entity={target()} />
+                  </div>
+                )}
+              </Show>
+              {/* Sized to the space the entity chip leaves rather than to a
+                  share of its own, so the pair can never overflow. */}
+              <Show when={step() === 'when' && description().trim()}>
+                {(typed) => (
+                  <button
+                    type="button"
+                    class="bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded min-w-0 flex-1 text-left text-ink-muted hover:text-ink"
+                    title="Edit the description"
+                    onClick={() => setStep('description')}
+                  >
+                    {typed()}
+                  </button>
+                )}
+              </Show>
+            </CommandMenuShell.Toolbar>
+          </Show>
+          <Switch>
+            <Match when={step() === 'description'}>
+              <DescriptionStep onContinue={advanceFromDescription} />
+            </Match>
+            <Match when={step() === 'when'}>
+              <CommandMenuShell.Body>
+                <WhenList
+                  query={query}
+                  current={() => editing()?.remindAt}
+                  selectedIndex={selectedIndex}
+                  setSelectedIndex={setSelectedIndex}
+                  onSubmit={(date) => void submit(date)}
+                  setKeybindings={keybindings}
+                />
+              </CommandMenuShell.Body>
+            </Match>
+          </Switch>
         </Show>
       </CommandMenuShell>
     </Dialog>
@@ -237,7 +321,8 @@ export function CreateReminderModal() {
  * What the description step does with the dialog's shared list bindings.
  *
  * There is no list to move through, so the arrows are inert and Enter is the
- * skip-through: it advances whether or not anything was typed.
+ * skip-through: it advances whether or not anything was typed, subject to the
+ * step's own check.
  */
 function descriptionStepKeybindings(advance: VoidFunction): ListNavActions {
   return { next: () => {}, previous: () => {}, select: advance };
@@ -307,6 +392,8 @@ function DescriptionStep(props: { onContinue: VoidFunction }) {
 
 function WhenList(props: {
   query: () => string;
+  /** The firing an edited reminder already has, offered as "Keep current time". */
+  current: () => Date | undefined;
   selectedIndex: () => number;
   setSelectedIndex: (next: number | ((prev: number) => number)) => void;
   onSubmit: (date: Date) => void;
@@ -326,7 +413,12 @@ function WhenList(props: {
     const now = new Date();
     // The resting list is reminder-specific; typing hands off to the shared
     // date search. Either way a reminder must fire in the future.
-    if (!props.query().trim()) return reminderDefaultOptions(now);
+    if (!props.query().trim()) {
+      const current = props.current();
+      return current
+        ? reminderEditOptions(current, now)
+        : reminderDefaultOptions(now);
+    }
     return futureDateOptions(rawOptions(), now);
   });
 

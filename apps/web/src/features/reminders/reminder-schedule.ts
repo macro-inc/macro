@@ -4,6 +4,7 @@ import {
 } from '@core/util/dateSearch/useDateSearch';
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
+import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
 import { addDays, addHours, addWeeks, endOfWeek } from 'date-fns';
 
 /**
@@ -112,6 +113,61 @@ export function reminderDefaultOptions(now: Date): DateOption[] {
     })),
     now
   );
+}
+
+/**
+ * What the picker offers when editing a reminder that already has a time.
+ *
+ * "Keep current time" leads, so a rename costs one Enter rather than forcing a
+ * date to be re-picked. It is the only option exempt from the future filter: an
+ * overdue reminder still has to be renamable, and keeping its time sends no
+ * schedule at all — see {@link reminderEditPatch}.
+ *
+ * Presets landing on the current time are dropped, or the same instant would be
+ * offered twice under two labels.
+ */
+export function reminderEditOptions(current: Date, now: Date): DateOption[] {
+  const keep: DateOption = {
+    id: 'keep',
+    displayText: 'Keep current time',
+    secondaryText: formatDateWithContext(current, now, true),
+    date: current,
+    type: 'preset',
+  };
+  const rest = reminderDefaultOptions(now).filter(
+    (option) => option.date.getTime() !== current.getTime()
+  );
+  return [keep, ...rest];
+}
+
+/**
+ * The patch that turns `original` into `next`, or undefined when they match.
+ *
+ * Only changed fields are sent: the API rejects a patch with no fields, and an
+ * unchanged schedule must be omitted rather than re-sent, since re-sending the
+ * time of a reminder that has already fired would be rejected as being in the
+ * past. Omitting it is also what lets an overdue reminder be renamed at all.
+ */
+export function reminderEditPatch(
+  original: { description: string; remindAt: Date; completed: boolean },
+  next: { description: string; remindAt: Date }
+): UpdateReminderRequest | undefined {
+  const patch: UpdateReminderRequest = {};
+
+  const description = clampDescription(next.description);
+  if (description && description !== original.description) {
+    patch.description = description;
+  }
+  if (next.remindAt.getTime() !== original.remindAt.getTime()) {
+    patch.schedule = onceSchedule(next.remindAt);
+    // Giving a reminder that was marked done a new time is a request for it to
+    // fire again, and the dispatcher skips completed reminders — so without
+    // clearing the flag the time the user just picked would silently never
+    // arrive. A description-only edit leaves it alone.
+    if (original.completed) patch.completed = false;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : undefined;
 }
 
 /** What an entity with no usable name is called, matching how lists render it. */

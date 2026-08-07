@@ -25,7 +25,7 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
-import { CreateReminderModal } from '@app/features/reminders/CreateReminderModal';
+import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
@@ -463,7 +463,7 @@ function LayoutInner(props: RouteSectionProps) {
             key={ENABLE_REMINDERS_FLAG}
             enabledOverride={ENABLE_REMINDERS_OVERRIDE}
           >
-            <CreateReminderModal />
+            <ReminderComposerModal />
           </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
