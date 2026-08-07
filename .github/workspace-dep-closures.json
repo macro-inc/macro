@@ -2105,6 +2105,17 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "email_api_client": [
+      "crates/cowlike",
+      "crates/email_api_client",
+      "crates/email_utils",
+      "crates/gmail_client",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/models_email",
+      "crates/models_pagination",
+      "crates/workspace-hack"
+    ],
     "email_db_client": [
       "crates/cowlike",
       "crates/email_db_client",
@@ -2286,6 +2297,7 @@
       "crates/document_storage_service_client",
       "crates/document_sub_type",
       "crates/email",
+      "crates/email_api_client",
       "crates/email_db_client",
       "crates/email_utils",
       "crates/entity_access",

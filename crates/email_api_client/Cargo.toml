@@ -22,12 +22,12 @@ outbound-gmail = [
 ]
 
 [dependencies]
-ammonia = { version = "4.1.4", optional = true }
+ammonia = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
 gmail_client = { path = "../gmail_client", optional = true }
-html-escape = { version = "0.2", optional = true }
+html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"

@@ -2201,7 +2201,7 @@ collapse to one refresh per window.
 against the auth service and records the result on each link. A grant that died
 while the caller was inactive is detected here within minutes instead of waiting on
 the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
-the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+the one-time reauth fan-out) are handled by the email service token source.
  */
 export type healthCheckLinksResponse202 = {
   data: EmptyResponse;

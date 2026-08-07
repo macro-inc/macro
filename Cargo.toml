@@ -302,6 +302,8 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
+ammonia = "4.1.4"
+html-escape = "0.2"
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final
