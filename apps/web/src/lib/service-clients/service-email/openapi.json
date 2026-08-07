@@ -5417,6 +5417,27 @@
           "other"
         ]
       },
+      "RefreshCalendarEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A sync run committed changes for `link_id`; viewers should refetch.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["synced"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Connected inbox whose calendars changed."
+              }
+            }
+          }
+        ],
+        "description": "Realtime signal that a connected inbox's calendar projection changed."
+      },
       "RefreshEmailEvent": {
         "oneOf": [
           {

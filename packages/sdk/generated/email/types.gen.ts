@@ -1138,6 +1138,17 @@ export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'imp
 export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other';
 
 /**
+ * A sync run committed changes for `link_id`; viewers should refetch.
+ */
+export type RefreshCalendarEvent = {
+    event: 'synced';
+    /**
+     * Connected inbox whose calendars changed.
+     */
+    link_id: string;
+};
+
+/**
  * Payload for the `refresh_email` connection gateway event: identifies the
  * inbox that changed and the kind of change.
  */
