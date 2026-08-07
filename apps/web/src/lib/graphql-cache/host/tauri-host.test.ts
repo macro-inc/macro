@@ -335,6 +335,42 @@ describe('createTauriCacheHost', () => {
     }
   });
 
+  it('does not time out an uncertain durable enqueue', async () => {
+    vi.useFakeTimers();
+    try {
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_init'
+          ? Promise.resolve(null)
+          : new Promise(() => {})
+      );
+
+      let settled = false;
+      void host
+        .enqueueOptimisticMutation(
+          { query: 'mutation Rename { rename { id } }', data: {} },
+          { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
+        )
+        .then(
+          () => {
+            settled = true;
+          },
+          () => {
+            settled = true;
+          }
+        );
+      await vi.advanceTimersByTimeAsync(60);
+
+      expect(settled).toBe(false);
+      host.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('tolerates a failed listener setup (no unhandled rejection)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

@@ -51,8 +51,9 @@ export interface TauriHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Per-request timeout in ms (default 10s, matching worker-host). A hung
-   * IPC call rejects; the exchange degrades rejected reads to the network.
+   * Read-only request timeout in ms (default 10s, matching worker-host).
+   * Optimistic enqueue remains pending because retrying an uncertain durable
+   * operation could duplicate user intent.
    */
   requestTimeoutMs?: number;
   /** Reports an asynchronous durable-storage initialization failure. */
@@ -73,19 +74,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   function request<T>(
     command: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    timeout = true
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`graphql cache ipc timeout: ${command}`));
-      }, requestTimeoutMs);
+      const timer = timeout
+        ? setTimeout(() => {
+            reject(new Error(`graphql cache ipc timeout: ${command}`));
+          }, requestTimeoutMs)
+        : undefined;
       invoke<T>(command, args).then(
         (value) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           resolve(value);
         },
         (error) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           // Command errors cross the boundary as strings; normalize to
           // Error for parity with worker-host rejections.
           reject(error instanceof Error ? error : new Error(String(error)));
@@ -200,7 +204,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           owner: claim.owner,
           nowMs: claim.nowMs,
           leaseExpiresAtMs: claim.leaseExpiresAtMs,
-        }
+        },
+        false
       );
     },
 
