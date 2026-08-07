@@ -38,7 +38,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.2 Repair the sync cursor in the stale-cursor (`OutdatedCursor`) recovery path
 
-- [ ] **Status**
+- [x] **Status** — done
 
 **Problem.** On `OutdatedCursor` from `list_changes`, `schedule_stale_cursor_backfill` (`services/email_service/src/pubsub/inbox_sync/operations/gmail_message.rs:81-84, 117-177`) schedules a recovery backfill and drops the notification — but **nothing writes a fresh history cursor**. Verified: the only writers of `email_gmail_histories` are link init (`api/email/init.rs:913`) and a successful `list_changes` (`gmail_message.rs:88`, unreachable once the cursor is expired). The notification's own `history_id` is read for a freshness check (`gmail_message.rs:56`) but never persisted; `handle_refresh` discards the fresh cursor `register_subscription` returns; `/resync` doesn't repair it either.
 

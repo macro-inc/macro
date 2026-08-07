@@ -9,10 +9,15 @@ use models_email::gmail::inbox_sync::{
     DeleteMessagePayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
     UpdateLabelsPayload, UpsertMessagePayload,
 };
+use models_email::email::service::backfill::BackfillJob;
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use sqlx::PgPool;
 use std::result;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 // handle the initial message received from gmail notifying us of inbox changes.
 // ensure the message is valid, then send off pubsub messages for each change.
@@ -44,7 +49,7 @@ pub async fn gmail_message(
     let db_history_u64 = match db_history_id.parse::<u64>() {
         Ok(history_id) => history_id,
         Err(error) => {
-            schedule_stale_cursor_backfill(ctx, link).await?;
+            schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
             return Err(ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::OutdatedHistoryId,
                 source: anyhow::Error::from(error)
@@ -79,7 +84,7 @@ pub async fn gmail_message(
     {
         Ok(batch) => batch,
         Err(EmailApiError::OutdatedCursor) => {
-            schedule_stale_cursor_backfill(ctx, link).await?;
+            schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
             return Err(handle_gmail_message_error(EmailApiError::OutdatedCursor));
         }
         Err(error) => return Err(handle_gmail_message_error(error)),
@@ -117,39 +122,10 @@ pub async fn gmail_message(
 async fn schedule_stale_cursor_backfill(
     ctx: &PubSubContext,
     link: &Link,
+    notification_history_id: u64,
 ) -> result::Result<(), ProcessingError> {
-    let existing_job =
-        email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
-            .await
-            .map_err(recovery_db_error)?;
-
-    let (job, created) = if let Some(job) = existing_job {
-        (job, false)
-    } else {
-        match email_db_client::backfill::job::insert::create_backfill_job(
-            &ctx.db,
-            link.id,
-            link.fusionauth_user_id.as_str(),
-            None,
-        )
-        .await
-        .map_err(recovery_db_error)?
-        {
-            Some(job) => (job, true),
-            None => {
-                let job =
-                    email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
-                        .await
-                        .map_err(recovery_db_error)?
-                        .ok_or_else(|| {
-                            recovery_db_error(anyhow::anyhow!(
-                                "backfill insert conflicted but no active job was found"
-                            ))
-                        })?;
-                (job, false)
-            }
-        }
-    };
+    let (job, created) =
+        ensure_recovery_backfill_job(&ctx.db, link.id, link.fusionauth_user_id.as_str()).await?;
 
     let message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
@@ -171,7 +147,69 @@ async fn schedule_stale_cursor_backfill(
         }));
     }
 
+    repair_stale_cursor(&ctx.db, link.id, notification_history_id).await;
+
     Ok(())
+}
+
+/// Finds the link's active backfill job, creating one when none exists.
+///
+/// Returns the job and whether it was created by this call.
+async fn ensure_recovery_backfill_job(
+    db: &PgPool,
+    link_id: Uuid,
+    fusionauth_user_id: &str,
+) -> result::Result<(BackfillJob, bool), ProcessingError> {
+    let existing_job = email_db_client::backfill::job::get::get_active_backfill_job(db, link_id)
+        .await
+        .map_err(recovery_db_error)?;
+
+    if let Some(job) = existing_job {
+        return Ok((job, false));
+    }
+
+    match email_db_client::backfill::job::insert::create_backfill_job(
+        db,
+        link_id,
+        fusionauth_user_id,
+        None,
+    )
+    .await
+    .map_err(recovery_db_error)?
+    {
+        Some(job) => Ok((job, true)),
+        None => {
+            let job = email_db_client::backfill::job::get::get_active_backfill_job(db, link_id)
+                .await
+                .map_err(recovery_db_error)?
+                .ok_or_else(|| {
+                    recovery_db_error(anyhow::anyhow!(
+                        "backfill insert conflicted but no active job was found"
+                    ))
+                })?;
+            Ok((job, false))
+        }
+    }
+}
+
+/// Persists the notification's history id as the link's sync cursor once a
+/// recovery backfill covers the gap.
+///
+/// Without this write the expired cursor stays in place, so every subsequent
+/// notification re-enters the `OutdatedCursor` arm and schedules another
+/// full-mailbox backfill forever. A write failure is deliberately swallowed:
+/// the notification is dropped either way, and the next notification re-enters
+/// this path (reusing the active job) and retries the repair.
+async fn repair_stale_cursor(db: &PgPool, link_id: Uuid, notification_history_id: u64) {
+    let _ = email_db_client::histories::upsert_gmail_history(
+        db,
+        link_id,
+        &notification_history_id.to_string(),
+    )
+    .await
+    .inspect_err(|error| {
+        tracing::warn!(error = ?error, %link_id, "failed to repair stale gmail sync cursor");
+    });
 }
 
 fn recovery_db_error(error: impl Into<anyhow::Error>) -> ProcessingError {
