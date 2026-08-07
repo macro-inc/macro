@@ -403,7 +403,7 @@ impl CacheEngine {
                 .map_err(err_js)?;
             let initial_claim = match result.initial_claim {
                 InitialClaimOutcome::Claimed(claimed) => JsInitialMutationClaim::Claimed {
-                    mutation: JsClaimedMutation::try_from(claimed)?,
+                    mutation: JsClaimedMutation::try_from(*claimed)?,
                 },
                 InitialClaimOutcome::NotRunnable => JsInitialMutationClaim::NotRunnable,
                 InitialClaimOutcome::Failed(error) => JsInitialMutationClaim::Failed {

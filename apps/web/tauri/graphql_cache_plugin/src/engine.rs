@@ -364,7 +364,7 @@ impl EngineHandle {
             .map_err(|error| error.to_string())?;
         let initial_claim = match result.initial_claim {
             InitialClaimOutcome::Claimed(claimed) => InitialMutationClaimWire::Claimed {
-                mutation: ClaimedMutationWire::try_from(claimed)?,
+                mutation: ClaimedMutationWire::try_from(*claimed)?,
             },
             InitialClaimOutcome::NotRunnable => InitialMutationClaimWire::NotRunnable,
             InitialClaimOutcome::Failed(error) => InitialMutationClaimWire::Failed {

@@ -91,7 +91,7 @@ pub struct WriteResult {
 #[derive(Debug)]
 pub enum InitialClaimOutcome<E> {
     /// The strict queue head was runnable and is now durably leased.
-    Claimed(ClaimedMutation),
+    Claimed(Box<ClaimedMutation>),
     /// The strict queue head is leased, deferred, or the queue is empty.
     NotRunnable,
     /// Enqueue succeeded, but attempting to claim the strict head failed.
@@ -912,7 +912,7 @@ impl<S: Storage> Engine<S> {
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
         let (transaction_id, write_result) = self.begin_optimistic_write(origin_op, input).await?;
         let initial_claim = match self.claim_next_mutation(claim).await {
-            Ok(Some(claimed)) => InitialClaimOutcome::Claimed(claimed),
+            Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
             Ok(None) => InitialClaimOutcome::NotRunnable,
             Err(error) => InitialClaimOutcome::Failed(error),
         };
