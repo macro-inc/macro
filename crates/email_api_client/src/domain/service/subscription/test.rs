@@ -58,8 +58,8 @@ fn registration_and_stop_use_matching_costs_and_operations() {
         assert_eq!(
             *calls.lock().unwrap(),
             vec![
-                Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::RateLimit(Uuid::nil(), operation),
+                Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::Repository(repository_call),
             ]
         );
@@ -76,8 +76,8 @@ fn registration_can_bypass_the_token_cache_for_initialization() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
             Call::RateLimit(Uuid::nil(), super::ApiOperationKind::Subscribe),
+            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
             Call::Repository("subscribe"),
         ]
     );

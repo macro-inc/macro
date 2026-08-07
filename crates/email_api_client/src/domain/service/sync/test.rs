@@ -54,8 +54,8 @@ fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::GetProfile),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }
@@ -75,8 +75,8 @@ fn list_changes_uses_changes_quota_and_forwards_cursor() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::ListChanges),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }

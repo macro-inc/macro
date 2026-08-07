@@ -49,8 +49,8 @@ fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::GetAttachment),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }

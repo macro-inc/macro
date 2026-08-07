@@ -64,16 +64,16 @@ where
         link_id: Uuid,
         operation: ApiOperationKind,
     ) -> Result<AccessToken, EmailApiError> {
-        let access_token = self
-            .get_access_token(link_id, TokenFreshness::Cached)
-            .await?;
-
+        // Check the cheap local limiter first: under throttling this avoids
+        // paying the full token dance (SELECT + Redis + possible auth-service
+        // refresh + health write) per refused attempt. The limiter does not
+        // consume provider quota on denial.
         self.rate_limiter
             .check_rate_limit(link_id, operation)
             .await
             .map_err(EmailApiError::from)?;
 
-        Ok(access_token)
+        self.get_access_token(link_id, TokenFreshness::Cached).await
     }
 }
 

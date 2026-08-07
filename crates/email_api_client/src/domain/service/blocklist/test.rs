@@ -79,8 +79,8 @@ fn blocklist_methods_use_their_matching_costs_and_operations() {
         assert_eq!(
             *calls.lock().unwrap(),
             vec![
-                Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::RateLimit(Uuid::nil(), operation),
+                Call::Token(Uuid::nil(), TokenFreshness::Cached),
                 Call::Repository(repository_call),
             ]
         );

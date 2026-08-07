@@ -160,8 +160,8 @@ where
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, operation),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }

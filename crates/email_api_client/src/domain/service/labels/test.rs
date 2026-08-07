@@ -70,8 +70,8 @@ fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::ListLabels),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }
@@ -96,8 +96,8 @@ fn create_label_uses_create_quota_and_forwards_name() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::CreateLabel),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }
@@ -122,8 +122,8 @@ fn delete_label_uses_delete_quota_and_forwards_provider_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::Token(link_id, TokenFreshness::Cached),
             Call::RateLimit(link_id, ApiOperationKind::DeleteLabel),
+            Call::Token(link_id, TokenFreshness::Cached),
         ]
     );
 }

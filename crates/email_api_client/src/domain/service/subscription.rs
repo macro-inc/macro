@@ -28,15 +28,15 @@ where
         &self,
         link: &Link,
     ) -> Result<ProviderSubscription, EmailApiError> {
+        self.rate_limiter
+            .check_rate_limit(link.id, ApiOperationKind::Subscribe)
+            .await
+            .map_err(EmailApiError::from)?;
         let access_token = self
             .token_source
             .get_access_token_for_link(link, TokenFreshness::Fresh)
             .await
             .map_err(super::map_token_error)?;
-        self.rate_limiter
-            .check_rate_limit(link.id, ApiOperationKind::Subscribe)
-            .await
-            .map_err(EmailApiError::from)?;
 
         self.repository.subscribe(&access_token).await
     }

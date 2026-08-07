@@ -31,7 +31,7 @@ fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 #[test]
-fn token_failure_stops_before_rate_limit_and_repository() {
+fn token_failure_stops_before_repository_after_the_quota_check() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
@@ -44,12 +44,15 @@ fn token_failure_stops_before_rate_limit_and_repository() {
     assert_eq!(result, Err(EmailApiError::AuthRequired));
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![Call::Token(Uuid::nil(), TokenFreshness::Cached)]
+        vec![
+            Call::RateLimit(Uuid::nil(), ApiOperationKind::GetMessage),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+        ]
     );
 }
 
 #[test]
-fn rate_limit_refusal_stops_before_repository() {
+fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
     let calls = call_log();
     let retry_after = Duration::from_secs(17);
     let service = EmailApiClientServiceImpl::new(
@@ -67,12 +70,11 @@ fn rate_limit_refusal_stops_before_repository() {
             origin: crate::domain::models::RateLimitOrigin::Local,
         })
     );
+    // A refused attempt must not pay the token acquisition (SELECT + Redis +
+    // possible auth-service refresh + health write).
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![
-            Call::Token(Uuid::nil(), TokenFreshness::Cached),
-            Call::RateLimit(Uuid::nil(), ApiOperationKind::SendMessage),
-        ]
+        vec![Call::RateLimit(Uuid::nil(), ApiOperationKind::SendMessage)]
     );
 }
 
