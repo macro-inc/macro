@@ -173,6 +173,9 @@ async fn ensure_recovery_backfill_job(
         link_id,
         fusionauth_user_id,
         None,
+        // Stale-cursor recovery: refresh existing threads so the gap window's
+        // replies are recovered (see backfill_thread's refresh path).
+        true,
     )
     .await
     .map_err(recovery_db_error)?

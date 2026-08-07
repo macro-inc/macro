@@ -663,6 +663,7 @@ async fn init_user(
         link.id,
         link.fusionauth_user_id.as_str(),
         None,
+        false,
     )
     .await
     .context("Failed to create backfill job")?

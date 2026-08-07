@@ -88,6 +88,7 @@ pub async fn list_threads(
                 job_id: scope.job_id,
                 payload: BackfillThreadPayload {
                     thread_provider_id: thread.provider_id.clone(),
+                    refresh_existing: p.refresh_existing,
                 },
             }),
         };
@@ -112,6 +113,7 @@ pub async fn list_threads(
                 payload: ListThreadsPayload {
                     next_page_token,
                     priority_pass: false,
+                    refresh_existing: p.refresh_existing,
                 },
             }),
         };
@@ -203,6 +205,7 @@ async fn list_priority_threads(
                     job_id: scope.job_id,
                     payload: BackfillThreadPayload {
                         thread_provider_id: thread.provider_id.clone(),
+                        refresh_existing: false,
                     },
                 }),
             };
@@ -238,6 +241,7 @@ async fn list_priority_threads(
             payload: ListThreadsPayload {
                 next_page_token: None,
                 priority_pass: false,
+                refresh_existing: scope.payload.refresh_existing,
             },
         }),
     };

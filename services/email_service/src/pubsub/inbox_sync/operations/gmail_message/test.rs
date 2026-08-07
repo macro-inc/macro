@@ -44,6 +44,17 @@ async fn recovery_backfill_job_is_created_once_and_then_reused(pool: PgPool) {
         "a second notification must reuse the active recovery job instead of creating another"
     );
     assert_eq!(job.id, reused_job.id);
+
+    // Recovery jobs are flagged so backfill refreshes existing threads
+    // instead of skipping them (and the init outbox skips the priority pass).
+    let is_recovery = sqlx::query_scalar!(
+        r#"SELECT is_recovery FROM email_backfill_jobs WHERE id = $1"#,
+        job.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(is_recovery);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

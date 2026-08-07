@@ -166,7 +166,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### Sync recovery completeness
 
-- [ ] **P1.9 Recovery backfills should not skip existing threads.** `pubsub/backfill/backfill_thread.rs:40-44` returns early for known thread ids without fetching messages, so the stale-cursor gap window's replies in existing threads are never recovered (even after reconnect). Add a job flag (e.g. `refresh_existing: bool` on stale-cursor recovery jobs) that fetches message ids for existing threads and upserts missing ones. Depends on P0.2.
+- [x] **P1.9 Recovery backfills should not skip existing threads.** (done: `is_recovery` job column; recovery jobs skip the priority pass and refresh existing threads) `pubsub/backfill/backfill_thread.rs:40-44` returns early for known thread ids without fetching messages, so the stale-cursor gap window's replies in existing threads are never recovered (even after reconnect). Add a job flag (e.g. `refresh_existing: bool` on stale-cursor recovery jobs) that fetches message ids for existing threads and upserts missing ones. Depends on P0.2.
 
 ### Observability
 
