@@ -64,6 +64,10 @@ type CompleteMutationRoot {
 	"""
 	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
 	"""
+	Add and remove options across one entity's multi-select properties.
+	"""
+	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
+	"""
 	Rename heterogeneous entities in one request.
 	"""
 	renameEntities(inputs: [RenameEntityInput!]!): EntityMutationPayload!
@@ -163,6 +167,24 @@ type EntityMutationPayload {
 	Per-input mutation outcomes.
 	"""
 	results: [GraphqlEntityMutationResult!]!
+}
+
+"""
+One property's option delta within an options update.
+"""
+input EntityPropertyOptionDeltaInput {
+	"""
+	Identifier of the multi-select property definition being changed.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Options to add to the currently stored value.
+	"""
+	addOptionIds: [ID!]!
+	"""
+	Options to strip from the currently stored value.
+	"""
+	removeOptionIds: [ID!]!
 }
 
 """
@@ -5573,6 +5595,24 @@ input UpdateEmailThreadLabelInput {
 	Whether the label should be present after the mutation.
 	"""
 	value: Boolean!
+}
+
+"""
+Input for applying option deltas across one entity's properties.
+"""
+input UpdateEntityPropertyOptionsInput {
+	"""
+	Type of entity whose properties are changing.
+	"""
+	entityType: GraphqlPropertyTargetEntityType!
+	"""
+	Identifier of the entity whose properties are changing.
+	"""
+	entityId: String!
+	"""
+	Per-property option deltas applied in one transaction.
+	"""
+	properties: [EntityPropertyOptionDeltaInput!]!
 }
 
 """

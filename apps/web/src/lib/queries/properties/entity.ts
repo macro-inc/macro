@@ -42,7 +42,12 @@ import {
   createGraphqlEntityPropertiesQuery,
   type EntityPropertyMutationDisposition,
 } from './graphql/entity';
+import { updateGraphqlEntityPropertyOptions } from './graphql/entity-options';
 import { propertiesKeys } from './keys';
+import {
+  type EntityPropertyOptionSelection,
+  getEntityPropertyOptionDeltas,
+} from './option-deltas';
 
 function toPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
@@ -189,10 +194,21 @@ function optimisticUpdateSoupEntityProperties(
   }[]
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
+  if (!current) {
+    // A miss here means the write silently lost its optimism. Expected on the
+    // GraphQL transport, whose rows live in the normalized cache instead and
+    // carry their own optimistic write.
+    if (!ENABLE_GRAPHQL_SOUP()) {
+      console.warn(
+        'no soup cache entry for entity; skipping optimistic property update',
+        entityId
+      );
+    }
+    return undefined;
+  }
   // channel / foreign entity / channel thread rows are property-less; call
   // records carry properties (tags) and are handled like documents.
   if (
-    !current ||
     current.tag === 'channel' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
@@ -595,27 +611,6 @@ export function useRemoveEntityPropertyOptionMutation(
   }));
 }
 
-type EntityPropertyOptionDelta = {
-  type: 'add' | 'remove';
-  optionId: string;
-};
-
-function getEntityPropertyOptionDeltas(
-  currentOptionIds: string[],
-  nextOptionIds: string[]
-): EntityPropertyOptionDelta[] {
-  const current = new Set(currentOptionIds);
-  const next = new Set(nextOptionIds);
-  return [
-    ...currentOptionIds
-      .filter((optionId) => !next.has(optionId))
-      .map((optionId) => ({ type: 'remove' as const, optionId })),
-    ...nextOptionIds
-      .filter((optionId) => !current.has(optionId))
-      .map((optionId) => ({ type: 'add' as const, optionId })),
-  ];
-}
-
 type BulkUpdateEntityPropertyOptionsParams = {
   entityId: string;
   entityType: EntityType;
@@ -624,12 +619,6 @@ type BulkUpdateEntityPropertyOptionsParams = {
     currentOptionIds: string[];
     nextOptionIds: string[];
   }>;
-};
-
-/** A property's reconciled final option ids after a bulk update. */
-export type EntityPropertyOptionSelection = {
-  propertyDefinitionId: string;
-  optionIds: string[];
 };
 
 type BulkUpdateEntityPropertyOptionsContext = {
@@ -704,6 +693,12 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
     mutationFn: async (
       variables: BulkUpdateEntityPropertyOptionsParams
     ): Promise<EntityPropertyOptionSelection[]> => {
+      // The transport swaps, the mutation shell does not: the per-entity scope
+      // that serializes commits and the in-flight overlay both read this
+      // mutation's state, whichever cache the selection lands in.
+      if (ENABLE_GRAPHQL_SOUP()) {
+        return updateGraphqlEntityPropertyOptions(variables);
+      }
       const response = await throwOnErr(async () =>
         propertiesServiceClient.bulkUpdateEntityPropertyOptions({
           entity_type: toPropertyTargetEntityType(variables.entityType),
@@ -716,12 +711,8 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
               );
               return {
                 property_id: getPropertyDefinitionId(update.property),
-                add_option_ids: deltas
-                  .filter((delta) => delta.type === 'add')
-                  .map((delta) => delta.optionId),
-                remove_option_ids: deltas
-                  .filter((delta) => delta.type === 'remove')
-                  .map((delta) => delta.optionId),
+                add_option_ids: deltas.addOptionIds,
+                remove_option_ids: deltas.removeOptionIds,
               };
             }),
           },

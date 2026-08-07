@@ -238,7 +238,8 @@ function toGraphqlSetPropertyValue(
     .exhaustive();
 }
 
-function toGraphqlPropertyTargetEntityType(
+/** Maps a REST property target type onto its GraphQL enum. */
+export function toGraphqlPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
 ): GraphqlPropertyTargetEntityType {
   if (entityType === 'TASK') return 'DOCUMENT';
