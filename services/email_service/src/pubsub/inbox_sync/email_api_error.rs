@@ -71,11 +71,17 @@ fn non_retryable(error: EmailApiError) -> ProcessingError {
 }
 
 fn detail(error: EmailApiError) -> DetailedError {
+    // Exhaustive: a new EmailApiError variant must force a policy decision
+    // here rather than silently falling into a catch-all.
     let reason = match error {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
-        _ => FailureReason::GmailApiFailed,
+        EmailApiError::Forbidden
+        | EmailApiError::NotFound
+        | EmailApiError::Conflict
+        | EmailApiError::Transient { .. }
+        | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };
     DetailedError {
         reason,

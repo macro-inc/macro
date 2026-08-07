@@ -21,10 +21,17 @@ enum RateLimitRoute {
 }
 
 fn error_policy(error: &EmailApiError) -> ErrorPolicy {
+    // Exhaustive: a new EmailApiError variant must force a policy decision
+    // here rather than silently dropping the operation as permanent.
     match error {
         EmailApiError::RateLimited { .. } => ErrorPolicy::RateLimited,
         EmailApiError::Transient { .. } => ErrorPolicy::Retry,
-        _ => ErrorPolicy::Permanent,
+        EmailApiError::AuthRequired
+        | EmailApiError::Forbidden
+        | EmailApiError::NotFound
+        | EmailApiError::Conflict
+        | EmailApiError::OutdatedCursor
+        | EmailApiError::Permanent { .. } => ErrorPolicy::Permanent,
     }
 }
 
@@ -84,7 +91,11 @@ fn processing_error(error: EmailApiError, retryable: bool) -> ProcessingError {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
-        _ => FailureReason::GmailApiFailed,
+        EmailApiError::Forbidden
+        | EmailApiError::NotFound
+        | EmailApiError::Conflict
+        | EmailApiError::Transient { .. }
+        | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };
     let detail = DetailedError {
         reason,

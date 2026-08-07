@@ -5,11 +5,17 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 mod test;
 
 pub(crate) fn map_email_api_error(error: EmailApiError, context: &'static str) -> ProcessingError {
+    // Exhaustive: a new EmailApiError variant must force a policy decision
+    // here rather than silently falling into a catch-all.
     let reason = match &error {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
-        _ => FailureReason::GmailApiFailed,
+        EmailApiError::Forbidden
+        | EmailApiError::NotFound
+        | EmailApiError::Conflict
+        | EmailApiError::Transient { .. }
+        | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };
     let is_retryable = error.is_transient();
     let detail = DetailedError {
