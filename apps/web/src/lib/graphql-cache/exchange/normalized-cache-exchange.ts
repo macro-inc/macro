@@ -43,6 +43,7 @@ import {
   type OperationDefinitionNode,
   parse,
 } from 'graphql';
+import { match } from 'ts-pattern';
 import {
   empty,
   filter,
@@ -402,7 +403,13 @@ export function normalizedCacheExchange(
                 [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
               }
             );
-            void replay.toPromise();
+            await replay.toPromise().then((result) => {
+              // Normal exchange results settle the attempt in writeThrough
+              // before resolving. Reject only an otherwise-unhandled error.
+              if (result.error && attemptInFlight) {
+                return Promise.reject(result.error);
+              }
+            });
           } catch (error) {
             try {
               await host.rollbackOptimisticWrite(
@@ -606,20 +613,20 @@ export function normalizedCacheExchange(
           });
         });
         try {
-          switch (enqueue.initialClaim.kind) {
-            case 'claimed':
-              await routeClaimedMutation(enqueue.initialClaim.mutation);
-              break;
-            case 'not-runnable':
+          await match(enqueue.initialClaim)
+            .with({ kind: 'claimed' }, ({ mutation }) =>
+              routeClaimedMutation(mutation)
+            )
+            .with({ kind: 'not-runnable' }, () => {
               resolveLiveOperationsAsQueued();
               scheduleDrain();
-              break;
-            case 'failed':
-              options.onCacheError?.(new Error(enqueue.initialClaim.error), op);
+            })
+            .with({ kind: 'failed' }, ({ error }) => {
+              options.onCacheError?.(new Error(error), op);
               resolveLiveOperationsAsQueued();
               scheduleDrain(EMPTY_QUEUE_POLL_MS);
-              break;
-          }
+            })
+            .exhaustive();
         } catch (error) {
           // Enqueue already succeeded. Preserve durable-runner ownership even
           // if routing or claim rollback fails unexpectedly.

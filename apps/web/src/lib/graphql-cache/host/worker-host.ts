@@ -22,10 +22,10 @@ import {
 } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
 import type {
-  BeginOptimisticWriteArgs,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  EnqueueOptimisticMutationArgs,
   InitialMutationClaimArgs,
   InspectQueryArgs,
   InspectQueryVariantsArgs,
@@ -215,7 +215,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async enqueueOptimisticMutation(
-      args: BeginOptimisticWriteArgs,
+      args: EnqueueOptimisticMutationArgs,
       claim: InitialMutationClaimArgs
     ): Promise<EnqueueOptimisticMutationResult> {
       await ready;

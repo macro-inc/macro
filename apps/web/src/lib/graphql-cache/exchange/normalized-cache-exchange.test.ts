@@ -160,6 +160,30 @@ function makeFakeHost(): FakeHost {
     leased: boolean;
     nextAttemptAtMs?: number;
   }> = [];
+
+  function claimQueueHead(nowMs: number): ClaimedMutation | undefined {
+    const head = queue[0];
+    if (
+      !head ||
+      head.leased ||
+      (head.nextAttemptAtMs !== undefined && head.nextAttemptAtMs > nowMs)
+    ) {
+      return undefined;
+    }
+    head.leased = true;
+    head.nextAttemptAtMs = undefined;
+    head.attemptCount += 1;
+    host.claims.push(head.transactionId);
+    return {
+      transactionId: head.transactionId,
+      leaseGeneration: String(head.attemptCount),
+      query: head.args.query,
+      operationName: head.args.operationName,
+      variables: head.args.variables ?? {},
+      attemptCount: head.attemptCount,
+    };
+  }
+
   const host: FakeHost = {
     clientId: 'test-client',
     reads: [],
@@ -218,27 +242,7 @@ function makeFakeHost(): FakeHost {
       });
       const transactionId = `txn-${host.begins.length}`;
       queue.push({ transactionId, args, attemptCount: 0, leased: false });
-      const head = queue[0];
-      let mutation: ClaimedMutation | undefined;
-      if (
-        head &&
-        !head.leased &&
-        (head.nextAttemptAtMs === undefined ||
-          head.nextAttemptAtMs <= claim.nowMs)
-      ) {
-        head.leased = true;
-        head.nextAttemptAtMs = undefined;
-        head.attemptCount += 1;
-        host.claims.push(head.transactionId);
-        mutation = {
-          transactionId: head.transactionId,
-          leaseGeneration: String(head.attemptCount),
-          query: head.args.query,
-          operationName: head.args.operationName,
-          variables: head.args.variables ?? {},
-          attemptCount: head.attemptCount,
-        };
-      }
+      const mutation = claimQueueHead(claim.nowMs);
       return {
         transactionId,
         changed: [],
@@ -259,26 +263,7 @@ function makeFakeHost(): FakeHost {
       _owner,
       nowMs
     ): Promise<ClaimedMutation | undefined> {
-      const head = queue[0];
-      if (
-        !head ||
-        head.leased ||
-        (head.nextAttemptAtMs !== undefined && head.nextAttemptAtMs > nowMs)
-      ) {
-        return undefined;
-      }
-      head.leased = true;
-      head.nextAttemptAtMs = undefined;
-      head.attemptCount += 1;
-      host.claims.push(head.transactionId);
-      return {
-        transactionId: head.transactionId,
-        leaseGeneration: String(head.attemptCount),
-        query: head.args.query,
-        operationName: head.args.operationName,
-        variables: head.args.variables ?? {},
-        attemptCount: head.attemptCount,
-      };
+      return claimQueueHead(nowMs);
     },
     async deferOptimisticWrite(
       transactionId,
@@ -430,7 +415,7 @@ function harness(
             ...context,
           } as never)
         );
-        return Promise.resolve(undefined);
+        return Promise.resolve({ error: undefined });
       },
     })),
   } as unknown as Client;
@@ -917,6 +902,28 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
       expect(forwarded[0]?.context.fetch).toBeTypeOf('function');
       expect(host.commits[0]?.transactionId).toBe('restored-1');
+    });
+
+    it('rolls back when a persisted replay resolves with an urql error', async () => {
+      host.seedQueued({
+        query: stringifyDocument(MUTATION),
+        operationName: 'SetEntityProperty',
+        variables: { input: {} },
+        data: optimistic,
+      });
+      const error = new CombinedError({
+        networkError: new Error('offline'),
+      });
+      const { client } = harness(host);
+      vi.mocked(client.mutation).mockImplementation(
+        () =>
+          ({
+            toPromise: () => Promise.resolve({ error }),
+          }) as never
+      );
+      await tick();
+
+      expect(host.rollbacks).toEqual(['restored-1']);
     });
 
     it('forwards optimistic mutations without cache work when the host is disabled', async () => {

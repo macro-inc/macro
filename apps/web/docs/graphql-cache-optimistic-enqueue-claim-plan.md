@@ -228,7 +228,7 @@ with an API such as:
 
 ```ts
 enqueueOptimisticMutation(
-  args: BeginOptimisticWriteArgs,
+  args: EnqueueOptimisticMutationArgs,
   claim: {
     owner: string;
     nowMs: number;

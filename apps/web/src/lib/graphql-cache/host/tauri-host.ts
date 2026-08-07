@@ -23,10 +23,10 @@ import {
   type WriteResult,
 } from '../protocol';
 import type {
-  BeginOptimisticWriteArgs,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  EnqueueOptimisticMutationArgs,
   InitialMutationClaimArgs,
   InspectQueryArgs,
   InspectQueryVariantsArgs,
@@ -51,9 +51,9 @@ export interface TauriHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Read-only request timeout in ms (default 10s, matching worker-host).
-   * Optimistic enqueue remains pending because retrying an uncertain durable
-   * operation could duplicate user intent.
+   * Request timeout in ms (default 10s, matching worker-host). Applies to all
+   * commands except optimistic enqueue, which remains pending because retrying
+   * an uncertain durable operation could duplicate user intent.
    */
   requestTimeoutMs?: number;
   /** Reports an asynchronous durable-storage initialization failure. */
@@ -186,7 +186,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async enqueueOptimisticMutation(
-      args: BeginOptimisticWriteArgs,
+      args: EnqueueOptimisticMutationArgs,
       claim: InitialMutationClaimArgs
     ): Promise<EnqueueOptimisticMutationResult> {
       await ready;

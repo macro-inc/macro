@@ -53,7 +53,7 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   identity?: string;
 }
 
-export interface BeginOptimisticWriteArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -78,7 +78,7 @@ export interface CacheHost {
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
-    args: BeginOptimisticWriteArgs,
+    args: EnqueueOptimisticMutationArgs,
     claim: InitialMutationClaimArgs
   ): Promise<EnqueueOptimisticMutationResult>;
   /** Recovers variables for cached variants without materializing values. */

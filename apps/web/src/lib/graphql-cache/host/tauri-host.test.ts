@@ -338,15 +338,15 @@ describe('createTauriCacheHost', () => {
   it('does not time out an uncertain durable enqueue', async () => {
     vi.useFakeTimers();
     try {
-      const host = createTauriCacheHost({
-        scope: 'scope-1',
-        requestTimeoutMs: 50,
-      });
       invokeMock.mockImplementation((command: string) =>
         command === 'graphql_cache_init'
           ? Promise.resolve(null)
           : new Promise(() => {})
       );
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
 
       let settled = false;
       void host
