@@ -133,6 +133,22 @@ pub(crate) fn is_watch_conflict(error: &GmailApiHttpError) -> bool {
         })
 }
 
+/// People API reports an expired contacts sync token (~7-day expiry) as
+/// HTTP 400 with this reason; it is a stale cursor, not a permanent failure.
+const EXPIRED_SYNC_TOKEN_FRAGMENT: &str = "EXPIRED_SYNC_TOKEN";
+
+pub(crate) fn map_contacts_error(error: GmailApiHttpError) -> EmailApiError {
+    if error.status().is_some_and(|status| status.as_u16() == 400)
+        && error
+            .body()
+            .is_some_and(|body| body.contains(EXPIRED_SYNC_TOKEN_FRAGMENT))
+    {
+        return EmailApiError::OutdatedCursor;
+    }
+
+    map_gmail_error(error)
+}
+
 pub(crate) fn map_watch_error(error: GmailApiHttpError) -> EmailApiError {
     if is_watch_conflict(&error) {
         return EmailApiError::Conflict;

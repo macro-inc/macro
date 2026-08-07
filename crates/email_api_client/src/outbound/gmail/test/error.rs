@@ -5,7 +5,8 @@ use http::StatusCode;
 
 use crate::domain::models::EmailApiError;
 use crate::outbound::gmail::{
-    GmailApiClientRepository, map_gmail_error, map_history_error, map_watch_error,
+    GmailApiClientRepository, map_contacts_error, map_gmail_error, map_history_error,
+    map_watch_error,
 };
 
 fn http_error(
@@ -133,6 +134,22 @@ fn history_not_found_is_an_outdated_cursor() {
         map_history_error(http_error(StatusCode::FORBIDDEN, "scope", None)),
         EmailApiError::Forbidden
     );
+}
+
+#[test]
+fn expired_contacts_sync_token_is_an_outdated_cursor() {
+    assert_eq!(
+        map_contacts_error(http_error(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"status":"FAILED_PRECONDITION","details":[{"reason":"EXPIRED_SYNC_TOKEN"}]}}"#,
+            None,
+        )),
+        EmailApiError::OutdatedCursor
+    );
+    assert!(matches!(
+        map_contacts_error(http_error(StatusCode::BAD_REQUEST, "invalid request", None)),
+        EmailApiError::Permanent { .. }
+    ));
 }
 
 #[test]

@@ -7,7 +7,7 @@ use crate::domain::models::{AccessToken, EmailApiError};
 use crate::domain::ports::MailboxContactsClient;
 
 use super::convert::map_person_to_contact;
-use super::{GmailApiClientRepository, map_gmail_error};
+use super::{GmailApiClientRepository, map_contacts_error, map_gmail_error};
 
 impl MailboxContactsClient for GmailApiClientRepository {
     async fn get_self_contact(
@@ -33,7 +33,7 @@ impl MailboxContactsClient for GmailApiClientRepository {
             .client
             .get_contacts(access_token.expose_secret(), sync_token)
             .await
-            .map_err(map_gmail_error)?;
+            .map_err(map_contacts_error)?;
         Ok(contact_list(link_id, people, next_sync_token))
     }
 
@@ -47,7 +47,7 @@ impl MailboxContactsClient for GmailApiClientRepository {
             .client
             .get_other_contacts(access_token.expose_secret(), sync_token)
             .await
-            .map_err(map_gmail_error)?;
+            .map_err(map_contacts_error)?;
         Ok(contact_list(link_id, people, next_sync_token))
     }
 }

@@ -4,10 +4,11 @@ use anyhow::{Context, anyhow};
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
+use email_api_client::domain::models::EmailApiError;
 use futures::{StreamExt, stream};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::contact::Contact;
+use models_email::service::contact::{Contact, ContactList};
 use models_email::service::link::Link;
 use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::sync_token::SyncTokens;
@@ -98,9 +99,13 @@ async fn fetch_new_contacts_from_google(
         }
     };
 
-    match email_api
-        .list_contacts(link.id, contacts_sync_token.as_deref())
-        .await
+    match list_contacts_with_expiry_recovery(
+        email_api,
+        link,
+        contacts_sync_token.as_deref(),
+        ContactListKind::Primary,
+    )
+    .await
     {
         Ok(contact_list) => {
             new_contacts_token = Some(contact_list.next_sync_token);
@@ -111,9 +116,13 @@ async fn fetch_new_contacts_from_google(
         }
     };
 
-    match email_api
-        .list_other_contacts(link.id, other_contacts_sync_token.as_deref())
-        .await
+    match list_contacts_with_expiry_recovery(
+        email_api,
+        link,
+        other_contacts_sync_token.as_deref(),
+        ContactListKind::Other,
+    )
+    .await
     {
         Ok(contact_list) => {
             new_other_contacts_token = Some(contact_list.next_sync_token);
@@ -131,6 +140,49 @@ async fn fetch_new_contacts_from_google(
     };
 
     (all_new_contacts, new_sync_tokens)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ContactListKind {
+    Primary,
+    Other,
+}
+
+/// Lists one contact collection, retrying once from scratch when the stored
+/// sync token has expired.
+///
+/// People API sync tokens expire after about seven days; without this
+/// recovery, an idle link's contact sync would fail permanently until the
+/// user reconnected the inbox.
+async fn list_contacts_with_expiry_recovery(
+    email_api: &GmailApi,
+    link: &Link,
+    sync_token: Option<&str>,
+    kind: ContactListKind,
+) -> Result<ContactList, EmailApiError> {
+    match list_contacts_once(email_api, link, sync_token, kind).await {
+        Err(EmailApiError::OutdatedCursor) if sync_token.is_some() => {
+            tracing::warn!(
+                link_id = %link.id,
+                ?kind,
+                "contacts sync token expired; retrying with a full sync"
+            );
+            list_contacts_once(email_api, link, None, kind).await
+        }
+        result => result,
+    }
+}
+
+async fn list_contacts_once(
+    email_api: &GmailApi,
+    link: &Link,
+    sync_token: Option<&str>,
+    kind: ContactListKind,
+) -> Result<ContactList, EmailApiError> {
+    match kind {
+        ContactListKind::Primary => email_api.list_contacts(link.id, sync_token).await,
+        ContactListKind::Other => email_api.list_other_contacts(link.id, sync_token).await,
+    }
 }
 
 /// Handles processing (SFS uploads) and database storage for a list of contacts.
