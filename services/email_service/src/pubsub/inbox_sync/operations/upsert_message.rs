@@ -224,14 +224,11 @@ pub async fn upsert_message(
                 })
             })?;
     } else {
-        fetch_and_insert_thread(ctx, payload, link.id, &provider_thread_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch and insert thread".to_string()),
-                })
-            })?;
+        // Propagated verbatim: fetch_and_insert_thread already routed provider
+        // errors through handle_operation_error (retry queue vs redelivery),
+        // and re-wrapping would double-process rate limits and mislabel
+        // permanent failures as retryable.
+        fetch_and_insert_thread(ctx, payload, link.id, &provider_thread_id).await?;
     }
 
     let (message_db_id, thread_db_id) =
@@ -545,7 +542,7 @@ async fn fetch_and_insert_thread(
     payload: &UpsertMessagePayload,
     link_id: Uuid,
     provider_thread_id: &str,
-) -> anyhow::Result<()> {
+) -> result::Result<(), ProcessingError> {
     let messages = match ctx.email_api.get_thread(link_id, provider_thread_id).await {
         Ok(messages) => messages,
         Err(error) => {
@@ -555,8 +552,7 @@ async fn fetch_and_insert_thread(
                 InboxSyncOperation::UpsertMessage(payload.clone()),
                 error,
             )
-            .await
-            .into());
+            .await);
         }
     };
     let mut threads = vec![thread_from_normalized_messages(
