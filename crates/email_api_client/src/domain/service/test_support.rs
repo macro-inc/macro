@@ -20,6 +20,7 @@ use super::super::ports::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Call {
     Token(Uuid, TokenFreshness),
+    HealthNeutralToken(Uuid, TokenFreshness),
     RateLimit(Uuid, ApiOperationKind),
     Repository(&'static str),
 }
@@ -71,6 +72,18 @@ impl ProviderTokenSource for FakeTokenSource {
             .lock()
             .unwrap()
             .push(Call::Token(link_id, freshness));
+        self.result.clone()
+    }
+
+    async fn get_access_token_health_neutral(
+        &self,
+        link: &models_email::service::link::Link,
+        freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::HealthNeutralToken(link.id, freshness));
         self.result.clone()
     }
 }

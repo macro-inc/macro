@@ -46,6 +46,25 @@ where
         let access_token = self.prepare(link_id, ApiOperationKind::Unsubscribe).await?;
         self.repository.unsubscribe(&access_token).await
     }
+
+    /// Stops the mailbox's subscription without token-health side effects.
+    ///
+    /// This is intended for link teardown: a grant that died since the last
+    /// probe must not set `needs_reauth` or fan out a reauthorization
+    /// notification for an inbox that is being intentionally removed.
+    pub async fn stop_subscription_for_link(&self, link: &Link) -> Result<(), EmailApiError> {
+        self.rate_limiter
+            .check_rate_limit(link.id, ApiOperationKind::Unsubscribe)
+            .await
+            .map_err(EmailApiError::from)?;
+        let access_token = self
+            .token_source
+            .get_access_token_health_neutral(link, TokenFreshness::Cached)
+            .await
+            .map_err(super::map_token_error)?;
+
+        self.repository.unsubscribe(&access_token).await
+    }
 }
 
 #[cfg(test)]

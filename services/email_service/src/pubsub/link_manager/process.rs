@@ -16,9 +16,36 @@ use models_email::service::link::{Link, UserProvider};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqs_worker::cleanup_message;
+use std::future::Future;
+use std::time::Duration;
 
 #[cfg(test)]
 mod test;
+
+/// Backoff schedule for teardown provider calls: three attempts total.
+const TEARDOWN_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(200), Duration::from_millis(400)];
+
+/// Runs a teardown provider call with a bounded retry (3 attempts, 200/400ms).
+///
+/// Only transient failures retry. Permanent errors (revoked grants, missing
+/// scopes) return immediately: retrying cannot help while tearing a link down.
+async fn retry_teardown<F, Fut>(mut operation: F) -> Result<(), EmailApiError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<(), EmailApiError>>,
+{
+    let mut delays = TEARDOWN_RETRY_DELAYS.iter();
+    loop {
+        match operation().await {
+            Ok(()) => return Ok(()),
+            Err(error) if error.is_transient() => match delays.next() {
+                Some(delay) => tokio::time::sleep(*delay).await,
+                None => return Err(error),
+            },
+            Err(error) => return Err(error),
+        }
+    }
+}
 
 #[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
@@ -270,8 +297,9 @@ async fn handle_delete(
 
     // Best effort: revoked grants and provider failures must not block local teardown.
     // Stop before evicting the token so a valid cached grant remains available for the call.
-    ctx.email_api
-        .stop_subscription(link.id)
+    // The health-neutral path never marks the link as needing reauth or notifies the
+    // user about an inbox that is being intentionally removed.
+    retry_teardown(|| ctx.email_api.stop_subscription_for_link(link))
         .await
         .inspect_err(|error| {
             tracing::warn!(error=?error, "Gmail call to stop watch failed");

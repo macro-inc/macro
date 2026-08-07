@@ -262,6 +262,17 @@ pub trait ProviderTokenSource: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send {
         self.get_access_token(link.id, freshness)
     }
+
+    /// Returns an access token without recording token-health side effects.
+    ///
+    /// Teardown flows use this: a failed acquisition while deleting a link
+    /// must not mark the link as needing reauthorization or notify the user
+    /// about an inbox that is being intentionally removed.
+    fn get_access_token_health_neutral(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send;
 }
 
 /// Applies provider quota policy before an outbound request.
@@ -464,6 +475,16 @@ impl ProviderTokenSource for NoOpProviderTokenSource {
     async fn get_access_token(
         &self,
         _: Uuid,
+        _: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        Err(TokenError::Permanent {
+            message: "email provider token source is not configured".to_string(),
+        })
+    }
+
+    async fn get_access_token_health_neutral(
+        &self,
+        _: &Link,
         _: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
         Err(TokenError::Permanent {

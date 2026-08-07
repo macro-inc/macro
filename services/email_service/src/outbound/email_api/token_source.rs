@@ -79,6 +79,19 @@ impl ProviderTokenSource for EmailServiceTokenSource {
         // wrongly skip the UPDATE. Always attempt the clear on this path.
         self.acquire(link, freshness, true).await
     }
+
+    async fn get_access_token_health_neutral(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        // Deliberately bypasses record_token_health: teardown must neither
+        // set needs_reauth nor enqueue a reauth notification.
+        self.fetch_token(link, freshness)
+            .await
+            .map(AccessToken::new)
+            .map_err(map_token_acquisition_error)
+    }
 }
 
 impl EmailServiceTokenSource {
@@ -208,6 +221,14 @@ impl ProviderTokenSource for StaticTokenSource {
     async fn get_access_token(
         &self,
         _link_id: Uuid,
+        _freshness: TokenFreshness,
+    ) -> Result<AccessToken, TokenError> {
+        Ok(self.token.clone())
+    }
+
+    async fn get_access_token_health_neutral(
+        &self,
+        _link: &Link,
         _freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
         Ok(self.token.clone())

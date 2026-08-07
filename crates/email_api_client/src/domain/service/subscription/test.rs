@@ -83,6 +83,23 @@ fn registration_can_bypass_the_token_cache_for_initialization() {
     );
 }
 
+#[test]
+fn teardown_stop_uses_the_health_neutral_token_path() {
+    let calls = call_log();
+    let service = service(calls.clone());
+
+    block_on(service.stop_subscription_for_link(&link())).unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            Call::RateLimit(Uuid::nil(), super::ApiOperationKind::Unsubscribe),
+            Call::HealthNeutralToken(Uuid::nil(), TokenFreshness::Cached),
+            Call::Repository("unsubscribe"),
+        ]
+    );
+}
+
 fn link() -> Link {
     Link {
         id: Uuid::nil(),

@@ -131,7 +131,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.7 Make link teardown health-neutral again, with bounded retry
 
-- [ ] **Status**
+- [x] **Status** — done
 
 **Problem.** `handle_delete` → `ctx.email_api.stop_subscription(link.id)` (`services/email_service/src/pubsub/link_manager/process.rs:271-279`) routes token acquisition through `record_token_health`. Main's teardown deliberately used a side-effect-free token fetch (`fetch_teardown_token`) with a 3-attempt retry (200ms/400ms, no retry on `Forbidden`).
 
