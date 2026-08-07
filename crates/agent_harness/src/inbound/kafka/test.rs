@@ -11,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
+use crate::domain::model::HarnessCommand;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -51,7 +52,7 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
 
 #[test]
 fn a_mention_for_our_bot_opens_a_session() {
-    let command = agent_trigger_to_harness_command(
+    let (_, command) = agent_trigger_to_harness_command(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
         BotId::TEST_A,
     )
@@ -80,7 +81,7 @@ fn a_threaded_mention_answers_into_its_thread() {
         },
     ));
 
-    let HarnessCommand::Open(open) = agent_trigger_to_harness_command(event, BotId::TEST_A)
+    let (_, HarnessCommand::Open(open)) = agent_trigger_to_harness_command(event, BotId::TEST_A)
         .expect("the mention should yield a command")
     else {
         panic!("a new-session event should open");
@@ -119,13 +120,14 @@ fn a_bot_authored_mention_is_skipped() {
 
 #[test]
 fn a_channel_message_forwards_to_its_session() {
-    let command = agent_trigger_to_harness_command(channel_message(BotId::TEST_A), BotId::TEST_A)
-        .expect("a channel event for our bot should yield a command");
+    let (session_id, command) =
+        agent_trigger_to_harness_command(channel_message(BotId::TEST_A), BotId::TEST_A)
+            .expect("a channel event for our bot should yield a command");
 
     let HarnessCommand::Forward(forward) = command else {
         panic!("an existing-session event should forward");
     };
-    assert_eq!(forward.session_id, AgentSessionId::TEST_A);
+    assert_eq!(session_id, AgentSessionId::TEST_A);
     assert_eq!(forward.sender, Some(user()));
     assert_eq!(forward.content, "@claude fix the tests");
 }

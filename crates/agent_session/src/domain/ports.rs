@@ -1,3 +1,4 @@
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
@@ -58,6 +59,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Update an existing agent session.
     fn update(&self, session: AgentSession) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist the agent-assigned ACP session id without replacing other session fields.
+    fn set_acp_session_id(
+        &self,
+        id: AgentSessionId,
+        acp_session_id: SessionId,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;

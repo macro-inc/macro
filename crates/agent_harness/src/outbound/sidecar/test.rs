@@ -153,3 +153,18 @@ async fn ends_when_the_sidecar_goes_away() {
             .is_none()
     );
 }
+
+#[tokio::test]
+async fn sending_fails_after_the_sidecar_goes_away() {
+    let (transport, sidecar) = transport().await;
+    let _ready = transport.recv().await;
+    drop(sidecar);
+    let _closed = transport.recv().await;
+
+    let error = transport
+        .send(ToRuntimeMessage::Acp(AcpMessage(frame())))
+        .await
+        .expect_err("a closed socket cannot accept a frame");
+
+    assert!(matches!(error, TransportError::Client(_)));
+}

@@ -155,8 +155,8 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
     }
 }
 
-/// Hands out [`ContainerMock`]s and remembers them, so `resume` returns the
-/// same container `spawn` created. Cloning shares one provisioner.
+/// Hands out [`ContainerMock`]s and remembers them. Resuming preserves the
+/// logical sandbox but replaces its disconnected transport.
 #[derive(Clone, Default)]
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
@@ -212,8 +212,14 @@ impl ContainerManager for MockContainerManager {
 
     async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {
         self.resumes.fetch_add(1, Ordering::Relaxed);
-        self.container(session).ok_or_else(|| {
-            HarnessError::Container(format!("no sandbox was ever spawned for {session}"))
-        })
+        let mut containers = self.lock();
+        if !containers.contains_key(&session) {
+            return Err(HarnessError::Container(format!(
+                "no sandbox was ever spawned for {session}"
+            )));
+        }
+        let container = ContainerMock::default();
+        containers.insert(session, container.clone());
+        Ok(container)
     }
 }
