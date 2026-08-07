@@ -1,85 +1,16 @@
-use super::util::{TURN, parse_log};
+use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
     Author, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
     TurnId,
 };
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tracing::Level;
-use tracing::field::{Field, Visit};
-use tracing::subscriber::with_default;
-
-/// Everything a captured `WARN` event carried, by field name.
-type CapturedFields = HashMap<String, String>;
-
-#[derive(Default)]
-struct CapturedWarnings {
-    events: Mutex<Vec<CapturedFields>>,
-}
-
-struct FieldCapture<'a>(&'a mut CapturedFields);
-
-impl Visit for FieldCapture<'_> {
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_owned(), format!("{value:?}"));
-    }
-}
-
-/// A [`tracing::Subscriber`] that records every `WARN`-level event's fields,
-/// so a test can assert on what the fold logged without threading it through
-/// its return value.
-struct TracingCapture {
-    captured: Arc<CapturedWarnings>,
-}
-
-impl TracingCapture {
-    fn new() -> (Self, Arc<CapturedWarnings>) {
-        let captured = Arc::new(CapturedWarnings::default());
-        (
-            Self {
-                captured: captured.clone(),
-            },
-            captured,
-        )
-    }
-}
-
-impl tracing::Subscriber for TracingCapture {
-    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-
-    fn event(&self, event: &tracing::Event<'_>) {
-        if *event.metadata().level() != Level::WARN {
-            return;
-        }
-        let mut fields = CapturedFields::default();
-        event.record(&mut FieldCapture(&mut fields));
-        self.captured.events.lock().unwrap().push(fields);
-    }
-
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
 
 /// Fold a log while capturing anything it logs at `WARN`.
 fn fold_capturing_warnings(
     log: impl IntoIterator<Item = AgentSessionLog>,
 ) -> (Vec<FoldedMessage>, Vec<CapturedFields>) {
-    let (subscriber, captured) = TracingCapture::new();
-    let messages = with_default(subscriber, || fold(log));
-    let events = captured.events.lock().unwrap().clone();
-    (messages, events)
+    capturing_warnings(|| fold(log))
 }
 
 /// The full fixture: one prompt, prose, a permission-gated terminal command,

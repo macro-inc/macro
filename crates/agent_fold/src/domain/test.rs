@@ -2,6 +2,7 @@
 //! [`util`] for what they share.
 
 mod fold;
+mod machine;
 mod meta;
 mod service;
 mod util;

@@ -62,25 +62,6 @@ impl FoldedMessageRepo for StaticMessages {
             .cloned()
             .unwrap_or_default())
     }
-
-    async fn get_message(
-        &self,
-        _session: AgentSessionId,
-        _id: MessageId,
-    ) -> Result<Option<FoldedMessage>, rootcause::Report> {
-        Ok(None)
-    }
-
-    async fn message_ids(
-        &self,
-        session: AgentSessionId,
-    ) -> Result<Vec<MessageId>, rootcause::Report> {
-        Ok(FoldedMessageRepo::messages(self, session)
-            .await?
-            .iter()
-            .map(FoldedMessage::id)
-            .collect())
-    }
 }
 
 /// Both placeholder keys a completed turn produces, in fold order.
@@ -318,4 +299,269 @@ async fn channel_messages_without_a_session_is_none() {
         .expect("lookup succeeds");
 
     assert!(folded.is_none());
+}
+
+// A live connection's frames do not come through `append_event` - the actor
+// writes them into `PlaceholderSyncingLogs`, which folds incrementally rather
+// than asking what the whole log derives. These pin that path.
+
+/// A `PlaceholderSyncingLogs` over the given store, as `register_transport`
+/// builds one for a connection.
+fn connection<C: Comms + Clone + Send + Sync + 'static>(
+    repo: InMemoryAgentSessionRepo,
+    comms: C,
+) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C> {
+    PlaceholderSyncingLogs {
+        repo,
+        comms,
+        state: tokio::sync::Mutex::new(PlaceholderState::default()),
+    }
+}
+
+/// A [`Comms`] that refuses the first `n` placeholder writes, so a test can
+/// see what happens to a message the fold has already announced.
+#[derive(Clone)]
+struct FlakyComms {
+    inner: RecordingComms,
+    refusals: Arc<Mutex<usize>>,
+}
+
+impl FlakyComms {
+    fn refusing(n: usize) -> Self {
+        Self {
+            inner: RecordingComms::new(),
+            refusals: Arc::new(Mutex::new(n)),
+        }
+    }
+}
+
+impl Comms for FlakyComms {
+    async fn messages_with_placeholders(
+        &self,
+        session: &AgentSession,
+    ) -> Result<std::collections::HashSet<MessageId>, rootcause::Report> {
+        self.inner.messages_with_placeholders(session).await
+    }
+
+    async fn create_message_placeholder(
+        &self,
+        session: &AgentSession,
+        id: MessageId,
+        author: &Author,
+    ) -> Result<(), rootcause::Report> {
+        let refuse = {
+            let mut left = self.refusals.lock().expect("not poisoned");
+            let refuse = *left > 0;
+            *left = left.saturating_sub(1);
+            refuse
+        };
+        if refuse {
+            return Err(rootcause::report!("comms is down"));
+        }
+        self.inner
+            .create_message_placeholder(session, id, author)
+            .await
+    }
+}
+
+/// The live path, on a real recording: the same placeholders as the refolding
+/// path, one per folded message and never twice.
+#[tokio::test]
+async fn a_connections_frames_place_one_placeholder_per_folded_message() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = RecordingComms::new();
+    let logs = connection(repo.clone(), comms.clone());
+
+    for entry in parse_log_as(test_session(), TURN) {
+        logs.create(entry).await.expect("append succeeds");
+
+        let created = comms.created();
+        let unique: std::collections::HashSet<_> = created.iter().collect();
+        assert_eq!(unique.len(), created.len(), "no placeholder written twice");
+    }
+
+    assert_eq!(comms.created(), both_sides(channel, 0));
+}
+
+/// The point of the rework: a connection folds its session once, when it
+/// starts, and every frame after that is folded into the state it kept.
+///
+/// Reading the whole log is what folding from scratch costs, so a read per
+/// frame is exactly the quadratic behaviour this replaced.
+#[tokio::test]
+async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let logs = connection(repo.clone(), RecordingComms::new());
+
+    let log = parse_log_as(test_session(), TURN);
+    let frames = log.len();
+    assert!(frames > 5, "the fixture is worth counting reads over");
+
+    for entry in log {
+        logs.create(entry).await.expect("append succeeds");
+    }
+
+    assert_eq!(
+        repo.log_reads(),
+        1,
+        "{frames} frames should cost one fold, not one per frame"
+    );
+}
+
+/// The agent's placeholder is written while its turn is still running, not
+/// held back until the turn stops - so a channel has somewhere to render the
+/// reply as it streams.
+#[tokio::test]
+async fn the_agents_placeholder_appears_before_its_turn_ends() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = RecordingComms::new();
+    let logs = connection(repo.clone(), comms.clone());
+
+    let log = parse_log_as(test_session(), TURN);
+    let frames = log.len();
+    let agent_side = (
+        channel,
+        MessageId {
+            turn: TurnId(0),
+            author: AuthorKind::Agent,
+        },
+    );
+
+    let mut placed_at = None;
+    for (index, entry) in log.into_iter().enumerate() {
+        logs.create(entry).await.expect("append succeeds");
+        if placed_at.is_none() && comms.created().contains(&agent_side) {
+            placed_at = Some(index);
+        }
+    }
+
+    let placed_at = placed_at.expect("the agent's placeholder was written");
+    assert!(
+        placed_at < frames - 1,
+        "placed at frame {placed_at} of {frames}, not once the turn had ended"
+    );
+}
+
+/// Re-attaching to a session that is already rendered leaves the channel
+/// alone.
+///
+/// The reconnected fold catches up on the stored log and so re-derives every
+/// message the first connection did. Nothing filters those out - they are
+/// offered to comms again and the unique index absorbs them, which is the
+/// trade this path makes: one redundant write per message per connection
+/// instead of a query per connection to find out they exist.
+#[tokio::test]
+async fn re_attaching_does_not_place_a_message_twice() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = RecordingComms::new();
+
+    // A first connection folds the whole recording.
+    let first = connection(repo.clone(), comms.clone());
+    for entry in parse_log_as(test_session(), TURN) {
+        first.create(entry).await.expect("append succeeds");
+    }
+    let after_first = comms.created();
+    assert_eq!(after_first, both_sides(channel, 0));
+
+    // A second connection over the same log, as an attach would build.
+    let offered_before = comms.offered();
+    let second = connection(repo.clone(), comms.clone());
+    second
+        .create(any_event(test_session()))
+        .await
+        .expect("append succeeds");
+
+    assert_eq!(
+        comms.created(),
+        after_first,
+        "a re-attached connection re-derives the log but adds no rows"
+    );
+    assert_eq!(
+        comms.offered() - offered_before,
+        after_first.len(),
+        "and gets there by re-offering them, not by checking first"
+    );
+}
+
+/// A message the fold announced but comms refused is not lost. The fold names
+/// a message once, so the connection has to remember it and try again.
+#[tokio::test]
+async fn a_refused_placeholder_is_retried_on_the_next_frame() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = FlakyComms::refusing(1);
+    let logs = connection(repo.clone(), comms.clone());
+
+    let mut log = parse_log_as(test_session(), TURN).into_iter();
+
+    // The prompt derives the user's message, and comms refuses it.
+    logs.create(log.next().expect("the fixture opens with a prompt"))
+        .await
+        .expect("a refused placeholder does not fail the append");
+    assert_eq!(comms.inner.created(), vec![], "the write was refused");
+
+    // Everything the fixture derives still lands, the refused message
+    // included.
+    for entry in log {
+        logs.create(entry).await.expect("append succeeds");
+    }
+    assert_eq!(
+        comms.inner.created(),
+        both_sides(channel, 0),
+        "the refused message was retried, and in fold order"
+    );
+}
+
+/// One more prompt, to see what turn a reconnected session gives it.
+const SECOND_PROMPT: &str = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p2","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"and again"}]}}}"#;
+
+/// What catching up is actually for: a connection that inherits a log keeps
+/// counting turns from where the log left off.
+///
+/// A fold starting empty would call this prompt `TurnId(0)`, key it to the
+/// placeholder turn 0 already owns, and have it swallowed as a duplicate - so
+/// it would render nowhere, while a channel load folding the whole log went
+/// on deriving it as turn 1. No unique index catches that; the ids are simply
+/// wrong.
+#[tokio::test]
+async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let channel = Uuid::from_u128(0xc4a2);
+    repo.insert_session(test_agent_session(test_session(), channel));
+    let comms = RecordingComms::new();
+
+    let first = connection(repo.clone(), comms.clone());
+    for entry in parse_log_as(test_session(), TURN) {
+        first.create(entry).await.expect("append succeeds");
+    }
+    assert_eq!(comms.created(), both_sides(channel, 0));
+
+    // A second connection over the same log, then a fresh prompt.
+    let second = connection(repo.clone(), comms.clone());
+    for entry in parse_log_as(test_session(), SECOND_PROMPT) {
+        second.create(entry).await.expect("append succeeds");
+    }
+
+    let mut expected = both_sides(channel, 0);
+    expected.push((
+        channel,
+        MessageId {
+            turn: TurnId(1),
+            author: AuthorKind::User,
+        },
+    ));
+    assert_eq!(
+        comms.created(),
+        expected,
+        "the prompt after a re-attach is turn 1, not turn 0 over again"
+    );
 }

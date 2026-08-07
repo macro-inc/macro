@@ -66,7 +66,7 @@ impl std::str::FromStr for MessageId {
         let (turn, author) = value.split_once(':').ok_or(())?;
         Ok(Self {
             turn: TurnId(turn.parse().map_err(|_| ())?),
-            author: author.parse()?,
+            author: author.parse().map_err(|_| ())?,
         })
     }
 }
@@ -75,7 +75,24 @@ impl std::str::FromStr for MessageId {
 ///
 /// The identity-free discriminant of [`Author`], usable in a key where
 /// [`Author`] itself carries a payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// The wire names a [`MessageId`] is written with and parsed back from are
+/// the strum-derived `snake_case` variant names - one source of truth for
+/// both directions.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    strum::Display,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum AuthorKind {
     /// A person.
     User,
@@ -87,22 +104,7 @@ impl AuthorKind {
     /// The wire name, as it appears in a [`MessageId`]'s string form.
     #[must_use]
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::Agent => "agent",
-        }
-    }
-}
-
-impl std::str::FromStr for AuthorKind {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "user" => Ok(Self::User),
-            "agent" => Ok(Self::Agent),
-            _ => Err(()),
-        }
+        self.into()
     }
 }
 
@@ -201,7 +203,8 @@ pub struct ToolUse {
 /// [`ToolStatus::Pending`] and [`ToolStatus::Running`] are legitimate final
 /// states, not errors: a live session's newest calls have not finished, and a
 /// session that dies mid-call leaves one behind permanently.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, strum::Display, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum ToolStatus {
     /// Not started - either still streaming input or awaiting permission.
     #[default]
@@ -316,7 +319,13 @@ pub enum PermissionOutcome {
 }
 
 /// Why a turn stopped.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Parsed straight off ACP's `stopReason` wire string by the strum-derived
+/// [`FromStr`](std::str::FromStr): the `snake_case` variant names are the
+/// wire names, and anything unmodelled falls through to [`Self::Other`], so
+/// parsing never fails.
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum StopReason {
     /// The agent finished its turn.
     EndTurn,
@@ -329,5 +338,44 @@ pub enum StopReason {
     /// The turn was cancelled.
     Cancelled,
     /// A stop reason this fold does not model, as its wire string.
+    #[strum(default)]
     Other(String),
+}
+
+/// What pushing one log frame into a
+/// [`FoldMachine`](crate::domain::ports::FoldMachine) changed.
+///
+/// Most frames change nothing - handshakes, token accounting, an unmodelled
+/// update - so a push yields `Option<IncrementalFoldResult>` and the quiet
+/// ones report `None`. A frame changes at most one message: the only push
+/// that touches two messages is a prompt arriving while a previous turn is
+/// still open, and closing that turn is a no-op because its agent message is
+/// already emitted with the `stop: None` it will keep.
+///
+/// The message is borrowed from the machine rather than cloned. Folding a
+/// whole log discards every result, so cloning here would make the batch path
+/// pay for the streaming one; a caller that needs to keep a message - to
+/// serialize it across a WASM boundary, or to write a comms placeholder -
+/// clones only the ones it uses.
+///
+/// Both variants carry the whole message as it now stands rather than a
+/// delta, so a consumer applies an update by replacing whatever it holds
+/// under the same [`FoldedMessage::id`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IncrementalFoldResult<'a> {
+    /// A message the machine had not derived before. Reported exactly once
+    /// per message, before any update to it.
+    NewMessage(&'a FoldedMessage),
+    /// A message the machine had already reported, whose content changed.
+    MessageUpdate(&'a FoldedMessage),
+}
+
+impl<'a> IncrementalFoldResult<'a> {
+    /// The message that changed, whichever way it changed.
+    #[must_use]
+    pub fn message(self) -> &'a FoldedMessage {
+        match self {
+            Self::NewMessage(message) | Self::MessageUpdate(message) => message,
+        }
+    }
 }

@@ -89,10 +89,7 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 /// A placeholder is a comms message with no stored body whose
 /// `agent_session_message_id` - the composite
 /// `"{agent_session_id}:{turn}:{author}"` - names the folded message of an
-/// agent session it renders. The service diffs
-/// [`Comms::messages_with_placeholders`] against what the fold derives
-/// ([`FoldedMessageRepo::message_ids`](agent_fold::domain::ports::FoldedMessageRepo::message_ids))
-/// to decide which placeholders are missing.
+/// agent session it renders.
 ///
 /// One placeholder per folded message, not per turn: a turn's prompt and its
 /// reply have different authors, so collapsing them onto one row would leave
@@ -100,6 +97,12 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 pub trait Comms {
     /// The messages of this session that already have a placeholder row in
     /// its channel.
+    ///
+    /// Only the rebuild path needs this - see
+    /// [`AgentSessionService::sync_placeholders`](crate::domain::service::AgentSessionService::sync_placeholders),
+    /// which has to notice placeholders that were deleted or never written. A
+    /// live connection does not ask, because
+    /// [`Comms::create_message_placeholder`] is idempotent.
     fn messages_with_placeholders(
         &self,
         session: &AgentSession,
@@ -110,6 +113,13 @@ pub trait Comms {
     ///
     /// `author` sets the row's sender: the agent's messages are sent by the
     /// session's bot, a user's by that user.
+    ///
+    /// **Must be idempotent.** Writing a message that already has a row is a
+    /// success that changes nothing, not an error - a reconnecting session
+    /// re-derives its whole log and re-offers every placeholder in it, and
+    /// nothing upstream filters those out. In Postgres the partial unique
+    /// index on `agent_session_message_id` is what enforces this; an
+    /// implementation without one has to do it itself.
     fn create_message_placeholder(
         &self,
         session: &AgentSession,
