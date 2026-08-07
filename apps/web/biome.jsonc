@@ -15,6 +15,7 @@
       "!chrome-extension-vite",
       "!infra/web-app/output",
       "!scripts",
+      "!.direnv",
       "src/lib/service-clients/**/generated/**",
       // graphql-codegen output; regenerated wholesale by `bun gen-graphql`
       "!src/lib/service-clients/service-storage/graphql/generated",

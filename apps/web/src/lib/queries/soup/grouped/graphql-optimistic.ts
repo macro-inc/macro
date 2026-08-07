@@ -1,5 +1,5 @@
-import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import { documentOperationName } from '@graphql-cache/exchange/generated-selection';
+import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
   prependUnique,
