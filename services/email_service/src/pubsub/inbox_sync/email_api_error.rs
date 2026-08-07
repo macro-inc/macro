@@ -1,4 +1,4 @@
-use email_api_client::domain::models::EmailApiError;
+use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
@@ -51,7 +51,18 @@ pub(crate) async fn handle_operation_error(
 }
 
 pub(crate) fn handle_gmail_message_error(error: EmailApiError) -> ProcessingError {
-    if matches!(error, EmailApiError::RateLimited { .. }) {
+    // Local budget refusals drop the notification by design: no provider
+    // quota was consumed and a later notification covers the same cursor
+    // range, avoiding fan-out backpressure. A provider-origin 429 retries
+    // (main's behavior) so an idle mailbox does not stay unsynced until its
+    // next change.
+    if matches!(
+        error,
+        EmailApiError::RateLimited {
+            origin: RateLimitOrigin::Local,
+            ..
+        }
+    ) {
         return non_retryable(error);
     }
 

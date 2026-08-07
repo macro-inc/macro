@@ -3,7 +3,7 @@ use std::time::Duration;
 use gmail_client::GmailApiHttpError;
 use http::StatusCode;
 
-use crate::domain::models::EmailApiError;
+use crate::domain::models::{EmailApiError, RateLimitOrigin};
 use crate::outbound::gmail::{
     GmailApiClientRepository, map_contacts_error, map_gmail_error, map_history_error,
     map_watch_error,
@@ -49,6 +49,7 @@ fn maps_provider_statuses_centrally() {
         )),
         EmailApiError::RateLimited {
             retry_after: Some(retry_after),
+            origin: RateLimitOrigin::Provider,
         }
     );
 }
@@ -61,7 +62,10 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
             r#"{"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}"#,
             None,
         )),
-        EmailApiError::RateLimited { retry_after: None }
+        EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Provider,
+        }
     );
 
     let retry_after = Duration::from_secs(12);
@@ -73,6 +77,7 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
         )),
         EmailApiError::RateLimited {
             retry_after: Some(retry_after),
+            origin: RateLimitOrigin::Provider,
         }
     );
 
@@ -83,7 +88,10 @@ fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
                 format!(r#"{{"error":{{"errors":[{{"reason":"{reason}"}}]}}}}"#),
                 None,
             )),
-            EmailApiError::RateLimited { retry_after: None },
+            EmailApiError::RateLimited {
+                retry_after: None,
+                origin: RateLimitOrigin::Provider,
+            },
             "reason {reason} should map to RateLimited",
         );
     }

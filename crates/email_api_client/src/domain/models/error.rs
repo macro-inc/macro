@@ -24,6 +24,8 @@ pub enum EmailApiError {
     RateLimited {
         /// Delay suggested before retrying, when one is known.
         retry_after: Option<Duration>,
+        /// Whether the refusal came from local policy or the provider itself.
+        origin: RateLimitOrigin,
     },
     /// The provider grant must be reauthorized.
     #[error("email provider authorization is required")]
@@ -61,10 +63,24 @@ impl EmailApiError {
     }
 }
 
+/// Where a rate-limit refusal originated.
+///
+/// Callers use this to distinguish a local budget refusal (no provider quota
+/// was consumed; a drop-and-wait policy may be appropriate) from the provider
+/// itself throttling the request (retrying preserves delivery guarantees).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RateLimitOrigin {
+    /// Refused by local quota policy before any provider call was made.
+    Local,
+    /// The provider itself throttled the request.
+    Provider,
+}
+
 impl From<RateLimitRefusal> for EmailApiError {
     fn from(refusal: RateLimitRefusal) -> Self {
         Self::RateLimited {
             retry_after: refusal.retry_after,
+            origin: RateLimitOrigin::Local,
         }
     }
 }

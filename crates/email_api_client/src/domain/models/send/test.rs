@@ -5,7 +5,9 @@ use models_email::email::service::message::MessageToSend;
 use uuid::Uuid;
 
 use super::SendRequest;
-use crate::domain::models::{AccessToken, EmailApiError, ProviderSubscription, SyncCursor};
+use crate::domain::models::{
+    AccessToken, EmailApiError, ProviderSubscription, RateLimitOrigin, SyncCursor,
+};
 
 fn contact(email: &str, name: &str) -> ContactInfo {
     ContactInfo {
@@ -31,7 +33,13 @@ fn email_api_error_identifies_transient_failures() {
         }
         .is_transient()
     );
-    assert!(EmailApiError::RateLimited { retry_after: None }.is_transient());
+    assert!(
+        EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Local,
+        }
+        .is_transient()
+    );
     assert!(
         !EmailApiError::Permanent {
             message: "invalid message".to_string(),

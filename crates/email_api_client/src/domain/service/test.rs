@@ -64,6 +64,7 @@ fn rate_limit_refusal_stops_before_repository() {
         result,
         Err(EmailApiError::RateLimited {
             retry_after: Some(retry_after),
+            origin: crate::domain::models::RateLimitOrigin::Local,
         })
     );
     assert_eq!(

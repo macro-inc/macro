@@ -18,7 +18,7 @@ use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
 
-use crate::domain::models::EmailApiError;
+use crate::domain::models::{EmailApiError, RateLimitOrigin};
 
 #[allow(dead_code)]
 const WATCH_CONFLICT_BODY_FRAGMENT: &str = "push notification client allowed";
@@ -91,11 +91,17 @@ pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
             retry_after,
         } => match status.as_u16() {
             401 => EmailApiError::AuthRequired,
-            403 if is_quota_403_body(&body) => EmailApiError::RateLimited { retry_after },
+            403 if is_quota_403_body(&body) => EmailApiError::RateLimited {
+                retry_after,
+                origin: RateLimitOrigin::Provider,
+            },
             403 => EmailApiError::Forbidden,
             404 => EmailApiError::NotFound,
             409 => EmailApiError::Conflict,
-            429 => EmailApiError::RateLimited { retry_after },
+            429 => EmailApiError::RateLimited {
+                retry_after,
+                origin: RateLimitOrigin::Provider,
+            },
             500..=599 => EmailApiError::Transient {
                 message: format!("Gmail API returned {status}: {body}"),
             },

@@ -24,6 +24,7 @@ fn maps_rate_limits_to_retryable_rate_limit_failures() {
     assert_mapping(
         EmailApiError::RateLimited {
             retry_after: Some(Duration::from_secs(5)),
+            origin: email_api_client::domain::models::RateLimitOrigin::Provider,
         },
         true,
         FailureReason::GmailApiRateLimited,
