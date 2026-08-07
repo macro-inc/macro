@@ -7,7 +7,7 @@ mod history;
 mod label;
 mod message;
 mod payload;
-mod sanitizer;
+pub(crate) mod sanitizer;
 mod thread;
 
 #[allow(unused_imports)]

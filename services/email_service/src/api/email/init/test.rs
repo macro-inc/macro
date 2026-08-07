@@ -97,7 +97,10 @@ fn unusable_provider_grants_classify_as_no_gmail_grant() {
 
 #[test]
 fn rate_limiting_classifies_as_http_429() {
-    let error = classify_provider_init_error(EmailApiError::RateLimited { retry_after: None });
+    let error = classify_provider_init_error(EmailApiError::RateLimited {
+        retry_after: None,
+        origin: email_api_client::domain::models::RateLimitOrigin::Provider,
+    });
     assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
 }
 

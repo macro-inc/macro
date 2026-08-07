@@ -1,9 +1,18 @@
 use ammonia::Builder;
+use regex::Regex;
 use scraper::{Html, Selector};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-pub(super) fn sanitize_email_html(raw_html: &str) -> String {
+#[cfg(test)]
+mod test;
+
+/// Sanitizes a full email HTML document against the shared allowlist.
+///
+/// Extracts `<style>` and `<body>` content from (possibly malformed)
+/// documents, cleans the markup with ammonia, and scrubs `<style>` element
+/// text of external references and non-allowlisted properties.
+pub fn sanitize_email_html(raw_html: &str) -> String {
     // Attempt 1: Parse as a full document. This is best for well-formed emails.
     let document = Html::parse_document(raw_html);
     let content_to_clean = if let Some(reconstructed) = find_and_reconstruct(&document) {
@@ -21,7 +30,15 @@ pub(super) fn sanitize_email_html(raw_html: &str) -> String {
         }
     };
 
-    CLEANER.clean(&content_to_clean).to_string()
+    sanitize_style_blocks(&CLEANER.clean(&content_to_clean).to_string())
+}
+
+/// Sanitizes a user-supplied HTML fragment (e.g. an email signature) with the
+/// same allowlist as full email bodies, but without the document/body
+/// reconstruction `sanitize_email_html` applies to whole messages — a fragment
+/// has no `<head>`/`<body>` to extract, so we just clean it in place.
+pub fn sanitize_html_fragment(raw_html: &str) -> String {
+    sanitize_style_blocks(&CLEANER.clean(raw_html).to_string())
 }
 
 /// Extracts all <style> tags and the <body> tag from a parsed document,
@@ -48,11 +65,76 @@ fn find_and_reconstruct(document: &Html) -> Option<String> {
     }
 }
 
+/// Innermost `{ ... }` declaration blocks. Nested at-rules (`@media { a { … } }`)
+/// keep their structure: only the inner declaration lists match.
+static CSS_DECLARATION_BLOCK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{([^{}]*)\}").expect("static regex is valid"));
+static CSS_COMMENT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)/\*.*?\*/").expect("static regex is valid"));
+/// `@import …` up to its terminating semicolon (or end of block/input).
+static CSS_IMPORT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)@import[^;{}]*(;|$)").expect("static regex is valid"));
+/// `<style …> … </style>` in ammonia's already-normalized output.
+static STYLE_BLOCK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)(<style\b[^>]*>)(.*?)(</style>)").expect("static regex is valid"));
+
+/// Scrubs the text content of every `<style>` element in sanitized HTML.
+///
+/// Ammonia's built-in CSS filter applies only to `style` *attributes*;
+/// `<style>` element content passes through verbatim, which would allow CSS
+/// overlay phishing and `@import`/`url()` exfiltration or tracking. This pass
+/// removes comments and `@import` rules and keeps only allowlisted,
+/// externally-inert declarations.
+fn sanitize_style_blocks(html: &str) -> String {
+    if !html.contains("<style") {
+        return html.to_string();
+    }
+
+    STYLE_BLOCK
+        .replace_all(html, |caps: &regex::Captures<'_>| {
+            format!("{}{}{}", &caps[1], sanitize_style_content(&caps[2]), &caps[3])
+        })
+        .into_owned()
+}
+
+fn sanitize_style_content(css: &str) -> String {
+    let css = CSS_COMMENT.replace_all(css, "");
+    let css = CSS_IMPORT.replace_all(&css, "");
+
+    CSS_DECLARATION_BLOCK
+        .replace_all(&css, |caps: &regex::Captures<'_>| {
+            format!("{{{}}}", filter_css_declarations(&caps[1]))
+        })
+        .into_owned()
+}
+
+fn filter_css_declarations(declarations: &str) -> String {
+    let safe_properties = get_safe_css_properties();
+
+    declarations
+        .split(';')
+        .filter_map(|declaration| {
+            let (property, value) = declaration.split_once(':')?;
+            let property = property.trim().to_ascii_lowercase();
+            let value_lower = value.to_ascii_lowercase();
+            // Escapes (`\75 rl(`) could smuggle url() past a substring check,
+            // so any backslash disqualifies the declaration outright.
+            let value_is_inert = !value_lower.contains("url(")
+                && !value_lower.contains("expression(")
+                && !value_lower.contains('\\');
+            (safe_properties.contains(property.as_str()) && value_is_inert)
+                .then(|| format!("{}:{};", property, value.trim()))
+        })
+        .collect()
+}
+
 // create a single time
 static CLEANER: LazyLock<Builder<'static>> = LazyLock::new(|| {
     let mut cleaner = Builder::default();
 
-    // we are allowing style tags. ammonia has built-in css sanitization
+    // Keep <style> elements and their text. NOTE: ammonia's CSS filtering
+    // applies only to `style` attributes; element content is emitted verbatim,
+    // so sanitize_style_blocks scrubs it after cleaning.
     cleaner.rm_clean_content_tags(&["style"]);
 
     // Basic and layout tags

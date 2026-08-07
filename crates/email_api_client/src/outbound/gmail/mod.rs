@@ -4,6 +4,8 @@ mod attachments;
 mod blocklist;
 mod contacts;
 pub(crate) mod convert;
+
+pub use convert::sanitizer::{sanitize_email_html, sanitize_html_fragment};
 mod labels;
 mod messages;
 mod send;
