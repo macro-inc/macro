@@ -65,7 +65,7 @@ const standaloneItem = (): CalendarOccurrenceItem =>
         {
           email: 'other@example.com',
           isSelf: false,
-          responseStatus: 'accepted',
+          responseStatus: 'declined',
         },
       ],
     },
@@ -175,7 +175,7 @@ describe('useRsvpCalendarEventMutation', () => {
       ).toBe('accepted');
       expect(
         event?.attendees.find((attendee) => !attendee.isSelf)?.responseStatus
-      ).toBe('accepted');
+      ).toBe('declined');
     }
     expect(rsvpCalendarEventMock).toHaveBeenCalledWith('event-1', {
       response: 'accepted',

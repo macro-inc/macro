@@ -38,10 +38,35 @@ export interface RecurrenceConfig {
 
 const NEVER: RecurrenceEnds = { kind: 'never' };
 
-/** RFC 5545 `UNTIL` for an inclusive local end date. */
+/**
+ * RFC 5545 `UNTIL` closing an inclusive local end date, Google-style:
+ * all-day rules carry the plain date, timed rules the local end-of-day
+ * instant rendered in UTC.
+ */
 function untilValue(date: string, allDay: boolean) {
-  const compact = date.replaceAll('-', '');
-  return allDay ? compact : `${compact}T235959Z`;
+  if (allDay) return date.replaceAll('-', '');
+  const endOfDay = new Date(`${date}T23:59:59`);
+  return `${endOfDay.toISOString().slice(0, 19).replaceAll(/[-:]/g, '')}Z`;
+}
+
+/** The local calendar date a stored `UNTIL` value ends on (inclusive). */
+function untilDate(value: string): string | undefined {
+  const match = value.match(
+    /^(\d{4})-?(\d{2})-?(\d{2})(?:T(\d{2}):?(\d{2}):?(\d{2})Z)?$/
+  );
+  if (!match) return undefined;
+  if (match[4] === undefined) return `${match[1]}-${match[2]}-${match[3]}`;
+  const instant = new Date(
+    Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6])
+    )
+  );
+  return format(instant, 'yyyy-MM-dd');
 }
 
 /** Serialize a config into a single-`RRULE` recurrence property list. */
@@ -125,9 +150,9 @@ export function parseRecurrenceConfig(
   if (rule.count !== undefined) {
     ends = { kind: 'after', count: rule.count };
   } else if (rule.until !== undefined) {
-    const match = rule.until.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
-    if (!match) return undefined;
-    ends = { kind: 'on', date: `${match[1]}-${match[2]}-${match[3]}` };
+    const date = untilDate(rule.until);
+    if (date === undefined) return undefined;
+    ends = { kind: 'on', date };
   }
 
   return {

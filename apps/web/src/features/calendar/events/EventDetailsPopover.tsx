@@ -27,7 +27,9 @@ interface SelectedEventDetailsProps {
  *
  * Both are keyed on the stable event id — not the view model's object
  * identity — so optimistic cache writes and refetches update them in place
- * instead of remounting them (which would close their dialogs).
+ * instead of remounting them (which would close their dialogs). When the
+ * event leaves the cache entirely (e.g. deleted from another tab) the
+ * overlay closes rather than lingering on stale data.
  */
 export function SelectedEventDetails(props: SelectedEventDetailsProps) {
   const popoverSelection = createMemo(
@@ -47,12 +49,6 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
   const drawerSelection = createMemo(() => props.event()?.id, undefined, {
     equals: (previous, next) => previous === next,
   });
-  // The selection can flash undefined for a frame while a refetch lands
-  // before the key clears; hold the last rendered event.
-  const heldEvent = createMemo<CalendarEvent | undefined>(
-    (previous) => props.event() ?? previous,
-    undefined
-  );
 
   return (
     <Show
@@ -60,7 +56,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
       fallback={
         <Show keyed when={popoverSelection()}>
           {(selected) => (
-            <Show when={heldEvent()}>
+            <Show when={props.event()}>
               {(currentEvent) => (
                 <EventDetailsPopover
                   anchor={selected.anchor}
@@ -77,7 +73,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
       }
     >
       <Show keyed when={drawerSelection()}>
-        <Show when={heldEvent()}>
+        <Show when={props.event()}>
           {(currentEvent) => (
             <EventDetailsDrawer
               event={currentEvent()}
@@ -358,15 +354,17 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
           </Layer>
         </Popover.Portal>
       </Popover>
-      <DeleteEventDialog
-        open={deleteOpen()}
-        event={props.event}
-        onClose={() => setDeleteOpen(false)}
-        onDeleted={() => {
-          setDeleteOpen(false);
-          props.onOpenChange(false);
-        }}
-      />
+      <Show when={deleteOpen()}>
+        <DeleteEventDialog
+          open
+          event={props.event}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            setDeleteOpen(false);
+            props.onOpenChange(false);
+          }}
+        />
+      </Show>
       <Show when={editorOpen()}>
         <EventEditorDialog
           open

@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { describe, expect, it } from 'vitest';
 import {
   buildRecurrenceLines,
@@ -11,6 +12,14 @@ import {
 
 // Friday, August 7 2026 (local).
 const friday = new Date(2026, 7, 7, 14, 0, 0);
+
+// Timed rules end at local end-of-day rendered in UTC, so the expected
+// UNTIL depends on the zone the tests run in.
+const timedUntil = (date: string) =>
+  `${new Date(`${date}T23:59:59`)
+    .toISOString()
+    .slice(0, 19)
+    .replaceAll(/[-:]/g, '')}Z`;
 
 describe('buildRecurrenceLines', () => {
   it('serializes the shapes the custom editor produces', () => {
@@ -42,7 +51,9 @@ describe('buildRecurrenceLines', () => {
         },
         false
       )
-    ).toEqual(['RRULE:FREQ=MONTHLY;BYDAY=1FR;UNTIL=20261106T235959Z']);
+    ).toEqual([
+      `RRULE:FREQ=MONTHLY;BYDAY=1FR;UNTIL=${timedUntil('2026-11-06')}`,
+    ]);
   });
 
   it('uses a date-valued UNTIL for all-day events', () => {
@@ -88,11 +99,17 @@ describe('parseRecurrenceConfig', () => {
     }
   });
 
-  it('parses UNTIL values Google emits', () => {
+  it('parses UNTIL values Google emits as the local end date', () => {
     const parsed = parseRecurrenceConfig([
       'RRULE:FREQ=WEEKLY;UNTIL=20261106T045959Z;BYDAY=FR',
     ]);
-    expect(parsed?.ends).toEqual({ kind: 'on', date: '2026-11-06' });
+    // 2026-11-06T04:59:59Z is 23:59:59 the previous evening in US Eastern;
+    // the config surfaces whatever calendar date that instant falls on here.
+    const localDate = format(
+      new Date(Date.UTC(2026, 10, 6, 4, 59, 59)),
+      'yyyy-MM-dd'
+    );
+    expect(parsed?.ends).toEqual({ kind: 'on', date: localDate });
   });
 
   it('declines rules it cannot round-trip', () => {

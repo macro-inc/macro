@@ -251,9 +251,10 @@ type CreateCallbacks = MutationCallbacks<
 >;
 
 /**
- * Creates an event on the requester's primary calendar. There is no
- * optimistic insert — the entity id is only known once the provider echo
- * lands — so the viewport refetches on settle.
+ * Creates an event on the selected calendar, defaulting to the requester's
+ * primary calendar when no `calendarId` is given. There is no optimistic
+ * insert — the entity id is only known once the provider echo lands — so
+ * the viewport refetches on settle.
  */
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({

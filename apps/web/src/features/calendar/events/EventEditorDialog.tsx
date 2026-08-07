@@ -174,6 +174,9 @@ export function EventEditorDialog(props: {
   const writableCalendars = createMemo(
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
   );
+  // The select displays the first writable calendar until touched, so submit
+  // must resolve the same fallback rather than let the server pick its own.
+  const effectiveCalendarId = () => calendarId() ?? writableCalendars()[0]?.id;
   const spansInboxes = createMemo(() =>
     spansMultipleInboxes(writableCalendars())
   );
@@ -218,7 +221,11 @@ export function EventEditorDialog(props: {
     if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
       return false;
     }
-    return config.ends.kind !== 'on' || config.ends.date !== '';
+    if (config.ends.kind === 'on') return config.ends.date !== '';
+    if (config.ends.kind === 'after') {
+      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
+    }
+    return true;
   });
   /** `undefined` leaves the stored rule untouched. */
   const recurrenceLines = (): string[] | undefined => {
@@ -293,7 +300,7 @@ export function EventEditorDialog(props: {
     create.mutate({
       title: current.title,
       time,
-      calendarId: calendarId(),
+      calendarId: effectiveCalendarId(),
       recurrenceLines: lines ?? [],
       location: current.location === '' ? undefined : current.location,
       description: current.description === '' ? undefined : current.description,
@@ -545,7 +552,7 @@ export function EventEditorDialog(props: {
           </div>
           <Show when={!isEdit() && writableCalendars().length > 1}>
             <select
-              value={calendarId() ?? writableCalendars()[0]?.id}
+              value={effectiveCalendarId()}
               onChange={(e) => setCalendarId(e.currentTarget.value)}
               aria-label="Calendar"
               class="settings-input w-full"

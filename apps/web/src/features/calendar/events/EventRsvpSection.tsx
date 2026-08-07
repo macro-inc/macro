@@ -48,6 +48,7 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
                 }
                 size="sm"
                 class="rounded-lg px-2.5"
+                disabled={rsvp.isPending}
                 label={option.label}
                 onClick={() =>
                   rsvp.mutate({
