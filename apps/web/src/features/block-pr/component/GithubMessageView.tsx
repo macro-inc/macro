@@ -1,9 +1,11 @@
 import { Message } from '@channel/Message/Message';
 import type { MessageData } from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
+import { ThreadRail } from '@channel/Thread/ThreadRail';
 import MacroLogo from '@icon/macro-logo.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -51,6 +53,25 @@ function sourceLabel(source: string): string | null {
 }
 
 /**
+ * Header badge text: the file/line anchor of a review comment when the
+ * metadata carries one, else a generic source label. Falls back to the line
+ * the comment was originally left on when later commits outdated it.
+ */
+function commentBadge(
+  comment: GithubPullRequestComment
+): { label: string; isAnchor: boolean } | null {
+  if (comment.source === 'review_comment' && comment.path) {
+    const line = comment.line ?? comment.originalLine;
+    return {
+      label: line != null ? `${comment.path}:${line}` : comment.path,
+      isAnchor: true,
+    };
+  }
+  const label = sourceLabel(comment.source);
+  return label === null ? null : { label, isAnchor: false };
+}
+
+/**
  * Fudge a GitHub comment into the channel message shape: GitHub authors ride
  * the bot-sender path, which carries an explicit display name through
  * `Message.SenderName`.
@@ -77,7 +98,8 @@ function toMessageData(comment: GithubPullRequestComment): MessageData {
 }
 
 function toThreadRowMessage(
-  comment: GithubPullRequestComment
+  comment: GithubPullRequestComment,
+  replies: GithubPullRequestComment[]
 ): ApiChannelMessage {
   const message = toMessageData(comment);
   const login = comment.authorLogin ?? 'github';
@@ -91,22 +113,23 @@ function toThreadRowMessage(
       avatar_url: githubAvatarUrl(login),
     },
     thread: {
-      reply_count: 0,
-      latest_reply_at: null,
+      reply_count: replies.length,
+      latest_reply_at: replies.at(-1)?.createdAt ?? null,
       preview: [],
     },
   };
 }
 
 /**
- * A read-only GitHub comment rendered with the channel message components,
- * collapsed to a preview when long (bot comments tend to be walls of text).
+ * The message proper: avatar, header, and collapsible markdown body. Replies
+ * skip the source pill — the thread rail already marks them as part of the
+ * root's review thread.
  */
-export function GithubMessageView(props: {
+function GithubCommentMessage(props: {
   comment: GithubPullRequestComment;
+  isReply?: boolean;
 }) {
   const messageData = () => toMessageData(props.comment);
-  const threadRowMessage = () => toThreadRowMessage(props.comment);
   const login = () => props.comment.authorLogin ?? 'github';
 
   const [expanded, setExpanded] = createSignal(false);
@@ -126,63 +149,101 @@ export function GithubMessageView(props: {
   });
 
   return (
-    <Thread.Row message={threadRowMessage()}>
-      <Message.Root message={messageData()}>
-        <Message.Layout class="pt-(--regular-message-padding-t)">
-          <Message.Slot placement="icon">
-            <GithubAvatar login={login()} />
-          </Message.Slot>
-          <Message.Slot
-            placement="header"
-            class="flex items-center gap-1 min-w-0 w-full"
-          >
-            <Message.SenderName />
-            <Show when={sourceLabel(props.comment.source)}>
-              {(label) => (
-                <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-2 py-0.5 text-xs font-medium leading-none text-ink-muted">
-                  {label()}
-                </span>
-              )}
-            </Show>
-            <div class="grow shrink-0 min-w-0 flex items-center gap-1.5 justify-end">
-              <Message.Timestamp
-                class="ml-auto shrink-0"
-                format="dateAndTime"
-              />
-            </div>
-          </Message.Slot>
-          <Message.Slot placement="content" class="ph-no-capture">
-            <div
-              ref={contentRef}
-              class={cn('relative', truncated() && 'overflow-hidden')}
-              style={
-                truncated()
-                  ? {
-                      'max-height': `${PREVIEW_MAX_HEIGHT}px`,
-                      'mask-image':
-                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
-                      '-webkit-mask-image':
-                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
-                    }
-                  : undefined
-              }
-            >
-              <Message.Content class="overflow-x-auto" />
-            </div>
-            <Show when={overflowing()}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="mt-2"
-                onClick={() => setExpanded(!expanded())}
+    <Message.Root message={messageData()}>
+      <Message.Layout class="pt-(--regular-message-padding-t)">
+        <Message.Slot placement="icon">
+          <GithubAvatar login={login()} />
+        </Message.Slot>
+        <Message.Slot
+          placement="header"
+          class="flex items-center gap-1 min-w-0 w-full"
+        >
+          <Message.SenderName />
+          <Show when={!props.isReply && commentBadge(props.comment)}>
+            {(badge) => (
+              <span
+                class={cn(
+                  'inline-flex min-w-0 items-center truncate rounded-sm bg-hover px-2 py-0.5 text-xs font-medium leading-none text-ink-muted',
+                  badge().isAnchor && 'font-mono'
+                )}
+                title={badge().isAnchor ? badge().label : undefined}
               >
-                {expanded() ? 'Show less' : 'Show more'}
-              </Button>
-            </Show>
-          </Message.Slot>
-        </Message.Layout>
-      </Message.Root>
+                {badge().label}
+              </span>
+            )}
+          </Show>
+          <div class="grow shrink-0 min-w-0 flex items-center gap-1.5 justify-end">
+            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+          </div>
+        </Message.Slot>
+        <Message.Slot placement="content" class="ph-no-capture">
+          <div
+            ref={contentRef}
+            class={cn('relative', truncated() && 'overflow-hidden')}
+            style={
+              truncated()
+                ? {
+                    'max-height': `${PREVIEW_MAX_HEIGHT}px`,
+                    'mask-image':
+                      'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                    '-webkit-mask-image':
+                      'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                  }
+                : undefined
+            }
+          >
+            <Message.Content class="overflow-x-auto" />
+          </div>
+          <Show when={overflowing()}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="mt-2"
+              onClick={() => setExpanded(!expanded())}
+            >
+              {expanded() ? 'Show less' : 'Show more'}
+            </Button>
+          </Show>
+        </Message.Slot>
+      </Message.Layout>
+    </Message.Root>
+  );
+}
+
+/**
+ * A read-only GitHub comment rendered with the channel message components,
+ * collapsed to a preview when long (bot comments tend to be walls of text).
+ * Review-thread replies render indented under the root along the thread
+ * rail, mirroring Macro discussion threads.
+ */
+export function GithubMessageView(props: {
+  comment: GithubPullRequestComment;
+  replies?: GithubPullRequestComment[];
+}) {
+  const replies = () => props.replies ?? [];
+
+  return (
+    <Thread.Row message={toThreadRowMessage(props.comment, replies())}>
+      <GithubCommentMessage comment={props.comment} />
+      <Show when={replies().length > 0}>
+        <div class="relative w-full">
+          <Thread.ReplyRailDecorations
+            isReplying={() => false}
+            firstThreadReplyNewMessage={false}
+          />
+          <Thread.RepliesContainer>
+            <Key each={replies()} by="id">
+              {(reply) => (
+                <div class="relative">
+                  <ThreadRail />
+                  <GithubCommentMessage comment={reply()} isReply />
+                </div>
+              )}
+            </Key>
+          </Thread.RepliesContainer>
+        </div>
+      </Show>
     </Thread.Row>
   );
 }

@@ -777,7 +777,14 @@ where
                 }
             }
 
-            let (recipients, posted_notification) =
+            let channel_participants = self
+                .repo
+                .get_participants(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let recipients = participant_ids(&channel_participants);
+
+            let posted_notification =
                 if notification_policy == PatchMessageNotificationPolicy::NotifyAsPostedMessage {
                     let metadata = if let Some(user_actor) = actor.as_user() {
                         self.repo
@@ -795,16 +802,6 @@ where
                             channel_name: info.name.unwrap_or_default(),
                         }
                     };
-                    let notification_participants = self
-                        .repo
-                        .get_participants(channel_id)
-                        .await
-                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-                    // This patch replaces a message that was originally posted
-                    // to every channel participant (for example, Macro AI's
-                    // "thinking" placeholder). Keep the realtime audience the
-                    // same so observers do not retain the stale placeholder.
-                    let recipients = participant_ids(&notification_participants);
                     let has_attachments = !self
                         .repo
                         .get_message_attachments(message_id)
@@ -812,31 +809,14 @@ where
                         .map_err(|e| ChannelMutationErr::Repo(e.into()))?
                         .is_empty();
 
-                    (
-                        recipients,
-                        Some(crate::domain::events::MessageChangedNotificationContext {
-                            metadata,
-                            participants: notification_participants,
-                            mentions: replacement_mentions.clone().unwrap_or_default(),
-                            has_attachments,
-                        }),
-                    )
+                    Some(crate::domain::events::MessageChangedNotificationContext {
+                        metadata,
+                        participants: channel_participants,
+                        mentions: replacement_mentions.clone().unwrap_or_default(),
+                        has_attachments,
+                    })
                 } else {
-                    let recipients = if let Some(thread_id) = message.thread_id {
-                        self.repo
-                            .get_thread_participants(thread_id)
-                            .await
-                            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
-                    } else {
-                        participant_ids(
-                            &self
-                                .repo
-                                .get_participants(channel_id)
-                                .await
-                                .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
-                        )
-                    };
-                    (recipients, None)
+                    None
                 };
 
             self.events.dispatch(ChannelEvent::MessageChanged {

@@ -73,7 +73,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -272,7 +272,7 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
 const CHECKBOX_ITEM_BOX_CLASS = cn(
   'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
   'border border-transparent text-surface',
-  'group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted',
+  'group-data-highlighted:not-hover:border-edge-muted',
   'hover:border-accent',
   'group-data-checked:bg-accent group-data-checked:border-accent'
 );

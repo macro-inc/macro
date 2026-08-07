@@ -2,6 +2,36 @@ use super::*;
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
+
+async fn remove_message_labels(pool: &Pool<Postgres>, message_id: Uuid) -> Result<()> {
+    sqlx::query!(
+        r#"
+        DELETE FROM email_message_labels
+        WHERE message_id = $1
+        "#,
+        message_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn attachment_is_claimed(pool: &Pool<Postgres>, attachment_id: Uuid) -> Result<bool> {
+    let claimed_at = sqlx::query_scalar!(
+        r#"
+        SELECT upload_claimed_at
+        FROM email_attachments
+        WHERE id = $1
+        "#,
+        attachment_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(claimed_at.is_some())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -52,6 +82,32 @@ async fn thread_attachments_for_backfill_condition_2(pool: Pool<Postgres>) -> Re
         scripts("fetch_thread_attachments_for_backfill")
     )
 )]
+async fn thread_attachments_for_backfill_requires_important_label(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    remove_message_labels(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-0000002a0201")?,
+    )
+    .await?;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000102")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
 // should return attachments for thread with same domain contact message
 async fn thread_attachments_for_backfill_condition_3(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
@@ -61,6 +117,48 @@ async fn thread_attachments_for_backfill_condition_3(pool: Pool<Postgres>) -> Re
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
+async fn thread_attachments_for_backfill_rejects_domain_suffix(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000106")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_attachments_for_backfill")
+    )
+)]
+async fn thread_attachments_for_backfill_matches_domain_case_insensitively(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000107")?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(
+        res[0].filename,
+        Some("mixed_case_domain_doc.pdf".to_string())
+    );
 
     Ok(())
 }
@@ -120,23 +218,89 @@ async fn job_attachments_for_backfill_includes_previously_contacted_participants
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
     let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
 
-    // Should return 3 attachments:
-    // 1. valid_document.pdf from Thread 1 (previously contacted participant)
-    // 2. mixed_thread_doc.pdf from Thread 3 (has previously contacted participant)
-    // 3. also_included_doc.docx from Thread 3 (same thread as #2)
-    assert_eq!(res.len(), 3);
-
-    // Check that the correct attachments are returned
     let filenames: Vec<&str> = res
         .iter()
-        .map(|a| a.filename.as_ref().map(|s| s.as_str()).unwrap())
+        .map(|attachment| attachment.filename.as_deref().unwrap())
         .collect();
-    assert!(filenames.contains(&"valid_document.pdf"));
-    assert!(filenames.contains(&"mixed_thread_doc.pdf"));
-    assert!(filenames.contains(&"also_included_doc.docx"));
+    assert_eq!(
+        filenames,
+        vec![
+            "also_included_doc.docx",
+            "mixed_thread_doc.pdf",
+            "valid_document.pdf"
+        ]
+    );
 
-    // Verify excluded_document.pdf is NOT included (from thread with no contacted participants)
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_excludes_ineligible_and_filtered_attachments(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+    let filenames: Vec<&str> = res
+        .iter()
+        .filter_map(|attachment| attachment.filename.as_deref())
+        .collect();
+
     assert!(!filenames.contains(&"excluded_document.pdf"));
+    assert!(!filenames.contains(&"self_only.pdf"));
+    assert!(!filenames.contains(&"filtered_image.jpg"));
+    assert_eq!(res.len(), 3);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_allows_missing_self_contact(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000002a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename.as_deref(), Some("missing_self_contact.pdf"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_job_attachments_for_backfill")
+    )
+)]
+async fn job_attachments_for_backfill_does_not_leak_other_links(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let res = fetch_job_attachments_for_backfill(&pool, link_id).await?;
+
+    assert!(
+        res.iter()
+            .all(|attachment| attachment.filename.as_deref() != Some("other_link_document.pdf"))
+    );
 
     Ok(())
 }
@@ -204,6 +368,34 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
         scripts("fetch_insertable_attachments_for_new_email")
     )
 )]
+async fn insertable_attachments_require_important_label(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    remove_message_labels(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-0000000e0201")?,
+    )
+    .await?;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-201",
+    )
+    .await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
 async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
@@ -221,6 +413,56 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
     assert_eq!(res[0].filename, Some("same_domain_doc.pdf".to_string()));
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-301");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_rejects_domain_suffix(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-901",
+    )
+    .await?;
+
+    assert!(res.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_matches_domain_case_insensitively(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-1001",
+    )
+    .await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(
+        res[0].filename,
+        Some("mixed_case_domain_doc.pdf".to_string())
+    );
 
     Ok(())
 }
@@ -263,12 +505,11 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
         scripts("fetch_insertable_attachments_for_new_email")
     )
 )]
-async fn insertable_attachments_condition_5_previously_contacted(
+async fn insertable_attachments_condition_5_contacted_participant_claims(
     pool: Pool<Postgres>,
 ) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test condition 4: user has previously contacted a thread participant
     let message_provider_id = "target-msg-401";
     let res = new_email_document_atts(
         &pool,
@@ -277,8 +518,6 @@ async fn insertable_attachments_condition_5_previously_contacted(
     )
     .await?;
 
-    // Should return 1 attachment (previously_contacted_doc.pdf)
-    // This should be found by the second query (condition 4)
     assert_eq!(res.len(), 1);
     assert_eq!(
         res[0].filename,
@@ -287,12 +526,26 @@ async fn insertable_attachments_condition_5_previously_contacted(
     assert_eq!(res[0].mime_type, "application/pdf");
     assert_eq!(res[0].email_provider_id, "target-msg-401");
 
-    let second_res = new_email_document_atts(
-        &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
     )
-    .await?;
+)]
+async fn insertable_attachments_condition_5_repeated_invocation_does_not_reclaim(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?;
+    let first_res = new_email_document_atts(&pool, link_id, "target-msg-401").await?;
+    let second_res = new_email_document_atts(&pool, link_id, "target-msg-401").await?;
+
+    assert_eq!(first_res.len(), 1);
     assert!(second_res.is_empty());
 
     Ok(())
@@ -305,20 +558,82 @@ async fn insertable_attachments_condition_5_previously_contacted(
         scripts("fetch_insertable_attachments_for_new_email")
     )
 )]
-async fn insertable_attachments_no_conditions_met(pool: Pool<Postgres>) -> Result<()> {
+async fn insertable_attachments_condition_5_never_contacted_participant_does_not_claim(
+    pool: Pool<Postgres>,
+) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test control case: no conditions met
-    let message_provider_id = "target-msg-601";
     let res = new_email_document_atts(
         &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-601",
     )
     .await?;
 
-    // Should return 0 attachments
-    assert_eq!(res.len(), 0);
+    assert!(res.is_empty());
+    assert!(
+        !attachment_is_claimed(
+            &pool,
+            Uuid::parse_str("00000000-0000-0000-0000-0000006a0601")?
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_condition_5_self_is_only_contacted_participant(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "target-msg-1101",
+    )
+    .await?;
+
+    assert!(res.is_empty());
+    assert!(
+        !attachment_is_claimed(
+            &pool,
+            Uuid::parse_str("00000000-0000-0000-0000-000000aa1101")?
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_insertable_attachments_for_new_email")
+    )
+)]
+async fn insertable_attachments_condition_5_missing_self_contact_allows_contacted_participant(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let res = new_email_document_atts(
+        &pool,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000002a")?,
+        "target-msg-1301",
+    )
+    .await?;
+
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename.as_deref(), Some("missing_self_contact.pdf"));
 
     Ok(())
 }
@@ -393,21 +708,46 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 async fn insertable_attachments_thread_exists_logic(pool: Pool<Postgres>) -> Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-    // Test that attachments are returned when ANY message in the thread meets conditions
-    // Even if the specific target message doesn't meet the condition itself
+    let target_message_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0202")?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (
+            id, provider_id, thread_id, link_id, from_contact_id, internal_date_ts
+        )
+        VALUES (
+            $1,
+            'other-msg-202',
+            '00000000-0000-0000-0000-000000000102',
+            '00000000-0000-0000-0000-00000000001a',
+            '00000000-0000-0000-0000-0000000c0002',
+            NOW()
+        )
+        "#,
+        target_message_id
+    )
+    .execute(&pool)
+    .await?;
 
-    // target-msg-202 is in Thread 2, which contains target-msg-201 with IMPORTANT label
-    let message_provider_id = "other-msg-202";
+    sqlx::query!(
+        r#"
+        UPDATE email_attachments
+        SET message_id = $1
+        WHERE message_id = '00000000-0000-0000-0000-0000000e0201'
+        "#,
+        target_message_id
+    )
+    .execute(&pool)
+    .await?;
+
     let res = new_email_document_atts(
         &pool,
-        Uuid::parse_str("00000000-0000-0000-0000-00000000001a").unwrap(),
-        message_provider_id,
+        Uuid::parse_str("00000000-0000-0000-0000-00000000001a")?,
+        "other-msg-202",
     )
     .await?;
 
-    // Should return 0 because other-msg-202 has no attachments
-    // But the EXISTS clause should still evaluate to true due to target-msg-201 having IMPORTANT
-    assert_eq!(res.len(), 0);
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename, Some("important_doc.pdf".to_string()));
 
     Ok(())
 }

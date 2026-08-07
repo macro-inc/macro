@@ -48,3 +48,4 @@ jobs:
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}

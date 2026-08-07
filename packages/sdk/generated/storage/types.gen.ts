@@ -5103,6 +5103,31 @@ export type GithubPullRequestComment = {
      */
     id: number;
     /**
+     * The id of the comment this one replies to, when it is part of a review
+     * thread. Only ever present on `review_comment` sources.
+     */
+    inReplyToId?: number | null;
+    /**
+     * The line in the current diff the comment is anchored to. Cleared by
+     * GitHub when later commits outdate the comment's diff.
+     */
+    line?: number | null;
+    /**
+     * The line the comment was originally anchored to, kept even when the
+     * diff has since changed.
+     */
+    originalLine?: number | null;
+    /**
+     * The repository-relative file path the review comment is anchored to.
+     * Only ever present on `review_comment` sources.
+     */
+    path?: string | null;
+    /**
+     * The id of the pull request review this comment was submitted with.
+     * Only ever present on `review_comment` sources.
+     */
+    pullRequestReviewId?: number | null;
+    /**
      * The GitHub source for the comment, such as `issue_comment` or `review_comment`.
      */
     source: string;

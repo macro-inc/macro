@@ -18536,6 +18536,34 @@
             "description": "The unique GitHub identifier for the comment or review.",
             "minimum": 0
           },
+          "inReplyToId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The id of the comment this one replies to, when it is part of a review\nthread. Only ever present on `review_comment` sources.",
+            "minimum": 0
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The line in the current diff the comment is anchored to. Cleared by\nGitHub when later commits outdate the comment's diff.",
+            "minimum": 0
+          },
+          "originalLine": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The line the comment was originally anchored to, kept even when the\ndiff has since changed.",
+            "minimum": 0
+          },
+          "path": {
+            "type": ["string", "null"],
+            "description": "The repository-relative file path the review comment is anchored to.\nOnly ever present on `review_comment` sources."
+          },
+          "pullRequestReviewId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.",
+            "minimum": 0
+          },
           "source": {
             "type": "string",
             "description": "The GitHub source for the comment, such as `issue_comment` or `review_comment`."

@@ -29,6 +29,12 @@ export function CalendarSetupStatus() {
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
 
+  const hasEvents = () =>
+    (calendarPager.activeData()?.events().length ?? 0) > 0;
+
+  // Existing events are not evidence that setup is complete: a revoked grant
+  // or delegated inbox can leave events visible without a working calendar
+  // connection belonging to the current user.
   const setupState = createMemo<
     'connect' | 'permission' | 'reauth' | undefined
   >(() => {
@@ -36,11 +42,7 @@ export function CalendarSetupStatus() {
     const range = activeData?.range();
     if (range && !isCalendarRangeSupported(range)) return undefined;
 
-    if (
-      !linksQuery.isSuccess ||
-      !activeData?.occurrencesQuery.isSuccess ||
-      activeData.events().length > 0
-    ) {
+    if (!linksQuery.isSuccess || !activeData?.occurrencesQuery.isSuccess) {
       return undefined;
     }
 
@@ -68,25 +70,42 @@ export function CalendarSetupStatus() {
 
   return (
     <Show when={setupState() !== undefined}>
-      <div
-        class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
-        aria-live="polite"
-      >
-        <div class="flex max-w-sm flex-col items-center gap-3">
-          <div class="text-sm font-semibold text-ink">
-            {setupMessage().title}
+      <Show
+        when={!hasEvents()}
+        fallback={
+          <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
+            <span>{setupMessage().title}</span>
+            <Button
+              variant="active"
+              size="sm"
+              label={setupMessage().action}
+              onClick={() => void startAddInbox()}
+            >
+              {setupMessage().action}
+            </Button>
           </div>
-          <p class="text-xs text-ink-muted">{setupMessage().description}</p>
-          <Button
-            variant="active"
-            size="sm"
-            label={setupMessage().action}
-            onClick={() => void startAddInbox()}
-          >
-            {setupMessage().action}
-          </Button>
+        }
+      >
+        <div
+          class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
+          aria-live="polite"
+        >
+          <div class="flex max-w-sm flex-col items-center gap-3">
+            <div class="text-sm font-semibold text-ink">
+              {setupMessage().title}
+            </div>
+            <p class="text-xs text-ink-muted">{setupMessage().description}</p>
+            <Button
+              variant="active"
+              size="sm"
+              label={setupMessage().action}
+              onClick={() => void startAddInbox()}
+            >
+              {setupMessage().action}
+            </Button>
+          </div>
         </div>
-      </div>
+      </Show>
     </Show>
   );
 }

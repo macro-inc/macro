@@ -6395,6 +6395,14 @@ export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMi
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemInReplyToIdMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemLineMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemOriginalLineMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemPullRequestReviewIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
@@ -6493,6 +6501,48 @@ export const getDocumentGithubPullRequestsResponse = zod
                       )
                       .describe(
                         'The unique GitHub identifier for the comment or review.'
+                      ),
+                    inReplyToId: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemInReplyToIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The id of the comment this one replies to, when it is part of a review\nthread. Only ever present on `review_comment` sources.'
+                      ),
+                    line: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemLineMin
+                      )
+                      .nullish()
+                      .describe(
+                        "The line in the current diff the comment is anchored to. Cleared by\nGitHub when later commits outdate the comment's diff."
+                      ),
+                    originalLine: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemOriginalLineMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The line the comment was originally anchored to, kept even when the\ndiff has since changed.'
+                      ),
+                    path: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The repository-relative file path the review comment is anchored to.\nOnly ever present on `review_comment` sources.'
+                      ),
+                    pullRequestReviewId: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemPullRequestReviewIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.'
                       ),
                     source: zod
                       .string()

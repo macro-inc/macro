@@ -135,6 +135,10 @@
         "pulumi-fusionauth": "6.0.2",
       },
     },
+    "stacks/gateway": {
+      "name": "gateway-stack",
+      "version": "0.0.0",
+    },
     "stacks/github-runners": {
       "name": "github-runners-stack",
       "version": "0.0.0",
@@ -572,6 +576,8 @@
     "fusion-auth": ["fusion-auth@workspace:stacks/fusion-auth"],
 
     "fusionauth-instance-stack": ["fusionauth-instance-stack@workspace:stacks/fusionauth-instance"],
+
+    "gateway-stack": ["gateway-stack@workspace:stacks/gateway"],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 

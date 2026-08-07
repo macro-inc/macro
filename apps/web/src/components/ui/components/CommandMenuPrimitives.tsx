@@ -4,6 +4,7 @@ import {
   createEffect,
   createSelector,
   createSignal,
+  For,
   type JSX,
   type ParentProps,
   type Setter,
@@ -170,6 +171,89 @@ export const CommandMenuShell = Object.assign(CommandMenuShellRoot, {
   Footer: CommandMenuFooter,
 });
 
+export function CommandMenuList<T>(props: {
+  items: readonly T[];
+  selectedIndex: number;
+  scrollSelectedIntoView?: boolean;
+  class?: string;
+  itemId?: (item: T, index: number) => string;
+  itemDisabled?: (item: T, index: number) => boolean;
+  beforeItem?: (item: T, index: number) => JSX.Element;
+  onSelect: (item: T, index: number, event: MouseEvent) => void;
+  onItemMouseMove?: (index: number, item: T) => void;
+  children: (item: T, index: Accessor<number>) => JSX.Element;
+}) {
+  let listRef: HTMLDivElement | undefined;
+  let lastMousePosition: { x: number; y: number } | undefined;
+  let suppressPointerSelectionUntil = 0;
+
+  const isSelected = createSelector(() => props.selectedIndex);
+
+  const itemId = (item: T, index: number) =>
+    props.itemId?.(item, index) ?? `command-menu-list-item-${index}`;
+
+  createEffect(() => {
+    const index = props.selectedIndex;
+    const item = props.items[index];
+
+    if (!props.scrollSelectedIntoView || !listRef || !item) return;
+
+    suppressPointerSelectionUntil = performance.now() + 250;
+    const elem = document.getElementById(itemId(item, index));
+    elem?.scrollIntoView({ block: 'nearest' });
+  });
+
+  const handleMouseMove = (event: MouseEvent, item: T, index: number) => {
+    const mousePosition = { x: event.clientX, y: event.clientY };
+    const isFirstMouseMove = lastMousePosition === undefined;
+    const moved =
+      lastMousePosition !== undefined &&
+      (lastMousePosition.x !== mousePosition.x ||
+        lastMousePosition.y !== mousePosition.y);
+
+    lastMousePosition = mousePosition;
+
+    if (performance.now() < suppressPointerSelectionUntil) return;
+
+    if (moved || isFirstMouseMove) {
+      props.onItemMouseMove?.(index, item);
+    }
+  };
+
+  return (
+    <div
+      ref={listRef}
+      role="listbox"
+      class={cn(
+        'max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2',
+        props.class
+      )}
+      onScroll={() => {
+        suppressPointerSelectionUntil = performance.now() + 120;
+      }}
+    >
+      <For each={props.items}>
+        {(item, index) => (
+          <>
+            {props.beforeItem?.(item, index())}
+            <CommandMenuListItem
+              as="div"
+              id={itemId(item, index())}
+              selected={isSelected(index())}
+              disabled={props.itemDisabled?.(item, index())}
+              class="scroll-m-2"
+              onClick={(event) => props.onSelect(item, index(), event)}
+              onMouseMove={(event) => handleMouseMove(event, item, index())}
+            >
+              {props.children(item, index)}
+            </CommandMenuListItem>
+          </>
+        )}
+      </For>
+    </div>
+  );
+}
+
 export function CommandMenuSearchInput(
   props: JSX.InputHTMLAttributes<HTMLInputElement>
 ) {
@@ -202,9 +286,11 @@ export function CommandMenuListItem(
       component={props.as ?? 'button'}
       type={props.as === 'div' ? undefined : 'button'}
       id={props.id}
-      disabled={props.disabled}
+      disabled={props.as === 'div' ? undefined : props.disabled}
+      aria-disabled={props.disabled || undefined}
       class={cn(
         'rounded-md group w-full flex items-center h-10 px-2 gap-2 text-sm font-semibold relative scroll-m-1 text-left disabled:opacity-50 disabled:pointer-events-none',
+        props.disabled && 'opacity-50 pointer-events-none',
         props.selected && 'bg-active',
         props.class
       )}

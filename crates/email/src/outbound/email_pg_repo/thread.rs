@@ -1,4 +1,4 @@
-use crate::domain::models::{MessageRow, ThreadRow};
+use crate::domain::models::{EmailThreadMetadata, MessageRow, ThreadRow};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -27,6 +27,31 @@ pub(super) async fn thread_by_id(
     .await?;
 
     Ok(row.map(ThreadRow::from))
+}
+
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn thread_metadata_by_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<EmailThreadMetadata>, sqlx::Error> {
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    sqlx::query_as!(
+        EmailThreadMetadata,
+        r#"
+        SELECT
+            id AS "thread_id!",
+            link_id,
+            latest_inbound_message_ts
+        FROM email_threads
+        WHERE id = ANY($1)
+        "#,
+        thread_ids,
+    )
+    .fetch_all(pool)
+    .await
 }
 
 #[tracing::instrument(err, skip(pool))]

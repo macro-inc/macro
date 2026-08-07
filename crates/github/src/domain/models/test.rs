@@ -54,6 +54,11 @@ fn pull_request_comment() -> GithubPullRequestComment {
         created_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         updated_at: Some(utc_datetime("2026-05-25T19:00:00Z")),
         source: "issue_comment".to_string(),
+        in_reply_to_id: None,
+        pull_request_review_id: None,
+        path: None,
+        line: None,
+        original_line: None,
     }
 }
 
