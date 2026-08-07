@@ -69,6 +69,7 @@
 			"packages/lexical-core",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
+			"services/bots/stripe-payment-bot",
 			"services/lexical-service"
 		],
 		"catalog": {
