@@ -226,8 +226,6 @@ impl GmailClient {
         .await
     }
 
-    // Batch adds and removes Gmail labels from multiple messages
-    /// Returns a tuple of (successful_message_ids, failed_message_ids)
     /// Fetches a specific message from Gmail by its provider ID.
     /// Returns raw Gmail MessageResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token), err)]

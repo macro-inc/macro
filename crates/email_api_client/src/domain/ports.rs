@@ -220,7 +220,10 @@ pub trait MailboxBlocklistClient: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 }
 
-/// Complete provider repository assembled from the eight narrow capabilities.
+/// Provider repository assembled from the eight core mailbox capabilities.
+///
+/// [`MailboxCalendarClient`] is deliberately not part of this bound: calendar
+/// part discovery is optional and composed separately where needed.
 pub trait EmailApiClientRepository:
     MailboxSyncClient
     + MailboxSubscriptionClient

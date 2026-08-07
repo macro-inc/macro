@@ -12,11 +12,19 @@ use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
 
 /// Selects the shared provider quota budget used by a service instance.
+///
+/// `Live` and `Backfill` are two *thresholds over one shared Redis window*,
+/// not two counters: every operation charges the same per-user key, and the
+/// budget only decides the limit that charge is compared against. Splitting
+/// the Redis key per budget would let live + backfill together exceed Gmail's
+/// per-user quota — and would silently reset quota state already deployed
+/// under the shared key. Don't "fix" the key sharing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateBudget {
-    /// The normal budget used by interactive and incremental operations.
+    /// The normal threshold used by interactive and incremental operations.
     Live,
-    /// The lower budget reserved for mailbox backfills.
+    /// The lower threshold reserved for mailbox backfills, leaving headroom
+    /// for live operations while a backfill runs.
     Backfill,
 }
 
