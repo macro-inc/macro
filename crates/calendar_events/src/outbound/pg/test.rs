@@ -2241,6 +2241,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         r#"
         SELECT
             (SELECT title FROM calendar_events WHERE id = $1) AS "title!",
+            (SELECT calendar_id FROM calendar_event_sources WHERE event_id = $1) AS "calendar_id",
             (SELECT count(*) FROM calendar_event_sources WHERE event_id = $1) AS "sources!"
         "#,
         event_id,
@@ -2249,8 +2250,8 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     .await
     .unwrap();
     assert_eq!(
-        (row.title.as_str(), row.sources),
-        ("Team copy", 1),
+        (row.title.as_str(), row.calendar_id, row.sources),
+        ("Team copy", Some(secondary_id), 1),
         "the surviving calendar's copy is promoted back to canonical"
     );
 

@@ -687,7 +687,11 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN LATERAL (
                 SELECT source.calendar_id
                 FROM calendar_event_sources source
+                JOIN calendars calendar ON calendar.id = source.calendar_id
+                JOIN calendar_accounts account ON account.id = source.account_id
                 WHERE source.event_id = event.id
+                  AND NOT calendar.is_deleted
+                  AND account.sync_status <> 'disabled'
                 ORDER BY
                     source.source_sequence DESC,
                     source.source_updated_at DESC,
@@ -1169,7 +1173,7 @@ impl CalendarRepository for PgCalendarRepository {
                     OR EXISTS (
                         SELECT 1
                         FROM macro_user_links delegation
-                        WHERE delegation.link_id = account.email_link_id
+                        WHERE delegation.link_id = event.source_link_id
                           AND delegation.primary_macro_id = $2
                     )
               )
