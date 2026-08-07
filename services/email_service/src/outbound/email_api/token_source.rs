@@ -62,7 +62,11 @@ impl ProviderTokenSource for EmailServiceTokenSource {
                 tracing::warn!(error=?error, %link_id, "Failed to load link for access-token acquisition");
             })
             .map_err(|_| transient_error("unable to load the linked mailbox"))?
-            .ok_or_else(|| transient_error("linked mailbox was not found"))?;
+            // A missing link is a deleted mailbox, not an infrastructure blip:
+            // retrying would only redeliver the message until the DLQ.
+            .ok_or_else(|| TokenError::Permanent {
+                message: "linked mailbox was not found".to_string(),
+            })?;
 
         // The row was just read, so the health-clear UPDATE can be gated on
         // its needs_reauth value instead of running unconditionally per call.
