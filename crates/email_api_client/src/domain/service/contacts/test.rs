@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use models_email::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, block_on, call_log};
+use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -65,10 +65,10 @@ fn expected_error() -> EmailApiError {
     }
 }
 
-fn assert_call<F, E>(operation: ApiOperationKind, expected_repository_call: E, invoke: F)
+async fn assert_call<F, E>(operation: ApiOperationKind, expected_repository_call: E, invoke: F)
 where
     E: FnOnce(Uuid) -> ContactCall,
-    F: FnOnce(
+    F: AsyncFnOnce(
         &EmailApiClientServiceImpl<ContactsClient, FakeTokenSource, FakeRateLimiter>,
         Uuid,
     ) -> Result<(), EmailApiError>,
@@ -83,7 +83,7 @@ where
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    assert_eq!(invoke(&service, link_id), Err(expected_error()));
+    assert_eq!(invoke(&service, link_id).await, Err(expected_error()));
     assert_eq!(
         *repository_call.lock().unwrap(),
         Some(expected_repository_call(link_id))
@@ -97,27 +97,27 @@ where
     );
 }
 
-#[test]
-fn contact_reads_use_correct_operation_kinds_and_forward_sync_tokens() {
+#[tokio::test]
+async fn contact_reads_use_correct_operation_kinds_and_forward_sync_tokens() {
     assert_call(
         ApiOperationKind::ListContacts,
         ContactCall::SelfContact,
-        |service, link_id| block_on(service.get_self_contact(link_id)).map(|_| ()),
-    );
+        async |service, link_id| service.get_self_contact(link_id).await.map(|_| ()),
+    ).await;
 
     assert_call(
         ApiOperationKind::ListContacts,
         |link_id| ContactCall::Contacts(link_id, Some("primary-token".into())),
-        |service, link_id| {
-            block_on(service.list_contacts(link_id, Some("primary-token"))).map(|_| ())
+        async |service, link_id| {
+            service.list_contacts(link_id, Some("primary-token")).await.map(|_| ())
         },
-    );
+    ).await;
 
     assert_call(
         ApiOperationKind::ListContacts,
         |link_id| ContactCall::OtherContacts(link_id, Some("other-token".into())),
-        |service, link_id| {
-            block_on(service.list_other_contacts(link_id, Some("other-token"))).map(|_| ())
+        async |service, link_id| {
+            service.list_other_contacts(link_id, Some("other-token")).await.map(|_| ())
         },
-    );
+    ).await;
 }

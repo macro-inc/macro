@@ -52,3 +52,6 @@ impl ChangeBatch {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -1,6 +1,4 @@
-use std::future::Future;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Wake, Waker};
 
 use models_email::email::service::label::Label;
 use models_email::email::service::message::Message;
@@ -29,25 +27,6 @@ pub(super) type CallLog = Arc<Mutex<Vec<Call>>>;
 
 pub(super) fn call_log() -> CallLog {
     Arc::new(Mutex::new(Vec::new()))
-}
-
-struct NoopWaker;
-
-impl Wake for NoopWaker {
-    fn wake(self: Arc<Self>) {}
-}
-
-pub(super) fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Waker::from(Arc::new(NoopWaker));
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
 }
 
 #[derive(Clone)]

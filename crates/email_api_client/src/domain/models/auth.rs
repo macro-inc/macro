@@ -64,3 +64,6 @@ pub enum TokenError {
         message: String,
     },
 }
+
+#[cfg(test)]
+mod test;

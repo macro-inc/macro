@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use models_email::email::service::label::Label;
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, block_on, call_log};
+use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -50,8 +50,8 @@ fn expected_error() -> EmailApiError {
     }
 }
 
-#[test]
-fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
+#[tokio::test]
+async fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     let calls = call_log();
     let repository = LabelClient::default();
     let arguments = repository.arguments.clone();
@@ -63,7 +63,7 @@ fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     );
 
     assert!(matches!(
-        block_on(service.list_labels(link_id)),
+        service.list_labels(link_id).await,
         Err(error) if error == expected_error()
     ));
     assert_eq!(*arguments.lock().unwrap(), Some(("token".into(), link_id)));
@@ -76,8 +76,8 @@ fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     );
 }
 
-#[test]
-fn create_label_uses_create_quota_and_forwards_name() {
+#[tokio::test]
+async fn create_label_uses_create_quota_and_forwards_name() {
     let calls = call_log();
     let repository = LabelClient::default();
     let created_label_name = repository.created_label_name.clone();
@@ -89,7 +89,7 @@ fn create_label_uses_create_quota_and_forwards_name() {
     );
 
     assert!(matches!(
-        block_on(service.create_label(link_id, "Projects")),
+        service.create_label(link_id, "Projects").await,
         Err(error) if error == expected_error()
     ));
     assert_eq!(*created_label_name.lock().unwrap(), Some("Projects".into()));
@@ -102,8 +102,8 @@ fn create_label_uses_create_quota_and_forwards_name() {
     );
 }
 
-#[test]
-fn delete_label_uses_delete_quota_and_forwards_provider_id() {
+#[tokio::test]
+async fn delete_label_uses_delete_quota_and_forwards_provider_id() {
     let calls = call_log();
     let repository = LabelClient::default();
     let deleted_label_id = repository.deleted_label_id.clone();
@@ -115,7 +115,7 @@ fn delete_label_uses_delete_quota_and_forwards_provider_id() {
     );
 
     assert_eq!(
-        block_on(service.delete_label(link_id, "label")),
+        service.delete_label(link_id, "label").await,
         Err(expected_error())
     );
     assert_eq!(*deleted_label_id.lock().unwrap(), Some("label".into()));

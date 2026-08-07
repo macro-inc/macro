@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::sync::Arc;
-use std::task::{Context, Poll, Wake, Waker};
 
 use uuid::Uuid;
 
@@ -47,8 +44,8 @@ impl BlocklistClient {
     }
 }
 
-#[test]
-fn blocklist_methods_use_their_matching_costs_and_operations() {
+#[tokio::test]
+async fn blocklist_methods_use_their_matching_costs_and_operations() {
     for (operation, repository_call) in [
         (super::ApiOperationKind::BlockSender, "block_sender"),
         (super::ApiOperationKind::UnblockSender, "unblock_sender"),
@@ -62,14 +59,14 @@ fn blocklist_methods_use_their_matching_costs_and_operations() {
 
         match operation {
             super::ApiOperationKind::BlockSender => {
-                block_on(service.block_sender(Uuid::nil(), "blocked@example.com")).unwrap()
+                service.block_sender(Uuid::nil(), "blocked@example.com").await.unwrap()
             }
             super::ApiOperationKind::UnblockSender => {
-                block_on(service.unblock_sender(Uuid::nil(), "blocked@example.com")).unwrap()
+                service.unblock_sender(Uuid::nil(), "blocked@example.com").await.unwrap()
             }
             super::ApiOperationKind::ListBlockedSenders => {
                 assert_eq!(
-                    block_on(service.list_blocked_senders(Uuid::nil())).unwrap(),
+                    service.list_blocked_senders(Uuid::nil()).await.unwrap(),
                     vec!["blocked@example.com"]
                 );
             }
@@ -99,20 +96,3 @@ fn service(
     )
 }
 
-struct NoopWaker;
-
-impl Wake for NoopWaker {
-    fn wake(self: Arc<Self>) {}
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Waker::from(Arc::new(NoopWaker));
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}

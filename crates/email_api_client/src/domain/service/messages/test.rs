@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use models_email::email::service::message::Message;
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, block_on, call_log};
+use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -134,10 +134,10 @@ fn expected_error() -> EmailApiError {
     }
 }
 
-fn assert_call<F, E>(operation: ApiOperationKind, expected_repository_call: E, invoke: F)
+async fn assert_call<F, E>(operation: ApiOperationKind, expected_repository_call: E, invoke: F)
 where
     E: FnOnce(Uuid) -> MessageCall,
-    F: FnOnce(
+    F: AsyncFnOnce(
         &EmailApiClientServiceImpl<MessageClient, FakeTokenSource, FakeRateLimiter>,
         Uuid,
     ) -> Result<(), EmailApiError>,
@@ -152,7 +152,7 @@ where
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    assert_eq!(invoke(&service, link_id), Err(expected_error()));
+    assert_eq!(invoke(&service, link_id).await, Err(expected_error()));
     assert_eq!(
         *repository_call.lock().unwrap(),
         Some(expected_repository_call(link_id))
@@ -166,37 +166,37 @@ where
     );
 }
 
-#[test]
-fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
+#[tokio::test]
+async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
     assert_call(
         ApiOperationKind::GetMessage,
         |link_id| MessageCall::Message(link_id, "message".into()),
-        |service, link_id| block_on(service.get_message(link_id, "message")).map(|_| ()),
-    );
+        async |service, link_id| service.get_message(link_id, "message").await.map(|_| ()),
+    ).await;
     assert_call(
         ApiOperationKind::GetMessage,
         |_| MessageCall::MessageLabels("message".into()),
-        |service, link_id| block_on(service.get_message_label_ids(link_id, "message")).map(|_| ()),
-    );
+        async |service, link_id| service.get_message_label_ids(link_id, "message").await.map(|_| ()),
+    ).await;
     assert_call(
         ApiOperationKind::ListMessages,
         |_| MessageCall::Messages(25, vec!["inbox".into(), "unread".into()]),
-        |service, link_id| {
-            block_on(service.list_messages(link_id, 25, &["inbox", "unread"])).map(|_| ())
+        async |service, link_id| {
+            service.list_messages(link_id, 25, &["inbox", "unread"]).await.map(|_| ())
         },
-    );
+    ).await;
     assert_call(
         ApiOperationKind::GetThread,
         |_| MessageCall::MessageIdsForThread("thread".into()),
-        |service, link_id| {
-            block_on(service.get_message_ids_for_thread(link_id, "thread")).map(|_| ())
+        async |service, link_id| {
+            service.get_message_ids_for_thread(link_id, "thread").await.map(|_| ())
         },
-    );
+    ).await;
     assert_call(
         ApiOperationKind::GetThread,
         |link_id| MessageCall::Thread(link_id, "thread".into()),
-        |service, link_id| block_on(service.get_thread(link_id, "thread")).map(|_| ()),
-    );
+        async |service, link_id| service.get_thread(link_id, "thread").await.map(|_| ()),
+    ).await;
     assert_call(
         ApiOperationKind::ListThreads,
         |_| {
@@ -206,11 +206,11 @@ fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
                 vec!["inbox".into(), "starred".into()],
             )
         },
-        |service, link_id| {
-            block_on(service.list_threads(link_id, 50, Some("next-page"), &["inbox", "starred"]))
+        async |service, link_id| {
+            service.list_threads(link_id, 50, Some("next-page"), &["inbox", "starred"]).await
                 .map(|_| ())
         },
-    );
+    ).await;
     assert_call(
         ApiOperationKind::ModifyMessageLabels,
         |_| {
@@ -220,13 +220,13 @@ fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
                 vec!["unread".into()],
             )
         },
-        |service, link_id| {
-            block_on(service.modify_message_labels(
+        async |service, link_id| {
+            service.modify_message_labels(
                 link_id,
                 "message",
                 &["starred".into()],
                 &["unread".into()],
-            ))
+            ).await
         },
-    );
+    ).await;
 }

@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::sync::Arc;
-use std::task::{Context, Poll, Wake, Waker};
 
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message::MessageToSend;
@@ -37,8 +34,8 @@ impl MailboxSendClient for SendClient {
     }
 }
 
-#[test]
-fn send_uses_send_cost_and_returns_ids_without_mutating_message() {
+#[tokio::test]
+async fn send_uses_send_cost_and_returns_ids_without_mutating_message() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         SendClient {
@@ -49,7 +46,7 @@ fn send_uses_send_cost_and_returns_ids_without_mutating_message() {
     );
     let request = send_request();
 
-    let sent_ids = block_on(service.send_message(Uuid::nil(), &request, Some("thread-1"))).unwrap();
+    let sent_ids = service.send_message(Uuid::nil(), &request, Some("thread-1")).await.unwrap();
 
     assert_eq!(sent_ids.provider_message_id, "message-1");
     assert_eq!(sent_ids.provider_thread_id, "thread-1");
@@ -96,20 +93,3 @@ fn send_request() -> SendRequest {
     }
 }
 
-struct NoopWaker;
-
-impl Wake for NoopWaker {
-    fn wake(self: Arc<Self>) {}
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Waker::from(Arc::new(NoopWaker));
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}

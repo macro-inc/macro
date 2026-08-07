@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::sync::Arc;
-use std::task::{Context, Poll, Wake, Waker};
 use std::time::Duration;
 
 use uuid::Uuid;
@@ -11,27 +8,9 @@ use super::super::models::{
 use super::EmailApiClientServiceImpl;
 use super::test_support::{Call, FakeRateLimiter, FakeRepository, FakeTokenSource, call_log};
 
-struct NoopWaker;
 
-impl Wake for NoopWaker {
-    fn wake(self: Arc<Self>) {}
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Waker::from(Arc::new(NoopWaker));
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
-#[test]
-fn token_failure_stops_before_repository_after_the_quota_check() {
+#[tokio::test]
+async fn token_failure_stops_before_repository_after_the_quota_check() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
@@ -39,7 +18,7 @@ fn token_failure_stops_before_repository_after_the_quota_check() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = block_on(service.prepare(Uuid::nil(), ApiOperationKind::GetMessage));
+    let result = service.prepare(Uuid::nil(), ApiOperationKind::GetMessage).await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));
     assert_eq!(
@@ -51,8 +30,8 @@ fn token_failure_stops_before_repository_after_the_quota_check() {
     );
 }
 
-#[test]
-fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
+#[tokio::test]
+async fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
     let calls = call_log();
     let retry_after = Duration::from_secs(17);
     let service = EmailApiClientServiceImpl::new(
@@ -61,7 +40,7 @@ fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
         FakeRateLimiter::new(calls.clone(), Err(RateLimitRefusal::new(Some(retry_after)))),
     );
 
-    let result = block_on(service.prepare(Uuid::nil(), ApiOperationKind::SendMessage));
+    let result = service.prepare(Uuid::nil(), ApiOperationKind::SendMessage).await;
 
     assert_eq!(
         result,
@@ -78,8 +57,8 @@ fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
     );
 }
 
-#[test]
-fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
+#[tokio::test]
+async fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
@@ -87,7 +66,7 @@ fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = block_on(service.get_access_token(Uuid::nil(), TokenFreshness::Fresh));
+    let result = service.get_access_token(Uuid::nil(), TokenFreshness::Fresh).await;
 
     assert_eq!(result.unwrap().expose_secret(), "access-token");
     assert_eq!(
@@ -96,8 +75,8 @@ fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
     );
 }
 
-#[test]
-fn token_errors_preserve_transient_and_permanent_classification() {
+#[tokio::test]
+async fn token_errors_preserve_transient_and_permanent_classification() {
     for (token_error, expected) in [
         (
             TokenError::Transient {
@@ -124,7 +103,7 @@ fn token_errors_preserve_transient_and_permanent_classification() {
         );
 
         assert_eq!(
-            block_on(service.get_access_token(Uuid::nil(), TokenFreshness::Cached)),
+            service.get_access_token(Uuid::nil(), TokenFreshness::Cached).await,
             Err(expected)
         );
     }

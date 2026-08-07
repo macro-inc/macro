@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, block_on, call_log};
+use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -27,8 +27,8 @@ impl MailboxAttachmentClient for AttachmentClient {
     }
 }
 
-#[test]
-fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
+#[tokio::test]
+async fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
     let calls = call_log();
     let repository = AttachmentClient::default();
     let arguments = repository.arguments.clone();
@@ -39,7 +39,7 @@ fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
         FakeRateLimiter::new(calls.clone(), Ok(())),
     );
 
-    let result = block_on(service.get_attachment(link_id, "message", "attachment"));
+    let result = service.get_attachment(link_id, "message", "attachment").await;
 
     assert_eq!(result.unwrap(), vec![1, 2, 3]);
     assert_eq!(

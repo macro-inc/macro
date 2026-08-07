@@ -84,3 +84,6 @@ impl From<RateLimitRefusal> for EmailApiError {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

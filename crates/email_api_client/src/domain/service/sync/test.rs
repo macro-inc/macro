@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, block_on, call_log};
+use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, InboxChanges, TokenFreshness};
 
@@ -42,13 +42,13 @@ fn service(
     )
 }
 
-#[test]
-fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
+#[tokio::test]
+async fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
     let calls = call_log();
     let link_id = Uuid::new_v4();
 
     assert_eq!(
-        block_on(service(SyncClient::default(), &calls).get_thread_count(link_id)),
+        service(SyncClient::default(), &calls).get_thread_count(link_id).await,
         Ok(42)
     );
     assert_eq!(
@@ -60,15 +60,15 @@ fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
     );
 }
 
-#[test]
-fn list_changes_uses_changes_quota_and_forwards_cursor() {
+#[tokio::test]
+async fn list_changes_uses_changes_quota_and_forwards_cursor() {
     let calls = call_log();
     let repository = SyncClient::default();
     let captured_cursor = repository.cursor.clone();
     let link_id = Uuid::new_v4();
     let cursor = SyncCursor::gmail("cursor");
 
-    let result = block_on(service(repository, &calls).list_changes(link_id, &cursor));
+    let result = service(repository, &calls).list_changes(link_id, &cursor).await;
 
     assert_eq!(result.unwrap().next_cursor, SyncCursor::gmail("next"));
     assert_eq!(*captured_cursor.lock().unwrap(), Some("cursor".into()));

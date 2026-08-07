@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::sync::Arc;
-use std::task::{Context, Poll, Wake, Waker};
 
 use chrono::{TimeZone, Utc};
 use models_email::service::link::{Link, UserProvider};
@@ -39,8 +36,8 @@ impl SubscriptionClient {
     }
 }
 
-#[test]
-fn registration_and_stop_use_matching_costs_and_operations() {
+#[tokio::test]
+async fn registration_and_stop_use_matching_costs_and_operations() {
     for (register, operation, repository_call) in [
         (true, super::ApiOperationKind::Subscribe, "subscribe"),
         (false, super::ApiOperationKind::Unsubscribe, "unsubscribe"),
@@ -49,10 +46,10 @@ fn registration_and_stop_use_matching_costs_and_operations() {
         let service = service(calls.clone());
 
         if register {
-            let subscription = block_on(service.register_subscription(Uuid::nil())).unwrap();
+            let subscription = service.register_subscription(Uuid::nil()).await.unwrap();
             assert_eq!(subscription.cursor, SyncCursor::gmail("cursor-1"));
         } else {
-            block_on(service.stop_subscription(Uuid::nil())).unwrap();
+            service.stop_subscription(Uuid::nil()).await.unwrap();
         }
 
         assert_eq!(
@@ -66,12 +63,12 @@ fn registration_and_stop_use_matching_costs_and_operations() {
     }
 }
 
-#[test]
-fn registration_can_bypass_the_token_cache_for_initialization() {
+#[tokio::test]
+async fn registration_can_bypass_the_token_cache_for_initialization() {
     let calls = call_log();
     let service = service(calls.clone());
 
-    block_on(service.register_subscription_without_cache(&link())).unwrap();
+    service.register_subscription_without_cache(&link()).await.unwrap();
 
     assert_eq!(
         *calls.lock().unwrap(),
@@ -83,12 +80,12 @@ fn registration_can_bypass_the_token_cache_for_initialization() {
     );
 }
 
-#[test]
-fn teardown_stop_uses_the_health_neutral_token_path() {
+#[tokio::test]
+async fn teardown_stop_uses_the_health_neutral_token_path() {
     let calls = call_log();
     let service = service(calls.clone());
 
-    block_on(service.stop_subscription_for_link(&link())).unwrap();
+    service.stop_subscription_for_link(&link()).await.unwrap();
 
     assert_eq!(
         *calls.lock().unwrap(),
@@ -128,20 +125,3 @@ fn service(
     )
 }
 
-struct NoopWaker;
-
-impl Wake for NoopWaker {
-    fn wake(self: Arc<Self>) {}
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Waker::from(Arc::new(NoopWaker));
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}

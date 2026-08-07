@@ -4,7 +4,6 @@ use models_email::email::service::message::MessageToSend;
 use uuid::Uuid;
 
 use super::SendRequest;
-use crate::domain::models::{AccessToken, EmailApiError, RateLimitOrigin, SyncCursor};
 
 fn contact(email: &str, name: &str) -> ContactInfo {
     ContactInfo {
@@ -12,46 +11,6 @@ fn contact(email: &str, name: &str) -> ContactInfo {
         name: Some(name.to_string()),
         photo_url: None,
     }
-}
-
-#[test]
-fn access_token_debug_output_is_redacted() {
-    let output = format!("{:?}", AccessToken::new("secret-token-value"));
-
-    assert_eq!(output, "AccessToken([REDACTED])");
-    assert!(!output.contains("secret-token-value"));
-}
-
-#[test]
-fn email_api_error_identifies_transient_failures() {
-    assert!(
-        EmailApiError::Transient {
-            message: "provider unavailable".to_string(),
-        }
-        .is_transient()
-    );
-    assert!(
-        EmailApiError::RateLimited {
-            retry_after: None,
-            origin: RateLimitOrigin::Local,
-        }
-        .is_transient()
-    );
-    assert!(
-        !EmailApiError::Permanent {
-            message: "invalid message".to_string(),
-        }
-        .is_transient()
-    );
-    assert!(!EmailApiError::OutdatedCursor.is_transient());
-}
-
-#[test]
-fn gmail_cursor_preserves_opaque_history_id() {
-    let cursor = SyncCursor::gmail("history-123");
-
-    assert_eq!(cursor, SyncCursor::Gmail("history-123".to_string()));
-    assert_eq!(cursor.as_str(), "history-123");
 }
 
 #[test]
