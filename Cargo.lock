@@ -6315,6 +6315,7 @@ name = "gmail_client"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "httpdate",
  "jsonwebtoken 10.3.0",
  "models_email",
  "regex",

@@ -67,6 +67,28 @@ async fn distinguishes_transport_decode_and_invalid_response_errors() {
 }
 
 #[test]
+fn retry_after_parses_delta_seconds_and_http_dates() {
+    assert_eq!(parse_retry_after("37"), Some(Duration::from_secs(37)));
+    assert_eq!(parse_retry_after("  37  "), Some(Duration::from_secs(37)));
+
+    let future = std::time::SystemTime::now() + Duration::from_secs(120);
+    let parsed = parse_retry_after(&httpdate::fmt_http_date(future))
+        .expect("http-date form should parse");
+    assert!(
+        parsed <= Duration::from_secs(120) && parsed >= Duration::from_secs(110),
+        "expected roughly two minutes, got {parsed:?}"
+    );
+
+    // A date in the past clamps to zero instead of failing or underflowing.
+    assert_eq!(
+        parse_retry_after("Sun, 06 Nov 1994 08:49:37 GMT"),
+        Some(Duration::ZERO)
+    );
+
+    assert_eq!(parse_retry_after("not-a-date"), None);
+}
+
+#[test]
 fn sanitization_truncates_unicode_only_at_character_boundaries() {
     let body = format!("{} user@example.com", "界".repeat(400));
     let sanitized = sanitize_error_body(&body);

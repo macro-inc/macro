@@ -57,6 +57,7 @@ pub async fn handler(
             };
             (
                 status,
+                crate::api::email::provider_error::provider_error_headers(&e),
                 Json(ErrorResponse {
                     message: message.into(),
                 }),

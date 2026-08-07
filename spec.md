@@ -158,7 +158,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 ### Rate limiting / Retry-After
 
 - [x] **P1.6 Check the rate limit before acquiring the token in `prepare()`.** (done) `crates/email_api_client/src/domain/service/mod.rs:62-77` acquires the token (SELECT + Redis + possible auth-service refresh + health write) before `check_rate_limit`; main's gmail_ops did the cheap check first. Under throttling, every refused attempt pays the full token dance. Swap the order (the limiter doesn't consume provider quota on denial); update `service/test.rs:69-75`, which pins the current order, and `register_subscription_without_cache`.
-- [ ] **P1.7 Plumb `Retry-After` end-to-end.** (a) `gmail_client/src/error.rs:88-93` parses only delta-seconds — also handle the HTTP-date form (`httpdate::parse_http_date`, clamp at zero). (b) `api/email/provider_error.rs` drops `RateLimited::retry_after` — return it and set a `Retry-After` header on 429 responses. (c) Worker policy modules ignore it — optionally use it for SQS visibility timeout on retryable rate limits.
+- [x] **P1.7 Plumb `Retry-After` end-to-end.** (done: a+b; optional (c) SQS visibility-timeout use not taken) (a) `gmail_client/src/error.rs:88-93` parses only delta-seconds — also handle the HTTP-date form (`httpdate::parse_http_date`, clamp at zero). (b) `api/email/provider_error.rs` drops `RateLimited::retry_after` — return it and set a `Retry-After` header on 429 responses. (c) Worker policy modules ignore it — optionally use it for SQS visibility timeout on retryable rate limits.
 
 ### Sanitizer (security-adjacent)
 

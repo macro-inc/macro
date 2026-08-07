@@ -23,16 +23,20 @@ pub enum ListBlockedError {
 
 impl IntoResponse for ListBlockedError {
     fn into_response(self) -> Response {
-        let status_code = match &self {
-            ListBlockedError::Forbidden => StatusCode::FORBIDDEN,
-            ListBlockedError::Provider(error) => {
-                crate::api::email::provider_error::provider_error_status(error)
+        let (status_code, headers) = match &self {
+            ListBlockedError::Forbidden => (StatusCode::FORBIDDEN, Default::default()),
+            ListBlockedError::Provider(error) => (
+                crate::api::email::provider_error::provider_error_status(error),
+                crate::api::email::provider_error::provider_error_headers(error),
+            ),
+            ListBlockedError::InternalError(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Default::default())
             }
-            ListBlockedError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (
             status_code,
+            headers,
             Json(ErrorResponse {
                 message: self.to_string().into(),
             }),

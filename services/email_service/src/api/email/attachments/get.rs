@@ -150,6 +150,7 @@ pub async fn handler(
                 tracing::warn!(error=?e, "error fetching attachment from email provider");
                 (
                     crate::api::email::provider_error::provider_error_status(&e),
+                    crate::api::email::provider_error::provider_error_headers(&e),
                     Json(ErrorResponse {
                         message: "error fetching attachment".into(),
                     }),

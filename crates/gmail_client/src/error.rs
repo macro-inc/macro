@@ -89,8 +89,7 @@ pub(crate) async fn unsuccessful_response(response: reqwest::Response) -> GmailA
         .headers()
         .get(reqwest::header::RETRY_AFTER)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .map(Duration::from_secs);
+        .and_then(parse_retry_after);
 
     let body = match response.text().await {
         Ok(body) => sanitize_error_body(&body),
@@ -102,6 +101,21 @@ pub(crate) async fn unsuccessful_response(response: reqwest::Response) -> GmailA
         body,
         retry_after,
     }
+}
+
+/// Parses a `Retry-After` header value in either of its RFC 9110 forms:
+/// delta-seconds or an HTTP-date (clamped at zero when already past).
+fn parse_retry_after(value: &str) -> Option<Duration> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+
+    let when = httpdate::parse_http_date(value).ok()?;
+    Some(
+        when.duration_since(std::time::SystemTime::now())
+            .unwrap_or(Duration::ZERO),
+    )
 }
 
 pub(crate) async fn decode_json_response<T>(

@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 base64 = { workspace = true }
+httpdate = { workspace = true }
 jsonwebtoken = { workspace = true }
 models_email = { path = "../models_email" }
 regex = { workspace = true }
