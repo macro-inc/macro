@@ -1,7 +1,5 @@
-import {
-  useBulkUpdateEntityPropertyOptionsMutation,
-  useInFlightEntityPropertyOptions,
-} from '@queries/properties/entity';
+import { useBulkUpdateEntityPropertyOptionsMutation } from '@queries/properties/entity';
+import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import {
   useEnsureTagSetMutation,
   useTagsQuery,

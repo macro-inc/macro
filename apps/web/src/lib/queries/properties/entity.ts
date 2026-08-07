@@ -19,7 +19,7 @@ import type {
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
-import { useMutation, useMutationState, useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
@@ -43,6 +43,10 @@ import {
   type EntityPropertyMutationDisposition,
 } from './graphql/entity';
 import { updateGraphqlEntityPropertyOptions } from './graphql/entity-options';
+import {
+  type BulkUpdateEntityPropertyOptionsParams,
+  bulkEntityPropertyOptionsKey,
+} from './in-flight-options';
 import { propertiesKeys } from './keys';
 import {
   type EntityPropertyOptionSelection,
@@ -611,63 +615,9 @@ export function useRemoveEntityPropertyOptionMutation(
   }));
 }
 
-type BulkUpdateEntityPropertyOptionsParams = {
-  entityId: string;
-  entityType: EntityType;
-  properties: Array<{
-    property: Property | PropertyDefinitionDomain;
-    currentOptionIds: string[];
-    nextOptionIds: string[];
-  }>;
-};
-
 type BulkUpdateEntityPropertyOptionsContext = {
   soupTxn?: SoupTransaction;
 };
-
-/**
- * Mutation-cache key for an entity's bulk option updates. Used both as the
- * mutation's serialization scope and to read its in-flight variables for
- * optimistic display.
- */
-function bulkEntityPropertyOptionsKey(entityId: string) {
-  return ['bulkEntityPropertyOptions', entityId] as const;
-}
-
-/**
- * Optimistic overlay for a query-backed tag source: the option ids an in-flight
- * bulk update is applying to a property, so a query-backed view reflects the
- * change before its refetch lands. Returns `undefined` when nothing is in
- * flight for the property, so callers fall back to the persisted value. On
- * settle the mutation leaves `pending` and the overlay disappears — no manual
- * rollback. Soup-backed sources don't need this: their optimism rides the
- * soup-cache update in the mutation lifecycle below.
- */
-export function useInFlightEntityPropertyOptions(entityId: string) {
-  const inFlight = useMutationState(() => ({
-    filters: {
-      mutationKey: bulkEntityPropertyOptionsKey(entityId),
-      status: 'pending' as const,
-    },
-    select: (mutation) =>
-      mutation.state.variables as
-        | BulkUpdateEntityPropertyOptionsParams
-        | undefined,
-  }));
-
-  return (propertyDefinitionId: string): string[] | undefined => {
-    const pending = inFlight();
-    // Latest in-flight update targeting this property wins.
-    for (let index = pending.length - 1; index >= 0; index--) {
-      const match = pending[index]?.properties.find(
-        (update) =>
-          getPropertyDefinitionId(update.property) === propertyDefinitionId
-      );
-      if (match) return match.nextOptionIds;
-    }
-    return undefined;
-  };
-}
 
 /**
  * Persists a complete multi-select selection across one or more properties in a

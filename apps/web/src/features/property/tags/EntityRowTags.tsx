@@ -2,7 +2,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
-import { useInFlightEntityPropertyOptions } from '@queries/properties/entity';
+import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { Button, cn, HoverCard, Layer } from '@ui';
