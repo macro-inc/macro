@@ -312,7 +312,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       `${stack}-${BASE_NAME}`,
       {
         tags: this.tags,
-        listenerArn: gatewayLoadBalancer.albArn,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
         vpcId: vpc.vpcId,
         containerPort: serviceContainerPort,
         priority: 10,
