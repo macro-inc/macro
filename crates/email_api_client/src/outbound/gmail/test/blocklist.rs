@@ -84,6 +84,79 @@ async fn block_creates_a_sender_to_trash_filter() {
 }
 
 #[tokio::test]
+async fn blocking_is_idempotent_across_address_casing() {
+    let server = MockServer::start().await;
+    mount_filters(
+        &server,
+        json!({
+            "filter": [{
+                "id": "blocked-cased",
+                "criteria": { "from": "John@Example.com" },
+                "action": { "addLabelIds": ["TRASH"] }
+            }]
+        }),
+    )
+    .await;
+
+    repository(&server)
+        .block_sender(&AccessToken::new("token"), "john@example.com")
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1, "no duplicate filter may be created");
+    assert_eq!(requests[0].method.as_str(), "GET");
+}
+
+#[tokio::test]
+async fn unblock_matches_filters_case_insensitively_and_deletes_all_duplicates() {
+    let server = MockServer::start().await;
+    mount_filters(
+        &server,
+        json!({
+            "filter": [
+                {
+                    "id": "blocked-upper",
+                    "criteria": { "from": "John@Example.com" },
+                    "action": { "addLabelIds": ["TRASH"] }
+                },
+                {
+                    "id": "other",
+                    "criteria": { "from": "someone-else@example.com" },
+                    "action": { "addLabelIds": ["TRASH"] }
+                },
+                {
+                    "id": "blocked-lower",
+                    "criteria": { "from": "john@example.com" },
+                    "action": { "addLabelIds": ["TRASH"] }
+                }
+            ]
+        }),
+    )
+    .await;
+    Mock::given(method("DELETE"))
+        .and(path("/users/me/settings/filters/blocked-upper"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/users/me/settings/filters/blocked-lower"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    repository(&server)
+        .unblock_sender(&AccessToken::new("token"), "JOHN@example.com")
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 3, "one list plus exactly two deletes");
+}
+
+#[tokio::test]
 async fn unblocking_a_missing_sender_is_idempotent() {
     let server = MockServer::start().await;
     mount_filters(&server, json!({ "filter": [] })).await;

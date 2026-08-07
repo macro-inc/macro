@@ -21,7 +21,7 @@ impl MailboxBlocklistClient for GmailApiClientRepository {
             .list_filters(token)
             .await
             .map_err(map_gmail_error)?;
-        if find_block_filter(&filters, email_address).is_some() {
+        if find_block_filters(&filters, email_address).next().is_some() {
             return Ok(());
         }
 
@@ -43,19 +43,30 @@ impl MailboxBlocklistClient for GmailApiClientRepository {
             .list_filters(token)
             .await
             .map_err(map_gmail_error)?;
-        let Some(filter) = find_block_filter(&filters, email_address) else {
-            return Ok(());
-        };
-        let Some(filter_id) = filter.id.as_deref() else {
-            return Err(EmailApiError::Permanent {
-                message: "Gmail blocked-sender filter is missing its provider ID".to_string(),
-            });
-        };
+        // Delete every matching filter: blocking with different casing used to
+        // create duplicates, and removing them all heals those legacy states.
+        let mut found = false;
+        for filter in find_block_filters(&filters, email_address) {
+            found = true;
+            let Some(filter_id) = filter.id.as_deref() else {
+                return Err(EmailApiError::Permanent {
+                    message: "Gmail blocked-sender filter is missing its provider ID".to_string(),
+                });
+            };
 
-        self.client
-            .delete_filter(token, filter_id)
-            .await
-            .map_err(map_gmail_error)
+            self.client
+                .delete_filter(token, filter_id)
+                .await
+                .map_err(map_gmail_error)?;
+        }
+
+        if !found {
+            tracing::warn!(
+                "no blocked-sender filter found to delete for the requested address"
+            );
+        }
+
+        Ok(())
     }
 
     async fn list_blocked_senders(
@@ -96,9 +107,20 @@ fn block_filter(email_address: &str) -> Filter {
     }
 }
 
-fn find_block_filter<'a>(filters: &'a [Filter], email_address: &str) -> Option<&'a Filter> {
-    filters.iter().find(|filter| {
-        is_block_filter(filter) && filter.criteria.from.as_deref() == Some(email_address)
+/// Finds every block filter for `email_address`, ignoring ASCII case: Gmail
+/// treats addresses case-insensitively and stored filters may differ in
+/// casing from the request.
+fn find_block_filters<'a>(
+    filters: &'a [Filter],
+    email_address: &'a str,
+) -> impl Iterator<Item = &'a Filter> {
+    filters.iter().filter(move |filter| {
+        is_block_filter(filter)
+            && filter
+                .criteria
+                .from
+                .as_deref()
+                .is_some_and(|from| from.eq_ignore_ascii_case(email_address))
     })
 }
 

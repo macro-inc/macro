@@ -96,7 +96,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 
 ### P0.5 Restore case-insensitive blocked-sender filter matching
 
-- [ ] **Status**
+- [x] **Status** — done (also restores the "no block filter found" warn from P1.10)
 
 **Problem.** `find_block_filter` (`crates/email_api_client/src/outbound/gmail/blocklist.rs:99-103`) compares `filter.criteria.from.as_deref() == Some(email_address)`. Main used `eq_ignore_ascii_case`. No call-site layer normalizes case (`api/email/contacts/block_sender.rs` passes the request value verbatim).
 
