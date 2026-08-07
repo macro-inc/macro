@@ -26,6 +26,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeEditReminderAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -88,6 +89,7 @@ export const useEntityActionHotkeys = (
 
   const copyEntityIdAction = makeCopyEntityIdAction();
   const createReminderAction = makeCreateReminderAction();
+  const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
 
@@ -302,18 +304,37 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Rename - 'r'
+  /**
+   * Whether 'r' should open the reminder editor rather than rename.
+   *
+   * A reminder is never renamable — its name is its description, owned by the
+   * reminders API — so the two are mutually exclusive and can share the key
+   * instead of leaving 'r' dead on a reminder row.
+   */
+  const editsReminder = (): boolean => {
+    const entities = getEntitiesForAction();
+    return entities.length === 1 && editReminderAction.canExecute(entities[0]);
+  };
+
+  // Rename - 'r'. Edits the reminder instead when the row is one.
   registerHotkey({
     hotkey: ['r'],
     hotkeyToken: TOKENS.entity.action.rename,
     scopeId,
     description: () => {
+      if (editsReminder()) return 'Edit reminder';
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Rename items' : 'Rename item';
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
+
+      if (editsReminder()) {
+        editReminderAction.executeWithSoup(entities, soup);
+        return true;
+      }
+
       if (!entities.every(renameAction.canExecute)) return false;
 
       renameAction.executeWithSoup(entities, soup);
@@ -321,6 +342,7 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
+      if (editsReminder()) return true;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
     },
