@@ -36,3 +36,4 @@ export {
 } from './resources/role';
 export type { TopicArgs } from './resources/kafka-cluster';
 export { KafkaCluster } from './resources/kafka-cluster';
+export { ServiceTargetGroup } from './resources/service_target_group';

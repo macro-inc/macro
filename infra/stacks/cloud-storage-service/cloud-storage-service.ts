@@ -10,6 +10,7 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
@@ -19,7 +20,10 @@ import {
   DopplerEcsEnvironment,
   getKafkaClusterPolicy,
   stack,
+  getGatewayAlb,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -303,6 +307,22 @@ export class CloudStorageService extends pulumi.ComponentResource {
     });
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
+
+    new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.albArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        priority: 10,
+        healthCheckPath,
+        pathPatterns: ['/dss/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
 
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
