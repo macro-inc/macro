@@ -1,3 +1,4 @@
+import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
@@ -11,16 +12,22 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
+import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
 import {
   type InfiniteData,
-  type MutationFunction,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
+import {
+  createGraphqlNotificationsQuery,
+  createGraphqlUpdateNotificationsMutation,
+  type UpdateNotificationsResult,
+} from './graphql/user-notifications';
 import { notificationKeys } from './keys';
 
 function stripOwnerId({
@@ -149,31 +156,121 @@ function userNotificationsQueryOptions(limit: number, done?: boolean) {
   };
 }
 
-/**
- * Paginated query for all notifications for the current user.
- *
- * `done` filters by done status. Omitted, the server returns only active
- * (not-done) notifications; `done: true` pages through the done ones —
- * surfaces that need the complete stream (e.g. the activity timeline) run
- * one query per done state and merge.
- */
-export function useUserNotificationsQuery(args?: {
+/** Arguments for the current user's notification query. */
+export type UserNotificationsQueryArgs = {
   limit?: number;
   done?: boolean;
-}) {
-  const limit = normalizeLimit(args?.limit);
+};
 
-  return useInfiniteQuery(() => ({
-    ...userNotificationsQueryOptions(limit, args?.done),
-    select: (
-      data: InfiniteData<
-        GetAllUserNotificationsResponse,
-        UserNotificationsPageParam
-      >
-    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
-    // Always refetch in the case of a stale browser tab
-    refetchOnWindowFocus: 'always',
+/** Reactive options for the current user's notification query. */
+export type UserNotificationsQueryOptions = {
+  enabled?: boolean;
+};
+
+/** Query state exposed by the transport-neutral notification facade. */
+export type UserNotificationsQuery = {
+  readonly data: UnifiedNotification[] | undefined;
+  readonly error: Error | null;
+  readonly isLoading: boolean;
+  readonly isFetching: boolean;
+  readonly isFetchingNextPage: boolean;
+  readonly hasNextPage: boolean;
+  readonly transport: 'rest' | 'graphql';
+  fetchNextPage(): Promise<void>;
+  refetch(): Promise<void>;
+};
+
+/** REST implementation kept private behind {@link useUserNotificationsQuery}. */
+function useRestUserNotificationsQuery(
+  args: Accessor<UserNotificationsQueryArgs>,
+  options?: Accessor<UserNotificationsQueryOptions>
+) {
+  return useInfiniteQuery(() => {
+    const queryArgs = args();
+    const limit = normalizeLimit(queryArgs.limit);
+    return {
+      ...userNotificationsQueryOptions(limit, queryArgs.done),
+      select: (
+        data: InfiniteData<
+          GetAllUserNotificationsResponse,
+          UserNotificationsPageParam
+        >
+      ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
+      enabled: options?.().enabled,
+      // Always refetch in the case of a stale browser tab
+      refetchOnWindowFocus: 'always' as const,
+    };
+  });
+}
+
+/**
+ * Paginated query for the current user's notifications.
+ *
+ * Active notifications come from the GraphQL Soup query's notification
+ * fragment. Done-history queries retain REST pagination because Soup
+ * notification edges only return active records.
+ */
+export function useUserNotificationsQuery(
+  args: Accessor<UserNotificationsQueryArgs>,
+  options?: Accessor<UserNotificationsQueryOptions>
+): UserNotificationsQuery {
+  const queryEnabled = () => options?.().enabled !== false;
+
+  const usesGraphql = () => ENABLE_GRAPHQL_SOUP() && args().done !== true;
+
+  const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
+    enabled: queryEnabled() && usesGraphql(),
   }));
+
+  const restQuery = useRestUserNotificationsQuery(args, () => ({
+    enabled: queryEnabled() && !usesGraphql(),
+  }));
+
+  const refetch = async () => {
+    if (usesGraphql()) {
+      await graphqlQuery.refetch({
+        requestPolicy: 'network-only',
+        throwOnError: true,
+      });
+    } else {
+      await restQuery.refetch();
+    }
+  };
+
+  return {
+    get data() {
+      return usesGraphql() ? graphqlQuery.data : restQuery.data;
+    },
+    get error() {
+      return usesGraphql()
+        ? graphqlQuery.error
+        : ((restQuery.error as Error | null) ?? null);
+    },
+    get isLoading() {
+      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+    },
+    get isFetching() {
+      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+    },
+    get isFetchingNextPage() {
+      return usesGraphql()
+        ? graphqlQuery.isFetchingNextPage
+        : restQuery.isFetchingNextPage;
+    },
+    get hasNextPage() {
+      return usesGraphql()
+        ? graphqlQuery.hasNextPage
+        : (restQuery.hasNextPage ?? false);
+    },
+    get transport() {
+      return usesGraphql() ? 'graphql' : 'rest';
+    },
+    async fetchNextPage() {
+      if (usesGraphql()) await graphqlQuery.fetchNextPage();
+      else await restQuery.fetchNextPage();
+    },
+    refetch,
+  };
 }
 
 type EntityNotificationsPageParam = {
@@ -368,24 +465,19 @@ type NotificationsUpdater = UpdaterWithParams<
   NotificationsMutationParams
 >;
 
-type NotificationsMutationCallbacks<T> = MutationCallbacks<
-  T,
+type NotificationsMutationCallbacks = MutationCallbacks<
+  UpdateNotificationsResult,
   Error,
   NotificationsMutationParams,
   NotificationsMutationContext
->;
-
-type NotificationsMutationFn<T> = MutationFunction<
-  T,
-  NotificationsMutationParams
 >;
 
 type NotificationsOnMutateFn = (
   variables: NotificationsMutationParams
 ) => Promise<NotificationsMutationContext>;
 
-function notificationsMutationSuccessCallback<T>(
-  _: T,
+function notificationsMutationSuccessCallback(
+  _: UpdateNotificationsResult,
   _params: NotificationsMutationParams
 ) {
   queryClient.invalidateQueries({
@@ -424,25 +516,135 @@ function createNotificationsMutateFn(
   };
 }
 
-function createNotificationsMutation<T>(
-  mutationFn: NotificationsMutationFn<T>,
-  parentCallbacks?: NotificationsMutationCallbacks<T>
+async function updateRestNotifications(
+  params: NotificationsMutationParams,
+  operation: NotificationUpdateOperation
+): Promise<UpdateNotificationsResult> {
+  const request = { notificationIds: params.notificationIds };
+  switch (operation) {
+    case 'MARK_SEEN':
+      await throwOnErr(
+        async () =>
+          await notificationServiceClient.bulkMarkNotificationAsSeen(request)
+      );
+      break;
+    case 'MARK_DONE':
+      await throwOnErr(
+        async () =>
+          await notificationServiceClient.bulkMarkNotificationAsDone(request)
+      );
+      break;
+    case 'MARK_UNDONE':
+      await throwOnErr(
+        async () =>
+          await notificationServiceClient.bulkMarkNotificationAsUndone(request)
+      );
+      break;
+  }
+  return [];
+}
+
+/** Transport-neutral notification status mutation exposed to consumers. */
+export type NotificationsMutation = {
+  readonly isPending: boolean;
+  readonly error: Error | null;
+  mutate(variables: NotificationsMutationParams): void;
+  mutateAsync(
+    variables: NotificationsMutationParams
+  ): Promise<UpdateNotificationsResult>;
+};
+
+function createNotificationsMutation(
+  operation: NotificationUpdateOperation,
+  parentCallbacks?: NotificationsMutationCallbacks
 ) {
-  return (callbacks?: NotificationsMutationCallbacks<T>) => {
-    return useMutation(() => ({
-      mutationFn,
-      ...withCallbacks<
-        T,
-        Error,
-        NotificationsMutationParams,
-        NotificationsMutationContext
-      >(
-        {
-          onSuccess: notificationsMutationSuccessCallback,
-        },
-        { ...parentCallbacks, ...callbacks }
-      ),
+  return (
+    callbacks?: NotificationsMutationCallbacks
+  ): NotificationsMutation => {
+    // Preserve the existing callback precedence: caller callbacks replace
+    // parent callbacks with the same name, while cache invalidation remains
+    // the outer default lifecycle.
+    const lifecycle = withCallbacks<
+      UpdateNotificationsResult,
+      Error,
+      NotificationsMutationParams,
+      NotificationsMutationContext
+    >(
+      { onSuccess: notificationsMutationSuccessCallback },
+      { ...parentCallbacks, ...callbacks }
+    );
+
+    const restMutation = useMutation(() => ({
+      mutationFn: (variables: NotificationsMutationParams) =>
+        updateRestNotifications(variables, operation),
+      ...lifecycle,
     }));
+    const graphqlMutation =
+      createGraphqlUpdateNotificationsMutation<NotificationsMutationContext>({
+        operation,
+        onMutate: async (variables) =>
+          (await lifecycle.onMutate?.(
+            variables,
+            undefined as never
+          )) as NotificationsMutationContext,
+        onSuccess: async (data, variables, context) => {
+          await lifecycle.onSuccess?.(
+            data,
+            variables,
+            context as NotificationsMutationContext,
+            undefined as never
+          );
+        },
+        onError: async (error, variables, context) => {
+          await lifecycle.onError?.(
+            error,
+            variables,
+            context as NotificationsMutationContext,
+            undefined as never
+          );
+        },
+        onSettled: async (data, error, variables, context) => {
+          await lifecycle.onSettled?.(
+            data,
+            error,
+            variables,
+            context as NotificationsMutationContext,
+            undefined as never
+          );
+        },
+      });
+
+    return {
+      get isPending() {
+        return ENABLE_GRAPHQL_SOUP()
+          ? graphqlMutation.isPending
+          : restMutation.isPending;
+      },
+      get error() {
+        return ENABLE_GRAPHQL_SOUP()
+          ? graphqlMutation.error
+          : (restMutation.error ?? null);
+      },
+      mutate(variables) {
+        if (ENABLE_GRAPHQL_SOUP()) {
+          graphqlMutation.mutate(variables);
+        } else {
+          restMutation.mutate(variables);
+        }
+      },
+      async mutateAsync(variables) {
+        if (!ENABLE_GRAPHQL_SOUP()) {
+          return await restMutation.mutateAsync(variables);
+        }
+
+        const result = await graphqlMutation.mutateAsync(variables);
+        if (result.error) throw result.error;
+        if (!result.data) {
+          throw new Error('updateNotifications mutation returned no data');
+        }
+        return result.data.updateNotifications;
+      },
+    };
   };
 }
 
@@ -480,11 +682,7 @@ const mapNotificationsAsSeen = (
 
 /** Marks notifications as seen with optimistic update. */
 export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
-  async (params: NotificationsMutationParams) =>
-    await updateNotifications({
-      notificationIds: params.notificationIds,
-      operation: 'MARK_SEEN',
-    }),
+  'MARK_SEEN',
   {
     onMutate: createNotificationsMutateFn(mapNotificationsAsSeen),
     onError: notificationsMutationErrorFn,
@@ -512,11 +710,7 @@ const markNotificationsAsDoneMutateFn = createNotificationsMutateFn(
 
 /** Marks notifications as done (removes from list) with optimistic update. */
 export const useMarkNotificationsAsDoneMutation = createNotificationsMutation(
-  async (params: NotificationsMutationParams) =>
-    await updateNotifications({
-      notificationIds: params.notificationIds,
-      operation: 'MARK_DONE',
-    }),
+  'MARK_DONE',
   {
     onMutate: async (params) => {
       retireUnconfirmedInserts(params.notificationIds);
