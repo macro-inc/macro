@@ -172,3 +172,24 @@ export function resolveReminderDescription(
 ): string {
   return clampDescription(input) || reminderDescriptionFor(entity);
 }
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Confirmation text for a reminder that was just set.
+ *
+ * The date is dropped for anything inside the next day: "set for 1:08 PM" is
+ * what someone who just asked for three hours from now wants to read back, and
+ * "Aug 7, 1:08 PM" only adds a date they already know. Past the day boundary
+ * the date carries the meaning, so it stays.
+ */
+export function formatReminderWhen(
+  date: Date,
+  now: number = Date.now()
+): string {
+  const withinADay = date.getTime() - now < ONE_DAY_MS;
+  return date.toLocaleString(undefined, {
+    ...(withinADay ? {} : { month: 'short', day: 'numeric' }),
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}

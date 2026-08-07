@@ -3,6 +3,7 @@ import type { EntityData } from '@entity';
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatReminderWhen,
   futureDateOptions,
   onceSchedule,
   REMINDER_DEFAULT_TIME,
@@ -293,5 +294,52 @@ describe('REMINDER_DEFAULT_TIME', () => {
   // is easy to miss, so this is deliberately a morning.
   it('is 9am', () => {
     expect(REMINDER_DEFAULT_TIME).toEqual({ hours: 9, minutes: 0 });
+  });
+});
+
+describe('formatReminderWhen', () => {
+  // Fixed instants rather than the wall clock, and the assertions compare
+  // against `toLocaleString` output rather than a hardcoded string, so the
+  // test states what is included and stays put across locales and timezones.
+  const now = new Date('2026-08-07T10:00:00.000Z').getTime();
+  const timeOnly = { hour: 'numeric', minute: '2-digit' } as const;
+  const withDate = { month: 'short', day: 'numeric', ...timeOnly } as const;
+
+  it('omits the date three hours out', () => {
+    const date = new Date(now + 3 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
+  });
+
+  it('omits the date just under a day out', () => {
+    const date = new Date(now + 24 * 60 * 60 * 1000 - 1);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
+  });
+
+  it('includes the date at exactly a day out', () => {
+    const date = new Date(now + 24 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, withDate)
+    );
+  });
+
+  it('includes the date a week out', () => {
+    const date = new Date(now + 7 * 24 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, withDate)
+    );
+  });
+
+  // The composer rejects past times before this runs, but a date that slipped
+  // past while the dialog sat open should still read as a time, not crash or
+  // sprout a date.
+  it('omits the date for an instant already past', () => {
+    const date = new Date(now - 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
   });
 });

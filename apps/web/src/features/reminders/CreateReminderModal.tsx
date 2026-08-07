@@ -41,6 +41,7 @@ import {
   reminderComposerState,
 } from './reminder-composer';
 import {
+  formatReminderWhen,
   futureDateOptions,
   onceSchedule,
   REMINDER_DEFAULT_TIME,
@@ -141,7 +142,7 @@ export function CreateReminderModal() {
         // Both or neither: the API rejects one without the other.
         ...(attachTo ?? undefined),
       });
-      toast.success(`Reminder set for ${formatWhen(date)}`);
+      toast.success(`Reminder set for ${formatReminderWhen(date)}`);
     } catch {
       toast.failure('Failed to create reminder');
     }
@@ -425,13 +426,4 @@ function WhenList(props: {
       </div>
     </>
   );
-}
-
-function formatWhen(date: Date): string {
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
