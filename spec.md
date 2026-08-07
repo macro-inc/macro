@@ -188,7 +188,7 @@ Definition of done: every P0 item checked off with its listed tests added; `carg
 ## P2 — Hygiene
 
 - [x] **P2.1** (done) Remove stale lint shields: `#[allow(dead_code)]` on live items (`outbound/gmail/mod.rs:23,102,111`); module-wide `#![allow(dead_code)]` + `#[allow(unused_imports)]` in `convert/mod.rs` (then delete the genuinely dead `map_thread_resources_to_service`, `thread.rs:10-18`, and `ProviderSubscription::is_expired_at` if still uncalled).
-- [ ] **P2.2** Update utoipa response docs for newly reachable statuses (429/403/404/409 on `get_attachment`, `init`, `create_label`, `list_blocked`), then regenerate the SDK/spec (`just coverage` / SDK codegen) — the OpenAPI spec currently under-documents error codes.
+- [x] **P2.2** (done) Update utoipa response docs for newly reachable statuses (429/403/404/409 on `get_attachment`, `init`, `create_label`, `list_blocked`), then regenerate the SDK/spec (`just coverage` / SDK codegen) — the OpenAPI spec currently under-documents error codes.
 - [ ] **P2.3** Route `get_document_id`'s `UploadError` through `provider_error_status` — it special-cases only `RateLimited` → 429 while provider `AuthRequired`/`NotFound` collapse to 500 (sibling `attachments/get.rs` returns 401/404).
 - [ ] **P2.4** Replace tautological tests: `gmail_client/src/error/test.rs:36-44,62-66` (variant matches itself); `rate_limiter/test.rs` mapping table restating the impl — add a fail-open test (Redis unreachable → allowed) instead.
 - [ ] **P2.5** Test-file placement: move the `AccessToken`/`EmailApiError`/`SyncCursor`/`ProviderSubscription` tests out of `models/send/test.rs` into their own modules' `test.rs`. Replace the five hand-rolled busy-spin `block_on` helpers in domain tests with `#[tokio::test]`.

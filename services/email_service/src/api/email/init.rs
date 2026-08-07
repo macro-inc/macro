@@ -187,6 +187,7 @@ pub struct InitParams {
             (status = 400, body=InitErrorCodeResponse),
             (status = 401, body=ErrorResponse),
             (status = 409, body=SharedInboxConflictResponse),
+            (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]

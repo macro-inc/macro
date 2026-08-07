@@ -1771,7 +1771,10 @@ export type GetAttachmentData = {
 export type GetAttachmentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -1947,6 +1950,9 @@ export type ListBlockedSendersData = {
 export type ListBlockedSendersErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2312,6 +2318,7 @@ export type InitUserErrors = {
     400: InitErrorCodeResponse;
     401: ErrorResponse;
     409: SharedInboxConflictResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2353,7 +2360,10 @@ export type CreateLabelData = {
 export type CreateLabelErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
     409: ErrorResponse;
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
