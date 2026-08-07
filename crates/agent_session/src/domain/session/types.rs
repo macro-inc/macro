@@ -13,6 +13,7 @@ pub(super) struct PendingAction<Token> {
     pub(super) from: Option<MacroUserIdStr<'static>>,
     pub(super) action: AgentAction,
     pub(super) token: Token,
+    pub(super) log: bool,
 }
 
 pub(super) enum SessionPhase {
@@ -115,6 +116,8 @@ pub enum Input<Token> {
         /// Rides along until the action reaches the transport, then comes
         /// back out in [`Effect::Complete`].
         token: Token,
+        /// Whether delivery must first append a durable log entry.
+        log: bool,
     },
     /// The transport produced a message.
     Inbound(ToServerMessage),
@@ -130,6 +133,8 @@ pub enum Effect<Token> {
         from: Option<MacroUserIdStr<'static>>,
         /// The envelope to deliver.
         message: ToRuntimeMessage,
+        /// Whether the shell must log this message before writing it.
+        log: bool,
     },
     /// Persist an inbound message to the session's log stream.
     Log {
