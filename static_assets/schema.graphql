@@ -3627,7 +3627,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	Only the reference is returned; the client resolves it into a Soup item
 	through the edges that already exist for that entity type.
 	"""
-	referencedEntity: GraphqlEntity
+	referencedEntity: GraphqlSoupReminderReference
 	"""
 	What to remind the user about.
 	"""
@@ -3688,6 +3688,32 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+The entity a reminder is about, resolved server-side.
+
+Carries `file_type`/`sub_type` rather than just the reference: a reminder is
+iconed as whatever it points at, and the client's icon path is synchronous,
+so resolving them here saves a fetch per row.
+"""
+type GraphqlSoupReminderReference {
+	"""
+	The referenced entity's id.
+	"""
+	id: ID!
+	"""
+	The referenced entity's type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	File type, when the reference is a document — `md`, `pdf`, and so on.
+	"""
+	fileType: String
+	"""
+	Sub type, when the reference is a task or snippet document.
+	"""
+	subType: String
 }
 
 """

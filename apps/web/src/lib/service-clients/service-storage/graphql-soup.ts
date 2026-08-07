@@ -30,7 +30,10 @@ import { match } from 'ts-pattern';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
+import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
 import {
+  type GraphqlEntityType,
+  type GraphqlReminderScheduleType,
   type GroupedSoupInput,
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
@@ -388,6 +391,39 @@ function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
   }));
 }
 
+/**
+ * Both GraphQL entity-type enums are the REST snake_case names upper-cased, so
+ * the inverse is a plain lower-case. Kept separate from the notification
+ * mapper because the two enums are distinct types with different members.
+ */
+function mapGraphqlEntityRefType(entityType: GraphqlEntityType) {
+  return entityType.toLowerCase();
+}
+
+/**
+ * Rebuild the REST schedule union from the flat GraphQL fields. `remindAt`,
+ * `cron`, and `timezone` are each nullable in the schema because they only
+ * apply to one variant; `scheduleType` says which one is populated.
+ */
+function mapGraphqlReminderSchedule(entity: {
+  scheduleType: GraphqlReminderScheduleType;
+  remindAt: string | null;
+  cron: string | null;
+  timezone: string | null;
+  nextRunAt: string;
+}): SoupReminderSchedule {
+  if (entity.scheduleType === 'RECURRING') {
+    return {
+      type: 'recurring',
+      cron: entity.cron ?? '',
+      timezone: entity.timezone ?? 'UTC',
+    };
+  }
+  // A one-shot reminder's next run is its remindAt, so that is the right
+  // stand-in on the off chance the server sends the type without the field.
+  return { type: 'once', remindAt: entity.remindAt ?? entity.nextRunAt };
+}
+
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
   const frecency = item.frecencyScore ?? 0;
 
@@ -667,10 +703,34 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
     )
     .with(
       { __typename: 'GraphqlSoupReminder' },
-      // Reminders ship on the REST soup path. `SoupItemFields` has no
-      // `... on GraphqlSoupReminder` selection, so remindAt/completedAt and
-      // the referenced entity aren't available here to build a row from.
-      () => null
+      (entity) =>
+        ({
+          tag: 'reminder',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            description: entity.reminderDescription,
+            schedule: mapGraphqlReminderSchedule(entity),
+            referencedEntity: entity.referencedEntity
+              ? {
+                  id: entity.referencedEntity.id,
+                  entityType: mapGraphqlEntityRefType(
+                    entity.referencedEntity.entityType
+                  ),
+                  fileType: entity.referencedEntity.fileType ?? undefined,
+                  subType: entity.referencedEntity.subType ?? undefined,
+                }
+              : undefined,
+            nextRunAt: entity.nextRunAt,
+            enabled: entity.enabled,
+            completedAt: entity.completedAt ?? undefined,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
     )
     .exhaustive();
 }
