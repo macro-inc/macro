@@ -367,12 +367,12 @@ export class CloudStorageService extends pulumi.ComponentResource {
         loadBalancers: [
           {
             targetGroupArn: targetGroup.arn,
-            containerName: BASE_NAME,
+            containerName: 'service',
             containerPort: serviceContainerPort,
           },
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
-            containerName: BASE_NAME,
+            containerName: 'service',
             containerPort: serviceContainerPort,
           },
         ],
