@@ -124,7 +124,11 @@ describe('resolveMarkEntitiesDoneVariables', () => {
         entities: [channelRow({ notifications: [notification] })],
         notificationSource,
       })
-    ).toEqual({ emailIds: [], notificationIds: ['notification-1'] });
+    ).toEqual({
+      emailIds: [],
+      notificationIds: ['notification-1'],
+      reminderIds: [],
+    });
   });
 });
 

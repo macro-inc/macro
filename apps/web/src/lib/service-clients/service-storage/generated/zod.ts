@@ -25891,7 +25891,9 @@ export const listRemindersResponse = zod
             completedAt: zod.iso
               .datetime({})
               .nullish()
-              .describe('Set once a one-shot reminder has fired.'),
+              .describe(
+                'Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished.'
+              ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the reminder was created.'),
@@ -26058,7 +26060,9 @@ export const getReminderResponse = zod
     completedAt: zod.iso
       .datetime({})
       .nullish()
-      .describe('Set once a one-shot reminder has fired.'),
+      .describe(
+        'Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished.'
+      ),
     createdAt: zod.iso.datetime({}).describe('When the reminder was created.'),
     description: zod.string().describe('What to remind the user about.'),
     enabled: zod
@@ -26197,7 +26201,9 @@ export const updateReminderResponse = zod
     completedAt: zod.iso
       .datetime({})
       .nullish()
-      .describe('Set once a one-shot reminder has fired.'),
+      .describe(
+        'Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished.'
+      ),
     createdAt: zod.iso.datetime({}).describe('When the reminder was created.'),
     description: zod.string().describe('What to remind the user about.'),
     enabled: zod

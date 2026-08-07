@@ -6,6 +6,7 @@
  */
 
 /**
- * Set once a one-shot reminder has fired.
+ * Set once the owner marks the reminder as dealt with. Firing does not
+set it — a delivered reminder is waiting on its owner, not finished.
  */
 export type ReminderCompletedAt = string | null;

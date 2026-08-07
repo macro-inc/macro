@@ -20924,7 +20924,7 @@
           "completedAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "Set once a one-shot reminder has fired."
+            "description": "Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished."
           },
           "createdAt": {
             "type": "string",

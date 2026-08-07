@@ -16,7 +16,8 @@ import type { ReminderSchedule } from './reminderSchedule';
 so the field would be redundant on the wire.
  */
 export interface Reminder {
-  /** Set once a one-shot reminder has fired. */
+  /** Set once the owner marks the reminder as dealt with. Firing does not
+set it — a delivered reminder is waiting on its owner, not finished. */
   completedAt?: ReminderCompletedAt;
   /** When the reminder was created. */
   createdAt: string;
