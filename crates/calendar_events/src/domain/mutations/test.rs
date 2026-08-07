@@ -329,6 +329,44 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         Ok(())
     }
 
+    async fn delete_event_instance(
+        &self,
+        _access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        self.calls.lock().unwrap().push(format!(
+            "instance:{master_provider_event_id}:{original_start}"
+        ));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        Ok(match self.behavior {
+            FakeProviderBehavior::Gone => GoogleSeriesMutationOutcome::Gone,
+            _ => GoogleSeriesMutationOutcome::Applied(Box::new(echo_upsert(&target.owner_id))),
+        })
+    }
+
+    async fn truncate_recurring_event(
+        &self,
+        _access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        self.calls.lock().unwrap().push(format!(
+            "truncate:{master_provider_event_id}:{original_start}"
+        ));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        Ok(match self.behavior {
+            FakeProviderBehavior::Gone => GoogleSeriesMutationOutcome::SeriesDeleted,
+            _ => GoogleSeriesMutationOutcome::Applied(Box::new(echo_upsert(&target.owner_id))),
+        })
+    }
+
     async fn rsvp_event(
         &self,
         _access_token: &str,
@@ -580,7 +618,7 @@ async fn delete_pushes_to_the_provider_then_retires_the_local_source() {
     let calls = provider.calls.clone();
 
     service(repo, provider, FakeTokens::ok())
-        .delete_event("macro|user", Uuid::now_v7())
+        .delete_event("macro|user", Uuid::now_v7(), CalendarDeletionScope::All)
         .await
         .unwrap();
 
@@ -640,7 +678,9 @@ async fn token_and_provider_failures_map_to_typed_errors() {
         FakeTokens::reauth(),
     );
     assert!(matches!(
-        reauth.delete_event("macro|user", Uuid::now_v7()).await,
+        reauth
+            .delete_event("macro|user", Uuid::now_v7(), CalendarDeletionScope::All)
+            .await,
         Err(CalendarMutationError::ReauthRequired(_))
     ));
 
@@ -655,7 +695,9 @@ async fn token_and_provider_failures_map_to_typed_errors() {
         FakeTokens::ok(),
     );
     assert!(matches!(
-        transient.delete_event("macro|user", Uuid::now_v7()).await,
+        transient
+            .delete_event("macro|user", Uuid::now_v7(), CalendarDeletionScope::All)
+            .await,
         Err(CalendarMutationError::Retryable(_))
     ));
 
@@ -670,7 +712,9 @@ async fn token_and_provider_failures_map_to_typed_errors() {
         FakeTokens::ok(),
     );
     assert!(matches!(
-        permanent.delete_event("macro|user", Uuid::now_v7()).await,
+        permanent
+            .delete_event("macro|user", Uuid::now_v7(), CalendarDeletionScope::All)
+            .await,
         Err(CalendarMutationError::ProviderRejected(_))
     ));
 }
@@ -685,4 +729,77 @@ fn empty_patch_is_detected() {
         }
         .is_empty()
     );
+}
+
+#[tokio::test]
+async fn scoped_deletions_reshape_or_retire_the_series() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let removed = repo.removed_sources.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(repo, provider, FakeTokens::ok());
+
+    svc.delete_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarDeletionScope::ThisEvent {
+            recurrence_id: "2026-08-10T09:00:00+00:00".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        ["instance:master-id:2026-08-10T09:00:00+00:00"],
+        "single-occurrence deletions address the recurring master"
+    );
+    assert_eq!(
+        upserts.lock().unwrap().len(),
+        1,
+        "the surviving series echo is persisted"
+    );
+    assert!(removed.lock().unwrap().is_empty());
+
+    svc.delete_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarDeletionScope::ThisAndFollowing {
+            recurrence_id: "2026-08-12T09:00:00+00:00".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(upserts.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn truncation_that_empties_the_series_retires_the_local_source() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let removed = repo.removed_sources.clone();
+    let svc = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Gone),
+        FakeTokens::ok(),
+    );
+
+    svc.delete_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarDeletionScope::ThisAndFollowing {
+            recurrence_id: "2026-08-04T09:00:00+00:00".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(upserts.lock().unwrap().is_empty());
+    assert_eq!(removed.lock().unwrap().len(), 1);
 }

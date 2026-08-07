@@ -129,6 +129,24 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Deletion scope; defaults to the entire event or series.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CalendarDeletionScopeParam"
+            }
+          },
+          {
+            "name": "recurrenceId",
+            "in": "query",
+            "description": "Original-start key of the occurrence a scoped deletion targets.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4307,6 +4325,11 @@
             "description": "Whether attendance is optional."
           }
         }
+      },
+      "CalendarDeletionScopeParam": {
+        "type": "string",
+        "description": "How much of a recurring series a deletion removes.",
+        "enum": ["all", "this_event", "this_and_following"]
       },
       "CalendarEvent": {
         "type": "object",

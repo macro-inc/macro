@@ -15,10 +15,10 @@ use super::{
         CalendarEventPatch, CalendarEventUpsert, EventTime, OccurrenceRange,
     },
     ports::{
-        CalendarAccessTokenProvider, CalendarEventWrite, CalendarMutationError,
-        CalendarMutationService, CalendarRepository, CalendarTokenError,
+        CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
+        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarTokenError,
         GoogleCalendarMutationProvider, GoogleProviderError, GoogleProviderErrorKind,
-        GoogleRsvpOutcome,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -174,28 +174,63 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        scope: CalendarDeletionScope,
     ) -> Result<(), CalendarMutationError> {
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
-        self.provider
-            .delete_event(
-                &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
-                target.master_provider_event_id(),
-            )
-            .await
-            .map_err(provider_error)?;
-        self.repository
-            .remove_google_source(
-                target.account_id,
-                target.calendar_id,
-                target.master_provider_event_id(),
-            )
-            .await
-            .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))
+        let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
+        let outcome = match &scope {
+            CalendarDeletionScope::All => {
+                self.provider
+                    .delete_event(
+                        &access_token,
+                        &google_target,
+                        target.master_provider_event_id(),
+                    )
+                    .await
+                    .map_err(provider_error)?;
+                GoogleSeriesMutationOutcome::SeriesDeleted
+            }
+            CalendarDeletionScope::ThisEvent { recurrence_id } => self
+                .provider
+                .delete_event_instance(
+                    &access_token,
+                    &google_target,
+                    target.master_provider_event_id(),
+                    recurrence_id,
+                )
+                .await
+                .map_err(provider_error)?,
+            CalendarDeletionScope::ThisAndFollowing { recurrence_id } => self
+                .provider
+                .truncate_recurring_event(
+                    &access_token,
+                    &google_target,
+                    target.master_provider_event_id(),
+                    recurrence_id,
+                )
+                .await
+                .map_err(provider_error)?,
+        };
+        match outcome {
+            GoogleSeriesMutationOutcome::Applied(upsert) => {
+                self.persist_echo(*upsert).await.map(|_| ())
+            }
+            // Either the deletion removed the series or it was already
+            // gone; retiring the local source converges both.
+            GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => self
+                .repository
+                .remove_google_source(
+                    target.account_id,
+                    target.calendar_id,
+                    target.master_provider_event_id(),
+                )
+                .await
+                .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}"))),
+        }
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]

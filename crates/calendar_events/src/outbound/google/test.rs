@@ -375,3 +375,67 @@ fn only_the_snapshot_plan_or_a_reset_token_forces_a_full_rebuild() {
         "ExtendTail must reach the tail path, not the full rebuild"
     );
 }
+
+#[test]
+fn truncation_rewrites_the_rrule_bound_and_keeps_other_lines() {
+    let cutoff = EventStart::Timed(
+        DateTime::parse_from_rfc3339("2026-08-12T09:00:00+00:00")
+            .unwrap()
+            .with_timezone(&Utc),
+    );
+    assert_eq!(
+        truncate_recurrence_lines(
+            &[
+                "RRULE:FREQ=WEEKLY;COUNT=10;BYDAY=MO,FR".to_string(),
+                "EXDATE;TZID=UTC:20260810T090000".to_string(),
+            ],
+            &cutoff,
+        ),
+        vec![
+            "RRULE:FREQ=WEEKLY;BYDAY=MO,FR;UNTIL=20260812T085959Z".to_string(),
+            "EXDATE;TZID=UTC:20260810T090000".to_string(),
+        ]
+    );
+
+    let all_day_cutoff = EventStart::AllDay(NaiveDate::from_ymd_opt(2026, 8, 12).unwrap());
+    assert_eq!(
+        truncate_recurrence_lines(
+            &["RRULE:FREQ=DAILY;UNTIL=20270101".to_string()],
+            &all_day_cutoff,
+        ),
+        vec!["RRULE:FREQ=DAILY;UNTIL=20260811".to_string()]
+    );
+}
+
+#[test]
+fn occurrence_keys_parse_back_to_starts() {
+    assert_eq!(
+        parse_occurrence_start("2026-08-12T09:00:00+00:00"),
+        Some(EventStart::Timed(
+            DateTime::parse_from_rfc3339("2026-08-12T09:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        ))
+    );
+    assert_eq!(
+        parse_occurrence_start("2026-08-12"),
+        Some(EventStart::AllDay(
+            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
+        ))
+    );
+    assert_eq!(parse_occurrence_start("not-a-start"), None);
+
+    let master = EventStart::Timed(
+        DateTime::parse_from_rfc3339("2026-08-04T09:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+    );
+    assert!(occurrence_is_after(
+        &parse_occurrence_start("2026-08-05T09:00:00+00:00").unwrap(),
+        &master
+    ));
+    assert!(!occurrence_is_after(
+        &parse_occurrence_start("2026-08-04T09:00:00+00:00").unwrap(),
+        &master
+    ));
+}

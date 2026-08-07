@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
@@ -27,7 +27,7 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
         CalendarEventPatch, EventTime, EventTransparency, EventVisibility, VisibleCalendar,
     },
-    ports::{CalendarMutationError, CalendarMutationService},
+    ports::{CalendarDeletionScope, CalendarMutationError, CalendarMutationService},
 };
 
 /// Router state for authenticated calendar mutations.
@@ -158,6 +158,31 @@ pub struct UpdateCalendarEventRequest {
     pub visibility: Option<EventVisibility>,
     /// Replacement transparency.
     pub transparency: Option<EventTransparency>,
+}
+
+/// How much of a recurring series a deletion removes.
+#[derive(Clone, Copy, Debug, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarDeletionScopeParam {
+    /// The entire event or series.
+    #[default]
+    All,
+    /// One occurrence.
+    ThisEvent,
+    /// One occurrence and everything after it.
+    ThisAndFollowing,
+}
+
+/// Query selecting how much of a recurring series a deletion removes.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteCalendarEventQuery {
+    /// Deletion scope; defaults to the entire event or series.
+    #[serde(default)]
+    pub scope: CalendarDeletionScopeParam,
+    /// Original-start key of the occurrence a scoped deletion targets.
+    pub recurrence_id: Option<String>,
 }
 
 /// Request body setting the requester's RSVP on an event.
@@ -422,7 +447,10 @@ where
     delete,
     path = "/calendar/events/{event_id}",
     tag = "calendar_events",
-    params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
+    params(
+        ("event_id" = Uuid, Path, description = "Calendar event entity id"),
+        DeleteCalendarEventQuery,
+    ),
     responses(
         (status = 204, description = "The event was deleted"),
         (status = 401, description = "Authentication required"),
@@ -436,14 +464,35 @@ pub async fn delete_calendar_event<S, Auth>(
     State(state): State<CalendarMutationRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(event_id): Path<Uuid>,
+    Query(query): Query<DeleteCalendarEventQuery>,
 ) -> Result<StatusCode, CalendarMutationApiError>
 where
     S: CalendarMutationService,
     Auth: MacroAuthorizationService,
 {
+    let scoped_occurrence = |kind: &'static str| {
+        query.recurrence_id.clone().ok_or(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::InvalidInput,
+            message: format!("a {kind} deletion requires recurrenceId"),
+            status: StatusCode::BAD_REQUEST,
+        })
+    };
+    let scope = match query.scope {
+        CalendarDeletionScopeParam::All => CalendarDeletionScope::All,
+        CalendarDeletionScopeParam::ThisEvent => CalendarDeletionScope::ThisEvent {
+            recurrence_id: scoped_occurrence("this-event")?,
+        },
+        CalendarDeletionScopeParam::ThisAndFollowing => CalendarDeletionScope::ThisAndFollowing {
+            recurrence_id: scoped_occurrence("this-and-following")?,
+        },
+    };
     state
         .service
-        .delete_event(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .delete_event(
+            user.authorization.user.macro_user_id.as_ref(),
+            event_id,
+            scope,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

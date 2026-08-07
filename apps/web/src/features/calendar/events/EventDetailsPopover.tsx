@@ -7,6 +7,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
+import type { CalendarDeletionScope } from '@service-email/client';
 import { Button, Dialog, Layer, Panel } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
@@ -149,12 +150,26 @@ function DeleteEventDialog(props: {
   const isRecurring = () =>
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
+  const [scope, setScope] = createSignal<CalendarDeletionScope>('this_event');
   const deleteEvent = useDeleteCalendarEventMutation({
     onSuccess: () => props.onDeleted(),
     onError: (error) => {
       toast.failure('Failed to delete event', { subtext: error.message });
     },
   });
+  const confirm = () => {
+    const effectiveScope = isRecurring() ? scope() : 'all';
+    deleteEvent.mutate({
+      eventId: props.event.eventId,
+      scope: effectiveScope,
+      recurrenceId:
+        effectiveScope === 'all'
+          ? undefined
+          : (props.event.recurrenceId ?? props.event.occurrenceKey),
+      occurrenceKey:
+        effectiveScope === 'all' ? undefined : props.event.occurrenceKey,
+    });
+  };
 
   return (
     <Dialog
@@ -178,11 +193,49 @@ function DeleteEventDialog(props: {
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body class="flex flex-col gap-3 p-3">
-          <p class="max-w-80 text-sm text-ink-muted">
-            Delete “{props.event.title || 'Untitled event'}”
-            {isRecurring() ? ' and all of its occurrences' : ''}? Guests will be
-            notified.
-          </p>
+          <Show
+            when={isRecurring()}
+            fallback={
+              <p class="max-w-80 text-sm text-ink-muted">
+                Delete “{props.event.title || 'Untitled event'}”? Guests will be
+                notified.
+              </p>
+            }
+          >
+            <div class="flex max-w-80 flex-col gap-2 text-sm text-ink-muted">
+              <p>
+                Remove “{props.event.title || 'Untitled event'}”? Guests will be
+                notified.
+              </p>
+              <label class="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="delete-scope"
+                  checked={scope() === 'this_event'}
+                  onChange={() => setScope('this_event')}
+                />
+                This event
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="delete-scope"
+                  checked={scope() === 'this_and_following'}
+                  onChange={() => setScope('this_and_following')}
+                />
+                This and following events
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="delete-scope"
+                  checked={scope() === 'all'}
+                  onChange={() => setScope('all')}
+                />
+                All events
+              </label>
+            </div>
+          </Show>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
@@ -198,9 +251,7 @@ function DeleteEventDialog(props: {
               class="rounded-lg"
               disabled={deleteEvent.isPending}
               label="Delete"
-              onClick={() =>
-                deleteEvent.mutate({ eventId: props.event.eventId })
-              }
+              onClick={confirm}
             >
               <Show when={deleteEvent.isPending} fallback="Delete">
                 <SpinnerIcon class="size-4 animate-spin" />

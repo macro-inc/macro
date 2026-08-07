@@ -213,6 +213,36 @@ describe('useDeleteCalendarEventMutation', () => {
     }
   });
 
+  it('scopes optimistic removal to one occurrence or a suffix', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({
+      eventId: 'event-2',
+      scope: 'this_event',
+      recurrenceId: '2026-08-05T09:00:00Z',
+      occurrenceKey: '2026-08-05T09:00:00Z',
+    });
+    expect(deleteCalendarEventMock).toHaveBeenCalledWith('event-2', {
+      scope: 'this_event',
+      recurrenceId: '2026-08-05T09:00:00Z',
+    });
+    let items = viewportData(viewportA)?.items ?? [];
+    expect(items.map((item) => item.occurrence.occurrenceKey)).toEqual([
+      '2026-08-06T14:00:00Z',
+    ]);
+
+    seedViewports();
+    await remove.mutateAsync({
+      eventId: 'event-2',
+      scope: 'this_and_following',
+      recurrenceId: '2026-08-05T09:00:00Z',
+      occurrenceKey: '2026-08-05T09:00:00Z',
+    });
+    items = viewportData(viewportA)?.items ?? [];
+    expect(items.map((item) => item.event.id)).toEqual(['event-1']);
+  });
+
   it('restores removed items when the request fails', async () => {
     deleteCalendarEventMock.mockResolvedValue(failure());
     const remove = renderHook(() => useDeleteCalendarEventMutation());

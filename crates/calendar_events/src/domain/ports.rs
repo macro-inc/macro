@@ -136,6 +136,27 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         provider_event_id: &str,
     ) -> impl Future<Output = Result<(), GoogleProviderError>> + Send;
 
+    /// Delete one occurrence of a recurring series, identified by its
+    /// original start key, then refresh the series. An occurrence already
+    /// gone at the provider refreshes without deleting.
+    fn delete_event_instance(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> impl Future<Output = Result<GoogleSeriesMutationOutcome, GoogleProviderError>> + Send;
+
+    /// End a recurring series just before the identified occurrence,
+    /// deleting the series outright when nothing would remain.
+    fn truncate_recurring_event(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> impl Future<Output = Result<GoogleSeriesMutationOutcome, GoogleProviderError>> + Send;
+
     /// Set the connected account's own RSVP on an event. Returns `None`
     /// when the event no longer exists at the provider and `Some(Err(..))`
     /// never; absence of a self attendee surfaces as
@@ -148,6 +169,33 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         self_email: &str,
         response: AttendeeResponseStatus,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
+}
+
+/// How much of a recurring series a deletion removes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarDeletionScope {
+    /// The entire event or series.
+    All,
+    /// One occurrence, identified by its original start key.
+    ThisEvent {
+        /// Stable original-start key of the occurrence.
+        recurrence_id: String,
+    },
+    /// The identified occurrence and everything after it.
+    ThisAndFollowing {
+        /// Stable original-start key of the first removed occurrence.
+        recurrence_id: String,
+    },
+}
+
+/// Result of a provider mutation that reshapes a recurring series.
+pub enum GoogleSeriesMutationOutcome {
+    /// The series survives; the echo carries its refreshed state.
+    Applied(Box<CalendarEventUpsert>),
+    /// The provider no longer has any of the series.
+    SeriesDeleted,
+    /// The series master vanished before the mutation could apply.
+    Gone,
 }
 
 /// Result of attempting to set the connected account's RSVP.
@@ -329,11 +377,13 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         patch: CalendarEventPatch,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 
-    /// Delete an event at its provider and retire its local source.
+    /// Delete an event at its provider — entirely, one occurrence, or from
+    /// an occurrence onward — and reconcile the local projection.
     fn delete_event(
         &self,
         requester_id: &str,
         event_id: Uuid,
+        scope: CalendarDeletionScope,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 
     /// Set the requester's inbox RSVP on an event and persist the echo.

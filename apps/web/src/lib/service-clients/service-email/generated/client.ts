@@ -20,6 +20,7 @@ import type {
   CreateDraftResponse,
   CreateLabelRequest,
   CreateLabelResponse,
+  DeleteCalendarEventParams,
   EmptyResponse,
   ErrorResponse,
   GetActiveBackfillJobResponse,
@@ -248,15 +249,31 @@ export type deleteCalendarEventResponse =
   | deleteCalendarEventResponseSuccess
   | deleteCalendarEventResponseError;
 
-export const getDeleteCalendarEventUrl = (eventId: string) => {
-  return `/calendar/events/${eventId}`;
+export const getDeleteCalendarEventUrl = (
+  eventId: string,
+  params?: DeleteCalendarEventParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/calendar/events/${eventId}?${stringifiedParams}`
+    : `/calendar/events/${eventId}`;
 };
 
 export const deleteCalendarEvent = async (
   eventId: string,
+  params?: DeleteCalendarEventParams,
   options?: RequestInit
 ): Promise<deleteCalendarEventResponse> => {
-  const res = await fetch(getDeleteCalendarEventUrl(eventId), {
+  const res = await fetch(getDeleteCalendarEventUrl(eventId, params), {
     ...options,
     method: 'DELETE',
   });

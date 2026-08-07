@@ -51,6 +51,9 @@ const emailHost: string = SERVER_HOSTS['email-service'];
  */
 const EMAIL_LINK_ID_HEADER = 'X-Email-Link-Id';
 
+/** How much of a recurring series a calendar deletion removes. */
+export type CalendarDeletionScope = 'all' | 'this_event' | 'this_and_following';
+
 function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
   return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
 }
@@ -582,9 +585,20 @@ export const emailClient = {
       }
     );
   },
-  async deleteCalendarEvent(eventId: string) {
+  async deleteCalendarEvent(
+    eventId: string,
+    options?: { scope?: CalendarDeletionScope; recurrenceId?: string }
+  ) {
+    const params = new URLSearchParams();
+    if (options?.scope && options.scope !== 'all') {
+      params.set('scope', options.scope);
+    }
+    if (options?.recurrenceId) {
+      params.set('recurrenceId', options.recurrenceId);
+    }
+    const query = params.toString();
     return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(
-      `${emailHost}/calendar/events/${eventId}`,
+      `${emailHost}/calendar/events/${eventId}${query ? `?${query}` : ''}`,
       {
         method: 'DELETE',
         errorResponseHandler: calendarMutationErrorHandler,

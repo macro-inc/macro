@@ -20,6 +20,7 @@ use crate::domain::{
     ports::{
         GoogleCalendarMutationProvider, GoogleCalendarProvider, GoogleEventSyncContext,
         GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
+        GoogleSeriesMutationOutcome,
     },
 };
 
@@ -763,6 +764,54 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         }
     }
 
+    async fn delete_event_raw(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        provider_event_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        let calendar = urlencoding::encode(&target.provider_calendar_id);
+        let event = urlencoding::encode(provider_event_id);
+        self.gate.acquire(target.email_link_id).await?;
+        let response = self
+            .client
+            .delete(format!(
+                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+            ))
+            .bearer_auth(access_token)
+            .query(&[SEND_UPDATES])
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        // An event already deleted (or cancelled) at the provider is success.
+        if status.is_success() || status == StatusCode::NOT_FOUND || status == StatusCode::GONE {
+            return Ok(());
+        }
+        let body = response.text().await.map_err(provider_transport_error)?;
+        Err(provider_response_error(status, &body))
+    }
+
+    /// Refresh a series after reshaping it, mapping the outcome for callers.
+    async fn series_outcome(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        match self
+            .refresh_series(access_token, target, master_provider_event_id, None)
+            .await?
+        {
+            SeriesOutcome::Refreshed(upsert) => Ok(GoogleSeriesMutationOutcome::Applied(upsert)),
+            SeriesOutcome::Gone => Ok(GoogleSeriesMutationOutcome::Gone),
+            SeriesOutcome::Malformed => Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                "Google Calendar returned a malformed series after the mutation",
+            )),
+        }
+    }
+
     async fn patch_event_raw(
         &self,
         access_token: &str,
@@ -864,26 +913,111 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         target: &GoogleCalendarTarget,
         provider_event_id: &str,
     ) -> Result<(), GoogleProviderError> {
-        let calendar = urlencoding::encode(&target.provider_calendar_id);
-        let event = urlencoding::encode(provider_event_id);
-        self.gate.acquire(target.email_link_id).await?;
-        let response = self
-            .client
-            .delete(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
-            ))
-            .bearer_auth(access_token)
-            .query(&[SEND_UPDATES])
-            .send()
+        self.delete_event_raw(access_token, target, provider_event_id)
             .await
-            .map_err(provider_transport_error)?;
-        let status = response.status();
-        // An event already deleted (or cancelled) at the provider is success.
-        if status.is_success() || status == StatusCode::NOT_FOUND || status == StatusCode::GONE {
-            return Ok(());
+    }
+
+    #[tracing::instrument(
+        skip(self, access_token, target),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn delete_event_instance(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        let Some(start) = parse_occurrence_start(original_start) else {
+            return Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                "the occurrence identifier is not a recognizable start",
+            ));
+        };
+        // A one-day window around the occurrence bounds the lookup; the
+        // exact instance is matched locally by its original start.
+        let window = occurrence_window(&start);
+        let instances = self
+            .instances(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                master_provider_event_id,
+                &window,
+            )
+            .await?;
+        let matched = instances.into_iter().find(|instance| {
+            instance
+                .original_start_time
+                .as_ref()
+                .and_then(google_start)
+                .is_some_and(|candidate| candidate == start)
+        });
+        if let Some(instance) = matched {
+            self.delete_event_raw(access_token, target, &instance.id)
+                .await?;
         }
-        let body = response.text().await.map_err(provider_transport_error)?;
-        Err(provider_response_error(status, &body))
+        self.series_outcome(access_token, target, master_provider_event_id)
+            .await
+    }
+
+    #[tracing::instrument(
+        skip(self, access_token, target),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
+    async fn truncate_recurring_event(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        original_start: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        let Some(cutoff) = parse_occurrence_start(original_start) else {
+            return Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                "the occurrence identifier is not a recognizable start",
+            ));
+        };
+        let Some(master) = self
+            .event(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                master_provider_event_id,
+            )
+            .await?
+        else {
+            return Ok(GoogleSeriesMutationOutcome::Gone);
+        };
+        // Removing everything from the first occurrence onward is a series
+        // deletion, matching Google Calendar's own behavior.
+        let master_start = google_time(&master).ok().map(|time| event_start_of(&time));
+        if master_start.is_some_and(|start| !occurrence_is_after(&cutoff, &start)) {
+            self.delete_event_raw(access_token, target, &master.id)
+                .await?;
+            return Ok(GoogleSeriesMutationOutcome::SeriesDeleted);
+        }
+        let truncated = truncate_recurrence_lines(&master.recurrence, &cutoff);
+        let Some(updated) = self
+            .patch_event_raw(
+                access_token,
+                target,
+                &master.id,
+                serde_json::json!({ "recurrence": truncated }),
+            )
+            .await?
+        else {
+            return Ok(GoogleSeriesMutationOutcome::Gone);
+        };
+        match self
+            .mutation_readback(access_token, target, updated)
+            .await?
+        {
+            Some(upsert) => Ok(GoogleSeriesMutationOutcome::Applied(Box::new(upsert))),
+            None => Ok(GoogleSeriesMutationOutcome::Gone),
+        }
     }
 
     #[tracing::instrument(
@@ -949,6 +1083,83 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
             None => Ok(GoogleRsvpOutcome::Gone),
         }
     }
+}
+
+/// Parse a stored occurrence key (RFC 3339 instant or local date).
+fn parse_occurrence_start(value: &str) -> Option<EventStart> {
+    if let Ok(instant) = DateTime::parse_from_rfc3339(value) {
+        return Some(EventStart::Timed(instant.with_timezone(&Utc)));
+    }
+    NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .ok()
+        .map(EventStart::AllDay)
+}
+
+fn start_instant(start: &EventStart) -> DateTime<Utc> {
+    match start {
+        EventStart::Timed(instant) => *instant,
+        EventStart::AllDay(date) => date
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is a valid time")
+            .and_utc(),
+    }
+}
+
+fn event_start_of(time: &EventTime) -> EventStart {
+    match time {
+        EventTime::Timed { starts_at, .. } => EventStart::Timed(*starts_at),
+        EventTime::AllDay { start_date, .. } => EventStart::AllDay(*start_date),
+    }
+}
+
+fn occurrence_is_after(cutoff: &EventStart, master_start: &EventStart) -> bool {
+    start_instant(cutoff) > start_instant(master_start)
+}
+
+/// One-day range around an occurrence, bounding an exact-instance lookup.
+fn occurrence_window(start: &EventStart) -> OccurrenceRange {
+    let instant = start_instant(start);
+    let date = match start {
+        EventStart::Timed(instant) => instant.date_naive(),
+        EventStart::AllDay(date) => *date,
+    };
+    OccurrenceRange {
+        starts_at: instant - chrono::Duration::days(1),
+        ends_at: instant + chrono::Duration::days(1),
+        start_date: date - chrono::Duration::days(1),
+        end_date: date + chrono::Duration::days(1),
+    }
+}
+
+/// Rewrite a recurrence property list to end just before `cutoff`,
+/// replacing any existing `UNTIL` or `COUNT` bound.
+fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<String> {
+    let until = match cutoff {
+        EventStart::Timed(instant) => (*instant - chrono::Duration::seconds(1))
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string(),
+        EventStart::AllDay(date) => (*date - chrono::Duration::days(1))
+            .format("%Y%m%d")
+            .to_string(),
+    };
+    lines
+        .iter()
+        .map(|line| {
+            let Some(params) = line.strip_prefix("RRULE:") else {
+                return line.clone();
+            };
+            let mut kept: Vec<&str> = params
+                .split(';')
+                .filter(|param| {
+                    let upper = param.to_ascii_uppercase();
+                    !upper.starts_with("UNTIL=") && !upper.starts_with("COUNT=")
+                })
+                .collect();
+            let until_param = format!("UNTIL={until}");
+            kept.push(&until_param);
+            format!("RRULE:{}", kept.join(";"))
+        })
+        .collect()
 }
 
 fn mutation_normalization_error(error: Report) -> GoogleProviderError {

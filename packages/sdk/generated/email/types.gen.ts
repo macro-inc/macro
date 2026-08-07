@@ -583,6 +583,11 @@ export type CalendarAttendeeInputBody = {
 };
 
 /**
+ * How much of a recurring series a deletion removes.
+ */
+export type CalendarDeletionScopeParam = 'all' | 'this_event' | 'this_and_following';
+
+/**
  * A stable, first-class Macro calendar event entity.
  */
 export type CalendarEvent = {
@@ -1539,7 +1544,16 @@ export type DeleteCalendarEventData = {
          */
         event_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Deletion scope; defaults to the entire event or series.
+         */
+        scope?: CalendarDeletionScopeParam;
+        /**
+         * Original-start key of the occurrence a scoped deletion targets.
+         */
+        recurrenceId?: string;
+    };
     url: '/calendar/events/{event_id}';
 };
 

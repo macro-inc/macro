@@ -1,7 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { emailClient } from '@service-email/client';
+import { type CalendarDeletionScope, emailClient } from '@service-email/client';
 import type { CalendarEvent as CalendarEventEntity } from '@service-email/generated/schemas/calendarEvent';
 import type { CreateCalendarEventRequest } from '@service-email/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-email/generated/schemas/updateCalendarEventRequest';
@@ -109,6 +109,28 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
 
 export interface DeleteCalendarEventArgs {
   eventId: string;
+  /** How much of a recurring series to remove; defaults to all of it. */
+  scope?: CalendarDeletionScope;
+  /** Original-start key of the occurrence a scoped deletion targets. */
+  recurrenceId?: string;
+  /** Cache key of the occurrence, for the optimistic update. */
+  occurrenceKey?: string;
+}
+
+function survivesDeletion(
+  item: CalendarOccurrenceItem,
+  args: DeleteCalendarEventArgs
+): boolean {
+  if (item.event.id !== args.eventId) return true;
+  if (args.scope === 'this_event') {
+    return item.occurrence.occurrenceKey !== args.occurrenceKey;
+  }
+  if (args.scope === 'this_and_following' && args.occurrenceKey !== undefined) {
+    // Occurrence keys within one event share a format, so ordering is
+    // lexicographic.
+    return item.occurrence.occurrenceKey < args.occurrenceKey;
+  }
+  return false;
 }
 
 type DeleteCallbacks = MutationCallbacks<
@@ -122,7 +144,12 @@ type DeleteCallbacks = MutationCallbacks<
 export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: DeleteCalendarEventArgs) =>
-      await throwOnErr(() => emailClient.deleteCalendarEvent(args.eventId)),
+      await throwOnErr(() =>
+        emailClient.deleteCalendarEvent(args.eventId, {
+          scope: args.scope,
+          recurrenceId: args.recurrenceId,
+        })
+      ),
     ...withCallbacks<
       unknown,
       Error,
@@ -132,7 +159,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
       {
         onMutate: (args) =>
           patchOccurrenceCaches((items) =>
-            items.filter((item) => item.event.id !== args.eventId)
+            items.filter((item) => survivesDeletion(item, args))
           ),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: () => invalidateCalendarOccurrences(),

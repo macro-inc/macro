@@ -201,6 +201,7 @@ use utoipa::OpenApi;
             calendar_events::inbound::mutation_router::CalendarAttendeeInputBody,
             calendar_events::inbound::mutation_router::CalendarMutationApiError,
             calendar_events::inbound::mutation_router::CalendarMutationErrorCode,
+            calendar_events::inbound::mutation_router::CalendarDeletionScopeParam,
             calendar_events::domain::models::CalendarEvent,
             calendar_events::domain::models::CalendarAttendee,
             calendar_events::domain::models::AttendeeResponseStatus,
