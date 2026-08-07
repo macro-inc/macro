@@ -32,17 +32,22 @@ async fn preserves_status_sanitized_body_and_retry_after() {
 }
 
 #[tokio::test]
-async fn distinguishes_transport_decode_and_invalid_response_errors() {
+async fn transport_and_decode_errors_do_not_leak_request_urls() {
+    // Transport failure against a URL carrying a sensitive query parameter.
     let transport_error = reqwest::Client::new()
-        .get("://invalid-url")
+        .get("http://127.0.0.1:1/people?syncToken=SECRET-TOKEN")
         .send()
         .await
-        .expect_err("invalid URL should fail before transport");
-    assert!(matches!(
-        GmailApiHttpError::Transport(transport_error),
-        GmailApiHttpError::Transport(_)
-    ));
+        .expect_err("connection to a closed port should fail");
+    let error = GmailApiHttpError::transport(transport_error);
+    let rendered = error.to_string();
+    assert!(matches!(error, GmailApiHttpError::Transport(_)));
+    assert!(
+        !rendered.contains("SECRET-TOKEN") && !rendered.contains("127.0.0.1"),
+        "transport errors must not render the request URL: {rendered}"
+    );
 
+    // Decode failure through the shared decoder, same URL-hygiene requirement.
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/malformed"))
@@ -50,20 +55,19 @@ async fn distinguishes_transport_decode_and_invalid_response_errors() {
         .mount(&server)
         .await;
     let response = reqwest::Client::new()
-        .get(format!("{}/malformed", server.uri()))
+        .get(format!("{}/malformed?syncToken=SECRET-TOKEN", server.uri()))
         .send()
         .await
         .expect("request should complete");
     let decode_error = decode_json_response::<serde_json::Value>(response)
         .await
         .expect_err("malformed JSON should fail decoding");
+    let rendered = decode_error.to_string();
     assert!(matches!(decode_error, GmailApiHttpError::Decode(_)));
-
-    let invalid_error = GmailApiHttpError::InvalidResponse("missing history id".to_string());
-    assert!(matches!(
-        invalid_error,
-        GmailApiHttpError::InvalidResponse(_)
-    ));
+    assert!(
+        !rendered.contains("SECRET-TOKEN") && !rendered.contains(&server.uri()),
+        "decode errors must not render the request URL: {rendered}"
+    );
 }
 
 #[test]

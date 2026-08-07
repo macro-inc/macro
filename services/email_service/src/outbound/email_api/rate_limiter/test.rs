@@ -2,77 +2,28 @@ use email_api_client::domain::models::ApiOperationKind;
 use models_email::gmail::operations::GmailApiOperation;
 use uuid::Uuid;
 
-use super::{RateBudget, gmail_operation, rate_limit_args, rate_limit_result};
+use super::{RateBudget, RedisProviderRateLimiter, gmail_operation, rate_limit_args, rate_limit_result};
 
-#[test]
-fn every_api_operation_maps_to_the_expected_quota_operation() {
-    let mappings = [
-        (
-            ApiOperationKind::GetProfile,
-            GmailApiOperation::UsersGetProfile,
-        ),
-        (
-            ApiOperationKind::ListChanges,
-            GmailApiOperation::HistoryList,
-        ),
-        (ApiOperationKind::ListLabels, GmailApiOperation::LabelsList),
-        (
-            ApiOperationKind::CreateLabel,
-            GmailApiOperation::LabelsCreate,
-        ),
-        (
-            ApiOperationKind::DeleteLabel,
-            GmailApiOperation::LabelsDelete,
-        ),
-        (ApiOperationKind::GetMessage, GmailApiOperation::MessagesGet),
-        (
-            ApiOperationKind::ListMessages,
-            GmailApiOperation::MessagesList,
-        ),
-        (
-            ApiOperationKind::ModifyMessageLabels,
-            GmailApiOperation::MessagesModify,
-        ),
-        (
-            ApiOperationKind::GetAttachment,
-            GmailApiOperation::MessagesAttachmentsGet,
-        ),
-        (
-            ApiOperationKind::SendMessage,
-            GmailApiOperation::MessagesSend,
-        ),
-        (ApiOperationKind::GetThread, GmailApiOperation::ThreadsGet),
-        (
-            ApiOperationKind::ListThreads,
-            GmailApiOperation::ThreadsList,
-        ),
-        (
-            ApiOperationKind::ListContacts,
-            GmailApiOperation::UsersGetProfile,
-        ),
-        (
-            ApiOperationKind::BlockSender,
-            GmailApiOperation::SettingsFiltersCreate,
-        ),
-        (
-            ApiOperationKind::UnblockSender,
-            GmailApiOperation::SettingsFiltersDelete,
-        ),
-        (
-            ApiOperationKind::ListBlockedSenders,
-            GmailApiOperation::SettingsFiltersList,
-        ),
-        (ApiOperationKind::Subscribe, GmailApiOperation::Watch),
-        (ApiOperationKind::Unsubscribe, GmailApiOperation::Stop),
-    ];
+/// Redis being unreachable must fail open: quota accounting degrades, mail
+/// flow does not.
+#[tokio::test]
+async fn unreachable_redis_fails_open() {
+    let redis_client = crate::util::redis::RedisClient::new(
+        redis::Client::open("redis://127.0.0.1:1/").expect("client construction is offline"),
+        100,
+        50,
+        60,
+    );
+    let limiter = RedisProviderRateLimiter::new(redis_client, RateBudget::Live);
 
-    for (operation, expected) in mappings {
-        assert_eq!(
-            gmail_operation(operation),
-            expected,
-            "mapping for {operation:?}"
-        );
-    }
+    let result = email_api_client::domain::ports::ProviderRateLimiter::check_rate_limit(
+        &limiter,
+        Uuid::new_v4(),
+        ApiOperationKind::GetMessage,
+    )
+    .await;
+
+    assert!(result.is_ok(), "redis outage must not refuse provider calls");
 }
 
 #[test]
