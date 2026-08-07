@@ -1120,7 +1120,7 @@ impl<S: Storage> Engine<S> {
         keys: &BTreeSet<EntityKey<'static>>,
     ) -> Result<HashMap<EntityKey<'static>, Record>, EngineError<S::Error>> {
         let mut out = HashMap::new();
-        let mut missing: Vec<EntityKey<'static>> = Vec::new();
+        let mut missing = Vec::new();
         for key in keys {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -1166,7 +1166,7 @@ impl<S: Storage> Engine<S> {
             match resolve_owner(&effective, &operation, &inspection.path)? {
                 OwnerResolution::Owner(owner) => break recover_variants(&owner, &prepared)?,
                 OwnerResolution::Absent => return Ok(Vec::new()),
-                OwnerResolution::NeedRecord(key) if !candidates.contains(key.as_ref()) => {
+                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
                     candidates.insert(key.into_owned());
                 }
                 OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),

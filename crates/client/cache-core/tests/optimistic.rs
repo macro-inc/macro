@@ -71,10 +71,7 @@ impl ClaimFailingStorage {
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
 
-    async fn get_batch(
-        &self,
-        keys: &[EntityKey<'static>],
-    ) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         Ok(self.inner.get_batch(keys).await.unwrap())
     }
 

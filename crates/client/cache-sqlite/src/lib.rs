@@ -224,10 +224,7 @@ fn claim_is_current(
 impl Storage for SqliteStorage {
     type Error = SqliteStorageError;
 
-    async fn get_batch(
-        &self,
-        keys: &[EntityKey<'static>],
-    ) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         let conn = self.conn();
         let mut stmt = conn.prepare_cached("SELECT value FROM records WHERE key = ?1")?;
         let mut out = Vec::with_capacity(keys.len());

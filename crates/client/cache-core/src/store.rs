@@ -23,7 +23,7 @@ pub trait Storage: MaybeSend {
     /// Fetches records; result is aligned with `keys` (`None` = absent).
     fn get_batch(
         &self,
-        keys: &[EntityKey<'static>],
+        keys: &[EntityKey<'_>],
     ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
 
     /// Upserts records atomically (all-or-nothing per batch).
@@ -129,10 +129,7 @@ impl InMemoryStorage {
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
-    async fn get_batch(
-        &self,
-        keys: &[EntityKey<'static>],
-    ) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         Ok(keys.iter().map(|k| self.records.get(k).cloned()).collect())
     }
 

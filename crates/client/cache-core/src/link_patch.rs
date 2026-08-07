@@ -111,7 +111,7 @@ impl LinkOperation {
             Self::Remove { entity_key }
             | Self::PrependUnique { entity_key }
             | Self::RemoveEmbeddedLink { entity_key, .. }
-            | Self::UpsertEmbeddedLink { entity_key, .. } => entity_key.borrow(),
+            | Self::UpsertEmbeddedLink { entity_key, .. } => entity_key.borrowed(),
         }
     }
 }
@@ -416,7 +416,7 @@ fn apply_one(
             );
         }
         LinkOperation::PrependUnique { entity_key } => {
-            prepend_unique(normalized_links(target)?, entity_key.borrow());
+            prepend_unique(normalized_links(target)?, entity_key.borrowed());
         }
         LinkOperation::RemoveEmbeddedLink { entity_key, .. } => {
             let fields = resolved
@@ -428,7 +428,7 @@ fn apply_one(
                 &fields.list_item,
                 &fields.link_field,
                 &fields.count_field,
-                entity_key.borrow(),
+                entity_key.borrowed(),
             )?;
         }
         LinkOperation::UpsertEmbeddedLink { entity_key, .. } => {
@@ -441,7 +441,7 @@ fn apply_one(
                 &fields.list_item,
                 &fields.link_field,
                 &fields.count_field,
-                entity_key.borrow(),
+                entity_key.borrowed(),
                 &fields.insert_fields,
             )?;
         }

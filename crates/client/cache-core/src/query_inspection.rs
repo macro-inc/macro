@@ -203,7 +203,7 @@ fn resolve_record_owner<'records, 'selection>(
     selections: &'selection [Selection],
     path: &[String],
 ) -> Result<OwnerResolution<'records, 'selection>, QueryInspectionError> {
-    let Some(record) = records.get(key.as_ref()) else {
+    let Some(record) = records.get(&key) else {
         return Ok(OwnerResolution::NeedRecord(key));
     };
     let concrete = record.typename().unwrap_or(declared_type);
@@ -238,7 +238,7 @@ fn resolve_fields_owner<'records, 'selection>(
     match value {
         CacheValue::Ref(key) => resolve_record_owner(
             records,
-            key.borrow(),
+            key.borrowed(),
             next_type,
             &field.selection_set,
             &path[1..],
