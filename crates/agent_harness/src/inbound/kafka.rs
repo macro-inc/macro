@@ -11,19 +11,10 @@ use agent_trigger::domain::broker_events::{
 };
 use bot_id::BotId;
 
-use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession};
+use crate::domain::model::{ForwardMessage, HarnessCommand, MentionOrigin, OpenSession};
 
 #[cfg(test)]
 mod test;
-
-/// A trigger event translated into the harness's vocabulary.
-#[derive(Debug, Clone)]
-pub enum HarnessCommand {
-    /// Open a new session.
-    Open(OpenSession),
-    /// Feed a session that already exists.
-    Forward(ForwardMessage),
-}
 
 /// Why an event yielded no command. Only for logging - none of these are
 /// errors, and the consumer commits the offset either way.
@@ -57,6 +48,7 @@ pub fn agent_trigger_to_harness_command(
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(HarnessCommand::Open(OpenSession {
+                session_id: agent_session::domain::model::AgentSessionId::new(),
                 bot_id: mentioned.bot_id,
                 origin: MentionOrigin {
                     channel_id: message.channel_id,

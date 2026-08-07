@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::{HarnessCommand, agent_trigger_to_harness_command};
+use agent_harness::inbound::kafka::agent_trigger_to_harness_command;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
@@ -218,19 +218,13 @@ async fn main() -> anyhow::Result<()> {
                     run_error = Some(error);
                     break;
                 }
-                let harness = harness.clone();
+                let session_id = command.session_id();
+                let execution = harness.execute(command);
                 tasks.spawn(async move {
-                    match command {
-                        HarnessCommand::Open(open) => match harness.open(open).await {
-                            Ok(id) => tracing::info!(session_id = %id, "opened an agent session"),
-                            Err(error) => {
-                                tracing::error!(error = ?error, "failed to open an agent session");
-                            }
-                        },
-                        HarnessCommand::Forward(forward) => {
-                            if let Err(error) = harness.forward(forward).await {
-                                tracing::error!(error = ?error, "failed to forward to an agent session");
-                            }
+                    match execution.await {
+                        Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
+                        Err(error) => {
+                            tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
                         }
                     }
                 });

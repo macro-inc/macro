@@ -11,6 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
+use crate::domain::model::HarnessCommand;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")

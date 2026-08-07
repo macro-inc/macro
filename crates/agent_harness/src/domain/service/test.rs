@@ -17,7 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    ForwardMessage, MentionOrigin, OpenSession, SessionDefaults, SpawnContainer,
+    ForwardMessage, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::testing::helpers::agent::FakeAgent;
@@ -31,6 +31,7 @@ fn sender() -> MacroUserIdStr<'static> {
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
+        session_id: AgentSessionId::new(),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
@@ -113,8 +114,11 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { bot_id, origin } = open_command();
-    let id = AgentSessionId::new();
+    let OpenSession {
+        session_id: id,
+        bot_id,
+        origin,
+    } = open_command();
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
@@ -147,9 +151,10 @@ async fn disconnected_session(
 async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer) = harness();
     let command = open_command();
+    let id = command.session_id;
     let origin = command.origin.clone();
 
-    let open = service.open(command);
+    let open = service.execute(HarnessCommand::Open(command));
     let drive = async {
         // The container exists as soon as `open` spawns it; drive its agent
         // through the handshake so the queued mention can flush.
@@ -166,7 +171,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
         container
     };
     let (opened, container) = tokio::join!(open, drive);
-    let id = opened.expect("open should succeed");
+    opened.expect("open should succeed");
 
     // The row exists, carries the origin, and was announced with its real
     // dedicated channel id.
@@ -192,7 +197,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
 async fn open_announces_before_the_prompt_is_delivered() {
     let (service, _repo, containers, announcer) = harness();
 
-    let open = service.open(open_command());
+    let open = service.execute(HarnessCommand::Open(open_command()));
     let observed = async {
         // The announcement lands while the container is still booting - the
         // handshake has not even started, so the prompt cannot have been
@@ -222,7 +227,9 @@ async fn open_announces_before_the_prompt_is_delivered() {
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
     let (service, _repo, containers, _announcer) = harness();
-    let open = service.open(open_command());
+    let command = open_command();
+    let id = command.session_id;
+    let open = service.execute(HarnessCommand::Open(command));
     let drive = async {
         loop {
             if containers.spawned() == 1 {
@@ -237,14 +244,14 @@ async fn forward_to_a_live_session_reuses_the_transport() {
         container
     };
     let (opened, container) = tokio::join!(open, drive);
-    let id = opened.expect("open should succeed");
+    opened.expect("open should succeed");
 
     service
-        .forward(ForwardMessage {
+        .execute(HarnessCommand::Forward(ForwardMessage {
             session_id: id,
             sender: Some(sender()),
             content: "and add a regression test".to_owned(),
-        })
+        }))
         .await
         .expect("forward to a live session should succeed");
 
@@ -256,7 +263,9 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 #[tokio::test]
 async fn a_delivery_failure_is_not_automatically_resumed() {
     let (service, _repo, containers, _announcer) = harness();
-    let open = service.open(open_command());
+    let command = open_command();
+    let id = command.session_id;
+    let open = service.execute(HarnessCommand::Open(command));
     let drive = async {
         loop {
             if containers.spawned() == 1 {
@@ -271,15 +280,15 @@ async fn a_delivery_failure_is_not_automatically_resumed() {
         container
     };
     let (opened, container) = tokio::join!(open, drive);
-    let id = opened.expect("open should succeed");
+    opened.expect("open should succeed");
     container.fails_sends_after(0);
 
     let result = service
-        .forward(ForwardMessage {
+        .execute(HarnessCommand::Forward(ForwardMessage {
             session_id: id,
             sender: Some(sender()),
             content: "do not retry this".to_owned(),
-        })
+        }))
         .await;
 
     assert!(matches!(result, Err(HarnessError::Session(_))));
@@ -291,11 +300,11 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
-    let forward = service.forward(ForwardMessage {
+    let forward = service.execute(HarnessCommand::Forward(ForwardMessage {
         session_id: id,
         sender: Some(sender()),
         content: "continue after reconnecting".to_owned(),
-    });
+    }));
     let drive_resume = async {
         loop {
             if containers.resumed() == 1 {
@@ -342,16 +351,16 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
 async fn concurrent_forwards_share_one_session_recovery() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
-    let first = service.forward(ForwardMessage {
+    let first = service.execute(HarnessCommand::Forward(ForwardMessage {
         session_id: id,
         sender: Some(sender()),
         content: "first".to_owned(),
-    });
-    let second = service.forward(ForwardMessage {
+    }));
+    let second = service.execute(HarnessCommand::Forward(ForwardMessage {
         session_id: id,
         sender: Some(sender()),
         content: "second".to_owned(),
-    });
+    }));
     let drive_resume = async {
         loop {
             if containers.resumed() == 1 {
@@ -372,7 +381,105 @@ async fn concurrent_forwards_share_one_session_recovery() {
     first.expect("the first message should be delivered");
     second.expect("the second message should be delivered");
     assert_eq!(containers.resumed(), 1);
-    assert_eq!(prompts(&resumed.agent()).len(), 2);
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [
+            vec![ContentBlock::from("first")],
+            vec![ContentBlock::from("second")],
+        ]
+    );
+}
+
+#[tokio::test]
+async fn different_sessions_execute_concurrently() {
+    let (service, repo, containers, _announcer) = harness();
+    let first_id = disconnected_session(&repo, &containers).await;
+    let second_id = disconnected_session(&repo, &containers).await;
+    let first = service.execute(HarnessCommand::Forward(ForwardMessage {
+        session_id: first_id,
+        sender: Some(sender()),
+        content: "first".to_owned(),
+    }));
+    let second = service.execute(HarnessCommand::Forward(ForwardMessage {
+        session_id: second_id,
+        sender: Some(sender()),
+        content: "second".to_owned(),
+    }));
+    let drive_resumes = async {
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if containers.resumed() == 2 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("different session workers should resume concurrently");
+
+        let first_container = containers
+            .container(first_id)
+            .expect("the first resumed container is findable");
+        let second_container = containers
+            .container(second_id)
+            .expect("the second resumed container is findable");
+        tokio::join!(
+            complete_resume(&first_container),
+            complete_resume(&second_container)
+        );
+        let first_agent = first_container.agent();
+        let second_agent = second_container.agent();
+        tokio::join!(
+            first_agent.wait_for_requests(3),
+            second_agent.wait_for_requests(3)
+        );
+    };
+
+    let (first, second, ()) = tokio::join!(first, second, drive_resumes);
+
+    first.expect("the first session command should complete");
+    second.expect("the second session command should complete");
+}
+
+#[tokio::test]
+async fn an_admitted_command_survives_caller_cancellation_and_retires_its_worker() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    let completion = service.execute(HarnessCommand::Forward(ForwardMessage {
+        session_id: id,
+        sender: Some(sender()),
+        content: "finish even when nobody is waiting".to_owned(),
+    }));
+    drop(completion);
+
+    loop {
+        if containers.resumed() == 1 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    let resumed = containers
+        .container(id)
+        .expect("the resumed container is findable");
+    complete_resume(&resumed).await;
+    resumed.agent().wait_for_requests(3).await;
+
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        loop {
+            if service.workers.is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("an idle command worker should retire");
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [vec![ContentBlock::from(
+            "finish even when nobody is waiting"
+        )]]
+    );
 }
 
 #[tokio::test]
@@ -380,7 +487,7 @@ async fn a_failed_announce_surfaces_and_no_prompt_is_delivered() {
     let (service, repo, containers, announcer) = harness();
     announcer.fails("comms is down");
 
-    let result = service.open(open_command()).await;
+    let result = service.execute(HarnessCommand::Open(open_command())).await;
 
     assert!(matches!(result, Err(HarnessError::Announce(_))));
     // The session row and container exist - the failure is the announcement,
