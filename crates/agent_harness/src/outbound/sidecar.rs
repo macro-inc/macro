@@ -15,7 +15,7 @@ use agent_runtime_protocol::domain::schema::v0::{
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Mutex as AsyncMutex;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -27,8 +27,13 @@ mod test;
 /// Not `Clone` itself - `recv` has to be exclusive - so containers share one
 /// through an `Arc`, which is what makes them cloneable.
 pub struct SidecarTransport {
-    outbound: mpsc::UnboundedSender<RawJsonRpcMessage>,
+    outbound: mpsc::UnboundedSender<Outbound>,
     inbound: AsyncMutex<mpsc::UnboundedReceiver<ToServerMessage>>,
+}
+
+struct Outbound {
+    frame: RawJsonRpcMessage,
+    completed: oneshot::Sender<Result<(), TransportError>>,
 }
 
 impl SidecarTransport {
@@ -69,9 +74,13 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for SidecarTransport {
             return Ok(());
         };
 
+        let (completed, result) = oneshot::channel();
         self.outbound
-            .send(frame)
-            .map_err(|_| TransportError::Client("the sidecar connection is closed".to_owned()))
+            .send(Outbound { frame, completed })
+            .map_err(|_| TransportError::Client("the sidecar connection is closed".to_owned()))?;
+        result
+            .await
+            .map_err(|_| TransportError::Client("the sidecar connection is closed".to_owned()))?
     }
 
     async fn recv(&self) -> Result<Option<ToServerMessage>, TransportError> {
@@ -82,7 +91,7 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for SidecarTransport {
 /// Relay frames until either side closes.
 async fn pump<Socket>(
     socket: WebSocketStream<Socket>,
-    mut outbound: mpsc::UnboundedReceiver<RawJsonRpcMessage>,
+    mut outbound: mpsc::UnboundedReceiver<Outbound>,
     inbound: mpsc::UnboundedSender<ToServerMessage>,
 ) where
     Socket: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -92,16 +101,22 @@ async fn pump<Socket>(
     loop {
         tokio::select! {
             outgoing = outbound.recv() => {
-                let Some(frame) = outgoing else { break };
-                // A frame we just built failing to serialize is not worth
-                // tearing the session down over.
-                let Ok(json) = serde_json::to_string(&frame) else {
-                    tracing::error!("could not serialize an outgoing acp frame");
-                    continue;
+                let Some(Outbound { frame, completed }) = outgoing else { break };
+                let json = match serde_json::to_string(&frame) {
+                    Ok(json) => json,
+                    Err(error) => {
+                        tracing::error!(error = ?error, "could not serialize an outgoing acp frame");
+                        let _ = completed.send(Err(TransportError::Client(
+                            "could not serialize an outgoing ACP frame".to_owned(),
+                        )));
+                        continue;
+                    }
                 };
-                if socket_tx.send(Message::Text(json.into())).await.is_err() {
+                if let Err(error) = socket_tx.send(Message::Text(json.into())).await {
+                    let _ = completed.send(Err(TransportError::Client(error.to_string())));
                     break;
                 }
+                let _ = completed.send(Ok(()));
             }
             incoming = socket_rx.next() => {
                 let json = match incoming {

@@ -2,9 +2,10 @@
 //! tokio, no mocks, no waiting - `Token` is a plain integer.
 
 use agent_client_protocol::schema::v1::{
-    InitializeResponse, NewSessionResponse, PermissionOption, PermissionOptionKind, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    SelectedPermissionOutcome, ToolCallUpdate, ToolCallUpdateFields,
+    AgentCapabilities, InitializeResponse, NewSessionResponse, PermissionOption,
+    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, Response, ResumeSessionResponse, SelectedPermissionOutcome,
+    SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -42,12 +43,13 @@ fn frame(frame: RawJsonRpcMessage) -> Input<u32> {
 }
 
 fn initialized() -> Input<u32> {
+    initialized_with(InitializeResponse::new(PROTOCOL_VERSION))
+}
+
+fn initialized_with(response: InitializeResponse) -> Input<u32> {
     frame(RawJsonRpcMessage::response(
         request_id(0),
-        Ok(
-            serde_json::to_value(InitializeResponse::new(PROTOCOL_VERSION))
-                .expect("a serializable response"),
-        ),
+        Ok(serde_json::to_value(response).expect("a serializable response")),
     ))
 }
 
@@ -88,6 +90,19 @@ fn sent_request_ids(effects: &[Effect<u32>]) -> Vec<RequestId> {
                 message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
                 ..
             } => Some(request.id.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn sent_methods(effects: &[Effect<u32>]) -> Vec<String> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+                ..
+            } => Some(request.method.to_string()),
             _ => None,
         })
         .collect()
@@ -182,6 +197,7 @@ fn session_new_success_flushes_the_queue_positionally() {
         effects[..],
         [
             Effect::Log { .. },
+            Effect::PersistAcpSession { .. },
             Effect::Send { .. },
             Effect::Complete {
                 token: 1,
@@ -200,6 +216,73 @@ fn session_new_success_flushes_the_queue_positionally() {
         machine.status().session_id().map(ToString::to_string),
         Some("acp-42".to_owned())
     );
+}
+
+#[test]
+fn reconnect_uses_session_resume_when_the_agent_supports_it() {
+    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    machine.handle(command("continue", 1));
+    machine.handle(acp_ready());
+    let initialized = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+        AgentCapabilities::new().session_capabilities(
+            SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+        ),
+    );
+
+    let opening = machine.handle(initialized_with(initialized));
+
+    assert_eq!(sent_methods(&opening), ["session/resume"]);
+    let resumed = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(1),
+        Ok(serde_json::to_value(ResumeSessionResponse::new()).unwrap()),
+    )));
+    assert!(matches!(
+        resumed[..],
+        [
+            Effect::Log { .. },
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 1,
+                result: Ok(())
+            }
+        ]
+    ));
+    assert_eq!(machine.status().session_id().unwrap().to_string(), "acp-42");
+}
+
+#[test]
+fn reconnect_falls_back_to_session_load() {
+    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    machine.handle(acp_ready());
+    let initialized = InitializeResponse::new(PROTOCOL_VERSION)
+        .agent_capabilities(AgentCapabilities::new().load_session(true));
+
+    let opening = machine.handle(initialized_with(initialized));
+
+    assert_eq!(sent_methods(&opening), ["session/load"]);
+}
+
+#[test]
+fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
+    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    machine.handle(command("cannot continue", 1));
+    machine.handle(acp_ready());
+
+    let effects = machine.handle(initialized());
+
+    assert!(matches!(
+        effects[..],
+        [
+            Effect::Log { .. },
+            Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::ResumeUnsupported(_))
+            },
+            Effect::Stop {
+                reason: StopReason::ResumeUnsupported
+            }
+        ]
+    ));
 }
 
 #[test]

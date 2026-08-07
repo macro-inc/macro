@@ -10,6 +10,7 @@ use crate::domain::model::{
     Message, SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
@@ -324,6 +325,32 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             return Err(anyhow::anyhow!("agent session not found").into());
         }
 
+        Ok(())
+    }
+
+    async fn set_acp_session_id(
+        &self,
+        id: AgentSessionId,
+        acp_session_id: SessionId,
+    ) -> Result<()> {
+        let acp_session_id = acp_session_id.to_string();
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET acp_session_id = $2,
+                modified_at = NOW()
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+            acp_session_id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist ACP session id")?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("agent session not found").into());
+        }
         Ok(())
     }
 

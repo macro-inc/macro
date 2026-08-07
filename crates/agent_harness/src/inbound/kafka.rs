@@ -6,24 +6,16 @@
 //! or a forward? Pure translation, no IO; the consumer loop lives in the
 //! service binary.
 
+use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
     AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::BotId;
 
-use crate::domain::model::{ForwardMessage, MentionOrigin, OpenSession};
+use crate::domain::model::{ForwardMessage, HarnessCommand, MentionOrigin, OpenSession};
 
 #[cfg(test)]
 mod test;
-
-/// A trigger event translated into the harness's vocabulary.
-#[derive(Debug, Clone)]
-pub enum HarnessCommand {
-    /// Open a new session.
-    Open(OpenSession),
-    /// Feed a session that already exists.
-    Forward(ForwardMessage),
-}
 
 /// Why an event yielded no command. Only for logging - none of these are
 /// errors, and the consumer commits the offset either way.
@@ -44,7 +36,7 @@ pub enum Skipped {
 pub fn agent_trigger_to_harness_command(
     event: AgentTriggerTopicEvent,
     our_bot: BotId,
-) -> Result<HarnessCommand, Skipped> {
+) -> Result<(AgentSessionId, HarnessCommand), Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
             if mentioned.bot_id != our_bot {
@@ -56,18 +48,21 @@ pub fn agent_trigger_to_harness_command(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
-            Ok(HarnessCommand::Open(OpenSession {
-                bot_id: mentioned.bot_id,
-                origin: MentionOrigin {
-                    channel_id: message.channel_id,
-                    // A top-level mention roots its own thread; a mention
-                    // inside a thread answers into that thread.
-                    thread_id: message.thread_id.unwrap_or(message.message_id),
-                    message_id: message.message_id,
-                    sender,
-                    content: message.content,
-                },
-            }))
+            Ok((
+                AgentSessionId::new(),
+                HarnessCommand::Open(OpenSession {
+                    bot_id: mentioned.bot_id,
+                    origin: MentionOrigin {
+                        channel_id: message.channel_id,
+                        // A top-level mention roots its own thread; a mention
+                        // inside a thread answers into that thread.
+                        thread_id: message.thread_id.unwrap_or(message.message_id),
+                        message_id: message.message_id,
+                        sender,
+                        content: message.content,
+                    },
+                }),
+            ))
         }
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
             ChannelEventMetadata {
@@ -80,11 +75,13 @@ pub fn agent_trigger_to_harness_command(
             if bot_id != our_bot {
                 return Err(Skipped::ForeignBot);
             }
-            Ok(HarnessCommand::Forward(ForwardMessage {
+            Ok((
                 session_id,
-                sender: message.sender.as_user().cloned(),
-                content: message.content,
-            }))
+                HarnessCommand::Forward(ForwardMessage {
+                    sender: message.sender.as_user().cloned(),
+                    content: message.content,
+                }),
+            ))
         }
         _ => Err(Skipped::Unrecognized),
     }

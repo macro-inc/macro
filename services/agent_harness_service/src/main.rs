@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::{HarnessCommand, agent_trigger_to_harness_command};
+use agent_harness::inbound::kafka::agent_trigger_to_harness_command;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
@@ -132,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
     ));
     let announcer = ChannelAnnouncer::new(channel_service, bot_id);
 
-    let harness = AgentHarnessService::new(
+    let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
         announcer,
@@ -141,7 +141,7 @@ async fn main() -> anyhow::Result<()> {
             harness: config.harness_slug.clone(),
             repo_url: config.harness_repo_url.clone(),
         },
-    );
+    ));
 
     // The consumer: every agent-session event, filtered to our bot.
     let consumer =
@@ -162,6 +162,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let mut shutdown = std::pin::pin!(shutdown_signal());
+    let mut tasks = tokio::task::JoinSet::new();
+    let mut run_error = None;
     loop {
         tokio::select! {
             () = &mut shutdown => {
@@ -186,35 +188,62 @@ async fn main() -> anyhow::Result<()> {
                             offset = kafka_message.offset(),
                             "dropping undecodable agent session event"
                         );
-                        commit_message(&consumer, kafka_message)?;
-                        continue;
+                        match commit_message(&consumer, kafka_message) {
+                            Ok(()) => continue,
+                            Err(error) => {
+                                run_error = Some(error);
+                                break;
+                            }
+                        }
                     }
                 };
 
-                match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
-                    Ok(HarnessCommand::Open(open)) => match harness.open(open).await {
-                        Ok(id) => tracing::info!(session_id = %id, "opened an agent session"),
-                        Err(error) => {
-                            tracing::error!(error = ?error, "failed to open an agent session");
-                        }
-                    },
-                    Ok(HarnessCommand::Forward(forward)) => {
-                        if let Err(error) = harness.forward(forward).await {
-                            tracing::error!(error = ?error, "failed to forward to an agent session");
-                        }
-                    }
+                let (session_id, command) = match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
+                    Ok(command) => command,
                     Err(skipped) => {
                         tracing::debug!(?skipped, "skipped an agent session event");
+                        match commit_message(&consumer, kafka_message) {
+                            Ok(()) => continue,
+                            Err(error) => {
+                                run_error = Some(error);
+                                break;
+                            }
+                        }
                     }
-                }
+                };
 
-                // Committed even when handling failed: retrying a failed open
-                // against Daytona in a tight loop would wedge the partition.
-                // Failures are logged and the user retries by mentioning again.
-                commit_message(&consumer, kafka_message)?;
+                // Intentionally at-most-once: keep ingestion simple and never
+                // let concurrent task completion commit Kafka offsets out of order.
+                if let Err(error) = commit_message(&consumer, kafka_message) {
+                    run_error = Some(error);
+                    break;
+                }
+                let execution = harness.execute(session_id, command);
+                tasks.spawn(async move {
+                    match execution.await {
+                        Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
+                        Err(error) => {
+                            tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
+                        }
+                    }
+                });
+            }
+            Some(result) = tasks.join_next(), if !tasks.is_empty() => {
+                if let Err(error) = result {
+                    tracing::error!(error = ?error, "agent harness task failed");
+                }
             }
         }
     }
 
-    Ok(())
+    while let Some(result) = tasks.join_next().await {
+        if let Err(error) = result {
+            tracing::error!(error = ?error, "agent harness task failed during shutdown");
+        }
+    }
+
+    match run_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }

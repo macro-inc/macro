@@ -32,12 +32,19 @@ pub struct OpenSession {
 /// Deliver a message to a session that already exists.
 #[derive(Debug, Clone)]
 pub struct ForwardMessage {
-    /// The session to feed.
-    pub session_id: AgentSessionId,
     /// Who sent it, when it came from a user.
     pub sender: Option<MacroUserIdStr<'static>>,
     /// The message text, verbatim.
     pub content: String,
+}
+
+/// One operation executed by the harness for an agent session.
+#[derive(Debug, Clone)]
+pub enum HarnessCommand {
+    /// Open a new session.
+    Open(OpenSession),
+    /// Feed a session that already exists.
+    Forward(ForwardMessage),
 }
 
 /// Facts required to announce a newly created session.
