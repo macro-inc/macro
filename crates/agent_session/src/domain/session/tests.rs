@@ -29,7 +29,6 @@ fn command(text: &str, token: u32) -> Input<u32> {
         from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
         action: AgentAction::prompt(text),
         token,
-        log: true,
     }
 }
 

@@ -95,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         snapshot: Snapshot::new(config.daytona_snapshot.clone()),
         github_token: GithubTokenSecret::new(config.github_token.clone()),
     });
+    let container_shutdown = containers.clone();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
@@ -236,10 +237,17 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    container_shutdown.shutdown_all().await;
+
     while let Some(result) = tasks.join_next().await {
         if let Err(error) = result {
             tracing::error!(error = ?error, "agent harness task failed during shutdown");
         }
+    }
+
+    let stop_failures = container_shutdown.shutdown_all().await;
+    if stop_failures > 0 {
+        tracing::error!(stop_failures, "some Daytona sandboxes failed to stop");
     }
 
     match run_error {
