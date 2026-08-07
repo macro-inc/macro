@@ -53,6 +53,51 @@ fn maps_provider_statuses_centrally() {
 }
 
 #[test]
+fn quota_403s_are_rate_limited_and_plain_403s_stay_forbidden() {
+    assert_eq!(
+        map_gmail_error(http_error(
+            StatusCode::FORBIDDEN,
+            r#"{"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}"#,
+            None,
+        )),
+        EmailApiError::RateLimited { retry_after: None }
+    );
+
+    let retry_after = Duration::from_secs(12);
+    assert_eq!(
+        map_gmail_error(http_error(
+            StatusCode::FORBIDDEN,
+            r#"{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}"#,
+            Some(retry_after),
+        )),
+        EmailApiError::RateLimited {
+            retry_after: Some(retry_after),
+        }
+    );
+
+    for reason in ["dailyLimitExceeded", "quotaExceeded"] {
+        assert_eq!(
+            map_gmail_error(http_error(
+                StatusCode::FORBIDDEN,
+                format!(r#"{{"error":{{"errors":[{{"reason":"{reason}"}}]}}}}"#),
+                None,
+            )),
+            EmailApiError::RateLimited { retry_after: None },
+            "reason {reason} should map to RateLimited",
+        );
+    }
+
+    assert_eq!(
+        map_gmail_error(http_error(
+            StatusCode::FORBIDDEN,
+            "Request had insufficient authentication scopes.",
+            None,
+        )),
+        EmailApiError::Forbidden
+    );
+}
+
+#[test]
 fn maps_server_errors_as_transient_and_other_http_errors_as_permanent() {
     assert!(matches!(
         map_gmail_error(http_error(

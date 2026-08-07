@@ -68,6 +68,21 @@ impl GmailApiClientRepository {
     }
 }
 
+/// Gmail signals per-user quota exhaustion as HTTP 403 with one of these
+/// `reason` strings; 429 is only one of its rate-limit forms.
+const QUOTA_403_REASONS: [&str; 4] = [
+    "userRateLimitExceeded",
+    "rateLimitExceeded",
+    "dailyLimitExceeded",
+    "quotaExceeded",
+];
+
+fn is_quota_403_body(body: &str) -> bool {
+    QUOTA_403_REASONS
+        .iter()
+        .any(|reason| body.contains(reason))
+}
+
 pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
     match error {
         GmailApiHttpError::Http {
@@ -76,6 +91,7 @@ pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
             retry_after,
         } => match status.as_u16() {
             401 => EmailApiError::AuthRequired,
+            403 if is_quota_403_body(&body) => EmailApiError::RateLimited { retry_after },
             403 => EmailApiError::Forbidden,
             404 => EmailApiError::NotFound,
             409 => EmailApiError::Conflict,
