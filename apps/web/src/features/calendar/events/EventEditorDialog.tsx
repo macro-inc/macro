@@ -11,6 +11,7 @@ import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import {
   addDays,
   addHours,
+  addMonths,
   format,
   isMatch,
   parseISO,
@@ -18,6 +19,17 @@ import {
 } from 'date-fns';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
+import { formatRecurrenceDescription } from './recurrence-description';
+import {
+  buildRecurrenceLines,
+  defaultCustomConfig,
+  parseRecurrenceConfig,
+  type RecurrenceConfig,
+  recurrenceConfigsEqual,
+  recurrencePresetsFor,
+  WEEKDAY_CODES,
+  type WeekdayCode,
+} from './recurrence-editor';
 import type { CalendarEvent } from './types';
 
 /** `<input type="date">` value. */
@@ -170,6 +182,67 @@ export function EventEditorDialog(props: {
     emailAddress: string;
     isPrimary: boolean;
   }) => calendarDisplayLabel(calendar, spansInboxes());
+
+  const initialLines = props.event?.recurrenceLines ?? [];
+  const initialConfig =
+    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
+  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
+  const startForRecurrence = createMemo(() => {
+    const start = state().start;
+    const parsed = state().allDay ? parseISO(start) : new Date(start);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  });
+  const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
+  const initialChoice = () => {
+    if (initialLines.length === 0) return 'none';
+    if (!initialConfig) return 'existing';
+    const preset = recurrencePresetsFor(
+      props.event?.allDay
+        ? parseISO(props.event.start)
+        : new Date(props.event?.start ?? Date.now())
+    ).find((candidate) =>
+      recurrenceConfigsEqual(candidate.config, initialConfig)
+    );
+    return preset?.id ?? 'custom';
+  };
+  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
+  const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
+    initialConfig ?? defaultCustomConfig(startForRecurrence())
+  );
+  const customValid = createMemo(() => {
+    if (recurrenceChoice() !== 'custom') return true;
+    const config = customConfig();
+    if (!Number.isInteger(config.interval) || config.interval < 1) {
+      return false;
+    }
+    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
+      return false;
+    }
+    return config.ends.kind !== 'on' || config.ends.date !== '';
+  });
+  /** `undefined` leaves the stored rule untouched. */
+  const recurrenceLines = (): string[] | undefined => {
+    const choice = recurrenceChoice();
+    if (choice === 'existing') return undefined;
+    if (choice === 'none') return [];
+    if (choice === 'custom') {
+      return buildRecurrenceLines(customConfig(), state().allDay);
+    }
+    const preset = presets().find((candidate) => candidate.id === choice);
+    return preset
+      ? buildRecurrenceLines(preset.config, state().allDay)
+      : undefined;
+  };
+  const toggleWeekday = (code: WeekdayCode) => {
+    setCustomConfig((config) => ({
+      ...config,
+      byDay: config.byDay.includes(code)
+        ? config.byDay.filter((day) => day !== code)
+        : [...config.byDay, code],
+    }));
+  };
+  const setEnds = (ends: RecurrenceConfig['ends']) =>
+    setCustomConfig((config) => ({ ...config, ends }));
   const isRecurring = () =>
     (props.event?.recurrenceLines.length ?? 0) > 0 ||
     props.event?.recurrenceId !== undefined;
@@ -179,7 +252,7 @@ export function EventEditorDialog(props: {
   );
   const eventTime = createMemo(() => buildEventTime(state()));
   const canSave = () =>
-    eventTime() !== undefined && invalidGuests().length === 0;
+    eventTime() !== undefined && invalidGuests().length === 0 && customValid();
 
   const create = useCreateCalendarEventMutation({
     onSuccess: () => props.onClose(),
@@ -201,7 +274,10 @@ export function EventEditorDialog(props: {
 
     const current = state();
     const event = props.event;
+    const lines = recurrenceLines();
     if (event) {
+      const recurrenceChanged =
+        lines !== undefined && lines.join('\n') !== initialLines.join('\n');
       update.mutate({
         eventId: event.eventId,
         patch: {
@@ -209,6 +285,7 @@ export function EventEditorDialog(props: {
           time,
           location: current.location,
           description: current.description,
+          ...(recurrenceChanged ? { recurrenceLines: lines } : {}),
         },
       });
       return;
@@ -217,6 +294,7 @@ export function EventEditorDialog(props: {
       title: current.title,
       time,
       calendarId: calendarId(),
+      recurrenceLines: lines ?? [],
       location: current.location === '' ? undefined : current.location,
       description: current.description === '' ? undefined : current.description,
       attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
@@ -289,6 +367,181 @@ export function EventEditorDialog(props: {
               aria-label="End"
               class="settings-input min-w-0 flex-1"
             />
+          </div>
+          <div class="flex flex-col gap-2">
+            <select
+              value={recurrenceChoice()}
+              onChange={(e) => {
+                const choice = e.currentTarget.value;
+                if (choice === 'custom') {
+                  const seed =
+                    presets().find((preset) => preset.id === recurrenceChoice())
+                      ?.config ??
+                    initialConfig ??
+                    defaultCustomConfig(startForRecurrence());
+                  setCustomConfig(seed);
+                }
+                setRecurrenceChoice(choice);
+              }}
+              aria-label="Repeats"
+              class="settings-input w-full"
+            >
+              <option value="none">Does not repeat</option>
+              <For each={presets()}>
+                {(preset) => <option value={preset.id}>{preset.label}</option>}
+              </For>
+              <Show when={hasUnrepresentableRule}>
+                <option value="existing">
+                  {`Custom: ${
+                    formatRecurrenceDescription(initialLines) ?? 'existing rule'
+                  } (unchanged)`}
+                </option>
+              </Show>
+              <option value="custom">Custom…</option>
+            </select>
+            <Show when={recurrenceChoice() === 'custom'}>
+              <div class="border-edge-muted flex flex-col gap-2.5 rounded-lg border p-2.5 text-xs text-ink-muted">
+                <div class="flex items-center gap-2">
+                  <span>Repeat every</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={customConfig().interval}
+                    onInput={(e) =>
+                      setCustomConfig((config) => ({
+                        ...config,
+                        interval: e.currentTarget.valueAsNumber,
+                      }))
+                    }
+                    aria-label="Repeat interval"
+                    class="settings-input w-16"
+                  />
+                  <select
+                    value={customConfig().frequency}
+                    onChange={(e) =>
+                      setCustomConfig((config) => ({
+                        ...config,
+                        frequency: e.currentTarget
+                          .value as RecurrenceConfig['frequency'],
+                      }))
+                    }
+                    aria-label="Repeat unit"
+                    class="settings-input"
+                  >
+                    <option value="DAILY">day</option>
+                    <option value="WEEKLY">week</option>
+                    <option value="MONTHLY">month</option>
+                    <option value="YEARLY">year</option>
+                  </select>
+                </div>
+                <Show when={customConfig().frequency === 'WEEKLY'}>
+                  <div class="flex items-center gap-1.5">
+                    <span class="mr-1">Repeat on</span>
+                    <For each={WEEKDAY_CODES}>
+                      {(code) => (
+                        <Button
+                          variant={
+                            customConfig().byDay.includes(code)
+                              ? 'active'
+                              : 'ghost'
+                          }
+                          size="icon-sm"
+                          class="rounded-full text-xxs"
+                          aria-label={code}
+                          aria-pressed={customConfig().byDay.includes(code)}
+                          onClick={() => toggleWeekday(code)}
+                        >
+                          {code[0]}
+                        </Button>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+                <div class="flex flex-col gap-1.5">
+                  <span>Ends</span>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="recurrence-ends"
+                      checked={customConfig().ends.kind === 'never'}
+                      onChange={() => setEnds({ kind: 'never' })}
+                    />
+                    Never
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="recurrence-ends"
+                      checked={customConfig().ends.kind === 'on'}
+                      onChange={() =>
+                        setEnds({
+                          kind: 'on',
+                          date: format(
+                            addMonths(startForRecurrence(), 3),
+                            'yyyy-MM-dd'
+                          ),
+                        })
+                      }
+                    />
+                    On
+                    <Show when={customConfig().ends.kind === 'on'}>
+                      <input
+                        type="date"
+                        value={
+                          customConfig().ends.kind === 'on'
+                            ? (
+                                customConfig().ends as {
+                                  kind: 'on';
+                                  date: string;
+                                }
+                              ).date
+                            : ''
+                        }
+                        onInput={(e) =>
+                          setEnds({ kind: 'on', date: e.currentTarget.value })
+                        }
+                        aria-label="Ends on date"
+                        class="settings-input"
+                      />
+                    </Show>
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="recurrence-ends"
+                      checked={customConfig().ends.kind === 'after'}
+                      onChange={() => setEnds({ kind: 'after', count: 13 })}
+                    />
+                    After
+                    <Show when={customConfig().ends.kind === 'after'}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={
+                          customConfig().ends.kind === 'after'
+                            ? (
+                                customConfig().ends as {
+                                  kind: 'after';
+                                  count: number;
+                                }
+                              ).count
+                            : 13
+                        }
+                        onInput={(e) =>
+                          setEnds({
+                            kind: 'after',
+                            count: e.currentTarget.valueAsNumber,
+                          })
+                        }
+                        aria-label="Ends after occurrences"
+                        class="settings-input w-20"
+                      />
+                      occurrences
+                    </Show>
+                  </label>
+                </div>
+              </div>
+            </Show>
           </div>
           <Show when={!isEdit() && writableCalendars().length > 1}>
             <select
