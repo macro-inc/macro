@@ -198,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let command = match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
+                let (session_id, command) = match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
                     Ok(command) => command,
                     Err(skipped) => {
                         tracing::debug!(?skipped, "skipped an agent session event");
@@ -218,8 +218,7 @@ async fn main() -> anyhow::Result<()> {
                     run_error = Some(error);
                     break;
                 }
-                let session_id = command.session_id();
-                let execution = harness.execute(command);
+                let execution = harness.execute(session_id, command);
                 tasks.spawn(async move {
                     match execution.await {
                         Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),

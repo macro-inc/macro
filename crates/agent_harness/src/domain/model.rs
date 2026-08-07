@@ -23,8 +23,6 @@ pub struct MentionOrigin {
 /// Open a new session for a mention.
 #[derive(Debug, Clone)]
 pub struct OpenSession {
-    /// Identity assigned before the command enters its per-session queue.
-    pub session_id: AgentSessionId,
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The mention itself.
@@ -34,8 +32,6 @@ pub struct OpenSession {
 /// Deliver a message to a session that already exists.
 #[derive(Debug, Clone)]
 pub struct ForwardMessage {
-    /// The session to feed.
-    pub session_id: AgentSessionId,
     /// Who sent it, when it came from a user.
     pub sender: Option<MacroUserIdStr<'static>>,
     /// The message text, verbatim.
@@ -49,17 +45,6 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Feed a session that already exists.
     Forward(ForwardMessage),
-}
-
-impl HarnessCommand {
-    /// Session whose command queue must execute this operation.
-    #[must_use]
-    pub fn session_id(&self) -> AgentSessionId {
-        match self {
-            Self::Open(command) => command.session_id,
-            Self::Forward(command) => command.session_id,
-        }
-    }
 }
 
 /// Facts required to announce a newly created session.

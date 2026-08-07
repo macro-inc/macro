@@ -68,10 +68,9 @@ where
     /// completion future without reordering commands.
     pub fn execute(
         &self,
+        session_id: AgentSessionId,
         mut command: HarnessCommand,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
-        let session_id = command.session_id();
-
         let result = loop {
             let commands = self.commands(session_id);
             let (completed, result) = oneshot::channel();
@@ -100,14 +99,18 @@ where
             Entry::Vacant(entry) => {
                 let (commands, receiver) = mpsc::unbounded_channel();
                 entry.insert(commands.clone());
-                self.spawn_worker(receiver);
+                self.spawn_worker(session_id, receiver);
                 commands
             }
         }
     }
 
-    fn spawn_worker(&self, receiver: mpsc::UnboundedReceiver<QueuedCommand>) {
-        tokio::spawn(run_session_worker(self.inner.clone(), receiver));
+    fn spawn_worker(
+        &self,
+        session_id: AgentSessionId,
+        receiver: mpsc::UnboundedReceiver<QueuedCommand>,
+    ) {
+        tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
     }
 }
 
@@ -117,24 +120,20 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
 {
-    async fn execute(&self, command: HarnessCommand) -> Result<()> {
+    async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match command {
-            HarnessCommand::Open(command) => self.open(command).await,
-            HarnessCommand::Forward(command) => self.forward(command).await,
+            HarnessCommand::Open(command) => self.open(session_id, command).await,
+            HarnessCommand::Forward(command) => self.forward(session_id, command).await,
         }
     }
 
     #[tracing::instrument(err, skip(self, command), fields(
-        session_id = %command.session_id,
+        %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
     ))]
-    async fn open(&self, command: OpenSession) -> Result<()> {
-        let OpenSession {
-            session_id,
-            bot_id,
-            origin,
-        } = command;
+    async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
+        let OpenSession { bot_id, origin } = command;
         let repo_url = self.defaults.repo_url.clone();
 
         // The container comes up before the session exists anywhere: the
@@ -184,13 +183,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self, command), fields(session_id = %command.session_id))]
-    async fn forward(&self, command: ForwardMessage) -> Result<()> {
-        let ForwardMessage {
-            session_id,
-            sender,
-            content,
-        } = command;
+    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    async fn forward(&self, session_id: AgentSessionId, command: ForwardMessage) -> Result<()> {
+        let ForwardMessage { sender, content } = command;
         let action = AgentAction::prompt(content);
 
         match self
@@ -213,6 +208,7 @@ where
 }
 
 async fn run_session_worker<Sessions, Containers, Announcer>(
+    session_id: AgentSessionId,
     inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer>>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
@@ -222,7 +218,7 @@ async fn run_session_worker<Sessions, Containers, Announcer>(
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand { command, completed } = queued;
-        let result = inner.execute(command).await;
+        let result = inner.execute(session_id, command).await;
         let _ = completed.send(result);
     }
 }

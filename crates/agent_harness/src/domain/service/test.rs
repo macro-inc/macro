@@ -31,7 +31,6 @@ fn sender() -> MacroUserIdStr<'static> {
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
-        session_id: AgentSessionId::new(),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
@@ -114,11 +113,8 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession {
-        session_id: id,
-        bot_id,
-        origin,
-    } = open_command();
+    let OpenSession { bot_id, origin } = open_command();
+    let id = AgentSessionId::new();
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
@@ -151,10 +147,10 @@ async fn disconnected_session(
 async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer) = harness();
     let command = open_command();
-    let id = command.session_id;
+    let id = AgentSessionId::new();
     let origin = command.origin.clone();
 
-    let open = service.execute(HarnessCommand::Open(command));
+    let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         // The container exists as soon as `open` spawns it; drive its agent
         // through the handshake so the queued mention can flush.
@@ -196,8 +192,9 @@ async fn open_creates_announces_and_delivers_the_mention() {
 #[tokio::test]
 async fn open_announces_before_the_prompt_is_delivered() {
     let (service, _repo, containers, announcer) = harness();
+    let id = AgentSessionId::new();
 
-    let open = service.execute(HarnessCommand::Open(open_command()));
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
     let observed = async {
         // The announcement lands while the container is still booting - the
         // handshake has not even started, so the prompt cannot have been
@@ -228,8 +225,8 @@ async fn open_announces_before_the_prompt_is_delivered() {
 async fn forward_to_a_live_session_reuses_the_transport() {
     let (service, _repo, containers, _announcer) = harness();
     let command = open_command();
-    let id = command.session_id;
-    let open = service.execute(HarnessCommand::Open(command));
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
             if containers.spawned() == 1 {
@@ -247,11 +244,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     opened.expect("open should succeed");
 
     service
-        .execute(HarnessCommand::Forward(ForwardMessage {
-            session_id: id,
-            sender: Some(sender()),
-            content: "and add a regression test".to_owned(),
-        }))
+        .execute(
+            id,
+            HarnessCommand::Forward(ForwardMessage {
+                sender: Some(sender()),
+                content: "and add a regression test".to_owned(),
+            }),
+        )
         .await
         .expect("forward to a live session should succeed");
 
@@ -264,8 +263,8 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 async fn a_delivery_failure_is_not_automatically_resumed() {
     let (service, _repo, containers, _announcer) = harness();
     let command = open_command();
-    let id = command.session_id;
-    let open = service.execute(HarnessCommand::Open(command));
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
             if containers.spawned() == 1 {
@@ -284,11 +283,13 @@ async fn a_delivery_failure_is_not_automatically_resumed() {
     container.fails_sends_after(0);
 
     let result = service
-        .execute(HarnessCommand::Forward(ForwardMessage {
-            session_id: id,
-            sender: Some(sender()),
-            content: "do not retry this".to_owned(),
-        }))
+        .execute(
+            id,
+            HarnessCommand::Forward(ForwardMessage {
+                sender: Some(sender()),
+                content: "do not retry this".to_owned(),
+            }),
+        )
         .await;
 
     assert!(matches!(result, Err(HarnessError::Session(_))));
@@ -300,11 +301,13 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
-    let forward = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: id,
-        sender: Some(sender()),
-        content: "continue after reconnecting".to_owned(),
-    }));
+    let forward = service.execute(
+        id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "continue after reconnecting".to_owned(),
+        }),
+    );
     let drive_resume = async {
         loop {
             if containers.resumed() == 1 {
@@ -351,16 +354,20 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
 async fn concurrent_forwards_share_one_session_recovery() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
-    let first = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: id,
-        sender: Some(sender()),
-        content: "first".to_owned(),
-    }));
-    let second = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: id,
-        sender: Some(sender()),
-        content: "second".to_owned(),
-    }));
+    let first = service.execute(
+        id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "first".to_owned(),
+        }),
+    );
+    let second = service.execute(
+        id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "second".to_owned(),
+        }),
+    );
     let drive_resume = async {
         loop {
             if containers.resumed() == 1 {
@@ -395,16 +402,20 @@ async fn different_sessions_execute_concurrently() {
     let (service, repo, containers, _announcer) = harness();
     let first_id = disconnected_session(&repo, &containers).await;
     let second_id = disconnected_session(&repo, &containers).await;
-    let first = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: first_id,
-        sender: Some(sender()),
-        content: "first".to_owned(),
-    }));
-    let second = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: second_id,
-        sender: Some(sender()),
-        content: "second".to_owned(),
-    }));
+    let first = service.execute(
+        first_id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "first".to_owned(),
+        }),
+    );
+    let second = service.execute(
+        second_id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "second".to_owned(),
+        }),
+    );
     let drive_resumes = async {
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
@@ -445,11 +456,13 @@ async fn different_sessions_execute_concurrently() {
 async fn an_admitted_command_survives_caller_cancellation() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
-    let completion = service.execute(HarnessCommand::Forward(ForwardMessage {
-        session_id: id,
-        sender: Some(sender()),
-        content: "finish even when nobody is waiting".to_owned(),
-    }));
+    let completion = service.execute(
+        id,
+        HarnessCommand::Forward(ForwardMessage {
+            sender: Some(sender()),
+            content: "finish even when nobody is waiting".to_owned(),
+        }),
+    );
     drop(completion);
 
     loop {
@@ -477,7 +490,9 @@ async fn a_failed_announce_surfaces_and_no_prompt_is_delivered() {
     let (service, repo, containers, announcer) = harness();
     announcer.fails("comms is down");
 
-    let result = service.execute(HarnessCommand::Open(open_command())).await;
+    let result = service
+        .execute(AgentSessionId::new(), HarnessCommand::Open(open_command()))
+        .await;
 
     assert!(matches!(result, Err(HarnessError::Announce(_))));
     // The session row and container exist - the failure is the announcement,
