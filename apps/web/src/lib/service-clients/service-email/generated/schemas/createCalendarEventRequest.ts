@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarAttendeeInputBody } from './calendarAttendeeInputBody';
+import type { CreateCalendarEventRequestCalendarId } from './createCalendarEventRequestCalendarId';
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
@@ -18,6 +19,9 @@ import type { EventTime } from './eventTime';
 export interface CreateCalendarEventRequest {
   /** Invited attendees. */
   attendees?: CalendarAttendeeInputBody[];
+  /** Exact calendar to create the event on; takes precedence over the
+inbox default. */
+  calendarId?: CreateCalendarEventRequestCalendarId;
   /** Optional event body. */
   description?: CreateCalendarEventRequestDescription;
   /** Connected inbox whose primary calendar receives the event; defaults

@@ -219,8 +219,16 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
         _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarCreationTarget>, rootcause::Report> {
         Ok(self.creation_target.clone())
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::VisibleCalendar>, rootcause::Report> {
+        Ok(Vec::new())
     }
 
     async fn remove_google_source(
@@ -388,7 +396,9 @@ async fn create_requires_a_writable_calendar() {
         FakeTokens::ok(),
     );
     assert!(matches!(
-        missing.create_event("macro|user", None, draft()).await,
+        missing
+            .create_event("macro|user", None, None, draft())
+            .await,
         Err(CalendarMutationError::NoWritableCalendar)
     ));
 
@@ -401,7 +411,9 @@ async fn create_requires_a_writable_calendar() {
         FakeTokens::ok(),
     );
     assert!(matches!(
-        read_only.create_event("macro|user", None, draft()).await,
+        read_only
+            .create_event("macro|user", None, None, draft())
+            .await,
         Err(CalendarMutationError::ReadOnly)
     ));
 }
@@ -420,7 +432,7 @@ async fn create_persists_the_provider_echo_and_returns_the_applied_id() {
         FakeProvider::new(FakeProviderBehavior::Echo),
         FakeTokens::ok(),
     )
-    .create_event("macro|user", None, draft())
+    .create_event("macro|user", None, None, draft())
     .await
     .unwrap();
 
@@ -449,14 +461,14 @@ async fn create_rejects_invalid_input_before_reaching_the_provider() {
         time_zone: None,
     };
     assert!(matches!(
-        svc.create_event("macro|user", None, inverted).await,
+        svc.create_event("macro|user", None, None, inverted).await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
 
     let mut bad_email = draft();
     bad_email.attendees[0].email = "not-an-email".to_string();
     assert!(matches!(
-        svc.create_event("macro|user", None, bad_email).await,
+        svc.create_event("macro|user", None, None, bad_email).await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
     assert!(calls.lock().unwrap().is_empty());

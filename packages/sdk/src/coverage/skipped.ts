@@ -166,6 +166,7 @@ export const emailBacklog = [
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'listCalendars',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',

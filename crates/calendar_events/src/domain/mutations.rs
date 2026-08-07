@@ -100,13 +100,14 @@ where
         &self,
         requester_id: &str,
         email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         validate_time(&draft.time)?;
         validate_attendee_emails(draft.attendees.iter().map(|attendee| &attendee.email))?;
         let target = self
             .repository
-            .get_creation_target(requester_id, email_link_id)
+            .get_creation_target(requester_id, email_link_id, calendar_id)
             .await
             .map_err(internal)?
             .ok_or(CalendarMutationError::NoWritableCalendar)?;
@@ -228,6 +229,17 @@ where
                 Err(CalendarMutationError::NotFound)
             }
         }
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> Result<Vec<super::models::VisibleCalendar>, CalendarMutationError> {
+        self.repository
+            .list_visible_calendars(requester_id)
+            .await
+            .map_err(internal)
     }
 }
 

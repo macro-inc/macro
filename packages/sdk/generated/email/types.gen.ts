@@ -722,6 +722,11 @@ export type CreateCalendarEventRequest = {
      */
     attendees?: Array<CalendarAttendeeInputBody>;
     /**
+     * Exact calendar to create the event on; takes precedence over the
+     * inbox default.
+     */
+    calendarId?: string | null;
+    /**
      * Optional event body.
      */
     description?: string | null;
@@ -1000,6 +1005,16 @@ export type ListBlockedResponse = {
      * List of email addresses that are currently blocked.
      */
     blocked_emails: Array<string>;
+};
+
+/**
+ * Calendars visible to the requester across connected and delegated inboxes.
+ */
+export type ListCalendarsResponse = {
+    /**
+     * Primaries and writable calendars first.
+     */
+    calendars: Array<VisibleCalendar>;
 };
 
 export type ListContactsResponse = {
@@ -1406,6 +1421,69 @@ export type UpsertScheduledResponse = {
 export type UserProvider = 'GMAIL';
 
 export type Value = unknown;
+
+/**
+ * A calendar visible to a requester, listed for pickers and filters.
+ */
+export type VisibleCalendar = {
+    /**
+     * Provider color.
+     */
+    color?: string | null;
+    /**
+     * Connected inbox address, for grouping in multi-inbox pickers.
+     */
+    emailAddress: string;
+    /**
+     * Connected inbox that syncs this calendar.
+     */
+    emailLinkId: string;
+    /**
+     * Persisted Macro calendar identifier.
+     */
+    id: string;
+    /**
+     * Whether this is its account's primary calendar.
+     */
+    isPrimary: boolean;
+    /**
+     * Whether the grant can create and modify events on this calendar.
+     */
+    isWritable: boolean;
+    /**
+     * Provider display name.
+     */
+    name: string;
+};
+
+export type ListCalendarsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/calendar/calendars';
+};
+
+export type ListCalendarsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Transient failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type ListCalendarsError = ListCalendarsErrors[keyof ListCalendarsErrors];
+
+export type ListCalendarsResponses = {
+    /**
+     * Calendars visible to the requester
+     */
+    200: ListCalendarsResponse;
+};
+
+export type ListCalendarsResponse2 = ListCalendarsResponses[keyof ListCalendarsResponses];
 
 export type CreateCalendarEventData = {
     body: CreateCalendarEventRequest;

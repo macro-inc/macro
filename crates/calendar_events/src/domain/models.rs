@@ -655,6 +655,27 @@ impl CalendarEventMutationTarget {
     }
 }
 
+/// A calendar visible to a requester, listed for pickers and filters.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct VisibleCalendar {
+    /// Persisted Macro calendar identifier.
+    pub id: Uuid,
+    /// Connected inbox that syncs this calendar.
+    pub email_link_id: Uuid,
+    /// Connected inbox address, for grouping in multi-inbox pickers.
+    pub email_address: String,
+    /// Provider display name.
+    pub name: String,
+    /// Provider color.
+    pub color: Option<String>,
+    /// Whether this is its account's primary calendar.
+    pub is_primary: bool,
+    /// Whether the grant can create and modify events on this calendar.
+    pub is_writable: bool,
+}
+
 /// The writable calendar a new user-created event lands in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CalendarCreationTarget {

@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   useCreateCalendarEventMutation,
   useUpdateCalendarEventMutation,
@@ -15,7 +16,7 @@ import {
   parseISO,
   startOfHour,
 } from 'date-fns';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { CalendarEvent } from './types';
 
 /** `<input type="date">` value. */
@@ -153,6 +154,26 @@ export function EventEditorDialog(props: {
 }) {
   const [state, setState] = createSignal(initialEditorState(props.event));
   const isEdit = () => props.event !== undefined;
+  const [calendarId, setCalendarId] = createSignal<string>();
+  const calendarsQuery = useVisibleCalendarsQuery(() => ({
+    enabled: !isEdit(),
+  }));
+  const writableCalendars = createMemo(
+    () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
+  );
+  const spansInboxes = createMemo(
+    () =>
+      new Set(writableCalendars().map((calendar) => calendar.emailAddress))
+        .size > 1
+  );
+  const calendarLabel = (calendar: {
+    name: string;
+    emailAddress: string;
+    isPrimary: boolean;
+  }) =>
+    spansInboxes()
+      ? `${calendar.name} — ${calendar.emailAddress}`
+      : calendar.name;
   const isRecurring = () =>
     (props.event?.recurrenceLines.length ?? 0) > 0 ||
     props.event?.recurrenceId !== undefined;
@@ -199,6 +220,7 @@ export function EventEditorDialog(props: {
     create.mutate({
       title: current.title,
       time,
+      calendarId: calendarId(),
       location: current.location === '' ? undefined : current.location,
       description: current.description === '' ? undefined : current.description,
       attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
@@ -272,6 +294,20 @@ export function EventEditorDialog(props: {
               class="settings-input min-w-0 flex-1"
             />
           </div>
+          <Show when={!isEdit() && writableCalendars().length > 1}>
+            <select
+              value={calendarId() ?? writableCalendars()[0]?.id}
+              onChange={(e) => setCalendarId(e.currentTarget.value)}
+              aria-label="Calendar"
+              class="settings-input w-full"
+            >
+              <For each={writableCalendars()}>
+                {(calendar) => (
+                  <option value={calendar.id}>{calendarLabel(calendar)}</option>
+                )}
+              </For>
+            </select>
+          </Show>
           <Show when={!isEdit()}>
             <div class="flex flex-col gap-1">
               <input

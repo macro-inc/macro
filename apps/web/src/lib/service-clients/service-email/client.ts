@@ -18,6 +18,7 @@ import type {
   GetAttachmentResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
+  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -552,6 +553,14 @@ export const emailClient = {
     return emailFetch(`/email/filters/${args.id}`, {
       method: 'DELETE',
     });
+  },
+  async listCalendars() {
+    return fetchWithToken<ListCalendarsResponse>(
+      `${emailHost}/calendar/calendars`,
+      {
+        method: 'GET',
+      }
+    );
   },
   async createCalendarEvent(args: CreateCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(

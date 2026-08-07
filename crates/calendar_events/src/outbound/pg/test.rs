@@ -2089,7 +2089,7 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
     let (account_id, calendar_id) = grant_and_provider_ids(&repo, link_id).await;
 
     let target = repo
-        .get_creation_target(owner_id, None)
+        .get_creation_target(owner_id, None, None)
         .await
         .unwrap()
         .expect("owner resolves a creation target");
@@ -2099,22 +2099,79 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
     assert!(!target.is_read_only);
 
     let explicit = repo
-        .get_creation_target(owner_id, Some(link_id))
+        .get_creation_target(owner_id, Some(link_id), None)
         .await
         .unwrap();
     assert!(explicit.is_some());
 
     let unknown_link = repo
-        .get_creation_target(owner_id, Some(Uuid::now_v7()))
+        .get_creation_target(owner_id, Some(Uuid::now_v7()), None)
         .await
         .unwrap();
     assert!(unknown_link.is_none());
 
     let stranger = repo
-        .get_creation_target("macro|calendar-create-stranger@example.com", None)
+        .get_creation_target("macro|calendar-create-stranger@example.com", None, None)
         .await
         .unwrap();
     assert!(stranger.is_none());
+
+    let team_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: Some("#33b679".to_string()),
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap();
+    let picked = repo
+        .get_creation_target(owner_id, None, Some(team_id))
+        .await
+        .unwrap()
+        .expect("an explicit calendar overrides the primary default");
+    assert_eq!(picked.calendar_id, team_id);
+    assert_eq!(picked.provider_calendar_id, "team");
+    assert!(!picked.is_read_only);
+
+    let foreign_calendar = repo
+        .get_creation_target(
+            "macro|calendar-create-stranger@example.com",
+            None,
+            Some(team_id),
+        )
+        .await
+        .unwrap();
+    assert!(
+        foreign_calendar.is_none(),
+        "calendar picks stay requester-scoped"
+    );
+
+    let calendars = repo.list_visible_calendars(owner_id).await.unwrap();
+    assert_eq!(
+        calendars
+            .iter()
+            .map(|calendar| (
+                calendar.name.as_str(),
+                calendar.is_primary,
+                calendar.is_writable
+            ))
+            .collect::<Vec<_>>(),
+        vec![("Primary", true, true), ("Team", false, true)]
+    );
+    assert!(
+        repo.list_visible_calendars("macro|calendar-create-stranger@example.com")
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

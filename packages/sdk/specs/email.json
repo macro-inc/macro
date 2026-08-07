@@ -10,6 +10,38 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/calendar/calendars": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List the requester's visible calendars for pickers and filters.",
+        "operationId": "list_calendars",
+        "responses": {
+          "200": {
+            "description": "Calendars visible to the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCalendarsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "503": {
+            "description": "Transient failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/calendar/events": {
       "post": {
         "tags": ["calendar_events"],
@@ -4513,6 +4545,11 @@
             },
             "description": "Invited attendees."
           },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Optional event body."
@@ -4979,6 +5016,20 @@
               "type": "string"
             },
             "description": "List of email addresses that are currently blocked."
+          }
+        }
+      },
+      "ListCalendarsResponse": {
+        "type": "object",
+        "description": "Calendars visible to the requester across connected and delegated inboxes.",
+        "required": ["calendars"],
+        "properties": {
+          "calendars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisibleCalendar"
+            },
+            "description": "Primaries and writable calendars first."
           }
         }
       },
@@ -5971,7 +6022,51 @@
         "type": "string",
         "enum": ["GMAIL"]
       },
-      "Value": {}
+      "Value": {},
+      "VisibleCalendar": {
+        "type": "object",
+        "description": "A calendar visible to a requester, listed for pickers and filters.",
+        "required": [
+          "id",
+          "emailLinkId",
+          "emailAddress",
+          "name",
+          "isPrimary",
+          "isWritable"
+        ],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "Provider color."
+          },
+          "emailAddress": {
+            "type": "string",
+            "description": "Connected inbox address, for grouping in multi-inbox pickers."
+          },
+          "emailLinkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Connected inbox that syncs this calendar."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persisted Macro calendar identifier."
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "Whether this is its account's primary calendar."
+          },
+          "isWritable": {
+            "type": "boolean",
+            "description": "Whether the grant can create and modify events on this calendar."
+          },
+          "name": {
+            "type": "string",
+            "description": "Provider display name."
+          }
+        }
+      }
     }
   },
   "tags": [

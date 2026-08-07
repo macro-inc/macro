@@ -13,7 +13,7 @@ use super::models::{
     CalendarEventPatch, CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
     CalendarOccurrenceCursor, CalendarSyncStatus, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
     GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
-    OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+    OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -275,14 +275,22 @@ pub trait CalendarRepository: Send + Sync + 'static {
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventMutationTarget>, Report>> + Send;
 
-    /// Resolve the writable calendar a requester-created event lands in:
-    /// the supplied inbox's primary calendar, or the requester's primary
-    /// inbox's primary calendar when no inbox is supplied.
+    /// Resolve the calendar a requester-created event lands in: the exact
+    /// calendar when one is supplied, otherwise the supplied inbox's primary
+    /// calendar, otherwise the requester's primary inbox's primary calendar.
     fn get_creation_target(
         &self,
         requester_id: &str,
         email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Option<CalendarCreationTarget>, Report>> + Send;
+
+    /// List every calendar visible to the requester across owned and
+    /// delegated inboxes, primaries and writables first.
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
     /// Retire a Google source the provider confirmed deleted (a recurring
     /// master also retires its expanded instances), restoring the best
@@ -297,14 +305,21 @@ pub trait CalendarRepository: Send + Sync + 'static {
 
 /// Inbound service port for user-initiated calendar event mutations.
 pub trait CalendarMutationService: Send + Sync + 'static {
-    /// Create an event on the requester's (or the supplied inbox's) primary
-    /// calendar and persist the provider echo.
+    /// Create an event on the selected calendar — or the requester's (or
+    /// the supplied inbox's) primary calendar — and persist the provider echo.
     fn create_event(
         &self,
         requester_id: &str,
         email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+
+    /// List the calendars the requester can see, flagged for writability.
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<VisibleCalendar>, CalendarMutationError>> + Send;
 
     /// Patch an event at its provider and persist the echo.
     fn update_event(

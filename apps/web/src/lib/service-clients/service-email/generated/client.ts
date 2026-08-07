@@ -36,6 +36,7 @@ import type {
   InitUserParams,
   ListBackfillJobsResponse,
   ListBlockedResponse,
+  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -63,6 +64,60 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
+
+/**
+ * @summary List the requester's visible calendars for pickers and filters.
+ */
+export type listCalendarsResponse200 = {
+  data: ListCalendarsResponse;
+  status: 200;
+};
+
+export type listCalendarsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCalendarsResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type listCalendarsResponseSuccess = listCalendarsResponse200 & {
+  headers: Headers;
+};
+export type listCalendarsResponseError = (
+  | listCalendarsResponse401
+  | listCalendarsResponse503
+) & {
+  headers: Headers;
+};
+
+export type listCalendarsResponse =
+  | listCalendarsResponseSuccess
+  | listCalendarsResponseError;
+
+export const getListCalendarsUrl = () => {
+  return `/calendar/calendars`;
+};
+
+export const listCalendars = async (
+  options?: RequestInit
+): Promise<listCalendarsResponse> => {
+  const res = await fetch(getListCalendarsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCalendarsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCalendarsResponse;
+};
 
 /**
  * @summary Create a calendar event and return its synced entity.

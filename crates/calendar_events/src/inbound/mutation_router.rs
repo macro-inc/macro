@@ -14,7 +14,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, patch, post, put},
+    routing::{delete, get, patch, post, put},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, EventTime, EventTransparency, EventVisibility,
+        CalendarEventPatch, EventTime, EventTransparency, EventVisibility, VisibleCalendar,
     },
     ports::{CalendarMutationError, CalendarMutationService},
 };
@@ -71,6 +71,7 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
+        .route("/calendars", get(list_calendars::<S, Auth>))
         .route("/events", post(create_calendar_event::<S, Auth>))
         .route(
             "/events/{event_id}",
@@ -111,6 +112,9 @@ impl From<CalendarAttendeeInputBody> for CalendarAttendeeInput {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCalendarEventRequest {
+    /// Exact calendar to create the event on; takes precedence over the
+    /// inbox default.
+    pub calendar_id: Option<Uuid>,
     /// Connected inbox whose primary calendar receives the event; defaults
     /// to the requester's primary inbox.
     pub email_link_id: Option<Uuid>,
@@ -227,7 +231,7 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
             CalendarMutationError::ReadOnly => (
                 StatusCode::FORBIDDEN,
                 CalendarMutationErrorCode::ReadOnly,
-                "this calendar event cannot be modified".to_string(),
+                "this calendar is read-only".to_string(),
             ),
             CalendarMutationError::NoWritableCalendar => (
                 StatusCode::CONFLICT,
@@ -319,10 +323,46 @@ where
         .create_event(
             user.authorization.user.macro_user_id.as_ref(),
             request.email_link_id,
+            request.calendar_id,
             draft,
         )
         .await?;
     Ok((StatusCode::CREATED, Json(event)))
+}
+
+/// Calendars visible to the requester across connected and delegated inboxes.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCalendarsResponse {
+    /// Primaries and writable calendars first.
+    pub calendars: Vec<VisibleCalendar>,
+}
+
+/// List the requester's visible calendars for pickers and filters.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    get,
+    path = "/calendar/calendars",
+    tag = "calendar_events",
+    responses(
+        (status = 200, description = "Calendars visible to the requester", body = ListCalendarsResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 503, description = "Transient failure", body = CalendarMutationApiError),
+    )
+)]
+pub async fn list_calendars<S, Auth>(
+    State(state): State<CalendarMutationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<ListCalendarsResponse>, CalendarMutationApiError>
+where
+    S: CalendarMutationService,
+    Auth: MacroAuthorizationService,
+{
+    let calendars = state
+        .service
+        .list_visible_calendars(user.authorization.user.macro_user_id.as_ref())
+        .await?;
+    Ok(Json(ListCalendarsResponse { calendars }))
 }
 
 /// Update fields of a calendar event and return its synced entity.

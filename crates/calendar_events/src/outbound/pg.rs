@@ -18,7 +18,7 @@ use crate::domain::{
         CalendarOccurrenceCursor, CalendarSyncStatus, EventStart, EventStatus, EventTime,
         EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
         GoogleScopeSet, GoogleWatchChannel, OccurrenceRange, ProviderCalendar,
-        StoredGoogleCalendar,
+        StoredGoogleCalendar, VisibleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository,
@@ -1196,6 +1196,7 @@ impl CalendarRepository for PgCalendarRepository {
         &self,
         requester_id: &str,
         email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarCreationTarget>, Report> {
         let row = sqlx::query!(
             r#"
@@ -1212,9 +1213,12 @@ impl CalendarRepository for PgCalendarRepository {
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
-            WHERE calendar.is_primary
-              AND NOT calendar.is_deleted
+            WHERE NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
+              AND (
+                    ($3::uuid IS NOT NULL AND calendar.id = $3)
+                    OR ($3::uuid IS NULL AND calendar.is_primary)
+              )
               AND ($2::uuid IS NULL OR link.id = $2)
               AND (
                     link.macro_id = $1
@@ -1233,6 +1237,7 @@ impl CalendarRepository for PgCalendarRepository {
             "#,
             requester_id,
             email_link_id,
+            calendar_id,
         )
         .fetch_optional(&self.pool)
         .await
@@ -1250,6 +1255,62 @@ impl CalendarRepository for PgCalendarRepository {
                 provider: row.provider,
             },
         }))
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> Result<Vec<VisibleCalendar>, Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                calendar.id,
+                link.id AS email_link_id,
+                link.email_address,
+                calendar.name,
+                calendar.color,
+                calendar.is_primary,
+                calendar.access_role
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN calendars calendar ON calendar.account_id = account.id
+            WHERE NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+              AND (
+                    link.macro_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links delegation
+                        WHERE delegation.link_id = link.id
+                          AND delegation.primary_macro_id = $1
+                    )
+              )
+            ORDER BY
+                (link.macro_id = $1) DESC,
+                link.is_primary DESC,
+                link.created_at ASC,
+                calendar.is_primary DESC,
+                (calendar.access_role IN ('owner', 'writer')) DESC,
+                calendar.name ASC
+            "#,
+            requester_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| VisibleCalendar {
+                id: row.id,
+                email_link_id: row.email_link_id,
+                email_address: row.email_address,
+                name: row.name,
+                color: row.color,
+                is_primary: row.is_primary,
+                is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self), err)]

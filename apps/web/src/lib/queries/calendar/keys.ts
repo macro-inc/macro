@@ -8,6 +8,7 @@ export interface CalendarOccurrenceQueryRange {
 }
 
 export const calendarKeys = createQueryKeys('calendar', {
+  visibleCalendars: null,
   occurrences: (
     userId: string,
     range: CalendarOccurrenceQueryRange | undefined

@@ -69,7 +69,15 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
         _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarCreationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::VisibleCalendar>, Report> {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
 
