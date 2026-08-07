@@ -871,11 +871,14 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 .json(&draft_body(draft)),
         )
         .await?;
+        // The insert already happened and carries no idempotency key, so a
+        // readback miss must not surface as retryable: a client retry would
+        // POST a duplicate event.
         self.mutation_readback(access_token, target, created)
             .await?
             .ok_or_else(|| {
                 GoogleProviderError::new(
-                    GoogleProviderErrorKind::Transient,
+                    GoogleProviderErrorKind::Permanent,
                     "Google Calendar dropped the event immediately after creation",
                 )
             })
@@ -1046,13 +1049,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         else {
             return Ok(GoogleRsvpOutcome::Gone);
         };
-        let mut attendees: Vec<GoogleAttendee> = current
-            .attendees
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|attendee| attendee.email.is_some())
-            .collect();
+        let mut attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
         let self_position = attendees
             .iter()
             .position(|attendee| attendee.is_self)
@@ -1264,7 +1261,7 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
 fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
     let mut body = serde_json::json!({});
     if let Some(title) = &patch.title {
-        body["summary"] = serde_json::Value::String(title.clone());
+        body["summary"] = google_text_body(title);
     }
     if let Some(description) = &patch.description {
         body["description"] = google_text_body(description);
@@ -1803,11 +1800,17 @@ struct GooglePerson {
     display_name: Option<String>,
 }
 
+/// Writes replace the whole `attendees` array, so every field Google returns
+/// must survive a deserialize/serialize round trip; unmapped fields (id,
+/// additionalGuests, resource, ...) are carried through `extra`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GoogleAttendee {
+    #[serde(skip_serializing_if = "Option::is_none")]
     email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     response_status: Option<String>,
     #[serde(default)]
     organizer: bool,
@@ -1815,7 +1818,10 @@ struct GoogleAttendee {
     optional: bool,
     #[serde(default, rename = "self")]
     is_self: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     comment: Option<String>,
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

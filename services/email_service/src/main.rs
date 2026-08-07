@@ -190,7 +190,10 @@ async fn main() -> anyhow::Result<()> {
     let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
         PgCalendarRepository::new(db.clone()),
         GoogleCalendarClient::with_gate(
-            reqwest::Client::new(),
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .context("failed to build the google calendar mutation http client")?,
             RedisCalendarRequestGate::new((*redis_client).clone()),
         ),
         CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
