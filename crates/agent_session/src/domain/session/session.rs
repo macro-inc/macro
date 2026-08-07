@@ -3,9 +3,10 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, InitializeResponse, NewSessionRequest, NewSessionResponse,
-    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, Response, SelectedPermissionOutcome, SessionId,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -19,7 +20,8 @@ use crate::domain::model::AgentSessionId;
 use crate::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 
 use super::types::{
-    CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionPhase, StopReason,
+    CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionOpening, SessionPhase,
+    StopReason,
 };
 
 const REQUEST_PERMISSION_METHOD: &str = "session/request_permission";
@@ -34,6 +36,7 @@ pub struct SessionMachine<Token> {
     next_request: u64,
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
+    resume_session_id: Option<SessionId>,
 }
 
 impl<Token> SessionMachine<Token> {
@@ -44,6 +47,18 @@ impl<Token> SessionMachine<Token> {
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
+            resume_session_id: None,
+        }
+    }
+
+    /// A fresh connection that must restore an existing ACP session.
+    pub fn resume(id: AgentSessionId, session_id: SessionId) -> Self {
+        Self {
+            id,
+            phase: SessionPhase::Booting,
+            next_request: INITIAL_REQUEST_NUM,
+            pending: VecDeque::new(),
+            resume_session_id: Some(session_id),
         }
     }
 
@@ -183,7 +198,7 @@ impl<Token> SessionMachine<Token> {
             {
                 self.on_initialized(&frame, effects);
             }
-            SessionPhase::Opening { request_id } if frame.response_id() == Some(request_id) => {
+            SessionPhase::Opening { request_id, .. } if frame.response_id() == Some(request_id) => {
                 self.on_session_opened(&frame, effects);
             }
             _ => {}
@@ -195,21 +210,44 @@ impl<Token> SessionMachine<Token> {
             self.die(StopReason::InitializationRefused, effects);
             return;
         };
-        if let Err(error) = serde_json::from_value::<InitializeResponse>(result.clone()) {
-            self.die(
-                StopReason::InitializationUnintelligible(error.to_string()),
-                effects,
-            );
-            return;
-        }
+        let response = match serde_json::from_value::<InitializeResponse>(result.clone()) {
+            Ok(response) => response,
+            Err(error) => {
+                self.die(
+                    StopReason::InitializationUnintelligible(error.to_string()),
+                    effects,
+                );
+                return;
+            }
+        };
 
-        match self.build_new_session_request() {
-            Ok((open, request_id)) => {
+        let opening = match self.resume_session_id.clone() {
+            Some(session_id)
+                if response
+                    .agent_capabilities
+                    .session_capabilities
+                    .resume
+                    .is_some() =>
+            {
+                self.build_resume_session_request(session_id)
+            }
+            Some(session_id) if response.agent_capabilities.load_session => {
+                self.build_load_session_request(session_id)
+            }
+            Some(_) => {
+                self.resume_unsupported(effects);
+                return;
+            }
+            None => self.build_new_session_request(),
+        };
+
+        match opening {
+            Ok((open, request_id, kind)) => {
                 effects.push(Effect::Send {
                     from: None,
                     message: ToRuntimeMessage::Acp(AcpMessage(open)),
                 });
-                self.phase = SessionPhase::Opening { request_id };
+                self.phase = SessionPhase::Opening { request_id, kind };
             }
             Err(error) => {
                 self.die(
@@ -225,21 +263,95 @@ impl<Token> SessionMachine<Token> {
             self.die(StopReason::SessionRefused, effects);
             return;
         };
-        let session_id = match serde_json::from_value::<NewSessionResponse>(result.clone()) {
-            Ok(response) => response.session_id,
-            Err(error) => {
-                self.die(
-                    StopReason::SessionUnintelligible(error.to_string()),
-                    effects,
-                );
-                return;
+        let kind = match &self.phase {
+            SessionPhase::Opening { kind, .. } => kind.clone(),
+            _ => return,
+        };
+        let (session_id, persist) = match kind {
+            SessionOpening::New => {
+                match serde_json::from_value::<NewSessionResponse>(result.clone()) {
+                    Ok(response) => (response.session_id, true),
+                    Err(error) => {
+                        self.die(
+                            StopReason::SessionUnintelligible(error.to_string()),
+                            effects,
+                        );
+                        return;
+                    }
+                }
+            }
+            SessionOpening::Resume(session_id) => {
+                if let Err(error) = serde_json::from_value::<ResumeSessionResponse>(result.clone())
+                {
+                    self.die(
+                        StopReason::SessionUnintelligible(error.to_string()),
+                        effects,
+                    );
+                    return;
+                }
+                (session_id, false)
+            }
+            SessionOpening::Load(session_id) => {
+                if let Err(error) = serde_json::from_value::<LoadSessionResponse>(result.clone()) {
+                    self.die(
+                        StopReason::SessionUnintelligible(error.to_string()),
+                        effects,
+                    );
+                    return;
+                }
+                (session_id, false)
             }
         };
 
         self.phase = SessionPhase::Live {
             session_id: session_id.clone(),
         };
+        if persist {
+            effects.push(Effect::PersistAcpSession {
+                session_id: session_id.clone(),
+            });
+        }
         self.flush(&session_id, effects);
+    }
+
+    fn build_session_request<Request: JsonRpcMessage + serde::Serialize>(
+        &mut self,
+        request: Request,
+        kind: SessionOpening,
+    ) -> std::result::Result<
+        (RawJsonRpcMessage, RequestId, SessionOpening),
+        agent_client_protocol::Error,
+    > {
+        let (method, params) = request.to_untyped_message()?.into_parts();
+        let request_id = self.next_id();
+        let request = RawJsonRpcMessage::request(method, params, request_id.clone())?;
+        Ok((request, request_id, kind))
+    }
+
+    fn build_resume_session_request(
+        &mut self,
+        session_id: SessionId,
+    ) -> std::result::Result<
+        (RawJsonRpcMessage, RequestId, SessionOpening),
+        agent_client_protocol::Error,
+    > {
+        self.build_session_request(
+            ResumeSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            SessionOpening::Resume(session_id),
+        )
+    }
+
+    fn build_load_session_request(
+        &mut self,
+        session_id: SessionId,
+    ) -> std::result::Result<
+        (RawJsonRpcMessage, RequestId, SessionOpening),
+        agent_client_protocol::Error,
+    > {
+        self.build_session_request(
+            LoadSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            SessionOpening::Load(session_id),
+        )
     }
 
     fn build_initialize_request(
@@ -255,13 +367,14 @@ impl<Token> SessionMachine<Token> {
 
     fn build_new_session_request(
         &mut self,
-    ) -> std::result::Result<(RawJsonRpcMessage, RequestId), agent_client_protocol::Error> {
-        let (method, params) = NewSessionRequest::new(AGENT_WORKING_DIRECTORY)
-            .to_untyped_message()?
-            .into_parts();
-        let request_id = self.next_id();
-        let request = RawJsonRpcMessage::request(method, params, request_id.clone())?;
-        Ok((request, request_id))
+    ) -> std::result::Result<
+        (RawJsonRpcMessage, RequestId, SessionOpening),
+        agent_client_protocol::Error,
+    > {
+        self.build_session_request(
+            NewSessionRequest::new(AGENT_WORKING_DIRECTORY),
+            SessionOpening::New,
+        )
     }
 
     /// Permission prompts require a client response. This autonomous agent has
@@ -352,6 +465,19 @@ impl<Token> SessionMachine<Token> {
             });
         }
         effects.push(Effect::Stop { reason });
+    }
+
+    fn resume_unsupported(&mut self, effects: &mut Vec<Effect<Token>>) {
+        self.phase = SessionPhase::Dead;
+        while let Some(queued) = self.pending.pop_front() {
+            effects.push(Effect::Complete {
+                token: queued.token,
+                result: Err(AgentSessionError::ResumeUnsupported(self.id)),
+            });
+        }
+        effects.push(Effect::Stop {
+            reason: StopReason::ResumeUnsupported,
+        });
     }
 
     /// Namespaced so a caller's request id can never collide with ours.

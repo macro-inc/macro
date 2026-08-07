@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::v1::{
     ClientNotification, ClientRequest, InitializeResponse, NewSessionResponse, RequestId,
+    ResumeSessionResponse,
 };
 use agent_client_protocol::{
     Error as AcpError, JsonRpcMessage, JsonRpcNotification, JsonRpcResponse, RawJsonRpcMessage,
@@ -103,6 +104,16 @@ impl FakeAgent {
             .opening
             .clone()
             .expect("the harness has not sent session/new");
+        self.sends_reply(id, response);
+    }
+
+    /// Answer the `session/resume` this agent received.
+    pub fn resumes_session(&self, response: ResumeSessionResponse) {
+        let id = self
+            .lock_progress()
+            .opening
+            .clone()
+            .expect("the harness has not sent session/resume");
         self.sends_reply(id, response);
     }
 
@@ -208,7 +219,9 @@ impl FakeAgent {
                 ClientRequest::InitializeRequest(_) => {
                     progress.initializing = Some(request.id.clone());
                 }
-                ClientRequest::NewSessionRequest(_) | ClientRequest::LoadSessionRequest(_) => {
+                ClientRequest::NewSessionRequest(_)
+                | ClientRequest::LoadSessionRequest(_)
+                | ClientRequest::ResumeSessionRequest(_) => {
                     assert_eq!(
                         progress.stage,
                         Stage::Initialized,

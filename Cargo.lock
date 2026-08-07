@@ -188,6 +188,7 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "dashmap",
  "futures",
  "kafka_util",
  "macro_env_var",

@@ -150,6 +150,7 @@ impl ContainerManager for DaytonaContainerManager {
             .ok_or_else(|| {
                 HarnessError::Container(format!("session {session} has no sandbox to resume"))
             })?;
+        self.client.start(&id).await.map_err(unavailable)?;
         self.bring_up(&id).await
     }
 }

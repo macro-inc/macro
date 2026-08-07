@@ -15,6 +15,7 @@ bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }
+dashmap = { workspace = true }
 futures = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }

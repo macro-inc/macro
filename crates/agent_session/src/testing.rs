@@ -10,6 +10,7 @@ use crate::domain::model::{
     SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
 use macro_uuid::Uuid;
@@ -137,6 +138,23 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn update(&self, session: AgentSession) -> Result<()> {
         self.insert_session(session);
+        Ok(())
+    }
+
+    async fn set_acp_session_id(
+        &self,
+        id: AgentSessionId,
+        acp_session_id: SessionId,
+    ) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.acp_session_id = Some(acp_session_id.to_string());
+        session.modified_at = chrono::Utc::now();
         Ok(())
     }
 
