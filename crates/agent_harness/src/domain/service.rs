@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::error::AgentSessionError;
@@ -18,17 +18,11 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
-type SessionWorkers = DashMap<AgentSessionId, Weak<SessionWorker>>;
-
-struct SessionWorker {
-    commands: mpsc::UnboundedSender<QueuedCommand>,
-}
+type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
 struct QueuedCommand {
     command: HarnessCommand,
     completed: oneshot::Sender<Result<()>>,
-    // Keeps this worker discoverable until its admitted command completes.
-    worker: Arc<SessionWorker>,
 }
 
 struct AgentHarnessInner<Sessions, Containers, Announcer> {
@@ -79,22 +73,16 @@ where
         let session_id = command.session_id();
 
         let result = loop {
-            let worker = self.worker(session_id);
+            let commands = self.commands(session_id);
             let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand {
-                command,
-                completed,
-                worker: worker.clone(),
-            };
+            let queued = QueuedCommand { command, completed };
 
-            match worker.commands.send(queued) {
+            match commands.send(queued) {
                 Ok(()) => break result,
                 Err(error) => {
                     command = error.0.command;
-                    let stale = Arc::downgrade(&worker);
                     self.workers
-                        .remove_if(&session_id, |_, current| current.ptr_eq(&stale));
-                    drop(worker);
+                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
                 }
             }
         };
@@ -106,47 +94,20 @@ where
         }
     }
 
-    fn worker(&self, session_id: AgentSessionId) -> Arc<SessionWorker> {
+    fn commands(&self, session_id: AgentSessionId) -> mpsc::UnboundedSender<QueuedCommand> {
         match self.workers.entry(session_id) {
-            Entry::Occupied(mut entry) => {
-                if let Some(worker) = entry.get().upgrade() {
-                    return worker;
-                }
-
-                let (worker, commands) = SessionWorker::new();
-                entry.insert(Arc::downgrade(&worker));
-                self.spawn_worker(session_id, &worker, commands);
-                worker
-            }
+            Entry::Occupied(entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
-                let (worker, commands) = SessionWorker::new();
-                entry.insert(Arc::downgrade(&worker));
-                self.spawn_worker(session_id, &worker, commands);
-                worker
+                let (commands, receiver) = mpsc::unbounded_channel();
+                entry.insert(commands.clone());
+                self.spawn_worker(receiver);
+                commands
             }
         }
     }
 
-    fn spawn_worker(
-        &self,
-        session_id: AgentSessionId,
-        worker: &Arc<SessionWorker>,
-        commands: mpsc::UnboundedReceiver<QueuedCommand>,
-    ) {
-        tokio::spawn(run_session_worker(
-            session_id,
-            self.inner.clone(),
-            Arc::downgrade(&self.workers),
-            Arc::downgrade(worker),
-            commands,
-        ));
-    }
-}
-
-impl SessionWorker {
-    fn new() -> (Arc<Self>, mpsc::UnboundedReceiver<QueuedCommand>) {
-        let (commands, receiver) = mpsc::unbounded_channel();
-        (Arc::new(Self { commands }), receiver)
+    fn spawn_worker(&self, receiver: mpsc::UnboundedReceiver<QueuedCommand>) {
+        tokio::spawn(run_session_worker(self.inner.clone(), receiver));
     }
 }
 
@@ -251,45 +212,17 @@ where
     }
 }
 
-struct WorkerRegistration {
-    session_id: AgentSessionId,
-    workers: Weak<SessionWorkers>,
-    worker: Weak<SessionWorker>,
-}
-
-impl Drop for WorkerRegistration {
-    fn drop(&mut self) {
-        if let Some(workers) = self.workers.upgrade() {
-            workers.remove_if(&self.session_id, |_, current| current.ptr_eq(&self.worker));
-        }
-    }
-}
-
 async fn run_session_worker<Sessions, Containers, Announcer>(
-    session_id: AgentSessionId,
     inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer>>,
-    workers: Weak<SessionWorkers>,
-    worker: Weak<SessionWorker>,
-    mut commands: mpsc::UnboundedReceiver<QueuedCommand>,
+    mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
 {
-    let _registration = WorkerRegistration {
-        session_id,
-        workers,
-        worker,
-    };
-
-    while let Some(queued) = commands.recv().await {
-        let QueuedCommand {
-            command,
-            completed,
-            worker,
-        } = queued;
+    while let Some(queued) = receiver.recv().await {
+        let QueuedCommand { command, completed } = queued;
         let result = inner.execute(command).await;
         let _ = completed.send(result);
-        drop(worker);
     }
 }

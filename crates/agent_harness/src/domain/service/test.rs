@@ -442,7 +442,7 @@ async fn different_sessions_execute_concurrently() {
 }
 
 #[tokio::test]
-async fn an_admitted_command_survives_caller_cancellation_and_retires_its_worker() {
+async fn an_admitted_command_survives_caller_cancellation() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
     let completion = service.execute(HarnessCommand::Forward(ForwardMessage {
@@ -464,16 +464,6 @@ async fn an_admitted_command_survives_caller_cancellation_and_retires_its_worker
     complete_resume(&resumed).await;
     resumed.agent().wait_for_requests(3).await;
 
-    tokio::time::timeout(std::time::Duration::from_secs(1), async {
-        loop {
-            if service.workers.is_empty() {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("an idle command worker should retire");
     assert_eq!(
         prompts(&resumed.agent()),
         [vec![ContentBlock::from(
