@@ -1,6 +1,9 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { DEFAULT_TARGET_GROUP_HEALTH_CHECK } from './ecs_deployment_defaults';
+import {
+  DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+  DEFAULT_TARGET_GROUP_HEALTH_CHECK,
+} from './ecs_deployment_defaults';
 
 type ServiceTargetGroupArgs = {
   // AWS resource tags
@@ -52,7 +55,8 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
         targetType: 'ip',
         vpcId: args.vpcId,
 
-        deregistrationDelay: args.deregistrationDelay ?? 60,
+        deregistrationDelay:
+          args.deregistrationDelay ?? DEFAULT_DEREGISTRATION_DELAY_SECONDS,
 
         healthCheck: {
           path: args.healthCheckPath,

@@ -317,7 +317,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         priority: 10,
         healthCheckPath,
-        pathPatterns: ['/dss/*'],
+        pathPatterns: ['/dss', '/dss/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },
