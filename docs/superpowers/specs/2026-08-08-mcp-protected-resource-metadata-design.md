@@ -7,11 +7,15 @@
 
 ## Problem
 
-Macro’s MCP OAuth broker publishes protected resource metadata at:
+Macro’s MCP OAuth broker publishes protected resource metadata for resource
+`{public_url}/mcp`. Per RFC 9728 §3, valid discovery locations for that
+resource are:
 
-- `/.well-known/oauth-protected-resource`
-- `/.well-known/oauth-protected-resource/mcp`
-- `/mcp/.well-known/oauth-protected-resource`
+| Route | Role |
+|-------|------|
+| `/.well-known/oauth-protected-resource/mcp` | **Canonical** (path insertion). Also the URL in `WWW-Authenticate` `resource_metadata`. |
+| `/mcp/.well-known/oauth-protected-resource` | RFC-allowed alternative (well-known under the resource path). Same document. |
+| `/.well-known/oauth-protected-resource` | **Not** a valid identifier for `/mcp` — identifies the origin. **Permanent-redirect** to the canonical path. |
 
 Production currently returns approximately:
 
@@ -85,9 +89,9 @@ where `public_url` is the existing `McpAuthProxyServiceImpl` base URL (same base
 
 | Unit | Responsibility |
 |------|----------------|
-| `McpAuthProxyService::protected_resource_metadata` | Build the JSON document for all PRM well-known routes |
-| Existing axum routes | Unchanged; already call `protected_resource_metadata()` |
-| `WWW-Authenticate` middleware | Unchanged; already points at `/.well-known/oauth-protected-resource/mcp` |
+| `McpAuthProxyService::protected_resource_metadata` | Build the JSON document for `/mcp` PRM (canonical + path-style routes) |
+| Axum PRM routes | Serve metadata on canonical + path-style URLs; **redirect** root well-known → canonical |
+| `WWW-Authenticate` middleware | Unchanged; already points at canonical `/.well-known/oauth-protected-resource/mcp` |
 
 ### Target metadata document
 

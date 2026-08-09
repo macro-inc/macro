@@ -33,10 +33,7 @@ impl InflightAuthStore for NoopInflightAuth {
         unreachable!("metadata test must not touch inflight store")
     }
 
-    async fn take_issued(
-        &self,
-        _code: &str,
-    ) -> anyhow::Result<Option<IssuedAuthorizationCode>> {
+    async fn take_issued(&self, _code: &str) -> anyhow::Result<Option<IssuedAuthorizationCode>> {
         unreachable!("metadata test must not touch inflight store")
     }
 

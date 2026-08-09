@@ -1,5 +1,8 @@
 //! Axum router for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use axum::{
@@ -36,6 +39,16 @@ async fn protected_resource_metadata<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
 ) -> Json<serde_json::Value> {
     Json(auth_proxy.protected_resource_metadata())
+}
+
+/// Redirect the origin-root PRM well-known to the canonical path for `{public_url}/mcp`.
+///
+/// RFC 9728 path insertion places metadata for resource `…/mcp` at
+/// `/.well-known/oauth-protected-resource/mcp`. Serving the same document at
+/// the root well-known without a path suffix would identify the origin itself,
+/// not `/mcp`.
+async fn redirect_root_protected_resource_metadata() -> Redirect {
+    Redirect::permanent("/.well-known/oauth-protected-resource/mcp")
 }
 
 async fn register<I: InflightAuthStore + 'static>(
@@ -209,14 +222,18 @@ where
 {
     let oauth_routes = Router::new()
         .route("/health", routing::get(health))
+        // Root well-known identifies the origin resource, not `/mcp` — redirect
+        // to the canonical path-insertion location (matches WWW-Authenticate).
         .route(
             "/.well-known/oauth-protected-resource",
-            routing::get(protected_resource_metadata),
+            routing::get(redirect_root_protected_resource_metadata),
         )
+        // Canonical discovery URL for resource `{public_url}/mcp` (RFC 9728 §3).
         .route(
             "/.well-known/oauth-protected-resource/mcp",
             routing::get(protected_resource_metadata),
         )
+        // RFC 9728 also allows well-known inserted under the resource path.
         .route(
             "/mcp/.well-known/oauth-protected-resource",
             routing::get(protected_resource_metadata),
