@@ -229,7 +229,7 @@ fn cargo_clippy() -> Step<Run> {
 /// pgvector service container, tuned env preserved.
 fn postgres_service() -> Container {
     Container::default()
-        .image("pgvector/pgvector:pg16")
+        .image("pgvector/pgvector:pg18")
         .env(
             Env::new("POSTGRES_USER", "user")
                 .add("POSTGRES_PASSWORD", "password")
