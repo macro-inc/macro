@@ -1,5 +1,8 @@
 //! Service implementation for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 use std::{future::Future, sync::Arc, time::Duration};
