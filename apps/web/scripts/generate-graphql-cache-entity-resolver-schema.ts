@@ -32,6 +32,11 @@ export type EntityResolverSchemaMetadata = Record<
   Record<string, FieldMetadata>
 >;
 
+/** Locale-independent UTF-16 code-unit ordering, matching ECMAScript strings. */
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function isKeyableObject(type: GraphQLObjectType): boolean {
   const id = type.getFields().id;
   return id !== undefined && isNonNullType(id.type) && id.type.ofType === GraphQLID;
@@ -66,7 +71,7 @@ function collectArgumentPaths(
   const nextVisited = new Set(visited);
   nextVisited.add(nullableType.name);
   const fields = Object.values(nullableType.getFields()).sort((a, b) =>
-    a.name.localeCompare(b.name)
+    compareCodeUnits(a.name, b.name)
   );
   for (const field of fields) {
     collectArgumentPaths(
@@ -93,12 +98,12 @@ export function deriveEntityResolverSchema(
       (type): type is GraphQLObjectType =>
         isObjectType(type) && !type.name.startsWith('__')
     )
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareCodeUnits(a.name, b.name));
 
   for (const owner of owners) {
     const fields: Record<string, FieldMetadata> = {};
     for (const field of Object.values(owner.getFields()).sort((a, b) =>
-      a.name.localeCompare(b.name)
+      compareCodeUnits(a.name, b.name)
     )) {
       const nullableReturn = isNonNullType(field.type)
         ? field.type.ofType
@@ -121,13 +126,13 @@ export function deriveEntityResolverSchema(
           .getPossibleTypes(returnType)
           .filter(isKeyableObject)
           .map((type) => type.name)
-          .sort();
+          .sort(compareCodeUnits);
       }
       if (targets.length === 0) continue;
 
       const argumentPaths: string[][] = [];
       for (const argument of [...field.args].sort((a, b) =>
-        a.name.localeCompare(b.name)
+        compareCodeUnits(a.name, b.name)
       )) {
         collectArgumentPaths(
           argument.type,
@@ -139,7 +144,7 @@ export function deriveEntityResolverSchema(
         );
       }
       argumentPaths.sort((a, b) =>
-        JSON.stringify(a).localeCompare(JSON.stringify(b))
+        compareCodeUnits(JSON.stringify(a), JSON.stringify(b))
       );
       if (argumentPaths.length === 0) continue;
       fields[field.name] = { targets, argumentPaths };
@@ -175,10 +180,10 @@ export function renderEntityResolverSchema(
     'export const entityResolverSchema = {',
   ];
 
-  for (const parent of Object.keys(metadata).sort()) {
+  for (const parent of Object.keys(metadata).sort(compareCodeUnits)) {
     lines.push(`  ${parent}: {`);
     const fields = metadata[parent] ?? {};
-    for (const fieldName of Object.keys(fields).sort()) {
+    for (const fieldName of Object.keys(fields).sort(compareCodeUnits)) {
       const field = fields[fieldName];
       if (!field) continue;
       for (const target of field.targets) targets.add(target);
@@ -204,7 +209,7 @@ export function renderEntityResolverSchema(
   lines.push(
     'export type GeneratedEntityResolverSchema = typeof entityResolverSchema;'
   );
-  const sortedTargets = [...targets].sort();
+  const sortedTargets = [...targets].sort(compareCodeUnits);
   if (sortedTargets.length === 0) {
     lines.push('export type GeneratedEntityResolverTarget = never;');
   } else {
@@ -218,7 +223,7 @@ export function renderEntityResolverSchema(
     }
   }
   const sortedPaths = [...paths.values()].sort((a, b) =>
-    JSON.stringify(a).localeCompare(JSON.stringify(b))
+    compareCodeUnits(JSON.stringify(a), JSON.stringify(b))
   );
   if (sortedPaths.length === 0) {
     lines.push('export type GeneratedEntityResolverArgumentPath = never;');
