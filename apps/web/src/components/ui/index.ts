@@ -61,6 +61,18 @@ export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
 export { Scroll } from './components/Scroll';
 export { SegmentedControl } from './components/SegmentedControl';
+export type {
+  SelectContentProps,
+  SelectIconProps,
+  SelectItemIndicatorProps,
+  SelectItemLabelProps,
+  SelectItemProps,
+  SelectListboxProps,
+  SelectRootProps,
+  SelectTriggerProps,
+  SelectValueProps,
+} from './components/Select';
+export { Select } from './components/Select';
 export type { SendButtonProps } from './components/SendButton';
 export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
