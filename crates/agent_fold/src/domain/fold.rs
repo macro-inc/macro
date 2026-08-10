@@ -30,6 +30,7 @@
 //! top-to-bottom, and every frame it ignores is an explicit arm.
 
 use crate::domain::error::FoldError;
+use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
     AnsiText, Author, FileDiff, FoldedMessage, MessagePart, Permission, PermissionOption,
@@ -42,7 +43,6 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_client_protocol::{RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
-use agent_session::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use serde::Deserialize;
@@ -130,10 +130,7 @@ impl<T: LogRepo + Sync> FoldSession for T {
         &self,
         session: AgentSessionId,
     ) -> Result<Vec<FoldedMessage>, rootcause::Report> {
-        let log = self
-            .list_by_session(session)
-            .await
-            .map_err(|error| rootcause::report!(error))?;
+        let log = self.list_by_session(session).await?;
         Ok(fold(log))
     }
 }

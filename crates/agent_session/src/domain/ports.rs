@@ -6,6 +6,7 @@ use macro_uuid::Uuid;
 
 use super::error::Result;
 use super::model::*;
+use std::collections::HashSet;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -81,4 +82,38 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         &self,
         agent_session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<AgentSessionLog>>> + Send;
+}
+
+/// Writing agent-message placeholder rows into comms.
+///
+/// A placeholder is a comms message with no stored body whose
+/// `agent_session_message_id` - the composite
+/// `"{agent_session_id}:{turn}:{author}"` - names the folded message of an
+/// agent session it renders. The service diffs
+/// [`Comms::messages_with_placeholders`] against what the fold derives
+/// ([`FoldedMessageRepo::message_ids`](agent_fold::domain::ports::FoldedMessageRepo::message_ids))
+/// to decide which placeholders are missing.
+///
+/// One placeholder per folded message, not per turn: a turn's prompt and its
+/// reply have different authors, so collapsing them onto one row would leave
+/// the prompt with no sender of its own.
+pub trait Comms {
+    /// The messages of this session that already have a placeholder row in
+    /// its channel.
+    fn messages_with_placeholders(
+        &self,
+        session: &AgentSession,
+    ) -> impl Future<Output = Result<HashSet<MessageId>, rootcause::Report>> + Send;
+
+    /// Write a bodyless placeholder row to the session's channel, carrying
+    /// the given message key inside its `agent_session_message_id`.
+    ///
+    /// `author` sets the row's sender: the agent's messages are sent by the
+    /// session's bot, a user's by that user.
+    fn create_message_placeholder(
+        &self,
+        session: &AgentSession,
+        id: MessageId,
+        author: &Author,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

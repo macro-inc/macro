@@ -1,10 +1,10 @@
 use super::util::{TURN, parse_log};
 use crate::domain::fold::fold;
+use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
     Author, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
     TurnId,
 };
-use agent_session::domain::model::AgentSessionLog;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::Level;

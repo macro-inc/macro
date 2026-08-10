@@ -1,42 +1,19 @@
-use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
+use agent_fold::domain::model::FoldedMessage;
+use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AgentSessionId(Uuid);
-
-impl AgentSessionId {
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_A: Self = Self(Uuid::from_u128(0xA));
-
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_B: Self = Self(Uuid::from_u128(0xB));
-
-    /// Mint a fresh session id, backed by a UUIDv7.
-    #[expect(clippy::new_without_default, reason = "each call mints a distinct id")]
-    pub fn new() -> Self {
-        Self(macro_uuid::generate_uuid_v7())
-    }
-
-    pub(crate) fn new_from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
-    /// The underlying UUID.
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-}
-
-impl std::fmt::Display for AgentSessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
+// The log vocabulary - the session id, the log entry, and the frame it
+// carries - is owned by `agent_fold`, the bottom of the agent session stack,
+// so that this crate can depend on the fold (see `agent_fold::domain::log`).
+// Re-exported here because this is where callers expect session types.
+pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
+// Folded messages are derived, but a `MessageId` is also what a comms
+// placeholder persists (inside its `agent_session_message_id`) to say which
+// message it renders.
+pub use agent_fold::domain::model::{Author, AuthorKind, MessageId, TurnId};
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -97,6 +74,41 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
+/// The composite id a placeholder comms message stores in its
+/// `agent_session_message_id` column:
+/// `"{agent_session_id}:{turn}:{author}"`.
+///
+/// Folded messages have no table of their own, so this composite is the whole
+/// mapping between a comms row and the message it renders. Comms writes it
+/// when placing a placeholder, and readers joining folded messages back onto
+/// comms rows reproduce it from the same parts.
+///
+/// Keyed per message rather than per turn: a turn yields a prompt and a
+/// reply with different senders, and each needs its own row.
+#[must_use]
+pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
+    format!("{}:{id}", session.as_uuid())
+}
+
+/// The message key inside a [`composite_message_id`] built for `session`, or
+/// `None` when the composite names a different session or is malformed.
+#[must_use]
+pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
+    composite
+        .strip_prefix(&format!("{}:", session.as_uuid()))?
+        .parse()
+        .ok()
+}
+
+/// A session's folded messages, looked up by its dedicated channel.
+#[derive(Debug, Clone)]
+pub struct ChannelFoldedMessages {
+    /// The session whose log derived the messages.
+    pub agent_session_id: AgentSessionId,
+    /// The folded messages, oldest first.
+    pub messages: Vec<FoldedMessage>,
+}
+
 /// How an incoming channel context relates to an agent session.
 #[derive(Debug, Clone)]
 pub enum ChannelSession {
@@ -118,25 +130,4 @@ pub enum ChannelSession {
         /// Session associated with the addressed bot and thread.
         subthread_agent_session: AgentSession,
     },
-}
-
-/// One logical protocol message with its direction.
-///
-/// Serializes as `{"direction": "to_server" | "to_runtime", "content": <envelope>}`,
-/// the same vocabulary the Postgres log storage uses for its `direction` and
-/// `content` columns, so recorded fixtures and stored rows share one wire
-/// format.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "direction", content = "content", rename_all = "snake_case")]
-pub enum Message {
-    ToServer(ToServerMessage),
-    ToRuntime(ToRuntimeMessage),
-}
-
-#[derive(Debug, Clone)]
-pub struct AgentSessionLog {
-    pub agent_session_id: AgentSessionId,
-    /// if this is ACP sent by a user this will be Some
-    pub user_id: Option<MacroUserIdStr<'static>>,
-    pub content: Message,
 }

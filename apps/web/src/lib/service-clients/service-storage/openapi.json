@@ -82,6 +82,78 @@
         "deprecated": true
       }
     },
+    "/agent-sessions/channel/{channel_id}/messages": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The folded messages of the agent session behind a channel.",
+        "description": "Placeholder comms messages in an agent channel store no body, only an\n`agent_session_message_id`; each message here carries the same composite id,\nso a reader joins the two to render the channel. `404` when no agent\nsession owns the channel.",
+        "operationId": "get_agent_channel_messages",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "ID of the session's dedicated channel",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentChannelMessagesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -11338,6 +11410,25 @@
           }
         }
       },
+      "AgentChannelMessagesResponse": {
+        "type": "object",
+        "description": "Response body for a channel's folded agent-session messages.",
+        "required": ["agentSessionId", "messages"],
+        "properties": {
+          "agentSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session whose log derived the messages."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoldedMessageDto"
+            },
+            "description": "The session's folded messages, oldest first."
+          }
+        }
+      },
       "AgentSessionResponse": {
         "type": "object",
         "description": "Response body describing an agent session.",
@@ -11673,7 +11764,6 @@
           "channel_id",
           "message_id",
           "sender_id",
-          "message_content",
           "message_created_at",
           "attachment_created_at"
         ],
@@ -11693,8 +11783,8 @@
             "description": "Optional channel name (DMs do not have a name)."
           },
           "message_content": {
-            "type": "string",
-            "description": "Full message content (might be used for preview/snippet)."
+            "type": ["string", "null"],
+            "description": "Full message content (might be used for preview/snippet). `None` on\nagent-turn placeholder messages."
           },
           "message_created_at": {
             "type": "string",
@@ -11881,19 +11971,22 @@
           "channel_id",
           "sender_id",
           "sender",
-          "content",
           "created_at",
           "updated_at"
         ],
         "properties": {
+          "agent_session_message_id": {
+            "type": ["string", "null"],
+            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders."
+          },
           "channel_id": {
             "type": "string",
             "format": "uuid",
             "description": "Channel id."
           },
           "content": {
-            "type": "string",
-            "description": "Message content."
+            "type": ["string", "null"],
+            "description": "Message content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -11975,21 +12068,25 @@
           }
         }
       },
+      "ApiChannelKind": {
+        "type": "string",
+        "description": "Channel kind in API responses.",
+        "enum": ["normal", "agent"]
+      },
       "ApiChannelListMessage": {
         "type": "object",
         "description": "Channel message in API responses.",
         "required": [
           "message_id",
           "sender_id",
-          "content",
           "created_at",
           "updated_at",
           "mentions"
         ],
         "properties": {
           "content": {
-            "type": "string",
-            "description": "Message content."
+            "type": ["string", "null"],
+            "description": "Message content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -12090,7 +12187,6 @@
           "channel_id",
           "sender_id",
           "sender",
-          "content",
           "created_at",
           "updated_at",
           "thread",
@@ -12098,6 +12194,10 @@
           "attachments"
         ],
         "properties": {
+          "agent_session_message_id": {
+            "type": ["string", "null"],
+            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders;\njoin it against the folded messages of the channel's agent session."
+          },
           "attachments": {
             "type": "array",
             "items": {
@@ -12111,8 +12211,8 @@
             "description": "Channel id."
           },
           "content": {
-            "type": "string",
-            "description": "Message content."
+            "type": ["string", "null"],
+            "description": "Message content. `None` on agent-turn placeholder messages, whose body\nis folded from the agent session log and joined in by the client."
           },
           "created_at": {
             "type": "string",
@@ -12218,6 +12318,7 @@
         "required": [
           "id",
           "channel_type",
+          "kind",
           "auto_join_team",
           "created_at",
           "updated_at",
@@ -12257,6 +12358,10 @@
           "is_participant": {
             "type": "boolean",
             "description": "Whether the requesting user is an active participant of the channel."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ApiChannelKind",
+            "description": "Channel kind: `normal`, or `agent` for an agent session's dedicated\nchannel whose agent messages are folded placeholders."
           },
           "latest_message": {
             "oneOf": [
@@ -12639,13 +12744,16 @@
           "id",
           "sender_id",
           "sender",
-          "content",
           "created_at",
           "updated_at",
           "reactions",
           "attachments"
         ],
         "properties": {
+          "agent_session_message_id": {
+            "type": ["string", "null"],
+            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders."
+          },
           "attachments": {
             "type": "array",
             "items": {
@@ -12654,8 +12762,8 @@
             "description": "Attachments on this reply."
           },
           "content": {
-            "type": "string",
-            "description": "Reply content."
+            "type": ["string", "null"],
+            "description": "Reply content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -13971,15 +14079,14 @@
         "required": [
           "message_id",
           "sender_id",
-          "content",
           "created_at",
           "updated_at",
           "mentions"
         ],
         "properties": {
           "content": {
-            "type": "string",
-            "description": "Message content."
+            "type": ["string", "null"],
+            "description": "Message content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -18113,6 +18220,25 @@
           }
         }
       },
+      "FileDiffDto": {
+        "type": "object",
+        "description": "A file modification a tool reported, mirroring [`FileDiff`].",
+        "required": ["path", "newText"],
+        "properties": {
+          "newText": {
+            "type": "string",
+            "description": "New contents."
+          },
+          "oldText": {
+            "type": ["string", "null"],
+            "description": "Prior contents, absent when the file is new."
+          },
+          "path": {
+            "type": "string",
+            "description": "The file that changed."
+          }
+        }
+      },
       "FileSystemNodeWithIds": {
         "oneOf": [
           {
@@ -18603,6 +18729,171 @@
           }
         ],
         "description": "Represents a file type update: either set to a specific type or clear to null."
+      },
+      "FoldedAuthorDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person, via `session/prompt`.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "userId": {
+                "type": ["string", "null"],
+                "description": "The user's macro id, absent when the prompt was unattributed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["agent"]
+              }
+            }
+          }
+        ],
+        "description": "Who produced a folded message, mirroring [`Author`].\n\nMulti-word fields in these enums carry explicit `#[serde(rename)]`s\ninstead of `rename_all_fields = \"camelCase\"`: utoipa does not read\n`rename_all_fields`, so the explicit form keeps the generated schema and\nthe serialized wire format in agreement."
+      },
+      "FoldedMessageDto": {
+        "type": "object",
+        "description": "One renderable message folded from a session's protocol log, mirroring\n[`FoldedMessage`].",
+        "required": ["agentSessionMessageId", "turn", "author", "parts"],
+        "properties": {
+          "agentSessionMessageId": {
+            "type": "string",
+            "description": "The composite id the placeholder comms message for this folded message\ncarries in its `agent_session_message_id`:\n`\"{agent_session_id}:{turn}:{author}\"`. Readers join folded messages\nonto placeholder rows by this, one to one."
+          },
+          "author": {
+            "$ref": "#/components/schemas/FoldedAuthorDto",
+            "description": "Who produced the message."
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoldedMessagePartDto"
+            },
+            "description": "Ordered renderable content. Never empty."
+          },
+          "stop": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StopReasonDto",
+                "description": "How the turn ended, on the agent message that closed it. Absent while\nthe turn is in flight or when the session died without a response."
+              }
+            ]
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The turn within the session, assigned in log order from zero.",
+            "minimum": 0
+          }
+        }
+      },
+      "FoldedMessagePartDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Prose from the user or the agent.",
+            "required": ["text", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["text"]
+              },
+              "text": {
+                "type": "string",
+                "description": "The prose."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent's reasoning, which a reader may want to hide by default.",
+            "required": ["text", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["thought"]
+              },
+              "text": {
+                "type": "string",
+                "description": "The reasoning."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A tool the agent invoked.",
+            "required": ["id", "label", "status", "detail", "kind"],
+            "properties": {
+              "detail": {
+                "$ref": "#/components/schemas/ToolDetailDto",
+                "description": "What the tool did, as far as the log reveals."
+              },
+              "id": {
+                "type": "string",
+                "description": "The ACP `toolCallId`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["tool_use"]
+              },
+              "label": {
+                "type": "string",
+                "description": "What to show as the tool's name."
+              },
+              "status": {
+                "$ref": "#/components/schemas/ToolStatusDto",
+                "description": "Where the call got to."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent asking to proceed with a tool call.",
+            "required": ["toolCall", "options", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["permission"]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PermissionOptionDto"
+                },
+                "description": "The choices offered, in the order ACP listed them."
+              },
+              "outcome": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PermissionOutcomeDto",
+                    "description": "What the user chose. Absent while the request is outstanding, or\nwhen the session ended before anyone answered."
+                  }
+                ]
+              },
+              "toolCall": {
+                "type": "string",
+                "description": "The `toolCallId` permission was requested for."
+              }
+            }
+          }
+        ],
+        "description": "A unit of renderable content, mirroring [`MessagePart`]."
       },
       "FolderItem": {
         "type": "object",
@@ -20577,6 +20868,56 @@
           }
         }
       },
+      "PermissionOptionDto": {
+        "type": "object",
+        "description": "One choice offered for a permission request, mirroring\n[`PermissionOption`].",
+        "required": ["id", "name", "kind"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id to report back when this option is chosen."
+          },
+          "kind": {
+            "type": "string",
+            "description": "ACP's option kind, as its wire string - `allow_once`, `reject_once`,\n`allow_always`, `reject_always`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Label to show."
+          }
+        }
+      },
+      "PermissionOutcomeDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An option was chosen.",
+            "required": ["optionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["selected"]
+              },
+              "optionId": {
+                "type": "string",
+                "description": "The chosen option's id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The request was cancelled without a choice.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          }
+        ],
+        "description": "How a permission request resolved, mirroring [`PermissionOutcome`]."
+      },
       "PinRequest": {
         "type": "object",
         "required": ["pinType"],
@@ -22380,7 +22721,6 @@
           "channel_id",
           "sender_id",
           "sender",
-          "content",
           "created_at",
           "updated_at",
           "thread",
@@ -22401,8 +22741,8 @@
             "description": "Channel id."
           },
           "content": {
-            "type": "string",
-            "description": "Message content."
+            "type": ["string", "null"],
+            "description": "Message content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -23637,7 +23977,6 @@
           "id",
           "sender_id",
           "sender",
-          "content",
           "created_at",
           "updated_at",
           "reactions",
@@ -23652,8 +23991,8 @@
             "description": "Attachments on this reply."
           },
           "content": {
-            "type": "string",
-            "description": "Reply content."
+            "type": ["string", "null"],
+            "description": "Reply content. `None` on agent-turn placeholder messages."
           },
           "created_at": {
             "type": "string",
@@ -23702,6 +24041,81 @@
             "description": "Id of the user's \"Macro how to guide\"."
           }
         }
+      },
+      "StopReasonDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The agent finished its turn.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["end_turn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The model hit its token limit.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["max_tokens"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent hit its turn-request limit.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["max_turn_requests"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent declined.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["refusal"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The turn was cancelled.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A stop reason the fold does not model.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["other"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "The wire string."
+              }
+            }
+          }
+        ],
+        "description": "Why a turn stopped, mirroring [`StopReason`]."
       },
       "String": {
         "type": "string"
@@ -23812,6 +24226,95 @@
             }
           }
         }
+      },
+      "ToolDetailDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A shell command.",
+            "required": ["kind"],
+            "properties": {
+              "command": {
+                "type": ["string", "null"],
+                "description": "The command line, when the harness reported one."
+              },
+              "exitCode": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "Process exit code, when the harness reported one."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["terminal"]
+              },
+              "output": {
+                "type": ["string", "null"],
+                "description": "Captured output, ANSI escape sequences left in place."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One or more file modifications.",
+            "required": ["diffs", "kind"],
+            "properties": {
+              "diffs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FileDiffDto"
+                },
+                "description": "The diffs ACP reported for this call."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["edit"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A file read.",
+            "required": ["paths", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["read"]
+              },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Paths this call touched."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Anything else, including tools the fold has no special rendering for.",
+            "required": ["acpKind", "kind"],
+            "properties": {
+              "acpKind": {
+                "type": "string",
+                "description": "ACP's tool kind, as its wire string."
+              },
+              "input": {
+                "type": ["object", "null"],
+                "description": "The tool's input, when reported."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["other"]
+              }
+            }
+          }
+        ],
+        "description": "What a tool call actually did, mirroring [`ToolDetail`]."
+      },
+      "ToolStatusDto": {
+        "type": "string",
+        "description": "How far a tool call progressed, mirroring [`ToolStatus`].",
+        "enum": ["pending", "running", "completed", "failed"]
       },
       "TranscriptSegmentRequest": {
         "type": "object",

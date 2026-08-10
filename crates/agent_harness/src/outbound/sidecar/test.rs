@@ -1,5 +1,7 @@
 use agent_client_protocol::schema::v1::{PromptRequest, RequestId, SessionId};
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::{TcpListener, TcpStream};
 
 use super::*;
@@ -17,6 +19,15 @@ fn frame() -> RawJsonRpcMessage {
 /// Stand in for the sidecar: accept one WebSocket and hand back the transport
 /// under test alongside the sidecar's end of it.
 async fn transport() -> (SidecarTransport, WebSocketStream<TcpStream>) {
+    observed_transport(|| {}).await
+}
+
+async fn observed_transport<Observer>(
+    observer: Observer,
+) -> (SidecarTransport, WebSocketStream<TcpStream>)
+where
+    Observer: Fn() + Send + 'static,
+{
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("binding a local port should succeed");
@@ -36,7 +47,10 @@ async fn transport() -> (SidecarTransport, WebSocketStream<TcpStream>) {
         .expect("dialing the sidecar should succeed");
     let sidecar = server.await.expect("the accept task should not panic");
 
-    (SidecarTransport::connect(client), sidecar)
+    (
+        SidecarTransport::connect_observed(client, observer),
+        sidecar,
+    )
 }
 
 #[tokio::test]
@@ -87,6 +101,30 @@ async fn wraps_frames_from_the_agent() {
         serde_json::to_value(received).expect("the frame should serialize"),
         serde_json::to_value(frame()).expect("the fixture should serialize"),
     );
+}
+
+#[tokio::test]
+async fn observes_valid_inbound_acp_frames() {
+    let observed = Arc::new(AtomicUsize::new(0));
+    let incremented = observed.clone();
+    let (transport, mut sidecar) = observed_transport(move || {
+        incremented.fetch_add(1, Ordering::Relaxed);
+    })
+    .await;
+    let _ready = transport.recv().await;
+
+    sidecar
+        .send(Message::Text("not json at all".into()))
+        .await
+        .expect("the sidecar should be able to send");
+    let json = serde_json::to_string(&frame()).expect("the fixture should serialize");
+    sidecar
+        .send(Message::Text(json.into()))
+        .await
+        .expect("the sidecar should be able to send");
+    let _frame = transport.recv().await;
+
+    assert_eq!(observed.load(Ordering::Relaxed), 1);
 }
 
 #[tokio::test]

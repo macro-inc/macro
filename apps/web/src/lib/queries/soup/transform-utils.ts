@@ -778,7 +778,7 @@ export const mapApiSoupItemToEntity = (
         threadId: item.data.id,
         senderId: item.data.sender_id,
         sender: item.data.sender,
-        content: item.data.content,
+        content: item.data.content ?? '',
         attachments: item.data.attachments,
         reactions: item.data.reactions,
         ownerId: item.data.sender_id,
@@ -818,7 +818,7 @@ export const mapApiSoupItemToEntity = (
           ? {
               messageId: latestMessage.message_id,
               threadId: latestMessage.thread_id ?? undefined,
-              content: latestMessage.content,
+              content: latestMessage.content ?? '',
               mentions: latestMessage.mentions,
               senderId: latestMessage.sender_id,
               createdAt: latestMessage.created_at,
@@ -828,7 +828,7 @@ export const mapApiSoupItemToEntity = (
           ? {
               messageId: latestRootMessage.message_id,
               threadId: latestRootMessage.thread_id ?? undefined,
-              content: latestRootMessage.content,
+              content: latestRootMessage.content ?? '',
               mentions: latestRootMessage.mentions,
               senderId: latestRootMessage.sender_id,
               createdAt: latestRootMessage.created_at,

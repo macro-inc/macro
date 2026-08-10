@@ -4,6 +4,7 @@
 // generated service-storage primitives. (Previously generated as `@service-comms`'s
 // `ApiChannelWithLatest`; service-storage's generated `SoupChannel` nests these under
 // `.channel` and is therefore not interchangeable.)
+import type { ApiChannelKind } from './generated/schemas/apiChannelKind';
 import type { Channel } from './generated/schemas/channel';
 import type { ChannelParticipant } from './generated/schemas/channelParticipant';
 import type { LatestMessage } from './generated/schemas/latestMessage';
@@ -12,6 +13,8 @@ import type { LatestMessage } from './generated/schemas/latestMessage';
 export type ChannelWithParticipants = Channel & {
   /** Whether current and future team members automatically join the channel. */
   auto_join_team: boolean;
+  /** `normal`, or `agent` for an agent session's dedicated channel. */
+  kind: ApiChannelKind;
   participants: ChannelParticipant[];
   /** Whether the requesting user is an active participant of the channel. */
   is_participant: boolean;

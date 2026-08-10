@@ -1,3 +1,4 @@
+use agent_fold::domain::service::FoldedMessageService;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::AgentSessionRouterState;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -462,9 +463,16 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the agent session router state: the domain service backed
-/// by the Postgres repo, which serves both the session and log ports.
-pub(crate) type DssAgentSessionState =
-    AgentSessionRouterState<AgentSessionServiceImpl<PgAgentSessionRepo>, AuthorizationService>;
+/// by the Postgres repo, which serves the session, log, and comms ports, and
+/// answers turn queries by folding the log on read.
+pub(crate) type DssAgentSessionState = AgentSessionRouterState<
+    AgentSessionServiceImpl<
+        PgAgentSessionRepo,
+        FoldedMessageService<PgAgentSessionRepo>,
+        PgAgentSessionRepo,
+    >,
+    AuthorizationService,
+>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

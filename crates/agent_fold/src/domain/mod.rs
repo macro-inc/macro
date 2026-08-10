@@ -5,6 +5,8 @@
 mod error;
 /// Collapsing a protocol log into messages.
 pub mod fold;
+/// The raw log vocabulary the fold consumes.
+pub mod log;
 /// Harness-specific `_meta` extraction.
 pub mod meta;
 /// The renderable message vocabulary.

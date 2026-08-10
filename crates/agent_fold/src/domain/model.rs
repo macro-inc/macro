@@ -21,6 +21,9 @@ use std::path::PathBuf;
 /// Assigned by the fold in log order starting at zero, so the same log always
 /// yields the same ids. This is not the ACP request id - that correlation is
 /// internal to the fold.
+///
+/// A turn is not the unit a channel renders - see [`MessageId`], which is
+/// what a comms placeholder stores.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TurnId(pub u32);
 
@@ -36,7 +39,13 @@ pub struct ToolUseId(pub String);
 /// a message - and because [`TurnId`]s are assigned in log order, the same
 /// log always derives the same keys. Queries that pretend the messages are
 /// stored address them by this.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The one exception to "nothing here is persisted": a comms placeholder
+/// message stores the message it renders, as `"{turn}:{author}"` under a
+/// session prefix, relying on exactly this stability. One placeholder per
+/// message, not per turn - a turn's prompt and its reply are separate rows
+/// so each can carry its own sender.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MessageId {
     /// The turn the message belongs to.
     pub turn: TurnId,
@@ -44,16 +53,57 @@ pub struct MessageId {
     pub author: AuthorKind,
 }
 
+impl std::fmt::Display for MessageId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}:{}", self.turn.0, self.author.as_str())
+    }
+}
+
+impl std::str::FromStr for MessageId {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let (turn, author) = value.split_once(':').ok_or(())?;
+        Ok(Self {
+            turn: TurnId(turn.parse().map_err(|_| ())?),
+            author: author.parse()?,
+        })
+    }
+}
+
 /// Which side of the conversation produced a message.
 ///
 /// The identity-free discriminant of [`Author`], usable in a key where
 /// [`Author`] itself carries a payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AuthorKind {
     /// A person.
     User,
     /// The agent.
     Agent,
+}
+
+impl AuthorKind {
+    /// The wire name, as it appears in a [`MessageId`]'s string form.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Agent => "agent",
+        }
+    }
+}
+
+impl std::str::FromStr for AuthorKind {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "user" => Ok(Self::User),
+            "agent" => Ok(Self::Agent),
+            _ => Err(()),
+        }
+    }
 }
 
 /// One renderable message folded out of a session's protocol log.

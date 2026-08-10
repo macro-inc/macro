@@ -1,19 +1,17 @@
-use super::util::{TURN, parse_log_as, test_session};
+use super::util::{InMemoryLog, TURN, parse_log_as, test_session};
 use crate::domain::fold;
+use crate::domain::log::AgentSessionId;
 use crate::domain::model::{AuthorKind, MessageId, TurnId};
-use crate::domain::ports::FoldedMessageRepo;
+use crate::domain::ports::{FoldedMessageRepo, LogRepo};
 use crate::domain::service::FoldedMessageService;
-use agent_session::domain::model::AgentSessionId;
-use agent_session::domain::ports::AgentSessionLogRepo;
-use agent_session::testing::InMemoryAgentSessionRepo;
 
 fn other_session() -> AgentSessionId {
     AgentSessionId::TEST_B
 }
 
-/// A repo holding two sessions: the full fixture, and a second session cut
+/// A log holding two sessions: the full fixture, and a second session cut
 /// off mid-turn.
-fn two_session_store() -> InMemoryAgentSessionRepo {
+fn two_session_store() -> InMemoryLog {
     let mut second = parse_log_as(other_session(), TURN);
     second.truncate(9);
 
@@ -93,7 +91,8 @@ async fn service_matches_the_bare_fold() {
         .await
         .expect("in-memory store cannot fail");
     let via_fold = fold::fold(
-        AgentSessionLogRepo::list_by_session(&store, test_session())
+        store
+            .list_by_session(test_session())
             .await
             .expect("in-memory store cannot fail"),
     );
@@ -108,4 +107,39 @@ async fn service_matches_the_bare_fold() {
             .expect("in-memory store cannot fail");
         assert_eq!(fetched.as_ref(), Some(message));
     }
+}
+
+/// `message_ids` lists one key per derived message - a turn contributes both
+/// its user and its agent side, keyed apart by author, so each gets its own
+/// placeholder. An unlogged session derives none.
+#[tokio::test]
+async fn message_ids_lists_each_message_once() {
+    let service = FoldedMessageService::new(two_session_store());
+
+    let ids = service
+        .message_ids(test_session())
+        .await
+        .expect("in-memory store cannot fail");
+    assert_eq!(
+        ids,
+        vec![
+            MessageId {
+                turn: TurnId(0),
+                author: AuthorKind::User,
+            },
+            MessageId {
+                turn: TurnId(0),
+                author: AuthorKind::Agent,
+            },
+        ],
+        "one turn, but both sides are separately addressable"
+    );
+
+    let unlogged = service
+        .message_ids(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
+            9,
+        )))
+        .await
+        .expect("in-memory store cannot fail");
+    assert_eq!(unlogged, vec![]);
 }

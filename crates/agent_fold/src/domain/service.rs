@@ -7,9 +7,9 @@
 //! [`LogRepo`](crate::domain::ports::LogRepo) - so the only thing this type
 //! adds is the `get_message` lookup, which is just a filter over `messages`.
 
+use crate::domain::log::AgentSessionId;
 use crate::domain::model::{FoldedMessage, MessageId};
 use crate::domain::ports::{FoldSession, FoldedMessageRepo};
-use agent_session::domain::model::AgentSessionId;
 
 /// Serves [`FoldedMessageRepo`] queries by delegating to a [`FoldSession`].
 #[derive(Debug, Clone)]
@@ -44,5 +44,16 @@ where
     ) -> Result<Option<FoldedMessage>, rootcause::Report> {
         let messages = self.sessions.fold_session(session).await?;
         Ok(messages.into_iter().find(|message| message.id() == id))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn message_ids(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<Vec<MessageId>, rootcause::Report> {
+        let messages = self.sessions.fold_session(session).await?;
+        // Already oldest-first and already unique - the fold emits at most one
+        // message per (turn, author side), which is exactly the key.
+        Ok(messages.iter().map(FoldedMessage::id).collect())
     }
 }

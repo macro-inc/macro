@@ -1541,7 +1541,7 @@ async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()>
     let rows = result.rows;
 
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].content, "other channel msg");
+    assert_eq!(rows[0].content.as_deref(), Some("other channel msg"));
     Ok(())
 }
 
@@ -1591,8 +1591,14 @@ async fn thread_data_preview_count_limits_replies(pool: Pool<Postgres>) -> anyho
         "only 2 preview replies returned"
     );
     // Preview should be the 2 oldest replies, in chronological order
-    assert_eq!(thread.preview_replies[0].content, "reply 1");
-    assert_eq!(thread.preview_replies[1].content, "reply 2");
+    assert_eq!(
+        thread.preview_replies[0].content.as_deref(),
+        Some("reply 1")
+    );
+    assert_eq!(
+        thread.preview_replies[1].content.as_deref(),
+        Some("reply 2")
+    );
     Ok(())
 }
 
@@ -1623,7 +1629,10 @@ async fn thread_data_multiple_parents(pool: Pool<Postgres>) -> anyhow::Result<()
     assert!(map.contains_key(&MSG2));
     assert_eq!(map[&MSG1].reply_count, 4);
     assert_eq!(map[&MSG2].reply_count, 1);
-    assert_eq!(map[&MSG2].preview_replies[0].content, "reply to deleted");
+    assert_eq!(
+        map[&MSG2].preview_replies[0].content.as_deref(),
+        Some("reply to deleted")
+    );
     Ok(())
 }
 
@@ -1644,7 +1653,10 @@ async fn thread_replies_returns_all_active_replies_oldest_first(
         ids[3],
         Uuid::from_u128(0x00000000_0000_0000_0000_00000000b004)
     );
-    let content: Vec<&str> = replies.iter().map(|r| r.content.as_str()).collect();
+    let content: Vec<&str> = replies
+        .iter()
+        .map(|r| r.content.as_deref().unwrap_or_default())
+        .collect();
     assert_eq!(content, vec!["reply 1", "reply 2", "reply 3", "reply 4"]);
     Ok(())
 }
@@ -1691,7 +1703,10 @@ async fn thread_replies_excludes_deleted_rows(pool: Pool<Postgres>) -> anyhow::R
     let active_replies = repo.get_thread_replies(MSG2).await?;
     assert_eq!(active_replies.len(), 1);
     assert_eq!(active_replies[0].id, REPLY4);
-    assert_eq!(active_replies[0].content, "reply to deleted");
+    assert_eq!(
+        active_replies[0].content.as_deref(),
+        Some("reply to deleted")
+    );
     Ok(())
 }
 
@@ -1979,7 +1994,7 @@ async fn resolve_top_level_parent_returns_self_for_top_level(
 
     let row = row.expect("top-level message should resolve to itself");
     assert_eq!(row.id, MSG1);
-    assert_eq!(row.content, "first message");
+    assert_eq!(row.content.as_deref(), Some("first message"));
     Ok(())
 }
 
@@ -2607,7 +2622,7 @@ async fn attachment_references_returns_channel_reference_for_participant(
     assert_eq!(channel.len(), 1);
     assert_eq!(channel[0].channel_id, CH1);
     assert_eq!(channel[0].message_id, MSG1);
-    assert_eq!(channel[0].message_content, "first message");
+    assert_eq!(channel[0].message_content.as_deref(), Some("first message"));
     Ok(())
 }
 

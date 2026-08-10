@@ -327,6 +327,34 @@
         }
       }
     },
+    "/runtime": {
+      "get": {
+        "tags": ["agent proxy"],
+        "summary": "Accept one agent runtime's WebSocket connection.",
+        "description": "One endpoint serves every session, disambiguated by `?id=` rather than a\nlistener per session. `agent_runtime_protocol` deliberately carries no\nsession identifier on the wire - a connection hosts exactly one agent\nexecution, so the wire protocol has no routing table - which makes this\nhandler the place that identifier actually lives: matched against the\nquery parameter the runtime dialed with, then handed on the same way for\nevery session.",
+        "operationId": "connect_agent_runtime",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "ID of the agent session (chat) this runtime hosts",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket upgrade; carries the agent-runtime protocol"
+          },
+          "400": {
+            "description": "missing or malformed session id"
+          }
+        }
+      }
+    },
     "/sessions/{session_id}/acp": {
       "post": {
         "tags": ["agent proxy"],
@@ -694,6 +722,7 @@
           "document",
           "project",
           "email_thread",
+          "calendar_event",
           "team",
           "call",
           "foreign_entity",

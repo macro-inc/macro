@@ -12,6 +12,7 @@ use crate::{
     },
     service::s3::S3,
 };
+use agent_fold::domain::service::FoldedMessageService;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::AgentSessionRouterState;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -311,8 +312,13 @@ async fn main() -> anyhow::Result<()> {
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 
+    let agent_session_repo = PgAgentSessionRepo::new(db.clone());
     let agent_session_state = AgentSessionRouterState::new(
-        AgentSessionServiceImpl::new(PgAgentSessionRepo::new(db.clone())),
+        AgentSessionServiceImpl::new(
+            agent_session_repo.clone(),
+            FoldedMessageService::new(agent_session_repo.clone()),
+            agent_session_repo,
+        ),
         authorization_state.clone(),
     );
 

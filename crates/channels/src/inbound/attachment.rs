@@ -119,7 +119,7 @@ fn format_messages(messages: &[RecentChannelMessage]) -> String {
         let tag = XmlTag {
             name: "message",
             attrs: attrs(&[("sender", &msg.sender_id), ("timestamp", &timestamp)]),
-            body: &msg.content,
+            body: msg.content.as_deref().unwrap_or_default(),
         };
         writeln!(&mut body, "{tag}").expect("write to string");
     }

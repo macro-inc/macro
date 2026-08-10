@@ -8,7 +8,8 @@ import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { isUnifiedInputMode } from '../unified-input-mode';
-import { useMessage } from './context';
+import { useFoldedMessageLookup, useMessage } from './context';
+import { FoldedContent } from './FoldedContent';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
@@ -122,6 +123,46 @@ function DeletedMessageLayout() {
   );
 }
 
+/**
+ * An agent-session placeholder: the comms row stores no content, only an
+ * `agent_session_message_id`, and the body is the folded message looked up
+ * from the channel's agent session. One row per folded message, so this
+ * renders the user's prompt as well as the agent's reply.
+ */
+function FoldedMessageLayout() {
+  const message = useMessage();
+  const lookup = useFoldedMessageLookup();
+  const folded = () => {
+    const messageId = message().agent_session_message_id;
+    return messageId ? lookup?.(messageId) : undefined;
+  };
+
+  return (
+    <Message.Layout class="pt-(--regular-message-padding-t)">
+      <Message.Slot placement="icon">
+        <Message.SenderIcon />
+      </Message.Slot>
+      <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
+        <div class="flex items-center gap-1 min-w-0">
+          <Message.SenderName />
+          <Message.AgentBadge />
+          <div class="grow shrink-0 min-w-0 flex justify-end">
+            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+          </div>
+        </div>
+      </Message.Slot>
+      <Message.Slot placement="content" class="ph-no-capture">
+        <Show
+          when={folded()}
+          fallback={<p class="text-sm text-ink-muted italic">Working…</p>}
+        >
+          {(folded) => <FoldedContent folded={folded()} />}
+        </Show>
+      </Message.Slot>
+    </Message.Layout>
+  );
+}
+
 function RegularMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
@@ -227,6 +268,14 @@ export function ChannelMessage(props: ChannelMessageProps) {
         <Switch>
           <Match when={props.message.deleted_at != null}>
             <DeletedMessageLayout />
+          </Match>
+          <Match
+            when={
+              props.message.content == null &&
+              props.message.agent_session_message_id != null
+            }
+          >
+            <FoldedMessageLayout />
           </Match>
           <Match when={isGrouped()}>
             <GroupedMessageLayout

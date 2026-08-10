@@ -33,6 +33,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
+import type { AgentChannelMessagesResponse } from './generated/schemas/agentChannelMessagesResponse';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -920,6 +921,21 @@ export const storageServiceClient = {
           method: 'POST',
           body: JSON.stringify(filters),
         }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Folded messages of the agent session behind a channel. `404` when the
+   * channel has no agent session; each message's `agentSessionTurnId` matches
+   * the `agent_session_turn_id` on the channel's placeholder messages.
+   */
+  async getAgentChannelMessages(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<AgentChannelMessagesResponse>(
+        `/agent-sessions/channel/${channel_id}/messages`,
+        { method: 'GET' }
       )
     ).map((result) => result);
   },

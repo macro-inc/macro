@@ -841,7 +841,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                       <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
                         <div class="line-clamp-3 wrap-break-word">
                           <StaticMarkdown
-                            markdown={context().content}
+                            markdown={context().content ?? ''}
                             theme={channelTheme}
                             target="internal"
                           />
