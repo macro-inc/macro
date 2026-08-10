@@ -421,7 +421,7 @@ export function EventDetails(props: {
             </Show>
           </div>
 
-          <div class="mt-5 flex flex-col gap-3 text-sm text-ink-muted sm:text-xs">
+          <div class="mt-5 flex flex-col gap-5 text-sm text-ink-muted sm:gap-3 sm:text-xs">
             <Show when={conferenceUrl()}>
               {(url) => (
                 <div class="-ml-9 flex items-center gap-4 sm:-ml-7 sm:gap-3">

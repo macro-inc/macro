@@ -155,8 +155,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 </div>
               </Show>
             </div>
-            <div class="min-h-0 flex-1 overflow-y-auto">
-              <div class="px-3 pb-3">
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div class="px-3">
                 <EventDetails
                   event={props.event}
                   timeFormat={props.timeFormat}
