@@ -90,6 +90,11 @@ describe('internal transformer fallbacks', () => {
     ],
     ['<m-snapshot>{bad}</m-snapshot>', 'Unknown Snapshot'],
     ['<m-await>{bad}</m-await>', 'Unknown Await'],
+    ['<m-magic-chip>{bad}</m-magic-chip>', 'Unknown Magic Chip'],
+    [
+      '<m-magic-chip>{"agentSessionId":"session","channelId":"channel","promptedTurnId":"turn","status":"invalid"}</m-magic-chip>',
+      'Unknown Magic Chip',
+    ],
     ['<m-link>{bad}</m-link>', 'Unknown Link'],
   ])('falls back for malformed text transformer payload %#', async (markdown, name) => {
     const editor = await importMarkdown(markdown);
