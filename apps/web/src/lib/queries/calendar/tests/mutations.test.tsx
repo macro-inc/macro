@@ -146,6 +146,14 @@ function renderHook<T>(factory: () => T): T {
 const failure = () =>
   err([{ code: 'HTTP_ERROR' as const, message: 'provider says no' }]);
 
+function deferredResult() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise<unknown>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
@@ -182,45 +190,48 @@ describe('useRsvpCalendarEventMutation', () => {
     });
   });
 
-  it('scopes the optimistic answer to the occurrences it covers', async () => {
-    // Three occurrences of one series, so a scoped answer has something to
-    // leave alone.
-    const seriesOccurrence = (key: string): CalendarOccurrenceItem =>
-      ({
-        event: {
-          id: 'event-3',
-          title: 'Standup',
-          recurrenceLines: ['RRULE:FREQ=DAILY'],
-          time: { kind: 'timed', startsAt: key, endsAt: key },
-          attendees: [
-            {
-              email: 'self@example.com',
-              isSelf: true,
-              responseStatus: 'accepted',
-            },
-          ],
-        },
-        occurrence: {
-          eventId: 'event-3',
-          occurrenceKey: key,
-          recurrenceId: key,
-          time: { kind: 'timed', startsAt: key, endsAt: key },
-        },
-      }) as unknown as CalendarOccurrenceItem;
-    const keys = [
-      '2026-08-04T09:00:00Z',
-      '2026-08-05T09:00:00Z',
-      '2026-08-06T09:00:00Z',
-    ];
+  // Three occurrences of one series, so a scoped answer has something to
+  // leave alone.
+  const seriesOccurrence = (key: string): CalendarOccurrenceItem =>
+    ({
+      event: {
+        id: 'event-3',
+        title: 'Standup',
+        recurrenceLines: ['RRULE:FREQ=DAILY'],
+        time: { kind: 'timed', startsAt: key, endsAt: key },
+        attendees: [
+          {
+            email: 'self@example.com',
+            isSelf: true,
+            responseStatus: 'accepted',
+          },
+        ],
+      },
+      occurrence: {
+        eventId: 'event-3',
+        occurrenceKey: key,
+        recurrenceId: key,
+        time: { kind: 'timed', startsAt: key, endsAt: key },
+      },
+    }) as unknown as CalendarOccurrenceItem;
+  const seriesKeys = [
+    '2026-08-04T09:00:00Z',
+    '2026-08-05T09:00:00Z',
+    '2026-08-06T09:00:00Z',
+  ];
+  const seedSeries = () =>
     testQueryClient.setQueryData(
       calendarKeys.occurrences('user', viewportA).queryKey,
-      { items: keys.map(seriesOccurrence), syncStatus: 'ready' }
+      { items: seriesKeys.map(seriesOccurrence), syncStatus: 'ready' }
     );
-    const responseAt = (key: string) =>
-      viewportData(viewportA)
-        ?.items.find((item) => item.occurrence.occurrenceKey === key)
-        ?.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
+  const responseAt = (key: string) =>
+    viewportData(viewportA)
+      ?.items.find((item) => item.occurrence.occurrenceKey === key)
+      ?.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
 
+  it('scopes the optimistic answer to the occurrences it covers', async () => {
+    const keys = seriesKeys;
+    seedSeries();
     rsvpCalendarEventMock.mockResolvedValue(ok({ id: 'event-3' }));
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
@@ -280,6 +291,135 @@ describe('useRsvpCalendarEventMutation', () => {
         event?.attendees.find((attendee) => attendee.isSelf)?.responseStatus
       ).toBe('needs_action');
     }
+  });
+
+  const selfStatus = () =>
+    viewportData(viewportA)
+      ?.items.find((item) => item.event.id === 'event-1')
+      ?.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
+
+  it('keeps the newer optimistic response when an older overlapping request fails', async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    rsvpCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    const firstMutation = rsvp
+      .mutateAsync({ eventId: 'event-1', response: 'accepted' })
+      .catch(() => {});
+    await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
+
+    const secondMutation = rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'tentative',
+    });
+    await vi.waitFor(() => expect(selfStatus()).toBe('tentative'));
+
+    first.resolve(failure());
+    await firstMutation;
+    expect(selfStatus()).toBe('tentative');
+
+    second.resolve(ok({ id: 'event-1' }));
+    await secondMutation;
+    expect(selfStatus()).toBe('tentative');
+  });
+
+  it('keeps a newer identical response when the older request fails', async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    rsvpCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    const firstMutation = rsvp
+      .mutateAsync({ eventId: 'event-1', response: 'accepted' })
+      .catch(() => {});
+    await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
+
+    // The second answer picks the same response, so equal cache values
+    // cannot reveal which mutation wrote last — wait for its request to
+    // confirm its optimistic write went through.
+    const secondMutation = rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'accepted',
+    });
+    await vi.waitFor(() =>
+      expect(rsvpCalendarEventMock).toHaveBeenCalledTimes(2)
+    );
+
+    second.resolve(ok({ id: 'event-1' }));
+    await secondMutation;
+    expect(selfStatus()).toBe('accepted');
+
+    first.resolve(failure());
+    await firstMutation;
+    expect(selfStatus()).toBe('accepted');
+  });
+
+  it('rolls a failed series answer back around a newer occurrence answer', async () => {
+    seedSeries();
+    const first = deferredResult();
+    const second = deferredResult();
+    rsvpCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    const firstMutation = rsvp
+      .mutateAsync({ eventId: 'event-3', response: 'tentative', scope: 'all' })
+      .catch(() => {});
+    await vi.waitFor(() => expect(responseAt(seriesKeys[0])).toBe('tentative'));
+
+    const secondMutation = rsvp.mutateAsync({
+      eventId: 'event-3',
+      response: 'declined',
+      scope: 'this_event',
+      recurrenceId: seriesKeys[1],
+      occurrenceKey: seriesKeys[1],
+    });
+    await vi.waitFor(() => expect(responseAt(seriesKeys[1])).toBe('declined'));
+
+    first.resolve(failure());
+    await firstMutation;
+    expect(responseAt(seriesKeys[0])).toBe('accepted');
+    expect(responseAt(seriesKeys[1])).toBe('declined');
+    expect(responseAt(seriesKeys[2])).toBe('accepted');
+
+    second.resolve(ok({ id: 'event-3' }));
+    await secondMutation;
+    expect(responseAt(seriesKeys[1])).toBe('declined');
+  });
+
+  it('only refetches once the last overlapping request settles', async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    rsvpCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const invalidateSpy = vi.spyOn(testQueryClient, 'invalidateQueries');
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    const firstMutation = rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'accepted',
+    });
+    await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
+    const secondMutation = rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'declined',
+    });
+    await vi.waitFor(() => expect(selfStatus()).toBe('declined'));
+
+    first.resolve(ok({ id: 'event-1' }));
+    await firstMutation;
+    expect(invalidateSpy).not.toHaveBeenCalled();
+
+    second.resolve(ok({ id: 'event-1' }));
+    await secondMutation;
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
   });
 });
 

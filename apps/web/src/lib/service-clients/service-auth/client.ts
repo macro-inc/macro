@@ -193,8 +193,11 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
+    // The session code stays valid server-side for 5 minutes and is
+    // replayable, so retrying transient failures is safe.
     const result = await authApiFetch<UserTokensResponse>(
-      `/session/login/${args.session_code}`
+      `/session/login/${args.session_code}`,
+      { retry: { maxTries: 3, delay: 'exponential' } }
     );
     if (result.isOk()) {
       setAccessTokenData({

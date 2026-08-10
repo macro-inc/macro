@@ -531,6 +531,11 @@
           pname = "macro-tauri-desktop-dmg";
           TAURI_CONFIG = tauriDesktopDmgConfig;
           APPLE_SIGNING_IDENTITY = tauriDesktopDmgSigningIdentity;
+          # Nix's cctools ld crashes with SIGTRAP while linking the large final
+          # desktop binary on GitHub's macOS 15 arm64 runners. This derivation
+          # is already an impure, unsandboxed native macOS build for signing;
+          # use the runner's Apple linker and SDK for the final Cargo link.
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = "/usr/bin/clang";
           nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
           preBuild = ''
             if [ -z "$APPLE_SIGNING_IDENTITY" ]; then

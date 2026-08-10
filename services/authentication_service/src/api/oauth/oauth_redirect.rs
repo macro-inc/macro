@@ -63,6 +63,7 @@ pub async fn handler(
         Some(c) => c,
         None => {
             tracing::warn!(
+                auth_handoff_failure = "missing_code",
                 error = ?params.error,
                 error_reason = ?params.error_reason,
                 error_description = ?params.error_description,
@@ -91,7 +92,11 @@ pub async fn handler(
     {
         Ok(tokens) => tokens,
         Err(e) => {
-            tracing::error!(error=?e, "unable to complete authorization code grant");
+            tracing::error!(
+                auth_handoff_failure = "code_grant_failed",
+                error=?e,
+                "unable to complete authorization code grant"
+            );
             return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
         }
     };
@@ -100,6 +105,13 @@ pub async fn handler(
         ctx.macro_cache_client
             .set_mobile_login_session(code.0.as_str(), &refresh_token)
             .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    auth_handoff_failure = "session_code_store_failed",
+                    error=?e,
+                    "unable to store mobile session code"
+                );
+            })
             .map_err(InnerErr::MacroCacheErr)
     };
 
@@ -107,6 +119,13 @@ pub async fn handler(
         Some(
             state
                 .decode()
+                .inspect_err(|e| {
+                    tracing::error!(
+                        auth_handoff_failure = "state_decode_failed",
+                        error=?e,
+                        "unable to decode oauth state"
+                    );
+                })
                 .map_err(|e| InnerErr::Serde(e).into_response())?,
         )
     } else {
@@ -124,9 +143,14 @@ pub async fn handler(
     if let Some(state) = state.as_ref()
         && let Some(referral_code) = state.referral_code.as_ref()
     {
-        let user_id = decoded_user_id
-            .as_ref()
-            .map_err(|_| InnerErr::InvalidJwtError.into_response())?;
+        let user_id = decoded_user_id.as_ref().map_err(|e| {
+            tracing::error!(
+                auth_handoff_failure = "referral_jwt_decode_failed",
+                error=?e,
+                "unable to decode access token while tracking referral"
+            );
+            InnerErr::InvalidJwtError.into_response()
+        })?;
 
         let _ = ctx
             .referral_service
@@ -211,6 +235,13 @@ async fn get_redirect_url(
     write_db: impl AsyncFnOnce(&SessionCode) -> Result<(), InnerErr>,
 ) -> Result<Url, InnerErr> {
     let Some(state) = state else {
+        // A mobile login cannot complete from here: without state there is no
+        // is_mobile flag, so no session code is minted and the app's
+        // macro:// callback never fires.
+        tracing::warn!(
+            auth_handoff_failure = "state_missing",
+            "oauth redirect received without state; redirecting to default app url"
+        );
         return Ok(default_redirect_url());
     };
 
