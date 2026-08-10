@@ -7,6 +7,8 @@ import {
   formatDate,
   formatNumber,
   formatPropertyValue,
+} from '../utils/formatting';
+import {
   getEntityValues,
   getLinkValues,
   getSelectValues,
@@ -18,7 +20,7 @@ import {
   isNumberProperty,
   isSelectProperty,
   isStringProperty,
-} from '../utils';
+} from '../utils/typeGuards';
 
 type Props = {
   property: Property;
@@ -57,6 +59,7 @@ export function PropertyText(props: Props) {
 
   return (
     <Show
+      keyed
       when={userId()}
       fallback={
         <PrimitivePropertyText
@@ -69,7 +72,7 @@ export function PropertyText(props: Props) {
     >
       {(id) => (
         <UserPropertyText
-          id={id()}
+          id={id}
           fallback={props.fallback}
           class={props.class}
         />
