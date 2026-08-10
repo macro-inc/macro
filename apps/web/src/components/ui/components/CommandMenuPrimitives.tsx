@@ -127,7 +127,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
 function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Header class={cn('gap-2 px-2 my-1 bg-surface', props.class)}>
+    <Panel.Header class={cn('gap-2 px-4 my-1 bg-surface', props.class)}>
       {props.children}
     </Panel.Header>
   );

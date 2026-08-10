@@ -58,23 +58,35 @@ import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   CommandMenuHotkeyHint,
   CommandMenuList,
+  CommandMenuSearchInput,
   CommandMenuShell,
   cn,
   createCommandListController,
   Hotkey,
+  ToggleSwitch,
 } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import type { CreatableBlock } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
+const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
 const FRECENCY_COUNT_WEIGHT = 10;
 const FRECENCY_HALF_LIFE_DAYS = 14;
 
@@ -88,6 +100,10 @@ type LauncherFrecencyStore = Record<string, LauncherFrecencyEntry>;
 const [launcherFrecencyStore, setLauncherFrecencyStore] = makePersisted(
   createStore<LauncherFrecencyStore>({}),
   { name: LAUNCHER_FRECENCY_STORE }
+);
+const [launcherSearchMode, setLauncherSearchModePreference] = makePersisted(
+  createSignal(false),
+  { name: LAUNCHER_SEARCH_MODE_STORE }
 );
 
 function launcherItemKey(item: CreatableBlock) {
@@ -113,6 +129,25 @@ function trackLauncherItemUsage(item: CreatableBlock) {
     count: (previous?.count ?? 0) + 1,
     lastUsedAt: Date.now(),
   });
+}
+
+function matchesLauncherSearch(item: CreatableBlock, query: string) {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+  if (terms.length === 0) return true;
+
+  const searchableText = [
+    item.label,
+    item.description,
+    item.launcherHint,
+    item.blockName,
+    ...(item.keywords ?? []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return terms.every((term) => searchableText.includes(term));
 }
 
 const createBlock = async (spec: {
@@ -561,6 +596,7 @@ export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;
   selected?: boolean;
+  showHotkey?: boolean;
 };
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
@@ -601,9 +637,11 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         </Show>
       </div>
 
-      <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal text-ink-muted">
-        <Hotkey token={props.creatableBlock.hotkeyToken} />
-      </div>
+      <Show when={props.showHotkey}>
+        <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal text-ink-muted">
+          <Hotkey token={props.creatableBlock.hotkeyToken} />
+        </div>
+      </Show>
     </>
   );
 };
@@ -622,7 +660,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     (props.blocks ?? CREATABLE_BLOCKS).filter(
       (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
     );
-  const blocks = createMemo(() => {
+  const sortedBlocks = createMemo(() => {
     const now = Date.now();
 
     return availableBlocks()
@@ -634,9 +672,19 @@ export const LauncherInner = (props: LauncherInnerProps) => {
       .sort((a, b) => b.score - a.score || a.index - b.index)
       .map(({ item }) => item);
   });
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchMode = launcherSearchMode;
+  const blocks = createMemo(() => {
+    if (!searchMode()) return sortedBlocks();
+
+    return sortedBlocks().filter((item) =>
+      matchesLauncherSearch(item, searchQuery())
+    );
+  });
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
+  let searchInputRef: HTMLInputElement | undefined;
   let shiftRippleRef: HTMLSpanElement | undefined;
 
   const shiftHeld = () => pressedKeys().has('shift');
@@ -660,6 +708,29 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
     return true;
   };
+
+  const setLauncherSearchMode = (next: boolean) => {
+    setLauncherSearchModePreference(next);
+
+    if (!next) {
+      setSearchQuery('');
+    }
+
+    queueMicrotask(() => {
+      if (next) {
+        searchInputRef?.focus({ preventScroll: true });
+      } else {
+        ref?.focus({ preventScroll: true });
+      }
+    });
+  };
+
+  createEffect(() => {
+    searchMode();
+    searchQuery();
+    blocks().length;
+    setFocusedIndex(0);
+  });
 
   availableBlocks().forEach((item) => {
     registerHotkey({
@@ -700,14 +771,22 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     hotkey: ['arrowup', 'ctrl+k', 'shift+tab'],
     scopeId: launcherScope,
     description: 'Navigate up',
-    keyDownHandler: () => listController.selectPrevious(),
+    keyDownHandler: (event) => {
+      event?.preventDefault();
+      return listController.selectPrevious();
+    },
+    runWithInputFocused: true,
   }).withGroup(hkGroup);
 
   const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j', 'tab'],
     scopeId: launcherScope,
     description: 'Navigate down',
-    keyDownHandler: () => listController.selectNext(),
+    keyDownHandler: (event) => {
+      event?.preventDefault();
+      return listController.selectNext();
+    },
+    runWithInputFocused: true,
   }).withGroup(hkGroup);
 
   registerHotkey({
@@ -757,7 +836,13 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onMount(() => {
     if (!ref) return;
     attachHotkeys(ref);
-    ref.focus({ preventScroll: true });
+    queueMicrotask(() => {
+      if (searchMode()) {
+        searchInputRef?.focus({ preventScroll: true });
+      } else {
+        ref.focus({ preventScroll: true });
+      }
+    });
   });
 
   onCleanup(hkGroup.dispose);
@@ -776,37 +861,46 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="my-0 justify-between p-2 px-4 bg-surface">
-          <h1 class="font-medium text-small text-ink-muted">Create New</h1>
-          <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
-            <style>{`
-            @keyframes shift-ripple {
-              0%   { transform: scale(1); opacity: 0.6; }
-              100% { transform: scale(2.2); opacity: 0; }
+        <CommandMenuShell.Header class="gap-2 px-4 my-1 bg-surface border-b-0">
+          <Show
+            when={searchMode()}
+            fallback={
+              <div class="min-w-0 flex flex-1 items-center gap-2 text-ink-muted">
+                <PlusIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <h1 class="truncate text-base font-normal">Create New</h1>
+              </div>
             }
-            .shift-ripple.rippling {
-              animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
-            }
-          `}</style>
-            Hold{' '}
-            <span class="relative inline-flex place-items-center my-1">
-              <span
-                ref={shiftRippleRef}
-                class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
+          >
+            <div class="min-w-0 flex flex-1 items-center gap-2">
+              <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <CommandMenuSearchInput
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search create options"
+                value={searchQuery()}
+                onInput={(event) => setSearchQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setLauncherSearchMode(false);
+                  }
+                }}
               />
-              <span
-                class={cn(
-                  'border text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
-                  shiftHeld()
-                    ? 'border-accent text-accent bg-accent/10'
-                    : 'border-edge-muted'
-                )}
-              >
-                {getNormalizedKeyString({ shortcut: 'shift' })}
+            </div>
+          </Show>
+          <ToggleSwitch
+            checked={searchMode()}
+            onChange={setLauncherSearchMode}
+            size="xs"
+            label={
+              <span class="text-[11px] font-medium leading-none text-ink-extra-muted/70">
+                Search mode
               </span>
-            </span>
-            to launch in new split
-          </p>
+            }
+            labelClass="flex items-center"
+            controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
+            class="ml-auto flex-row-reverse gap-1.5 rounded-full bg-ink/4 px-2 py-1"
+          />
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
           <CommandMenuList
@@ -824,11 +918,21 @@ export const LauncherInner = (props: LauncherInnerProps) => {
               <LauncherMenuItem
                 creatableBlock={item}
                 selected={focusedIndex() === index()}
+                showHotkey={!searchMode()}
               />
             )}
           </CommandMenuList>
         </CommandMenuShell.Body>
         <CommandMenuShell.Footer>
+          <style>{`
+              @keyframes shift-ripple {
+                0%   { transform: scale(1); opacity: 0.6; }
+                100% { transform: scale(2.2); opacity: 0; }
+              }
+              .shift-ripple.rippling {
+                animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+              }
+            `}</style>
           <span class="flex items-center gap-1">
             <div class="flex gap-1">
               <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
@@ -844,6 +948,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             hotkey={<Hotkey shortcut={confirmHotkey.hotkey()} />}
             label="Create"
           />
+          <span class="hidden touch:hidden md:flex items-center gap-1">
+            Hold
+            <span class="relative inline-flex place-items-center">
+              <span
+                ref={shiftRippleRef}
+                class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
+              />
+              <span
+                class={cn(
+                  'border text-xxs px-1.5 py-px rounded-md transition-colors duration-150',
+                  shiftHeld()
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-edge-muted'
+                )}
+              >
+                {getNormalizedKeyString({ shortcut: 'shift' })}
+              </span>
+            </span>
+            New split
+          </span>
         </CommandMenuShell.Footer>
       </CommandMenuShell>
     </div>
