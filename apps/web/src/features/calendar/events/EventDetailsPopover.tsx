@@ -115,8 +115,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
             <div class="px-3 pb-3">
               <EventDetails event={props.event} timeFormat={props.timeFormat} />
             </div>
-            <EventRsvpSection event={props.event} />
             <EventAttendeesSection attendees={props.event.attendees} />
+            <EventRsvpSection event={props.event} />
           </div>
           <MobileDrawer.Close
             as={Button}
@@ -306,49 +306,54 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               }}
             >
               <Popover.Arrow class="fill-surface" />
-              <div class="relative w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
+              <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
                 <Popover.Title class="sr-only">
                   {props.event.title}
                 </Popover.Title>
-                <div class="p-3">
-                  <EventDetails
-                    event={props.event}
-                    timeFormat={props.timeFormat}
-                  />
-                </div>
-                <EventRsvpSection event={props.event} />
-                <EventAttendeesSection attendees={props.event.attendees} />
-                <div class="absolute right-2 top-2 flex items-center gap-0.5">
+                <div class="flex items-center justify-end gap-2 px-2 pt-2">
                   <Show when={canModify()}>
-                    <Button
-                      aria-label="Edit event"
-                      variant="ghost"
-                      size="icon-sm"
-                      class="rounded-md text-ink-muted"
-                      onClick={() => setEditorOpen(true)}
-                    >
-                      <PencilSimpleIcon class="size-3" />
-                    </Button>
-                    <Button
-                      aria-label="Delete event"
-                      variant="ghost"
-                      size="icon-sm"
-                      class="rounded-md text-ink-muted"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <TrashIcon class="size-3" />
-                    </Button>
+                    <div class="flex items-center gap-1">
+                      <Button
+                        aria-label="Edit event"
+                        variant="ghost"
+                        size="icon-sm"
+                        depth={3}
+                        class="rounded-md text-ink-muted [&_svg]:size-4"
+                        onClick={() => setEditorOpen(true)}
+                      >
+                        <PencilSimpleIcon />
+                      </Button>
+                      <Button
+                        aria-label="Delete event"
+                        variant="ghost"
+                        size="icon-sm"
+                        depth={3}
+                        class="rounded-md text-ink-muted [&_svg]:size-4"
+                        onClick={() => setDeleteOpen(true)}
+                      >
+                        <TrashIcon />
+                      </Button>
+                    </div>
                   </Show>
                   <Popover.CloseButton
                     as={Button}
                     aria-label="Close event details"
                     variant="ghost"
                     size="icon-sm"
-                    class="rounded-md text-ink-muted"
+                    depth={3}
+                    class="rounded-md text-ink-muted [&_svg]:size-4"
                   >
-                    <CloseIcon class="size-3" />
+                    <CloseIcon />
                   </Popover.CloseButton>
                 </div>
+                <div class="px-3 pb-3">
+                  <EventDetails
+                    event={props.event}
+                    timeFormat={props.timeFormat}
+                  />
+                </div>
+                <EventAttendeesSection attendees={props.event.attendees} />
+                <EventRsvpSection event={props.event} />
               </div>
             </Popover.Content>
           </Layer>

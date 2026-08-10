@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import type { CalendarEvent } from './types';
 
@@ -35,21 +35,21 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
 
   return (
     <Show when={canRespond()}>
-      <div class="border-edge-muted flex items-center gap-3 border-t px-4 py-2.5 text-xs text-ink-muted">
+      <div class="border-edge-muted flex items-center gap-3 border-t px-4 py-2.5 text-xs text-ink-muted bg-active">
         <span>Going?</span>
-        <div class="ml-auto flex shrink-0 gap-1">
+        <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
           <For each={RSVP_OPTIONS}>
             {(option) => (
               <Button
                 variant={
                   selfAttendee()?.responseStatus === option.response
                     ? 'active'
-                    : 'ghost'
+                    : 'base'
                 }
                 size="sm"
-                class="rounded-lg px-2.5"
+                depth={3}
+                class="rounded-lg px-3"
                 disabled={rsvp.isPending}
-                label={option.label}
                 onClick={() =>
                   rsvp.mutate({
                     eventId: props.event.eventId,
