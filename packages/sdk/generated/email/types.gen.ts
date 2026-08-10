@@ -693,6 +693,15 @@ export type CalendarMutationApiError = {
  */
 export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
 
+/**
+ * How much of a recurring series an RSVP applies to.
+ *
+ * Unlike deletion there is no this-and-following variant: the provider
+ * cannot express a forward-scoped response, so offering one would be a
+ * promise sync could not keep.
+ */
+export type CalendarRsvpScopeParam = 'all' | 'this_event';
+
 export type CancelBackfillParams = {
     job_id: string;
 };
@@ -1199,9 +1208,14 @@ export type ResyncResponse = {
  */
 export type RsvpCalendarEventRequest = {
     /**
+     * Original-start key of the occurrence the response targets.
+     */
+    recurrenceId?: string | null;
+    /**
      * The response to record for the connected account.
      */
     response: AttendeeResponseStatus;
+    scope?: null | CalendarRsvpScopeParam;
 };
 
 /**
