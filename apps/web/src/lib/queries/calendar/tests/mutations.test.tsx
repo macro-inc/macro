@@ -326,6 +326,39 @@ describe('useRsvpCalendarEventMutation', () => {
     expect(selfStatus()).toBe('tentative');
   });
 
+  it('keeps a newer identical response when the older request fails', async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    rsvpCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    const firstMutation = rsvp
+      .mutateAsync({ eventId: 'event-1', response: 'accepted' })
+      .catch(() => {});
+    await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
+
+    // The second answer picks the same response, so equal cache values
+    // cannot reveal which mutation wrote last — wait for its request to
+    // confirm its optimistic write went through.
+    const secondMutation = rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'accepted',
+    });
+    await vi.waitFor(() =>
+      expect(rsvpCalendarEventMock).toHaveBeenCalledTimes(2)
+    );
+
+    second.resolve(ok({ id: 'event-1' }));
+    await secondMutation;
+    expect(selfStatus()).toBe('accepted');
+
+    first.resolve(failure());
+    await firstMutation;
+    expect(selfStatus()).toBe('accepted');
+  });
+
   it('rolls a failed series answer back around a newer occurrence answer', async () => {
     seedSeries();
     const first = deferredResult();

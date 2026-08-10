@@ -97,10 +97,27 @@ type RsvpCallbacks = MutationCallbacks<
   CalendarEventEntity,
   Error,
   RsvpCalendarEventArgs,
-  CalendarMutationContext
+  RsvpMutationContext
 >;
 
 const RSVP_MUTATION_KEY = ['calendar', 'rsvp'] as const;
+
+type RsvpMutationContext = CalendarMutationContext & {
+  /** Drops this mutation's writer stamps once it has settled. */
+  release: () => void;
+};
+
+let rsvpRevisionCounter = 0;
+/**
+ * Latest optimistic writer per (event, occurrence). Value equality cannot
+ * tell overlapping same-response mutations apart, so rollback ownership is
+ * tracked explicitly: an older mutation's failure must not revert an
+ * occurrence a newer mutation has since answered.
+ */
+const rsvpLastWriter = new Map<string, number>();
+
+const rsvpWriterKey = (eventId: string, occurrenceKey: string) =>
+  JSON.stringify([eventId, occurrenceKey]);
 
 function selfResponseOf(
   item: CalendarOccurrenceItem
@@ -160,9 +177,9 @@ function readAnsweredResponses(
  * The buttons stay enabled while the request is in flight (the round trip
  * writes through to the provider, which takes seconds), so overlapping
  * mutations are expected: the rollback restores only the occurrences this
- * mutation answered and skips any a newer mutation overwrote, and only the
- * last mutation to settle refetches — otherwise an earlier settle would
- * clobber a later mutation's optimistic state with stale server data.
+ * mutation still owns per the writer stamps, and only the last mutation to
+ * settle refetches — otherwise an earlier settle would clobber a later
+ * mutation's optimistic state with stale server data.
  */
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
@@ -179,14 +196,21 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
       CalendarEventEntity,
       Error,
       RsvpCalendarEventArgs,
-      CalendarMutationContext
+      RsvpMutationContext
     >(
       {
         onMutate: async (args) => {
+          const revision = ++rsvpRevisionCounter;
           await queryClient.cancelQueries({
             queryKey: calendarKeys.occurrences._def,
           });
           const previous = readAnsweredResponses(args);
+          for (const occurrenceKey of previous.keys()) {
+            rsvpLastWriter.set(
+              rsvpWriterKey(args.eventId, occurrenceKey),
+              revision
+            );
+          }
           patchOccurrenceQueries((items) =>
             items.map((item) =>
               answeredByRsvp(item, args)
@@ -199,17 +223,34 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
               patchOccurrenceQueries((items) =>
                 items.map((item) => {
                   if (!answeredByRsvp(item, args)) return item;
-                  const restored = previous.get(item.occurrence.occurrenceKey);
+                  const occurrenceKey = item.occurrence.occurrenceKey;
+                  if (
+                    rsvpLastWriter.get(
+                      rsvpWriterKey(args.eventId, occurrenceKey)
+                    ) !== revision
+                  ) {
+                    return item;
+                  }
+                  const restored = previous.get(occurrenceKey);
                   if (restored === undefined) return item;
                   if (selfResponseOf(item) !== args.response) return item;
                   return withSelfResponse(item, restored);
                 })
               );
             },
+            release: () => {
+              for (const occurrenceKey of previous.keys()) {
+                const key = rsvpWriterKey(args.eventId, occurrenceKey);
+                if (rsvpLastWriter.get(key) === revision) {
+                  rsvpLastWriter.delete(key);
+                }
+              }
+            },
           };
         },
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => {
+        onSettled: (_data, _error, _args, context) => {
+          context?.release();
           if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
             return;
           }
