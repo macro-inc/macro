@@ -1,5 +1,21 @@
 import type { CallRecord } from '@service-call/client';
 import { onCleanup } from 'solid-js';
+import { match, P } from 'ts-pattern';
+
+/**
+ * Cross-tab fan-out of terminal incoming-call states ("answered"/"ended"), so
+ * a ring resolved in one tab stops in every tab even when a background tab
+ * missed the one-shot websocket event.
+ *
+ * Resolutions publish over a BroadcastChannel, with a localStorage `storage`
+ * event as fallback for embedded browsers where BroadcastChannel is missing
+ * or unreliable. The channel is a hand-rolled module-level singleton rather
+ * than `@solid-primitives/broadcast-channel`: the primitive constructs
+ * `BroadcastChannel` unguarded (it would throw in exactly the environments
+ * the fallback exists for) and ties the channel's lifetime to a reactive
+ * owner, while publishes here happen from async owner-less contexts and the
+ * subscription registry must outlive any subscribing component.
+ */
 
 const CALL_RESOLUTION_CHANNEL = 'macro-call-resolution';
 const CALL_RESOLUTION_STORAGE_KEY = 'macro.call-resolution';
@@ -8,7 +24,6 @@ export type CallResolution =
   | {
       type: 'answered';
       callId: string;
-      channelId?: string;
       answeredBy: string;
     }
   | {
@@ -32,34 +47,16 @@ function getResolutionKey(resolution: CallResolution) {
 }
 
 function parseCallResolution(value: unknown): CallResolution | null {
-  if (!value || typeof value !== 'object') return null;
-
-  const resolution = value as Record<string, unknown>;
-  if (typeof resolution.callId !== 'string') return null;
-
-  if (
-    resolution.type === 'answered' &&
-    typeof resolution.answeredBy === 'string' &&
-    (resolution.channelId === undefined ||
-      typeof resolution.channelId === 'string')
-  ) {
-    return {
-      type: resolution.type,
-      callId: resolution.callId,
-      channelId: resolution.channelId,
-      answeredBy: resolution.answeredBy,
-    };
-  }
-
-  if (resolution.type === 'ended' && typeof resolution.channelId === 'string') {
-    return {
-      type: resolution.type,
-      callId: resolution.callId,
-      channelId: resolution.channelId,
-    };
-  }
-
-  return null;
+  return match(value)
+    .with(
+      { type: 'answered', callId: P.string, answeredBy: P.string },
+      ({ type, callId, answeredBy }) => ({ type, callId, answeredBy })
+    )
+    .with(
+      { type: 'ended', callId: P.string, channelId: P.string },
+      ({ type, callId, channelId }) => ({ type, callId, channelId })
+    )
+    .otherwise(() => null);
 }
 
 function emitCallResolution(value: unknown) {
@@ -132,14 +129,15 @@ export function publishCallResolution(resolution: CallResolution) {
     // The storage event below remains available as a cross-tab fallback.
   }
 
-  if (typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(
       CALL_RESOLUTION_STORAGE_KEY,
       JSON.stringify(resolution)
     );
   } catch {
-    // Storage can be disabled in private or embedded browser contexts.
+    // Storage can be disabled in private or embedded browser contexts —
+    // there, even reading the `localStorage` global throws (a `typeof` check
+    // would not catch that, since the global resolves but its getter throws).
   }
 }
 
@@ -188,7 +186,6 @@ export function getCallRecordResolution(
     return {
       type: 'answered',
       callId: record.callId,
-      channelId: record.channelId,
       answeredBy: userId,
     };
   }

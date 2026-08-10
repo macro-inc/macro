@@ -12,14 +12,16 @@ import {
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
-import { callServiceClient } from '@service-call/client';
+import { isTabFocused } from '@core/signal/tabFocus';
+import { fetchCallRecord } from '@queries/call/call';
 import {
   type Accessor,
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
+  untrack,
 } from 'solid-js';
 
 export type IncomingCall = {
@@ -96,8 +98,11 @@ function addIncomingCall(call: IncomingCall) {
 
 async function reconcileIncomingCall(call: IncomingCall, userId: string) {
   try {
-    const record = await throwOnErr(() =>
-      callServiceClient.getCallRecord(call.callId)
+    // The stale time matches the reconcile interval so overlapping triggers
+    // (interval + focus + online) collapse into one request per cycle.
+    const record = await fetchCallRecord(
+      call.callId,
+      INCOMING_CALL_RECONCILE_INTERVAL_MS
     );
     const resolution = getCallRecordResolution(record, userId);
     if (resolution) publishCallResolution(resolution);
@@ -144,7 +149,10 @@ export function useIncomingCallWidgetVisible() {
  * Mount once near the app root, alongside `<CallStartedNotifier />` — *not*
  * inside the sidebar. The store is module-level and per-call auto-dismiss
  * timers bound its growth, so tracking must not be tied to whether the widget
- * that renders it happens to be visible.
+ * that renders it happens to be visible. Instant dismissal on answer/end
+ * arrives via call resolutions, which `<CallStartedNotifier />` publishes
+ * from the websocket events — without it mounted, dismissal degrades to the
+ * reconciliation poll below.
  */
 export function IncomingCallEvents() {
   const callCtx = useCallContextOptional();
@@ -201,48 +209,58 @@ export function IncomingCallEvents() {
     if (activeCallId) dismissIncomingCall(activeCallId);
   });
 
+  // Dev-only debug calls (`window.macroDebugIncomingCall`) have no server
+  // record to reconcile against.
+  const reconcilableCalls = createMemo(() =>
+    incomingCalls().filter(
+      (call) => !(DEV_MODE_ENV && call.callId.startsWith('debug-'))
+    )
+  );
+  const shouldReconcile = createMemo(
+    () => reconcilableCalls().length > 0 && !!userId()
+  );
+
+  const reconcile = () => {
+    const currentUserId = userId();
+    if (!currentUserId) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    for (const call of reconcilableCalls()) {
+      void reconcileIncomingCall(call, currentUserId);
+    }
+  };
+
   // Websocket events are intentionally one-shot and are not replayed after a
   // background tab reconnects. While calls are ringing, periodically compare
-  // them with the authoritative call record and re-check immediately when the
-  // tab becomes visible or comes back online.
+  // them with the authoritative call record. Overlapping triggers are deduped
+  // by the query cache inside `reconcileIncomingCall`; the boolean memo gate
+  // keeps the interval from restarting every time the call set changes.
   createEffect(() => {
-    const calls = incomingCalls();
-    const currentUserId = userId();
-    if (calls.length === 0 || !currentUserId) return;
+    if (!shouldReconcile()) return;
 
-    let isReconcileInFlight = false;
-    const reconcile = () => {
-      if (
-        isReconcileInFlight ||
-        (typeof navigator !== 'undefined' && !navigator.onLine)
-      ) {
-        return;
-      }
-      isReconcileInFlight = true;
-      void Promise.all(
-        calls.map((call) => reconcileIncomingCall(call, currentUserId))
-      ).finally(() => {
-        isReconcileInFlight = false;
-      });
-    };
-    const reconcileWhenVisible = () => {
-      if (document.visibilityState === 'visible') reconcile();
-    };
-
-    reconcile();
+    untrack(reconcile);
     const intervalId = window.setInterval(
       reconcile,
       INCOMING_CALL_RECONCILE_INTERVAL_MS
     );
-    document.addEventListener('visibilitychange', reconcileWhenVisible);
     window.addEventListener('online', reconcile);
 
     onCleanup(() => {
       window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', reconcileWhenVisible);
       window.removeEventListener('online', reconcile);
     });
   });
+
+  // The interval is throttled while the tab is hidden; re-check as soon as
+  // the tab regains focus.
+  createEffect(
+    on(
+      isTabFocused,
+      (focused) => {
+        if (focused && shouldReconcile()) reconcile();
+      },
+      { defer: true }
+    )
+  );
 
   createCallEventsEffect({
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {

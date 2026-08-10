@@ -193,6 +193,11 @@ function startRingingLoop(
  * `call_ended` both stop the ring; `call_answered` additionally closes the
  * incoming-call notification since the user is already in the call.
  *
+ * This component is the sole bridge from those one-shot websocket events to
+ * published call resolutions (`call-resolution.ts`) — resolution consumers
+ * like `IncomingCallEvents` rely on it being mounted for instant dismissal,
+ * falling back to their reconciliation poll otherwise.
+ *
  * Mount once near the app root, inside `<CallProvider>` and
  * `<ChannelsContextProvider>`. The backend already excludes the caller from
  * the broadcast (`call_service::send_call_event` filters on
@@ -226,12 +231,11 @@ export function CallStartedNotifier() {
       publishCallResolution({ type: 'ended', channelId, callId });
     },
 
-    onCallAnswered: ({ channelId, callId, answeredBy }) => {
+    onCallAnswered: ({ callId, answeredBy }) => {
       const answeringUserId = answeredBy ?? userId();
       if (!answeringUserId) return;
       publishCallResolution({
         type: 'answered',
-        channelId: channelId ?? undefined,
         callId,
         answeredBy: answeringUserId,
       });

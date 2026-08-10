@@ -173,21 +173,25 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           throwOnErr(() => callServiceClient.getOrCreateCall(id)),
           new Promise<void>((resolve) => setTimeout(resolve, 300)),
         ]);
-        const answeringUserId = userId();
-        if (answeringUserId) {
-          publishCallResolution({
-            type: 'answered',
-            channelId: tokenResponse.channelId,
-            callId: tokenResponse.callId,
-            answeredBy: answeringUserId,
-          });
-        }
         if (cancelled) return;
 
         await callCtx.connectSession(tokenResponse, {
           channelTitle:
             channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null,
         });
+        if (cancelled) return;
+
+        // Publish only once the session is connected — a cancelled or
+        // timed-out join must not silence this user's ring on other tabs.
+        // (onError sets `cancelled` via cancelCurrentJoin.)
+        const answeringUserId = userId();
+        if (answeringUserId) {
+          publishCallResolution({
+            type: 'answered',
+            callId: tokenResponse.callId,
+            answeredBy: answeringUserId,
+          });
+        }
       };
 
       const timeout = new Promise<never>((_, reject) =>

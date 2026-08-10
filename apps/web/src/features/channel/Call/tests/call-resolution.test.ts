@@ -39,7 +39,6 @@ describe('call resolution signaling', () => {
     const unsubscribe = subscribeToCallResolutions(handler);
     const resolution = {
       type: 'answered' as const,
-      channelId: 'channel-1',
       callId: 'call-1',
       answeredBy: 'macro|person@example.com',
     };
@@ -144,9 +143,30 @@ describe('getCallRecordResolution', () => {
     ).toEqual({
       type: 'answered',
       callId: 'call-1',
-      channelId: 'channel-1',
       answeredBy: 'macro|person@example.com',
     });
+  });
+
+  it('keeps ringing when a different user answered', async () => {
+    const { getCallRecordResolution } = await import('../call-resolution');
+
+    expect(
+      getCallRecordResolution(
+        {
+          callId: 'call-1',
+          channelId: 'channel-1',
+          isActive: true,
+          participants: [
+            {
+              userId: 'macro|someone-else@example.com',
+              joinedAt: '2026-08-10T10:00:00.000Z',
+              leftAt: '2026-08-10T10:01:00.000Z',
+            },
+          ],
+        },
+        'macro|person@example.com'
+      )
+    ).toBeNull();
   });
 
   it('resolves an inactive call as ended and leaves an unanswered call alone', async () => {
