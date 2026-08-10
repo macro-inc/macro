@@ -2,6 +2,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -9,11 +10,14 @@ import CloseIcon from '@phosphor/x.svg';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
 import { Button, Dialog, Layer, Panel } from '@ui';
+import { Stepper } from '@ui/components/Stepper';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
 import { EventEditorDialog } from './EventEditorDialog';
+import { EventEditorForm } from './EventEditorForm';
 import { EventRsvpSection } from './EventRsvpSection';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
+import { useEventEditor } from './useEventEditor';
 
 interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;
@@ -322,6 +326,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const [deleteOpen, setDeleteOpen] = createSignal(false);
   const [editorOpen, setEditorOpen] = createSignal(false);
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+  const editor = useEventEditor({
+    event: () => props.event,
+    onSaved: () => setEditorOpen(false),
+  });
 
   return (
     <>
@@ -329,9 +337,9 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         anchorRef={() => props.anchor}
         open
         onOpenChange={(open) => {
-          // Keep the popover mounted while one of its dialogs is up; the
-          // dialog's own close path decides what happens next.
-          if (!open && (deleteOpen() || editorOpen())) return;
+          // Keep the popover mounted while its delete dialog is open or an
+          // edit mutation is in flight.
+          if (!open && (deleteOpen() || editor.pending())) return;
           props.onOpenChange(open);
         }}
         placement="right-start"
@@ -342,7 +350,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         <Popover.Portal>
           <Layer depth={3}>
             <Popover.Content
-              class="z-modal max-w-[calc(100vw-2rem)] outline-none"
+              class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
               onInteractOutside={(event) => {
                 // FullCalendar selects on click (pointer release), so dismissing on
                 // pointer down would briefly close the popover before reopening it.
@@ -367,9 +375,22 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                 <Popover.Title class="sr-only">
                   {props.event.title}
                 </Popover.Title>
-                <div class="flex items-center justify-end gap-2 px-2 pt-2">
-                  <Show when={canModify()}>
-                    <div class="flex items-center gap-1">
+                <div class="flex items-center justify-between gap-2 px-2 pt-2">
+                  <Show when={editorOpen()}>
+                    <Button
+                      aria-label="Back to event details"
+                      variant="ghost"
+                      size="icon-sm"
+                      depth={3}
+                      class="rounded-md text-ink-muted [&_svg]:size-4"
+                      disabled={editor.pending()}
+                      onClick={() => setEditorOpen(false)}
+                    >
+                      <ArrowLeftIcon />
+                    </Button>
+                  </Show>
+                  <div class="ml-auto flex items-center gap-1">
+                    <Show when={!editorOpen() && canModify()}>
                       <Button
                         aria-label="Edit event"
                         variant="ghost"
@@ -390,27 +411,53 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                       >
                         <TrashIcon />
                       </Button>
+                    </Show>
+                    <Popover.CloseButton
+                      as={Button}
+                      aria-label="Close event details"
+                      variant="ghost"
+                      size="icon-sm"
+                      depth={3}
+                      class="rounded-md text-ink-muted [&_svg]:size-4"
+                      disabled={editor.pending()}
+                    >
+                      <CloseIcon />
+                    </Popover.CloseButton>
+                  </div>
+                </div>
+                <Stepper
+                  step={editorOpen() ? 1 : 0}
+                  transition={Stepper.transitions.slide}
+                  class="overflow-hidden"
+                >
+                  <Stepper.Step>
+                    <div>
+                      <div class="px-3 pb-3">
+                        <EventDetails
+                          event={props.event}
+                          timeFormat={props.timeFormat}
+                        />
+                      </div>
+                      <EventAttendeesSection
+                        attendees={props.event.attendees}
+                      />
+                      <EventRsvpSection event={props.event} />
                     </div>
-                  </Show>
-                  <Popover.CloseButton
-                    as={Button}
-                    aria-label="Close event details"
-                    variant="ghost"
-                    size="icon-sm"
-                    depth={3}
-                    class="rounded-md text-ink-muted [&_svg]:size-4"
-                  >
-                    <CloseIcon />
-                  </Popover.CloseButton>
-                </div>
-                <div class="px-3 pb-3">
-                  <EventDetails
-                    event={props.event}
-                    timeFormat={props.timeFormat}
-                  />
-                </div>
-                <EventAttendeesSection attendees={props.event.attendees} />
-                <EventRsvpSection event={props.event} />
+                  </Stepper.Step>
+                  <Stepper.Step>
+                    <EventEditorForm
+                      initialValues={editor.initialValues()}
+                      disabledFields={editor.disabledFields}
+                      calendarOptions={editor.calendarOptions()}
+                      guestOptions={editor.guestOptions}
+                      showRecurringEditNotice={editor.showRecurringEditNotice()}
+                      pending={editor.pending()}
+                      class="max-h-[calc(100vh-6rem)] overflow-y-auto"
+                      onCancel={() => setEditorOpen(false)}
+                      onSubmit={editor.save}
+                    />
+                  </Stepper.Step>
+                </Stepper>
               </div>
             </Popover.Content>
           </Layer>
@@ -425,13 +472,6 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             setDeleteOpen(false);
             props.onOpenChange(false);
           }}
-        />
-      </Show>
-      <Show when={editorOpen()}>
-        <EventEditorDialog
-          open
-          event={props.event}
-          onClose={() => setEditorOpen(false)}
         />
       </Show>
     </>

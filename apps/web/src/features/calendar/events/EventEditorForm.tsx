@@ -11,7 +11,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
 import UsersIcon from '@phosphor/users.svg';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
-import { Button, cn, Select, ToggleSwitch } from '@ui';
+import { Button, Checkbox, cn, Select, Tooltip } from '@ui';
 import {
   addDays,
   addHours,
@@ -30,6 +30,7 @@ import {
   For,
   Show,
 } from 'solid-js';
+import { EventDateField, EventDateTimeField } from './EventDateTimeField';
 import { formatRecurrenceDescription } from './recurrence-description';
 import {
   buildRecurrenceLines,
@@ -49,6 +50,8 @@ const DATE_VALUE = 'yyyy-MM-dd';
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
 
 const EDITOR_INPUT_CLASS =
+  'rounded-none! border-x-0! border-t-0! border-b! px-0! sm:text-xs!';
+const EDITOR_TITLE_INPUT_CLASS =
   'rounded-none! border-x-0! border-t-0! border-b! px-0!';
 
 const isDateOnly = (value: string) => isMatch(value, DATE_VALUE);
@@ -305,6 +308,7 @@ export function EventEditorForm(props: EventEditorFormProps) {
   const formId = createUniqueId();
   const recurrenceEndsName = `recurrence-ends-${formId}`;
   const guestInputId = `event-guests-${formId}`;
+  const dateRangeErrorId = `event-date-range-error-${formId}`;
 
   const initialValues =
     props.initialValues ?? defaultEditorInitialValues(new Date());
@@ -457,6 +461,25 @@ export function EventEditorForm(props: EventEditorFormProps) {
   const setEnds = (ends: RecurrenceConfig['ends']) =>
     setCustomConfig((config) => ({ ...config, ends }));
 
+  const dateRangeError = createMemo(() => {
+    const current = state();
+    if (!current.start || !current.end) return undefined;
+
+    if (current.allDay) {
+      return current.end < current.start
+        ? 'End date cannot be before the start date.'
+        : undefined;
+    }
+
+    const start = new Date(current.start);
+    const end = new Date(current.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return undefined;
+    }
+
+    return end <= start ? 'End time must be after the start time.' : undefined;
+  });
+
   const eventTime = createMemo(() => buildEventTime(state()));
   const canSave = () => eventTime() !== undefined && customValid();
 
@@ -475,10 +498,22 @@ export function EventEditorForm(props: EventEditorFormProps) {
     });
   };
 
+  const AllDayCheckbox = () => (
+    <Checkbox
+      checked={state().allDay}
+      disabled={inputIsDisabled('allDay')}
+      onChange={(allDay) => setState(convertTimesForAllDay(state(), allDay))}
+      class="shrink-0 text-xs text-ink-muted"
+    >
+      <Checkbox.Control />
+      <Checkbox.Label>All day</Checkbox.Label>
+    </Checkbox>
+  );
+
   return (
     <form
       class={cn(
-        'grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-3 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3',
+        'grid grid-cols-[1.25rem_minmax(0,1fr)] gap-4 px-4 pb-4 pt-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:text-xs [&_:disabled]:cursor-not-allowed',
         props.class
       )}
       onSubmit={(event) => {
@@ -500,98 +535,105 @@ export function EventEditorForm(props: EventEditorFormProps) {
           }
           placeholder="Add title"
           aria-label="Title"
-          class={cn('settings-input w-full', EDITOR_INPUT_CLASS)}
+          class={cn(
+            'settings-input h-auto min-h-9 w-full text-lg! font-semibold! leading-snug text-ink sm:text-base!',
+            EDITOR_TITLE_INPUT_CLASS
+          )}
           disabled={inputIsDisabled('title')}
         />
 
-        <div class="flex items-center justify-between gap-2 text-xs text-ink-muted">
-          <ToggleSwitch
-            label="All day"
-            checked={state().allDay}
-            disabled={inputIsDisabled('allDay')}
-            onChange={(allDay) =>
-              setState(convertTimesForAllDay(state(), allDay))
-            }
-          />
+        <div class="flex min-w-0 flex-col gap-1">
           <Show
             when={state().allDay}
             fallback={
-              <Show when={props.showRecurringEditNotice}>
-                <span class="text-ink-extra-muted">
-                  Changes apply to all occurrences
+              <div class="flex min-w-0 items-center gap-1.5">
+                <EventDateTimeField
+                  label="Start"
+                  value={state().start}
+                  onChange={(start) => setState({ ...state(), start })}
+                  disabled={inputIsDisabled('start')}
+                  portalScope="local"
+                  class="min-w-0 max-w-40 flex-1 basis-0"
+                />
+                <span aria-hidden="true" class="shrink-0 text-ink-extra-muted">
+                  –
                 </span>
-              </Show>
+                <EventDateTimeField
+                  label="End"
+                  value={state().end}
+                  onChange={(end) => setState({ ...state(), end })}
+                  disabled={inputIsDisabled('end')}
+                  invalid={dateRangeError() !== undefined}
+                  describedBy={dateRangeError() ? dateRangeErrorId : undefined}
+                  portalScope="local"
+                  class="min-w-0 max-w-40 flex-1 basis-0"
+                />
+              </div>
             }
           >
-            <input
-              type="date"
-              value={state().start}
-              onInput={(event) =>
-                setState(moveAllDayRange(state(), event.currentTarget.value))
-              }
-              aria-label="Date"
-              class={cn(
-                'settings-input min-w-0 w-40 max-w-full',
-                EDITOR_INPUT_CLASS
-              )}
-              disabled={inputIsDisabled('start') || inputIsDisabled('end')}
-            />
+            <div class="flex min-w-0 items-center gap-1.5">
+              <EventDateField
+                label="Start"
+                value={state().start}
+                onChange={(date) => setState(moveAllDayRange(state(), date))}
+                disabled={inputIsDisabled('start')}
+                portalScope="local"
+                class="min-w-0 max-w-40 flex-1 basis-0"
+              />
+              <span aria-hidden="true" class="shrink-0 text-ink-extra-muted">
+                –
+              </span>
+              <EventDateField
+                label="End"
+                value={state().end}
+                onChange={(end) => setState({ ...state(), end })}
+                disabled={inputIsDisabled('end')}
+                invalid={dateRangeError() !== undefined}
+                describedBy={dateRangeError() ? dateRangeErrorId : undefined}
+                portalScope="local"
+                class="min-w-0 max-w-40 flex-1 basis-0"
+              />
+            </div>
+          </Show>
+
+          <Show when={dateRangeError()}>
+            {(error) => (
+              <p
+                id={dateRangeErrorId}
+                role="alert"
+                class="text-xs text-failure"
+              >
+                {error()}
+              </p>
+            )}
           </Show>
         </div>
 
-        <Show when={state().allDay && props.showRecurringEditNotice}>
-          <span class="text-right text-xs text-ink-extra-muted">
-            Changes apply to all occurrences
-          </span>
-        </Show>
-
-        <Show when={!state().allDay}>
-          <div class="flex items-center gap-2">
-            <input
-              type="datetime-local"
-              value={state().start}
-              onInput={(event) =>
-                setState({ ...state(), start: event.currentTarget.value })
-              }
-              aria-label="Start"
-              class={cn('settings-input min-w-0 flex-1', EDITOR_INPUT_CLASS)}
-              disabled={inputIsDisabled('start')}
-            />
-            <span class="shrink-0 text-xs text-ink-extra-muted">to</span>
-            <input
-              type="datetime-local"
-              value={state().end}
-              onInput={(event) =>
-                setState({ ...state(), end: event.currentTarget.value })
-              }
-              aria-label="End"
-              class={cn('settings-input min-w-0 flex-1', EDITOR_INPUT_CLASS)}
-              disabled={inputIsDisabled('end')}
-            />
-          </div>
-        </Show>
-
         <div class="flex flex-col gap-2">
-          <Select<EditorSelectOption>
-            options={recurrenceOptions()}
-            value={selectedRecurrenceOption()}
-            onChange={(option) =>
-              option && changeRecurrenceChoice(option.value)
-            }
-            optionValue="value"
-            optionTextValue="label"
-            disabled={inputIsDisabled('recurrence')}
-          >
-            <Select.Trigger aria-label="Repeats" class={EDITOR_INPUT_CLASS}>
-              <Select.Value<EditorSelectOption>>
-                {(selectState) => selectState.selectedOption().label}
-              </Select.Value>
-              <Select.Icon />
-            </Select.Trigger>
-            <Select.Content portalScope="local">
-              <Select.Listbox />
-            </Select.Content>
-          </Select>
+          <div class="flex min-w-0 items-center gap-3">
+            <AllDayCheckbox />
+            <Select<EditorSelectOption>
+              options={recurrenceOptions()}
+              value={selectedRecurrenceOption()}
+              onChange={(option) =>
+                option && changeRecurrenceChoice(option.value)
+              }
+              optionValue="value"
+              optionTextValue="label"
+              disabled={inputIsDisabled('recurrence')}
+              class="ml-auto w-40 min-w-40 max-w-40 shrink-0"
+            >
+              <Select.Trigger aria-label="Repeats" class={EDITOR_INPUT_CLASS}>
+                <Select.Value<EditorSelectOption>>
+                  {(selectState) => selectState.selectedOption().label}
+                </Select.Value>
+                <Select.Icon />
+              </Select.Trigger>
+              <Select.Content portalScope="local">
+                <Select.Listbox />
+              </Select.Content>
+            </Select>
+          </div>
 
           <Show when={recurrenceChoice() === 'custom'}>
             <div class="border-edge-muted flex flex-col gap-2.5 rounded-lg border p-2.5 text-xs text-ink-muted">
@@ -772,26 +814,38 @@ export function EventEditorForm(props: EventEditorFormProps) {
             aria-hidden="true"
             class="mt-2 size-5 text-ink-extra-muted sm:size-4"
           />
-          <Select<EventEditorCalendarOption>
-            options={props.calendarOptions}
-            value={selectedCalendarOption()}
-            onChange={(option) =>
-              option && setState({ ...state(), calendarId: option.id })
-            }
-            optionValue="id"
-            optionTextValue="label"
-            disabled={inputIsDisabled('calendar')}
+          <Tooltip
+            label="Moving an existing event to another calendar is not currently supported"
+            placement="bottom"
+            disabled={!fieldIsDisabled('calendar')}
+            class="w-full"
           >
-            <Select.Trigger aria-label="Calendar" class={EDITOR_INPUT_CLASS}>
-              <Select.Value<EventEditorCalendarOption>>
-                {(selectState) => selectState.selectedOption().label}
-              </Select.Value>
-              <Select.Icon />
-            </Select.Trigger>
-            <Select.Content portalScope="local">
-              <Select.Listbox />
-            </Select.Content>
-          </Select>
+            <div class="w-full">
+              <Select<EventEditorCalendarOption>
+                options={props.calendarOptions}
+                value={selectedCalendarOption()}
+                onChange={(option) =>
+                  option && setState({ ...state(), calendarId: option.id })
+                }
+                optionValue="id"
+                optionTextValue="label"
+                disabled={inputIsDisabled('calendar')}
+              >
+                <Select.Trigger
+                  aria-label="Calendar"
+                  class={EDITOR_INPUT_CLASS}
+                >
+                  <Select.Value<EventEditorCalendarOption>>
+                    {(selectState) => selectState.selectedOption().label}
+                  </Select.Value>
+                  <Select.Icon />
+                </Select.Trigger>
+                <Select.Content portalScope="local">
+                  <Select.Listbox />
+                </Select.Content>
+              </Select>
+            </div>
+          </Tooltip>
         </div>
       </Show>
 
@@ -804,24 +858,33 @@ export function EventEditorForm(props: EventEditorFormProps) {
         <label for={guestInputId} class="sr-only">
           Guests
         </label>
-        <RecipientSelector<EventEditorGuestKind>
-          inputId={guestInputId}
-          options={props.guestOptions}
-          selectedOptions={selectedGuests()}
-          setSelectedOptions={(next) => {
-            if (!inputIsDisabled('guests')) setSelectedGuests(next);
-          }}
-          placeholder="Add guests"
-          hideBorder
-          noPadding
-          disabled={inputIsDisabled('guests')}
-          portalScope="local"
-          class={cn(
-            'min-h-9 border-edge-muted bg-transparent! py-1 focus-within:border-accent',
-            EDITOR_INPUT_CLASS,
-            inputIsDisabled('guests') && 'opacity-70'
-          )}
-        />
+        <Tooltip
+          label="Adding guests to an existing event is not currently supported"
+          placement="bottom"
+          disabled={!fieldIsDisabled('guests')}
+          class="w-full"
+        >
+          <div class="w-full">
+            <RecipientSelector<EventEditorGuestKind>
+              inputId={guestInputId}
+              options={props.guestOptions}
+              selectedOptions={selectedGuests()}
+              setSelectedOptions={(next) => {
+                if (!inputIsDisabled('guests')) setSelectedGuests(next);
+              }}
+              placeholder="Add guests"
+              hideBorder
+              noPadding
+              disabled={inputIsDisabled('guests')}
+              portalScope="local"
+              class={cn(
+                'min-h-9 border-edge-muted bg-transparent! py-1 text-sm focus-within:border-accent sm:text-xs [&_input]:sm:text-xs!',
+                EDITOR_INPUT_CLASS,
+                inputIsDisabled('guests') && 'opacity-70'
+              )}
+            />
+          </div>
+        </Tooltip>
       </div>
 
       <MapPinIcon
@@ -861,7 +924,13 @@ export function EventEditorForm(props: EventEditorFormProps) {
         disabled={inputIsDisabled('description')}
       />
 
-      <div class="col-start-2 flex justify-end gap-1 pt-1">
+      <Show when={props.showRecurringEditNotice}>
+        <span class="col-start-2 text-xs text-ink-extra-muted">
+          Changes apply to all occurrences
+        </span>
+      </Show>
+
+      <div class="border-edge-muted col-span-2 -mx-4 -mb-4 flex items-center justify-end gap-1 border-t bg-active px-4 py-2.5">
         <Button
           type="button"
           variant="ghost"

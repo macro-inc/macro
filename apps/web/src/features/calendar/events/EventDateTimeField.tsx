@@ -1,0 +1,409 @@
+import type { CollectionNode } from '@kobalte/core';
+import { Listbox } from '@kobalte/core/listbox';
+import { Popover } from '@kobalte/core/popover';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
+import CheckIcon from '@phosphor/check.svg';
+import { Calendar } from '@ui/components/Calendar';
+import { Layer } from '@ui/components/Layer';
+import { cn } from '@ui/utils/classname';
+import { createMemo, createSignal } from 'solid-js';
+
+const UNDERLINE_INPUT_CLASS =
+  'rounded-none! border-x-0! border-t-0! border-b! px-0! sm:text-xs!';
+
+export interface EventTimeOption {
+  value: string;
+  label: string;
+}
+
+const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'short',
+});
+
+/** Every quarter-hour in a day, with canonical values and localized labels. */
+export const EVENT_TIME_OPTIONS: EventTimeOption[] = Array.from(
+  { length: 24 * 4 },
+  (_, index) => {
+    const hour = Math.floor(index / 4);
+    const minute = (index % 4) * 15;
+    return {
+      value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      label: timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute)),
+    };
+  }
+);
+
+export function splitLocalDateTime(value: string) {
+  const separator = value.indexOf('T');
+  if (separator === -1) return { date: value, time: '' };
+  return {
+    date: value.slice(0, separator),
+    time: value.slice(separator + 1, separator + 6),
+  };
+}
+
+function withLocalDate(value: string, date: string) {
+  return `${date}T${splitLocalDateTime(value).time}`;
+}
+
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return undefined;
+  }
+  return date;
+}
+
+function formatLocalDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function parseDateInput(value: string) {
+  const localDate = parseLocalDate(value.trim());
+  if (localDate) return formatLocalDate(localDate);
+
+  const parsed = new Date(value.trim());
+  return Number.isNaN(parsed.getTime()) ? undefined : formatLocalDate(parsed);
+}
+
+function withLocalTime(value: string, time: string) {
+  return `${splitLocalDateTime(value).date}T${time}`;
+}
+
+function parseTimeInput(value: string) {
+  const match = /^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i.exec(
+    value.trim().replaceAll('.', '')
+  );
+  if (!match) return undefined;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] ?? 0);
+  const period = match[3]?.toLowerCase();
+  if (minute > 59) return undefined;
+
+  if (period) {
+    if (hour < 1 || hour > 12) return undefined;
+    if (period === 'am' && hour === 12) hour = 0;
+    if (period === 'pm' && hour !== 12) hour += 12;
+  } else if (hour > 23) {
+    return undefined;
+  }
+
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function formatTimeLabel(value: string) {
+  const parsed = parseTimeInput(value);
+  if (!parsed) return 'Time';
+  const [hour = 0, minute = 0] = parsed.split(':').map(Number);
+  return timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute));
+}
+
+function TimeOptionItem(props: CollectionNode<EventTimeOption>) {
+  return (
+    <Listbox.Item
+      item={props}
+      class="group flex cursor-default items-center justify-between rounded-lg px-3 py-2 text-sm text-ink outline-none data-selected:bg-active data-highlighted:bg-hover"
+    >
+      <Listbox.ItemLabel>{props.rawValue.label}</Listbox.ItemLabel>
+      <Listbox.ItemIndicator class="text-accent">
+        <CheckIcon class="size-3.5" />
+      </Listbox.ItemIndicator>
+    </Listbox.Item>
+  );
+}
+
+export interface EventDateFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+  class?: string;
+  portalScope?: 'local';
+}
+
+/** Compact calendar date selector used by event date/time ranges. */
+export function EventDateField(props: EventDateFieldProps) {
+  const [open, setOpen] = createSignal(false);
+  const [portalSearchRef, setPortalSearchRef] = createSignal<HTMLDivElement>();
+  const selectedDate = () => parseLocalDate(props.value);
+  const portalMount = () => {
+    if (props.portalScope !== 'local') return undefined;
+    return (
+      portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
+    );
+  };
+
+  return (
+    <Popover
+      open={open() && !props.disabled}
+      onOpenChange={(next) => setOpen(!props.disabled && next)}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <Popover.Trigger
+        aria-label={`${props.label} date`}
+        aria-describedby={props.describedBy}
+        aria-invalid={props.invalid || undefined}
+        title={selectedDate() ? dateLabelFormatter.format(selectedDate()) : ''}
+        disabled={props.disabled}
+        class={cn(
+          'settings-input flex h-9 min-w-0 items-center justify-start gap-1 truncate rounded-none! border-x-0! border-t-0! border-b! px-1! text-xs font-normal disabled:cursor-not-allowed',
+          props.invalid && 'border-b-failure!',
+          props.class
+        )}
+      >
+        <CalendarBlankIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        <span class="truncate">
+          {selectedDate() ? dateLabelFormatter.format(selectedDate()) : 'Date'}
+        </span>
+      </Popover.Trigger>
+
+      <div class="hidden" ref={setPortalSearchRef} />
+      <Popover.Portal mount={portalMount()}>
+        <Layer depth={3}>
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-3 shadow-menu menu-open-animation">
+            <Popover.Title class="sr-only">
+              Choose {props.label.toLowerCase()} date
+            </Popover.Title>
+            <Calendar
+              required
+              fixedWeeks
+              value={selectedDate()}
+              onValueChange={(date) => {
+                if (!date) return;
+                props.onChange(formatLocalDate(date));
+                setOpen(false);
+              }}
+            />
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+export interface EventDateTimeFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+  class?: string;
+  portalScope?: 'local';
+}
+
+/** Editable date/time fields with one popup for calendar and time selection. */
+export function EventDateTimeField(props: EventDateTimeFieldProps) {
+  const [open, setOpen] = createSignal(false);
+  const [dateDraft, setDateDraft] = createSignal<string>();
+  const [dateDraftDirty, setDateDraftDirty] = createSignal(false);
+  const [timeDraft, setTimeDraft] = createSignal<string>();
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement>();
+  const [portalSearchRef, setPortalSearchRef] = createSignal<HTMLDivElement>();
+  let anchorRef: HTMLDivElement | undefined;
+
+  const date = () => splitLocalDateTime(props.value).date;
+  const time = () => splitLocalDateTime(props.value).time;
+  const selectedDate = () => parseLocalDate(date());
+  const dateInputLabel = () =>
+    selectedDate() ? dateLabelFormatter.format(selectedDate()) : 'Date';
+  const selectedTimeValues = createMemo(() => [time()]);
+  const portalMount = () => {
+    if (props.portalScope !== 'local') return undefined;
+    return (
+      portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
+    );
+  };
+  const scrollToSelectedTime = () => {
+    queueMicrotask(() => {
+      listboxRef()
+        ?.querySelector<HTMLElement>('[data-selected]')
+        ?.scrollIntoView({ block: 'center' });
+    });
+  };
+  const openPopup = () => {
+    if (props.disabled) return;
+    setOpen(true);
+    scrollToSelectedTime();
+  };
+  const close = () => {
+    setOpen(false);
+    setDateDraft(undefined);
+    setDateDraftDirty(false);
+    setTimeDraft(undefined);
+  };
+  const updateDateInput = (value: string) => {
+    setDateDraft(value);
+    setDateDraftDirty(true);
+    const parsed = parseDateInput(value);
+    if (parsed) props.onChange(withLocalDate(props.value, parsed));
+  };
+  const commitDateInput = (value: string) => {
+    if (dateDraftDirty()) {
+      const parsed = parseDateInput(value);
+      if (parsed) props.onChange(withLocalDate(props.value, parsed));
+    }
+    setDateDraft(undefined);
+    setDateDraftDirty(false);
+  };
+  const updateTimeInput = (value: string) => {
+    setTimeDraft(value);
+    const parsed = parseTimeInput(value);
+    if (parsed) props.onChange(withLocalTime(props.value, parsed));
+  };
+  const selectTime = (values: Set<string>) => {
+    const value = values.values().next().value;
+    if (typeof value !== 'string') return;
+    props.onChange(withLocalTime(props.value, value));
+    close();
+  };
+
+  return (
+    <Popover
+      anchorRef={() => anchorRef}
+      open={open() && !props.disabled}
+      onOpenChange={(next) => {
+        if (next) openPopup();
+        else close();
+      }}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <div
+        ref={anchorRef}
+        role="group"
+        aria-label={props.label}
+        aria-describedby={props.describedBy}
+        aria-invalid={props.invalid || undefined}
+        class={cn(
+          'settings-input grid h-9 min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] items-center gap-1 focus-within:border-accent',
+          UNDERLINE_INPUT_CLASS,
+          props.invalid && 'border-b-failure!',
+          props.class
+        )}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') close();
+        }}
+      >
+        <span class="flex min-w-0 items-center gap-1 px-1">
+          <CalendarBlankIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          <input
+            type="text"
+            value={dateDraft() ?? dateInputLabel()}
+            aria-label={`${props.label} date`}
+            aria-expanded={open()}
+            aria-haspopup="dialog"
+            disabled={props.disabled}
+            class="min-w-0 flex-1 bg-transparent text-left text-xs text-ink outline-none disabled:cursor-not-allowed"
+            onFocus={(event) => {
+              openPopup();
+              setDateDraft(dateInputLabel());
+              setDateDraftDirty(false);
+              event.currentTarget.select();
+            }}
+            onClick={openPopup}
+            onInput={(event) => updateDateInput(event.currentTarget.value)}
+            onBlur={(event) => commitDateInput(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitDateInput(event.currentTarget.value);
+              }
+            }}
+          />
+        </span>
+        <input
+          type="text"
+          value={timeDraft() ?? formatTimeLabel(time())}
+          aria-label={`${props.label} time`}
+          aria-expanded={open()}
+          aria-haspopup="listbox"
+          disabled={props.disabled}
+          class="h-full min-w-0 bg-transparent text-left text-xs text-ink outline-none disabled:cursor-not-allowed"
+          onFocus={(event) => {
+            openPopup();
+            setTimeDraft(formatTimeLabel(time()));
+            event.currentTarget.select();
+          }}
+          onClick={openPopup}
+          onInput={(event) => updateTimeInput(event.currentTarget.value)}
+          onBlur={(event) => updateTimeInput(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              updateTimeInput(event.currentTarget.value);
+            }
+          }}
+        />
+      </div>
+
+      <div class="hidden" ref={setPortalSearchRef} />
+      <Popover.Portal mount={portalMount()}>
+        <Layer depth={3}>
+          <Popover.Content
+            class="portal-scope z-action-menu w-[24rem] max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
+            onInteractOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && anchorRef?.contains(target)) {
+                event.preventDefault();
+              }
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <Popover.Title class="sr-only">
+              Choose {props.label.toLowerCase()} date and time
+            </Popover.Title>
+            <div class="grid grid-cols-[minmax(0,1fr)_9rem]">
+              <div class="min-w-0 p-3">
+                <Calendar
+                  required
+                  fixedWeeks
+                  value={selectedDate()}
+                  onValueChange={(next) => {
+                    if (!next) return;
+                    props.onChange(
+                      withLocalDate(props.value, formatLocalDate(next))
+                    );
+                    setDateDraft(undefined);
+                    setDateDraftDirty(false);
+                  }}
+                />
+              </div>
+              <Listbox<EventTimeOption>
+                ref={setListboxRef}
+                options={EVENT_TIME_OPTIONS}
+                optionValue="value"
+                optionTextValue="label"
+                value={selectedTimeValues()}
+                onChange={selectTime}
+                selectionMode="single"
+                disallowEmptySelection
+                shouldFocusWrap
+                renderItem={(item) => <TimeOptionItem {...item} />}
+                class="max-h-64 overflow-y-auto border-l border-edge p-1.5"
+              />
+            </div>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
