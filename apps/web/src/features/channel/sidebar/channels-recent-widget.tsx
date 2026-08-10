@@ -366,7 +366,13 @@ export const ChannelsRecentWidget = (props: {
 
   const missingUnreadChannelsQuery = useSoupAstItemsQuery(
     () => ({
-      params: { limit: RECENT_CHANNELS_LIMIT, sort_method: 'updated_at' },
+      // Sized to the id list, not RECENT_CHANNELS_LIMIT: this query must
+      // return every exact-id match, and a fixed limit would silently drop
+      // the oldest ones past it. The server clamps to its own [20, 500].
+      params: {
+        limit: missingUnreadChannelIds().length,
+        sort_method: 'updated_at',
+      },
       body: compileToAst(
         queryStateFrom(
           defineQueryFilters({
