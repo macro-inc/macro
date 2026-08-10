@@ -24,7 +24,6 @@ use super::types::{
     StopReason,
 };
 
-const REQUEST_PERMISSION_METHOD: &str = "session/request_permission";
 const INITIAL_REQUEST_NUM: u64 = 0;
 
 /// Protocol state for one connection of a session to an agent runtime.
@@ -388,7 +387,7 @@ impl<Token> SessionMachine<Token> {
         let RawJsonRpcMessage::Request(request) = frame else {
             return;
         };
-        if request.method.as_ref() != REQUEST_PERMISSION_METHOD {
+        if !RequestPermissionRequest::matches_method(&request.method) {
             return;
         }
 

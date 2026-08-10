@@ -503,7 +503,9 @@ where
         thread_id: Option<Uuid>,
         bot_id: Option<bots::domain::models::BotId>,
     ) -> Result<ChannelSession> {
-        self.repo.find_for_channel(channel_id, thread_id, bot_id).await
+        self.repo
+            .find_for_channel(channel_id, thread_id, bot_id)
+            .await
     }
 
     async fn update(&self, session: AgentSession) -> Result<()> {

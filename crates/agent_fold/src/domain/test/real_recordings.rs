@@ -153,3 +153,25 @@ fn three_resumes_in_one_log_derive_distinct_message_ids() {
          means turn numbering reset somewhere across the three resumes"
     );
 }
+
+/// What each small-to-medium real fixture actually folds to, pinned whole
+/// rather than checked field by field.
+///
+/// The tests above assert specific invariants (no warnings, distinct ids,
+/// streaming parity) that stay meaningful as fixtures are added; this is the
+/// other kind of coverage, for when the shape of a real recording's output
+/// itself needs to be pinned - which grows with every new fixture, so it is
+/// `insta` rather than another hand-written `assert_eq!` block.
+/// `long_multi_resume` sits out: at 106 turns its snapshot would be enormous
+/// and the tests above already cover what it uniquely proves.
+#[test]
+fn real_fixtures_fold_to_their_pinned_snapshot() {
+    for (name, recording) in REAL_FIXTURES {
+        if *name == "long_multi_resume" {
+            continue;
+        }
+        let (messages, warnings) = capturing_warnings(|| fold(parse_log(recording)));
+        assert_eq!(warnings, vec![], "{name} folded with a warning");
+        insta::assert_debug_snapshot!(*name, messages);
+    }
+}

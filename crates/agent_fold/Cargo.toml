@@ -50,4 +50,5 @@ serde-wasm-bindgen = { workspace = true }
 wasm-bindgen = { workspace = true }
 
 [dev-dependencies]
+insta = "1.48.0"
 tokio = { workspace = true }

@@ -6,21 +6,13 @@ pub use crate::testing::{
     RESUMED_NO_PROMPT, TURN, parse_log, parse_log_as, test_session,
 };
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use tracing::Level;
 use tracing::field::{Field, Visit};
 
 /// Everything a captured `WARN` event carried, by field name.
 pub type CapturedFields = HashMap<String, String>;
-
-thread_local! {
-    /// Warnings logged on this thread since the last [`capturing_warnings`]
-    /// call started. Thread-local rather than shared, so tests running in
-    /// parallel cannot see each other's warnings.
-    static CAPTURED: RefCell<Vec<CapturedFields>> = const { RefCell::new(Vec::new()) };
-}
 
 struct FieldCapture<'a>(&'a mut CapturedFields);
 
@@ -31,11 +23,10 @@ impl Visit for FieldCapture<'_> {
 }
 
 /// A [`tracing::Subscriber`] that records every `WARN`-level event's fields
-/// into the logging thread's [`CAPTURED`] buffer, so a test can assert on what
-/// the fold logged without threading it through its return value.
-///
-/// Installed once as the process-wide default - see [`capturing_warnings`].
-struct TracingCapture;
+/// into `captured`. One per [`capturing_warnings`] call - see there for why.
+struct TracingCapture {
+    captured: Arc<Mutex<Vec<CapturedFields>>>,
+}
 
 impl tracing::Subscriber for TracingCapture {
     fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
@@ -56,38 +47,72 @@ impl tracing::Subscriber for TracingCapture {
         }
         let mut fields = CapturedFields::default();
         event.record(&mut FieldCapture(&mut fields));
-        CAPTURED.with(|captured| captured.borrow_mut().push(fields));
+        self.captured.lock().unwrap().push(fields);
     }
 
     fn enter(&self, _span: &tracing::span::Id) {}
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// Run `body`, returning its value and every `WARN` it logged on this thread.
+/// Registers every `tracing::warn!` call site this crate's tests can reach as
+/// "always interesting", once, before any test runs.
 ///
-/// The capture is a *global* subscriber installed once, writing into a
-/// thread-local buffer, rather than the obvious
-/// [`with_default`](tracing::subscriber::with_default) scoped subscriber.
-/// Scoped subscribers do not survive this test binary: they flip global
-/// dispatch state on entry and back on exit, so with the suite running
-/// tests in parallel one test leaving its scope intermittently swallows the
-/// warnings another test is still inside its scope to collect. That failure
-/// shows up as a warning assertion seeing zero events - it looks exactly like
-/// a fold that stopped reporting, and it reproduces in roughly one run in
-/// five. A subscriber that is installed once and never removed has no such
-/// window.
-///
-/// Buffers are per-thread and cleared on entry, so parallel tests cannot see
-/// each other's warnings and a bare fold elsewhere cannot leak into one.
-pub fn capturing_warnings<T>(body: impl FnOnce() -> T) -> (T, Vec<CapturedFields>) {
+/// Without this, [`capturing_warnings`]'s per-call
+/// [`with_default`](tracing::subscriber::with_default) is not quite enough:
+/// `warn()`'s call site is one line shared by every `FoldError` variant, hit
+/// by dozens of tests across many threads, and `tracing` caches a call
+/// site's interest globally the first time anything asks - not per thread.
+/// If that first ask happens to land between two tests' `with_default`
+/// scopes, with no subscriber active, it caches "nobody's listening" for the
+/// rest of the process, and every later test's `with_default` scope is too
+/// late to undo it: the fast-path check that cache backs runs before a
+/// scoped subscriber is even consulted. `set_global_default` is documented
+/// to rebuild that cache against whatever it installs, so installing one
+/// unconditionally-interested subscriber before anything else runs closes
+/// the window for good. It does nothing with what it receives - actual
+/// capture is still each call's own thread-local subscriber below.
+fn ensure_warn_call_sites_are_registered() {
+    struct AlwaysInterested;
+
+    impl tracing::Subscriber for AlwaysInterested {
+        fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+        fn event(&self, _event: &tracing::Event<'_>) {}
+        fn enter(&self, _span: &tracing::span::Id) {}
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
     static INSTALLED: OnceLock<()> = OnceLock::new();
     INSTALLED.get_or_init(|| {
-        tracing::subscriber::set_global_default(TracingCapture)
-            .expect("nothing else installs a subscriber in this test binary");
+        // Another test binary in the workspace may have already claimed the
+        // global default; either way, one always-interested subscriber has
+        // now rebuilt the cache and that is all this needs.
+        let _ = tracing::subscriber::set_global_default(AlwaysInterested);
     });
+}
 
-    CAPTURED.with(|captured| captured.borrow_mut().clear());
-    let value = body();
-    let events = CAPTURED.with(|captured| std::mem::take(&mut *captured.borrow_mut()));
+/// Run `body`, returning its value and every `WARN` it logged.
+///
+/// A fresh subscriber per call, scoped to `body` with
+/// [`tracing::subscriber::with_default`] - the same pattern
+/// `macro_tower_layers`'s tests use. Each call gets its own capture, so
+/// nothing needs clearing between tests and parallel tests cannot see each
+/// other's warnings: there is no shared or global state for them to collide
+/// on in the first place.
+pub fn capturing_warnings<T>(body: impl FnOnce() -> T) -> (T, Vec<CapturedFields>) {
+    ensure_warn_call_sites_are_registered();
+
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let subscriber = TracingCapture {
+        captured: captured.clone(),
+    };
+    let value = tracing::subscriber::with_default(subscriber, body);
+    let events = std::mem::take(&mut *captured.lock().unwrap());
     (value, events)
 }

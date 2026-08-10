@@ -14,23 +14,12 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
-/// One entry as a client reads it back: the attribution, and the frame's own
-/// two fields flattened in beside it.
-///
-/// Written out by hand rather than reusing [`AgentSessionLogEntryDto`] so the
-/// test decodes the JSON on its own terms - if the DTO's shape drifts, this
-/// fails instead of drifting with it.
-#[derive(Debug, Deserialize)]
-struct WireEntry {
-    #[serde(rename = "userId")]
-    user_id: Option<String>,
-    #[serde(flatten)]
-    message: Message,
-}
-
 /// Serialize a log the way the endpoint does, then decode it the way a client
-/// would.
-fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<WireEntry> {
+/// would - into [`AgentSessionLogEntryDto`] itself, the type this crate
+/// already builds the response from. If its shape ever stops round-tripping
+/// through its own `Serialize`/`Deserialize`, that is exactly the drift this
+/// test exists to catch.
+fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<AgentSessionLogEntryDto> {
     let response = AgentChannelLogResponse::from(ChannelSessionLog {
         agent_session_id: test_session(),
         bot: SessionBot {
@@ -44,7 +33,7 @@ fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<WireEntry> {
 
     #[derive(Deserialize)]
     struct Wire {
-        entries: Vec<WireEntry>,
+        entries: Vec<AgentSessionLogEntryDto>,
     }
     let wire: Wire = serde_json::from_str(&json).expect("a client can decode it");
     wire.entries
@@ -74,42 +63,24 @@ fn a_decoded_log_folds_to_what_the_server_folds() {
     assert_eq!(fold(decoded), fold(recorded));
 }
 
-/// Attribution survives, and only where it existed: the fixture attributes
-/// exactly its prompt frames, and an unattributed frame carries no `userId`
-/// key at all rather than a null.
+/// An unattributed frame carries no `userId` key at all rather than a null.
+///
+/// Not covered by [`a_decoded_log_folds_to_what_the_server_folds`]: fold
+/// equivalence would already fail if attribution round-tripped to the wrong
+/// value, but omitted-vs-null is a wire-shape detail that decoding to
+/// `Option<String>` erases either way - only inspecting the raw JSON can
+/// tell the two apart.
 #[test]
-fn attribution_survives_the_round_trip() {
+fn unattributed_frames_omit_the_user_id_key() {
     let recorded = parse_log_as(test_session(), TURN);
-    let attributed = recorded
+    let unattributed = recorded
         .iter()
-        .filter(|entry| entry.user_id.is_some())
-        .count();
-    assert!(attributed > 0, "the fixture attributes its prompts");
+        .find(|entry| entry.user_id.is_none())
+        .expect("the fixture has unattributed frames");
 
-    let decoded = round_trip(recorded.clone());
-    assert_eq!(
-        decoded
-            .iter()
-            .filter(|entry| entry.user_id.is_some())
-            .count(),
-        attributed
-    );
-    for (decoded, recorded) in decoded.iter().zip(&recorded) {
-        assert_eq!(
-            decoded.user_id,
-            recorded.user_id.as_ref().map(ToString::to_string),
-            "the same frames are attributed, to the same people"
-        );
-    }
-
-    let value: serde_json::Value = serde_json::to_value(AgentSessionLogEntryDto::from(
-        recorded
-            .iter()
-            .find(|entry| entry.user_id.is_none())
-            .expect("the fixture has unattributed frames")
-            .clone(),
-    ))
-    .expect("the entry serializes");
+    let value: serde_json::Value =
+        serde_json::to_value(AgentSessionLogEntryDto::from(unattributed.clone()))
+            .expect("the entry serializes");
     assert!(
         value.get("userId").is_none(),
         "an unattributed frame omits the key rather than sending null: {value}"

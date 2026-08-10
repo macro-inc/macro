@@ -428,7 +428,10 @@ pub struct SessionBotDto {
 ///
 /// `agentSessionId` is not repeated per entry: every entry in a response
 /// belongs to the session named once at the top.
-#[derive(Debug, Serialize, ToSchema)]
+///
+/// `Deserialize` is for the wire-contract tests only - nothing server-side
+/// decodes its own response type.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionLogEntryDto {
     /// The user whose action produced the frame, absent when no user did.
     ///

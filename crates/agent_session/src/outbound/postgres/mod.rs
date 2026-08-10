@@ -7,9 +7,8 @@ mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, Message, MessageId, SessionBot, SessionStatus, composite_message_id,
-    parse_composite_message_id,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, AuthorKind, ChannelSession,
+    CreateAgentSessionParams, Message, MessageId, SessionBot, SessionStatus, TurnId,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
 use crate::outbound::connection_gateway_realtime::ChannelAudience;
@@ -17,6 +16,8 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
+use bots::domain::ports::BotRepo;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -294,17 +295,18 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
-        let bot = sqlx::query!(
-            r#"SELECT name, avatar_url FROM bots WHERE id = $1"#,
-            id.as_uuid(),
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("failed to read the session's bot")?;
+        // Delegated to the bots hex rather than a bespoke query: this is
+        // exactly bot id -> bot, and `get_bot` already excludes deleted bots -
+        // which is what this wants, since a deleted bot's old messages should
+        // render from the "Agent" fallback below, not its stale name.
+        let bot = PgBotsRepo::new(self.pool.clone())
+            .get_bot(id)
+            .await
+            .context("failed to read the session's bot")?;
 
-        // A deleted bot still has messages in the channel. Naming it after
-        // itself renders those as from an unknown agent rather than failing
-        // the whole log.
+        // A deleted (or never-existing) bot still has messages in the
+        // channel. Falling back to a generic name renders those as from an
+        // unknown agent rather than failing the whole log.
         Ok(match bot {
             Some(bot) => SessionBot {
                 id,
@@ -546,21 +548,27 @@ impl Comms for PgAgentSessionRepo {
         &self,
         session: &AgentSession,
     ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
-        let ids = sqlx::query_scalar!(
+        let rows = sqlx::query!(
             r#"
-            SELECT agent_session_message_id AS "agent_session_message_id!"
+            SELECT agent_session_turn AS "turn!", agent_session_author AS "author!"
             FROM comms_messages
-            WHERE channel_id = $1 AND agent_session_message_id IS NOT NULL
+            WHERE channel_id = $1 AND agent_session_id = $2
             "#,
             session.channel_id,
+            session.id.as_uuid(),
         )
         .fetch_all(&self.pool)
         .await
         .map_err(|error| rootcause::report!(error))?;
 
-        Ok(ids
-            .iter()
-            .filter_map(|id| parse_composite_message_id(session.id, id))
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(MessageId {
+                    turn: TurnId(row.turn.try_into().ok()?),
+                    author: row.author.parse::<AuthorKind>().ok()?,
+                })
+            })
             .collect())
     }
 
@@ -573,15 +581,19 @@ impl Comms for PgAgentSessionRepo {
         let sender = self.placeholder_sender(session, author).await?;
         sqlx::query!(
             r#"
-            INSERT INTO comms_messages (id, channel_id, sender_id, agent_session_message_id)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (agent_session_message_id) WHERE agent_session_message_id IS NOT NULL
+            INSERT INTO comms_messages
+                (id, channel_id, sender_id, agent_session_id, agent_session_turn, agent_session_author)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (agent_session_id, agent_session_turn, agent_session_author)
+                WHERE agent_session_id IS NOT NULL
                 DO NOTHING
             "#,
             macro_uuid::generate_uuid_v7(),
             session.channel_id,
             sender,
-            composite_message_id(session.id, id),
+            session.id.as_uuid(),
+            i64::from(id.turn.0),
+            id.author.as_str(),
         )
         .execute(&self.pool)
         .await

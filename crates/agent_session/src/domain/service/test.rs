@@ -364,7 +364,9 @@ async fn a_connections_frames_place_one_placeholder_per_folded_message() {
     let logs = connection(repo.clone(), comms.clone());
 
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("append succeeds");
 
         let created = comms.created();
         let unique: std::collections::HashSet<_> = created.iter().collect();
@@ -391,7 +393,9 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     assert!(frames > 5, "the fixture is worth counting reads over");
 
     for entry in log {
-        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("append succeeds");
     }
 
     assert_eq!(
@@ -424,7 +428,9 @@ async fn the_agents_placeholder_appears_before_its_turn_ends() {
 
     let mut placed_at = None;
     for (index, entry) in log.into_iter().enumerate() {
-        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("append succeeds");
         if placed_at.is_none() && comms.created().contains(&agent_side) {
             placed_at = Some(index);
         }
@@ -455,7 +461,9 @@ async fn re_attaching_does_not_place_a_message_twice() {
     // A first connection folds the whole recording.
     let first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&first, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&first, entry)
+            .await
+            .expect("append succeeds");
     }
     let after_first = comms.created();
     assert_eq!(after_first, both_sides(channel, 0));
@@ -511,7 +519,9 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     // Everything the fixture derives still lands, the refused message
     // included.
     for entry in log {
-        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("append succeeds");
     }
     assert_eq!(
         comms.inner.created(),
@@ -540,14 +550,18 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
 
     let first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&first, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&first, entry)
+            .await
+            .expect("append succeeds");
     }
     assert_eq!(comms.created(), both_sides(channel, 0));
 
     // A second connection over the same log, then a fresh prompt.
     let second = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), SECOND_PROMPT) {
-        AgentSessionLogRepo::create(&second, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&second, entry)
+            .await
+            .expect("append succeeds");
     }
 
     let mut expected = both_sides(channel, 0);
@@ -582,7 +596,9 @@ async fn a_connections_frames_are_published_to_its_channel() {
 
     let log = parse_log_as(test_session(), TURN);
     for entry in log.clone() {
-        AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+        AgentSessionLogRepo::create(&logs, entry)
+            .await
+            .expect("append succeeds");
     }
 
     let published = realtime.published();
@@ -633,7 +649,9 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
         let log = parse_log_as(test_session(), TURN);
         let frames = log.len();
         for entry in log {
-            AgentSessionLogRepo::create(&logs, entry).await.expect("append succeeds");
+            AgentSessionLogRepo::create(&logs, entry)
+                .await
+                .expect("append succeeds");
         }
         (repo.session_reads(), frames)
     }

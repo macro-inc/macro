@@ -10,15 +10,9 @@ use macro_uuid::Uuid;
 // Re-exported here because this is where callers expect session types.
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 // Folded messages are derived, but a `MessageId` is also what a comms
-// placeholder persists (inside its `agent_session_message_id`) to say which
-// message it renders.
-// `composite_message_id` comes with them: the composite is how a comms row
-// names the folded message it renders, and the fold now has two readers - this
-// service and the browser, which folds the same log in WASM - so the one
-// definition lives with the ids it is built from.
-pub use agent_fold::domain::model::{
-    Author, AuthorKind, MessageId, TurnId, composite_message_id, parse_composite_message_id,
-};
+// placeholder's agent_session_turn/agent_session_author columns persist to
+// say which message it renders - see PgAgentSessionRepo's `Comms` impl.
+pub use agent_fold::domain::model::{Author, AuthorKind, MessageId, TurnId};
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]

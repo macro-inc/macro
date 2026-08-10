@@ -5,6 +5,10 @@
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::ports::LogRepo;
+use agent_client_protocol::JsonRpcMessage;
+use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::PromptRequest;
+use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -122,11 +126,6 @@ fn parse_line(session: AgentSessionId, line: &str) -> AgentSessionLog {
         .expect("recorded line has a direction");
     let content = value.get("content").expect("recorded line has content");
 
-    let is_prompt = content
-        .get("method")
-        .and_then(|method| method.as_str())
-        .is_some_and(|method| method == "session/prompt");
-
     let content = match direction {
         "to_server" => Message::ToServer(
             serde_json::from_value(content.clone()).expect("to_server frame deserializes"),
@@ -136,6 +135,19 @@ fn parse_line(session: AgentSessionId, line: &str) -> AgentSessionLog {
         ),
         other => panic!("unknown direction {other}"),
     };
+
+    // Matched on the parsed frame through the crate's own helper rather than
+    // the raw JSON's `method` string, so a fixture parser and the fold it
+    // feeds agree on what a prompt is by construction.
+    let is_prompt = matches!(
+        &content,
+        Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+            if matches!(
+                &acp.0,
+                RawJsonRpcMessage::Request(request)
+                    if PromptRequest::matches_method(&request.method)
+            )
+    );
 
     AgentSessionLog {
         agent_session_id: session,

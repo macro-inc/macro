@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT agent_session_turn AS \"turn!\", agent_session_author AS \"author!\"\n            FROM comms_messages\n            WHERE channel_id = $1 AND agent_session_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "turn!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "author!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "544c9624ca7bb36eb6c3052a7f3768dfd86bd82b971b4dad5ea23f13afcdcef3"
+}
