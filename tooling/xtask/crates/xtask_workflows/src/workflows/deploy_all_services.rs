@@ -2,7 +2,7 @@
 //! two shared dep closures onto sticky disks, fan a build matrix out per
 //! service (binaries via crane, lambdas via crane + cargo-zigbuild), hand the
 //! artifacts off through Namespace artifact storage, run DB migrations, then
-//! deploy every service via Pulumi. Called by `deploy_cloud_storage_on_push`
+//! deploy every service via Pulumi. Called by `deploy_on_push`
 //! (dev) and `release-production` (prod), and manually dispatchable.
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
