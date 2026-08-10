@@ -7,6 +7,9 @@
 //! [`AgentSessionService`]; they make no authorization or business
 //! decisions.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
@@ -26,14 +29,9 @@ use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use agent_fold::domain::model::{
-    Author, FileDiff, FoldedMessage, MessagePart, Permission, PermissionOption, PermissionOutcome,
-    StopReason, ToolDetail, ToolStatus, ToolUse,
-};
-
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, ChannelFoldedMessages, SessionStatus, composite_message_id,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSessionLog, Message, SessionStatus,
 };
 use crate::domain::service::AgentSessionService;
 
@@ -86,8 +84,8 @@ where
                 .delete(delete_agent_session_handler::<T, Auth>),
         )
         .route(
-            "/channel/{channel_id}/messages",
-            get(get_agent_channel_messages_handler::<T, Auth>),
+            "/channel/{channel_id}/log",
+            get(get_agent_channel_log_handler::<T, Auth>),
         )
         .with_state(state)
 }
@@ -95,8 +93,6 @@ where
 /// Transport error for agent session handlers.
 #[derive(Debug)]
 pub enum AgentSessionApiError {
-    /// No agent session owns the addressed channel.
-    NoSessionForChannel,
     /// The domain rejected the operation.
     Domain(AgentSessionError),
 }
@@ -110,9 +106,6 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
-            Self::NoSessionForChannel => {
-                (StatusCode::NOT_FOUND, "no agent session owns this channel").into_response()
-            }
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "agent session request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
@@ -355,397 +348,186 @@ pub async fn delete_agent_session_handler<
     Ok(StatusCode::OK)
 }
 
-/// Response body for a channel's folded agent-session messages.
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentChannelMessagesResponse {
-    /// The session whose log derived the messages.
-    pub agent_session_id: Uuid,
-    /// The session's folded messages, oldest first.
-    pub messages: Vec<FoldedMessageDto>,
-}
-
-impl From<ChannelFoldedMessages> for AgentChannelMessagesResponse {
-    fn from(folded: ChannelFoldedMessages) -> Self {
-        let session = folded.agent_session_id;
-        Self {
-            agent_session_id: session.as_uuid(),
-            messages: folded
-                .messages
-                .into_iter()
-                .map(|message| FoldedMessageDto::new(session, message))
-                .collect(),
-        }
-    }
-}
-
-/// One renderable message folded from a session's protocol log, mirroring
-/// [`FoldedMessage`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct FoldedMessageDto {
-    /// The composite id the placeholder comms message for this folded message
-    /// carries in its `agent_session_message_id`:
-    /// `"{agent_session_id}:{turn}:{author}"`. Readers join folded messages
-    /// onto placeholder rows by this, one to one.
-    pub agent_session_message_id: String,
-    /// The turn within the session, assigned in log order from zero.
-    pub turn: u32,
-    /// Who produced the message.
-    pub author: FoldedAuthorDto,
-    /// Ordered renderable content. Never empty.
-    pub parts: Vec<FoldedMessagePartDto>,
-    /// How the turn ended, on the agent message that closed it. Absent while
-    /// the turn is in flight or when the session died without a response.
-    pub stop: Option<StopReasonDto>,
-}
-
-impl FoldedMessageDto {
-    /// Map a folded message into its transport shape, stamping the composite
-    /// message id of the session it was folded from.
-    fn new(session: AgentSessionId, message: FoldedMessage) -> Self {
-        Self {
-            agent_session_message_id: composite_message_id(session, message.id()),
-            turn: message.id.0,
-            author: message.author.into(),
-            parts: message
-                .parts
-                .into_inner()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            stop: message.stop.map(Into::into),
-        }
-    }
-}
-
-/// Who produced a folded message, mirroring [`Author`].
+/// Response body for a channel's raw agent-session log.
 ///
-/// Multi-word fields in these enums carry explicit `#[serde(rename)]`s
-/// instead of `rename_all_fields = "camelCase"`: utoipa does not read
-/// `rename_all_fields`, so the explicit form keeps the generated schema and
-/// the serialized wire format in agreement.
+/// The frames themselves: this endpoint does not fold, its readers do.
 #[derive(Debug, Serialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum FoldedAuthorDto {
-    /// A person, via `session/prompt`.
-    User {
-        /// The user's macro id, absent when the prompt was unattributed.
-        #[serde(rename = "userId")]
-        user_id: Option<String>,
-    },
-    /// The agent.
-    Agent,
+#[serde(rename_all = "camelCase")]
+pub struct AgentChannelLogResponse {
+    /// The session the entries belong to, absent when no agent session owns
+    /// the channel.
+    ///
+    /// Absent rather than a `404`, because every channel asks. A client has
+    /// no cheap way to know whether a channel is an agent channel before it
+    /// looks: the channel record it would have to consult is only ever
+    /// fetched as part of a list, which can predate the channel. So "no
+    /// session here" is an ordinary answer to an ordinary question, not a
+    /// failure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_session_id: Option<Uuid>,
+    /// The agent whose messages the log derives, absent for the same reason
+    /// the session id is.
+    ///
+    /// Here because a client renders those messages and cannot otherwise work
+    /// out who sent them: the sender of an agent message is this session's
+    /// bot, and no other response a channel fetches names it. Asking for the
+    /// channel's bots is the wrong question - those are bots explicitly added
+    /// to a channel, which a session's agent need not be.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bot: Option<SessionBotDto>,
+    /// Every logged frame, oldest first. Folding depends on this order. Empty
+    /// when there is no session.
+    pub entries: Vec<AgentSessionLogEntryDto>,
 }
 
-impl From<Author> for FoldedAuthorDto {
-    fn from(author: Author) -> Self {
-        match author {
-            Author::User(user_id) => Self::User {
-                user_id: user_id.map(|id| id.to_string()),
-            },
-            Author::Agent => Self::Agent,
+impl AgentChannelLogResponse {
+    /// The answer for a channel no agent session owns.
+    fn none() -> Self {
+        Self {
+            agent_session_id: None,
+            bot: None,
+            entries: Vec::new(),
         }
     }
 }
 
-/// A unit of renderable content, mirroring [`MessagePart`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum FoldedMessagePartDto {
-    /// Prose from the user or the agent.
-    Text {
-        /// The prose.
-        text: String,
-    },
-    /// The agent's reasoning, which a reader may want to hide by default.
-    Thought {
-        /// The reasoning.
-        text: String,
-    },
-    /// A tool the agent invoked.
-    ToolUse {
-        /// The ACP `toolCallId`.
-        id: String,
-        /// What to show as the tool's name.
-        label: String,
-        /// Where the call got to.
-        status: ToolStatusDto,
-        /// What the tool did, as far as the log reveals.
-        detail: ToolDetailDto,
-    },
-    /// The agent asking to proceed with a tool call.
-    Permission {
-        /// The `toolCallId` permission was requested for.
-        #[serde(rename = "toolCall")]
-        tool_call: String,
-        /// The choices offered, in the order ACP listed them.
-        options: Vec<PermissionOptionDto>,
-        /// What the user chose. Absent while the request is outstanding, or
-        /// when the session ended before anyone answered.
-        outcome: Option<PermissionOutcomeDto>,
-    },
-}
-
-impl From<MessagePart> for FoldedMessagePartDto {
-    fn from(part: MessagePart) -> Self {
-        match part {
-            MessagePart::Text(text) => Self::Text { text },
-            MessagePart::Thought(text) => Self::Thought { text },
-            MessagePart::ToolUse(ToolUse {
-                id,
-                label,
-                status,
-                detail,
-            }) => Self::ToolUse {
-                id: id.0,
-                label,
-                status: status.into(),
-                detail: detail.into(),
-            },
-            MessagePart::Permission(Permission {
-                tool_call,
-                options,
-                outcome,
-            }) => Self::Permission {
-                tool_call: tool_call.0,
-                options: options.into_iter().map(Into::into).collect(),
-                outcome: outcome.map(Into::into),
-            },
+impl From<ChannelSessionLog> for AgentChannelLogResponse {
+    fn from(log: ChannelSessionLog) -> Self {
+        Self {
+            agent_session_id: Some(log.agent_session_id.as_uuid()),
+            bot: Some(SessionBotDto {
+                id: log.bot.id.as_uuid(),
+                name: log.bot.name,
+                avatar_url: log.bot.avatar_url,
+            }),
+            entries: log.entries.into_iter().map(Into::into).collect(),
         }
     }
 }
 
-/// How far a tool call progressed, mirroring [`ToolStatus`].
+/// The agent behind a session, mirroring [`SessionBot`].
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionBotDto {
+    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
+    pub id: Uuid,
+    /// Display name.
+    pub name: String,
+    /// Avatar, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+/// One entry of a session's protocol log.
+///
+/// Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
+/// frame's own two fields, flattened in beside the attribution, which is the
+/// same shape a recorded session's JSONL carries. A reader can deserialize the
+/// `direction`/`content` pair straight back into the fold's own log type
+/// rather than through a transport vocabulary of its own.
+///
+/// `agentSessionId` is not repeated per entry: every entry in a response
+/// belongs to the session named once at the top.
+///
+/// `Deserialize` is for the wire-contract tests only - nothing server-side
+/// decodes its own response type.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct AgentSessionLogEntryDto {
+    /// The user whose action produced the frame, absent when no user did.
+    ///
+    /// Only prompts carry one, and only when the frame was attributed at the
+    /// time - a replayed or recorded session's are anonymous.
+    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// The frame: `direction` and the protocol envelope under `content`.
+    ///
+    /// Serialized by [`Message`] itself rather than rebuilt field by field, so
+    /// the bytes on the wire are exactly what the fold's own log type reads
+    /// back. [`LogFrameDto`] describes the two fields that produces.
+    #[serde(flatten)]
+    #[schema(value_type = LogFrameDto)]
+    pub message: Message,
+}
+
+/// The two fields [`AgentSessionLogEntryDto`] flattens in.
+///
+/// Schema only. Nothing constructs one: the entry serializes through
+/// [`Message`], and this exists so the generated clients see `direction` and
+/// `content` as named fields instead of an open map. A hand-built copy could
+/// drift from the fold's wire format, and the point of the endpoint is that it
+/// cannot - so this describes that format without being able to produce it.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LogFrameDto {
+    /// Which way the frame travelled.
+    pub direction: LogDirectionDto,
+    /// The protocol envelope, verbatim. Opaque here: it is Agent Runtime
+    /// Protocol, whose shape belongs to the fold rather than this endpoint.
+    #[schema(value_type = Object)]
+    pub content: serde_json::Value,
+}
+
+/// Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ToolStatusDto {
-    /// Not started - still streaming input or awaiting permission.
-    Pending,
-    /// Currently running.
-    Running,
-    /// Finished successfully.
-    Completed,
-    /// Finished unsuccessfully.
-    Failed,
+pub enum LogDirectionDto {
+    /// Runtime → server.
+    ToServer,
+    /// Server → runtime.
+    ToRuntime,
 }
 
-impl From<ToolStatus> for ToolStatusDto {
-    fn from(status: ToolStatus) -> Self {
-        match status {
-            ToolStatus::Pending => Self::Pending,
-            ToolStatus::Running => Self::Running,
-            ToolStatus::Completed => Self::Completed,
-            ToolStatus::Failed => Self::Failed,
-        }
-    }
-}
-
-/// What a tool call actually did, mirroring [`ToolDetail`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum ToolDetailDto {
-    /// A shell command.
-    Terminal {
-        /// The command line, when the harness reported one.
-        command: Option<String>,
-        /// Captured output, ANSI escape sequences left in place.
-        output: Option<String>,
-        /// Process exit code, when the harness reported one.
-        #[serde(rename = "exitCode")]
-        exit_code: Option<i32>,
-    },
-    /// One or more file modifications.
-    Edit {
-        /// The diffs ACP reported for this call.
-        diffs: Vec<FileDiffDto>,
-    },
-    /// A file read.
-    Read {
-        /// Paths this call touched.
-        paths: Vec<String>,
-    },
-    /// Anything else, including tools the fold has no special rendering for.
-    Other {
-        /// ACP's tool kind, as its wire string.
-        #[serde(rename = "acpKind")]
-        acp_kind: String,
-        /// The tool's input, when reported.
-        #[schema(value_type = Option<Object>)]
-        input: Option<serde_json::Value>,
-    },
-}
-
-impl From<ToolDetail> for ToolDetailDto {
-    fn from(detail: ToolDetail) -> Self {
-        match detail {
-            ToolDetail::Terminal {
-                command,
-                output,
-                exit_code,
-            } => Self::Terminal {
-                command,
-                output: output.map(|output| output.as_str().to_owned()),
-                exit_code,
-            },
-            ToolDetail::Edit { diffs } => Self::Edit {
-                diffs: diffs.into_iter().map(Into::into).collect(),
-            },
-            ToolDetail::Read { paths } => Self::Read {
-                paths: paths
-                    .into_iter()
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .collect(),
-            },
-            ToolDetail::Other { kind, input } => Self::Other {
-                acp_kind: kind,
-                input,
-            },
-        }
-    }
-}
-
-/// A file modification a tool reported, mirroring [`FileDiff`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct FileDiffDto {
-    /// The file that changed.
-    pub path: String,
-    /// Prior contents, absent when the file is new.
-    pub old_text: Option<String>,
-    /// New contents.
-    pub new_text: String,
-}
-
-impl From<FileDiff> for FileDiffDto {
-    fn from(diff: FileDiff) -> Self {
+impl From<AgentSessionLog> for AgentSessionLogEntryDto {
+    fn from(entry: AgentSessionLog) -> Self {
         Self {
-            path: diff.path.to_string_lossy().into_owned(),
-            old_text: diff.old_text,
-            new_text: diff.new_text,
-        }
-    }
-}
-
-/// One choice offered for a permission request, mirroring
-/// [`PermissionOption`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionOptionDto {
-    /// The id to report back when this option is chosen.
-    pub id: String,
-    /// Label to show.
-    pub name: String,
-    /// ACP's option kind, as its wire string - `allow_once`, `reject_once`,
-    /// `allow_always`, `reject_always`.
-    pub kind: String,
-}
-
-impl From<PermissionOption> for PermissionOptionDto {
-    fn from(option: PermissionOption) -> Self {
-        Self {
-            id: option.id,
-            name: option.name,
-            kind: option.kind,
-        }
-    }
-}
-
-/// How a permission request resolved, mirroring [`PermissionOutcome`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PermissionOutcomeDto {
-    /// An option was chosen.
-    Selected {
-        /// The chosen option's id.
-        #[serde(rename = "optionId")]
-        option_id: String,
-    },
-    /// The request was cancelled without a choice.
-    Cancelled,
-}
-
-impl From<PermissionOutcome> for PermissionOutcomeDto {
-    fn from(outcome: PermissionOutcome) -> Self {
-        match outcome {
-            PermissionOutcome::Selected { option_id } => Self::Selected { option_id },
-            PermissionOutcome::Cancelled => Self::Cancelled,
-        }
-    }
-}
-
-/// Why a turn stopped, mirroring [`StopReason`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum StopReasonDto {
-    /// The agent finished its turn.
-    EndTurn,
-    /// The model hit its token limit.
-    MaxTokens,
-    /// The agent hit its turn-request limit.
-    MaxTurnRequests,
-    /// The agent declined.
-    Refusal,
-    /// The turn was cancelled.
-    Cancelled,
-    /// A stop reason the fold does not model.
-    Other {
-        /// The wire string.
-        reason: String,
-    },
-}
-
-impl From<StopReason> for StopReasonDto {
-    fn from(stop: StopReason) -> Self {
-        match stop {
-            StopReason::EndTurn => Self::EndTurn,
-            StopReason::MaxTokens => Self::MaxTokens,
-            StopReason::MaxTurnRequests => Self::MaxTurnRequests,
-            StopReason::Refusal => Self::Refusal,
-            StopReason::Cancelled => Self::Cancelled,
-            StopReason::Other(reason) => Self::Other { reason },
+            user_id: entry.user_id.map(|user| user.to_string()),
+            message: entry.content,
         }
     }
 }
 
 #[utoipa::path(
     get,
-    path = "/agent-sessions/channel/{channel_id}/messages",
+    path = "/agent-sessions/channel/{channel_id}/log",
     tag = "agent-sessions",
-    operation_id = "get_agent_channel_messages",
+    operation_id = "get_agent_channel_log",
     params(("channel_id" = Uuid, Path, description = "ID of the session's dedicated channel")),
     responses(
-        (status = 200, body = AgentChannelMessagesResponse),
+        (status = 200, body = AgentChannelLogResponse),
         (status = 401, body = String),
         (status = 403, body = String),
         (status = 404, body = String),
         (status = 500, body = String),
     )
 )]
-/// The folded messages of the agent session behind a channel.
+/// The raw protocol log of the agent session behind a channel.
 ///
-/// Placeholder comms messages in an agent channel store no body, only an
-/// `agent_session_message_id`; each message here carries the same composite id,
-/// so a reader joins the two to render the channel. `404` when no agent
-/// session owns the channel.
+/// Served unfolded for a client that runs the fold itself.
+///
+/// Answers for any channel, not only an agent one: a channel with no session
+/// gets an empty log rather than a `404`. Clients call this on every channel
+/// load, because knowing whether a channel is an agent channel first would
+/// cost them a lookup they do not otherwise make.
+///
+/// The whole log, with no paging: the fold is a left fold over the frames from
+/// the beginning, so a reader that skipped any of them would derive different
+/// turn numbering - and turn numbering is what joins these to the channel's
+/// placeholder rows.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), channel_id = %channel_id),
     err(Debug)
 )]
-pub async fn get_agent_channel_messages_handler<
+pub async fn get_agent_channel_log_handler<
     T: AgentSessionService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentSessionRouterState<T, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(channel_id): Path<Uuid>,
-) -> Result<Json<AgentChannelMessagesResponse>, AgentSessionApiError> {
-    let folded = state
-        .service
-        .channel_messages(channel_id)
-        .await?
-        .ok_or(AgentSessionApiError::NoSessionForChannel)?;
+) -> Result<Json<AgentChannelLogResponse>, AgentSessionApiError> {
+    let log = state.service.channel_log(channel_id).await?;
 
-    Ok(Json(folded.into()))
+    Ok(Json(
+        log.map_or_else(AgentChannelLogResponse::none, Into::into),
+    ))
 }

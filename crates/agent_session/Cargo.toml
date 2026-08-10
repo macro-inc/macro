@@ -18,6 +18,8 @@ agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 axum = { workspace = true }
 bots = { path = "../bots"}
+connection_gateway_client = { path = "../connection_gateway_client" }
+model-entity = { path = "../model-entity" }
 clap = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
@@ -37,6 +39,7 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent-client-protocol = { workspace = true }
 non_empty = { path = "../non_empty" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }

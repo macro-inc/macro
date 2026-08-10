@@ -5,13 +5,17 @@
 //! can be read back through the ordinary service - useful for putting a real
 //! transcript in front of the UI without running a container.
 //!
-//! Frames go in through
-//! [`AgentSessionService::append_event`](agent_session::domain::service::AgentSessionService::append_event)
-//! rather than the log repo, because appending is not just an insert: each
-//! append refolds the session and writes a placeholder comms message for any
-//! turn the fold now derives that its channel has not seen. Writing to the
+//! Frames go in through [`PlaceholderSyncingLogs`] rather than the log repo,
+//! because appending is not just an insert: a frame that derives a message the
+//! channel has not seen also needs a placeholder comms message. Writing to the
 //! repo directly stores the log but leaves the channel empty, so the session
 //! renders as nothing.
+//!
+//! That is the same writer a live session's actor uses, which is the point: it
+//! carries an `agent_fold` machine from frame to frame instead of asking what
+//! the whole log derives on each one. Seeding a recording of n frames folds n
+//! entries rather than n^2 of them, and a long recording was where that
+//! difference stopped being academic.
 //!
 //! Recordings are the ones written by the `agent_session_recorder` example to
 //! `~/.agent_runtime_sessions/<session-id>.jsonl`: one JSON object per line,
@@ -30,12 +34,11 @@
 //!
 //! [`fold_jsonl`]: https://docs.rs/agent_fold
 
-use agent_fold::domain::service::FoldedMessageService;
 use agent_session::domain::model::{
     AgentSessionId, AgentSessionLog, CreateAgentSessionParams, Message,
 };
-use agent_session::domain::ports::AgentSessionRepo;
-use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
+use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, NoOpRealtime};
+use agent_session::domain::service::PlaceholderSyncingLogs;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use bots::domain::models::BotId;
 use clap::Parser;
@@ -228,20 +231,16 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             url: args.database_url.clone(),
             source,
         })?;
-    // The same repo answers all three ports, exactly as the composition root
-    // in `document_storage_service` wires them.
+    // The same repo answers every port, exactly as the composition root in
+    // `document_storage_service` wires them.
     let repo = PgAgentSessionRepo::new(pool);
-    let service = AgentSessionServiceImpl::new(
-        repo.clone(),
-        FoldedMessageService::new(repo.clone()),
-        repo.clone(),
-    );
 
     // Straight to the repo rather than `create_session`: that attaches a
     // transport, and a recording has no container to attach to. The row is
     // all a seeded session needs - its frames arrive from the file below.
-    let session = repo
-        .create(CreateAgentSessionParams {
+    let session = AgentSessionRepo::create(
+        &repo,
+        CreateAgentSessionParams {
             id: session_id,
             owner_id: owner,
             bot_id: BotId::new_from_uuid(args.bot_id),
@@ -250,23 +249,29 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             model: args.model.clone(),
             harness: args.harness.clone(),
             repo_url: args.repo_url.clone(),
-        })
-        .await
-        .map_err(SeedError::CreateSession)?;
+        },
+    )
+    .await
+    .map_err(SeedError::CreateSession)?;
 
     // Frames go in one at a time and in order: `agent_session_log` stamps
     // `created_at` itself and the log is read back `ORDER BY created_at, id`,
     // so append order is what makes the recording replay as recorded.
     //
-    // Each append refolds the whole session, so seeding a recording of n
-    // frames folds O(n^2) entries. That is the service's documented "fine for
-    // now" tradeoff for live appends; here it is the dominant cost, hence the
-    // progress line.
+    // One writer for the whole recording, so its fold is built once and
+    // advanced a frame at a time. Rebuilding it per frame - or going through
+    // `append_event`, which folds the stored log afresh every call - is what
+    // made long recordings crawl.
+    //
+    // Nothing streams: a recording has no viewers to be live for, and pushing
+    // its thousands of frames at a channel would only make the gateway replay
+    // a session nobody is watching.
+    let logs = PlaceholderSyncingLogs::new(repo.clone(), repo.clone(), NoOpRealtime);
+
     let total = log.len();
     let started = Instant::now();
     for (index, entry) in log.into_iter().enumerate() {
-        service
-            .append_event(entry)
+        AgentSessionLogRepo::create(&logs, entry)
             .await
             .map_err(|source| SeedError::WriteLog {
                 entry: index + 1,

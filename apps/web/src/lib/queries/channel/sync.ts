@@ -4,6 +4,7 @@ import type { ApiCountedReaction as CountedReaction } from '@service-storage/gen
 import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { consumeNonce } from '../nonce';
+import { adoptAgentSessionPlaceholder } from './agent-session-placeholders';
 import { ChannelNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -55,6 +56,18 @@ type CommsAttachmentPayload = {
  * - Catches edge cases like server-side message modifications
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
+  // An agent-turn placeholder may already be on screen under a client-chosen
+  // id, put there by the fold the moment it derived the message this row was
+  // written for. Claim it before anything below looks the row up by id, or
+  // the insert path adds the turn a second time.
+  if (payload.agent_session_message_id) {
+    adoptAgentSessionPlaceholder(
+      payload.channel_id,
+      payload.agent_session_message_id,
+      payload.id
+    );
+  }
+
   const isExternalUpdate = !consumeNonce(
     ChannelNonceKeys.MESSAGE,
     payload.nonce

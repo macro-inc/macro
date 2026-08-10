@@ -832,8 +832,8 @@ export const CreateImportEntityResponse = z.object({
 });
 
 export const CreateProject = z.object({
-  parentProjectId: z.union([z.string().uuid(), z.null()]).optional(),
   projectName: z.string(),
+  parentProjectId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const CreateProjectResponse = z.object({
@@ -1953,6 +1953,7 @@ export const ListNotifications = z.object({
           'call',
           'task',
           'github',
+          'reminder',
         ])
       ),
       z.null(),
@@ -2193,7 +2194,6 @@ export const MarkNotificationsSeen = z.object({
 });
 
 export const MoveToProject = z.object({
-  entityId: z.string().uuid(),
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('document'),
@@ -2217,12 +2217,13 @@ export const MoveToProject = z.object({
       });
     }
   }),
+  entityId: z.string().uuid(),
   projectId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const MoveToProjectResponse = z.object({
-  message: z.string(),
   success: z.boolean(),
+  message: z.string(),
 });
 
 export const NameSearch = z.object({
@@ -3381,9 +3382,11 @@ export const ReadMetadataResponse = z.object({
 export const ReadProject = z.object({ projectId: z.string().uuid() });
 
 export const ReadProjectResponse = z.object({
+  projectId: z.string().uuid(),
+  projectName: z.string(),
+  parentProjectId: z.union([z.string(), z.null()]).optional(),
   items: z.array(
     z.object({
-      fileType: z.union([z.string(), z.null()]).optional(),
       id: z.string(),
       itemType: z.any().superRefine((x, ctx) => {
         const schemas = [
@@ -3408,14 +3411,12 @@ export const ReadProjectResponse = z.object({
         }
       }),
       name: z.string(),
+      fileType: z.union([z.string(), z.null()]).optional(),
       updatedAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
     })
   ),
-  parentProjectId: z.union([z.string(), z.null()]).optional(),
-  projectId: z.string().uuid(),
-  projectName: z.string(),
 });
 
 export const RenameDocument = z.object({
@@ -3430,6 +3431,7 @@ export const RenameDocumentResponse = z.object({
 });
 
 export const SearchSkills = z.object({
+  name: z.string(),
   matchType: z
     .any()
     .superRefine((x, ctx) => {
@@ -3451,7 +3453,6 @@ export const SearchSkills = z.object({
       }
     })
     .optional(),
-  name: z.string(),
 });
 
 export const SearchSkillsResponse = z.object({

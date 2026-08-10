@@ -11,7 +11,14 @@ export type SearchHighlightTermsLookup = (
 
 const SearchHighlightTermsContext = createContext<SearchHighlightTermsLookup>();
 
-const FoldedMessagesContext = createContext<FoldedMessageLookup>();
+// An accessor, not a lookup: the fold resolves after the message tree has
+// already been created (Suspense runs children while its resource is pending),
+// so a context holding the value itself hands every consumer the `undefined`
+// it had at creation and never updates them. Reading through an accessor puts
+// the read in the consumer's own tracking scope, which is where it has to be
+// for the messages to hydrate when the fold lands.
+const FoldedMessagesContext =
+  createContext<Accessor<FoldedMessageLookup | undefined>>();
 
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
@@ -25,7 +32,9 @@ export function useSearchHighlightTermsLookup():
   return useContext(SearchHighlightTermsContext);
 }
 
-export function useFoldedMessageLookup(): FoldedMessageLookup | undefined {
+export function useFoldedMessageLookup():
+  | Accessor<FoldedMessageLookup | undefined>
+  | undefined {
   return useContext(FoldedMessagesContext);
 }
 

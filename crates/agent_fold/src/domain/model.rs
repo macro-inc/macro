@@ -12,6 +12,7 @@
 //! recognize as the story of the session: what they asked, what the agent
 //! said, what it ran, and what it wanted permission to do.
 
+use crate::domain::log::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use std::path::PathBuf;
@@ -66,16 +67,61 @@ impl std::str::FromStr for MessageId {
         let (turn, author) = value.split_once(':').ok_or(())?;
         Ok(Self {
             turn: TurnId(turn.parse().map_err(|_| ())?),
-            author: author.parse()?,
+            author: author.parse().map_err(|_| ())?,
         })
     }
+}
+
+/// The composite id a placeholder comms message stores in its
+/// `agent_session_message_id` column: `"{agent_session_id}:{turn}:{author}"`.
+///
+/// Folded messages have no table of their own, so this composite is the whole
+/// mapping between a comms row and the message it renders. Whoever writes a
+/// placeholder builds it, and whoever renders one reproduces it from the same
+/// parts - which now includes the browser, folding the same log through this
+/// crate compiled to WASM. It lives here, with the ids it is made of, so those
+/// two cannot drift; the string is persisted, so drift would silently
+/// unrender a channel.
+///
+/// Keyed per message rather than per turn: a turn yields a prompt and a reply
+/// with different senders, and each needs its own row.
+#[must_use]
+pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
+    format!("{}:{id}", session.as_uuid())
+}
+
+/// The message key inside a [`composite_message_id`] built for `session`, or
+/// `None` when the composite names a different session or is malformed.
+#[must_use]
+pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
+    composite
+        .strip_prefix(&format!("{}:", session.as_uuid()))?
+        .parse()
+        .ok()
 }
 
 /// Which side of the conversation produced a message.
 ///
 /// The identity-free discriminant of [`Author`], usable in a key where
 /// [`Author`] itself carries a payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// The wire names a [`MessageId`] is written with and parsed back from are
+/// the strum-derived `snake_case` variant names - one source of truth for
+/// both directions.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    strum::Display,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[strum(serialize_all = "snake_case")]
 pub enum AuthorKind {
     /// A person.
     User,
@@ -87,22 +133,7 @@ impl AuthorKind {
     /// The wire name, as it appears in a [`MessageId`]'s string form.
     #[must_use]
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::Agent => "agent",
-        }
-    }
-}
-
-impl std::str::FromStr for AuthorKind {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "user" => Ok(Self::User),
-            "agent" => Ok(Self::Agent),
-            _ => Err(()),
-        }
+        self.into()
     }
 }
 
@@ -201,7 +232,8 @@ pub struct ToolUse {
 /// [`ToolStatus::Pending`] and [`ToolStatus::Running`] are legitimate final
 /// states, not errors: a live session's newest calls have not finished, and a
 /// session that dies mid-call leaves one behind permanently.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, strum::Display, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum ToolStatus {
     /// Not started - either still streaming input or awaiting permission.
     #[default]
@@ -284,11 +316,8 @@ pub struct Permission {
     pub tool_call: ToolUseId,
     /// The choices offered, in the order ACP listed them.
     pub options: Vec<PermissionOption>,
-    /// What the user chose.
-    ///
-    /// `None` while the request is outstanding, or when the session ended
-    /// before anyone answered.
-    pub outcome: Option<PermissionOutcome>,
+    /// How the request has resolved so far.
+    pub outcome: PermissionOutcome,
 }
 
 /// One choice offered for a [`Permission`] request.
@@ -298,14 +327,43 @@ pub struct PermissionOption {
     pub id: String,
     /// Label to show.
     pub name: String,
-    /// ACP's option kind, as its wire string - `allow_once`, `reject_once`,
-    /// `allow_always`, `reject_always`.
-    pub kind: String,
+    /// What kind of choice this is.
+    pub kind: PermissionOptionKind,
 }
 
-/// How a [`Permission`] request resolved.
+/// What kind of choice a [`PermissionOption`] offers, mirroring ACP's
+/// `PermissionOptionKind`.
+///
+/// ACP's enum is `#[non_exhaustive]`, but unlike [`StopReason`] there is no
+/// wire string worth preserving for a variant this fold does not model: the
+/// fold only ever sees one of these once the whole permission request has
+/// already deserialized successfully, and a wire value ACP added after this
+/// was written would have failed that deserialize already - so an unmatched
+/// kind here cannot happen in practice, not "happens and is rendered
+/// unlabeled."
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionOptionKind {
+    /// Allow this operation only this time.
+    AllowOnce,
+    /// Allow this operation and remember the choice.
+    AllowAlways,
+    /// Reject this operation only this time.
+    RejectOnce,
+    /// Reject this operation and remember the choice.
+    RejectAlways,
+}
+
+/// How a [`Permission`] request has resolved so far.
+///
+/// Not just "chosen or not": nothing chosen has more than one cause, and a
+/// reader deciding whether to still show the options needs to tell them
+/// apart. [`Self::Pending`] may still resolve; [`Self::Errored`] and
+/// [`Self::Unrecognized`] have already resolved, just not into anything this
+/// fold can show as a choice.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionOutcome {
+    /// No response has arrived yet - the request is still outstanding.
+    Pending,
     /// An option was chosen.
     Selected {
         /// The chosen option's id.
@@ -313,10 +371,23 @@ pub enum PermissionOutcome {
     },
     /// The request was cancelled without a choice.
     Cancelled,
+    /// The response was a JSON-RPC error rather than a result: the harness
+    /// failed to answer the request rather than resolving it.
+    Errored,
+    /// A result arrived, but this fold could not make sense of it - a
+    /// payload that did not match ACP's response shape, or an outcome ACP
+    /// added after this was written.
+    Unrecognized,
 }
 
 /// Why a turn stopped.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Parsed straight off ACP's `stopReason` wire string by the strum-derived
+/// [`FromStr`](std::str::FromStr): the `snake_case` variant names are the
+/// wire names, and anything unmodelled falls through to [`Self::Other`], so
+/// parsing never fails.
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum StopReason {
     /// The agent finished its turn.
     EndTurn,
@@ -329,5 +400,49 @@ pub enum StopReason {
     /// The turn was cancelled.
     Cancelled,
     /// A stop reason this fold does not model, as its wire string.
+    #[strum(default)]
     Other(String),
+}
+
+/// What pushing one log frame into a
+/// [`FoldMachine`](crate::domain::ports::FoldMachine) changed.
+///
+/// Most frames change nothing - handshakes, token accounting, an unmodelled
+/// update - and [`Self::Unchanged`] is what a push reports for them, rather
+/// than an `Option` a caller has to unwrap before it can even ask what
+/// happened. A frame changes at most one message: the only push that touches
+/// two messages is a prompt arriving while a previous turn is still open, and
+/// closing that turn is a no-op because its agent message is already emitted
+/// with the `stop: None` it will keep.
+///
+/// The message is borrowed from the machine rather than cloned. Folding a
+/// whole log discards every result, so cloning here would make the batch path
+/// pay for the streaming one; a caller that needs to keep a message - to
+/// serialize it across a WASM boundary, or to write a comms placeholder -
+/// clones only the ones it uses.
+///
+/// [`Self::NewMessage`] and [`Self::MessageUpdate`] carry the whole message as
+/// it now stands rather than a delta, so a consumer applies an update by
+/// replacing whatever it holds under the same [`FoldedMessage::id`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IncrementalFoldResult<'a> {
+    /// A message the machine had not derived before. Reported exactly once
+    /// per message, before any update to it.
+    NewMessage(&'a FoldedMessage),
+    /// A message the machine had already reported, whose content changed.
+    MessageUpdate(&'a FoldedMessage),
+    /// The frame changed nothing renderable - a handshake, bookkeeping, or an
+    /// update this fold does not model.
+    Unchanged,
+}
+
+impl<'a> IncrementalFoldResult<'a> {
+    /// The message that changed, or `None` for [`Self::Unchanged`].
+    #[must_use]
+    pub fn message(self) -> Option<&'a FoldedMessage> {
+        match self {
+            Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message),
+            Self::Unchanged => None,
+        }
+    }
 }

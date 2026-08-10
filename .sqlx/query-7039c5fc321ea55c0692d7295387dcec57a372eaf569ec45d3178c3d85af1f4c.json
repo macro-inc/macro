@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id AS \"user_id: MacroUserIdStr\"\n            FROM comms_channel_participants\n            WHERE channel_id = $1 AND left_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id: MacroUserIdStr",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7039c5fc321ea55c0692d7295387dcec57a372eaf569ec45d3178c3d85af1f4c"
+}

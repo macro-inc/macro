@@ -128,13 +128,38 @@ function DeletedMessageLayout() {
  * `agent_session_message_id`, and the body is the folded message looked up
  * from the channel's agent session. One row per folded message, so this
  * renders the user's prompt as well as the agent's reply.
+ *
+ * The lookup is complete by the time this runs — the channel suspends until
+ * its log is folded, and a live session hands the fold its new message before
+ * it puts a row in the channel for it — so a miss is not "not yet". It means
+ * a placeholder row outlived the message it named: the log no longer derives
+ * it, or it never did. Rare, and the row still carries a sender and a
+ * timestamp, so it renders as an empty message rather than disappearing.
  */
 function FoldedMessageLayout() {
   const message = useMessage();
   const lookup = useFoldedMessageLookup();
   const folded = () => {
     const messageId = message().agent_session_message_id;
-    return messageId ? lookup?.(messageId) : undefined;
+    if (!messageId) {
+      console.warn('[agent-fold] placeholder row has no message id', {
+        id: message().id,
+        content: message().content,
+      });
+      return undefined;
+    }
+    const found = lookup?.()?.(messageId);
+    if (!found) {
+      // The last hop: a placeholder row naming a message the fold did not
+      // produce. Both sides are logged because the two ids being built
+      // differently is the failure this cannot otherwise be told apart from
+      // "the fold ran and found nothing".
+      console.warn('[agent-fold] no folded message for placeholder', {
+        agentSessionMessageId: messageId,
+        lookupPresent: lookup?.() !== undefined,
+      });
+    }
+    return found;
   };
 
   return (
@@ -152,10 +177,7 @@ function FoldedMessageLayout() {
         </div>
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
-        <Show
-          when={folded()}
-          fallback={<p class="text-sm text-ink-muted italic">Working…</p>}
-        >
+        <Show when={folded()}>
           {(folded) => <FoldedContent folded={folded()} />}
         </Show>
       </Message.Slot>
@@ -269,12 +291,15 @@ export function ChannelMessage(props: ChannelMessageProps) {
           <Match when={props.message.deleted_at != null}>
             <DeletedMessageLayout />
           </Match>
-          <Match
-            when={
-              props.message.content == null &&
-              props.message.agent_session_message_id != null
-            }
-          >
+          {/*
+            Carrying an `agent_session_message_id` is what makes a row a
+            placeholder - it names the folded message that is its body. The
+            stored `content` is not consulted: a placeholder is written without
+            one, so anything but null there means something has gone wrong
+            upstream, and falling through to the ordinary layout would render
+            that row blank rather than showing the fold.
+          */}
+          <Match when={props.message.agent_session_message_id != null}>
             <FoldedMessageLayout />
           </Match>
           <Match when={isGrouped()}>

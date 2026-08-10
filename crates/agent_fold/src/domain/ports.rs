@@ -3,10 +3,10 @@
 //!
 //! [`FoldedMessageRepo`] is the query API the rest of the system calls. It is
 //! deliberately shaped like a repository over stored rows - list a session's
-//! messages, get one by id - even though nothing is stored: the service
-//! behind it derives every answer from the protocol log on each call.
-//! Callers should not be able to tell, and the day the messages *are*
-//! materialized somewhere, only the implementation moves.
+//! messages - even though nothing is stored: the service behind it derives
+//! every answer from the protocol log on each call. Callers should not be
+//! able to tell, and the day the messages *are* materialized somewhere, only
+//! the implementation moves.
 //!
 //! [`LogRepo`] is the driven port: the one capability folding needs from the
 //! outside, reading a session's raw log. This crate sits at the bottom of
@@ -24,7 +24,7 @@
 //! [`FoldSession`].
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog};
-use crate::domain::model::{FoldedMessage, MessageId};
+use crate::domain::model::{FoldedMessage, IncrementalFoldResult};
 use std::collections::VecDeque;
 
 /// Read a session's raw protocol log.
@@ -51,6 +51,26 @@ pub trait FoldSession {
     ) -> impl Future<Output = Result<Vec<FoldedMessage>, rootcause::Report>> + Send;
 }
 
+/// Fold a session's log one frame at a time, reporting what each frame
+/// changed.
+///
+/// The incremental counterpart to [`FoldSession`], which can only fold a
+/// whole log at once. A machine holds the fold's state between pushes, so
+/// appending one frame costs one frame's work instead of a refold, and a
+/// caller streaming a live session learns which message to redraw without
+/// diffing anything.
+///
+/// The machine is also the store: it keeps every message it has derived, and
+/// [`IncrementalFoldResult`] borrows from it. Ask
+/// [`FoldMachineImpl`](crate::domain::fold::FoldMachineImpl) for the whole
+/// list when a caller wants it all rather than the changes.
+pub trait FoldMachine {
+    /// Advance the machine by one log entry, reporting what it changed -
+    /// [`IncrementalFoldResult::Unchanged`] when the frame changes nothing
+    /// renderable.
+    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_>;
+}
+
 /// Query a session's messages as if they were stored.
 pub trait FoldedMessageRepo {
     /// A session's messages, oldest first. A session with no log folds to no
@@ -59,24 +79,4 @@ pub trait FoldedMessageRepo {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<FoldedMessage>, rootcause::Report>> + Send;
-
-    /// One message by its natural key, or `None` when the session's log
-    /// derives no such message.
-    fn get_message(
-        &self,
-        session: AgentSessionId,
-        id: MessageId,
-    ) -> impl Future<Output = Result<Option<FoldedMessage>, rootcause::Report>> + Send;
-
-    /// The keys of the messages the session's log derives, oldest first. A
-    /// session with no log derives none.
-    ///
-    /// This is what `agent_session`'s service polls on every append to decide
-    /// which messages still need a comms placeholder. It is keyed per message
-    /// rather than per turn because a turn's prompt and its reply are
-    /// rendered as separate channel messages with different senders.
-    fn message_ids(
-        &self,
-        session: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<MessageId>, rootcause::Report>> + Send;
 }

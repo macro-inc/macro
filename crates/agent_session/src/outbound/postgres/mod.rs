@@ -1,20 +1,23 @@
 //! Postgres implementation of the agent session and agent session log
-//! repositories, the fold's log source, and the comms placeholder writer.
+//! repositories, the fold's log source, the comms placeholder writer, and the
+//! channel audience a streamed frame is addressed to.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, Message, MessageId, SessionStatus, composite_message_id,
-    parse_composite_message_id,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, AuthorKind, ChannelSession,
+    CreateAgentSessionParams, Message, MessageId, SessionBot, SessionStatus, TurnId,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
+use crate::outbound::connection_gateway_realtime::ChannelAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
+use bots::domain::ports::BotRepo;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -290,6 +293,34 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        // Delegated to the bots hex rather than a bespoke query: this is
+        // exactly bot id -> bot, and `get_bot` already excludes deleted bots -
+        // which is what this wants, since a deleted bot's old messages should
+        // render from the "Agent" fallback below, not its stale name.
+        let bot = PgBotsRepo::new(self.pool.clone())
+            .get_bot(id)
+            .await
+            .context("failed to read the session's bot")?;
+
+        // A deleted (or never-existing) bot still has messages in the
+        // channel. Falling back to a generic name renders those as from an
+        // unknown agent rather than failing the whole log.
+        Ok(match bot {
+            Some(bot) => SessionBot {
+                id,
+                name: bot.name,
+                avatar_url: bot.avatar_url,
+            },
+            None => SessionBot {
+                id,
+                name: "Agent".to_owned(),
+                avatar_url: None,
+            },
+        })
+    }
+
     async fn update(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
         let result = sqlx::query!(
@@ -486,26 +517,58 @@ impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
     }
 }
 
-impl Comms for PgAgentSessionRepo {
-    async fn messages_with_placeholders(
+/// Who a channel's frames go to: everyone still in it.
+///
+/// A participant who has left keeps their row, with `left_at` set - so the
+/// filter is what stops a former member being sent a session they can no
+/// longer open.
+impl ChannelAudience for PgAgentSessionRepo {
+    async fn participants(
         &self,
-        session: &AgentSession,
-    ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
-        let ids = sqlx::query_scalar!(
+        channel_id: Uuid,
+    ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        let participants = sqlx::query_scalar!(
             r#"
-            SELECT agent_session_message_id AS "agent_session_message_id!"
-            FROM comms_messages
-            WHERE channel_id = $1 AND agent_session_message_id IS NOT NULL
+            SELECT user_id AS "user_id: MacroUserIdStr"
+            FROM comms_channel_participants
+            WHERE channel_id = $1 AND left_at IS NULL
             "#,
-            session.channel_id,
+            channel_id,
         )
         .fetch_all(&self.pool)
         .await
         .map_err(|error| rootcause::report!(error))?;
 
-        Ok(ids
-            .iter()
-            .filter_map(|id| parse_composite_message_id(session.id, id))
+        Ok(participants)
+    }
+}
+
+impl Comms for PgAgentSessionRepo {
+    async fn messages_with_placeholders(
+        &self,
+        session: &AgentSession,
+    ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT agent_session_turn AS "turn!", agent_session_author AS "author!"
+            FROM comms_messages
+            WHERE channel_id = $1 AND agent_session_id = $2
+            "#,
+            session.channel_id,
+            session.id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| rootcause::report!(error))?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(MessageId {
+                    turn: TurnId(row.turn.try_into().ok()?),
+                    author: row.author.parse::<AuthorKind>().ok()?,
+                })
+            })
             .collect())
     }
 
@@ -518,15 +581,19 @@ impl Comms for PgAgentSessionRepo {
         let sender = self.placeholder_sender(session, author).await?;
         sqlx::query!(
             r#"
-            INSERT INTO comms_messages (id, channel_id, sender_id, agent_session_message_id)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (agent_session_message_id) WHERE agent_session_message_id IS NOT NULL
+            INSERT INTO comms_messages
+                (id, channel_id, sender_id, agent_session_id, agent_session_turn, agent_session_author)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (agent_session_id, agent_session_turn, agent_session_author)
+                WHERE agent_session_id IS NOT NULL
                 DO NOTHING
             "#,
             macro_uuid::generate_uuid_v7(),
             session.channel_id,
             sender,
-            composite_message_id(session.id, id),
+            session.id.as_uuid(),
+            i64::from(id.turn.0),
+            id.author.as_str(),
         )
         .execute(&self.pool)
         .await

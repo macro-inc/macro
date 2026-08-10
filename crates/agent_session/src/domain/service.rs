@@ -5,15 +5,35 @@
 //! each connection's effects are executed by its actor shell.
 //!
 //! Appending to a session's log is what keeps its channel in step with it:
-//! every append refolds the session - through `agent_fold`'s
-//! [`FoldedMessageRepo`] - and writes a placeholder comms message for each
-//! folded message the log now derives that comms has not seen.
+//! every folded message the log derives gets a placeholder comms message, and
+//! the append is what notices it is missing.
 //!
 //! A live session's log is written by its actor rather than through
 //! [`AgentSessionService::append_event`], so the actor is handed a
 //! [`PlaceholderSyncingLogs`] instead of the bare repository. That is what
 //! makes the two paths agree: the actor keeps writing frames the only way it
 //! knows how, and placeholders appear either way.
+//!
+//! The two paths get there differently, because they know different amounts.
+//! Anyone writing a run of frames in order has somewhere to keep state, so
+//! [`PlaceholderSyncingLogs`] holds an `agent_fold` machine and pushes each
+//! frame into it - the streamed chunks that make up most of a log cost one
+//! push and no I/O. That is a session's actor, and equally `seed_jsonl`
+//! replaying a recording.
+//!
+//! [`PlaceholderSyncingLogs`] is also where a live session's frames are
+//! streamed from, for the same reason: it is the one place every frame of a
+//! connected session passes through, so anything a viewer should see as it
+//! happens has to be published from there. Neither the placeholder write nor
+//! the push can fail the durable append - see [`AgentSessionRealtime`].
+//!
+//! A lone frame has no run to amortize over, so
+//! [`AgentSessionService::append_event`] - and the
+//! [`AgentSessionService::sync_placeholders`] repair path, which additionally
+//! has to notice placeholders that were deleted or never written - ask
+//! [`FoldedMessageRepo`] what the whole log derives and diff that against
+//! comms. Both arrive at the same placeholders because both read the same
+//! fold.
 
 #[cfg(test)]
 mod test;
@@ -21,20 +41,24 @@ mod test;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_fold::domain::ports::FoldedMessageRepo;
+use agent_fold::domain::fold::FoldMachineImpl;
+use agent_fold::domain::model::IncrementalFoldResult;
+use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::AgentAction;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelFoldedMessages, ChannelSession,
-    CreateAgentSessionParams,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession, ChannelSessionLog,
+    CreateAgentSessionParams, LogAppended, MessageId,
 };
-use super::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo, Comms};
+use super::ports::{
+    AgentConnector, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, Comms,
+};
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -97,12 +121,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn sync_placeholders(&self, session: AgentSessionId)
     -> impl Future<Output = Result<()>> + Send;
 
-    /// The folded messages of the agent session behind a channel, or `None`
+    /// The raw protocol log of the agent session behind a channel, or `None`
     /// when no session owns the channel.
-    fn channel_messages(
+    ///
+    /// Served unfolded because nothing here folds for a reader any more: the
+    /// web client runs the same fold compiled to WASM, so a streamed session
+    /// and a reloaded one are rendered by one implementation rather than two
+    /// that have to be kept agreeing. See [`ChannelSessionLog`].
+    fn channel_log(
         &self,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ChannelFoldedMessages>>> + Send;
+    ) -> impl Future<Output = Result<Option<ChannelSessionLog>>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -110,22 +139,30 @@ pub trait AgentSessionService: Send + Sync + 'static {
 /// `R` is the persistence adapter implementing both [`AgentSessionRepo`] and
 /// [`AgentSessionLogRepo`], e.g. `outbound::postgres::PgAgentSessionRepo`.
 /// `Folds` answers "what messages does this session's log derive" -
-/// `agent_fold` folding the log on read - and `C` writes placeholder messages
-/// into the session's channel.
-pub struct AgentSessionServiceImpl<R, Folds, C> {
+/// `agent_fold` folding the log on read - `C` writes placeholder messages
+/// into the session's channel, and `Rt` streams each frame to whoever is
+/// watching that channel right now.
+pub struct AgentSessionServiceImpl<R, Folds, C, Rt> {
     repo: R,
     folds: Folds,
     comms: C,
+    realtime: Rt,
     active: Arc<ActiveSessions>,
 }
 
-impl<R, Folds, C> AgentSessionServiceImpl<R, Folds, C> {
-    /// Build a service from its persistence port, fold, and comms writer.
-    pub fn new(repo: R, folds: Folds, comms: C) -> Self {
+impl<R, Folds, C, Rt> AgentSessionServiceImpl<R, Folds, C, Rt> {
+    /// Build a service from its persistence port, fold, comms writer, and
+    /// realtime publisher.
+    ///
+    /// Only a live session streams, so a caller with no viewers to serve -
+    /// tests, and the offline placeholder repair - passes
+    /// [`NoOpRealtime`](super::ports::NoOpRealtime).
+    pub fn new(repo: R, folds: Folds, comms: C, realtime: Rt) -> Self {
         Self {
             repo,
             folds,
             comms,
+            realtime,
             active: Arc::new(DashMap::new()),
         }
     }
@@ -138,8 +175,8 @@ impl<R, Folds, C> AgentSessionServiceImpl<R, Folds, C> {
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + Clone,
-        Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
         C: Comms + Clone + Send + Sync + 'static,
+        Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
         Connector: AgentConnector + Clone,
     {
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
@@ -153,11 +190,14 @@ impl<R, Folds, C> AgentSessionServiceImpl<R, Folds, C> {
 
         // The actor owns this session's log writes, so it writes through the
         // placeholder sync rather than the bare repository - see module docs.
-        let logs = PlaceholderSyncingLogs {
-            repo: self.repo.clone(),
-            folds: self.folds.clone(),
-            comms: self.comms.clone(),
-        };
+        // Its fold starts empty and catches itself up on the stored log on the
+        // first frame, which keeps this sync and costs an attach nothing until
+        // the session actually says something.
+        let logs = PlaceholderSyncingLogs::new(
+            self.repo.clone(),
+            self.comms.clone(),
+            self.realtime.clone(),
+        );
         let actor = SessionActor::new(id, acp_session_id, connector, logs, command_rx);
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
@@ -198,13 +238,36 @@ impl<R, Folds, C> AgentSessionServiceImpl<R, Folds, C> {
             }
         }
     }
+
+    /// The session a channel renders, or `None` when no session owns it.
+    ///
+    /// A channel load carries no thread or bot context, so only the
+    /// dedicated-channel relation can match; thread-scoped sessions are
+    /// rendered by their own dedicated channels.
+    async fn session_for_channel(&self, channel_id: Uuid) -> Result<Option<AgentSession>>
+    where
+        R: AgentSessionRepo,
+    {
+        Ok(
+            match self.repo.find_for_channel(channel_id, None, None).await? {
+                ChannelSession::None => None,
+                ChannelSession::InDedicatedChannel(session)
+                | ChannelSession::CreatedFromThread(session) => Some(session),
+                ChannelSession::ThreadInDedicatedChannel {
+                    dedicated_channel_agent_session,
+                    ..
+                } => Some(dedicated_channel_agent_session),
+            },
+        )
+    }
 }
 
-impl<R, Folds, C> AgentSessionService for AgentSessionServiceImpl<R, Folds, C>
+impl<R, Folds, C, Rt> AgentSessionService for AgentSessionServiceImpl<R, Folds, C, Rt>
 where
     R: AgentSessionRepo + AgentSessionLogRepo + Clone,
     Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
     C: Comms + Clone + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
 {
     async fn create_session<Connector>(
         &self,
@@ -269,24 +332,16 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn channel_messages(&self, channel_id: Uuid) -> Result<Option<ChannelFoldedMessages>> {
-        // A channel load carries no thread or bot context, so only the
-        // dedicated-channel relation can match; thread-scoped sessions are
-        // rendered by their own dedicated channels.
-        let session = match self.repo.find_for_channel(channel_id, None, None).await? {
-            ChannelSession::None => return Ok(None),
-            ChannelSession::InDedicatedChannel(session)
-            | ChannelSession::CreatedFromThread(session) => session,
-            ChannelSession::ThreadInDedicatedChannel {
-                dedicated_channel_agent_session,
-                ..
-            } => dedicated_channel_agent_session,
+    async fn channel_log(&self, channel_id: Uuid) -> Result<Option<ChannelSessionLog>> {
+        let Some(session) = self.session_for_channel(channel_id).await? else {
+            return Ok(None);
         };
 
-        let messages = self.folds.messages(session.id).await?;
-        Ok(Some(ChannelFoldedMessages {
+        let entries = AgentSessionLogRepo::list_by_session(&self.repo, session.id).await?;
+        Ok(Some(ChannelSessionLog {
             agent_session_id: session.id,
-            messages,
+            bot: self.repo.session_bot(session.bot_id).await?,
+            entries,
         }))
     }
 }
@@ -298,34 +353,116 @@ where
 /// A connected session's frames never pass through
 /// [`AgentSessionService::append_event`] - the actor owns the log write - so
 /// without this the log would fill up while the channel stayed empty.
-#[derive(Clone)]
-struct PlaceholderSyncingLogs<R, Folds, C> {
+///
+/// This is also where a writer's fold lives. One session is hundreds of
+/// frames, and asking what the whole log derives on each of them made the
+/// work quadratic in the length of the session while answering "nothing new"
+/// almost every time. Instead the fold is [`PlaceholderState`], carried from
+/// frame to frame, and each frame is pushed into it.
+///
+/// Public because a session's actor is not the only thing that writes a run of
+/// frames in order: `seed_jsonl` replays a whole recording, and wants the same
+/// arithmetic rather than a refold per line. Anything writing one frame at a
+/// time should write through this; [`AgentSessionService::append_event`] is
+/// for a lone frame with no run to amortize over.
+pub struct PlaceholderSyncingLogs<R, C, Rt> {
     repo: R,
-    folds: Folds,
     comms: C,
+    realtime: Rt,
+    /// The writer's fold and what it has left to place.
+    ///
+    /// One writer goes through this, in order, so the lock is never
+    /// contended. It is here because [`AgentSessionLogRepo::create`] takes
+    /// `&self`, and holding it across the whole sync is what keeps a frame's
+    /// fold and its placeholder writes from interleaving with the next
+    /// frame's.
+    state: Mutex<PlaceholderState>,
 }
 
-impl<R, Folds, C> AgentSessionLogRepo for PlaceholderSyncingLogs<R, Folds, C>
+impl<R, C, Rt> PlaceholderSyncingLogs<R, C, Rt> {
+    /// A log writer that keeps `session`'s channel in step as it writes, and
+    /// streams each frame to whoever is watching that channel.
+    ///
+    /// The fold starts empty and catches itself up on whatever is already
+    /// stored when the first frame arrives, so this is cheap to build and
+    /// correct against a session that already has a log.
+    pub fn new(repo: R, comms: C, realtime: Rt) -> Self {
+        Self {
+            repo,
+            comms,
+            realtime,
+            state: Mutex::new(PlaceholderState::default()),
+        }
+    }
+}
+
+/// What one writer remembers between frames.
+#[derive(Default)]
+struct PlaceholderState {
+    /// The writer's incremental fold.
+    ///
+    /// `None` until the first frame catches it up on the session's stored
+    /// log. See [`PlaceholderSyncingLogs::catch_up`].
+    fold: Option<FoldMachineImpl>,
+    /// Messages the fold has derived that comms has not accepted yet.
+    ///
+    /// The fold announces a message exactly once, so a placeholder write that
+    /// fails cannot simply be dropped - nothing would ever mention that
+    /// message again. Holding it here means the next frame retries it, which
+    /// is what refolding the whole session every time used to give for free.
+    unplaced: Vec<(MessageId, Author)>,
+    /// The channel this writer's session renders into.
+    ///
+    /// A frame carries only its session, but streaming addresses a channel,
+    /// so without remembering it every frame would cost a session read - and
+    /// most frames are stream chunks that otherwise touch nothing but the log
+    /// insert. Kept here rather than taken in the constructor because a
+    /// writer is built when a transport attaches, before anything has looked
+    /// the session up; the first frame that needs it pays for the lookup and
+    /// every frame after it is free. A writer serves one session for its
+    /// lifetime, and a session never changes channel, so this cannot go
+    /// stale.
+    channel_id: Option<Uuid>,
+}
+
+impl<R, C, Rt> AgentSessionLogRepo for PlaceholderSyncingLogs<R, C, Rt>
 where
     R: AgentSessionRepo + AgentSessionLogRepo + Clone,
-    Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
     C: Comms + Clone + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
 {
     async fn create(&self, log: AgentSessionLog) -> Result<()> {
         let session = log.agent_session_id;
-        AgentSessionLogRepo::create(&self.repo, log).await?;
+
+        // Durable first, then the projection: a placeholder naming a frame
+        // that was not stored would point at a message no reload can derive.
+        // That ordering is what costs the clone, and it is a fraction of the
+        // refold it replaces.
+        AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
 
         // A failed sync must not fail the append. The actor treats a log
         // error as fatal to the connection, and placeholders are derived and
         // rebuildable (`sync_placeholders`) - killing a live session over a
         // projection it can recreate would be the wrong trade.
-        if let Err(error) =
-            create_missing_placeholders(&self.repo, &self.folds, &self.comms, session).await
-        {
+        if let Err(error) = self.place(session, log.clone()).await {
             tracing::error!(
                 error = ?error,
                 %session,
                 "failed to sync agent session placeholders"
+            );
+        }
+
+        // Streamed after the placeholders, so a viewer never receives a frame
+        // deriving a message whose row is not in the channel yet.
+        //
+        // Best-effort for the same reason, and a weaker one: the port drops
+        // frames by contract, and the log this was derived from is already
+        // durable, so the worst a failure costs is a viewer who has to reload.
+        if let Err(error) = self.stream(session, log).await {
+            tracing::error!(
+                error = ?error,
+                %session,
+                "failed to stream agent session frame"
             );
         }
         Ok(())
@@ -339,11 +476,11 @@ where
 /// Pure delegation to the wrapped repository: the actor's shutdown path reads
 /// and updates the session through its `Logs` handle, and those operations
 /// have no placeholder side to sync.
-impl<R, Folds, C> AgentSessionRepo for PlaceholderSyncingLogs<R, Folds, C>
+impl<R, C, Rt> AgentSessionRepo for PlaceholderSyncingLogs<R, C, Rt>
 where
-    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
-    Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
-    C: Comms + Clone + Send + Sync + 'static,
+    R: AgentSessionRepo + AgentSessionLogRepo,
+    C: Comms + Send + Sync + 'static,
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
 {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         AgentSessionRepo::create(&self.repo, params).await
@@ -353,13 +490,22 @@ where
         self.repo.get(id).await
     }
 
+    async fn session_bot(
+        &self,
+        id: bots::domain::models::BotId,
+    ) -> Result<super::model::SessionBot> {
+        self.repo.session_bot(id).await
+    }
+
     async fn find_for_channel(
         &self,
         channel_id: Uuid,
         thread_id: Option<Uuid>,
         bot_id: Option<bots::domain::models::BotId>,
     ) -> Result<ChannelSession> {
-        self.repo.find_for_channel(channel_id, thread_id, bot_id).await
+        self.repo
+            .find_for_channel(channel_id, thread_id, bot_id)
+            .await
     }
 
     async fn update(&self, session: AgentSession) -> Result<()> {
@@ -379,8 +525,160 @@ where
     }
 }
 
+impl<R, C, Rt> PlaceholderSyncingLogs<R, C, Rt>
+where
+    R: AgentSessionRepo + AgentSessionLogRepo,
+    C: Comms,
+    Rt: AgentSessionRealtime,
+{
+    /// Push the frame just appended out to the session's channel.
+    async fn stream(
+        &self,
+        agent_session_id: AgentSessionId,
+        entry: AgentSessionLog,
+    ) -> std::result::Result<(), rootcause::Report> {
+        let channel_id = self.channel_id(agent_session_id).await?;
+        self.realtime
+            .publish(LogAppended {
+                channel_id,
+                agent_session_id,
+                entry,
+            })
+            .await
+    }
+
+    /// The channel `session_id` renders into, read once per writer and
+    /// remembered - see [`PlaceholderState::channel_id`].
+    async fn channel_id(
+        &self,
+        session_id: AgentSessionId,
+    ) -> std::result::Result<Uuid, rootcause::Report> {
+        let mut state = self.state.lock().await;
+        if let Some(channel_id) = state.channel_id {
+            return Ok(channel_id);
+        }
+        let session = self
+            .repo
+            .get(session_id)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        state.channel_id = Some(session.channel_id);
+        Ok(session.channel_id)
+    }
+
+    /// Fold the frame just appended and place whatever it newly derived,
+    /// along with anything an earlier frame left unplaced.
+    async fn place(
+        &self,
+        session_id: AgentSessionId,
+        entry: AgentSessionLog,
+    ) -> std::result::Result<(), rootcause::Report> {
+        let mut guard = self.state.lock().await;
+        // Reborrow once, so the fold and the unplaced list can be held as the
+        // separate fields they are rather than through the guard.
+        let state = &mut *guard;
+
+        if let Some(fold) = &mut state.fold {
+            state.unplaced.extend(newly_derived(fold.push(entry)));
+        } else {
+            let (fold, derived) = self.catch_up(session_id).await?;
+            state.fold = Some(fold);
+            state.unplaced.extend(derived);
+        }
+
+        if state.unplaced.is_empty() {
+            return Ok(());
+        }
+
+        let session = self
+            .repo
+            .get(session_id)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        // Streaming wants the same thing this just read, so hand it over
+        // rather than let it go and read it again.
+        state.channel_id = Some(session.channel_id);
+
+        // Nothing here asks comms what it already holds. Catching up
+        // re-derives every message of an inherited log, so a re-attach does
+        // re-offer placeholders that exist - and
+        // [`Comms::create_message_placeholder`] is required to ignore those.
+        // One redundant write per message, once per connection, is cheaper
+        // than a query per connection to avoid it.
+
+        // Whatever comms refuses stays unplaced for the next frame to retry,
+        // so one failed write does not silently lose a message.
+        let mut refused = Vec::new();
+        let mut failure = None;
+        for (id, author) in std::mem::take(&mut state.unplaced) {
+            if let Err(error) = self
+                .comms
+                .create_message_placeholder(&session, id, &author)
+                .await
+            {
+                refused.push((id, author));
+                failure = Some(error);
+            }
+        }
+        state.unplaced = refused;
+
+        failure.map_or(Ok(()), Err)
+    }
+
+    /// Walk this connection's fold through the session's stored log, so it
+    /// starts from where the session actually is rather than from nothing.
+    ///
+    /// Runs once per connection, on its first frame - by which point that
+    /// frame is already in the log, so replaying the log folds it too and the
+    /// caller must not push it again.
+    ///
+    /// This is what makes re-attaching correct, and it is about turn
+    /// numbering rather than duplicate writes. [`TurnId`](agent_fold::domain::model::TurnId)s
+    /// are a counter over the log, so a fold starting empty would hand
+    /// `TurnId(0)` to the next prompt of a session already five turns in. That
+    /// message would key to a placeholder another turn already owns, be
+    /// dropped as a duplicate, and render nowhere - while a channel load,
+    /// folding the whole log, went on deriving turn five.
+    async fn catch_up(
+        &self,
+        session: AgentSessionId,
+    ) -> std::result::Result<(FoldMachineImpl, Vec<(MessageId, Author)>), rootcause::Report> {
+        let log = AgentSessionLogRepo::list_by_session(&self.repo, session)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        let mut fold = FoldMachineImpl::new();
+        let mut derived = Vec::new();
+        for stored in log {
+            derived.extend(newly_derived(fold.push(stored)));
+        }
+        Ok((fold, derived))
+    }
+}
+
+/// The message a push newly derived, if it derived one.
+///
+/// An update to a message already announced needs no placeholder: the row is
+/// bodyless, so there is nothing on it to keep in step. It exists to reserve
+/// the message's place in the channel, and the content is folded on read.
+fn newly_derived(result: IncrementalFoldResult<'_>) -> Option<(MessageId, Author)> {
+    match result {
+        IncrementalFoldResult::NewMessage(message) => Some((message.id(), message.author.clone())),
+        IncrementalFoldResult::MessageUpdate(_) | IncrementalFoldResult::Unchanged => None,
+    }
+}
+
 /// Write a placeholder comms message for every folded message `session`'s log
 /// derives that comms has not seen yet.
+///
+/// The path for callers with nowhere to keep a fold between frames: seeding a
+/// log from a recording, and the repair that rebuilds a channel's placeholders
+/// from scratch. A live connection does not come through here - it carries its
+/// own fold, in [`PlaceholderSyncingLogs`].
+///
+/// Refolding the whole session is the point rather than a shortcoming: this is
+/// also the path that has to notice placeholders that were never written, or
+/// were deleted, which a fold that only reports what changed cannot see.
 async fn create_missing_placeholders<R, Folds, C>(
     repo: &R,
     folds: &Folds,

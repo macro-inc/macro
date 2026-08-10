@@ -1,0 +1,40 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User(
+            Some(
+                macro|eric@example.com,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Text(
+                    "hi",
+                ),
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        parts: NonEmpty {
+            inner: [
+                Text(
+                    "Hey! What are we working on today?",
+                ),
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]
