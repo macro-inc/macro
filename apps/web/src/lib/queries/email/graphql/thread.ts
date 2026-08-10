@@ -1,54 +1,92 @@
+import {
+  createUrqlInfiniteQuery,
+  type UrqlInfiniteQueryResult,
+} from '@app/lib/urql-solid';
+import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { ThrownResultError } from '@core/util/result';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  EmailThreadPageDocument,
+  type EmailThreadPageQuery,
+  type EmailThreadPageQueryVariables,
+} from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import type { CombinedError } from '@urql/core';
+import type { Accessor } from 'solid-js';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
-const KNOWN_THREAD_ERROR_CODES = new Set(['NOT_FOUND', 'UNAUTHORIZED', 'GONE']);
+/** REST-compatible pages exposed to the email query facade. */
+export type GraphqlEmailThreadPages = {
+  pages: ApiThread[];
+  pageParams: number[];
+};
 
-function throwGraphqlError(error: CombinedError): never {
-  const knownErrors = error.graphQLErrors.flatMap((graphqlError) => {
-    const code = graphqlError.extensions?.code;
-    return typeof code === 'string' && KNOWN_THREAD_ERROR_CODES.has(code)
-      ? [{ code, message: graphqlError.message }]
-      : [];
-  });
+/** Reactive controls accepted by the GraphQL thread query. */
+export type GraphqlEmailThreadQueryOptions<TData> = {
+  enabled: boolean;
+  select?: (data: GraphqlEmailThreadPages) => TData;
+};
 
-  if (knownErrors.length > 0) {
-    throw new ThrownResultError(knownErrors);
-  }
+/** Live paginated GraphQL thread query. */
+export type GraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages> =
+  UrqlInfiniteQueryResult<
+    EmailThreadPageQuery,
+    EmailThreadPageQueryVariables,
+    number,
+    TData
+  >;
 
-  throw error;
+function threadFromPage(page: EmailThreadPageQuery) {
+  const thread = page.user.emailThread;
+  if (thread) return thread;
+
+  // Direct lookup currently returns null for both missing and inaccessible
+  // threads. Restore distinct states when the API exposes a typed result.
+  throw new ThrownResultError([
+    { code: 'NOT_FOUND', message: 'Email thread not found' },
+  ]);
 }
 
-/** Fetches one email-thread message page through GraphQL. */
-export async function fetchGraphqlEmailThreadPage(
-  threadId: string,
-  offset: number,
-  limit: number
-): Promise<ApiThread> {
-  const result = await getGraphqlSoupClient()
-    .query(
-      EmailThreadPageDocument,
-      { threadId, offset, limit },
-      // Keep the GraphQL operation on the app's cache-and-network policy.
-      // urql's toPromise resolves with the revalidated, non-stale result.
-      { requestPolicy: 'cache-and-network' }
-    )
-    .toPromise();
-
-  if (result.error) throwGraphqlError(result.error);
-
-  const thread = result.data?.user.emailThread;
-  if (!thread) {
-    // TODO(email-graphql): Direct lookup currently returns null for both missing
-    // and inaccessible threads. Restore distinct MISSING/UNAUTHORIZED/GONE
-    // states when the GraphQL API exposes a typed lookup result.
-    throw new ThrownResultError([
-      { code: 'NOT_FOUND', message: 'Email thread not found' },
-    ]);
-  }
-
-  return mapGraphqlEmailThreadPage(thread);
+/** Creates the native urql-solid query for one thread's message pages. */
+export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
+  threadId: Accessor<string>,
+  options: Accessor<GraphqlEmailThreadQueryOptions<TData>>
+): GraphqlEmailThreadQuery<TData> {
+  return createUrqlInfiniteQuery<
+    EmailThreadPageQuery,
+    EmailThreadPageQueryVariables,
+    number,
+    TData
+  >(() => ({
+    query: EmailThreadPageDocument,
+    client: getGraphqlSoupClient(),
+    initialPageParam: 0,
+    variables: (offset) => ({
+      threadId: threadId(),
+      offset,
+      limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+    }),
+    getNextPageParam: (lastPage, pages) => {
+      if (
+        threadFromPage(lastPage).messages.length < DEFAULT_THREAD_MESSAGES_LIMIT
+      ) {
+        return undefined;
+      }
+      return pages.reduce(
+        (sum, page) => sum + threadFromPage(page).messages.length,
+        0
+      );
+    },
+    enabled: options().enabled && threadId().length > 0,
+    requestPolicy: 'cache-and-network',
+    keepPreviousData: false,
+    select: ({ pages, pageParams }) => {
+      const mapped = {
+        pages: pages.map((page) =>
+          mapGraphqlEmailThreadPage(threadFromPage(page))
+        ),
+        pageParams: [...pageParams],
+      };
+      return options().select?.(mapped) ?? (mapped as TData);
+    },
+  }));
 }
