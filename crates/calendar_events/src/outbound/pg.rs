@@ -302,12 +302,12 @@ struct OccurrenceJoinRow {
 struct OverrideAttendeeRow {
     event_id: Uuid,
     recurrence_id: String,
-    email: String,
+    email: Option<String>,
     display_name: Option<String>,
-    response_status: String,
-    is_organizer: bool,
-    is_optional: bool,
-    is_self: bool,
+    response_status: Option<String>,
+    is_organizer: Option<bool>,
+    is_optional: Option<bool>,
+    is_self: Option<bool>,
     comment: Option<String>,
 }
 
@@ -2271,9 +2271,9 @@ async fn replace_overrides(
             INSERT INTO calendar_event_overrides (
                 event_id, recurrence_id, original_starts_at, original_start_date,
                 starts_at, ends_at, start_date, end_date,
-                title, description, location, status
+                title, description, location, status, attendees_overridden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             event_id,
             &event_override.recurrence_id,
@@ -2287,13 +2287,11 @@ async fn replace_overrides(
             event_override.description.as_deref(),
             event_override.location.as_deref(),
             event_override.status.map(EventStatus::as_str),
+            event_override.attendees.is_some(),
         )
         .execute(&mut **tx)
         .await
         .map_err(report)?;
-        // An empty list is indistinguishable from "no override" once stored,
-        // and it only arises for events with no attendees at all — where the
-        // inherited series list is equally empty.
         for attendee in event_override.attendees.iter().flatten() {
             sqlx::query!(
                 r#"
@@ -2417,15 +2415,29 @@ async fn fetch_override_attendees(
     if event_ids.is_empty() {
         return Ok(HashMap::new());
     }
+    // Driven from the overrides table so an explicitly-empty replacement
+    // list still produces a map entry: absence of an entry means "inherit
+    // the series attendees", never "the exception has no attendees".
     let rows = sqlx::query_as!(
         OverrideAttendeeRow,
         r#"
         SELECT
-            event_id, recurrence_id, email, display_name, response_status,
-            is_organizer, is_optional, is_self, comment
-        FROM calendar_event_override_attendees
-        WHERE event_id = ANY($1)
-        ORDER BY event_id, recurrence_id, email
+            override.event_id,
+            override.recurrence_id,
+            attendee.email AS "email?",
+            attendee.display_name,
+            attendee.response_status AS "response_status?",
+            attendee.is_organizer AS "is_organizer?",
+            attendee.is_optional AS "is_optional?",
+            attendee.is_self AS "is_self?",
+            attendee.comment
+        FROM calendar_event_overrides override
+        LEFT JOIN calendar_event_override_attendees attendee
+            ON attendee.event_id = override.event_id
+           AND attendee.recurrence_id = override.recurrence_id
+        WHERE override.event_id = ANY($1)
+          AND override.attendees_overridden
+        ORDER BY override.event_id, override.recurrence_id, attendee.email
         "#,
         event_ids,
     )
@@ -2434,18 +2446,20 @@ async fn fetch_override_attendees(
     .map_err(report)?;
     let mut by_occurrence: HashMap<(Uuid, String), Vec<CalendarAttendee>> = HashMap::new();
     for row in rows {
-        by_occurrence
+        let attendees = by_occurrence
             .entry((row.event_id, row.recurrence_id))
-            .or_default()
-            .push(CalendarAttendee {
-                email: row.email,
+            .or_default();
+        if let (Some(email), Some(response_status)) = (row.email, row.response_status) {
+            attendees.push(CalendarAttendee {
+                email,
                 display_name: row.display_name,
-                response_status: attendee_status(&row.response_status),
-                is_organizer: row.is_organizer,
-                is_optional: row.is_optional,
-                is_self: row.is_self,
+                response_status: attendee_status(&response_status),
+                is_organizer: row.is_organizer.unwrap_or_default(),
+                is_optional: row.is_optional.unwrap_or_default(),
+                is_self: row.is_self.unwrap_or_default(),
                 comment: row.comment,
             });
+        }
     }
     Ok(by_occurrence)
 }
