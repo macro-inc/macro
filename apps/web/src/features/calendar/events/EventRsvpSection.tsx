@@ -104,7 +104,6 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
                 }
                 size="sm"
                 class="rounded-lg px-2.5"
-                disabled={rsvp.isPending}
                 label={option.label}
                 onClick={() => respond(option.response)}
               >
@@ -116,18 +115,11 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
       </div>
       <Dialog
         open={pendingResponse() !== undefined}
-        onOpenChange={(open) =>
-          !open && !rsvp.isPending && setPendingResponse(undefined)
-        }
+        onOpenChange={(open) => !open && setPendingResponse(undefined)}
       >
         <Panel depth={2} class="max-w-[calc(100vw-2rem)] rounded-xl text-ink">
           <Panel.Header class="gap-1 px-2">
-            <Dialog.CloseButton
-              as={Button}
-              variant="ghost"
-              size="icon-sm"
-              disabled={rsvp.isPending}
-            >
+            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
               <CloseIcon />
             </Dialog.CloseButton>
             <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
@@ -154,7 +146,6 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
               <Button
                 variant="ghost"
                 class="rounded-lg"
-                disabled={rsvp.isPending}
                 label="Cancel"
                 onClick={() => setPendingResponse(undefined)}
               >
@@ -163,7 +154,6 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
               <Button
                 variant="active"
                 class="rounded-lg"
-                disabled={rsvp.isPending}
                 label="OK"
                 onClick={confirm}
               >

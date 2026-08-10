@@ -100,13 +100,73 @@ type RsvpCallbacks = MutationCallbacks<
   CalendarMutationContext
 >;
 
+const RSVP_MUTATION_KEY = ['calendar', 'rsvp'] as const;
+
+function selfResponseOf(
+  item: CalendarOccurrenceItem
+): AttendeeResponseStatus | undefined {
+  return item.event.attendees.find((attendee) => attendee.isSelf)
+    ?.responseStatus;
+}
+
+function withSelfResponse(
+  item: CalendarOccurrenceItem,
+  response: AttendeeResponseStatus
+): CalendarOccurrenceItem {
+  return {
+    ...item,
+    event: {
+      ...item.event,
+      attendees: item.event.attendees.map((attendee) =>
+        attendee.isSelf ? { ...attendee, responseStatus: response } : attendee
+      ),
+    },
+  };
+}
+
+function patchOccurrenceQueries(
+  update: (items: CalendarOccurrenceItem[]) => CalendarOccurrenceItem[]
+) {
+  queryClient.setQueriesData<CalendarOccurrencesData>(
+    { queryKey: calendarKeys.occurrences._def },
+    (old) => old && { ...old, items: update(old.items) }
+  );
+}
+
+/** Previous self responses of the occurrences a scoped answer covers. */
+function readAnsweredResponses(
+  args: RsvpCalendarEventArgs
+): Map<string, AttendeeResponseStatus> {
+  const previous = new Map<string, AttendeeResponseStatus>();
+  for (const [, data] of queryClient.getQueriesData<CalendarOccurrencesData>({
+    queryKey: calendarKeys.occurrences._def,
+  })) {
+    for (const item of data?.items ?? []) {
+      if (!answeredByRsvp(item, args)) continue;
+      const key = item.occurrence.occurrenceKey;
+      if (previous.has(key)) continue;
+      const response = selfResponseOf(item);
+      if (response !== undefined) previous.set(key, response);
+    }
+  }
+  return previous;
+}
+
 /**
  * Sets the viewer's RSVP for one occurrence or the whole series. Google
  * records an occurrence-scoped response as an exception instance, so the
  * answer can differ per occurrence.
+ *
+ * The buttons stay enabled while the request is in flight (the round trip
+ * writes through to the provider, which takes seconds), so overlapping
+ * mutations are expected: the rollback restores only the occurrences this
+ * mutation answered and skips any a newer mutation overwrote, and only the
+ * last mutation to settle refetches — otherwise an earlier settle would
+ * clobber a later mutation's optimistic state with stale server data.
  */
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
+    mutationKey: RSVP_MUTATION_KEY,
     mutationFn: async (args: RsvpCalendarEventArgs) =>
       await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
@@ -122,26 +182,39 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
       CalendarMutationContext
     >(
       {
-        onMutate: (args) =>
-          patchOccurrenceCaches((items) =>
+        onMutate: async (args) => {
+          await queryClient.cancelQueries({
+            queryKey: calendarKeys.occurrences._def,
+          });
+          const previous = readAnsweredResponses(args);
+          patchOccurrenceQueries((items) =>
             items.map((item) =>
               answeredByRsvp(item, args)
-                ? {
-                    ...item,
-                    event: {
-                      ...item.event,
-                      attendees: item.event.attendees.map((attendee) =>
-                        attendee.isSelf
-                          ? { ...attendee, responseStatus: args.response }
-                          : attendee
-                      ),
-                    },
-                  }
+                ? withSelfResponse(item, args.response)
                 : item
             )
-          ),
+          );
+          return {
+            rollback: () => {
+              patchOccurrenceQueries((items) =>
+                items.map((item) => {
+                  if (!answeredByRsvp(item, args)) return item;
+                  const restored = previous.get(item.occurrence.occurrenceKey);
+                  if (restored === undefined) return item;
+                  if (selfResponseOf(item) !== args.response) return item;
+                  return withSelfResponse(item, restored);
+                })
+              );
+            },
+          };
+        },
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => invalidateCalendarOccurrences(),
+        onSettled: () => {
+          if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
+            return;
+          }
+          return invalidateCalendarOccurrences();
+        },
       },
       callbacks
     ),
