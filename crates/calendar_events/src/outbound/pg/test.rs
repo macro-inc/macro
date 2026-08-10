@@ -1234,6 +1234,72 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     );
 }
 
+/// An exception that explicitly replaces the attendee list with an empty one
+/// must project no attendees for that occurrence — not fall back to the
+/// series list, which only an exception without an attendee list inherits.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explicitly_empty_override_attendees_do_not_inherit_the_series_list(pool: PgPool) {
+    let owner_id = "macro|calendar-empty-override@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "emptied@example.com",
+        "Emptied instance",
+        1,
+    );
+
+    let emptied_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = emptied_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(emptied_start),
+        time: EventTime::Timed {
+            starts_at: emptied_start,
+            ends_at: emptied_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: None,
+        description: None,
+        location: None,
+        status: Some(EventStatus::Confirmed),
+        attendees: Some(Vec::new()),
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
+    let result = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    let attendees_at = |key: &str| {
+        result
+            .iter()
+            .find(|(_, occurrence)| occurrence.occurrence_key == key)
+            .map(|(event, _)| event.attendees.len())
+    };
+    let series_start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
+    assert_eq!(attendees_at(&series_start.to_rfc3339()), Some(1));
+    assert_eq!(attendees_at(&recurrence_id), Some(0));
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn occurrence_cursor_is_stable_when_occurrences_share_a_start(pool: PgPool) {
     let owner_id = "macro|calendar-pagination@example.com";
