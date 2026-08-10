@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+use dashmap::DashMap;
 
 #[cfg(test)]
 mod test;
@@ -14,7 +14,7 @@ enum ContainerState {
 }
 
 pub(crate) struct ManagedContainers<Id> {
-    entries: Mutex<HashMap<Id, ContainerState>>,
+    entries: DashMap<Id, ContainerState>,
 }
 
 impl<Id> ManagedContainers<Id>
@@ -23,23 +23,16 @@ where
 {
     pub(crate) fn new() -> Self {
         Self {
-            entries: Mutex::new(HashMap::new()),
+            entries: DashMap::new(),
         }
     }
 
     pub(crate) fn register(&self, id: Id) {
-        self.entries
-            .lock()
-            .expect("managed containers should not be poisoned")
-            .insert(id, ContainerState::Pending);
+        self.entries.insert(id, ContainerState::Pending);
     }
 
     pub(crate) fn activate(&self, id: &Id, now: Instant) -> bool {
-        let mut entries = self
-            .entries
-            .lock()
-            .expect("managed containers should not be poisoned");
-        let Some(entry) = entries.get_mut(id) else {
+        let Some(mut entry) = self.entries.get_mut(id) else {
             return false;
         };
         *entry = ContainerState::Active { last_activity: now };
@@ -47,13 +40,8 @@ where
     }
 
     pub(crate) fn record_activity(&self, id: &Id, now: Instant) {
-        if let Some(entry) = self
-            .entries
-            .lock()
-            .expect("managed containers should not be poisoned")
-            .get_mut(id)
-        {
-            match entry {
+        if let Some(mut entry) = self.entries.get_mut(id) {
+            match &mut *entry {
                 ContainerState::Pending => {}
                 ContainerState::Active { last_activity }
                 | ContainerState::Stopping { last_activity } => *last_activity = now,
@@ -62,25 +50,32 @@ where
     }
 
     pub(crate) fn remove(&self, id: &Id) -> bool {
-        self.entries
-            .lock()
-            .expect("managed containers should not be poisoned")
-            .remove(id)
-            .is_some()
+        self.entries.remove(id).is_some()
     }
 
     pub(crate) fn reap_stale(&self, now: Instant, max_idle: Duration) -> Vec<Id> {
-        let mut entries = self
+        let candidates = self
             .entries
-            .lock()
-            .expect("managed containers should not be poisoned");
+            .iter()
+            .filter_map(|entry| match entry.value() {
+                ContainerState::Active { last_activity }
+                    if now.saturating_duration_since(*last_activity) >= max_idle =>
+                {
+                    Some(entry.key().clone())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let mut stale = Vec::new();
-        for (id, state) in entries.iter_mut() {
+        for id in candidates {
+            let Some(mut state) = self.entries.get_mut(&id) else {
+                continue;
+            };
             if let ContainerState::Active { last_activity } = *state
                 && now.saturating_duration_since(last_activity) >= max_idle
             {
                 *state = ContainerState::Stopping { last_activity };
-                stale.push(id.clone());
+                stale.push(id);
             }
         }
         stale
@@ -89,25 +84,16 @@ where
     pub(crate) fn restore_failed_stop(&self, id: Id, now: Instant, max_idle: Duration) {
         let last_activity = now.checked_sub(max_idle).unwrap_or(now);
         self.entries
-            .lock()
-            .expect("managed containers should not be poisoned")
             .entry(id)
             .or_insert(ContainerState::Active { last_activity });
     }
 
     pub(crate) fn finish_stop(&self, id: &Id, stopped: bool) {
-        let mut entries = self
-            .entries
-            .lock()
-            .expect("managed containers should not be poisoned");
         if stopped {
-            if entries
-                .get(id)
-                .is_some_and(|state| matches!(state, ContainerState::Stopping { .. }))
-            {
-                entries.remove(id);
-            }
-        } else if let Some(state) = entries.get_mut(id)
+            self.entries.remove_if(id, |_, state| {
+                matches!(state, ContainerState::Stopping { .. })
+            });
+        } else if let Some(mut state) = self.entries.get_mut(id)
             && let ContainerState::Stopping { last_activity } = *state
         {
             *state = ContainerState::Active { last_activity };
@@ -115,11 +101,13 @@ where
     }
 
     pub(crate) fn drain(&self) -> Vec<Id> {
-        self.entries
-            .lock()
-            .expect("managed containers should not be poisoned")
-            .drain()
-            .map(|(id, _)| id)
+        let ids = self
+            .entries
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect::<Vec<_>>();
+        ids.into_iter()
+            .filter_map(|id| self.entries.remove(&id).map(|(id, _)| id))
             .collect()
     }
 }
