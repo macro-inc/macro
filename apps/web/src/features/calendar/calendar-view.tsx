@@ -43,6 +43,7 @@ import {
 import { SelectedEventDetails } from './events/EventDetailsPopover';
 import { EventEditorDialog } from './events/EventEditorDialog';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
+import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
