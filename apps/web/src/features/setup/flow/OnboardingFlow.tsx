@@ -185,7 +185,7 @@ function buildSteps(
     ...connectorSteps,
     {
       key: 'team',
-      title: 'Set up your team',
+      title: 'Macro is meant for teams',
       subtitle:
         'Macro is built to be used with others. Invite your team to share docs, channels, and context from day one.',
       render: (controls) => (
