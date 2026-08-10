@@ -1127,7 +1127,15 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     }
 
     /// Rewrite just the connected account's `responseStatus` on one provider
-    /// event, preserving every other attendee exactly as Google has them.
+    /// event, leaving every other attendee untouched.
+    ///
+    /// The patch sends `attendeesOmitted: true` with only the connected
+    /// attendee's entry — Google's documented mechanism for updating one
+    /// participant's response — so a concurrent attendee change between our
+    /// read and this write cannot be overwritten by a full-array replace.
+    /// The read stays: it distinguishes a vanished event from a requester
+    /// who simply is not on the guest list, which the patch alone would
+    /// answer by quietly adding them.
     async fn patch_self_response(
         &self,
         access_token: &str,
@@ -1136,8 +1144,6 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         self_email: &str,
         response: AttendeeResponseStatus,
     ) -> Result<RsvpPatch, GoogleProviderError> {
-        // Patching `attendees` replaces the whole array, so start from the
-        // provider's current list rather than a possibly stale projection.
         let Some(current) = self
             .event(
                 access_token,
@@ -1149,23 +1155,22 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         else {
             return Ok(RsvpPatch::Gone);
         };
-        let mut attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
-        let self_position = attendees
+        let attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
+        let self_attendee = attendees
             .iter()
-            .position(|attendee| attendee.is_self)
+            .find(|attendee| attendee.is_self)
             .or_else(|| {
-                attendees.iter().position(|attendee| {
+                attendees.iter().find(|attendee| {
                     attendee
                         .email
                         .as_deref()
                         .is_some_and(|email| email.eq_ignore_ascii_case(self_email))
                 })
             });
-        let Some(position) = self_position else {
+        let Some(self_attendee) = self_attendee else {
             return Ok(RsvpPatch::NotAttendee);
         };
-        attendees[position].response_status = Some(google_response_status(response).to_string());
-        let body = serde_json::json!({ "attendees": attendees });
+        let body = rsvp_patch_body(self_attendee, response);
         match self
             .patch_event_raw(access_token, target, provider_event_id, body)
             .await?
@@ -1267,6 +1272,20 @@ fn google_response_status(status: AttendeeResponseStatus) -> &'static str {
         AttendeeResponseStatus::Declined => "declined",
         AttendeeResponseStatus::Tentative => "tentative",
     }
+}
+
+/// Body updating only the connected attendee's response: `attendeesOmitted`
+/// tells Google the array is partial, so other attendees survive untouched.
+fn rsvp_patch_body(
+    self_attendee: &GoogleAttendee,
+    response: AttendeeResponseStatus,
+) -> serde_json::Value {
+    let mut entry = self_attendee.clone();
+    entry.response_status = Some(google_response_status(response).to_string());
+    serde_json::json!({
+        "attendeesOmitted": true,
+        "attendees": [entry],
+    })
 }
 
 /// Serialize an event time as Google `start`/`end` objects. The unused shape

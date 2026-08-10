@@ -535,3 +535,26 @@ fn exception_attendees_are_carried_onto_the_override() {
     // Every attendee survives, not just the one whose response changed.
     assert_eq!(override_attendees.len(), 2);
 }
+
+/// The RSVP patch must not replace the full attendee array: a concurrent
+/// attendee change between our read and the patch would be silently undone.
+/// `attendeesOmitted` marks the array partial so Google merges by email.
+#[test]
+fn rsvp_patch_updates_only_the_connected_attendee() {
+    let self_attendee: GoogleAttendee = serde_json::from_value(serde_json::json!({
+        "email": "self@example.com",
+        "self": true,
+        "responseStatus": "needsAction",
+        "comment": "unrelated state that must survive"
+    }))
+    .unwrap();
+
+    let body = rsvp_patch_body(&self_attendee, AttendeeResponseStatus::Declined);
+
+    assert_eq!(body["attendeesOmitted"], serde_json::json!(true));
+    let attendees = body["attendees"].as_array().unwrap();
+    assert_eq!(attendees.len(), 1);
+    assert_eq!(attendees[0]["email"], "self@example.com");
+    assert_eq!(attendees[0]["responseStatus"], "declined");
+    assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
+}
