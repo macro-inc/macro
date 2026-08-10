@@ -255,7 +255,7 @@ function SoupNavigationButtons() {
   });
 
   const navigate = (offset: number) => {
-    const next = soup.navigate.by(offset);
+    const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
     void openEntityInSplitFromUnifiedList(next.row.original, {
