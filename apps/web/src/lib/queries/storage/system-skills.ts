@@ -29,7 +29,7 @@ export function useSystemSkillsQuery() {
 
   const skills = createMemo<SystemSkillSummary[]>(() => query.data ?? []);
   const byId = createMemo(
-    () => new Map(skills().map((skill) => [skill.documentId, skill]))
+    () => new Map(skills().map((skill) => [skill.id, skill]))
   );
 
   return {

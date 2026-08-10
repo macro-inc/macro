@@ -16,10 +16,7 @@ fn system_skill_slugs_and_ids_are_unique() {
 #[test]
 fn ids_are_stable_uuidv5_derivations() {
     for skill in SYSTEM_SKILLS {
-        let expected = Uuid::new_v5(
-            &Uuid::NAMESPACE_URL,
-            format!("https://macro.com/system-skills/{}", skill.slug).as_bytes(),
-        );
+        let expected = Uuid::new_v5(&SYSTEM_SKILL_NAMESPACE, skill.slug.as_bytes());
         assert_eq!(skill.id(), expected);
         assert_eq!(skill.id().get_version(), Some(uuid::Version::Sha1));
     }

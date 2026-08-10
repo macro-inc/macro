@@ -368,7 +368,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact => {
+            | EntityType::CrmContact
+            | EntityType::Skill => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type

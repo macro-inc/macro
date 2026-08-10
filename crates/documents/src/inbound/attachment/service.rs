@@ -71,6 +71,10 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> AttachmentService
                     .resolve_project(user_id, &entity.entity_id)
                     .await
                     .map_err(|error| ResolutionError::new(owned_ref, error)),
+                EntityType::Skill => self
+                    .resolve_skill(user_id, &entity.entity_id)
+                    .await
+                    .map_err(|error| ResolutionError::new(owned_ref, error)),
                 other => Err(ResolutionError::new(
                     owned_ref,
                     AttachmentError::RoutingError("DocumentAttachmentService".to_string(), other),
@@ -125,21 +129,22 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
         })
     }
 
+    /// Resolve a skill reference: either a built-in system skill (static,
+    /// code-defined content with a well-known id, visible to every user) or a
+    /// skill document (an ordinary markdown document with the skill sub-type,
+    /// access-checked like any other document).
     #[tracing::instrument(skip(self), err)]
-    async fn resolve_document(
+    async fn resolve_skill(
         &self,
         user_id: &MacroUserIdStr<'_>,
         id: &str,
     ) -> Result<AttachmentContent<'static>, AttachmentError> {
-        // System skills are static, code-defined content with well-known ids
-        // rather than documents; resolve them before any document lookup or
-        // access check (they are visible to every user).
         if let Some(skill) = uuid::Uuid::from_str(id)
             .ok()
             .and_then(system_skills::system_skill)
         {
             return Ok(AttachmentContent {
-                reference: EntityType::Document.with_entity_string(id.to_string()),
+                reference: EntityType::Skill.with_entity_string(id.to_string()),
                 name: Some(skill.name.to_string()),
                 content: NonEmpty::new(vec![
                     skill_type_metadata(),
@@ -149,6 +154,33 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
             });
         }
 
+        self.entity_access_service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                user_id,
+                None,
+                id,
+                EntityType::Document,
+            )
+            .await
+            .map_err(|e| AttachmentError::PermissionDenied(Box::new(e)))?;
+
+        let document = self
+            .document_service
+            .internal_get_basic_document(id)
+            .await
+            .map_err(|e| AttachmentError::Internal(e.into()))?;
+
+        let mut content = markdown::resolve_markdown(self, user_id, id, &document).await?;
+        content.reference = EntityType::Skill.with_entity_string(id.to_string());
+        Ok(content)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn resolve_document(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: &str,
+    ) -> Result<AttachmentContent<'static>, AttachmentError> {
         let receipt = self
             .entity_access_service
             .generate_entity_access_receipt(user_id, None, id, EntityType::Document)

@@ -18,6 +18,6 @@ export class SystemSkill {
   /** The built-in system skills, in display order. */
   static async list(client: MacroClient): Promise<SystemSkill[]> {
     const { skills } = unwrap(await client.storage.getSystemSkillsHandler());
-    return skills.map((skill) => new SystemSkill(skill.documentId, skill.name));
+    return skills.map((skill) => new SystemSkill(skill.id, skill.name));
   }
 }

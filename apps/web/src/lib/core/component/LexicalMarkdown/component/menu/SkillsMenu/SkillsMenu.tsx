@@ -50,13 +50,13 @@ const PANEL_DECORATION_HEIGHT = 18;
 function systemSkillItem(skill: SystemSkillSummary): EntityItem {
   return {
     kind: 'entity',
-    id: skill.documentId,
+    id: skill.id,
     bucket: 'skill',
     searchText: skill.name.toLowerCase(),
     sortTimestamp: 0,
     timestamps: {},
     data: {
-      id: skill.documentId,
+      id: skill.id,
       name: skill.name,
       ownerId: '',
       type: 'document',

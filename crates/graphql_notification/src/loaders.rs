@@ -34,7 +34,8 @@ fn notification_item_type(entity_type: model_entity::EntityType) -> Option<Notif
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::CalendarEvent => None,
+        | EntityType::CalendarEvent
+        | EntityType::Skill => None,
     }
 }
 

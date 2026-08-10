@@ -11,9 +11,8 @@ through the same tools as user-authored skill documents, but with no
 document behind them.
  */
 export interface SystemSkillSummary {
-  /** The well-known id the skill is referenced by in mentions and AI tools.
-Not a real document id: system skills cannot be opened as documents. */
-  documentId: string;
+  /** The well-known id the skill is referenced by in mentions and AI tools. */
+  id: string;
   /** The name of the skill. */
   name: string;
 }

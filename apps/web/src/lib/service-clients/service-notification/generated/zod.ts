@@ -143,6 +143,7 @@ export const listTypedNotificationsResponse = zod
                 'crm_company',
                 'crm_contact',
                 'reminder',
+                'skill',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1442,6 +1443,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'crm_company',
                 'crm_contact',
                 'reminder',
+                'skill',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -2735,6 +2737,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'crm_company',
                 'crm_contact',
                 'reminder',
+                'skill',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -4039,6 +4042,7 @@ export const getTypedNotificationByIdResponse = zod
         'crm_company',
         'crm_contact',
         'reminder',
+        'skill',
       ])
       .describe('The type of an entity in Macro'),
   })

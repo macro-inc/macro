@@ -1409,6 +1409,10 @@ enum GraphqlEntityType {
 	Reminder entity.
 	"""
 	REMINDER
+	"""
+	AI skill entity (skill document or built-in system skill).
+	"""
+	SKILL
 }
 
 """

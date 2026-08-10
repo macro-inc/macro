@@ -282,6 +282,7 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::Skill
             // Reminders are user-owned, never reachable through a team scope.
             | EntityType::Reminder => {
                 return Err(AccessError::BadRequest(

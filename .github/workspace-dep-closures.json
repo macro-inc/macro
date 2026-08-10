@@ -5539,6 +5539,7 @@
       "crates/properties",
       "crates/rate_limit",
       "crates/readonly_pool",
+      "crates/reminders",
       "crates/remote_env_var",
       "crates/search_service_client",
       "crates/share_permission_db_utils",

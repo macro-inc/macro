@@ -24,4 +24,5 @@ export type ReminderEntityType =
   | 'static_file'
   | 'crm_company'
   | 'crm_contact'
-  | 'reminder';
+  | 'reminder'
+  | 'skill';

@@ -137,7 +137,8 @@ export type ItemMention = {
     | 'group'
     | 'automation'
     | 'crm_company'
-    | 'crm_contact';
+    | 'crm_contact'
+    | 'skill';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -173,11 +174,15 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     if (blockName === 'pdf') fileType = 'pdf';
     else if (blockName === 'write') fileType = 'docx';
     else if (blockName === 'md') fileType = 'md';
-    // task/snippet/skill aliases are markdown documents
+    // task/snippet aliases are markdown documents
     else if (blockName === 'task') fileType = 'md';
     else if (blockName === 'snippet') fileType = 'md';
-    else if (blockName === 'skill') fileType = 'md';
-    else if (blockName === 'csv') fileType = 'csv';
+    // skills are their own attachment type: either a markdown skill
+    // document or a built-in system skill
+    else if (blockName === 'skill') {
+      fileType = 'md';
+      itemType = 'skill';
+    } else if (blockName === 'csv') fileType = 'csv';
     else if (blockName === 'canvas') fileType = 'canvas';
     else if (blockName === 'code') {
       const blockParams = node.getBlockParams();

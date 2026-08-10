@@ -538,6 +538,8 @@ export type GraphqlEntityType =
   | 'PROJECT'
   /** Reminder entity. */
   | 'REMINDER'
+  /** AI skill entity (skill document or built-in system skill). */
+  | 'SKILL'
   /** Static file entity. */
   | 'STATIC_FILE'
   /** Team entity. */

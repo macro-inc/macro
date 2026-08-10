@@ -538,8 +538,7 @@ pub struct CreateSkillResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SystemSkillSummary {
     /// The well-known id the skill is referenced by in mentions and AI tools.
-    /// Not a real document id: system skills cannot be opened as documents.
-    pub document_id: uuid::Uuid,
+    pub id: uuid::Uuid,
     /// The name of the skill.
     pub name: String,
 }

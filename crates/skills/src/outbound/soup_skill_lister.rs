@@ -16,7 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
 use soup::domain::{
-    models::{SoupQuery, SoupRequest, SoupType},
+    models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
 use uuid::Uuid;
@@ -67,6 +67,8 @@ fn skill_only_filter() -> EntityFilterAst {
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
+        // Reminders are opt-in: leaving the filter empty excludes them.
+        reminder_filter: None,
         properties_filter: None,
     }
 }
@@ -92,6 +94,8 @@ impl<S: SoupService> SkillLister for SoupSkillLister<S> {
                         skill_only_filter(),
                     ),
                     user: user_id.copied().into_owned(),
+                    // Most recently updated first.
+                    sort_direction: SoupSortDirection::default(),
                     // Emails are force-filtered out above, so the preview view
                     // and inbox links never come into play.
                     email_preview_view: PreviewView::default(),

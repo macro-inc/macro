@@ -8,8 +8,8 @@
 //!
 //! Each skill lives in its own module exporting a `SKILL` static, mirroring
 //! how the [`prompt`] crate exports a `PROMPT` per section. Register new
-//! skills in [`SYSTEM_SKILLS`], and mirror their id and name in the web
-//! app's `system-skills.ts` constants (like system properties do).
+//! skills in [`SYSTEM_SKILLS`]; the web app fetches them from the
+//! `GET /system_skills` endpoint.
 #![deny(missing_docs)]
 
 use prompt::Section;
@@ -32,15 +32,16 @@ pub struct SystemSkill {
     pub content: Section,
 }
 
+/// UUIDv5 namespace for system skill ids. An arbitrary constant generated
+/// once; changing it changes every system skill id.
+const SYSTEM_SKILL_NAMESPACE: Uuid = uuid::uuid!("7e447d71-00ba-4440-92f1-d478d0ce8fe5");
+
 impl SystemSkill {
-    /// The skill's stable id: the UUIDv5 of its URI in the standard URL
-    /// namespace. Derived rather than stored so it cannot drift from the
-    /// slug, and never collides with a real (v4) document id.
+    /// The skill's stable id: the UUIDv5 of its slug in
+    /// [`SYSTEM_SKILL_NAMESPACE`]. Derived rather than stored so it cannot
+    /// drift from the slug, and never collides with a real (v4) document id.
     pub fn id(&self) -> Uuid {
-        Uuid::new_v5(
-            &Uuid::NAMESPACE_URL,
-            format!("https://macro.com/system-skills/{}", self.slug).as_bytes(),
-        )
+        Uuid::new_v5(&SYSTEM_SKILL_NAMESPACE, self.slug.as_bytes())
     }
 
     /// Render the skill's markdown instructions.

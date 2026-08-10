@@ -26,7 +26,7 @@ pub async fn get_system_skills_handler<Auth: MacroAuthorizationService>(
         skills: system_skills::SYSTEM_SKILLS
             .iter()
             .map(|skill| SystemSkillSummary {
-                document_id: skill.id(),
+                id: skill.id(),
                 name: skill.name.to_string(),
             })
             .collect(),

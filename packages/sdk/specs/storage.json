@@ -7929,7 +7929,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -9742,7 +9743,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -11122,7 +11124,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -15211,7 +15214,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17787,7 +17791,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17833,7 +17838,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -21151,7 +21157,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -23163,7 +23170,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -23434,12 +23442,12 @@
       "SystemSkillSummary": {
         "type": "object",
         "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
-        "required": ["documentId", "name"],
+        "required": ["id", "name"],
         "properties": {
-          "documentId": {
+          "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The well-known id the skill is referenced by in mentions and AI tools.\nNot a real document id: system skills cannot be opened as documents."
+            "description": "The well-known id the skill is referenced by in mentions and AI tools."
           },
           "name": {
             "type": "string",

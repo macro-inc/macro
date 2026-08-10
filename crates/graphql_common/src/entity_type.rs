@@ -61,6 +61,8 @@ pub enum GraphqlEntityType {
     CrmContact,
     /// Reminder entity.
     Reminder,
+    /// AI skill entity (skill document or built-in system skill).
+    Skill,
 }
 
 impl GraphqlSoupEntityType {
@@ -127,6 +129,7 @@ impl GraphqlEntityType {
             EntityType::StaticFile => Self::StaticFile,
             EntityType::CrmContact => Self::CrmContact,
             EntityType::Reminder => Self::Reminder,
+            EntityType::Skill => Self::Skill,
         }
     }
 
@@ -153,6 +156,7 @@ impl GraphqlEntityType {
             Self::StaticFile => EntityType::StaticFile,
             Self::CrmContact => EntityType::CrmContact,
             Self::Reminder => EntityType::Reminder,
+            Self::Skill => EntityType::Skill,
         }
     }
 }
