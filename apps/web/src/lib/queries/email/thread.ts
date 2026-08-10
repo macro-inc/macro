@@ -6,7 +6,11 @@ import {
   ENABLE_GRAPHQL_SOUP_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { catchToResult, throwOnErr } from '@core/util/result';
+import {
+  catchToResult,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -20,6 +24,7 @@ import {
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import type { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -161,6 +166,31 @@ function selectThreadQueryData(
   };
 }
 
+function mapGraphqlThreadError(
+  error: CombinedError | null
+): ThrownResultError | null {
+  if (!error) return null;
+
+  const resultErrors = error.graphQLErrors.map((graphqlError) => ({
+    ...graphqlError.extensions,
+    code:
+      typeof graphqlError.extensions?.code === 'string'
+        ? graphqlError.extensions.code
+        : 'UNKNOWN',
+    message: graphqlError.message,
+  }));
+  return new ThrownResultError(
+    resultErrors.length > 0
+      ? resultErrors
+      : [
+          {
+            code: 'UNKNOWN',
+            message: error.networkError?.message ?? error.message,
+          },
+        ]
+  );
+}
+
 /**
  * Transport-neutral live query for a thread and its paginated messages.
  * GraphQL uses urql-solid while the rollout flag is enabled; REST remains the
@@ -207,7 +237,7 @@ export function useThreadQuery<TData = ThreadQueryData>(
     },
     get error() {
       return usesGraphql()
-        ? graphqlQuery.error
+        ? mapGraphqlThreadError(graphqlQuery.error)
         : ((restQuery.error as Error | null) ?? null);
     },
     get isLoading() {
