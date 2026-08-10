@@ -355,6 +355,12 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       setAutomationComposerOpen(true, false);
       return;
+    case 'skill':
+      createComponent({
+        componentId: 'skill-compose',
+        asPopover: true,
+      });
+      return;
   }
 }
 
@@ -366,7 +372,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideEmail,
     animatedIcon: AnimatedEmailIcon,
     description: 'Create email',
-    launcherHint: 'AI email draft',
     keywords: ['new', 'make', 'add', 'compose'],
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
@@ -404,6 +409,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'u',
     keyDownHandler: () => {
       runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Skill',
+    icon: getIconConfig('skill').icon,
+    description: 'Create skill',
+    launcherHint: 'Custom agent skill',
+    keywords: ['new', 'make', 'add', 'instruction', 'prompt'],
+    blockName: 'skill',
+    hotkeyToken: TOKENS.create.skill,
+    hotkey: 'k',
+    keyDownHandler: () => {
+      runCreateAction('skill');
       return true;
     },
   },
