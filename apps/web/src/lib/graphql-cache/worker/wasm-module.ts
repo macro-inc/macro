@@ -12,8 +12,8 @@ import type {
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   ClaimedMutation,
+  EnqueueOptimisticMutationResult,
   OptimisticLinkPatchWire,
-  OptimisticWriteResult,
   QueryRevalidationWire,
   ReadResult,
   RecordCursor,
@@ -43,7 +43,7 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<WriteResult>;
-  beginOptimisticWrite(
+  enqueueOptimisticMutation(
     originOpId: string | undefined,
     query: string,
     operationName: string | undefined,
@@ -51,8 +51,11 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
-    createdAtMs: number
-  ): Promise<OptimisticWriteResult>;
+    createdAtMs: number,
+    leaseOwner: string,
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
     operationName: string | undefined,

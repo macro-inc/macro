@@ -967,6 +967,12 @@ export const listOccurrencesResponse = zod
                     .describe('An attendee on a calendar event.')
                 )
                 .describe('Attendees, keyed by email during persistence.'),
+              calendarId: zod
+                .uuid()
+                .nullish()
+                .describe(
+                  'Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed.'
+                ),
               conferenceUrl: zod
                 .string()
                 .nullish()

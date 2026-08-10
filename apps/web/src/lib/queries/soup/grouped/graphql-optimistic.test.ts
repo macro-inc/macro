@@ -156,24 +156,25 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
 
     expect(result.updates).toHaveLength(2);
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'remove', entityKey: 'GraphqlSoupDocument:task-1' },
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
+      {
+        kind: 'removeEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'in-progress' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entityKey: 'GraphqlSoupDocument:task-1',
+      },
+      {
+        kind: 'upsertEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'completed' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entityKey: 'GraphqlSoupDocument:task-1',
+        insertFields: { nextCursor: null },
+      },
     ]);
     expect(result.updates.map((update) => update.path)).toEqual([
-      [
-        { field: 'user' },
-        { field: 'groupSoup' },
-        { field: 'bins' },
-        { listItem: { whereField: 'key', equals: 'in-progress' } },
-        { field: 'items' },
-      ],
-      [
-        { field: 'user' },
-        { field: 'groupSoup' },
-        { field: 'bins' },
-        { listItem: { whereField: 'key', equals: 'completed' } },
-        { field: 'items' },
-      ],
+      [{ field: 'user' }, { field: 'groupSoup' }, { field: 'bins' }],
+      [{ field: 'user' }, { field: 'groupSoup' }, { field: 'bins' }],
     ]);
     expect(result.revalidations).toHaveLength(1);
     expect(onInspect).toHaveBeenCalledWith(
@@ -238,12 +239,18 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     });
 
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'remove', entityKey: 'GraphqlSoupCall:task-1' },
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupCall:task-1' },
+      expect.objectContaining({
+        kind: 'removeEmbeddedLink',
+        entityKey: 'GraphqlSoupCall:task-1',
+      }),
+      expect.objectContaining({
+        kind: 'upsertEmbeddedLink',
+        entityKey: 'GraphqlSoupCall:task-1',
+      }),
     ]);
   });
 
-  it('does not make a partial move when the destination bin is absent', async () => {
+  it('creates a missing destination bin as part of the move', async () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ destination: false }),
       entityId: 'task-1',
@@ -252,7 +259,29 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       newGroupKeys: ['completed'],
     });
 
-    expect(result.updates).toEqual([]);
+    expect(result.updates).toHaveLength(2);
+    expect(result.updates.map((patch) => patch.operation)).toEqual([
+      {
+        kind: 'removeEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'in-progress' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entityKey: 'GraphqlSoupDocument:task-1',
+      },
+      {
+        kind: 'upsertEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'completed' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entityKey: 'GraphqlSoupDocument:task-1',
+        insertFields: { nextCursor: null },
+      },
+    ]);
+    expect(result.updates[1]?.path).toEqual([
+      { field: 'user' },
+      { field: 'groupSoup' },
+      { field: 'bins' },
+    ]);
     expect(result.revalidations).toHaveLength(1);
   });
 
@@ -281,8 +310,8 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       onRead.mock.calls.map(([request]) => request.variables.input)
     ).toEqual([input, continuation]);
     expect(result.updates.map((patch) => patch.operation.kind)).toEqual([
-      'remove',
-      'prependUnique',
+      'removeEmbeddedLink',
+      'upsertEmbeddedLink',
     ]);
   });
 
@@ -296,8 +325,8 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     });
 
     expect(result.updates.map((patch) => patch.operation.kind)).toEqual([
-      'remove',
-      'prependUnique',
+      'removeEmbeddedLink',
+      'upsertEmbeddedLink',
     ]);
   });
 
@@ -311,7 +340,14 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     });
 
     expect(result.updates.map((patch) => patch.operation)).toEqual([
-      { kind: 'prependUnique', entityKey: 'GraphqlSoupDocument:task-1' },
+      {
+        kind: 'upsertEmbeddedLink',
+        listItem: { whereField: 'key', equals: 'completed' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entityKey: 'GraphqlSoupDocument:task-1',
+        insertFields: { nextCursor: null },
+      },
     ]);
   });
 

@@ -1,6 +1,6 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
-use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult};
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
@@ -70,12 +70,21 @@ struct JsInspectionPathSegment {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsOptimisticWriteResult {
+struct JsEnqueueOptimisticMutationResult {
     transaction_id: String,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    initial_claim: JsInitialMutationClaim,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum JsInitialMutationClaim {
+    Claimed { mutation: JsClaimedMutation },
+    NotRunnable,
+    Failed { error: String },
 }
 
 #[derive(Serialize)]
@@ -339,11 +348,12 @@ impl CacheEngine {
         })
     }
 
-    /// Durably queues a mutation and its optimistic response. Resolves to
-    /// `{transactionId: string, changed: string[], affectedOps: string[],
-    /// reset: false}` where changes reflect the composed view.
-    #[wasm_bindgen(js_name = beginOptimisticWrite)]
-    pub fn begin_optimistic_write(
+    /// Durably queues a mutation and its optimistic response, then attempts
+    /// to claim the strict queue head before resolving. Claim failures are
+    /// returned as a nested diagnostic outcome because enqueue succeeded.
+    #[wasm_bindgen(js_name = enqueueOptimisticMutation)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
         query: String,
@@ -353,6 +363,9 @@ impl CacheEngine {
         link_patches: JsValue,
         revalidations: JsValue,
         created_at_ms: f64,
+        lease_owner: String,
+        now_ms: f64,
+        lease_expires_at_ms: f64,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
@@ -362,10 +375,18 @@ impl CacheEngine {
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
+            let claim = MutationClaimRequest {
+                owner: lease_owner,
+                now_ms: parse_timestamp(now_ms, "claim timestamp")?,
+                lease_expires_at_ms: parse_timestamp(
+                    lease_expires_at_ms,
+                    "lease expiration timestamp",
+                )?,
+            };
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
-            let (transaction, result) = engine
-                .begin_optimistic_write(
+            let result = engine
+                .enqueue_optimistic_mutation(
                     origin,
                     BeginOptimisticWrite {
                         query: &query,
@@ -376,19 +397,31 @@ impl CacheEngine {
                         revalidations: &revalidations,
                         created_at_ms,
                     },
+                    claim,
                 )
                 .await
                 .map_err(err_js)?;
-            to_js(&JsOptimisticWriteResult {
-                transaction_id: transaction.to_string(),
+            let initial_claim = match result.initial_claim {
+                InitialClaimOutcome::Claimed(claimed) => JsInitialMutationClaim::Claimed {
+                    mutation: JsClaimedMutation::try_from(*claimed)?,
+                },
+                InitialClaimOutcome::NotRunnable => JsInitialMutationClaim::NotRunnable,
+                InitialClaimOutcome::Failed(error) => JsInitialMutationClaim::Failed {
+                    error: error.to_string(),
+                },
+            };
+            to_js(&JsEnqueueOptimisticMutationResult {
+                transaction_id: result.transaction_id.to_string(),
                 changed: result
+                    .write_result
                     .changed
                     .into_iter()
                     .map(|key| key.0.into_owned())
                     .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
+                affected_ops: ops.borrow().names(result.write_result.affected_ops),
+                reset: result.write_result.reset,
+                revalidations: result.write_result.revalidations,
+                initial_claim,
             })
         })
     }

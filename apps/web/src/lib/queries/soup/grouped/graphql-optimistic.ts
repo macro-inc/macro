@@ -2,11 +2,10 @@ import { documentOperationName } from '@graphql-cache/exchange/generated-selecti
 import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import {
   type OptimisticUpdate,
-  prependUnique,
   type QueryRevalidation,
-  remove,
+  removeEmbeddedLink,
   select,
-  update,
+  upsertEmbeddedLink,
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { stringifyDocument } from '@urql/core';
@@ -93,7 +92,8 @@ export function groupPagesByLogicalView(
 /**
  * Discovers every cached property-grouped field and creates constrained link
  * recipes only where the loaded membership proves the move is applicable.
- * Missing bins/pages are left untouched and revalidated after success.
+ * Missing destination bins are created on initial pages; missing pages are
+ * left untouched and revalidated after success.
  */
 export async function buildOptimisticGroupedPropertyUpdates(
   args: BuildArgs
@@ -164,41 +164,48 @@ export async function buildOptimisticGroupedPropertyUpdates(
       continue;
     }
 
-    const destinationPages = pages.filter(
-      (page) =>
-        isInitialInput(page.input) &&
-        added.every((key) => page.bins.some((bin) => bin.key === key))
-    );
-    // Never expose a source-only move when this logical view has nowhere to
-    // show the destination. Revalidation will recover absent/new groups.
+    const destinationPages = pages.filter((page) => isInitialInput(page.input));
+    // Never expose a source-only move when this logical view has no initial
+    // page where the destination can be shown.
     if (added.length > 0 && destinationPages.length === 0) continue;
 
     for (const page of sourcePages) {
       for (const key of removed) {
         const source = page.bins.find((bin) => bin.key === key);
         if (!source?.items.some((item) => item.id === args.entityId)) continue;
-        const items = select(GroupSoupMembershipDocument, {
+        const bins = select(GroupSoupMembershipDocument, {
           input: page.input,
         })
           .field('user')
           .field('groupSoup')
-          .field('bins')
-          .item('key', key)
-          .field('items');
-        updates.push(update(items, remove(entity)));
+          .field('bins');
+        updates.push(
+          removeEmbeddedLink(bins, {
+            listItem: { whereField: 'key', equals: key },
+            linkField: 'items',
+            countField: 'totalCount',
+            entity,
+          })
+        );
       }
     }
     for (const page of destinationPages) {
       for (const key of added) {
-        const items = select(GroupSoupMembershipDocument, {
+        const bins = select(GroupSoupMembershipDocument, {
           input: page.input,
         })
           .field('user')
           .field('groupSoup')
-          .field('bins')
-          .item('key', key)
-          .field('items');
-        updates.push(update(items, prependUnique(entity)));
+          .field('bins');
+        updates.push(
+          upsertEmbeddedLink(bins, {
+            listItem: { whereField: 'key', equals: key },
+            linkField: 'items',
+            countField: 'totalCount',
+            entity,
+            insertFields: { nextCursor: null },
+          })
+        );
       }
     }
   }

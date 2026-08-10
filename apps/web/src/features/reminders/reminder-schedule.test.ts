@@ -3,12 +3,14 @@ import type { EntityData } from '@entity';
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatReminderWhen,
   futureDateOptions,
   onceSchedule,
   REMINDER_DEFAULT_TIME,
   REMINDER_DESCRIPTION_MAX_LENGTH,
   reminderDefaultOptions,
   reminderDescriptionFor,
+  resolveReminderDescription,
 } from './reminder-schedule';
 
 const option = (id: string, date: Date): DateOption => ({
@@ -230,10 +232,114 @@ describe('reminderDescriptionFor', () => {
   });
 });
 
+describe('resolveReminderDescription', () => {
+  const doc = (name: string) =>
+    ({ type: 'document', id: 'e1', name }) as EntityData;
+
+  it('uses what the user typed', () => {
+    expect(
+      resolveReminderDescription(
+        'Chase the countersignature',
+        doc('Q3 Contract')
+      )
+    ).toBe('Chase the countersignature');
+  });
+
+  it('trims what the user typed', () => {
+    expect(resolveReminderDescription('  Chase it  ', doc('Q3 Contract'))).toBe(
+      'Chase it'
+    );
+  });
+
+  // The step is optional and the API rejects an empty description, so skipping
+  // it has to land on the entity-derived name rather than send nothing.
+  it('falls back to the entity name when the field is skipped', () => {
+    expect(resolveReminderDescription('', doc('Q3 Contract'))).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  it('treats whitespace-only input as skipped', () => {
+    expect(resolveReminderDescription('   \n\t ', doc('Q3 Contract'))).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  // Skipping on an unnamed entity still has to produce something valid.
+  it('falls back through to the untitled label', () => {
+    expect(resolveReminderDescription('', doc('  '))).toBe('Untitled');
+  });
+
+  // The input's maxLength counts code units, so an emoji-heavy paste can still
+  // arrive over the service's character limit.
+  it('truncates over-long input by character', () => {
+    const long = '🔔'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 10);
+    const result = resolveReminderDescription(long, doc('Q3 Contract'));
+
+    expect([...result]).toHaveLength(REMINDER_DESCRIPTION_MAX_LENGTH);
+    expect(result.endsWith('🔔')).toBe(true);
+  });
+
+  it('leaves input exactly at the limit alone', () => {
+    const atLimit = 'x'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH);
+
+    expect(resolveReminderDescription(atLimit, doc('Q3 Contract'))).toBe(
+      atLimit
+    );
+  });
+});
+
 describe('REMINDER_DEFAULT_TIME', () => {
   // Bare dates come from presets that land on endOfDay; a reminder at 11:59 PM
   // is easy to miss, so this is deliberately a morning.
   it('is 9am', () => {
     expect(REMINDER_DEFAULT_TIME).toEqual({ hours: 9, minutes: 0 });
+  });
+});
+
+describe('formatReminderWhen', () => {
+  // Fixed instants rather than the wall clock, and the assertions compare
+  // against `toLocaleString` output rather than a hardcoded string, so the
+  // test states what is included and stays put across locales and timezones.
+  const now = new Date('2026-08-07T10:00:00.000Z').getTime();
+  const timeOnly = { hour: 'numeric', minute: '2-digit' } as const;
+  const withDate = { month: 'short', day: 'numeric', ...timeOnly } as const;
+
+  it('omits the date three hours out', () => {
+    const date = new Date(now + 3 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
+  });
+
+  it('omits the date just under a day out', () => {
+    const date = new Date(now + 24 * 60 * 60 * 1000 - 1);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
+  });
+
+  it('includes the date at exactly a day out', () => {
+    const date = new Date(now + 24 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, withDate)
+    );
+  });
+
+  it('includes the date a week out', () => {
+    const date = new Date(now + 7 * 24 * 60 * 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, withDate)
+    );
+  });
+
+  // The composer rejects past times before this runs, but a date that slipped
+  // past while the dialog sat open should still read as a time, not crash or
+  // sprout a date.
+  it('omits the date for an instant already past', () => {
+    const date = new Date(now - 60 * 1000);
+    expect(formatReminderWhen(date, now)).toBe(
+      date.toLocaleString(undefined, timeOnly)
+    );
   });
 });

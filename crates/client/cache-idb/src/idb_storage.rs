@@ -109,10 +109,10 @@ impl IdbStorage {
         // upgraded (delete/upgrade requests block while connections are
         // open); without this, `destroy` from another tab can hang forever.
         db.on_version_change(|event: web_sys::Event| {
-            if let Some(target) = event.target() {
-                if let Ok(db) = wasm_bindgen::JsCast::dyn_into::<web_sys::IdbDatabase>(target) {
-                    db.close();
-                }
+            if let Some(target) = event.target()
+                && let Ok(db) = wasm_bindgen::JsCast::dyn_into::<web_sys::IdbDatabase>(target)
+            {
+                db.close();
             }
         });
         let mut storage = IdbStorage { db };
@@ -190,10 +190,7 @@ impl IdbStorage {
 impl Storage for IdbStorage {
     type Error = IdbStorageError;
 
-    async fn get_batch(
-        &self,
-        keys: &[EntityKey<'static>],
-    ) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         let tx = self
             .db
             .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;

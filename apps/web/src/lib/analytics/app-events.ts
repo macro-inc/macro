@@ -73,6 +73,10 @@ export type AppEvents = {
   onboarding_v4_team: {
     action: 'created' | 'joined_invite' | 'already_on_team';
     invites_sent?: number;
+    /** Same-domain teammates the step pre-added to the invite list. */
+    invites_prefilled?: number;
+    /** How many of those the user removed before creating the team. */
+    invites_removed?: number;
     used_domain_suggestion?: boolean;
   };
   /**

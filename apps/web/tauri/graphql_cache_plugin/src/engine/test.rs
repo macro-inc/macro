@@ -56,12 +56,6 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
     .unwrap()
 }
 
-fn claim(handle: &EngineHandle) -> ClaimedMutationWire {
-    block_on(handle.claim_next_mutation("runner".to_string(), 10, 1_000))
-        .unwrap()
-        .expect("queue head")
-}
-
 #[test]
 fn write_then_read_round_trips() {
     let handle = spawn_handle();
@@ -222,7 +216,7 @@ fn optimistic_layer_commits_durably() {
     write(&handle, None, soup_data(false), None);
     read(&handle, Some("client:1"));
 
-    let optimistic = block_on(handle.begin_optimistic_write(
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
         Some("client:2".to_string()),
         QUERY.to_string(),
         Some("Soup".to_string()),
@@ -231,9 +225,22 @@ fn optimistic_layer_commits_durably() {
         vec![],
         vec![],
         0,
+        "runner".to_string(),
+        10,
+        1_000,
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
+    let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["initialClaim"]["kind"], "claimed");
+    assert_eq!(
+        serialized["initialClaim"]["mutation"]["transactionId"],
+        optimistic.transaction_id
+    );
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
+    assert_eq!(claimed.transaction_id, optimistic.transaction_id);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -241,7 +248,6 @@ fn optimistic_layer_commits_durably() {
     };
     assert_eq!(data, soup_data(true));
 
-    let claimed = claim(&handle);
     let committed = block_on(handle.commit_optimistic_write(
         optimistic.transaction_id,
         "runner".to_string(),
@@ -265,7 +271,7 @@ fn rollback_drops_optimistic_contribution() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);
 
-    let optimistic = block_on(handle.begin_optimistic_write(
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
         None,
         QUERY.to_string(),
         Some("Soup".to_string()),
@@ -274,10 +280,15 @@ fn rollback_drops_optimistic_contribution() {
         vec![],
         vec![],
         0,
+        "runner".to_string(),
+        10,
+        1_000,
     ))
     .unwrap();
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
 
-    let claimed = claim(&handle);
     block_on(handle.rollback_optimistic_write(
         optimistic.transaction_id,
         "runner".to_string(),

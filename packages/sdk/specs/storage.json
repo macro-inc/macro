@@ -12766,6 +12766,11 @@
             },
             "description": "Attendees, keyed by email during persistence."
           },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."

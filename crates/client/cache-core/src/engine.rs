@@ -87,6 +87,29 @@ pub struct WriteResult {
     pub revalidations: Vec<QueryRevalidation>,
 }
 
+/// Outcome of the initial strict-head claim attempted after enqueue.
+#[derive(Debug)]
+pub enum InitialClaimOutcome<E> {
+    /// The strict queue head was runnable and is now durably leased.
+    Claimed(Box<ClaimedMutation>),
+    /// The strict queue head is leased, deferred, or the queue is empty.
+    NotRunnable,
+    /// Enqueue succeeded, but attempting to claim the strict head failed.
+    Failed(E),
+}
+
+/// Result of durably enqueueing an optimistic mutation and attempting its
+/// initial strict-head claim.
+#[derive(Debug)]
+pub struct EnqueueOptimisticMutationResult<E> {
+    /// Engine-assigned id of the newly enqueued optimistic mutation.
+    pub transaction_id: OptimisticTransactionId,
+    /// Visible cache changes caused by the newly published optimistic layer.
+    pub write_result: WriteResult,
+    /// Outcome of the claim attempt made before hosts publish cache changes.
+    pub initial_claim: InitialClaimOutcome<E>,
+}
+
 /// Borrowed inputs for atomically beginning one optimistic mutation.
 pub struct BeginOptimisticWrite<'a> {
     /// GraphQL mutation document.
@@ -877,6 +900,29 @@ impl<S: Storage> Engine<S> {
         ))
     }
 
+    /// Durably enqueues a mutation and publishes its optimistic layer, then
+    /// attempts to claim the strict queue head before returning. A claim
+    /// failure is nested in the successful enqueue result so callers never
+    /// bypass or duplicate an already durable mutation.
+    pub async fn enqueue_optimistic_mutation(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        claim: MutationClaimRequest,
+    ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
+        let (transaction_id, write_result) = self.begin_optimistic_write(origin_op, input).await?;
+        let initial_claim = match self.claim_next_mutation(claim).await {
+            Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
+            Ok(None) => InitialClaimOutcome::NotRunnable,
+            Err(error) => InitialClaimOutcome::Failed(error),
+        };
+        Ok(EnqueueOptimisticMutationResult {
+            transaction_id,
+            write_result,
+            initial_claim,
+        })
+    }
+
     /// Claims the oldest runnable mutation. A leased or backed-off head
     /// blocks every later mutation.
     pub async fn claim_next_mutation(
@@ -1074,7 +1120,7 @@ impl<S: Storage> Engine<S> {
         keys: &BTreeSet<EntityKey<'static>>,
     ) -> Result<HashMap<EntityKey<'static>, Record>, EngineError<S::Error>> {
         let mut out = HashMap::new();
-        let mut missing: Vec<EntityKey<'static>> = Vec::new();
+        let mut missing = Vec::new();
         for key in keys {
             match self.hot.peek(key) {
                 Some(record) => {
@@ -1120,7 +1166,7 @@ impl<S: Storage> Engine<S> {
             match resolve_owner(&effective, &operation, &inspection.path)? {
                 OwnerResolution::Owner(owner) => break recover_variants(&owner, &prepared)?,
                 OwnerResolution::Absent => return Ok(Vec::new()),
-                OwnerResolution::NeedRecord(key) if !candidates.contains(key.as_ref()) => {
+                OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {
                     candidates.insert(key.into_owned());
                 }
                 OwnerResolution::NeedRecord(_) => return Ok(Vec::new()),

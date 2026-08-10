@@ -13,9 +13,9 @@ import {
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
   type MutationClaim,
   type MutationSettlement,
-  type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
   type SelectedRecordPageWire,
@@ -23,10 +23,11 @@ import {
   type WriteResult,
 } from '../protocol';
 import type {
-  BeginOptimisticWriteArgs,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  EnqueueOptimisticMutationArgs,
+  InitialMutationClaimArgs,
   InspectQueryArgs,
   InspectQueryVariantsArgs,
 } from './types';
@@ -50,8 +51,9 @@ export interface TauriHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Per-request timeout in ms (default 10s, matching worker-host). A hung
-   * IPC call rejects; the exchange degrades rejected reads to the network.
+   * Request timeout in ms (default 10s, matching worker-host). Applies to all
+   * commands except optimistic enqueue, which remains pending because retrying
+   * an uncertain durable operation could duplicate user intent.
    */
   requestTimeoutMs?: number;
   /** Reports an asynchronous durable-storage initialization failure. */
@@ -72,19 +74,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   function request<T>(
     command: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    timeout = true
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`graphql cache ipc timeout: ${command}`));
-      }, requestTimeoutMs);
+      const timer = timeout
+        ? setTimeout(() => {
+            reject(new Error(`graphql cache ipc timeout: ${command}`));
+          }, requestTimeoutMs)
+        : undefined;
       invoke<T>(command, args).then(
         (value) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           resolve(value);
         },
         (error) => {
-          clearTimeout(timer);
+          if (timer !== undefined) clearTimeout(timer);
           // Command errors cross the boundary as strings; normalize to
           // Error for parity with worker-host rejections.
           reject(error instanceof Error ? error : new Error(String(error)));
@@ -180,12 +185,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async beginOptimisticWrite(
-      args: BeginOptimisticWriteArgs
-    ): Promise<OptimisticWriteResult> {
+    async enqueueOptimisticMutation(
+      args: EnqueueOptimisticMutationArgs,
+      claim: InitialMutationClaimArgs
+    ): Promise<EnqueueOptimisticMutationResult> {
       await ready;
-      return await request<OptimisticWriteResult>(
-        'graphql_cache_begin_optimistic_write',
+      return await request<EnqueueOptimisticMutationResult>(
+        'graphql_cache_enqueue_optimistic_mutation',
         {
           originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
           query: args.query,
@@ -194,8 +200,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
-          createdAtMs: Date.now(),
-        }
+          createdAtMs: claim.nowMs,
+          owner: claim.owner,
+          nowMs: claim.nowMs,
+          leaseExpiresAtMs: claim.leaseExpiresAtMs,
+        },
+        false
       );
     },
 

@@ -214,8 +214,8 @@ async fn optimistic_write_round_trip() {
         "value": { "string": "x" }
     }});
 
-    // Begin: op 1 is affected, a string transaction id comes back.
-    let begin = JsFuture::from(engine.begin_optimistic_write(
+    // Enqueue: op 1 is affected and the strict head is already claimed.
+    let enqueue = JsFuture::from(engine.enqueue_optimistic_mutation(
         None,
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
@@ -224,16 +224,21 @@ async fn optimistic_write_round_trip() {
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         123.0,
+        "runner".into(),
+        10.0,
+        1_000.0,
     ))
     .await
     .unwrap();
-    let begin: serde_json::Value = serde_wasm_bindgen::from_value(begin).unwrap();
-    let txn = begin["transactionId"].as_str().unwrap().to_string();
-    assert_eq!(begin["affectedOps"], serde_json::json!(["tab1:1"]));
+    let enqueue: serde_json::Value = serde_wasm_bindgen::from_value(enqueue).unwrap();
+    let txn = enqueue["transactionId"].as_str().unwrap().to_string();
+    assert_eq!(enqueue["affectedOps"], serde_json::json!(["tab1:1"]));
     assert_eq!(
-        begin["changed"],
+        enqueue["changed"],
         serde_json::json!(["GraphqlProperty:prop-1"])
     );
+    assert_eq!(enqueue["initialClaim"]["kind"], "claimed");
+    assert_eq!(enqueue["initialClaim"]["mutation"]["transactionId"], txn);
 
     // The optimistic layer is visible through reads.
     let read = JsFuture::from(engine.read_query(
@@ -250,12 +255,10 @@ async fn optimistic_write_round_trip() {
         serde_json::json!("Stage")
     );
 
-    let claimed = JsFuture::from(engine.claim_next_mutation("runner".into(), 10.0, 1_000.0))
-        .await
-        .unwrap();
-    let claimed: serde_json::Value = serde_wasm_bindgen::from_value(claimed).unwrap();
-    assert_eq!(claimed["transactionId"], txn);
-    let generation = claimed["leaseGeneration"].as_str().unwrap().to_string();
+    let generation = enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Commit with the real response; the layer flushes durably.
     let commit = JsFuture::from(engine.commit_optimistic_write(

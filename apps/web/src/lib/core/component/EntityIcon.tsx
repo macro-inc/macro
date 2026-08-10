@@ -518,29 +518,45 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
-    // A reminder shows the icon of what it is about. The referenced entity's
-    // fileType/subType are resolved server-side precisely so this stays
-    // synchronous — every icon call site is.
-    //
-    // A standalone reminder is about nothing else, so it falls back to a bell
-    // rather than to `default`, whose wide variant is the unknown-file glyph.
-    .with({ type: 'reminder' }, (e) =>
-      e.referencedEntity
-        ? (itemToBlockName(
-            {
-              type: e.referencedEntity.type,
-              fileType: e.referencedEntity.fileType,
-              subType: e.referencedEntity.subType
-                ? { type: e.referencedEntity.subType as NamedSubType }
-                : undefined,
-            },
-            true
-          ) ?? 'reminder')
-        : 'reminder'
-    )
+    // Always the bell, never the referenced entity's icon: a reminder is a
+    // reminder first, and what it points at is iconed beside its name instead
+    // — see `reminderReferenceIconType`.
+    .with({ type: 'reminder' }, () => 'reminder')
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);
+}
+
+/** What the block resolvers return when they cannot place something. */
+const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
+
+/**
+ * The icon for what a reminder is about, shown beside the reminder's name.
+ *
+ * Synchronous by design: the referenced entity's `fileType`/`subType` are
+ * resolved server-side precisely so this costs no fetch per row.
+ *
+ * A reference that resolves to nothing gets the bell, not the unknown-file
+ * glyph, which on a reminder row reads as breakage rather than as a reminder.
+ * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
+ * returns the literal `unknown`, and `validateEntity` returns `default`.
+ */
+export function reminderReferenceIconType(
+  reference: NonNullable<ReminderEntity['referencedEntity']>
+): EntityWithValidIcon {
+  const blockName = itemToBlockName(
+    {
+      type: reference.type,
+      fileType: reference.fileType,
+      subType: reference.subType
+        ? { type: reference.subType as NamedSubType }
+        : undefined,
+    },
+    true
+  );
+
+  const iconType = blockName ? validateEntity(blockName) : 'default';
+  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(entity: EntityData) {

@@ -77,7 +77,29 @@ export type OptimisticLinkPatchWire = {
   path: EmbeddedLinkPathSegment[];
   operation:
     | { kind: 'remove'; entityKey: string }
-    | { kind: 'prependUnique'; entityKey: string };
+    | { kind: 'prependUnique'; entityKey: string }
+    | {
+        kind: 'removeEmbeddedLink';
+        listItem: {
+          whereField: string;
+          equals: string | number | boolean | null;
+        };
+        linkField: string;
+        countField: string;
+        entityKey: string;
+      }
+    | {
+        kind: 'upsertEmbeddedLink';
+        listItem: {
+          whereField: string;
+          equals: string | number | boolean | null;
+        };
+        linkField: string;
+        countField: string;
+        entityKey: string;
+        /** Scalar fields used only when the embedded item must be created. */
+        insertFields: Record<string, string | number | boolean | null>;
+      };
 };
 
 export type CachedQueryVariantWire = {
@@ -126,6 +148,17 @@ export type ClaimedMutation = {
   attemptCount: number;
 };
 
+/** Outcome of the strict-head claim attempted immediately after enqueue. */
+export type InitialMutationClaim =
+  | { kind: 'claimed'; mutation: ClaimedMutation }
+  | { kind: 'not-runnable' }
+  | { kind: 'failed'; error: string };
+
+/** Result returned after enqueue and the initial claim attempt complete. */
+export type EnqueueOptimisticMutationResult = OptimisticWriteResult & {
+  initialClaim: InitialMutationClaim;
+};
+
 /** Identifies the queue attempt allowed to settle a transaction. */
 export type MutationClaim = {
   owner: string;
@@ -166,9 +199,9 @@ export type CacheRequest = { id: number } & (
        */
       identity?: string;
     }
-  /** Durably enqueue a mutation together with its optimistic response. */
+  /** Durably enqueue an optimistic mutation and claim the strict head. */
   | {
-      kind: 'begin-optimistic-write';
+      kind: 'enqueue-optimistic-mutation';
       originOpId?: string;
       query: string;
       operationName?: string;
@@ -177,6 +210,9 @@ export type CacheRequest = { id: number } & (
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
       createdAtMs: number;
+      owner: string;
+      nowMs: number;
+      leaseExpiresAtMs: number;
     }
   | {
       kind: 'claim-next-mutation';

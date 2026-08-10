@@ -3,7 +3,9 @@ use std::marker::PhantomData;
 use async_graphql::{
     Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
 };
-use graphql_common::{GraphqlCacheDeletion, GraphqlEntity, GraphqlSoupEntityType};
+use graphql_common::{
+    GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
+};
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -1794,6 +1796,23 @@ pub enum GraphqlReminderScheduleType {
     Recurring,
 }
 
+/// The entity a reminder is about, resolved server-side.
+///
+/// Carries `file_type`/`sub_type` rather than just the reference: a reminder is
+/// iconed as whatever it points at, and the client's icon path is synchronous,
+/// so resolving them here saves a fetch per row.
+#[derive(SimpleObject)]
+pub struct GraphqlSoupReminderReference {
+    /// The referenced entity's id.
+    pub id: ID,
+    /// The referenced entity's type.
+    pub entity_type: GraphqlEntityType,
+    /// File type, when the reference is a document — `md`, `pdf`, and so on.
+    pub file_type: Option<String>,
+    /// Sub type, when the reference is a task or snippet document.
+    pub sub_type: Option<String>,
+}
+
 /// GraphQL reminder entity.
 pub struct GraphqlSoupReminder<E: SoupEntityEdges>(SoupReminder<()>, E, Option<f64>);
 
@@ -1838,11 +1857,16 @@ where
     ///
     /// Only the reference is returned; the client resolves it into a Soup item
     /// through the edges that already exist for that entity type.
-    async fn referenced_entity(&self) -> Option<GraphqlEntity<'static>> {
+    async fn referenced_entity(&self) -> Option<GraphqlSoupReminderReference> {
         self.0
             .referenced_entity
             .as_ref()
-            .map(|r| graphql_entity(r.entity_type, &r.id))
+            .map(|r| GraphqlSoupReminderReference {
+                id: ID(r.id.clone()),
+                entity_type: GraphqlEntityType::new(r.entity_type),
+                file_type: r.file_type.clone(),
+                sub_type: r.sub_type.clone(),
+            })
     }
 
     /// What to remind the user about.

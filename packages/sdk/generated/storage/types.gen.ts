@@ -1203,6 +1203,11 @@ export type CalendarEvent = {
      */
     attendees: Array<CalendarAttendee>;
     /**
+     * Calendar the canonical source belongs to, when known. Absent only in
+     * projections stored before calendars were attributed.
+     */
+    calendarId?: string | null;
+    /**
      * Direct join URL when known.
      */
     conferenceUrl?: string | null;

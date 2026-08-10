@@ -8,7 +8,7 @@ import type {
   CachePush,
   CacheRequest,
   CacheResponse,
-  OptimisticWriteResult,
+  EnqueueOptimisticMutationResult,
   ReadResult,
   SelectedRecordPageWire,
   WriteResult,
@@ -52,7 +52,8 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
-    request.kind === 'begin-optimistic-write' ||
+    request.kind === 'enqueue-optimistic-mutation' ||
+    request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'rollback-optimistic-write' ||
     request.kind === 'invalidate' ||
@@ -223,18 +224,22 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         return result;
       })
-      .with({ kind: 'begin-optimistic-write' }, async (request) => {
+      .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {
         const engine = this.requireEngine();
-        const result: OptimisticWriteResult = await engine.beginOptimisticWrite(
-          request.originOpId,
-          request.query,
-          request.operationName,
-          request.variables,
-          request.data,
-          request.linkPatches,
-          request.revalidations,
-          request.createdAtMs
-        );
+        const result: EnqueueOptimisticMutationResult =
+          await engine.enqueueOptimisticMutation(
+            request.originOpId,
+            request.query,
+            request.operationName,
+            request.variables,
+            request.data,
+            request.linkPatches,
+            request.revalidations,
+            request.createdAtMs,
+            request.owner,
+            request.nowMs,
+            request.leaseExpiresAtMs
+          );
         this.fanOut(result, true);
         return result;
       })

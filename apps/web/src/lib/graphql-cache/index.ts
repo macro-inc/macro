@@ -22,9 +22,11 @@ export {
   prependUnique,
   type QueryRevalidation,
   remove,
+  removeEmbeddedLink,
   type Selection,
   select,
   update,
+  upsertEmbeddedLink,
 } from './exchange/optimistic';
 export {
   type RecordSelection,
@@ -48,6 +50,8 @@ export type {
   CacheReadPriority,
   CacheRequest,
   CacheResponse,
+  EnqueueOptimisticMutationResult,
+  InitialMutationClaim,
   MutationSettlement,
   OptimisticWriteResult,
   QueryVariableFilter,

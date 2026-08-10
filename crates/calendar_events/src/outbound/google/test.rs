@@ -23,7 +23,7 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
 
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|readonly@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -31,10 +31,8 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
         provider_calendar_id: "primary".to_string(),
         is_read_only: true,
         range,
-        sync_token: None,
-        plan: GoogleSyncPlan::FullSnapshot,
     };
-    let upsert = map_upsert(&context, master, Vec::new(), Vec::new()).unwrap();
+    let upsert = map_upsert(&target, master, Vec::new(), Vec::new()).unwrap();
 
     assert!(upsert.event.is_read_only);
 }
@@ -70,7 +68,7 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         start_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|recurring@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -78,11 +76,9 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         provider_calendar_id: "primary".to_string(),
         is_read_only: false,
         range,
-        sync_token: None,
-        plan: GoogleSyncPlan::FullSnapshot,
     };
 
-    let upsert = map_upsert(&context, master, Vec::new(), vec![malformed_instance]).unwrap();
+    let upsert = map_upsert(&target, master, Vec::new(), vec![malformed_instance]).unwrap();
     assert!(upsert.occurrences.is_empty());
 }
 
@@ -107,7 +103,7 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
     let ends_at = DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
         .unwrap()
         .with_timezone(&Utc);
-    let context = GoogleEventSyncContext {
+    let target = GoogleCalendarTarget {
         owner_id: "macro|quarantine@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -120,11 +116,9 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
             start_date: starts_at.date_naive(),
             end_date: ends_at.date_naive(),
         },
-        sync_token: Some("token".to_string()),
-        plan: GoogleSyncPlan::FullSnapshot,
     };
 
-    let mapped = map_snapshot(&context, vec![valid, malformed], Vec::new());
+    let mapped = map_snapshot(&target, vec![valid, malformed], Vec::new());
 
     assert_eq!(mapped.upserts.len(), 1);
     assert_eq!(
@@ -380,4 +374,68 @@ fn only_the_snapshot_plan_or_a_reset_token_forces_a_full_rebuild() {
         !needs_full_rebuild(&tail, true, false),
         "ExtendTail must reach the tail path, not the full rebuild"
     );
+}
+
+#[test]
+fn truncation_rewrites_the_rrule_bound_and_keeps_other_lines() {
+    let cutoff = EventStart::Timed(
+        DateTime::parse_from_rfc3339("2026-08-12T09:00:00+00:00")
+            .unwrap()
+            .with_timezone(&Utc),
+    );
+    assert_eq!(
+        truncate_recurrence_lines(
+            &[
+                "RRULE:FREQ=WEEKLY;COUNT=10;BYDAY=MO,FR".to_string(),
+                "EXDATE;TZID=UTC:20260810T090000".to_string(),
+            ],
+            &cutoff,
+        ),
+        vec![
+            "RRULE:FREQ=WEEKLY;BYDAY=MO,FR;UNTIL=20260812T085959Z".to_string(),
+            "EXDATE;TZID=UTC:20260810T090000".to_string(),
+        ]
+    );
+
+    let all_day_cutoff = EventStart::AllDay(NaiveDate::from_ymd_opt(2026, 8, 12).unwrap());
+    assert_eq!(
+        truncate_recurrence_lines(
+            &["RRULE:FREQ=DAILY;UNTIL=20270101".to_string()],
+            &all_day_cutoff,
+        ),
+        vec!["RRULE:FREQ=DAILY;UNTIL=20260811".to_string()]
+    );
+}
+
+#[test]
+fn occurrence_keys_parse_back_to_starts() {
+    assert_eq!(
+        parse_occurrence_start("2026-08-12T09:00:00+00:00"),
+        Some(EventStart::Timed(
+            DateTime::parse_from_rfc3339("2026-08-12T09:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        ))
+    );
+    assert_eq!(
+        parse_occurrence_start("2026-08-12"),
+        Some(EventStart::AllDay(
+            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
+        ))
+    );
+    assert_eq!(parse_occurrence_start("not-a-start"), None);
+
+    let master = EventStart::Timed(
+        DateTime::parse_from_rfc3339("2026-08-04T09:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+    );
+    assert!(occurrence_is_after(
+        &parse_occurrence_start("2026-08-05T09:00:00+00:00").unwrap(),
+        &master
+    ));
+    assert!(!occurrence_is_after(
+        &parse_occurrence_start("2026-08-04T09:00:00+00:00").unwrap(),
+        &master
+    ));
 }
