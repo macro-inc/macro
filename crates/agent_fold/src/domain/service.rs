@@ -4,11 +4,12 @@
 //! it holds something that can fold a session ([`FoldSession`]) and answers
 //! [`FoldedMessageRepo`] queries with it. It does no folding of its own -
 //! that lives in [`FoldSession`]'s blanket impl over
-//! [`LogRepo`](crate::domain::ports::LogRepo) - so the only thing this type
-//! adds is the `get_message` lookup, which is just a filter over `messages`.
+//! [`LogRepo`](crate::domain::ports::LogRepo) - so all this type decides is
+//! which types answer the query API, which the blanket impl deliberately
+//! leaves open.
 
 use crate::domain::log::AgentSessionId;
-use crate::domain::model::{FoldedMessage, MessageId};
+use crate::domain::model::FoldedMessage;
 use crate::domain::ports::{FoldSession, FoldedMessageRepo};
 
 /// Serves [`FoldedMessageRepo`] queries by delegating to a [`FoldSession`].
@@ -34,26 +35,5 @@ where
         session: AgentSessionId,
     ) -> Result<Vec<FoldedMessage>, rootcause::Report> {
         self.sessions.fold_session(session).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_message(
-        &self,
-        session: AgentSessionId,
-        id: MessageId,
-    ) -> Result<Option<FoldedMessage>, rootcause::Report> {
-        let messages = self.sessions.fold_session(session).await?;
-        Ok(messages.into_iter().find(|message| message.id() == id))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn message_ids(
-        &self,
-        session: AgentSessionId,
-    ) -> Result<Vec<MessageId>, rootcause::Report> {
-        let messages = self.sessions.fold_session(session).await?;
-        // Already oldest-first and already unique - the fold emits at most one
-        // message per (turn, author side), which is exactly the key.
-        Ok(messages.iter().map(FoldedMessage::id).collect())
     }
 }

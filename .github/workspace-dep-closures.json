@@ -38,62 +38,17 @@
       "crates/workspace-hack"
     ],
     "agent_fold": [
-      "crates/agent",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",
-      "crates/agent_session",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
-      "crates/bot_id",
-      "crates/bots",
-      "crates/channel_sender",
-      "crates/channels",
-      "crates/connection_gateway_client",
-      "crates/connection_gateway_models",
-      "crates/contacts",
       "crates/cowlike",
-      "crates/document_sub_type",
-      "crates/entity_access",
-      "crates/entity_access_db_utils",
-      "crates/entity_mutation",
-      "crates/filter_ast",
-      "crates/frecency",
-      "crates/invite_email",
-      "crates/item_filters",
-      "crates/kafka_util",
-      "crates/last_online_tracker",
-      "crates/macro_auth",
-      "crates/macro_authorization",
-      "crates/macro_env",
-      "crates/macro_env_var",
-      "crates/macro_event_broker",
-      "crates/macro_event_topics",
-      "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/mention_utils",
-      "crates/model",
-      "crates/model-entity",
-      "crates/model-error-response",
-      "crates/model_file_type",
-      "crates/model_notifications",
-      "crates/model_user",
-      "crates/models_bulk_upload",
-      "crates/models_entity_access_management",
-      "crates/models_pagination",
-      "crates/models_permissions",
-      "crates/non_empty",
-      "crates/notification",
-      "crates/prompt",
-      "crates/rate_limit",
-      "crates/remote_env_var",
-      "crates/share_permission_db_utils",
-      "crates/sqs_worker",
-      "crates/workspace-hack"
+      "crates/non_empty"
     ],
     "agent_harness": [
+      "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_harness",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
@@ -149,7 +104,9 @@
       "crates/workspace-hack"
     ],
     "agent_harness_service": [
+      "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_harness",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
@@ -215,7 +172,9 @@
       "crates/agent_runtime_protocol"
     ],
     "agent_session": [
+      "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_toolset",
@@ -269,7 +228,9 @@
       "crates/workspace-hack"
     ],
     "agent_trigger": [
+      "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -324,7 +285,9 @@
       "crates/workspace-hack"
     ],
     "agent_trigger_service": [
+      "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -1618,8 +1581,7 @@
       "services/convert_service"
     ],
     "cowlike": [
-      "crates/cowlike",
-      "crates/workspace-hack"
+      "crates/cowlike"
     ],
     "crm": [
       "crates/activity",
@@ -1930,6 +1892,7 @@
     "document_storage_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_tools",
@@ -4127,12 +4090,10 @@
     ],
     "macro_user_id": [
       "crates/cowlike",
-      "crates/macro_user_id",
-      "crates/workspace-hack"
+      "crates/macro_user_id"
     ],
     "macro_uuid": [
-      "crates/macro_uuid",
-      "crates/workspace-hack"
+      "crates/macro_uuid"
     ],
     "maybe_send": [
       "crates/maybe_send"
@@ -4747,8 +4708,7 @@
       "crates/workspace-hack"
     ],
     "non_empty": [
-      "crates/non_empty",
-      "crates/workspace-hack"
+      "crates/non_empty"
     ],
     "notification": [
       "crates/ai_toolset",

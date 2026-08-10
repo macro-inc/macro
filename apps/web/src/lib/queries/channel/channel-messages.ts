@@ -615,6 +615,26 @@ export function findTopLevelMessageInChannelMessages(
   }
 }
 
+/**
+ * Finds the first cached top-level message in a channel that matches.
+ *
+ * For lookups that are not by id — an agent-session placeholder is found by
+ * the folded message it renders, because a client that synthesized one picked
+ * its own `id` and the server's row will not have it.
+ */
+export function findTopLevelMessageInChannelMessagesWhere(
+  channelId: string,
+  predicate: (message: ApiChannelMessage) => boolean
+): ApiChannelMessage | undefined {
+  for (const [, data] of getChannelMessagesEntries(channelId)) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      const message = page.items.find(predicate);
+      if (message) return message;
+    }
+  }
+}
+
 /** Finds a reply's parent thread id from cached channel messages. */
 export function findThreadIdInChannelMessages(
   channelId: string,

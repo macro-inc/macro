@@ -9,7 +9,7 @@ use agent_client_protocol::schema::v1::{
 use agent_fold::domain::service::FoldedMessageService;
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
-use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _};
+use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _, NoOpRealtime};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingComms};
 use bot_id::BotId;
@@ -49,6 +49,7 @@ fn harness() -> (
             InMemoryAgentSessionRepo,
             FoldedMessageService<InMemoryAgentSessionRepo>,
             RecordingComms,
+            NoOpRealtime,
         >,
         MockContainerManager,
         AnnouncerMock,
@@ -65,6 +66,7 @@ fn harness() -> (
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             RecordingComms::new(),
+            NoOpRealtime,
         ),
         containers.clone(),
         announcer.clone(),

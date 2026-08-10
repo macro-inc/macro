@@ -110,7 +110,14 @@ members = [
 anyhow = "1.0.100"
 apollo-compiler = "1"
 apollo-parser = "0.8"
-agent-client-protocol = "1.2.0"
+# Locally forked (see third_party/README.md). Defaults off so the fold's
+# dependency chain stays wasm-reachable; whoever spawns an agent as a
+# subprocess asks for `features = ["subprocess"]`.
+# Pinned past the v2.0.0 tag to pick up wasm32 support (PR #294, merged to
+# main but not yet in a tagged release):
+# https://github.com/agentclientprotocol/rust-sdk/pull/294
+# Swap back to a plain version once upstream cuts a release containing it.
+agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88" }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -319,6 +326,7 @@ strip = "none"
 # The Cloudflare sync worker is size-sensitive. Package manifests cannot own
 # profiles once they are workspace members, so keep its former release profile
 # here without changing release optimization for the backend services.
+
 [profile.sync-service-release]
 inherits = "release"
 lto = true

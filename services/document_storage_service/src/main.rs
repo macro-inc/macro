@@ -15,6 +15,7 @@ use crate::{
 use agent_fold::domain::service::FoldedMessageService;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::AgentSessionRouterState;
+use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
@@ -311,16 +312,6 @@ async fn main() -> anyhow::Result<()> {
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
-
-    let agent_session_repo = PgAgentSessionRepo::new(db.clone());
-    let agent_session_state = AgentSessionRouterState::new(
-        AgentSessionServiceImpl::new(
-            agent_session_repo.clone(),
-            FoldedMessageService::new(agent_session_repo.clone()),
-            agent_session_repo,
-        ),
-        authorization_state.clone(),
-    );
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -862,6 +853,26 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+
+    // The same repo answers every session port, and answers the audience
+    // question streaming asks of it: a frame goes to the channel's
+    // participants, because the gateway addresses users rather than channels.
+    // Wired here rather than beside the other session state because it needs
+    // the shared gateway client, which is only an `Arc` from this line on.
+    let agent_session_repo = PgAgentSessionRepo::new(db.clone());
+    let agent_session_state = AgentSessionRouterState::new(
+        AgentSessionServiceImpl::new(
+            agent_session_repo.clone(),
+            FoldedMessageService::new(agent_session_repo.clone()),
+            agent_session_repo.clone(),
+            ConnectionGatewayAgentSessionRealtime::new(
+                conn_gateway_client.clone(),
+                agent_session_repo,
+            ),
+        ),
+        authorization_state.clone(),
+    );
+
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's

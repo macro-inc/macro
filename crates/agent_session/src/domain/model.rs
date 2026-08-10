@@ -1,4 +1,3 @@
-use agent_fold::domain::model::FoldedMessage;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
@@ -11,8 +10,8 @@ use macro_uuid::Uuid;
 // Re-exported here because this is where callers expect session types.
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 // Folded messages are derived, but a `MessageId` is also what a comms
-// placeholder persists (inside its `agent_session_message_id`) to say which
-// message it renders.
+// placeholder's agent_session_turn/agent_session_author columns persist to
+// say which message it renders - see PgAgentSessionRepo's `Comms` impl.
 pub use agent_fold::domain::model::{Author, AuthorKind, MessageId, TurnId};
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
@@ -74,39 +73,57 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
-/// The composite id a placeholder comms message stores in its
-/// `agent_session_message_id` column:
-/// `"{agent_session_id}:{turn}:{author}"`.
-///
-/// Folded messages have no table of their own, so this composite is the whole
-/// mapping between a comms row and the message it renders. Comms writes it
-/// when placing a placeholder, and readers joining folded messages back onto
-/// comms rows reproduce it from the same parts.
-///
-/// Keyed per message rather than per turn: a turn yields a prompt and a
-/// reply with different senders, and each needs its own row.
-#[must_use]
-pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
-    format!("{}:{id}", session.as_uuid())
-}
-
-/// The message key inside a [`composite_message_id`] built for `session`, or
-/// `None` when the composite names a different session or is malformed.
-#[must_use]
-pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
-    composite
-        .strip_prefix(&format!("{}:", session.as_uuid()))?
-        .parse()
-        .ok()
-}
-
-/// A session's folded messages, looked up by its dedicated channel.
+/// The agent behind a session, as much of it as rendering a message needs.
 #[derive(Debug, Clone)]
-pub struct ChannelFoldedMessages {
-    /// The session whose log derived the messages.
+pub struct SessionBot {
+    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Avatar, when it has one.
+    pub avatar_url: Option<String>,
+}
+
+/// One frame appended to a live session's log, for anyone watching.
+///
+/// The streaming counterpart of [`ChannelSessionLog`]: that is the whole log
+/// for a reader arriving late, this is one frame for a reader already here.
+/// Both carry the same entry shape, so a client folds them the same way -
+/// catching up on the log and then following it is one fold, not two.
+///
+/// Addressed by channel rather than by session because that is what a viewer
+/// has: they opened a channel, and may not know a session exists.
+#[derive(Debug, Clone)]
+pub struct LogAppended {
+    /// The channel whose viewers should see this.
+    pub channel_id: Uuid,
+    /// The session the entry belongs to. The fold keys its messages on this,
+    /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
-    /// The folded messages, oldest first.
-    pub messages: Vec<FoldedMessage>,
+    /// The frame, exactly as the log stored it.
+    pub entry: AgentSessionLog,
+}
+
+/// A session's raw protocol log, looked up by its dedicated channel.
+///
+/// Served rather than the messages it derives: the reader folds it. The web
+/// client runs the same fold compiled to WASM, so a streamed session and a
+/// reloaded one are rendered by one implementation rather than two that have
+/// to be kept agreeing.
+#[derive(Debug, Clone)]
+pub struct ChannelSessionLog {
+    /// The session the entries belong to.
+    pub agent_session_id: AgentSessionId,
+    /// The agent whose messages the log derives.
+    ///
+    /// Sent because a reader has to render those messages and cannot work out
+    /// who sent them: the sender of an agent message is this session's bot,
+    /// and nothing else a client fetches names it. Asking the channel's bots
+    /// is the wrong question - those are bots explicitly added to a channel,
+    /// which a session's agent need not be.
+    pub bot: SessionBot,
+    /// Every logged frame, oldest first. Folding depends on this order.
+    pub entries: Vec<AgentSessionLog>,
 }
 
 /// How an incoming channel context relates to an agent session.

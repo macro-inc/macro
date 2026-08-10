@@ -4,22 +4,51 @@ name = "agent_fold"
 publish = false
 version = "0.1.0"
 
+[lib]
+# `cdylib` for the browser build; `rlib` so services keep linking it normally.
+crate-type = ["cdylib", "rlib"]
+
 [features]
+default = ["cli"]
+# The `fold_jsonl` viewer and what only it needs. Off by default for wasm:
+# `tokio` pulls in `mio`, which does not build for wasm32, and the library
+# itself uses neither - the fold is sync and the ports are plain futures.
+cli = ["dep:clap", "dep:tokio"]
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
 test-utils = []
 
+# Needs an async runtime and an argument parser, which the library does not.
+[[bin]]
+name = "fold_jsonl"
+required-features = ["cli"]
+
 [dependencies]
 agent-client-protocol = { workspace = true }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-clap = { workspace = true }
+# Schema only - the fold reads recorded frames and never opens a connection.
+# `default-features = false` drops ARP's transport (tokio, axum, tungstenite),
+# which is what lets this crate reach wasm. Native builds are unaffected:
+# whoever else needs the transport turns it back on, and cargo unifies.
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+clap = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+# The wasm-bindgen shell in `inbound::wasm`, which only exists on wasm32. Kept
+# target-gated rather than behind a feature so a native `cargo build` never
+# compiles or resolves any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+insta = "1.48.0"
+tokio = { workspace = true }

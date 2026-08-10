@@ -33,7 +33,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
-import type { AgentChannelMessagesResponse } from './generated/schemas/agentChannelMessagesResponse';
+import type { AgentChannelLogResponse } from './generated/schemas/agentChannelLogResponse';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -926,15 +926,20 @@ export const storageServiceClient = {
   },
 
   /**
-   * Folded messages of the agent session behind a channel. `404` when the
-   * channel has no agent session; each message's `agentSessionTurnId` matches
-   * the `agent_session_turn_id` on the channel's placeholder messages.
+   * The raw protocol log of the agent session behind a channel. `404` when the
+   * channel has no agent session.
+   *
+   * What `getAgentChannelMessages` folds before answering, served unfolded for
+   * a caller that runs the fold itself. The whole log, in order, with no
+   * paging: folding is a left fold from the first frame, so a reader that
+   * skipped any of them would derive turn numbering that no longer matches the
+   * channel's placeholder messages.
    */
-  async getAgentChannelMessages(args: WithChannelId) {
+  async getAgentChannelLog(args: WithChannelId) {
     const { channel_id } = args;
     return (
-      await dssFetch<AgentChannelMessagesResponse>(
-        `/agent-sessions/channel/${channel_id}/messages`,
+      await dssFetch<AgentChannelLogResponse>(
+        `/agent-sessions/channel/${channel_id}/log`,
         { method: 'GET' }
       )
     ).map((result) => result);

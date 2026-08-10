@@ -13,7 +13,7 @@ use agent_fold::domain::fold::fold;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
     Author, FoldedMessage, MessagePart, Permission, PermissionOutcome, StopReason, ToolDetail,
-    ToolStatus, ToolUse,
+    ToolUse,
 };
 use agent_fold::domain::ports::LogRepo;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -218,7 +218,7 @@ fn render_message(message: &FoldedMessage) -> String {
 /// A tool call: `[label · status]` then whatever detail the fold recovered.
 fn render_tool(tool: &ToolUse) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "[{} · {}]", tool.label, render_status(tool.status));
+    let _ = writeln!(out, "[{} · {}]", tool.label, tool.status);
     match &tool.detail {
         ToolDetail::Terminal {
             command,
@@ -276,11 +276,11 @@ fn render_permission(permission: &Permission) -> String {
         let _ = writeln!(
             out,
             "{}",
-            indent(&format!("- {} ({})", option.name, option.kind))
+            indent(&format!("- {} ({:?})", option.name, option.kind))
         );
     }
     let outcome = match &permission.outcome {
-        Some(PermissionOutcome::Selected { option_id }) => {
+        PermissionOutcome::Selected { option_id } => {
             let name = permission
                 .options
                 .iter()
@@ -288,20 +288,13 @@ fn render_permission(permission: &Permission) -> String {
                 .map_or(option_id.as_str(), |option| option.name.as_str());
             format!("chose: {name}")
         }
-        Some(PermissionOutcome::Cancelled) => "cancelled".to_owned(),
-        None => "unanswered".to_owned(),
+        PermissionOutcome::Cancelled => "cancelled".to_owned(),
+        PermissionOutcome::Pending => "pending".to_owned(),
+        PermissionOutcome::Errored => "errored".to_owned(),
+        PermissionOutcome::Unrecognized => "unrecognized".to_owned(),
     };
     let _ = writeln!(out, "{}", indent(&format!("→ {outcome}")));
     out
-}
-
-fn render_status(status: ToolStatus) -> &'static str {
-    match status {
-        ToolStatus::Pending => "pending",
-        ToolStatus::Running => "running",
-        ToolStatus::Completed => "completed",
-        ToolStatus::Failed => "failed",
-    }
 }
 
 fn render_stop(stop: &StopReason) -> String {

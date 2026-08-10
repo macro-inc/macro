@@ -100,7 +100,7 @@ export type TaggedSearchResult1 =
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 /**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
@@ -205,14 +205,6 @@ export type EntityItem =
        * The document's file type (e.g. md, pdf, docx), when known.
        */
       fileType?: string | null;
-      /**
-       * Document id.
-       */
-      id: string;
-      /**
-       * Document name.
-       */
-      name: string;
       /**
        * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
        * "skill" for skills.
@@ -370,14 +362,6 @@ export type NotificationItemType =
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
 /**
- * Direction for reading more messages around a cursor.
- */
-export type PageDirection = 'older' | 'newer';
-/**
- * The kind of an item inside a project.
- */
-export type ProjectItemType = 'document' | 'chat' | 'project';
-/**
  * Position of a channel message.
  */
 export type ToolMessageKind = 'topLevelMessage' | 'threadReply';
@@ -466,6 +450,14 @@ export type DocumentContentLocation =
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
+/**
+ * The kind of an item inside a project.
+ */
+export type ProjectItemType = 'document' | 'chat' | 'project';
+/**
+ * How search terms are matched against skill names.
+ */
+export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
  * User tools are pending until a user executes them
  */
@@ -1371,13 +1363,13 @@ export interface ImportEntityView {
  */
 export interface CreateProject {
   /**
-   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
-   */
-  parentProjectId?: string | null;
-  /**
    * The name of the project.
    */
   projectName: string;
+  /**
+   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
+   */
+  parentProjectId?: string | null;
 }
 /**
  * The create project response.
@@ -1492,7 +1484,7 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * Apply AI-driven edits to a Macro document in place -- rewriting, inserting, formatting, or restructuring. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
+ * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
  */
 export interface EditDocument {
   /**
@@ -1999,7 +1991,7 @@ export interface ListEntities {
   includeTypes?: ItemType[] | null;
   sortBy?: SortBy;
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
     [k: string]: unknown;
@@ -2039,7 +2031,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST call filter (callf).
    */
   callf?: {
     [k: string]: unknown;
@@ -2503,11 +2495,11 @@ export interface MarkNotificationsSeen {
  * Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it.
  */
 export interface MoveToProject {
+  entityType: MoveableEntityType;
   /**
    * The id of the entity to move.
    */
   entityId: string;
-  entityType: MoveableEntityType;
   /**
    * The id of the destination project. Omit to move the entity out of its current project to the top level.
    */
@@ -2518,13 +2510,13 @@ export interface MoveToProject {
  */
 export interface MoveToProjectResponse {
   /**
-   * A human-readable result message.
-   */
-  message: string;
-  /**
    * Whether the move succeeded.
    */
   success: boolean;
+  /**
+   * A human-readable result message.
+   */
+  message: string;
 }
 /**
  * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
@@ -2550,69 +2542,6 @@ export interface NameSearch {
   tagsMatch?: TagMatch;
 }
 /**
- * A single item inside a project.
- */
-export interface ProjectItem {
-  /**
-   * The file type, for documents (e.g. md, pdf, docx).
-   */
-  fileType?: string | null;
-  /**
-   * The id of the item.
-   */
-  id: string;
-  itemType: ProjectItemType;
-  /**
-   * The display name of the item.
-   */
-  name: string;
-  /**
-   * When the item was last updated.
-   */
-  updatedAt?: string | null;
-}
-/**
- * Metadata for a project fetched from the database
- */
-export interface ProjectMetadata {
-  created_at: string;
-  deleted_at?: string | null;
-  parent_project_id?: string | null;
-  updated_at: string;
-  viewed_at?: string | null;
-}
-/**
- * ProjectSearchResponseItem object with project metadata we fetch from macrodb.
- * The index carries created_at/updated_at for ranking, but viewed_at is
- * per-user and deleted_at changes without a reindex, so metadata stays
- * database-sourced.
- */
-export interface ProjectSearchResponseItemWithMetadata {
-  created_at: string;
-  /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
-   */
-  id: string;
-  /**
-   * Metadata from the database. None if the project doesn't exist in the database.
-   */
-  metadata?: ProjectMetadata | null;
-  name: string;
-  owner_id: string;
-  project_search_results: ProjectSearchResult[];
-  updated_at: string;
-}
-export interface ProjectSearchResult {
-  highlight: SearchHighlight;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
-}
-/**
-++++++ qmuwlwro d3d51915 "feat: system agent harness bot (#5372)" (rebased revision)
  * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
@@ -3437,6 +3366,58 @@ export interface DocumentContent {
   location?: DocumentContentLocation | null;
 }
 /**
+ * List the direct contents of a project (shown as a folder in the app UI): its documents, AI chats, and nested projects. Requires view access to the project. Email threads filed into the project are not included.
+ */
+export interface ReadProject {
+  /**
+   * The id of the project to read.
+   */
+  projectId: string;
+}
+/**
+ * The read project response.
+ */
+export interface ReadProjectResponse {
+  /**
+   * The id of the project.
+   */
+  projectId: string;
+  /**
+   * The name of the project.
+   */
+  projectName: string;
+  /**
+   * The id of the parent project, if this project is nested.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The project's direct children in display order.
+   */
+  items: ProjectItem[];
+}
+/**
+ * A single item inside a project.
+ */
+export interface ProjectItem {
+  /**
+   * The id of the item.
+   */
+  id: string;
+  itemType: ProjectItemType;
+  /**
+   * The display name of the item.
+   */
+  name: string;
+  /**
+   * The file type, for documents (e.g. md, pdf, docx).
+   */
+  fileType?: string | null;
+  /**
+   * When the item was last updated.
+   */
+  updatedAt?: string | null;
+}
+/**
  * Rename a document. Requires edit access to the document.
  */
 export interface RenameDocument {
@@ -3465,20 +3446,16 @@ export interface RenameDocumentResponse {
    * A human-readable result message.
    */
   message: string;
-  /**
-   * Whether the rename succeeded.
-   */
-  success: boolean;
 }
 /**
  * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
  */
 export interface SearchSkills {
-  matchType?: SearchSkillsMatchType;
   /**
    * The skill name to search. Pass 1-3 keywords drawn from words that would literally appear in the skill's name. The whole query is matched as a single adjacent phrase prefix, so long phrases will not match.
    */
   name: string;
+  matchType?: SearchSkillsMatchType;
 }
 /**
  * Response for a skill search.
@@ -3488,9 +3465,6 @@ export interface SearchSkillsResponse {
    * The matched skills, most recently updated first.
    */
   results: SkillSearchResult[];
-}
-export interface SearchToolResponse {
-  results: TaggedSearchResult[];
 }
 /**
  * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
