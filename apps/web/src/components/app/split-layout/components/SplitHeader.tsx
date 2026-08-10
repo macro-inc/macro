@@ -546,6 +546,7 @@ export function SplitHeader(props: {
               painting off-screen. */}
           <PriorityCollapseOverflowSensor
             controller={props.collapseController}
+            truncateAsLastResort
             class="relative min-w-0 h-full shrink overflow-hidden mobile:overflow-visible"
             contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2 mobile:max-w-full"
             contentRef={(element) => {
