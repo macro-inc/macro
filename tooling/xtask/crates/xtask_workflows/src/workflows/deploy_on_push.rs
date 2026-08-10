@@ -211,7 +211,7 @@ fn diff_checker() -> Step<Use> {
         diff_entry("cloud-storage", CLOUD_STORAGE_PATHS),
         diff_entry("sync-service", SYNC_SERVICE_PATHS),
         format!(
-            "web-app: ./infra/stacks/web-app/** {}",
+            "web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml {}",
             web_artifact_paths::diff_checker_list()
         ),
     ]
