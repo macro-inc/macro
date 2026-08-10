@@ -114,7 +114,7 @@ function TimeOptionItem(props: CollectionNode<EventTimeOption>) {
   return (
     <Listbox.Item
       item={props}
-      class="group flex cursor-default items-center justify-between rounded-lg px-3 py-2 text-sm text-ink outline-none data-selected:bg-active data-highlighted:bg-hover"
+      class="group flex cursor-default items-center justify-between rounded-lg px-3 py-2 text-sm text-ink outline-none hover:bg-hover data-selected:bg-active data-highlighted:bg-hover"
     >
       <Listbox.ItemLabel>{props.rawValue.label}</Listbox.ItemLabel>
       <Listbox.ItemIndicator class="text-accent">
