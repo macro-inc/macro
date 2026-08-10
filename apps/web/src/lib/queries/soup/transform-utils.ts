@@ -387,7 +387,9 @@ export const useSearchResponseItemMapper = () => {
                 ? { type: 'task' }
                 : result.sub_type === 'snippet'
                   ? { type: 'snippet' }
-                  : null,
+                  : result.sub_type === 'skill'
+                    ? { type: 'skill' }
+                    : null,
             id: result.document_id,
             name: formatDisplayName(
               result.name || blockNameToDefaultFile(result.file_type),

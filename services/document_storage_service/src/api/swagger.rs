@@ -188,6 +188,8 @@ use utoipa::OpenApi;
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
+        documents_hex::inbound::axum_router::create_skill::create_skill_handler,
+        documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
@@ -379,6 +381,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateTaskResponse,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
+            documents_hex::domain::models::CreateSkillRequest,
+            documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
             documents_hex::domain::models::PropertyInput,

@@ -212,6 +212,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({}),
         clientFilters: { and: ['automation'] },
       }),
+      skills: () => ({
+        filters: defineQueryFilters({
+          include: { subType: ['skill'] },
+        }),
+        clientFilters: { and: ['doc-skill'] },
+      }),
     },
   },
   mail: {

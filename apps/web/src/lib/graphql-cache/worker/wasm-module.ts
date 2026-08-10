@@ -8,6 +8,7 @@
  * src/lib/graphql-cache/wasm/ (gitignored).
  */
 
+import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
@@ -27,7 +28,8 @@ export interface CacheEngine {
     opId: string | undefined,
     query: string,
     operationName: string | undefined,
-    variables: Record<string, unknown> | undefined
+    variables: Record<string, unknown> | undefined,
+    entityResolvers: readonly EntityResolverWire[] | undefined
   ): Promise<ReadResult>;
   readRecords(
     document: string,

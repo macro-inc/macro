@@ -4,6 +4,13 @@
  */
 
 export {
+  compileEntityResolvers,
+  type EntityFromArgumentDescriptor,
+  type EntityResolverConfig,
+  type EntityResolverWire,
+  entityFromArgument,
+} from './exchange/entity-resolvers';
+export {
   type CachedSelection,
   type CachedVariant,
   type InspectionSelection,

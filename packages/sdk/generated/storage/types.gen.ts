@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 };
 
 /**
@@ -984,6 +984,8 @@ export type BasicDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type BomPart = {
@@ -2850,11 +2852,41 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * When and how often the reminder fires.
      */
     schedule: ReminderSchedule;
+};
+
+/**
+ * Request body for creating a skill — a markdown document containing
+ * instructions that AI reads and follows when the skill is referenced in an
+ * AI input.
+ */
+export type CreateSkillRequest = {
+    /**
+     * Markdown source text. Defaults to an empty skill document.
+     */
+    markdown?: string | null;
+    /**
+     * Optional project ID to associate the skill with.
+     */
+    projectId?: string | null;
+    /**
+     * The name of the skill.
+     */
+    skillName: string;
+};
+
+/**
+ * Response for creating a skill.
+ */
+export type CreateSkillResponse = {
+    /**
+     * The document ID of the created skill.
+     */
+    documentId: string;
 };
 
 /**
@@ -3810,6 +3842,8 @@ export type DocumentPreviewDataSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -3922,7 +3956,7 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -4491,7 +4525,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4513,7 +4547,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 };
 
 /**
@@ -6106,7 +6140,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * Reminder id.
      */
@@ -6974,6 +7008,8 @@ export type SoupDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -7456,7 +7492,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -7629,6 +7665,22 @@ export type SuccessResponse = {
 export type SyncServiceVersionId = {
     counter: number;
     peer: string;
+};
+
+/**
+ * A built-in system skill: static, code-defined AI instructions surfaced
+ * through the same tools as user-authored skill documents, but with no
+ * document behind them.
+ */
+export type SystemSkillSummary = {
+    /**
+     * The well-known id the skill is referenced by in mentions and AI tools.
+     */
+    id: string;
+    /**
+     * The name of the skill.
+     */
+    name: string;
 };
 
 /**
@@ -10333,6 +10385,35 @@ export type CreateMarkdownHandlerResponses = {
 
 export type CreateMarkdownHandlerResponse = CreateMarkdownHandlerResponses[keyof CreateMarkdownHandlerResponses];
 
+export type CreateSkillHandlerData = {
+    body: CreateSkillRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_skill';
+};
+
+export type CreateSkillHandlerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSkillHandlerError = CreateSkillHandlerErrors[keyof CreateSkillHandlerErrors];
+
+export type CreateSkillHandlerResponses = {
+    /**
+     * Response for creating a skill.
+     */
+    200: {
+        /**
+         * The document ID of the created skill.
+         */
+        documentId: string;
+    };
+};
+
+export type CreateSkillHandlerResponse = CreateSkillHandlerResponses[keyof CreateSkillHandlerResponses];
+
 export type CreateSnippetHandlerData = {
     body: CreateSnippetRequest;
     path?: never;
@@ -10588,6 +10669,33 @@ export type HandlerResponses = {
 };
 
 export type HandlerResponse = HandlerResponses[keyof HandlerResponses];
+
+export type GetSystemSkillsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/documents/system_skills';
+};
+
+export type GetSystemSkillsHandlerErrors = {
+    401: ErrorResponse;
+};
+
+export type GetSystemSkillsHandlerError = GetSystemSkillsHandlerErrors[keyof GetSystemSkillsHandlerErrors];
+
+export type GetSystemSkillsHandlerResponses = {
+    /**
+     * Response listing the built-in system skills.
+     */
+    200: {
+        /**
+         * Every system skill, in display order.
+         */
+        skills: Array<SystemSkillSummary>;
+    };
+};
+
+export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
 export type DeleteDocumentData = {
     body?: never;
@@ -11251,7 +11359,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
         /**
          * The id of the favorited entity.
          */
@@ -12077,7 +12185,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

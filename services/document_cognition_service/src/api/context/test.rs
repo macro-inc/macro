@@ -372,6 +372,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
+        skill_tool_context: ai_tools::build_skill_tool_context(
+            search_service_client.clone(),
+            soup_service.clone(),
+        ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
         recorder: ai_usage::pg_recorder(pool.clone()),

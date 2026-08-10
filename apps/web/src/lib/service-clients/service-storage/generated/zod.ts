@@ -103,6 +103,13 @@ export const getRecentActivityHandlerResponse = zod.object({
                               type: zod.enum(['snippet']),
                             })
                             .describe('A snippet document — reusable markdown'),
+                          zod
+                            .object({
+                              type: zod.enum(['skill']),
+                            })
+                            .describe(
+                              'A skill document — markdown instructions for AI'
+                            ),
                         ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -576,7 +583,7 @@ export const editCommentResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -4345,7 +4352,7 @@ export const getUserDocumentsHandlerResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet'])
+                  .enum(['task', 'snippet', 'skill'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -4514,7 +4521,7 @@ export const createDocumentResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .enum(['task', 'snippet'])
+                .enum(['task', 'snippet', 'skill'])
                 .describe(
                   'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                 ),
@@ -4690,7 +4697,7 @@ export const createMarkdownHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -4706,6 +4713,34 @@ export const createMarkdownHandlerResponse = zod
       .describe('A pre-generated permission token that you can use for SS'),
   })
   .describe('Response for creating a markdown document.');
+
+/**
+ * @summary Creates a skill document with initialized markdown content in one
+backend-owned lifecycle. Skills are markdown documents containing
+instructions that AI reads and follows when the skill is referenced in an
+AI input.
+ */
+export const createSkillHandlerBody = zod
+  .object({
+    markdown: zod
+      .string()
+      .nullish()
+      .describe('Markdown source text. Defaults to an empty skill document.'),
+    projectId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional project ID to associate the skill with.'),
+    skillName: zod.string().describe('The name of the skill.'),
+  })
+  .describe(
+    'Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.'
+  );
+
+export const createSkillHandlerResponse = zod
+  .object({
+    documentId: zod.string().describe('The document ID of the created skill.'),
+  })
+  .describe('Response for creating a skill.');
 
 /**
  * @summary Creates a snippet document with initialized markdown content in one
@@ -4974,7 +5009,7 @@ export const createTaskHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -5162,6 +5197,13 @@ export const getBatchPreviewHandlerResponse = zod.object({
                       type: zod.enum(['snippet']),
                     })
                     .describe('A snippet document — reusable markdown'),
+                  zod
+                    .object({
+                      type: zod.enum(['skill']),
+                    })
+                    .describe(
+                      'A skill document — markdown instructions for AI'
+                    ),
                 ])
                 .describe(
                   'The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.'
@@ -5285,6 +5327,13 @@ export const getDocumentByTeamSlugResponse = zod.object({
                           type: zod.enum(['snippet']),
                         })
                         .describe('A snippet document — reusable markdown'),
+                      zod
+                        .object({
+                          type: zod.enum(['skill']),
+                        })
+                        .describe(
+                          'A skill document — markdown instructions for AI'
+                        ),
                     ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -5366,6 +5415,33 @@ export const handlerResponse = zod
       .describe('Id of the user\'s \"Macro how to guide\".'),
   })
   .describe('The deterministic starter document ids for the current user.');
+
+/**
+ * @summary Lists the built-in system skills. System skills are static, code-defined
+AI instructions (see the `system_skills` crate); they surface in the
+skills menu and AI skill tools like user skills, but have no document
+behind them, so clients must not offer to open them.
+ */
+export const getSystemSkillsHandlerResponse = zod
+  .object({
+    skills: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'The well-known id the skill is referenced by in mentions and AI tools.'
+              ),
+            name: zod.string().describe('The name of the skill.'),
+          })
+          .describe(
+            'A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.'
+          )
+      )
+      .describe('Every system skill, in display order.'),
+  })
+  .describe('Response listing the built-in system skills.');
 
 /**
  * Returns document metadata, user access level, and view location.
@@ -5456,7 +5532,7 @@ export const getDocumentResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .enum(['task', 'snippet'])
+                .enum(['task', 'snippet', 'skill'])
                 .describe(
                   'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                 ),
@@ -5628,7 +5704,7 @@ export const saveDocumentHandlerResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -6301,7 +6377,7 @@ export const copyDocumentResponse = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet'])
+                  .enum(['task', 'snippet', 'skill'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -6734,7 +6810,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet'])
+                  .enum(['task', 'snippet', 'skill'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -6790,7 +6866,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet'])
+                  .enum(['task', 'snippet', 'skill'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -6857,7 +6933,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task', 'snippet'])
+                  .enum(['task', 'snippet', 'skill'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -7026,7 +7102,7 @@ export const simpleSaveResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -7210,7 +7286,7 @@ export const getDocumentVersionResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task', 'snippet'])
+            .enum(['task', 'snippet', 'skill'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -7346,6 +7422,7 @@ export const listFavoritesResponse = zod
                 'crm_company',
                 'crm_contact',
                 'reminder',
+                'skill',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7390,6 +7467,7 @@ export const addFavoriteBody = zod
         'crm_company',
         'crm_contact',
         'reminder',
+        'skill',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -7435,6 +7513,7 @@ export const addFavoriteResponse = zod
         'crm_company',
         'crm_contact',
         'reminder',
+        'skill',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -7477,6 +7556,7 @@ export const reorderFavoritesBody = zod
                 'crm_company',
                 'crm_contact',
                 'reminder',
+                'skill',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -7512,6 +7592,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_company',
       'crm_contact',
       'reminder',
+      'skill',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -7633,6 +7714,13 @@ export const getHistoryHandlerResponse = zod.object({
                       type: zod.enum(['snippet']),
                     })
                     .describe('A snippet document — reusable markdown'),
+                  zod
+                    .object({
+                      type: zod.enum(['skill']),
+                    })
+                    .describe(
+                      'A skill document — markdown instructions for AI'
+                    ),
                 ])
                 .describe(
                   'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -8092,6 +8180,13 @@ export const getItemsSoupResponse = zod
                               })
                               .describe(
                                 'A snippet document — reusable markdown'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['skill']),
+                              })
+                              .describe(
+                                'A skill document — markdown instructions for AI'
                               ),
                           ])
                           .describe(
@@ -10640,6 +10735,7 @@ export const getItemsSoupResponse = zod
                                 'crm_company',
                                 'crm_contact',
                                 'reminder',
+                                'skill',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -11709,6 +11805,13 @@ export const postItemsSoupResponse = zod
                               })
                               .describe(
                                 'A snippet document — reusable markdown'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['skill']),
+                              })
+                              .describe(
+                                'A skill document — markdown instructions for AI'
                               ),
                           ])
                           .describe(
@@ -14257,6 +14360,7 @@ export const postItemsSoupResponse = zod
                                 'crm_company',
                                 'crm_contact',
                                 'reminder',
+                                'skill',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -14790,6 +14894,13 @@ export const postItemsSoupAstResponse = zod
                               })
                               .describe(
                                 'A snippet document — reusable markdown'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['skill']),
+                              })
+                              .describe(
+                                'A skill document — markdown instructions for AI'
                               ),
                           ])
                           .describe(
@@ -17340,6 +17451,7 @@ export const postItemsSoupAstResponse = zod
                                 'crm_company',
                                 'crm_contact',
                                 'reminder',
+                                'skill',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -18129,6 +18241,13 @@ export const postItemsSoupAstGroupedResponse = zod
                                     })
                                     .describe(
                                       'A snippet document — reusable markdown'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['skill']),
+                                    })
+                                    .describe(
+                                      'A skill document — markdown instructions for AI'
                                     ),
                                 ])
                                 .describe(
@@ -20775,6 +20894,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_company',
                                       'crm_contact',
                                       'reminder',
+                                      'skill',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -21216,6 +21336,13 @@ export const postItemsSoupAstGroupedResponse = zod
                                     })
                                     .describe(
                                       'A snippet document — reusable markdown'
+                                    ),
+                                  zod
+                                    .object({
+                                      type: zod.enum(['skill']),
+                                    })
+                                    .describe(
+                                      'A skill document — markdown instructions for AI'
                                     ),
                                 ])
                                 .describe(
@@ -23862,6 +23989,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'crm_company',
                                       'crm_contact',
                                       'reminder',
+                                      'skill',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -24043,6 +24171,13 @@ export const getPinsHandlerResponse = zod.object({
                               type: zod.enum(['snippet']),
                             })
                             .describe('A snippet document — reusable markdown'),
+                          zod
+                            .object({
+                              type: zod.enum(['skill']),
+                            })
+                            .describe(
+                              'A skill document — markdown instructions for AI'
+                            ),
                         ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -24181,6 +24316,13 @@ export const getPinsHandlerResponse = zod.object({
                               type: zod.enum(['snippet']),
                             })
                             .describe('A snippet document — reusable markdown'),
+                          zod
+                            .object({
+                              type: zod.enum(['skill']),
+                            })
+                            .describe(
+                              'A skill document — markdown instructions for AI'
+                            ),
                         ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -25578,6 +25720,13 @@ export const getProjectContentHandlerResponse = zod.object({
                         type: zod.enum(['snippet']),
                       })
                       .describe('A snippet document — reusable markdown'),
+                    zod
+                      .object({
+                        type: zod.enum(['skill']),
+                      })
+                      .describe(
+                        'A skill document — markdown instructions for AI'
+                      ),
                   ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -25792,6 +25941,13 @@ export const recentlyDeletedResponse = zod.object({
                           type: zod.enum(['snippet']),
                         })
                         .describe('A snippet document — reusable markdown'),
+                      zod
+                        .object({
+                          type: zod.enum(['skill']),
+                        })
+                        .describe(
+                          'A skill document — markdown instructions for AI'
+                        ),
                     ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
@@ -25886,6 +26042,7 @@ export const listRemindersQueryParams = zod.object({
       'crm_company',
       'crm_contact',
       'reminder',
+      'skill',
     ])
     .optional()
     .describe(
@@ -25967,6 +26124,7 @@ export const listRemindersResponse = zod
                     'crm_company',
                     'crm_contact',
                     'reminder',
+                    'skill',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -26051,6 +26209,7 @@ export const createReminderBody = zod
             'crm_company',
             'crm_contact',
             'reminder',
+            'skill',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26132,6 +26291,7 @@ export const getReminderResponse = zod
             'crm_company',
             'crm_contact',
             'reminder',
+            'skill',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -26273,6 +26433,7 @@ export const updateReminderResponse = zod
             'crm_company',
             'crm_contact',
             'reminder',
+            'skill',
           ])
           .describe('The type of an entity in Macro'),
       ])

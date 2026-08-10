@@ -25,6 +25,7 @@ import type {
   ReadResult,
   WriteResult,
 } from '../protocol';
+import { entityFromArgument } from './entity-resolvers';
 import {
   type NormalizedCacheExchangeOptions,
   normalizedCacheExchange,
@@ -38,6 +39,26 @@ const QUERY = gql`
     }
   }
 `;
+
+const ENTITY_RESOLVER_OPTIONS: NormalizedCacheExchangeOptions = {
+  entityResolvers: {
+    GraphqlUser: {
+      emailThread: entityFromArgument('GraphqlSoupEmailThread', [
+        'input',
+        'threadId',
+      ]),
+    },
+  },
+};
+
+const EXPECTED_ENTITY_RESOLVERS = [
+  {
+    parentType: 'GraphqlUser',
+    fieldName: 'emailThread',
+    targetType: 'GraphqlSoupEmailThread',
+    argumentPath: ['input', 'threadId'],
+  },
+];
 
 const SUBSCRIPTION = gql`
   subscription SoupUpdates {
@@ -129,6 +150,7 @@ type FakeHost = CacheHost & {
     query: string;
     variables?: object;
     priority?: 'user-visible';
+    entityResolvers?: readonly unknown[];
   }>;
   writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
   begins: Array<{
@@ -216,6 +238,7 @@ function makeFakeHost(): FakeHost {
         query: args.query,
         variables: args.variables,
         priority: args.priority,
+        entityResolvers: args.entityResolvers,
       });
       return readResult;
     },
@@ -694,6 +717,59 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.data).toEqual({ from: 'network' });
   });
 
+  it('compiles entity resolvers once and forwards them to initial and post-write reads', async () => {
+    const options = {
+      entityResolvers: ENTITY_RESOLVER_OPTIONS.entityResolvers,
+    } satisfies NormalizedCacheExchangeOptions;
+    const { ops, forwarded } = harness(host, undefined, options);
+    // Mutating the outer options after exchange construction cannot change
+    // the already-compiled read policy.
+    (options as NormalizedCacheExchangeOptions).entityResolvers = undefined;
+    ops.next(makeOp(1));
+    await tick();
+
+    expect(host.reads).toHaveLength(2);
+    expect(forwarded.map((operation) => operation.key)).toEqual([1]);
+    expect(host.reads.every((read) => read.entityResolvers !== undefined)).toBe(
+      true
+    );
+    expect(host.reads.map((read) => read.entityResolvers)).toEqual([
+      EXPECTED_ENTITY_RESOLVERS,
+      EXPECTED_ENTITY_RESOLVERS,
+    ]);
+  });
+
+  it('cache-first resolver hit emits without reaching the network', async () => {
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
+    const { ops, results, forwarded } = harness(
+      host,
+      undefined,
+      ENTITY_RESOLVER_OPTIONS
+    );
+    ops.next(makeOp(1));
+    await tick();
+
+    expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
+    expect(results[0]?.data).toEqual({ from: 'cache' });
+    expect(forwarded).toHaveLength(0);
+  });
+
+  it('rejects malformed resolver options during exchange construction', () => {
+    expect(() =>
+      normalizedCacheExchange(host, {
+        entityResolvers: {
+          GraphqlUser: {
+            emailThread: {
+              kind: 'entity-from-argument',
+              targetType: 'GraphqlSoupEmailThread',
+              argumentPath: ['input', 'bad'],
+            },
+          },
+        } as never,
+      })
+    ).toThrow('does not have ID argument path');
+  });
+
   it('cache-first hit emits without network', async () => {
     host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
     const { ops, results, forwarded } = harness(host);
@@ -723,24 +799,30 @@ describe('normalizedCacheExchange', () => {
   });
 
   it('network-only skips the initial read and refreshes dependencies after writing', async () => {
-    const { ops, results } = harness(host);
+    const { ops, results } = harness(host, undefined, ENTITY_RESOLVER_OPTIONS);
     ops.next(makeOp(1, 'network-only'));
     await tick();
 
     expect(host.reads).toHaveLength(1);
     expect(host.reads[0]?.opKey).toBe(1);
+    expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
     expect(results[0]?.data).toEqual({ from: 'network' });
     expect(host.writes).toHaveLength(1);
   });
 
   it('cache-only miss emits empty data and never touches the network', async () => {
-    const { ops, results, forwarded } = harness(host);
+    const { ops, results, forwarded } = harness(
+      host,
+      undefined,
+      ENTITY_RESOLVER_OPTIONS
+    );
     ops.next(makeOp(1, 'cache-only'));
     await tick();
 
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBeUndefined();
     expect(forwarded).toHaveLength(0);
+    expect(host.reads[0]?.entityResolvers).toEqual(EXPECTED_ENTITY_RESOLVERS);
   });
 
   it('cache read errors degrade to the network', async () => {
@@ -850,7 +932,7 @@ describe('normalizedCacheExchange', () => {
 
   it('re-executes each affected active operation once as a prioritized cache read', async () => {
     host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
-    const { ops, client } = harness(host);
+    const { ops, client } = harness(host, undefined, ENTITY_RESOLVER_OPTIONS);
     const op = makeOp(7, 'cache-and-network');
     ops.next(op);
     await tick();
@@ -869,6 +951,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads).toHaveLength(2);
     expect(host.reads[0]?.priority).toBeUndefined();
     expect(host.reads[1]?.priority).toBe('user-visible');
+    expect(host.reads.map((read) => read.entityResolvers)).toEqual([
+      EXPECTED_ENTITY_RESOLVERS,
+      EXPECTED_ENTITY_RESOLVERS,
+    ]);
   });
 
   it('teardown unregisters the op with the host and stops re-execution', async () => {

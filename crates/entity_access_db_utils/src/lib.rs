@@ -258,6 +258,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
             | EntityType::Reminder => {
@@ -325,6 +326,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
             | EntityType::Reminder => {

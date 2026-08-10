@@ -16,6 +16,7 @@ use crate::engine::{
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
 };
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
@@ -89,9 +90,16 @@ pub async fn graphql_cache_read(
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
 ) -> Result<ReadResultWire, String> {
     engine_handle(&state)?
-        .read(op_id, query, operation_name, variables.unwrap_or_default())
+        .read(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+        )
         .await
 }
 

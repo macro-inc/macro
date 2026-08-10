@@ -5586,6 +5586,73 @@
         }
       }
     },
+    "/documents/create_skill": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "operationId": "create_skill_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a skill.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created skill."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_snippet": {
       "post": {
         "tags": ["document"],
@@ -6176,6 +6243,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/system_skills": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "operationId": "get_system_skills_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response listing the built-in system skills.",
+                  "required": ["skills"],
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemSkillSummary"
+                      },
+                      "description": "Every system skill, in display order."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7822,7 +7929,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -9635,7 +9743,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -11015,7 +11124,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -12451,6 +12561,17 @@
               "type": {
                 "type": "string",
                 "enum": ["snippet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
               }
             }
           }
@@ -15093,7 +15214,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -15102,6 +15224,37 @@
           "schedule": {
             "$ref": "#/components/schemas/ReminderSchedule",
             "description": "When and how often the reminder fires."
+          }
+        }
+      },
+      "CreateSkillRequest": {
+        "type": "object",
+        "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "required": ["skillName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty skill document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the skill with."
+          },
+          "skillName": {
+            "type": "string",
+            "description": "The name of the skill."
+          }
+        }
+      },
+      "CreateSkillResponse": {
+        "type": "object",
+        "description": "Response for creating a skill.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created skill."
           }
         }
       },
@@ -16542,6 +16695,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -16689,7 +16853,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -17627,7 +17791,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17673,7 +17838,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -20991,7 +21157,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -22244,6 +22411,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -22992,7 +23170,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -23257,6 +23436,22 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "SystemSkillSummary": {
+        "type": "object",
+        "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The well-known id the skill is referenced by in mentions and AI tools."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the skill."
           }
         }
       },

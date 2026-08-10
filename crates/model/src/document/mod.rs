@@ -50,6 +50,8 @@ pub enum BasicDocumentSubType {
     },
     /// A snippet document — reusable markdown
     Snippet {},
+    /// A skill document — markdown instructions for AI
+    Skill {},
 }
 
 impl BasicDocumentSubType {
@@ -61,6 +63,7 @@ impl BasicDocumentSubType {
                 is_completed: is_completed.unwrap_or_default(),
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
+            DocumentSubType::Skill => Some(Self::Skill {}),
         }
     }
 }
@@ -321,6 +324,8 @@ pub enum DocumentPreviewDataSubType {
     },
     /// A snippet document — reusable markdown
     Snippet {},
+    /// A skill document — markdown instructions for AI
+    Skill {},
 }
 
 impl DocumentPreviewDataSubType {
@@ -332,6 +337,7 @@ impl DocumentPreviewDataSubType {
                 is_completed: is_completed.unwrap_or_default(),
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
+            DocumentSubType::Skill => Some(Self::Skill {}),
         }
     }
 }

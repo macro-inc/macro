@@ -351,11 +351,57 @@ export const ChannelsRecentWidget = (props: {
     return map;
   });
 
+  // A channel can carry unread notifications while being older than the
+  // newest-RECENT_CHANNELS_LIMIT window the main query returns. Fetch those
+  // stragglers by id so an unread channel always makes the list.
+  const missingUnreadChannelIds = createMemo(() => {
+    const entities = channelsQuery.data?.entities;
+    if (!entities) return [];
+    const listed = new Set(
+      entities.filter(isChannelEntity).map((entity) => entity.id)
+    );
+    // Sorted so the derived query key is stable across notification reorders.
+    return [...unreadByChannel().keys()].filter((id) => !listed.has(id)).sort();
+  });
+
+  const missingUnreadChannelsQuery = useSoupAstItemsQuery(
+    () => ({
+      // Sized to the id list, not RECENT_CHANNELS_LIMIT: this query must
+      // return every exact-id match, and a fixed limit would silently drop
+      // the oldest ones past it. The server clamps to its own [20, 500].
+      params: {
+        limit: missingUnreadChannelIds().length,
+        sort_method: 'updated_at',
+      },
+      body: compileToAst(
+        queryStateFrom(
+          defineQueryFilters({
+            include: {
+              channelId: missingUnreadChannelIds(),
+              channelImportance: true,
+              channelIsParticipant: [true],
+            },
+          })
+        )
+      ),
+    }),
+    () => ({
+      enabled: missingUnreadChannelIds().length > 0,
+      staleTime: RECENT_CHANNELS_STALE_MS,
+    })
+  );
+
   const recentChannels = createMemo<RecentChannel[]>(() => {
     const unread = unreadByChannel();
-    const channels = (channelsQuery.data?.entities ?? [])
-      .filter(isChannelEntity)
-      .map((entity) => ({ entity, unread: unread.get(entity.id) ?? [] }));
+    // Only ids still missing may merge in: placeholder rows from a previous id
+    // set must not duplicate a listed channel or resurrect a since-read one.
+    const missing = new Set(missingUnreadChannelIds());
+    const channels = [
+      ...(channelsQuery.data?.entities ?? []).filter(isChannelEntity),
+      ...(missingUnreadChannelsQuery.data?.entities ?? [])
+        .filter(isChannelEntity)
+        .filter((entity) => missing.has(entity.id)),
+    ].map((entity) => ({ entity, unread: unread.get(entity.id) ?? [] }));
     // Same ordering as the channels soup view…
     channels.sort((a, b) =>
       compareDateDesc(

@@ -31,8 +31,20 @@ describe('createTauriCacheHost', () => {
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1', hotCapacity: 42 });
+    const entityResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupEmailThread',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
 
-    const result = await host.readQuery({ opKey: 7, query: '{ x }' });
+    const result = await host.readQuery({
+      opKey: 7,
+      query: '{ x }',
+      entityResolvers,
+    });
     expect(result).toEqual({ kind: 'miss' });
 
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init', {
@@ -44,6 +56,7 @@ describe('createTauriCacheHost', () => {
       query: '{ x }',
       operationName: undefined,
       variables: undefined,
+      entityResolvers,
     });
   });
 

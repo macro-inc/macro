@@ -347,6 +347,16 @@ apps/web/src/lib/graphql-cache/ # JS glue
   as hashed assets (explicit `module_or_path` URL — vite copies the
   wasm-pack JS as an opaque asset, so its internal relative wasm URL had to
   be resolved at the caller).
+- Exchange-level `entityResolvers` can synthesize one singular normalized
+  entity relation from a field argument without persisting a link. The
+  supported subset is intentionally data-only: `entityFromArgument` accepts
+  a schema-generated concrete target typename and a non-list path ending in
+  GraphQL `ID`. Arbitrary callbacks, scalar transforms, lists/pagination,
+  partial results, and resolver writes are not supported. For extracted
+  configuration, preserve field-specific checks with
+  `satisfies EntityResolverConfig`; TypeScript `any`/assertions can bypass
+  static checks, but malformed values are rejected during exchange
+  construction and validated again by the Rust engine.
 - **Manual smoke test pending**: dev-server run with the override enabled
   (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
   behavior in the browser.

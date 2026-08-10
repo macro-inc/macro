@@ -32,6 +32,7 @@ use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
 use self_knowledge::SelfKnowledge;
+use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
@@ -54,12 +55,13 @@ pub use tool_context::{
     ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolImportService,
     ToolImportToolContext, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
-    ToolPropertiesToolContext, ToolServiceContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_crm_tool_context,
-    build_project_tool_context, build_properties_service, build_properties_tool_context,
-    build_task_properties_adapter, build_team_repository, build_team_tool_context,
+    ToolPropertiesToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
+    ToolSoupService, ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext,
+    ToolUserEmailService, build_channel_tool_context_with_dispatcher,
+    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    build_crm_tool_context, build_project_tool_context, build_properties_service,
+    build_properties_tool_context, build_skill_tool_context, build_task_properties_adapter,
+    build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -92,6 +94,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
+        .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
 

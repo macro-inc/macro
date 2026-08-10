@@ -628,6 +628,7 @@ pub struct ChannelReplyMetadata {
 pub enum NotificationDocumentSubType {
     Task,
     Snippet,
+    Skill,
 }
 
 /// Someone mentioned a document in a channel

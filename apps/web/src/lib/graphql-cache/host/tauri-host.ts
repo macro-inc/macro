@@ -156,6 +156,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
+        entityResolvers: args.entityResolvers,
       });
     },
 

@@ -13,6 +13,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
+import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import {
   CRM_VIEW_URL_PARAM,
@@ -522,6 +523,10 @@ registerComponent('email-compose', (params) => {
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
+});
+registerComponent('skill-compose', (params) => {
+  usePageViewTracking('skill-compose');
+  return <ComposeSkill {...params} />;
 });
 registerComponent(
   'import-linear',

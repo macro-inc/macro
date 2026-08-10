@@ -178,7 +178,7 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 export type EmailPreset = 'signal';
 /**
  * Item returned by the list entities AI tool.
@@ -231,7 +231,8 @@ export type EntityItem =
        */
       name: string;
       /**
-       * The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+       * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
+       * "skill" for skills.
        */
       subType?: string | null;
       /**
@@ -450,6 +451,10 @@ export type SearchResult = {
   type: 'web_search_result';
   url: string;
 };
+/**
+ * How search terms are matched against skill names.
+ */
+export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
  * A search result annotated with the caller-visible tags on the item.
  */
@@ -2114,7 +2119,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
     [k: string]: unknown;
@@ -2397,6 +2402,37 @@ export interface NotificationItem {
    * The user ID of the sender, if any.
    */
   senderId?: string | null;
+}
+/**
+ * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
+ */
+export type ListSkills = {};
+/**
+ * Response for a skill listing.
+ */
+export interface ListSkillsResponse {
+  /**
+   * The user's skills, most recently updated first.
+   */
+  results: SkillSearchResult[];
+}
+/**
+ * A skill matched by a skill search.
+ */
+export interface SkillSearchResult {
+  /**
+   * The document id of the skill. Read the skill's instructions with
+   * ReadContent using this id.
+   */
+  documentId: string;
+  /**
+   * The name of the skill.
+   */
+  name: string;
+  /**
+   * When the skill was last updated, when known.
+   */
+  updatedAt?: string | null;
 }
 /**
  * List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags.
@@ -3454,6 +3490,25 @@ export interface RenameDocumentResponse {
    * Whether the rename succeeded.
    */
   success: boolean;
+}
+/**
+ * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
+ */
+export interface SearchSkills {
+  matchType?: SearchSkillsMatchType;
+  /**
+   * The skill name to search. Pass 1-3 keywords drawn from words that would literally appear in the skill's name. The whole query is matched as a single adjacent phrase prefix, so long phrases will not match.
+   */
+  name: string;
+}
+/**
+ * Response for a skill search.
+ */
+export interface SearchSkillsResponse {
+  /**
+   * The matched skills, most recently updated first.
+   */
+  results: SkillSearchResult[];
 }
 export interface SearchToolResponse {
   results: TaggedSearchResult[];

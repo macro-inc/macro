@@ -137,16 +137,29 @@ describe('createWorkerCacheHost', () => {
     }
     vi.stubGlobal('SharedWorker', FakeSharedWorker);
     const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const entityResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupEmailThread',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
 
     await expect(
       host.readQuery({
         opKey: 7,
         query: 'query GroupSoup { groupSoup }',
         priority: 'user-visible',
+        entityResolvers,
       })
     ).resolves.toEqual({ kind: 'hit', data: { soup: true } });
     expect(requests).toContainEqual(
-      expect.objectContaining({ kind: 'read', priority: 'user-visible' })
+      expect.objectContaining({
+        kind: 'read',
+        priority: 'user-visible',
+        entityResolvers,
+      })
     );
     host.dispose();
   });
