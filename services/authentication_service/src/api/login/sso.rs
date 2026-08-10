@@ -37,8 +37,8 @@ pub(crate) struct LoginQueryParams {
 
 fn is_allowed_original_url(url: &Url) -> bool {
     match url.scheme() {
-        // The iOS app uses macro://login as its authentication callback.
-        "macro" => url.host_str() == Some("login"),
+        // The app owns the custom scheme and handles all macro URI routes itself.
+        "macro" => true,
         "tauri" => url.host_str() == Some("localhost"),
         "http" => matches!(url.host_str(), Some("localhost" | "tauri.localhost")),
         "https" => matches!(
