@@ -90,11 +90,8 @@ fn protected_resource_metadata_includes_rfc9728_resource() {
         Some("https://mcp-server.example.com")
     );
     assert_eq!(
-        meta.get("authorization_servers")
-            .and_then(|v| v.as_array())
-            .and_then(|a| a.first())
-            .and_then(|v| v.as_str()),
-        Some("https://mcp-server.example.com")
+        meta.get("authorization_servers"),
+        Some(&serde_json::json!(["https://mcp-server.example.com"]))
     );
     assert_eq!(
         meta.get("resource_name").and_then(|v| v.as_str()),
