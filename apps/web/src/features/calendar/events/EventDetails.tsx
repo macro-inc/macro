@@ -9,6 +9,7 @@ import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GlobeIcon from '@phosphor/globe.svg';
@@ -19,6 +20,7 @@ import PersonIcon from '@phosphor/user.svg';
 import UsersIcon from '@phosphor/users.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Avatar, Button } from '@ui';
@@ -35,6 +37,11 @@ import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
 } from '../time-format';
+import {
+  formatReminderOffset,
+  REMINDER_METHOD_POPUP,
+  resolveReminderOverrides,
+} from './event-reminders';
 import { formatRecurrenceDescription } from './recurrence-description';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
@@ -310,6 +317,42 @@ function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
     : undefined;
 }
 
+/**
+ * The reminders the event resolves to, one line each: its own overrides when
+ * it departed from the calendar defaults, the calendar defaults otherwise.
+ * Nothing renders while the calendar (and so its defaults) is unknown.
+ */
+function EventRemindersItem(props: { event: CalendarEvent }) {
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const reminders = createMemo(() => {
+    const calendar = calendarsQuery.data?.find(
+      (candidate) => candidate.id === props.event.calendarId
+    );
+    return resolveReminderOverrides(
+      props.event.reminders,
+      calendar?.defaultReminders
+    ).toSorted((a, b) => a.minutes - b.minutes);
+  });
+
+  return (
+    <Show when={reminders().length > 0}>
+      <div class="-ml-7 flex items-start gap-3">
+        <BellSimpleIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+        <div class="flex select-text flex-col gap-0.5">
+          <For each={reminders()}>
+            {(reminder) => (
+              <span>
+                {formatReminderOffset(reminder.minutes)}
+                {reminder.method === REMINDER_METHOD_POPUP ? '' : ' (email)'}
+              </span>
+            )}
+          </For>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
 function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
   const macroId = props.organizer.email
     ? emailToMacroId(props.organizer.email)
@@ -468,6 +511,8 @@ export function EventDetails(props: {
                 </div>
               )}
             </Show>
+
+            <EventRemindersItem event={props.event} />
 
             <Show when={organizer()}>
               {(eventOrganizer) => (

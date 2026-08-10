@@ -11,6 +11,7 @@ import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
 import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail';
 import type { CalendarEventOrganizerName } from './calendarEventOrganizerName';
+import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
 import type { EventTransparency } from './eventTransparency';
@@ -47,6 +48,10 @@ projections stored before calendars were attributed. */
   ownerId: string;
   /** Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). */
   recurrenceLines: string[];
+  /** Per-user reminder configuration. Skipped when it is the provider
+default so projections stored before reminders were modeled still
+compare equal. */
+  reminders?: EventReminders;
   /**
    * Provider/iCalendar sequence number.
    * @minimum 0

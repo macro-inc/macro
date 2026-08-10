@@ -4,10 +4,10 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
-        CalendarSyncStatus, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
-        ProviderCalendar, StoredGoogleCalendar,
+        CalendarSyncStatus, EventReminders, EventStatus, EventTime, EventTransparency,
+        EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
+        GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
+        GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -187,6 +187,7 @@ fn valid_upsert() -> CalendarEventUpsert {
                 is_self: true,
                 comment: None,
             }],
+            reminders: EventReminders::default(),
             created_at: starts_at,
             updated_at: starts_at,
         },
@@ -424,6 +425,7 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
             access_role: Some("owner".to_string()),
             is_primary: primary,
             is_selected: true,
+            default_reminders: Vec::new(),
         };
         Ok(vec![calendar("primary", true), calendar("team", false)])
     }
@@ -546,6 +548,7 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
             access_role: Some("reader".to_string()),
             is_primary: false,
             is_selected: true,
+            default_reminders: Vec::new(),
         }])
     }
 

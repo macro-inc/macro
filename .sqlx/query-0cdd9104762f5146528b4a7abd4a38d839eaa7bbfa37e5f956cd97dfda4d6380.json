@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO calendars (\n            id, account_id, provider_calendar_id, name, description,\n            time_zone, color, access_role, is_primary, is_selected\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ON CONFLICT (account_id, provider_calendar_id) DO UPDATE SET\n            name = EXCLUDED.name,\n            description = EXCLUDED.description,\n            time_zone = EXCLUDED.time_zone,\n            color = EXCLUDED.color,\n            access_role = EXCLUDED.access_role,\n            is_primary = EXCLUDED.is_primary,\n            is_selected = EXCLUDED.is_selected,\n            is_deleted = false,\n            updated_at = now()\n        RETURNING\n            id,\n            sync_token,\n            materialized_starts_at,\n            materialized_ends_at,\n            materialized_start_date,\n            materialized_end_date,\n            synced_at,\n            watch_expires_at\n        ",
+  "query": "\n        INSERT INTO calendars (\n            id, account_id, provider_calendar_id, name, description,\n            time_zone, color, access_role, is_primary, is_selected,\n            default_reminders\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n        ON CONFLICT (account_id, provider_calendar_id) DO UPDATE SET\n            name = EXCLUDED.name,\n            description = EXCLUDED.description,\n            time_zone = EXCLUDED.time_zone,\n            color = EXCLUDED.color,\n            access_role = EXCLUDED.access_role,\n            is_primary = EXCLUDED.is_primary,\n            is_selected = EXCLUDED.is_selected,\n            is_deleted = false,\n            default_reminders = EXCLUDED.default_reminders,\n            updated_at = now()\n        RETURNING\n            id,\n            sync_token,\n            materialized_starts_at,\n            materialized_ends_at,\n            materialized_start_date,\n            materialized_end_date,\n            synced_at,\n            watch_expires_at\n        ",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,8 @@
         "Text",
         "Text",
         "Bool",
-        "Bool"
+        "Bool",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -69,5 +70,5 @@
       true
     ]
   },
-  "hash": "61e3a8b8718918c4e8f7ac025b83db6cb7d2800b924c29803e776f8b56ce7726"
+  "hash": "0cdd9104762f5146528b4a7abd4a38d839eaa7bbfa37e5f956cd97dfda4d6380"
 }

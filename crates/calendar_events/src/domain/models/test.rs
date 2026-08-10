@@ -139,3 +139,99 @@ fn event_time_serializes_nested_fields_as_camel_case() {
     assert_eq!(value["timeZone"], "America/New_York");
     assert!(value.get("starts_at").is_none());
 }
+
+#[test]
+fn default_reminders_stay_out_of_serialized_projections() {
+    let starts_at = Utc.with_ymd_and_hms(2026, 8, 10, 14, 0, 0).unwrap();
+    let mut event = CalendarEvent {
+        id: uuid::Uuid::now_v7(),
+        owner_id: "macro|projection@example.com".to_string(),
+        ical_uid: "projection@example.com".to_string(),
+        calendar_id: None,
+        title: "Projection".to_string(),
+        description: None,
+        location: None,
+        status: EventStatus::Confirmed,
+        visibility: EventVisibility::Default,
+        transparency: EventTransparency::Opaque,
+        time: EventTime::Timed {
+            starts_at,
+            ends_at: starts_at + chrono::Duration::hours(1),
+            time_zone: None,
+        },
+        recurrence_lines: Vec::new(),
+        organizer_email: None,
+        organizer_name: None,
+        conference_url: None,
+        sequence: 0,
+        is_read_only: false,
+        attendees: Vec::new(),
+        reminders: EventReminders::default(),
+        created_at: starts_at,
+        updated_at: starts_at,
+    };
+
+    // Projections stored before reminders were modeled have no `reminders`
+    // key. Serializing the default as nothing keeps them comparing equal to
+    // fresh normalizations, so full snapshots stay no-ops.
+    let serialized = serde_json::to_value(&event).unwrap();
+    assert!(serialized.get("reminders").is_none());
+    let legacy: CalendarEvent = serde_json::from_value(serialized).unwrap();
+    assert_eq!(legacy.reminders, EventReminders::default());
+
+    event.reminders = EventReminders {
+        use_default: false,
+        overrides: vec![EventReminderOverride {
+            method: REMINDER_METHOD_POPUP.to_string(),
+            minutes: 10,
+        }],
+    };
+    let serialized = serde_json::to_value(&event).unwrap();
+    assert_eq!(serialized["reminders"]["useDefault"], false);
+    let explicit: CalendarEvent = serde_json::from_value(serialized).unwrap();
+    assert_eq!(explicit.reminders, event.reminders);
+}
+
+#[test]
+fn popup_minutes_resolve_defaults_and_deduplicate() {
+    let defaults = vec![
+        EventReminderOverride {
+            method: REMINDER_METHOD_POPUP.to_string(),
+            minutes: 30,
+        },
+        EventReminderOverride {
+            method: REMINDER_METHOD_EMAIL.to_string(),
+            minutes: 60,
+        },
+    ];
+
+    assert_eq!(EventReminders::default().popup_minutes(&defaults), vec![30]);
+
+    let explicit = EventReminders {
+        use_default: false,
+        overrides: vec![
+            EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: 10,
+            },
+            EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: 10,
+            },
+            EventReminderOverride {
+                method: REMINDER_METHOD_EMAIL.to_string(),
+                minutes: 5,
+            },
+        ],
+    };
+    assert_eq!(explicit.popup_minutes(&defaults), vec![10]);
+    assert_eq!(
+        EventReminders {
+            use_default: false,
+            overrides: Vec::new(),
+        }
+        .popup_minutes(&defaults),
+        Vec::<u32>::new(),
+        "explicitly no reminders resolves to nothing even with defaults"
+    );
+}

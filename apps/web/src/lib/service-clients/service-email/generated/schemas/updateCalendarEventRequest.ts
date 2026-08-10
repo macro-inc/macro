@@ -8,6 +8,7 @@ import type { UpdateCalendarEventRequestAttendees } from './updateCalendarEventR
 import type { UpdateCalendarEventRequestDescription } from './updateCalendarEventRequestDescription';
 import type { UpdateCalendarEventRequestLocation } from './updateCalendarEventRequestLocation';
 import type { UpdateCalendarEventRequestRecurrenceLines } from './updateCalendarEventRequestRecurrenceLines';
+import type { UpdateCalendarEventRequestReminders } from './updateCalendarEventRequestReminders';
 import type { UpdateCalendarEventRequestTime } from './updateCalendarEventRequestTime';
 import type { UpdateCalendarEventRequestTitle } from './updateCalendarEventRequestTitle';
 import type { UpdateCalendarEventRequestTransparency } from './updateCalendarEventRequestTransparency';
@@ -25,6 +26,7 @@ export interface UpdateCalendarEventRequest {
   location?: UpdateCalendarEventRequestLocation;
   /** Replacement recurrence properties; an empty list clears them. */
   recurrenceLines?: UpdateCalendarEventRequestRecurrenceLines;
+  reminders?: UpdateCalendarEventRequestReminders;
   time?: UpdateCalendarEventRequestTime;
   /** Replacement title; an empty string clears it. */
   title?: UpdateCalendarEventRequestTitle;

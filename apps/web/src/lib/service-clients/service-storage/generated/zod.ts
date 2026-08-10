@@ -928,6 +928,8 @@ export const listOccurrencesQueryParams = zod.object({
     .describe('Opaque continuation cursor returned by the previous page.'),
 });
 
+export const listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesMin = 0;
+
 export const listOccurrencesResponseItemsItemEventSequenceMin = 0;
 
 export const listOccurrencesResponse = zod
@@ -1019,6 +1021,42 @@ export const listOccurrencesResponse = zod
                 .array(zod.string())
                 .describe(
                   'Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).'
+                ),
+              reminders: zod
+                .object({
+                  overrides: zod
+                    .array(
+                      zod
+                        .object({
+                          method: zod
+                            .string()
+                            .describe(
+                              'Provider method, stored verbatim; only `popup` fires Macro\nnotifications.'
+                            ),
+                          minutes: zod
+                            .number()
+                            .min(
+                              listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesMin
+                            )
+                            .describe('Minutes before the event start.'),
+                        })
+                        .describe(
+                          "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires."
+                        )
+                    )
+                    .optional()
+                    .describe(
+                      'Explicit reminders replacing the defaults when `use_default` is off.'
+                    ),
+                  useDefault: zod
+                    .boolean()
+                    .describe(
+                      "Whether the calendar's default reminders apply."
+                    ),
+                })
+                .optional()
+                .describe(
+                  "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely."
                 ),
               sequence: zod
                 .number()

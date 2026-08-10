@@ -558,3 +558,121 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["responseStatus"], "declined");
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
 }
+
+#[test]
+fn reminders_round_trip_between_google_and_the_domain() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "alarms@example.com",
+        "summary": "Alarmed",
+        "start": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z", "timeZone": "UTC"},
+        "reminders": {"useDefault": false, "overrides": [
+            {"method": "popup", "minutes": 10},
+            {"method": "email", "minutes": 60}
+        ]},
+        "created": "2026-07-20T14:00:00Z",
+        "updated": "2026-07-21T14:00:00Z"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-07-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|alarms@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    let upsert = map_upsert(&target, master.clone(), Vec::new(), Vec::new()).unwrap();
+    assert_eq!(
+        upsert.event.reminders,
+        EventReminders {
+            use_default: false,
+            overrides: vec![
+                EventReminderOverride {
+                    method: "popup".to_string(),
+                    minutes: 10,
+                },
+                EventReminderOverride {
+                    method: "email".to_string(),
+                    minutes: 60,
+                },
+            ],
+        },
+    );
+
+    // The raw payload keeps the field, so nothing is lost at ingestion.
+    let CalendarEventSource::Google(source) = &upsert.source;
+    assert_eq!(
+        source.raw_payload["reminders"]["overrides"][0]["minutes"],
+        serde_json::json!(10),
+    );
+
+    // An event without the field follows its calendar's defaults.
+    let mut bare = master;
+    bare.reminders = None;
+    let upsert = map_upsert(&target, bare, Vec::new(), Vec::new()).unwrap();
+    assert_eq!(upsert.event.reminders, EventReminders::default());
+}
+
+#[test]
+fn mutation_bodies_serialize_reminders_in_google_shape() {
+    let reminders = EventReminders {
+        use_default: false,
+        overrides: vec![EventReminderOverride {
+            method: "popup".to_string(),
+            minutes: 15,
+        }],
+    };
+    let expected = serde_json::json!({
+        "useDefault": false,
+        "overrides": [{"method": "popup", "minutes": 15}],
+    });
+
+    let draft = CalendarEventDraft {
+        title: "New".to_string(),
+        description: None,
+        location: None,
+        time: EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-07-24T14:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-07-24T15:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        },
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        visibility: None,
+        transparency: None,
+        reminders: Some(reminders.clone()),
+    };
+    assert_eq!(draft_body(&draft)["reminders"], expected);
+
+    let patch = CalendarEventPatch {
+        reminders: Some(reminders),
+        ..CalendarEventPatch::default()
+    };
+    assert_eq!(patch_body(&patch)["reminders"], expected);
+    assert_eq!(
+        patch_body(&CalendarEventPatch::default())
+            .as_object()
+            .unwrap()
+            .get("reminders"),
+        None,
+        "an untouched patch must not clobber provider reminders"
+    );
+}

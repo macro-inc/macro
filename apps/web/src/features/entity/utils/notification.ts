@@ -138,6 +138,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('github_pr_review', () => 'reviewed')
     .with('call_started', () => 'called')
     .with('reminder', () => 'reminder')
+    .with('calendar_event_reminder', () => 'starting soon')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
@@ -200,6 +201,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)
+    .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .exhaustive();
 }

@@ -33,6 +33,8 @@ export function mapCalendarOccurrence(
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
     attendees: event.attendees ?? [],
+    reminders: event.reminders ?? undefined,
+    calendarId: event.calendarId ?? undefined,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: event.title,
     calendar: source,

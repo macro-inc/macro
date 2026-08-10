@@ -568,6 +568,8 @@ export * from './entityReference';
 export * from './entityReferenceSpecificMessageId';
 export * from './entityType';
 export * from './errorResponse';
+export * from './eventReminderOverride';
+export * from './eventReminders';
 export * from './eventStatus';
 export * from './eventTime';
 export * from './eventTimeOneOf';

@@ -1,4 +1,5 @@
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
+import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 
 /** Supported FullCalendar period views. */
 export type CalendarPeriodView =
@@ -44,6 +45,10 @@ export interface CalendarEvent {
   organizerEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
+  /** Per-user reminder configuration; absent means the calendar default. */
+  reminders?: EventReminders;
+  /** Canonical calendar entity id, for resolving default reminders. */
+  calendarId?: string;
   /** Raw recurrence rules attached to the canonical event. */
   recurrenceLines: string[];
   /** Original IANA timezone for a timed occurrence. */

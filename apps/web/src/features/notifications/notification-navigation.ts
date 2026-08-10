@@ -15,6 +15,7 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import {
+  ENABLE_CALENDAR_UI,
   ENABLE_REMINDERS,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -385,6 +386,18 @@ function getSupportedHandler(
         if (!blockName) return;
 
         openSplitIfNotOpen(lm, blockName, entityId, {
+          newSplit,
+          sourceHandle,
+        });
+      };
+    })
+    .with('calendar_event_reminder', () => {
+      return async (lm: SplitManager, newSplit: boolean = false) => {
+        // A reminder delivered before the flag closed still has a live
+        // notification; opening it must not reach a surface the user is no
+        // longer meant to have.
+        if (!ENABLE_CALENDAR_UI()) return;
+        openSplitIfNotOpen(lm, 'component', 'calendar', {
           newSplit,
           sourceHandle,
         });

@@ -706,6 +706,55 @@ export const listTypedNotificationsResponse = zod
                     ),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance end, for timed events.'),
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The calendar event entity the alarm belongs to.'
+                            ),
+                          minutesBefore: zod
+                            .number()
+                            .describe(
+                              'Minutes before the start the alarm was configured to fire.'
+                            ),
+                          occurrenceKey: zod
+                            .string()
+                            .describe(
+                              'Stable occurrence key of the instance that is starting.'
+                            ),
+                          startDate: zod.iso
+                            .date()
+                            .nullish()
+                            .describe(
+                              'Instance start date, for all-day events.'
+                            ),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance start, for timed events.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'IANA zone for rendering local clock times, when known.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event display title at dispatch time.'),
+                        })
+                        .describe(
+                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                        ),
+                      tag: zod.enum(['calendar_event_reminder']),
+                    })
+                    .describe('A calendar event alarm came due.'),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -2006,6 +2055,55 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     ),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance end, for timed events.'),
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The calendar event entity the alarm belongs to.'
+                            ),
+                          minutesBefore: zod
+                            .number()
+                            .describe(
+                              'Minutes before the start the alarm was configured to fire.'
+                            ),
+                          occurrenceKey: zod
+                            .string()
+                            .describe(
+                              'Stable occurrence key of the instance that is starting.'
+                            ),
+                          startDate: zod.iso
+                            .date()
+                            .nullish()
+                            .describe(
+                              'Instance start date, for all-day events.'
+                            ),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance start, for timed events.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'IANA zone for rendering local clock times, when known.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event display title at dispatch time.'),
+                        })
+                        .describe(
+                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                        ),
+                      tag: zod.enum(['calendar_event_reminder']),
+                    })
+                    .describe('A calendar event alarm came due.'),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -3300,6 +3398,55 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     ),
                   zod
                     .object({
+                      content: zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance end, for timed events.'),
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The calendar event entity the alarm belongs to.'
+                            ),
+                          minutesBefore: zod
+                            .number()
+                            .describe(
+                              'Minutes before the start the alarm was configured to fire.'
+                            ),
+                          occurrenceKey: zod
+                            .string()
+                            .describe(
+                              'Stable occurrence key of the instance that is starting.'
+                            ),
+                          startDate: zod.iso
+                            .date()
+                            .nullish()
+                            .describe(
+                              'Instance start date, for all-day events.'
+                            ),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Instance start, for timed events.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'IANA zone for rendering local clock times, when known.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event display title at dispatch time.'),
+                        })
+                        .describe(
+                          'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                        ),
+                      tag: zod.enum(['calendar_event_reminder']),
+                    })
+                    .describe('A calendar event alarm came due.'),
+                  zod
+                    .object({
                       content: zod.object({
                         messageId: zod.string(),
                         summary: zod.string(),
@@ -4563,6 +4710,53 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('A reminder the user set for themselves came due.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  endsAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Instance end, for timed events.'),
+                  eventId: zod
+                    .uuid()
+                    .describe(
+                      'The calendar event entity the alarm belongs to.'
+                    ),
+                  minutesBefore: zod
+                    .number()
+                    .describe(
+                      'Minutes before the start the alarm was configured to fire.'
+                    ),
+                  occurrenceKey: zod
+                    .string()
+                    .describe(
+                      'Stable occurrence key of the instance that is starting.'
+                    ),
+                  startDate: zod.iso
+                    .date()
+                    .nullish()
+                    .describe('Instance start date, for all-day events.'),
+                  startsAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Instance start, for timed events.'),
+                  timeZone: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'IANA zone for rendering local clock times, when known.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe('Event display title at dispatch time.'),
+                })
+                .describe(
+                  'A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.'
+                ),
+              tag: zod.enum(['calendar_event_reminder']),
+            })
+            .describe('A calendar event alarm came due.'),
           zod
             .object({
               content: zod.object({

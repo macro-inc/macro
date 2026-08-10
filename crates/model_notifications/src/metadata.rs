@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
@@ -1394,6 +1394,111 @@ impl NotificationExtIos for ReminderMetadata {
         // the entity in the way a mention is, so two reminders on one document
         // stay two alerts.
         NotifCollapseKey::new(Self::TYPE_NAME).append(&self.reminder_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
+/// A calendar event alarm came due. Like [`ReminderMetadata`], these are
+/// self-notifications: `sender_id` must stay `None` or the only recipient is
+/// filtered out. Everything the alert renders rides in here so the
+/// dispatcher never has to resolve the event again at display time.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventReminderMetadata {
+    /// The calendar event entity the alarm belongs to.
+    #[schema(value_type = String, format = Uuid)]
+    pub event_id: Uuid,
+    /// Stable occurrence key of the instance that is starting.
+    pub occurrence_key: String,
+    /// Event display title at dispatch time.
+    pub title: String,
+    /// Instance start, for timed events.
+    pub starts_at: Option<DateTime<Utc>>,
+    /// Instance end, for timed events.
+    pub ends_at: Option<DateTime<Utc>>,
+    /// Instance start date, for all-day events.
+    #[schema(value_type = Option<String>, format = Date)]
+    pub start_date: Option<NaiveDate>,
+    /// IANA zone for rendering local clock times, when known.
+    pub time_zone: Option<String>,
+    /// Minutes before the start the alarm was configured to fire.
+    pub minutes_before: i32,
+}
+
+impl CalendarEventReminderMetadata {
+    fn display_zone(&self) -> Option<chrono_tz::Tz> {
+        self.time_zone.as_deref()?.parse().ok()
+    }
+}
+
+impl Notification for CalendarEventReminderMetadata {
+    const TYPE_NAME: &'static str = "calendar_event_reminder";
+}
+
+impl NotificationTitle for CalendarEventReminderMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(if self.title.is_empty() {
+            "(No title)".to_string()
+        } else {
+            self.title.clone()
+        })
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        if let (Some(starts_at), Some(zone)) = (self.starts_at, self.display_zone()) {
+            let start = starts_at.with_timezone(&zone).format("%-I:%M %p");
+            return Ok(match self.ends_at {
+                Some(ends_at) => {
+                    let end = ends_at.with_timezone(&zone).format("%-I:%M %p");
+                    format!("{start} – {end}")
+                }
+                None => start.to_string(),
+            });
+        }
+        if self.start_date.is_some() {
+            return Ok("All day".to_string());
+        }
+        // No renderable local time; fall back to the configured offset.
+        Ok(match self.minutes_before {
+            minutes if minutes <= 0 => "Starting now".to_string(),
+            minutes if minutes % 1440 == 0 => match minutes / 1440 {
+                1 => "Starts in 1 day".to_string(),
+                days => format!("Starts in {days} days"),
+            },
+            minutes if minutes % 60 == 0 => match minutes / 60 {
+                1 => "Starts in 1 hour".to_string(),
+                hours => format!("Starts in {hours} hours"),
+            },
+            1 => "Starts in 1 minute".to_string(),
+            minutes => format!("Starts in {minutes} minutes"),
+        })
+    }
+}
+
+impl NotificationExtIos for CalendarEventReminderMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        // Keyed on the exact firing so a redelivery replaces its alert while
+        // distinct offsets on the same occurrence stay separate alerts.
+        NotifCollapseKey::new(Self::TYPE_NAME)
+            .append(&self.event_id.to_string())
+            .append(&self.occurrence_key)
+            .append(&self.minutes_before.to_string())
     }
 
     fn as_apns<'a>(

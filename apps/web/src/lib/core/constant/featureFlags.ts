@@ -598,6 +598,17 @@ export const ENABLE_CALENDAR_UI_OVERRIDE =
   getFeatureFlagOverride('ENABLE_CALENDAR_UI') ??
   (DEV_MODE_ENV ? true : undefined);
 
+/**
+ * Non-reactive check for imperative call sites (notification navigation).
+ * For reactive UI, prefer `useCalendarUiFlag()`.
+ */
+export function ENABLE_CALENDAR_UI(): boolean {
+  if (ENABLE_CALENDAR_UI_OVERRIDE !== undefined) {
+    return ENABLE_CALENDAR_UI_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_UI_FLAG) ?? false;
+}
+
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.

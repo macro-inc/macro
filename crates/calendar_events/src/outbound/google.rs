@@ -12,10 +12,10 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput, CalendarEvent,
         CalendarEventDraft, CalendarEventOverride, CalendarEventPatch, CalendarEventSource,
-        CalendarEventUpsert, CalendarOccurrence, EventStart, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GoogleCalendarTarget, GoogleEventSource,
-        GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
-        OccurrenceRange, ProviderCalendar,
+        CalendarEventUpsert, CalendarOccurrence, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventVisibility, GoogleCalendarTarget,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel,
+        GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
@@ -377,6 +377,11 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
                 access_role: calendar.access_role,
                 is_primary: calendar.primary,
                 is_selected: calendar.selected,
+                default_reminders: calendar
+                    .default_reminders
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
             })
             .collect())
     }
@@ -1368,7 +1373,26 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
     if let Some(transparency) = draft.transparency {
         body["transparency"] = serde_json::Value::String(transparency.as_str().to_string());
     }
+    if let Some(reminders) = &draft.reminders {
+        body["reminders"] = google_reminders_body(reminders);
+    }
     body
+}
+
+fn google_reminders_body(reminders: &EventReminders) -> serde_json::Value {
+    serde_json::json!({
+        "useDefault": reminders.use_default,
+        "overrides": reminders
+            .overrides
+            .iter()
+            .map(|reminder| {
+                serde_json::json!({
+                    "method": reminder.method,
+                    "minutes": reminder.minutes,
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
 }
 
 fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
@@ -1398,6 +1422,9 @@ fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
     }
     if let Some(transparency) = patch.transparency {
         body["transparency"] = serde_json::Value::String(transparency.as_str().to_string());
+    }
+    if let Some(reminders) = &patch.reminders {
+        body["reminders"] = google_reminders_body(reminders);
     }
     body
 }
@@ -1600,6 +1627,7 @@ fn map_upsert(
             .into_iter()
             .filter_map(map_attendee)
             .collect(),
+        reminders: map_reminders(master.reminders.as_ref()),
         created_at,
         updated_at,
     };
@@ -1753,6 +1781,20 @@ fn google_start(value: &GoogleEventDateTime) -> Option<EventStart> {
     }
 }
 
+/// An absent `reminders` field means the calendar defaults apply — the same
+/// resolution Google performs, so a calendar with no defaults fires nothing.
+fn map_reminders(value: Option<&GoogleEventReminders>) -> EventReminders {
+    value.map_or_else(EventReminders::default, |reminders| EventReminders {
+        use_default: reminders.use_default,
+        overrides: reminders
+            .overrides
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect(),
+    })
+}
+
 fn map_attendee(value: GoogleAttendee) -> Option<CalendarAttendee> {
     let email = value.email?.to_ascii_lowercase();
     Some(CalendarAttendee {
@@ -1860,6 +1902,8 @@ struct GoogleCalendar {
     primary: bool,
     #[serde(default)]
     selected: bool,
+    #[serde(default)]
+    default_reminders: Vec<GoogleReminderOverride>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1896,9 +1940,37 @@ struct GoogleEvent {
     attendees: Option<Vec<GoogleAttendee>>,
     hangout_link: Option<String>,
     conference_data: Option<GoogleConferenceData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reminders: Option<GoogleEventReminders>,
     sequence: Option<u32>,
     created: Option<String>,
     updated: Option<String>,
+}
+
+/// The requester's private reminder configuration on an event.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleEventReminders {
+    #[serde(default)]
+    use_default: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    overrides: Vec<GoogleReminderOverride>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleReminderOverride {
+    method: String,
+    minutes: u32,
+}
+
+impl From<GoogleReminderOverride> for EventReminderOverride {
+    fn from(value: GoogleReminderOverride) -> Self {
+        Self {
+            method: value.method,
+            minutes: value.minutes,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

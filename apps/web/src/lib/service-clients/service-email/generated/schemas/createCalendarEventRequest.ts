@@ -9,6 +9,7 @@ import type { CreateCalendarEventRequestCalendarId } from './createCalendarEvent
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
+import type { CreateCalendarEventRequestReminders } from './createCalendarEventRequestReminders';
 import type { CreateCalendarEventRequestTransparency } from './createCalendarEventRequestTransparency';
 import type { CreateCalendarEventRequestVisibility } from './createCalendarEventRequestVisibility';
 import type { EventTime } from './eventTime';
@@ -31,6 +32,7 @@ to the requester's primary inbox. */
   location?: CreateCalendarEventRequestLocation;
   /** Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). */
   recurrenceLines?: string[];
+  reminders?: CreateCalendarEventRequestReminders;
   /** Timed or all-day shape. */
   time: EventTime;
   /** Display title. */

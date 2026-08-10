@@ -2545,12 +2545,18 @@ dependencies = [
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-sqs",
  "axum",
  "chrono",
+ "chrono-tz",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
  "models_pagination",
+ "notification",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
@@ -2558,6 +2564,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -9483,6 +9490,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "invite_email",
  "macro_user_id",
  "mention_utils",

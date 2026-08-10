@@ -20,7 +20,11 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::domain::reminder_dispatch::CalendarReminderDispatchService;
 use calendar_events::inbound::axum_router::CalendarRouterState;
+use calendar_events::inbound::dispatch_worker::CalendarReminderDispatchWorker;
+use calendar_events::outbound::notification_notifier::NotificationCalendarReminderNotifier;
+use calendar_events::outbound::sqs_dispatch_queue::SqsCalendarDispatchQueue;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -232,6 +236,7 @@ async fn main() -> anyhow::Result<()> {
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let reminder_dispatch_queue = macro_queues::ReminderDispatchQueue::new();
+    let calendar_reminder_dispatch_queue = macro_queues::CalendarReminderDispatchQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue)
@@ -1073,6 +1078,41 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("starting reminder dispatch worker");
             reminder_dispatch_worker.run(cancellation_token).await;
             tracing::info!("reminder dispatch worker stopped");
+        }
+    });
+
+    // Calendar event reminder dispatch: same sweep/deliver shape as reminders,
+    // on its own queue. Behind a master switch — when off, the worker drains
+    // the minutely tick so the queue neither backs up nor dead-letters.
+    let calendar_reminder_dispatch_worker = {
+        let queue = SqsCalendarDispatchQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            calendar_reminder_dispatch_queue.to_string(),
+        );
+        let dispatch_service = CalendarReminderDispatchService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            NotificationCalendarReminderNotifier::new((*notification_ingress_service).clone()),
+            queue.clone(),
+        );
+        CalendarReminderDispatchWorker::new(dispatch_service, queue)
+    };
+
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let enabled = config.calendar_reminder_dispatch_enabled;
+        async move {
+            if enabled {
+                tracing::info!("starting calendar reminder dispatch worker");
+                calendar_reminder_dispatch_worker
+                    .run(cancellation_token)
+                    .await;
+                tracing::info!("calendar reminder dispatch worker stopped");
+            } else {
+                tracing::info!("calendar reminder dispatch disabled; draining its queue");
+                calendar_reminder_dispatch_worker
+                    .drain(cancellation_token)
+                    .await;
+            }
         }
     });
 

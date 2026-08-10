@@ -75,6 +75,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
+            reminders: EventReminders::default(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
@@ -105,6 +106,7 @@ fn draft() -> CalendarEventDraft {
         recurrence_lines: Vec::new(),
         visibility: None,
         transparency: None,
+        reminders: None,
     }
 }
 

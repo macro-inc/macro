@@ -68,6 +68,47 @@ export type BulkGetByEventItemIdsRequest = {
 };
 
 /**
+ * A calendar event alarm came due. Like [`ReminderMetadata`], these are
+ * self-notifications: `sender_id` must stay `None` or the only recipient is
+ * filtered out. Everything the alert renders rides in here so the
+ * dispatcher never has to resolve the event again at display time.
+ */
+export type CalendarEventReminderMetadata = {
+    /**
+     * Instance end, for timed events.
+     */
+    endsAt?: string | null;
+    /**
+     * The calendar event entity the alarm belongs to.
+     */
+    eventId: string;
+    /**
+     * Minutes before the start the alarm was configured to fire.
+     */
+    minutesBefore: number;
+    /**
+     * Stable occurrence key of the instance that is starting.
+     */
+    occurrenceKey: string;
+    /**
+     * Instance start date, for all-day events.
+     */
+    startDate?: string | null;
+    /**
+     * Instance start, for timed events.
+     */
+    startsAt?: string | null;
+    /**
+     * IANA zone for rendering local clock times, when known.
+     */
+    timeZone?: string | null;
+    /**
+     * Event display title at dispatch time.
+     */
+    title: string;
+};
+
+/**
  * Metadata for a notification that a call has started in a channel.
  *
  * Mirrors the producer-side `CallStartedNotification` in the `call` crate:
@@ -821,6 +862,12 @@ export type NotifEvent = {
      */
     content: ReminderMetadata;
     tag: 'reminder';
+} | {
+    /**
+     * A calendar event alarm came due.
+     */
+    content: CalendarEventReminderMetadata;
+    tag: 'calendar_event_reminder';
 } | {
     /**
      * An AI assistant responded to a chat.

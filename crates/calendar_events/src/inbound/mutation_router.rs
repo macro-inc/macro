@@ -25,7 +25,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, EventTime, EventTransparency, EventVisibility, VisibleCalendar,
+        CalendarEventPatch, EventReminders, EventTime, EventTransparency, EventVisibility,
+        VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
@@ -135,6 +136,8 @@ pub struct CreateCalendarEventRequest {
     pub visibility: Option<EventVisibility>,
     /// Availability behavior.
     pub transparency: Option<EventTransparency>,
+    /// Reminder configuration; omit to keep the calendar defaults.
+    pub reminders: Option<EventReminders>,
 }
 
 /// Request body patching an event; omitted fields are left untouched.
@@ -157,6 +160,8 @@ pub struct UpdateCalendarEventRequest {
     pub visibility: Option<EventVisibility>,
     /// Replacement transparency.
     pub transparency: Option<EventTransparency>,
+    /// Replacement reminder configuration.
+    pub reminders: Option<EventReminders>,
 }
 
 /// How much of a recurring series a deletion removes.
@@ -359,6 +364,7 @@ where
         recurrence_lines: request.recurrence_lines,
         visibility: request.visibility,
         transparency: request.transparency,
+        reminders: request.reminders,
     };
     let event = state
         .service
@@ -446,6 +452,7 @@ where
         recurrence_lines: request.recurrence_lines,
         visibility: request.visibility,
         transparency: request.transparency,
+        reminders: request.reminders,
     };
     let event = state
         .service

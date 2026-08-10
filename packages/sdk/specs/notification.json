@@ -1103,6 +1103,50 @@
           }
         }
       },
+      "CalendarEventReminderMetadata": {
+        "type": "object",
+        "description": "A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.",
+        "required": ["eventId", "occurrenceKey", "title", "minutesBefore"],
+        "properties": {
+          "endsAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Instance end, for timed events."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The calendar event entity the alarm belongs to."
+          },
+          "minutesBefore": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes before the start the alarm was configured to fire."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable occurrence key of the instance that is starting."
+          },
+          "startDate": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "Instance start date, for all-day events."
+          },
+          "startsAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Instance start, for timed events."
+          },
+          "timeZone": {
+            "type": ["string", "null"],
+            "description": "IANA zone for rendering local clock times, when known."
+          },
+          "title": {
+            "type": "string",
+            "description": "Event display title at dispatch time."
+          }
+        }
+      },
       "CallStartedMetadata": {
         "type": "object",
         "description": "Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.",
@@ -2235,6 +2279,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A calendar event alarm came due.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CalendarEventReminderMetadata",
+                "description": "A calendar event alarm came due."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendar_event_reminder"]
               }
             }
           },

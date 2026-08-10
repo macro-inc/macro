@@ -4412,6 +4412,10 @@
             },
             "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
           },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Per-user reminder configuration. Skipped when it is the provider\ndefault so projections stored before reminders were modeled still\ncompare equal."
+          },
           "sequence": {
             "type": "integer",
             "format": "int32",
@@ -4603,6 +4607,17 @@
             },
             "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
           },
+          "reminders": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventReminders",
+                "description": "Reminder configuration; omit to keep the calendar defaults."
+              }
+            ]
+          },
           "time": {
             "$ref": "#/components/schemas/EventTime",
             "description": "Timed or all-day shape."
@@ -4694,6 +4709,41 @@
           "message": {
             "type": "string",
             "description": "Message to explain failure"
+          }
+        }
+      },
+      "EventReminderOverride": {
+        "type": "object",
+        "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
+        "required": ["method", "minutes"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "Provider method, stored verbatim; only `popup` fires Macro\nnotifications."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes before the event start.",
+            "minimum": 0
+          }
+        }
+      },
+      "EventReminders": {
+        "type": "object",
+        "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
+        "required": ["useDefault"],
+        "properties": {
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Explicit reminders replacing the defaults when `use_default` is off."
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Whether the calendar's default reminders apply."
           }
         }
       },
@@ -5892,6 +5942,17 @@
             },
             "description": "Replacement recurrence properties; an empty list clears them."
           },
+          "reminders": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventReminders",
+                "description": "Replacement reminder configuration."
+              }
+            ]
+          },
           "time": {
             "oneOf": [
               {
@@ -6101,12 +6162,20 @@
           "emailAddress",
           "name",
           "isPrimary",
-          "isWritable"
+          "isWritable",
+          "defaultReminders"
         ],
         "properties": {
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "defaultReminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Default reminders applied to events that keep `useDefault`."
           },
           "emailAddress": {
             "type": "string",

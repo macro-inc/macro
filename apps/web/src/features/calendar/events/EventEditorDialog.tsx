@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
@@ -19,6 +20,13 @@ import {
 } from 'date-fns';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
+import {
+  buildReminderOverrides,
+  formatReminderOffset,
+  popupMinutes,
+  REMINDER_OVERRIDES_MAX,
+  REMINDER_PRESET_MINUTES,
+} from './event-reminders';
 import { formatRecurrenceDescription } from './recurrence-description';
 import {
   buildRecurrenceLines,
@@ -168,9 +176,9 @@ export function EventEditorDialog(props: {
   const [state, setState] = createSignal(initialEditorState(props.event));
   const isEdit = () => props.event !== undefined;
   const [calendarId, setCalendarId] = createSignal<string>();
-  const calendarsQuery = useVisibleCalendarsQuery(() => ({
-    enabled: !isEdit(),
-  }));
+  // Enabled while editing too: reminder rows resolve the calendar's default
+  // reminders for events that follow them.
+  const calendarsQuery = useVisibleCalendarsQuery();
   const writableCalendars = createMemo(
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
   );
@@ -254,6 +262,47 @@ export function EventEditorDialog(props: {
     (props.event?.recurrenceLines.length ?? 0) > 0 ||
     props.event?.recurrenceId !== undefined;
 
+  // Popup reminder offsets. `undefined` means untouched: the rows display
+  // the resolved configuration (the event's overrides, else its calendar's
+  // defaults) and the save omits reminders entirely, so an event following
+  // its calendar defaults keeps following them.
+  const [reminderEdits, setReminderEdits] = createSignal<number[]>();
+  const defaultReminderMinutes = createMemo(() => {
+    const forCalendar = isEdit()
+      ? props.event?.calendarId
+      : effectiveCalendarId();
+    const calendar = calendarsQuery.data?.find(
+      (candidate) => candidate.id === forCalendar
+    );
+    return popupMinutes(calendar?.defaultReminders);
+  });
+  const reminderMinutes = createMemo(() => {
+    const edits = reminderEdits();
+    if (edits) return edits;
+    const reminders = props.event?.reminders;
+    if (reminders && !reminders.useDefault) {
+      return popupMinutes(reminders.overrides);
+    }
+    return defaultReminderMinutes();
+  });
+  const reminderOptions = (current: number) =>
+    [...new Set([...REMINDER_PRESET_MINUTES, current])].sort((a, b) => a - b);
+  const addReminder = () => {
+    const existing = reminderMinutes();
+    const next =
+      REMINDER_PRESET_MINUTES.find((minutes) => !existing.includes(minutes)) ??
+      10;
+    setReminderEdits([...existing, next]);
+  };
+  const setReminderAt = (index: number, minutes: number) => {
+    setReminderEdits(
+      reminderMinutes().map((value, i) => (i === index ? minutes : value))
+    );
+  };
+  const removeReminderAt = (index: number) => {
+    setReminderEdits(reminderMinutes().filter((_, i) => i !== index));
+  };
+
   const invalidGuests = createMemo(() =>
     parseGuestEmails(state().guests).filter((email) => !email.includes('@'))
   );
@@ -282,6 +331,11 @@ export function EventEditorDialog(props: {
     const current = state();
     const event = props.event;
     const lines = recurrenceLines();
+    const edits = reminderEdits();
+    const reminders =
+      edits === undefined
+        ? undefined
+        : buildReminderOverrides(edits, event?.reminders);
     if (event) {
       const recurrenceChanged =
         lines !== undefined && lines.join('\n') !== initialLines.join('\n');
@@ -293,6 +347,7 @@ export function EventEditorDialog(props: {
           location: current.location,
           description: current.description,
           ...(recurrenceChanged ? { recurrenceLines: lines } : {}),
+          ...(reminders ? { reminders } : {}),
         },
       });
       return;
@@ -305,6 +360,7 @@ export function EventEditorDialog(props: {
       location: current.location === '' ? undefined : current.location,
       description: current.description === '' ? undefined : current.description,
       attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
+      reminders,
     });
   };
 
@@ -592,6 +648,51 @@ export function EventEditorDialog(props: {
             placeholder="Add location"
             class="settings-input w-full"
           />
+          <div class="flex flex-col gap-2">
+            <For each={reminderMinutes()}>
+              {(minutes, index) => (
+                <div class="flex items-center gap-2">
+                  <BellSimpleIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                  <select
+                    value={String(minutes)}
+                    onChange={(e) =>
+                      setReminderAt(index(), Number(e.currentTarget.value))
+                    }
+                    aria-label="Notification time"
+                    class="settings-input min-w-0 flex-1"
+                  >
+                    <For each={reminderOptions(minutes)}>
+                      {(option) => (
+                        <option value={String(option)}>
+                          {formatReminderOffset(option)}
+                        </option>
+                      )}
+                    </For>
+                  </select>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Remove notification"
+                    onClick={() => removeReminderAt(index())}
+                  >
+                    <XIcon />
+                  </Button>
+                </div>
+              )}
+            </For>
+            <Show when={reminderMinutes().length < REMINDER_OVERRIDES_MAX}>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="self-start rounded-lg text-xs text-ink-muted"
+                label="Add notification"
+                onClick={addReminder}
+              >
+                <BellSimpleIcon class="size-4" />
+                Add notification
+              </Button>
+            </Show>
+          </div>
           <textarea
             value={state().description}
             onInput={(e) =>

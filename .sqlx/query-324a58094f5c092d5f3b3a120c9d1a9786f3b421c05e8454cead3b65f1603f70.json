@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT firing.event_id, firing.occurrence_key, firing.minutes_before, firing.fire_at\n            FROM calendar_event_reminder_firings firing\n            WHERE firing.fire_at <= $1\n              AND firing.fire_at > $2\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM calendar_event_reminder_deliveries delivery\n                  WHERE delivery.event_id = firing.event_id\n                    AND delivery.occurrence_key = firing.occurrence_key\n                    AND delivery.minutes_before = firing.minutes_before\n                    AND delivery.fire_at = firing.fire_at\n                    AND delivery.sent_at IS NOT NULL\n              )\n            ORDER BY firing.fire_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurrence_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "minutes_before",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "fire_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "324a58094f5c092d5f3b3a120c9d1a9786f3b421c05e8454cead3b65f1603f70"
+}

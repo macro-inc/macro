@@ -11,9 +11,11 @@ use super::models::{
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
     CalendarEventPatch, CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-    CalendarOccurrenceCursor, CalendarSyncStatus, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
-    GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
-    OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
+    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus, DueCalendarReminder,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
+    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -536,4 +538,89 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+}
+
+/// Dispatch use cases driven by the calendar reminder queue worker.
+pub trait CalendarReminderDispatch: Send + Sync + 'static {
+    /// Find due firings and fan one delivery message out per firing.
+    fn sweep(&self) -> impl Future<Output = Result<CalendarReminderSweepSummary, Report>> + Send;
+
+    /// Deliver one firing: revalidate, claim, notify, complete.
+    fn deliver(
+        &self,
+        firing: CalendarReminderFiring,
+    ) -> impl Future<Output = Result<CalendarReminderDeliveryOutcome, Report>> + Send;
+}
+
+/// Persistence the calendar reminder dispatcher runs on.
+pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
+    /// Scheduled firings inside the due window that have no completed
+    /// delivery claim.
+    fn due_reminder_firings(
+        &self,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<CalendarReminderFiring>, Report>> + Send;
+
+    /// Re-resolve one swept firing against live state. `None` means the
+    /// schedule moved on — the event changed, was cancelled, or its account
+    /// went away — and the stale message must not deliver.
+    fn find_due_reminder(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<Option<DueCalendarReminder>, Report>> + Send;
+
+    /// Claim the firing for delivery. The insert is the claim; a claim made
+    /// before `retry_before` and never completed is taken over.
+    fn claim_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+        retry_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// Hand an unfinished claim back so redelivery retries immediately.
+    fn release_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Mark the claimed firing delivered.
+    fn complete_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Notification egress for due calendar reminders.
+pub trait CalendarReminderNotifier: Send + Sync + 'static {
+    /// Send the reminder notification to the event owner.
+    fn notify(&self, due: &DueCalendarReminder) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// A raw message received from the dispatch queue.
+#[derive(Clone, Debug)]
+pub struct RawCalendarDispatchMessage {
+    /// Serialized [`CalendarReminderDispatchMessage`] body.
+    pub body: String,
+    /// Transport handle used to acknowledge the message.
+    pub receipt_handle: String,
+}
+
+/// Transport carrying calendar reminder dispatch messages.
+pub trait CalendarReminderDispatchQueue: Send + Sync + 'static {
+    /// Publish fan-out messages, one per due firing.
+    fn publish_batch(
+        &self,
+        messages: &[CalendarReminderDispatchMessage],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Long-poll the queue for work.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawCalendarDispatchMessage>, Report>> + Send;
+
+    /// Acknowledge one handled message.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
