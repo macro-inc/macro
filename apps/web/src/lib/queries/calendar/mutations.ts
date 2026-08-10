@@ -101,9 +101,9 @@ type RsvpCallbacks = MutationCallbacks<
 >;
 
 /**
- * Sets the viewer's RSVP for one occurrence, an occurrence onward, or the
- * whole series. Google records an occurrence-scoped response as an exception
- * instance, so the answer can differ per occurrence.
+ * Sets the viewer's RSVP for one occurrence or the whole series. Google
+ * records an occurrence-scoped response as an exception instance, so the
+ * answer can differ per occurrence.
  */
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
