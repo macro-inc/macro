@@ -9,6 +9,7 @@ mod config;
 
 use std::sync::Arc;
 
+use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::agent_trigger_to_harness_command;
@@ -84,9 +85,16 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    // Sessions: persistence and live actors.
+    // Sessions: persistence and live actors. The same repo answers all three
+    // ports, as in the `document_storage_service` root - a session's actor
+    // writes its log through the fold and comms so the frames it records show
+    // up as placeholder messages in the session's channel.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
-    let sessions = AgentSessionServiceImpl::new(session_repo);
+    let sessions = AgentSessionServiceImpl::new(
+        session_repo.clone(),
+        FoldedMessageService::new(session_repo.clone()),
+        session_repo,
+    );
 
     // Containers: Daytona sandboxes.
     let containers = DaytonaContainerManager::new(DaytonaSettings {
@@ -95,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         snapshot: Snapshot::new(config.daytona_snapshot.clone()),
         github_token: GithubTokenSecret::new(config.github_token.clone()),
     });
+    let container_shutdown = containers.clone();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
@@ -236,10 +245,17 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    container_shutdown.shutdown_all().await;
+
     while let Some(result) = tasks.join_next().await {
         if let Err(error) = result {
             tracing::error!(error = ?error, "agent harness task failed during shutdown");
         }
+    }
+
+    let stop_failures = container_shutdown.shutdown_all().await;
+    if stop_failures > 0 {
+        tracing::error!(stop_failures, "some Daytona sandboxes failed to stop");
     }
 
     match run_error {

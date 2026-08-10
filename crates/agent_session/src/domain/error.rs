@@ -24,4 +24,14 @@ pub enum AgentSessionError {
     Acp(#[from] agent_client_protocol::Error),
     #[error("{0}")]
     Unknown(#[from] anyhow::Error),
+    /// A fold or comms step failed while keeping a session's channel in step
+    /// with its log.
+    #[error("{0}")]
+    Fold(rootcause::Report),
+}
+
+impl From<rootcause::Report> for AgentSessionError {
+    fn from(report: rootcause::Report) -> Self {
+        Self::Fold(report)
+    }
 }

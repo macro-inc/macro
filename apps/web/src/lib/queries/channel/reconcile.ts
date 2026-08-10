@@ -449,7 +449,7 @@ export function getTargetMessageState(
     if (!reply) return;
 
     return {
-      content: reply.content,
+      content: reply.content ?? '',
       editedAt: reply.edited_at,
       updatedAt: reply.updated_at,
       attachments: reply.attachments,
@@ -463,7 +463,7 @@ export function getTargetMessageState(
   if (!message) return;
 
   return {
-    content: message.content,
+    content: message.content ?? '',
     editedAt: message.edited_at,
     updatedAt: message.updated_at,
     attachments: message.attachments,

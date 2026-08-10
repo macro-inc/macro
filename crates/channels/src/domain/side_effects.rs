@@ -938,7 +938,7 @@ where
         self.send_notification(ChannelNotificationEffect::UserMention {
             mention: ChannelMentionNotification {
                 channel_id,
-                message_content: message.content.clone(),
+                message_content: message.content.clone().unwrap_or_default(),
                 message_id: message.id,
                 has_attachments,
                 thread_id: message.thread_id,
@@ -970,7 +970,7 @@ where
             self.send_notification(ChannelNotificationEffect::DocumentMention {
                 mention: ChannelMentionNotification {
                     channel_id,
-                    message_content: message.content.clone(),
+                    message_content: message.content.clone().unwrap_or_default(),
                     message_id: message.id,
                     has_attachments,
                     thread_id: message.thread_id,
@@ -1003,7 +1003,7 @@ where
             thread_id,
             message_id: message.id,
             sender: context.sender.clone(),
-            message_content: message.content.clone(),
+            message_content: message.content.clone().unwrap_or_default(),
             has_attachments,
             thread_parent_sender_id: context.thread_context.parent_sender_id.clone(),
             metadata: context.metadata.clone(),
@@ -1052,7 +1052,7 @@ where
             recipient_user_ids,
             existing_user_ids,
             sender_profile_picture_url: context.sender_profile_picture_url,
-            message_content: Some(message.content.clone()),
+            message_content: message.content.clone(),
             metadata: context.metadata,
         })
         .await;
@@ -1069,7 +1069,7 @@ where
             channel_id,
             message_id: message.id,
             sender: context.sender.clone(),
-            message_content: message.content.clone(),
+            message_content: message.content.clone().unwrap_or_default(),
             has_attachments,
             metadata: context.metadata.clone(),
             sender_profile_picture_url: context.sender_profile_picture_url.clone(),
@@ -1284,7 +1284,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     sender: message.sender_id.clone(),
                     triggered_by: message.triggered_by.clone(),
                     channel_type: metadata.channel_type,
-                    content: message.content.clone(),
+                    content: message.content.clone().unwrap_or_default(),
                     mentions: mentions.clone(),
                     attachments: attachments
                         .iter()
@@ -1334,7 +1334,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     thread_id: message.thread_id,
                     sender: message.sender_id.clone(),
                     channel_type: metadata.channel_type,
-                    content: message.content.clone(),
+                    content: message.content.clone().unwrap_or_default(),
                     mentioned: mention.clone(),
                     created_at: message.created_at,
                 }));
@@ -1352,7 +1352,7 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 message_id: message.id,
                 thread_id: message.thread_id,
                 actor: actor.clone(),
-                content: message.content.clone(),
+                content: message.content.clone().unwrap_or_default(),
                 edited_at: message.edited_at,
                 updated_at: message.updated_at,
             },

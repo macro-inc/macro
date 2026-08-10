@@ -28,6 +28,7 @@ location_check = []
 
 [dependencies]
 activity = { path = "../../crates/activity" }
+agent_fold = { path = "../../crates/agent_fold" }
 agent_session = { path = "../../crates/agent_session" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }

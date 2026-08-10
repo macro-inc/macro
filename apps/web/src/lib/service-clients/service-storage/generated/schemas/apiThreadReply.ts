@@ -8,16 +8,21 @@
 import type { ApiCountedReaction } from './apiCountedReaction';
 import type { ApiMessageAttachment } from './apiMessageAttachment';
 import type { ApiMessageSender } from './apiMessageSender';
+import type { ApiThreadReplyAgentSessionMessageId } from './apiThreadReplyAgentSessionMessageId';
+import type { ApiThreadReplyContent } from './apiThreadReplyContent';
 import type { ApiThreadReplyEditedAt } from './apiThreadReplyEditedAt';
 
 /**
  * A thread reply shown in preview.
  */
 export interface ApiThreadReply {
+  /** The agent session turn this placeholder renders, as the composite
+`"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders. */
+  agent_session_message_id?: ApiThreadReplyAgentSessionMessageId;
   /** Attachments on this reply. */
   attachments: ApiMessageAttachment[];
-  /** Reply content. */
-  content: string;
+  /** Reply content. `None` on agent-turn placeholder messages. */
+  content?: ApiThreadReplyContent;
   /** When the reply was created. */
   created_at: string;
   /** When the reply was edited. */

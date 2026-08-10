@@ -37,7 +37,7 @@ export function messageAttachmentToInputAttachment(
 
 export function buildMessageEditSnapshot(message: MessageData): InputSnapshot {
   return {
-    value: message.content,
+    value: message.content ?? '',
     mentions: [],
     attachments: message.attachments
       .map(messageAttachmentToInputAttachment)

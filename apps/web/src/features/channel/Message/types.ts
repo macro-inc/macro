@@ -4,7 +4,13 @@ import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMes
 
 export type MessageData = {
   id: string;
-  content: string;
+  /** `null`/absent on agent-session placeholder messages. */
+  content?: string | null;
+  /**
+   * The folded agent-session message a placeholder renders, as the composite
+   * `"{agent_session_id}:{turn}:{author}"`. Set only on placeholders.
+   */
+  agent_session_message_id?: string | null;
   sender_id: string;
   /** Structured sender identity; carries bot name/avatar for bot senders. */
   sender?: ApiMessageSender;

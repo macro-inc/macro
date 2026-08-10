@@ -381,7 +381,7 @@ export function optimisticUpdateChannelMessage(
     }));
 
     replaceTargetMessageState(vars.channelId, target, {
-      content: vars.content,
+      content: vars.content ?? '',
       editedAt: now,
       updatedAt: now,
       attachments: [...kept, ...added],

@@ -11,7 +11,7 @@ fn message(sender_id: Sender) -> MutatedMessage {
         thread_id: None,
         sender_id,
         triggered_by: None,
-        content: "hello".to_string(),
+        content: Some("hello".to_string()),
         created_at: now,
         updated_at: now,
         edited_at: None,

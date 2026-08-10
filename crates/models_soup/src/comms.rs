@@ -82,8 +82,8 @@ pub struct ChannelMessage {
     pub thread_id: Option<Uuid>,
     /// Sender id.
     pub sender_id: String,
-    /// Message content.
-    pub content: String,
+    /// Message content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -135,8 +135,8 @@ pub struct SoupChannelThread {
     pub sender_id: String,
     /// Structured sender identity.
     pub sender: SoupMessageSender,
-    /// Message content.
-    pub content: String,
+    /// Message content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -203,8 +203,8 @@ pub struct SoupThreadReply {
     pub sender_id: String,
     /// Structured sender identity.
     pub sender: SoupMessageSender,
-    /// Reply content.
-    pub content: String,
+    /// Reply content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
