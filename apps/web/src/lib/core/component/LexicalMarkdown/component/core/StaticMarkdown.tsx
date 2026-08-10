@@ -451,11 +451,11 @@ const MagicChip: RenderableEntity<MagicChipNode> = {
     node.__type === 'magic-chip',
   render: (props) => (
     <span>
-      {MagicChipDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
+      <MagicChipDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
     </span>
   ),
 };

@@ -54,6 +54,9 @@ import { ensureAgentSessionPlaceholder } from './agent-session-placeholders';
 /** A channel view that wants the messages a live frame derives. */
 export type FoldedMessageSink = (messages: FoldedMessage[]) => void;
 
+/** A consumer that wants each raw protocol frame for one agent session. */
+export type AgentSessionLogSink = (event: AgentSessionLogEvent) => void;
+
 type ChannelStream = {
   /**
    * Frames held because no machine is open for them yet — the channel is
@@ -76,6 +79,22 @@ type ChannelStream = {
 };
 
 const streams = new Map<string, ChannelStream>();
+const logSinks = new Map<string, Set<AgentSessionLogSink>>();
+
+/** Follow raw Connection Gateway log frames for one agent session. */
+export function subscribeAgentSessionLog(
+  sessionId: string,
+  sink: AgentSessionLogSink
+): () => void {
+  const sinks = logSinks.get(sessionId) ?? new Set<AgentSessionLogSink>();
+  sinks.add(sink);
+  logSinks.set(sessionId, sinks);
+
+  return () => {
+    sinks.delete(sink);
+    if (sinks.size === 0) logSinks.delete(sessionId);
+  };
+}
 
 /**
  * Start holding a channel's frames.
@@ -192,6 +211,7 @@ export function handleAgentSessionLog(event: AgentSessionLogEvent): void {
       channelId: event.channelId,
       open: [...streams.keys()],
     });
+    notifyLogSinks(event);
     return;
   }
 
@@ -202,9 +222,17 @@ export function handleAgentSessionLog(event: AgentSessionLogEvent): void {
       channelId: event.channelId,
       buffered: stream.buffered.length,
     });
+    notifyLogSinks(event);
     return;
   }
   push(event.channelId, stream.session, [entry]);
+  // `push` posts to the worker synchronously. Observers that ask for the
+  // complete chain now queue behind this frame rather than reading one behind.
+  notifyLogSinks(event);
+}
+
+function notifyLogSinks(event: AgentSessionLogEvent): void {
+  for (const sink of logSinks.get(event.agentSessionId) ?? []) sink(event);
 }
 
 /**

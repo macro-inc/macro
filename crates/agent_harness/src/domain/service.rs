@@ -166,9 +166,11 @@ where
 
         self.announcer
             .announce(SessionAnnouncement {
+                session_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
                 session_channel_id: session.channel_id,
+                prompted_turn_id: origin.message_id,
                 triggered_by: origin.sender.clone(),
             })
             .await?;

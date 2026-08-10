@@ -50,12 +50,16 @@ pub enum HarnessCommand {
 /// Facts required to announce a newly created session.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Agent session represented by the announcement.
+    pub session_id: AgentSessionId,
     /// Channel containing the mention that opened the session.
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
     /// Dedicated channel created for the agent session.
     pub session_channel_id: Uuid,
+    /// Message that prompted the first agent turn.
+    pub prompted_turn_id: Uuid,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
 }

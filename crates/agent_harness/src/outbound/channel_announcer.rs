@@ -6,8 +6,10 @@
 //! through the channel API. The composition root decides which
 //! `ChannelService` implementation (and side-effect stack) this wraps.
 //!
-//! The announcement links the session's dedicated channel with an inline
-//! channel mention.
+//! The announcement links the session's dedicated channel with a magic chip.
+
+#[cfg(test)]
+mod test;
 
 use std::sync::Arc;
 
@@ -20,8 +22,14 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SessionAnnouncement;
 use crate::domain::ports::SessionAnnouncer;
 
-fn template_new_agent_session_response(session_channel_id: macro_uuid::Uuid) -> String {
-    format!("Agent session created! Channel: [[channel-mention;{session_channel_id}]]")
+fn template_new_agent_session_response(announcement: &SessionAnnouncement) -> String {
+    format!(
+        concat!(
+            "<m-magic-chip>{{\"agentSessionId\":\"{}\",\"channelId\":\"{}\",",
+            "\"promptedTurnId\":\"{}\",\"status\":\"booting\"}}</m-magic-chip>"
+        ),
+        announcement.session_id, announcement.session_channel_id, announcement.prompted_turn_id,
+    )
 }
 
 /// Posts session announcements as `bot_id` through a [`ChannelService`].
@@ -42,7 +50,7 @@ where
     Channels: ChannelService + Send + Sync + 'static,
 {
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
-        let content = template_new_agent_session_response(announcement.session_channel_id);
+        let content = template_new_agent_session_response(&announcement);
 
         self.channels
             .post_message(

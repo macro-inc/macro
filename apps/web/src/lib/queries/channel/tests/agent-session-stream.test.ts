@@ -1,6 +1,11 @@
+import type { AgentSessionLogEvent } from '@core/agent-fold/stream-protocol';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import { describe, expect, it } from 'vitest';
-import { dropOverlap } from '../agent-session-stream';
+import {
+  dropOverlap,
+  handleAgentSessionLog,
+  subscribeAgentSessionLog,
+} from '../agent-session-stream';
 
 /**
  * A frame, distinguishable by `n`. The fold never sees these — only their
@@ -51,5 +56,30 @@ describe('aligning a buffer against a fetched log', () => {
 
   it('holds nothing back when there is nothing buffered', () => {
     expect(dropOverlap(log, [])).toEqual([]);
+  });
+});
+
+describe('observing raw session log frames', () => {
+  it('delivers matching frames until unsubscribed', () => {
+    const received: AgentSessionLogEvent[] = [];
+    const first = {
+      channelId: 'channel-1',
+      agentSessionId: 'session-1',
+      ...frame(1),
+    } as AgentSessionLogEvent;
+    const second = {
+      channelId: 'channel-1',
+      agentSessionId: 'session-1',
+      ...frame(2),
+    } as AgentSessionLogEvent;
+    const unsubscribe = subscribeAgentSessionLog('session-1', (event) => {
+      received.push(event);
+    });
+
+    handleAgentSessionLog(first);
+    unsubscribe();
+    handleAgentSessionLog(second);
+
+    expect(received).toEqual([first]);
   });
 });
