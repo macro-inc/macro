@@ -51,6 +51,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -84,6 +85,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -132,6 +134,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -146,6 +149,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -156,6 +160,64 @@ async fn write_then_read_through_js_boundary() {
     // on a live connection without versionchange auto-close).
     JsFuture::from(engine.close()).await.unwrap();
     destroy_cache("wasm-shell-test".into()).await.unwrap();
+}
+
+#[wasm_bindgen_test]
+async fn entity_resolvers_cross_the_js_boundary() {
+    destroy_cache("wasm-shell-entity-resolver".into())
+        .await
+        .unwrap();
+    let engine = open_cache("wasm-shell-entity-resolver".into(), None)
+        .await
+        .unwrap();
+    let soup_variables = serde_json::json!({"input": {"limit": 1}});
+    JsFuture::from(engine.write_query(
+        None,
+        QUERY.into(),
+        Some("Soup".into()),
+        js(soup_variables),
+        js(serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupEmailThread",
+                        "id": "thread-1"
+                    }]
+                }
+            }
+        })),
+        None,
+    ))
+    .await
+    .unwrap();
+
+    let direct_query = r#"query Email($input: EmailThreadInput!) {
+        user { id emailThread(input: $input) { __typename id } }
+    }"#;
+    let result = JsFuture::from(engine.read_query(
+        Some("tab1:entity".into()),
+        direct_query.into(),
+        Some("Email".into()),
+        js(serde_json::json!({"input": {"threadId": "thread-1"}})),
+        js(serde_json::json!([{
+            "parentType": "GraphqlUser",
+            "fieldName": "emailThread",
+            "targetType": "GraphqlSoupEmailThread",
+            "argumentPath": ["input", "threadId"]
+        }])),
+    ))
+    .await
+    .unwrap();
+    let result: serde_json::Value = serde_wasm_bindgen::from_value(result).unwrap();
+    assert_eq!(result["kind"], "hit");
+    assert_eq!(result["data"]["user"]["emailThread"]["id"], "thread-1");
+
+    JsFuture::from(engine.close()).await.unwrap();
+    destroy_cache("wasm-shell-entity-resolver".into())
+        .await
+        .unwrap();
 }
 
 const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
@@ -201,6 +263,7 @@ async fn optimistic_write_round_trip() {
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -246,6 +309,7 @@ async fn optimistic_write_round_trip() {
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();

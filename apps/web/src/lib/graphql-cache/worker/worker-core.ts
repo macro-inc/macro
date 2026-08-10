@@ -72,6 +72,7 @@ function readSignature(request: CacheRequest): string | undefined {
     request.query,
     request.operationName ?? null,
     request.variables ?? null,
+    request.entityResolvers ?? null,
   ]);
 }
 
@@ -197,7 +198,8 @@ export class CacheWorkerCore {
           request.opId,
           request.query,
           request.operationName,
-          request.variables
+          request.variables,
+          request.entityResolvers
         );
         return result;
       })

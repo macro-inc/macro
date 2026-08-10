@@ -52,6 +52,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
+        Vec::new(),
     ))
     .unwrap()
 }
@@ -69,6 +70,53 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn entity_resolvers_cross_the_native_engine_boundary() {
+    let handle = spawn_handle();
+    write(
+        &handle,
+        None,
+        serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupEmailThread",
+                        "id": "thread-1"
+                    }]
+                }
+            }
+        }),
+        None,
+    );
+    let query = r#"query Email($input: EmailThreadInput!) {
+        user { id emailThread(input: $input) { __typename id } }
+    }"#;
+    let serde_json::Value::Object(variables) =
+        serde_json::json!({"input": {"threadId": "thread-1"}})
+    else {
+        unreachable!()
+    };
+    let result = block_on(handle.read(
+        Some("webview:1".to_string()),
+        query.to_string(),
+        Some("Email".to_string()),
+        variables,
+        vec![EntityResolver {
+            parent_type: "GraphqlUser".to_string(),
+            field_name: "emailThread".to_string(),
+            target_type: "GraphqlSoupEmailThread".to_string(),
+            argument_path: vec!["input".to_string(), "threadId".to_string()],
+        }],
+    ))
+    .unwrap();
+    let ReadResultWire::Hit { data } = result else {
+        panic!("expected resolver hit")
+    };
+    assert_eq!(data["user"]["emailThread"]["id"], "thread-1");
 }
 
 #[test]

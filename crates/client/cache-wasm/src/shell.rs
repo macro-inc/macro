@@ -1,6 +1,7 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
 use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult};
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
@@ -260,15 +261,23 @@ impl CacheEngine {
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
+        entity_resolvers: JsValue,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let vars = parse_variables(variables)?;
+            let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
             let op = op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
             let result = engine
-                .read_query(op, &query, operation_name.as_deref(), &vars)
+                .read_query_with_entity_resolvers(
+                    op,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &entity_resolvers,
+                )
                 .await
                 .map_err(err_js)?;
             to_js(&match result {

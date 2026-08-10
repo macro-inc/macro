@@ -11,6 +11,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
   createWorkerCacheHost,
+  entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
@@ -167,6 +168,14 @@ export function getGraphqlSoupClient(): Client {
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
           normalizedCacheExchange(host, {
+            entityResolvers: {
+              GraphqlUser: {
+                emailThread: entityFromArgument('GraphqlSoupEmailThread', [
+                  'input',
+                  'threadId',
+                ]),
+              },
+            },
             // Session identity witness: the viewer id present on every soup
             // response. A response for a different user silently wipes and
             // rebinds the cache (see @graphql-cache/scope).

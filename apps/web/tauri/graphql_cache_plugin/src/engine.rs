@@ -15,6 +15,7 @@ use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult, WriteResult,
 };
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
@@ -219,12 +220,19 @@ impl EngineHandle {
         query: String,
         operation_name: Option<String>,
         variables: Variables,
+        entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
-            .read_query(op, &query, operation_name.as_deref(), &variables)
+            .read_query_with_entity_resolvers(
+                op,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &entity_resolvers,
+            )
             .await
             .map(|result| match result {
                 ReadResult::Hit { data } => ReadResultWire::Hit { data },
