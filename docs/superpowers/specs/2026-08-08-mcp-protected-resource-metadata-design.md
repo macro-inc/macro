@@ -13,9 +13,9 @@ resource are:
 
 | Route | Role |
 |-------|------|
-| `/.well-known/oauth-protected-resource/mcp` | **Canonical** (path insertion). Also the URL in `WWW-Authenticate` `resource_metadata`. |
+| `/.well-known/oauth-protected-resource/mcp` | Path insertion for resource `…/mcp`. Also the URL in `WWW-Authenticate` `resource_metadata`. |
 | `/mcp/.well-known/oauth-protected-resource` | RFC-allowed alternative (well-known under the resource path). Same document. |
-| `/.well-known/oauth-protected-resource` | **Not** a valid identifier for `/mcp` — identifies the origin. **Permanent-redirect** to the canonical path. |
+| `/.well-known/oauth-protected-resource` | Origin well-known (pre-existing). Continues to serve the same `/mcp` document for SEP-style clients that probe the origin; not a pure origin-resource identifier under a strict reading of RFC 9728 §3. |
 
 Production currently returns approximately:
 
@@ -89,9 +89,9 @@ where `public_url` is the existing `McpAuthProxyServiceImpl` base URL (same base
 
 | Unit | Responsibility |
 |------|----------------|
-| `McpAuthProxyService::protected_resource_metadata` | Build the JSON document for `/mcp` PRM (canonical + path-style routes) |
-| Axum PRM routes | Serve metadata on canonical + path-style URLs; **redirect** root well-known → canonical |
-| `WWW-Authenticate` middleware | Unchanged; already points at canonical `/.well-known/oauth-protected-resource/mcp` |
+| `McpAuthProxyService::protected_resource_metadata` | Build the JSON document for `/mcp` PRM |
+| Axum PRM routes | Serve the same metadata on origin, path-insertion, and path-style well-known URLs |
+| `WWW-Authenticate` middleware | Unchanged; already points at `/.well-known/oauth-protected-resource/mcp` |
 
 ### Target metadata document
 

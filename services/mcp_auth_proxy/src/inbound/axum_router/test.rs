@@ -5,12 +5,12 @@ use std::sync::Arc;
 use axum::{
     Router,
     body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    http::{Request, StatusCode},
     routing,
 };
 use tower::ServiceExt;
 
-use super::{protected_resource_metadata, redirect_root_protected_resource_metadata};
+use super::protected_resource_metadata;
 use crate::domain::{
     models::{AccessToken, IssuedAuthorizationCode, PendingAuthorization, RefreshToken},
     ports::{OAuthProvider, TokenPairFuture},
@@ -86,7 +86,7 @@ fn prm_discovery_router() -> Router {
     Router::new()
         .route(
             "/.well-known/oauth-protected-resource",
-            routing::get(redirect_root_protected_resource_metadata),
+            routing::get(protected_resource_metadata::<NoopInflightAuth>),
         )
         .route(
             "/.well-known/oauth-protected-resource/mcp",
@@ -110,29 +110,8 @@ async fn get(app: Router, uri: &str) -> axum::http::Response<Body> {
     .expect("oneshot")
 }
 
-#[tokio::test]
-async fn root_prm_well_known_redirects_to_canonical() {
-    let res = get(
-        prm_discovery_router(),
-        "/.well-known/oauth-protected-resource",
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(
-        res.headers()
-            .get(header::LOCATION)
-            .and_then(|v| v.to_str().ok()),
-        Some("/.well-known/oauth-protected-resource/mcp")
-    );
-}
-
-#[tokio::test]
-async fn canonical_prm_returns_resource_document() {
-    let res = get(
-        prm_discovery_router(),
-        "/.well-known/oauth-protected-resource/mcp",
-    )
-    .await;
+async fn assert_prm_document(uri: &str) {
+    let res = get(prm_discovery_router(), uri).await;
     assert_eq!(res.status(), StatusCode::OK);
     let body = to_bytes(res.into_body(), 64 * 1024).await.expect("body");
     let meta: serde_json::Value = serde_json::from_slice(&body).expect("json");
@@ -147,17 +126,16 @@ async fn canonical_prm_returns_resource_document() {
 }
 
 #[tokio::test]
+async fn origin_prm_well_known_returns_resource_document() {
+    assert_prm_document("/.well-known/oauth-protected-resource").await;
+}
+
+#[tokio::test]
+async fn path_insertion_prm_returns_resource_document() {
+    assert_prm_document("/.well-known/oauth-protected-resource/mcp").await;
+}
+
+#[tokio::test]
 async fn path_style_prm_returns_same_resource_document() {
-    let res = get(
-        prm_discovery_router(),
-        "/mcp/.well-known/oauth-protected-resource",
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = to_bytes(res.into_body(), 64 * 1024).await.expect("body");
-    let meta: serde_json::Value = serde_json::from_slice(&body).expect("json");
-    assert_eq!(
-        meta.get("resource").and_then(|v| v.as_str()),
-        Some("https://mcp-server.example.com/mcp")
-    );
+    assert_prm_document("/mcp/.well-known/oauth-protected-resource").await;
 }
