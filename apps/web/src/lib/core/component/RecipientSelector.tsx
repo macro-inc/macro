@@ -321,7 +321,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const debouncedHandleChange = debounce(handleChange, 100);
 
-  const [isOpen, setIsOpen] = createSignal<boolean>();
+  const [isOpen, setIsOpen] = createSignal(false);
   const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
     createSignal(Boolean(props.focusOnMount));
 
