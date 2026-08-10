@@ -65,16 +65,12 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       offset,
       limit: DEFAULT_THREAD_MESSAGES_LIMIT,
     }),
-    getNextPageParam: (lastPage, pages) => {
-      if (
-        threadFromPage(lastPage).messages.length < DEFAULT_THREAD_MESSAGES_LIMIT
-      ) {
+    getNextPageParam: (lastPage, _pages, lastPageParam) => {
+      const thread = lastPage.user.emailThread;
+      if (!thread || thread.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT) {
         return undefined;
       }
-      return pages.reduce(
-        (sum, page) => sum + threadFromPage(page).messages.length,
-        0
-      );
+      return lastPageParam + thread.messages.length;
     },
     enabled: options().enabled && threadId().length > 0,
     requestPolicy: 'cache-and-network',
