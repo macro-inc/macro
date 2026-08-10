@@ -72,14 +72,23 @@ export interface RsvpCalendarEventArgs {
   occurrenceKey?: string;
 }
 
-/** Whether a cached occurrence is covered by a scoped response. */
+/**
+ * Whether a cached occurrence is covered by a scoped response. An omitted
+ * scope with a recurrenceId is occurrence-scoped, matching the API default.
+ */
 function answeredByRsvp(
   item: CalendarOccurrenceItem,
   args: RsvpCalendarEventArgs
 ): boolean {
   if (item.event.id !== args.eventId) return false;
-  if (args.scope === 'this_event' && args.occurrenceKey !== undefined) {
-    return item.occurrence.occurrenceKey === args.occurrenceKey;
+  if (
+    args.scope === 'this_event' ||
+    (args.scope === undefined && args.recurrenceId !== undefined)
+  ) {
+    return (
+      args.occurrenceKey !== undefined &&
+      item.occurrence.occurrenceKey === args.occurrenceKey
+    );
   }
   return true;
 }

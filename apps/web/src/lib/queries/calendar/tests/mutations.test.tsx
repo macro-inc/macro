@@ -250,6 +250,19 @@ describe('useRsvpCalendarEventMutation', () => {
     expect(responseAt(keys[0])).toBe('tentative');
     expect(responseAt(keys[1])).toBe('tentative');
     expect(responseAt(keys[2])).toBe('tentative');
+
+    // An omitted scope with a recurrenceId is occurrence-scoped on the
+    // server, so the optimistic patch must not widen it to the series.
+    await rsvp.mutateAsync({
+      eventId: 'event-3',
+      response: 'declined',
+      recurrenceId: keys[2],
+      occurrenceKey: keys[2],
+    });
+
+    expect(responseAt(keys[0])).toBe('tentative');
+    expect(responseAt(keys[1])).toBe('tentative');
+    expect(responseAt(keys[2])).toBe('declined');
   });
 
   it('rolls back every viewport when the request fails', async () => {
