@@ -335,9 +335,9 @@ function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
     : undefined;
 
   return (
-    <div class="-ml-9 flex min-w-0 items-center gap-4 sm:-ml-7 sm:gap-3">
-      <PersonIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-      <div class="min-w-0 flex-1">
+    <div class="contents">
+      <PersonIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
+      <div class="min-w-0">
         <CalendarUserItem
           displayName={displayName}
           iconProps={iconProps}
@@ -393,90 +393,84 @@ export function EventDetails(props: {
   });
 
   return (
-    <div class="min-w-0 p-1 text-ink">
-      <div class="flex items-start gap-4 sm:gap-3">
+    <div class="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
+      <span
+        aria-hidden="true"
+        class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
+      >
         <span
-          aria-hidden="true"
-          class="mt-0.5 flex size-5 shrink-0 items-center justify-center sm:size-4"
-        >
-          <span
-            class="size-4 rounded-sm sm:size-3"
-            style={{ 'background-color': props.event.calendar.color }}
-          />
-        </span>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-col gap-1">
-            <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
-              {props.event.title}
-            </div>
-            <div class="select-text text-sm text-ink-muted sm:text-xs">
-              {formatEventSchedule(props.event, props.timeFormat)}
-            </div>
-            <Show when={recurrenceDescription()}>
-              {(description) => (
-                <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
-                  {description()}
-                </div>
-              )}
-            </Show>
-          </div>
-
-          <div class="mt-5 flex flex-col gap-5 text-sm text-ink-muted sm:gap-3 sm:text-xs">
-            <Show when={conferenceUrl()}>
-              {(url) => (
-                <div class="-ml-9 flex items-center gap-4 sm:-ml-7 sm:gap-3">
-                  <VideoCameraIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-                  <Button
-                    fullWidth
-                    variant="cta"
-                    size="sm"
-                    class="h-8 rounded-lg [&_svg]:size-3.5!"
-                    label="Join meeting"
-                    onClick={() => openExternalUrl(url())}
-                  >
-                    Join meeting
-                    <ArrowSquareOutIcon />
-                  </Button>
-                </div>
-              )}
-            </Show>
-            <Show when={originalTimeZone()}>
-              {(timeZone) => (
-                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
-                  <GlobeIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-                  <span class="select-text">{timeZone()}</span>
-                </div>
-              )}
-            </Show>
-
-            <Show when={props.event.location}>
-              {(location) => (
-                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
-                  <MapPinIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-                  <span class="select-text">{location()}</span>
-                </div>
-              )}
-            </Show>
-
-            <Show when={props.event.description}>
-              {(description) => (
-                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
-                  <TextAlignLeftIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-                  <p class="select-text leading-relaxed text-ink-muted">
-                    {description()}
-                  </p>
-                </div>
-              )}
-            </Show>
-
-            <Show when={organizer()}>
-              {(eventOrganizer) => (
-                <CalendarOrganizerItem organizer={eventOrganizer()} />
-              )}
-            </Show>
-          </div>
+          class="size-4 rounded-sm sm:size-3"
+          style={{ 'background-color': props.event.calendar.color }}
+        />
+      </span>
+      <div class="flex min-w-0 flex-col gap-1">
+        <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
+          {props.event.title}
         </div>
+        <div class="select-text text-sm text-ink-muted sm:text-xs">
+          {formatEventSchedule(props.event, props.timeFormat)}
+        </div>
+        <Show when={recurrenceDescription()}>
+          {(description) => (
+            <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
+              {description()}
+            </div>
+          )}
+        </Show>
       </div>
+
+      <Show when={conferenceUrl()}>
+        {(url) => (
+          <div class="contents">
+            <VideoCameraIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
+            <Button
+              fullWidth
+              variant="cta"
+              size="sm"
+              class="h-8 rounded-lg [&_svg]:size-3.5!"
+              label="Join meeting"
+              onClick={() => openExternalUrl(url())}
+            >
+              Join meeting
+              <ArrowSquareOutIcon />
+            </Button>
+          </div>
+        )}
+      </Show>
+      <Show when={originalTimeZone()}>
+        {(timeZone) => (
+          <div class="contents">
+            <GlobeIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <span class="select-text">{timeZone()}</span>
+          </div>
+        )}
+      </Show>
+
+      <Show when={props.event.location}>
+        {(location) => (
+          <div class="contents">
+            <MapPinIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <span class="select-text">{location()}</span>
+          </div>
+        )}
+      </Show>
+
+      <Show when={props.event.description}>
+        {(description) => (
+          <div class="contents">
+            <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <p class="select-text leading-relaxed text-ink-muted">
+              {description()}
+            </p>
+          </div>
+        )}
+      </Show>
+
+      <Show when={organizer()}>
+        {(eventOrganizer) => (
+          <CalendarOrganizerItem organizer={eventOrganizer()} />
+        )}
+      </Show>
     </div>
   );
 }
