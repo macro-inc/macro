@@ -96,40 +96,97 @@ interface EventDetailsOverlayProps {
 }
 
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
+  const [deleteOpen, setDeleteOpen] = createSignal(false);
+  const [editorOpen, setEditorOpen] = createSignal(false);
+  const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+
   return (
-    <MobileDrawer
-      side="bottom"
-      open
-      onOpenChange={props.onOpenChange}
-      preventScroll={false}
-      preventScrollbarShift={false}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-        <MobileDrawer.Content
-          aria-label={props.event.title}
-          class="overflow-hidden"
-        >
-          <MobileDrawer.Handle />
-          <div class="min-h-0 flex-1 overflow-y-auto">
-            <div class="px-3 pb-3">
-              <EventDetails event={props.event} timeFormat={props.timeFormat} />
-            </div>
-            <EventAttendeesSection attendees={props.event.attendees} />
-            <EventRsvpSection event={props.event} />
-          </div>
-          <MobileDrawer.Close
-            as={Button}
-            aria-label="Close event details"
-            variant="ghost"
-            size="icon-sm"
-            class="absolute right-2 top-2 rounded-full text-ink-muted"
+    <>
+      <MobileDrawer
+        side="bottom"
+        open
+        onOpenChange={(open) => {
+          if (!open && (deleteOpen() || editorOpen())) return;
+          props.onOpenChange(open);
+        }}
+        preventScroll={false}
+        preventScrollbarShift={false}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+          <MobileDrawer.Content
+            aria-label={props.event.title}
+            class="overflow-hidden"
           >
-            <CloseIcon class="size-3" />
-          </MobileDrawer.Close>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
+            <MobileDrawer.Handle class="pointer-events-none absolute inset-x-0 top-0 z-1" />
+            <div class="flex shrink-0 items-center justify-between px-2 pb-3 pt-2">
+              <MobileDrawer.Close
+                as={Button}
+                aria-label="Close event details"
+                variant="ghost"
+                size="icon-md"
+                depth={3}
+                class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+              >
+                <CloseIcon />
+              </MobileDrawer.Close>
+              <Show when={canModify()}>
+                <div class="flex items-center gap-1">
+                  <Button
+                    aria-label="Edit event"
+                    variant="ghost"
+                    size="icon-md"
+                    depth={3}
+                    class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                    onClick={() => setEditorOpen(true)}
+                  >
+                    <PencilSimpleIcon />
+                  </Button>
+                  <Button
+                    aria-label="Delete event"
+                    variant="ghost"
+                    size="icon-md"
+                    depth={3}
+                    class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <TrashIcon />
+                  </Button>
+                </div>
+              </Show>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto">
+              <div class="px-3 pb-3">
+                <EventDetails
+                  event={props.event}
+                  timeFormat={props.timeFormat}
+                />
+              </div>
+              <EventAttendeesSection attendees={props.event.attendees} />
+              <EventRsvpSection event={props.event} buttonSize="md" />
+            </div>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+      <Show when={deleteOpen()}>
+        <DeleteEventDialog
+          open
+          event={props.event}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            setDeleteOpen(false);
+            props.onOpenChange(false);
+          }}
+        />
+      </Show>
+      <Show when={editorOpen()}>
+        <EventEditorDialog
+          open
+          event={props.event}
+          onClose={() => setEditorOpen(false)}
+        />
+      </Show>
+    </>
   );
 }
 

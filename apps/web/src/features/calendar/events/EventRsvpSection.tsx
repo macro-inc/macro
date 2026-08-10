@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
-import { Button, Layer } from '@ui';
+import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import type { CalendarEvent } from './types';
 
@@ -18,7 +18,10 @@ const RSVP_OPTIONS = [
  * RSVP controls for the connected account's own attendance. Recurring
  * events respond for the entire series, matching the backend semantics.
  */
-export function EventRsvpSection(props: { event: CalendarEvent }) {
+export function EventRsvpSection(props: {
+  event: CalendarEvent;
+  buttonSize?: 'sm' | 'md';
+}) {
   const selfAttendee = createMemo(() =>
     props.event.attendees.find((attendee) => attendee.isSelf)
   );
@@ -35,7 +38,7 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
 
   return (
     <Show when={canRespond()}>
-      <div class="border-edge-muted flex items-center gap-3 border-t px-4 py-2.5 text-xs text-ink-muted bg-active">
+      <div class="border-edge-muted flex items-center gap-3 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs">
         <span>Going?</span>
         <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
           <For each={RSVP_OPTIONS}>
@@ -46,7 +49,7 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
                     ? 'active'
                     : 'base'
                 }
-                size="sm"
+                size={props.buttonSize ?? 'sm'}
                 depth={3}
                 class="rounded-lg px-3"
                 disabled={rsvp.isPending}

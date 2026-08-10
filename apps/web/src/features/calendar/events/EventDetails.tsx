@@ -115,7 +115,7 @@ function CalendarUserItem(props: {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
 
   return (
-    <div class="flex min-w-0 items-center gap-3">
+    <div class="flex min-w-0 items-center gap-4 sm:gap-3">
       <Show
         keyed
         when={props.iconProps}
@@ -141,7 +141,7 @@ function CalendarUserItem(props: {
         <Show
           when={secondaryLabelPosition() === 'above' && props.secondaryLabel}
         >
-          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+          <div class="flex gap-1 text-xs text-ink-extra-muted sm:text-xxs">
             {props.secondaryLabel}
           </div>
         </Show>
@@ -152,7 +152,7 @@ function CalendarUserItem(props: {
         <Show
           when={secondaryLabelPosition() === 'below' && props.secondaryLabel}
         >
-          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+          <div class="flex gap-1 text-xs text-ink-extra-muted sm:text-xxs">
             {props.secondaryLabel}
           </div>
         </Show>
@@ -181,7 +181,7 @@ function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
       </>
     ) : undefined;
   const details = attendee.comment ? (
-    <div class="line-clamp-2 select-text text-xxs italic text-ink-extra-muted">
+    <div class="line-clamp-2 select-text text-xs italic text-ink-extra-muted sm:text-xxs">
       {attendee.comment}
     </div>
   ) : undefined;
@@ -335,8 +335,8 @@ function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
     : undefined;
 
   return (
-    <div class="-ml-7 flex min-w-0 items-center gap-3">
-      <PersonIcon class="size-4 shrink-0 text-ink-extra-muted" />
+    <div class="-ml-9 flex min-w-0 items-center gap-4 sm:-ml-7 sm:gap-3">
+      <PersonIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
       <div class="min-w-0 flex-1">
         <CalendarUserItem
           displayName={displayName}
@@ -394,56 +394,56 @@ export function EventDetails(props: {
 
   return (
     <div class="min-w-0 p-1 text-ink">
-      <div class="flex items-start gap-3">
+      <div class="flex items-start gap-4 sm:gap-3">
         <span
           aria-hidden="true"
-          class="mt-0.5 flex size-4 shrink-0 items-center justify-center"
+          class="mt-0.5 flex size-5 shrink-0 items-center justify-center sm:size-4"
         >
           <span
-            class="size-2.5 rounded-sm"
+            class="size-4 rounded-sm sm:size-3"
             style={{ 'background-color': props.event.calendar.color }}
           />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="flex flex-col gap-1 pr-8">
-            <div class="select-text text-base font-semibold leading-snug text-ink">
+          <div class="flex flex-col gap-1">
+            <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
               {props.event.title}
             </div>
-            <div class="select-text text-xs text-ink-muted">
+            <div class="select-text text-sm text-ink-muted sm:text-xs">
               {formatEventSchedule(props.event, props.timeFormat)}
             </div>
             <Show when={recurrenceDescription()}>
               {(description) => (
-                <div class="select-text text-xs text-ink-extra-muted">
+                <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
                   {description()}
                 </div>
               )}
             </Show>
           </div>
 
-          <div class="mt-5 flex flex-col gap-3 text-xs text-ink-muted">
+          <div class="mt-5 flex flex-col gap-3 text-sm text-ink-muted sm:text-xs">
             <Show when={conferenceUrl()}>
               {(url) => (
-                <div class="-ml-7 flex items-center gap-3">
-                  <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <div class="-ml-9 flex items-center gap-4 sm:-ml-7 sm:gap-3">
+                  <VideoCameraIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
                   <Button
                     fullWidth
                     variant="cta"
                     size="sm"
-                    class="h-8 rounded-lg"
+                    class="h-8 rounded-lg [&_svg]:size-3.5!"
                     label="Join meeting"
                     onClick={() => openExternalUrl(url())}
                   >
                     Join meeting
-                    <ArrowSquareOutIcon class="size-3.5" />
+                    <ArrowSquareOutIcon />
                   </Button>
                 </div>
               )}
             </Show>
             <Show when={originalTimeZone()}>
               {(timeZone) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <GlobeIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
+                  <GlobeIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
                   <span class="select-text">{timeZone()}</span>
                 </div>
               )}
@@ -451,8 +451,8 @@ export function EventDetails(props: {
 
             <Show when={props.event.location}>
               {(location) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <MapPinIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
+                  <MapPinIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
                   <span class="select-text">{location()}</span>
                 </div>
               )}
@@ -460,8 +460,8 @@ export function EventDetails(props: {
 
             <Show when={props.event.description}>
               {(description) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <TextAlignLeftIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+                <div class="-ml-9 flex items-start gap-4 sm:-ml-7 sm:gap-3">
+                  <TextAlignLeftIcon class="mt-0.5 size-5 shrink-0 text-ink-extra-muted sm:size-4" />
                   <p class="select-text leading-relaxed text-ink-muted">
                     {description()}
                   </p>
@@ -489,10 +489,10 @@ export function EventAttendeesSection(props: {
     <Show when={props.attendees.length > 0}>
       <Collapsible
         defaultOpen
-        class="border-edge-muted border-t text-xs text-ink-muted"
+        class="border-edge-muted text-sm text-ink-muted sm:border-t sm:text-xs"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-hover hover:text-ink">
-          <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
+        <Collapsible.Trigger class="group flex w-full items-center gap-4 px-4 py-4 text-left hover:bg-hover hover:text-ink sm:gap-3">
+          <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
           <span>
             {props.attendees.length}{' '}
             {plural('attendee', props.attendees.length)}
@@ -503,8 +503,8 @@ export function EventAttendeesSection(props: {
           />
         </Collapsible.Trigger>
         <Collapsible.Content class="data-closed:hidden">
-          <div class="flex gap-3 pb-3 pl-4 pt-1.5">
-            <span aria-hidden="true" class="size-4 shrink-0" />
+          <div class="flex gap-4 pb-3 pl-4 pt-1.5 sm:gap-3">
+            <span aria-hidden="true" class="size-5 shrink-0 sm:size-4" />
             <ScrollableAttendeeList attendees={props.attendees} />
           </div>
         </Collapsible.Content>
