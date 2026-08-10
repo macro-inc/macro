@@ -1,9 +1,15 @@
-query Soup($input: SoupInput!) {
+query Soup(
+	$input: SoupInput!
+	$includeEmailContent: Boolean! = false
+	$offset: Int! = 0
+	$limit: Int! = 20
+) {
 	user {
 		id
 		soup(input: $input) {
 			items {
 				...SoupItemFields
+				...EmailThreadPageFields @include(if: $includeEmailContent)
 			}
 			nextCursor
 		}
@@ -95,6 +101,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 							createdAt
 						}
 						labels {
+							__typename
 							id
 							linkId
 							providerLabelId

@@ -749,6 +749,8 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
 
 export type FetchGraphqlSoupOptions = {
   signal?: AbortSignal;
+  /** Select the first email message page for cache hydration. */
+  includeEmailContent?: boolean;
   /** Defaults to true for normal foreground Soup reads. */
   allowOfflineFallback?: boolean;
 };
@@ -799,20 +801,23 @@ export async function fetchGraphqlSoup(
 ): Promise<SoupPage> {
   const client = getGraphqlSoupClient();
   const useCache = graphqlCacheEnabled();
+  const variables: SoupQueryVariables = {
+    input,
+    includeEmailContent: options.includeEmailContent ?? false,
+    // Keep normalized field arguments identical to the thread query.
+    offset: 0,
+    limit: 20,
+  };
 
   // `cache-and-network` writes responses through the normalized cache;
   // `.toPromise()` skips the stale cache emission, so callers keep
   // network-fresh semantics. Reactive urql consumers will see the
   // stale-then-fresh stream once components migrate.
   const result = await client
-    .query<SoupQuery, SoupQueryVariables>(
-      SoupQueryDocument,
-      { input },
-      {
-        ...(useCache ? { requestPolicy: 'cache-and-network' as const } : {}),
-        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-      }
-    )
+    .query<SoupQuery, SoupQueryVariables>(SoupQueryDocument, variables, {
+      ...(useCache ? { requestPolicy: 'cache-and-network' as const } : {}),
+      ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+    })
     .toPromise();
 
   if (result.error) {
@@ -823,11 +828,9 @@ export async function fetchGraphqlSoup(
       result.error.networkError
     ) {
       const cached = await client
-        .query<SoupQuery, SoupQueryVariables>(
-          SoupQueryDocument,
-          { input },
-          { requestPolicy: 'cache-only' }
-        )
+        .query<SoupQuery, SoupQueryVariables>(SoupQueryDocument, variables, {
+          requestPolicy: 'cache-only',
+        })
         .toPromise();
       if (cached.data) {
         return mapGraphqlSoupPage(cached.data);

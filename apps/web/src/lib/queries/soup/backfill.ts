@@ -2,6 +2,7 @@ import { createTabLeaderSignal } from '@notifications/notification-election';
 import {
   fetchGraphqlSoup,
   type GraphqlSoupInitialInput,
+  type GraphqlSoupInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { useQueries, useQueryClient } from '@tanstack/solid-query';
@@ -17,8 +18,8 @@ import {
 // cannot retain the previous server-side filters.
 const BACKFILL_VERSION = 4;
 const PAGE_LIMIT = 250;
-// The email-content DataLoader rejects operations with more than 20 threads.
-const EMAIL_CONTENT_PAGE_LIMIT = 20;
+// Five threads × twenty messages reaches the DataLoader's 100-message cap.
+const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
@@ -29,6 +30,8 @@ export type SoupBackfillParams = {
   checkpointId: string;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
+  /** Select the first email message page for normalized-cache hydration. */
+  includeEmailContent?: boolean;
   /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
 };
@@ -53,11 +56,13 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 };
 
 /**
- * Backfills email threads and their newest content message while excluding
- * every other entity variant with an impossible id filter.
+ * Backfills email threads and the first message page used by the thread view
+ * while excluding every other entity variant with an impossible id filter.
  */
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'email-content',
+  // Restart completed legacy newest-message checkpoints with the new shape.
+  checkpointId: 'email-thread-pages',
+  includeEmailContent: true,
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -317,23 +322,22 @@ export async function runSoupBackfill(
   const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
 
   while (!signal.aborted) {
-    const page = await fetchGraphqlSoup(
-      checkpoint.nextCursor
-        ? {
-            continuation: {
-              cursor: checkpoint.nextCursor,
-              expand: passInput.expand,
-              emailView: passInput.emailView,
-            },
-          }
-        : { initial: passInput },
-      {
-        signal,
-        // Backfill must stop on a network failure instead of advancing from
-        // an old offline page. TanStack retries from the persisted cursor.
-        allowOfflineFallback: false,
-      }
-    );
+    const input: GraphqlSoupInput = checkpoint.nextCursor
+      ? {
+          continuation: {
+            cursor: checkpoint.nextCursor,
+            expand: passInput.expand,
+            emailView: passInput.emailView,
+          },
+        }
+      : { initial: passInput };
+    const page = await fetchGraphqlSoup(input, {
+      signal,
+      // Backfill must stop on a network failure instead of advancing from an
+      // old offline page. TanStack retries from the persisted cursor.
+      allowOfflineFallback: false,
+      ...(params.includeEmailContent ? { includeEmailContent: true } : {}),
+    });
 
     const completed = page.next_cursor == null;
     checkpoint = {
