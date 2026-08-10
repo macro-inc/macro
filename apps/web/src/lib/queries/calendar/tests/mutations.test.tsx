@@ -182,6 +182,76 @@ describe('useRsvpCalendarEventMutation', () => {
     });
   });
 
+  it('scopes the optimistic answer to the occurrences it covers', async () => {
+    // Three occurrences of one series, so a scoped answer has something to
+    // leave alone.
+    const seriesOccurrence = (key: string): CalendarOccurrenceItem =>
+      ({
+        event: {
+          id: 'event-3',
+          title: 'Standup',
+          recurrenceLines: ['RRULE:FREQ=DAILY'],
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+          attendees: [
+            {
+              email: 'self@example.com',
+              isSelf: true,
+              responseStatus: 'accepted',
+            },
+          ],
+        },
+        occurrence: {
+          eventId: 'event-3',
+          occurrenceKey: key,
+          recurrenceId: key,
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+        },
+      }) as unknown as CalendarOccurrenceItem;
+    const keys = [
+      '2026-08-04T09:00:00Z',
+      '2026-08-05T09:00:00Z',
+      '2026-08-06T09:00:00Z',
+    ];
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: keys.map(seriesOccurrence), syncStatus: 'ready' }
+    );
+    const responseAt = (key: string) =>
+      viewportData(viewportA)
+        ?.items.find((item) => item.occurrence.occurrenceKey === key)
+        ?.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
+
+    rsvpCalendarEventMock.mockResolvedValue(ok({ id: 'event-3' }));
+    const rsvp = renderHook(() => useRsvpCalendarEventMutation());
+
+    await rsvp.mutateAsync({
+      eventId: 'event-3',
+      response: 'declined',
+      scope: 'this_event',
+      recurrenceId: keys[1],
+      occurrenceKey: keys[1],
+    });
+
+    expect(responseAt(keys[0])).toBe('accepted');
+    expect(responseAt(keys[1])).toBe('declined');
+    expect(responseAt(keys[2])).toBe('accepted');
+    expect(rsvpCalendarEventMock).toHaveBeenCalledWith('event-3', {
+      response: 'declined',
+      scope: 'this_event',
+      recurrenceId: keys[1],
+    });
+
+    await rsvp.mutateAsync({
+      eventId: 'event-3',
+      response: 'tentative',
+      scope: 'all',
+    });
+
+    expect(responseAt(keys[0])).toBe('tentative');
+    expect(responseAt(keys[1])).toBe('tentative');
+    expect(responseAt(keys[2])).toBe('tentative');
+  });
+
   it('rolls back every viewport when the request fails', async () => {
     rsvpCalendarEventMock.mockResolvedValue(failure());
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());

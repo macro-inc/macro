@@ -18,8 +18,8 @@ use crate::domain::{
         OccurrenceRange, ProviderCalendar,
     },
     ports::{
-        GoogleCalendarMutationProvider, GoogleCalendarProvider, GoogleEventSyncContext,
-        GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
+        CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
+        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
         GoogleSeriesMutationOutcome,
     },
 };
@@ -1032,10 +1032,110 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        self_email: &str,
+        response: AttendeeResponseStatus,
+        scope: &CalendarRsvpScope,
+    ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
+        let patch_target = match scope {
+            CalendarRsvpScope::All => Some(master_provider_event_id.to_string()),
+            CalendarRsvpScope::ThisEvent { recurrence_id } => {
+                // The occurrence being gone from the series does not doom the
+                // series itself; the refresh below converges the projection.
+                self.instance_id_at(
+                    access_token,
+                    target,
+                    master_provider_event_id,
+                    recurrence_id,
+                )
+                .await?
+            }
+        };
+        if let Some(provider_event_id) = &patch_target {
+            match self
+                .patch_self_response(
+                    access_token,
+                    target,
+                    provider_event_id,
+                    self_email,
+                    response,
+                )
+                .await?
+            {
+                RsvpPatch::Applied => {}
+                RsvpPatch::NotAttendee => return Ok(GoogleRsvpOutcome::NotAttendee),
+                RsvpPatch::Gone => return Ok(GoogleRsvpOutcome::Gone),
+            }
+        }
+
+        // Every scope resolves by refreshing the series from Google, which
+        // owns recurrence expansion and now holds the exceptions just written.
+        match self
+            .series_outcome(access_token, target, master_provider_event_id)
+            .await?
+        {
+            GoogleSeriesMutationOutcome::Applied(upsert) => Ok(GoogleRsvpOutcome::Applied(upsert)),
+            GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
+                Ok(GoogleRsvpOutcome::Gone)
+            }
+        }
+    }
+}
+
+/// Outcome of writing the connected account's response to one provider event.
+enum RsvpPatch {
+    Applied,
+    NotAttendee,
+    Gone,
+}
+
+impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
+    /// Resolve one occurrence of a series to the provider id that carries it,
+    /// creating no exception of its own.
+    async fn instance_id_at(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+        recurrence_id: &str,
+    ) -> Result<Option<String>, GoogleProviderError> {
+        let Some(start) = parse_occurrence_start(recurrence_id) else {
+            return Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                "the occurrence identifier is not a recognizable start",
+            ));
+        };
+        let window = occurrence_window(&start);
+        Ok(self
+            .instances(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                master_provider_event_id,
+                &window,
+            )
+            .await?
+            .into_iter()
+            .find(|instance| {
+                instance
+                    .original_start_time
+                    .as_ref()
+                    .and_then(google_start)
+                    .is_some_and(|candidate| candidate == start)
+            })
+            .map(|instance| instance.id))
+    }
+
+    /// Rewrite just the connected account's `responseStatus` on one provider
+    /// event, preserving every other attendee exactly as Google has them.
+    async fn patch_self_response(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
         provider_event_id: &str,
         self_email: &str,
         response: AttendeeResponseStatus,
-    ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
+    ) -> Result<RsvpPatch, GoogleProviderError> {
         // Patching `attendees` replaces the whole array, so start from the
         // provider's current list rather than a possibly stale projection.
         let Some(current) = self
@@ -1047,7 +1147,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
             )
             .await?
         else {
-            return Ok(GoogleRsvpOutcome::Gone);
+            return Ok(RsvpPatch::Gone);
         };
         let mut attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
         let self_position = attendees
@@ -1062,22 +1162,16 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 })
             });
         let Some(position) = self_position else {
-            return Ok(GoogleRsvpOutcome::NotAttendee);
+            return Ok(RsvpPatch::NotAttendee);
         };
         attendees[position].response_status = Some(google_response_status(response).to_string());
         let body = serde_json::json!({ "attendees": attendees });
-        let Some(updated) = self
+        match self
             .patch_event_raw(access_token, target, provider_event_id, body)
             .await?
-        else {
-            return Ok(GoogleRsvpOutcome::Gone);
-        };
-        match self
-            .mutation_readback(access_token, target, updated)
-            .await?
         {
-            Some(upsert) => Ok(GoogleRsvpOutcome::Applied(Box::new(upsert))),
-            None => Ok(GoogleRsvpOutcome::Gone),
+            Some(_) => Ok(RsvpPatch::Applied),
+            None => Ok(RsvpPatch::Gone),
         }
     }
 }
@@ -1520,6 +1614,9 @@ fn map_upsert(
                     description: exception.description,
                     location: exception.location,
                     status: Some(google_status(exception.status.as_deref())),
+                    attendees: exception
+                        .attendees
+                        .map(|attendees| attendees.into_iter().filter_map(map_attendee).collect()),
                 })
             })()
             .inspect_err(|error| {

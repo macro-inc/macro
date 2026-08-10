@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use futures::try_join;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
@@ -296,6 +297,18 @@ struct OccurrenceJoinRow {
     is_read_only: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+}
+
+struct OverrideAttendeeRow {
+    event_id: Uuid,
+    recurrence_id: String,
+    email: String,
+    display_name: Option<String>,
+    response_status: String,
+    is_organizer: bool,
+    is_optional: bool,
+    is_self: bool,
+    comment: Option<String>,
 }
 
 struct AttendeeRow {
@@ -752,13 +765,27 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         let event_ids: Vec<_> = rows.iter().map(|row| row.event_id).collect();
-        let attendees = fetch_attendees(&self.pool, &event_ids).await?;
+        let (attendees, override_attendees) = try_join!(
+            fetch_attendees(&self.pool, &event_ids),
+            fetch_override_attendees(&self.pool, &event_ids),
+        )?;
         rows.into_iter()
             .map(|row| {
                 let event_id = row.event_id;
                 let occurrence = occurrence_from_join(&row)?;
-                let event =
-                    event_from_join(row, attendees.get(&event_id).cloned().unwrap_or_default())?;
+                // An exception's attendee list replaces the series list for
+                // that occurrence alone: Google records an instance-scoped
+                // RSVP there and never on the master.
+                let effective = occurrence
+                    .recurrence_id
+                    .as_ref()
+                    .and_then(|recurrence_id| {
+                        override_attendees.get(&(event_id, recurrence_id.clone()))
+                    })
+                    .or_else(|| attendees.get(&event_id))
+                    .cloned()
+                    .unwrap_or_default();
+                let event = event_from_join(row, effective)?;
                 Ok((event, occurrence))
             })
             .collect()
@@ -2264,6 +2291,39 @@ async fn replace_overrides(
         .execute(&mut **tx)
         .await
         .map_err(report)?;
+        // An empty list is indistinguishable from "no override" once stored,
+        // and it only arises for events with no attendees at all — where the
+        // inherited series list is equally empty.
+        for attendee in event_override.attendees.iter().flatten() {
+            sqlx::query!(
+                r#"
+                INSERT INTO calendar_event_override_attendees (
+                    event_id, recurrence_id, email, display_name, response_status,
+                    is_organizer, is_optional, is_self, comment
+                )
+                VALUES ($1, $2, lower($3), $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (event_id, recurrence_id, email) DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    response_status = EXCLUDED.response_status,
+                    is_organizer = EXCLUDED.is_organizer,
+                    is_optional = EXCLUDED.is_optional,
+                    is_self = EXCLUDED.is_self,
+                    comment = EXCLUDED.comment
+                "#,
+                event_id,
+                &event_override.recurrence_id,
+                &attendee.email,
+                attendee.display_name.as_deref(),
+                attendee.response_status.as_str(),
+                attendee.is_organizer,
+                attendee.is_optional,
+                attendee.is_self,
+                attendee.comment.as_deref(),
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        }
     }
     Ok(())
 }
@@ -2346,6 +2406,48 @@ async fn fetch_attendees(
             });
     }
     Ok(by_event)
+}
+
+/// Per-occurrence attendee overrides for the supplied events, keyed by
+/// `(event_id, recurrence_id)`.
+async fn fetch_override_attendees(
+    pool: &PgPool,
+    event_ids: &[Uuid],
+) -> Result<HashMap<(Uuid, String), Vec<CalendarAttendee>>, Report> {
+    if event_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = sqlx::query_as!(
+        OverrideAttendeeRow,
+        r#"
+        SELECT
+            event_id, recurrence_id, email, display_name, response_status,
+            is_organizer, is_optional, is_self, comment
+        FROM calendar_event_override_attendees
+        WHERE event_id = ANY($1)
+        ORDER BY event_id, recurrence_id, email
+        "#,
+        event_ids,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(report)?;
+    let mut by_occurrence: HashMap<(Uuid, String), Vec<CalendarAttendee>> = HashMap::new();
+    for row in rows {
+        by_occurrence
+            .entry((row.event_id, row.recurrence_id))
+            .or_default()
+            .push(CalendarAttendee {
+                email: row.email,
+                display_name: row.display_name,
+                response_status: attendee_status(&row.response_status),
+                is_organizer: row.is_organizer,
+                is_optional: row.is_optional,
+                is_self: row.is_self,
+                comment: row.comment,
+            });
+    }
+    Ok(by_occurrence)
 }
 
 type SplitTime = (

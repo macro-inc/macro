@@ -311,6 +311,12 @@ pub struct CalendarEventOverride {
     pub location: Option<String>,
     /// Optional replacement status.
     pub status: Option<EventStatus>,
+    /// Replacement attendee list for this occurrence alone. `None` inherits
+    /// the series attendees. Google carries the complete list on every
+    /// exception it returns, so a single instance-scoped RSVP — including the
+    /// auto-decline an out-of-office event performs — arrives here rather than
+    /// on the master.
+    pub attendees: Option<Vec<CalendarAttendee>>,
 }
 
 /// A start-only value used to identify an overridden occurrence.

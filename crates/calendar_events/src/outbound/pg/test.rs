@@ -1145,6 +1145,95 @@ async fn occurrence_range_uses_overlap_indexes_and_preserves_attendees(pool: PgP
     assert!(result.iter().all(|(event, _)| event.attendees.len() == 1));
 }
 
+/// A Google out-of-office auto-decline records the decline on the exception
+/// instance and never on the series master, so the occurrence carrying that
+/// exception must project the exception's attendees while its siblings keep
+/// the series answer.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) {
+    let owner_id = "macro|calendar-rsvp@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "declined@example.com",
+        "Declined instance",
+        1,
+    );
+    let self_attendee = CalendarAttendee {
+        email: "self@example.com".to_string(),
+        display_name: Some("Self".to_string()),
+        response_status: AttendeeResponseStatus::Accepted,
+        is_organizer: false,
+        is_optional: false,
+        is_self: true,
+        comment: None,
+    };
+    upsert.event.attendees.push(self_attendee.clone());
+
+    // The second occurrence is the exception: same event, declined for us.
+    let declined_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = declined_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(declined_start),
+        time: EventTime::Timed {
+            starts_at: declined_start,
+            ends_at: declined_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: None,
+        description: None,
+        location: None,
+        status: Some(EventStatus::Confirmed),
+        attendees: Some(vec![CalendarAttendee {
+            response_status: AttendeeResponseStatus::Declined,
+            comment: Some("Declined because I am out of office".to_string()),
+            ..self_attendee
+        }]),
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
+    let result = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    let response_at = |key: &str| {
+        result
+            .iter()
+            .find(|(_, occurrence)| occurrence.occurrence_key == key)
+            .and_then(|(event, _)| event.attendees.iter().find(|attendee| attendee.is_self))
+            .map(|attendee| attendee.response_status)
+    };
+    assert_eq!(
+        response_at(&recurrence_id),
+        Some(AttendeeResponseStatus::Declined)
+    );
+    let series_start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
+    assert_eq!(
+        response_at(&series_start.to_rfc3339()),
+        Some(AttendeeResponseStatus::Accepted)
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn occurrence_cursor_is_stable_when_occurrences_share_a_start(pool: PgPool) {
     let owner_id = "macro|calendar-pagination@example.com";

@@ -161,13 +161,18 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
     /// longer exists at the provider surfaces as [`GoogleRsvpOutcome::Gone`];
     /// absence of a self attendee surfaces as
     /// [`GoogleRsvpOutcome::NotAttendee`].
+    ///
+    /// `scope` selects what the response covers: the master for
+    /// [`CalendarRsvpScope::All`], one exception instance for
+    /// [`CalendarRsvpScope::ThisEvent`].
     fn rsvp_event(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
-        provider_event_id: &str,
+        master_provider_event_id: &str,
         self_email: &str,
         response: AttendeeResponseStatus,
+        scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
 }
 
@@ -184,6 +189,25 @@ pub enum CalendarDeletionScope {
     /// The identified occurrence and everything after it.
     ThisAndFollowing {
         /// Stable original-start key of the first removed occurrence.
+        recurrence_id: String,
+    },
+}
+
+/// How much of a recurring series an RSVP applies to.
+///
+/// There is deliberately no this-and-following variant. The provider's Event
+/// resource addresses an exception by `originalStartTime` — exactly one
+/// instance — with no range field, so a forward response is inexpressible as
+/// a provider write and could only be emulated by enumerating instances,
+/// which an unbounded series never finishes. Both variants here are one
+/// exact provider call that Google remains authoritative for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarRsvpScope {
+    /// The entire series, recorded on the master.
+    All,
+    /// One occurrence, identified by its original start key.
+    ThisEvent {
+        /// Stable original-start key of the occurrence.
         recurrence_id: String,
     },
 }
@@ -386,12 +410,14 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         scope: CalendarDeletionScope,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 
-    /// Set the requester's inbox RSVP on an event and persist the echo.
+    /// Set the requester's inbox RSVP on an event — the whole series, one
+    /// occurrence, or an occurrence onward — and persist the echo.
     fn respond_to_event(
         &self,
         requester_id: &str,
         event_id: Uuid,
         response: AttendeeResponseStatus,
+        scope: CalendarRsvpScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 }
 

@@ -1,7 +1,11 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { type CalendarDeletionScope, emailClient } from '@service-email/client';
+import {
+  type CalendarDeletionScope,
+  type CalendarRsvpScope,
+  emailClient,
+} from '@service-email/client';
 import type { CalendarEvent as CalendarEventEntity } from '@service-email/generated/schemas/calendarEvent';
 import type { CreateCalendarEventRequest } from '@service-email/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-email/generated/schemas/updateCalendarEventRequest';
@@ -60,6 +64,24 @@ function patchEventItems(
 export interface RsvpCalendarEventArgs {
   eventId: string;
   response: Exclude<AttendeeResponseStatus, 'needs_action'>;
+  /** How much of a recurring series to answer for; defaults to all of it. */
+  scope?: CalendarRsvpScope;
+  /** Original-start key of the occurrence a scoped response targets. */
+  recurrenceId?: string;
+  /** Cache key of the occurrence, for the optimistic update. */
+  occurrenceKey?: string;
+}
+
+/** Whether a cached occurrence is covered by a scoped response. */
+function answeredByRsvp(
+  item: CalendarOccurrenceItem,
+  args: RsvpCalendarEventArgs
+): boolean {
+  if (item.event.id !== args.eventId) return false;
+  if (args.scope === 'this_event' && args.occurrenceKey !== undefined) {
+    return item.occurrence.occurrenceKey === args.occurrenceKey;
+  }
+  return true;
 }
 
 type RsvpCallbacks = MutationCallbacks<
@@ -69,13 +91,19 @@ type RsvpCallbacks = MutationCallbacks<
   CalendarMutationContext
 >;
 
-/** Sets the viewer's RSVP; recurring events respond for the whole series. */
+/**
+ * Sets the viewer's RSVP for one occurrence, an occurrence onward, or the
+ * whole series. Google records an occurrence-scoped response as an exception
+ * instance, so the answer can differ per occurrence.
+ */
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: RsvpCalendarEventArgs) =>
       await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
           response: args.response,
+          scope: args.scope,
+          recurrenceId: args.recurrenceId,
         })
       ),
     ...withCallbacks<
@@ -86,18 +114,22 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
     >(
       {
         onMutate: (args) =>
-          patchOccurrenceCaches(
-            patchEventItems(args.eventId, (item) => ({
-              ...item,
-              event: {
-                ...item.event,
-                attendees: item.event.attendees.map((attendee) =>
-                  attendee.isSelf
-                    ? { ...attendee, responseStatus: args.response }
-                    : attendee
-                ),
-              },
-            }))
+          patchOccurrenceCaches((items) =>
+            items.map((item) =>
+              answeredByRsvp(item, args)
+                ? {
+                    ...item,
+                    event: {
+                      ...item.event,
+                      attendees: item.event.attendees.map((attendee) =>
+                        attendee.isSelf
+                          ? { ...attendee, responseStatus: args.response }
+                          : attendee
+                      ),
+                    },
+                  }
+                : item
+            )
           ),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: () => invalidateCalendarOccurrences(),

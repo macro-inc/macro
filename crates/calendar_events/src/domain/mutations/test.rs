@@ -371,14 +371,19 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         &self,
         _access_token: &str,
         target: &GoogleCalendarTarget,
-        provider_event_id: &str,
+        master_provider_event_id: &str,
         _self_email: &str,
         _response: AttendeeResponseStatus,
+        scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
+        let scope = match scope {
+            CalendarRsvpScope::All => "all".to_string(),
+            CalendarRsvpScope::ThisEvent { recurrence_id } => format!("this:{recurrence_id}"),
+        };
         self.calls
             .lock()
             .unwrap()
-            .push(format!("rsvp:{provider_event_id}"));
+            .push(format!("rsvp:{master_provider_event_id}:{scope}"));
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -641,7 +646,8 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
             .respond_to_event(
                 "macro|user",
                 Uuid::now_v7(),
-                AttendeeResponseStatus::Accepted
+                AttendeeResponseStatus::Accepted,
+                CalendarRsvpScope::All,
             )
             .await,
         Err(CalendarMutationError::NotAttendee)
@@ -652,19 +658,26 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
         ..FakeRepo::default()
     };
     let upserts = repo.upserts.clone();
-    service(
-        repo,
-        FakeProvider::new(FakeProviderBehavior::Echo),
-        FakeTokens::ok(),
-    )
-    .respond_to_event(
-        "macro|user",
-        Uuid::now_v7(),
-        AttendeeResponseStatus::Declined,
-    )
-    .await
-    .unwrap();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    service(repo, provider, FakeTokens::ok())
+        .respond_to_event(
+            "macro|user",
+            Uuid::now_v7(),
+            AttendeeResponseStatus::Declined,
+            CalendarRsvpScope::ThisEvent {
+                recurrence_id: "2026-08-14T22:00:00+00:00".to_string(),
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(upserts.lock().unwrap().len(), 1);
+    // The scope reaches the provider intact: an occurrence-scoped response
+    // must not silently widen to the series.
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        ["rsvp:master-id:this:2026-08-14T22:00:00+00:00"]
+    );
 }
 
 #[tokio::test]

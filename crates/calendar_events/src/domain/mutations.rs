@@ -16,9 +16,9 @@ use super::{
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
-        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarTokenError,
-        GoogleCalendarMutationProvider, GoogleProviderError, GoogleProviderErrorKind,
-        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
+        CalendarTokenError, GoogleCalendarMutationProvider, GoogleProviderError,
+        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -239,6 +239,7 @@ where
         requester_id: &str,
         event_id: Uuid,
         response: AttendeeResponseStatus,
+        scope: CalendarRsvpScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
@@ -253,6 +254,7 @@ where
                 target.master_provider_event_id(),
                 &target.token_identity.email_address,
                 response,
+                &scope,
             )
             .await
             .map_err(provider_error)?;

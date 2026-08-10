@@ -439,3 +439,99 @@ fn occurrence_keys_parse_back_to_starts() {
         &master
     ));
 }
+
+/// Google's out-of-office auto-decline leaves the master untouched and writes
+/// the decline onto the exception instance, so the exception's attendee list
+/// must survive mapping — it is the only record that the occurrence changed.
+#[test]
+fn exception_attendees_are_carried_onto_the_override() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-master",
+        "iCalUID": "declined@example.com",
+        "summary": "Prod Deploy",
+        "start": {"dateTime": "2026-08-13T22:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-08-13T22:30:00Z", "timeZone": "UTC"},
+        "recurrence": ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"],
+        "attendees": [
+            {"email": "self@example.com", "self": true, "responseStatus": "accepted"},
+            {"email": "organizer@example.com", "organizer": true, "responseStatus": "accepted"}
+        ],
+        "created": "2026-05-18T22:00:00Z",
+        "updated": "2026-05-18T22:00:00Z"
+    }))
+    .unwrap();
+    let exception: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-master_20260814T220000Z",
+        "iCalUID": "declined@example.com",
+        "summary": "Prod Deploy",
+        "recurringEventId": "provider-master",
+        "originalStartTime": {"dateTime": "2026-08-14T22:00:00Z", "timeZone": "UTC"},
+        "start": {"dateTime": "2026-08-14T22:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-08-14T22:30:00Z", "timeZone": "UTC"},
+        "status": "confirmed",
+        "attendees": [
+            {
+                "email": "self@example.com",
+                "self": true,
+                "responseStatus": "declined",
+                "comment": "Declined because I am out of office"
+            },
+            {"email": "organizer@example.com", "organizer": true, "responseStatus": "accepted"}
+        ],
+        "created": "2026-05-18T22:00:00Z",
+        "updated": "2026-08-10T14:48:00Z"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-09-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|self@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    let upsert = map_upsert(&target, master, vec![exception], Vec::new()).unwrap();
+
+    // The series answer is unchanged: only the one occurrence declined.
+    let series_self = upsert
+        .event
+        .attendees
+        .iter()
+        .find(|attendee| attendee.is_self)
+        .expect("the master carries a self attendee");
+    assert_eq!(
+        series_self.response_status,
+        AttendeeResponseStatus::Accepted
+    );
+
+    let override_attendees = upsert.overrides[0]
+        .attendees
+        .as_ref()
+        .expect("the exception carried an attendee list");
+    let override_self = override_attendees
+        .iter()
+        .find(|attendee| attendee.is_self)
+        .expect("the exception carries a self attendee");
+    assert_eq!(
+        override_self.response_status,
+        AttendeeResponseStatus::Declined
+    );
+    assert_eq!(
+        override_self.comment.as_deref(),
+        Some("Declined because I am out of office")
+    );
+    // Every attendee survives, not just the one whose response changed.
+    assert_eq!(override_attendees.len(), 2);
+}

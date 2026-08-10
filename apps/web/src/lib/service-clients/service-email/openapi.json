@@ -4475,6 +4475,11 @@
           "persist_failed"
         ]
       },
+      "CalendarRsvpScopeParam": {
+        "type": "string",
+        "description": "How much of a recurring series an RSVP applies to.\n\nUnlike deletion there is no this-and-following variant: the provider\ncannot express a forward-scoped response, so offering one would be a\npromise sync could not keep.",
+        "enum": ["all", "this_event"]
+      },
       "CancelBackfillParams": {
         "type": "object",
         "required": ["job_id"],
@@ -5589,9 +5594,24 @@
         "description": "Request body setting the requester's RSVP on an event.",
         "required": ["response"],
         "properties": {
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key of the occurrence the response targets."
+          },
           "response": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
             "description": "The response to record for the connected account."
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarRsvpScopeParam",
+                "description": "How much of a recurring series the response covers. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole series. An explicit `this_event` scope\nrequires `recurrenceId`, so a scoped request is never silently\nwidened to the series."
+              }
+            ]
           }
         }
       },
