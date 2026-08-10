@@ -77,6 +77,20 @@ export const TOKENS = {
     escape: 'code.escape',
   },
 
+  // calendar
+  calendar: {
+    view: {
+      day: 'calendar.view.day',
+      week: 'calendar.view.week',
+      month: 'calendar.view.month',
+    },
+    period: {
+      previous: 'calendar.period.previous',
+      next: 'calendar.period.next',
+      today: 'calendar.period.today',
+    },
+  },
+
   // global
   global: {
     createCommand: 'global.createCommand',

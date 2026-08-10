@@ -5,6 +5,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
@@ -39,6 +40,7 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
+import { useCalendarHotkeys } from './use-calendar-hotkeys';
 import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -174,6 +176,14 @@ function CalendarWorkspace() {
   const initialDate = new Date();
   const today = createLocalToday();
 
+  useCalendarHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    changeView: calendarPager.changeView,
+    previousPeriod: pager.previous,
+    nextPeriod: pager.next,
+    navigateToToday: calendarPager.navigateToToday,
+  });
+
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
@@ -222,6 +232,7 @@ function CalendarWorkspace() {
                     class="rounded-lg px-3"
                     depth={2}
                     label="Go to today"
+                    hotkey={TOKENS.calendar.period.today}
                     onClick={calendarPager.navigateToToday}
                   >
                     Today
@@ -234,6 +245,7 @@ function CalendarWorkspace() {
                 size="icon-sm"
                 class="rounded-full"
                 label="Go to today"
+                hotkey={TOKENS.calendar.period.today}
                 onClick={calendarPager.navigateToToday}
               >
                 <CalendarBlankIcon aria-hidden="true" />
@@ -253,6 +265,7 @@ function CalendarWorkspace() {
                   size="icon-sm"
                   class="rounded-lg"
                   label="Previous period"
+                  hotkey={TOKENS.calendar.period.previous}
                   onClick={() => void pager.previous()}
                 >
                   <CaretLeftIcon class="size-4" />
@@ -262,6 +275,7 @@ function CalendarWorkspace() {
                   size="icon-sm"
                   class="rounded-lg"
                   label="Next period"
+                  hotkey={TOKENS.calendar.period.next}
                   onClick={() => void pager.next()}
                 >
                   <CaretRightIcon class="size-4" />
