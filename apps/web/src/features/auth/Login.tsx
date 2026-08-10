@@ -492,9 +492,12 @@ export function Login(props: { signupMode?: boolean }) {
       ? rawToken[rawToken.length - 1]
       : rawToken;
     if (session_code && typeof session_code === 'string') {
-      unsetTokenPromise();
       authServiceClient.sessionLogin({ session_code }).then(async (res) => {
         if (res.isOk()) {
+          // Reset token state only after the session cookies have actually
+          // changed — resetting before sessionLogin opens a window where a
+          // visibility-triggered refresh re-latches under the new generation.
+          unsetTokenPromise();
           await invalidateAllAfterLogin();
           await initEmailLink().match(
             () => {},

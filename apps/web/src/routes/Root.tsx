@@ -59,6 +59,7 @@ import {
   syncLoginStorage,
   updateCookie,
 } from '@core/util/cookies';
+import { confirmSessionExpired } from '@core/util/fetchWithToken';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
@@ -77,11 +78,13 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import {
+  authKeys,
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
+import { queryClient } from '@queries/client';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -107,6 +110,7 @@ import { Button } from '@ui';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createResource,
   createSignal,
   type JSX,
   Match,
@@ -217,10 +221,30 @@ function shouldShowNativeOfflineFallback(
 }
 
 function SessionExpiredRedirect() {
-  void clearLocalAuthSession().catch((error) => {
-    console.error('Failed to clear local auth session', error);
+  // The UNAUTHORIZED that got us here can come from a latched refresh failure
+  // without the server ever being consulted, so confirm with a fresh refresh
+  // before destroying local session state. If the session turns out to be
+  // alive, refetch user-info instead and only treat a repeat 401 as real.
+  const [expired] = createResource(async () => {
+    if (!(await confirmSessionExpired())) {
+      await invalidateUserInfo();
+      const stillUnauthorized = thrownResultErrorHasCode(
+        queryClient.getQueryState(authKeys.userInfo.queryKey)?.error,
+        'UNAUTHORIZED'
+      );
+      if (!stillUnauthorized) return false;
+    }
+    await clearLocalAuthSession().catch((error) => {
+      console.error('Failed to clear local auth session', error);
+    });
+    return true;
   });
-  return <Navigate href={`/welcome${getCurrentQueryString()}`} />;
+
+  return (
+    <Show when={expired()}>
+      <Navigate href={`/welcome${getCurrentQueryString()}`} />
+    </Show>
+  );
 }
 
 function OfflineFallbackRoute() {
@@ -280,6 +304,11 @@ function BasePathComponent() {
       <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
         <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
       </Match>
+      {/* A paused query (fetch wanted, but the browser thinks it's offline —
+          common during a native cold launch) has isLoading false and no data.
+          It means "unknown", not "unauthenticated": wait for the fetch to
+          resume rather than showing login to a possibly-valid session. */}
+      <Match when={userInfoQuery.fetchStatus === 'paused'}>{null}</Match>
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >

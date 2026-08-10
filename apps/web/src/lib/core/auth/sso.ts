@@ -59,12 +59,15 @@ export async function startSsoLogin(
       return false;
     }
 
-    unsetTokenPromise();
     const res = await authServiceClient.sessionLogin({
       session_code: result.token,
     });
 
     if (res.isOk()) {
+      // Reset token state only after the session cookies have actually
+      // changed — resetting before sessionLogin opens a window where a
+      // visibility-triggered refresh re-latches under the new generation.
+      unsetTokenPromise();
       await invalidateAllAfterLogin();
       return true;
     }
