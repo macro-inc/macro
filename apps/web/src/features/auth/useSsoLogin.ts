@@ -57,9 +57,9 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       });
 
       if (!result.success || !result.token) {
-        console.error('Authentication failed:', result.error);
         // A canceled sheet is a deliberate user action, not a failure.
         if (result.error !== 'User canceled login') {
+          console.error('Authentication failed:', result.error);
           toast.failure('Sign-in failed. Please try again.');
         }
         return;
