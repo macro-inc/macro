@@ -136,15 +136,15 @@ async fn search_includes_matching_system_skills() {
     let service = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused());
 
     let results = service
-        .search_skills(&user(), "skill authoring", SkillMatchType::Partial)
+        .search_skills(&user(), "catch me up", SkillMatchType::Partial)
         .await
         .unwrap();
 
     assert_eq!(
         results,
         vec![SkillSummary {
-            document_id: system_skills::skill_authoring::SKILL.id(),
-            name: "Skill Authoring Guide".to_string(),
+            document_id: system_skills::catch_me_up::SKILL.id(),
+            name: "Catch Me Up".to_string(),
             updated_at: None,
         }]
     );
@@ -152,13 +152,13 @@ async fn search_includes_matching_system_skills() {
 
 #[tokio::test]
 async fn search_excludes_non_matching_system_skills() {
-    // "author" alone only prefix-matches when partial; exact must not match.
+    // "yester" alone only prefix-matches when partial; exact must not match.
     let partial = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused())
-        .search_skills(&user(), "author", SkillMatchType::Partial)
+        .search_skills(&user(), "yester", SkillMatchType::Partial)
         .await
         .unwrap();
     let exact = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused())
-        .search_skills(&user(), "author", SkillMatchType::Exact)
+        .search_skills(&user(), "yester", SkillMatchType::Exact)
         .await
         .unwrap();
 
@@ -170,9 +170,9 @@ async fn search_excludes_non_matching_system_skills() {
 async fn system_skill_matching_requires_adjacent_tokens() {
     let service = SkillServiceImpl::new(FakeSearcher::returning(vec![]), FakeLister::unused());
 
-    // "skill guide" skips the middle token, so the phrase must not match.
+    // "catch up" skips the middle token, so the phrase must not match.
     let results = service
-        .search_skills(&user(), "skill guide", SkillMatchType::Partial)
+        .search_skills(&user(), "catch up", SkillMatchType::Partial)
         .await
         .unwrap();
 

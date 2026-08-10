@@ -15,8 +15,8 @@
 use prompt::Section;
 use uuid::Uuid;
 
-pub mod demo;
-pub mod skill_authoring;
+pub mod catch_me_up;
+pub mod what_i_did_yesterday;
 
 #[cfg(test)]
 mod test;
@@ -51,7 +51,7 @@ impl SystemSkill {
 }
 
 /// Every system skill, in display order.
-pub static SYSTEM_SKILLS: &[&SystemSkill] = &[&skill_authoring::SKILL, &demo::SKILL];
+pub static SYSTEM_SKILLS: &[&SystemSkill] = &[&catch_me_up::SKILL, &what_i_did_yesterday::SKILL];
 
 /// Look up a system skill by its well-known id.
 pub fn system_skill(id: Uuid) -> Option<&'static SystemSkill> {
