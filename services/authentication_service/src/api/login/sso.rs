@@ -83,11 +83,15 @@ pub async fn handler(
     }) = query;
 
     let original_url = original_url.map(|url| url.0);
-    if original_url
+    if let Some(url) = original_url
         .as_ref()
-        .is_some_and(|url| !is_allowed_original_url(url))
+        .filter(|url| !is_allowed_original_url(url))
     {
-        tracing::error!("original_url is not allowed");
+        tracing::error!(
+            auth_handoff_failure = "original_url_rejected",
+            original_url = %url,
+            "original_url is not allowed"
+        );
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
