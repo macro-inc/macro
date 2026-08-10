@@ -4,8 +4,16 @@ import {
   stopCallRinger,
 } from '@channel/Call/CallStartedNotifier';
 import { createCallEventsEffect } from '@channel/Call/call-events';
+import {
+  createCallResolutionsEffect,
+  getCallRecordResolution,
+  publishCallResolution,
+} from '@channel/Call/call-resolution';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
+import { throwOnErr } from '@core/util/result';
+import { callServiceClient } from '@service-call/client';
 import {
   type Accessor,
   createEffect,
@@ -41,6 +49,7 @@ declare global {
 // renders incoming calls can be hidden while a call is still ringing.
 const [incomingCalls, setIncomingCalls] = createSignal<IncomingCall[]>([]);
 const incomingCallTimeouts = new Map<string, number>();
+const INCOMING_CALL_RECONCILE_INTERVAL_MS = 4_000;
 
 function clearIncomingCallTimeouts() {
   for (const timeoutId of incomingCallTimeouts.values()) {
@@ -85,6 +94,20 @@ function addIncomingCall(call: IncomingCall) {
   });
 }
 
+async function reconcileIncomingCall(call: IncomingCall, userId: string) {
+  try {
+    const record = await throwOnErr(() =>
+      callServiceClient.getCallRecord(call.callId)
+    );
+    const resolution = getCallRecordResolution(record, userId);
+    if (resolution) publishCallResolution(resolution);
+  } catch (error) {
+    // The websocket and cross-tab transports remain the primary paths. A
+    // transient reconciliation failure should not disturb the active ring.
+    console.warn('incoming call reconciliation failed', error);
+  }
+}
+
 export function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
   const channelsCtx = useChannelsContext();
   const callCtx = useCallContextOptional();
@@ -126,6 +149,14 @@ export function useIncomingCallWidgetVisible() {
 export function IncomingCallEvents() {
   const callCtx = useCallContextOptional();
   const channelsCtx = useChannelsContext();
+  const userId = useUserId();
+
+  createCallResolutionsEffect((resolution) => {
+    if (resolution.type === 'answered' && resolution.answeredBy !== userId()) {
+      return;
+    }
+    dismissIncomingCall(resolution.callId);
+  });
 
   createEffect(() => {
     if (!DEV_MODE_ENV) return;
@@ -170,11 +201,50 @@ export function IncomingCallEvents() {
     if (activeCallId) dismissIncomingCall(activeCallId);
   });
 
+  // Websocket events are intentionally one-shot and are not replayed after a
+  // background tab reconnects. While calls are ringing, periodically compare
+  // them with the authoritative call record and re-check immediately when the
+  // tab becomes visible or comes back online.
+  createEffect(() => {
+    const calls = incomingCalls();
+    const currentUserId = userId();
+    if (calls.length === 0 || !currentUserId) return;
+
+    let isReconcileInFlight = false;
+    const reconcile = () => {
+      if (
+        isReconcileInFlight ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        return;
+      }
+      isReconcileInFlight = true;
+      void Promise.all(
+        calls.map((call) => reconcileIncomingCall(call, currentUserId))
+      ).finally(() => {
+        isReconcileInFlight = false;
+      });
+    };
+    const reconcileWhenVisible = () => {
+      if (document.visibilityState === 'visible') reconcile();
+    };
+
+    reconcile();
+    const intervalId = window.setInterval(
+      reconcile,
+      INCOMING_CALL_RECONCILE_INTERVAL_MS
+    );
+    document.addEventListener('visibilitychange', reconcileWhenVisible);
+    window.addEventListener('online', reconcile);
+
+    onCleanup(() => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', reconcileWhenVisible);
+      window.removeEventListener('online', reconcile);
+    });
+  });
+
   createCallEventsEffect({
-    onCallEnded: ({ callId }) => dismissIncomingCall(callId),
-
-    onCallAnswered: ({ callId }) => dismissIncomingCall(callId),
-
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {
       if (callCtx?.activeCallId() === callId) return;
       if (isFromSelf) return;

@@ -1,4 +1,5 @@
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import {
@@ -8,6 +9,10 @@ import {
 } from '@queries/call/call';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
+import {
+  createCallResolutionsEffect,
+  publishCallResolution,
+} from './call-resolution';
 import { joinChannelCall } from './join-channel-call';
 
 const RING_VOLUME = 0.11;
@@ -198,17 +203,38 @@ export function CallStartedNotifier() {
   const callCtx = useCallContext();
   const channelsCtx = useChannelsContext();
   const notif = usePlatformNotificationState();
+  const userId = useUserId();
+
+  createCallResolutionsEffect((resolution) => {
+    if (resolution.type === 'answered') {
+      if (resolution.answeredBy !== userId()) return;
+      stopCallRinger(resolution.callId);
+      closeCallNotification(resolution.callId);
+      return;
+    }
+
+    stopCallRinger(resolution.callId);
+    setActiveCallEndedCache({
+      channelId: resolution.channelId,
+      callId: resolution.callId,
+    });
+    void invalidateActiveCallQueries();
+  });
 
   createCallEventsEffect({
     onCallEnded: ({ channelId, callId }) => {
-      stopCallRinger(callId);
-      setActiveCallEndedCache({ channelId, callId });
-      void invalidateActiveCallQueries();
+      publishCallResolution({ type: 'ended', channelId, callId });
     },
 
-    onCallAnswered: ({ callId }) => {
-      stopCallRinger(callId);
-      closeCallNotification(callId);
+    onCallAnswered: ({ channelId, callId, answeredBy }) => {
+      const answeringUserId = answeredBy ?? userId();
+      if (!answeringUserId) return;
+      publishCallResolution({
+        type: 'answered',
+        channelId: channelId ?? undefined,
+        callId,
+        answeredBy: answeringUserId,
+      });
     },
 
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {

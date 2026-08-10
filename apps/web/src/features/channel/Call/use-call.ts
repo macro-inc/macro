@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import {
   invalidateActiveCallQueries,
@@ -10,6 +11,7 @@ import { useMutation } from '@tanstack/solid-query';
 import type { DisconnectReason } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { publishCallResolution } from './call-resolution';
 import { LK_DISCONNECT_REASON, LK_ROOM_EVENT } from './livekit-loader';
 import { registerCallKitCallEndedHandler } from './use-callkit';
 
@@ -67,6 +69,7 @@ let leaveInFlight = false;
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
   const channelsCtx = useChannelsContext();
+  const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
 
   // Track the disconnect listener so we can swap it when the room changes.
@@ -170,6 +173,15 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           throwOnErr(() => callServiceClient.getOrCreateCall(id)),
           new Promise<void>((resolve) => setTimeout(resolve, 300)),
         ]);
+        const answeringUserId = userId();
+        if (answeringUserId) {
+          publishCallResolution({
+            type: 'answered',
+            channelId: tokenResponse.channelId,
+            callId: tokenResponse.callId,
+            answeredBy: answeringUserId,
+          });
+        }
         if (cancelled) return;
 
         await callCtx.connectSession(tokenResponse, {
