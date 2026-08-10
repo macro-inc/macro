@@ -257,15 +257,20 @@ function createCalendarPageData(
       refetchOnWindowFocus: isActive(),
     })
   );
-  const events = createMemo(() =>
-    isRangeSupported()
-      ? (occurrencesQuery.data?.items ?? []).map(mapCalendarOccurrence)
-      : []
-  );
+  const events = createMemo(() => {
+    if (!isRangeSupported()) return [];
+    const sourceById = calendarView.sourceById();
+    return (occurrencesQuery.data?.items ?? []).map((item) =>
+      mapCalendarOccurrence(
+        item,
+        item.event.calendarId != null
+          ? sourceById.get(item.event.calendarId)
+          : undefined
+      )
+    );
+  });
   const visibleEvents = createMemo(() =>
-    events().filter((event) =>
-      calendarView.eventState.visibleSourceIds.includes(event.calendar.id)
-    )
+    events().filter((event) => calendarView.isSourceVisible(event.calendar.id))
   );
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))

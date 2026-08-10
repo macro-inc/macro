@@ -1,12 +1,15 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { makePersisted } from '@solid-primitives/storage';
-import { batch, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { calendarDisplayLabel, spansMultipleInboxes } from './calendar-label';
 import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
 import type {
   CalendarEvent,
   CalendarPeriodView,
+  CalendarSource,
   CalendarTimeFormat,
   CalendarWeekStart,
 } from './events/types';
@@ -33,7 +36,6 @@ interface CalendarPreferences {
 }
 
 const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
-const CALENDAR_SOURCES = [DEFAULT_CALENDAR_SOURCE];
 
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {
@@ -54,13 +56,34 @@ export const [CalendarViewContextProvider, useCalendarView] =
         }),
       }
     );
+    const calendarsQuery = useVisibleCalendarsQuery();
+    const sources = createMemo<CalendarSource[]>(() => {
+      const calendars = calendarsQuery.data;
+      if (!calendars || calendars.length === 0) {
+        return [DEFAULT_CALENDAR_SOURCE];
+      }
+      const spansInboxes = spansMultipleInboxes(calendars);
+      return calendars.map((calendar) => ({
+        id: calendar.id,
+        name: calendarDisplayLabel(calendar, spansInboxes),
+        color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      }));
+    });
+    const sourceById = createMemo(
+      () => new Map(sources().map((source) => [source.id, source]))
+    );
+    // Sources default to visible, so calendars discovered after a
+    // preference was saved (or events whose calendar is still loading)
+    // never silently disappear.
+    const isSourceVisible = (sourceId: string) =>
+      !preferences.hiddenSourceIds.includes(sourceId);
+
     const [selectedEventId, setSelectedEventId] = createSignal<string>();
     const eventState: CalendarEventState = {
       get visibleSourceIds() {
-        const hiddenSourceIds = preferences.hiddenSourceIds;
-        return CALENDAR_SOURCES.filter(
-          (source) => !hiddenSourceIds.includes(source.id)
-        ).map((source) => source.id);
+        return sources()
+          .filter((source) => isSourceVisible(source.id))
+          .map((source) => source.id);
       },
       get selectedEventId() {
         return selectedEventId();
@@ -124,9 +147,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
     return {
       eventState,
       displaySettings,
-      sources: () => CALENDAR_SOURCES,
-      isSourceVisible: (sourceId: string) =>
-        eventState.visibleSourceIds.includes(sourceId),
+      sources,
+      sourceById,
+      isSourceVisible,
       setSourceVisibility,
       selectedEvent,
       selectedEventAnchor,

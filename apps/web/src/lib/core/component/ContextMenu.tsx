@@ -3,7 +3,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import CheckIcon from '@phosphor/check.svg?component-solid';
-import { addCtrlJKMenuNavigation, cn, Layer } from '@ui';
+import {
+  addCtrlJKMenuNavigation,
+  cn,
+  highlightFirstMenuItemOnOpen,
+  Layer,
+} from '@ui';
 import { Hotkey } from '@ui/components/Hotkey';
 import {
   type Component,
@@ -399,6 +404,13 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
     onCleanup(cleanup);
   });
 
+  const handleOpenAutoFocus = (event: Event) => {
+    props.onOpenAutoFocus?.(event);
+    if (!event.defaultPrevented && contentRef) {
+      highlightFirstMenuItemOnOpen(contentRef);
+    }
+  };
+
   return (
     <MobileConditionalOverlay mobileFullScreen={props.mobileFullScreen}>
       <Show
@@ -415,7 +427,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
                   isMobile() &&
                   'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
               )}
-              onOpenAutoFocus={props.onOpenAutoFocus}
+              onOpenAutoFocus={handleOpenAutoFocus}
               ref={contentRef}
               onCloseAutoFocus={props.onCloseAutoFocus}
             >

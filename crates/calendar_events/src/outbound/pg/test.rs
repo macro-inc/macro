@@ -122,6 +122,7 @@ fn timed_upsert(
             id,
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
+            calendar_id: Some(calendar_id),
             title: title.to_string(),
             description: None,
             location: None,
@@ -1971,4 +1972,298 @@ async fn unclaimed_permanent_google_failure_marks_account_error(pool: PgPool) {
         account.last_sync_error.as_deref(),
         Some("provider rejected data")
     );
+}
+
+async fn grant_and_provider_ids(repo: &PgCalendarRepository, link_id: Uuid) -> (Uuid, Uuid) {
+    repo.apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    provider_ids(repo, link_id).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn user_mutation_write_persists_a_google_echo_without_a_lease(pool: PgPool) {
+    let owner_id = "macro|calendar-user-mutation@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = grant_and_provider_ids(&repo, link_id).await;
+
+    let upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "user-created@example.com",
+        "Google event",
+        1,
+    );
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::UserMutation(upsert))
+        .await
+        .unwrap();
+
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            (SELECT title FROM calendar_events WHERE id = $1) AS "title!",
+            (SELECT count(*) FROM calendar_event_occurrences WHERE event_id = $1) AS "occurrences!",
+            (SELECT count(*) FROM calendar_event_sources WHERE event_id = $1 AND source_kind = 'google') AS "sources!"
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (row.title.as_str(), row.occurrences, row.sources),
+        ("Google event", 2, 1)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
+    let owner_id = "macro|calendar-target-owner@example.com";
+    let delegate_id = "macro|calendar-target-delegate@example.com";
+    let stranger_id = "macro|calendar-target-stranger@example.com";
+    insert_user(&pool, owner_id).await;
+    insert_user(&pool, delegate_id).await;
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = grant_and_provider_ids(&repo, link_id).await;
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::UserMutation(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "target@example.com",
+            "Target event",
+            1,
+        )))
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        delegate_id,
+        owner_id,
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let target = repo
+        .get_event_mutation_target(owner_id, event_id)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.provider_event_id, "provider-target@example.com");
+    assert_eq!(
+        target.master_provider_event_id(),
+        "provider-target@example.com"
+    );
+    assert_eq!(target.account_id, provider.0);
+    assert_eq!(target.calendar_id, provider.1);
+    assert_eq!(target.provider_calendar_id, "primary");
+    assert_eq!(target.owner_id, owner_id);
+    assert_eq!(target.token_identity.provider, "GMAIL");
+
+    let delegated = repo
+        .get_event_mutation_target(delegate_id, event_id)
+        .await
+        .unwrap();
+    assert!(delegated.is_some(), "delegate sees the mutation target");
+
+    let hidden = repo
+        .get_event_mutation_target(stranger_id, event_id)
+        .await
+        .unwrap();
+    assert!(hidden.is_none(), "stranger cannot see the mutation target");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) {
+    let owner_id = "macro|calendar-create@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+
+    let target = repo
+        .get_creation_target(owner_id, None, None)
+        .await
+        .unwrap()
+        .expect("owner resolves a creation target");
+    assert_eq!(target.account_id, account_id);
+    assert_eq!(target.calendar_id, calendar_id);
+    assert_eq!(target.owner_id, owner_id);
+    assert!(!target.is_read_only);
+
+    let explicit = repo
+        .get_creation_target(owner_id, Some(link_id), None)
+        .await
+        .unwrap();
+    assert!(explicit.is_some());
+
+    let unknown_link = repo
+        .get_creation_target(owner_id, Some(Uuid::now_v7()), None)
+        .await
+        .unwrap();
+    assert!(unknown_link.is_none());
+
+    let stranger = repo
+        .get_creation_target("macro|calendar-create-stranger@example.com", None, None)
+        .await
+        .unwrap();
+    assert!(stranger.is_none());
+
+    let team_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: Some("#33b679".to_string()),
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap();
+    let picked = repo
+        .get_creation_target(owner_id, None, Some(team_id))
+        .await
+        .unwrap()
+        .expect("an explicit calendar overrides the primary default");
+    assert_eq!(picked.calendar_id, team_id);
+    assert_eq!(picked.provider_calendar_id, "team");
+    assert!(!picked.is_read_only);
+
+    let foreign_calendar = repo
+        .get_creation_target(
+            "macro|calendar-create-stranger@example.com",
+            None,
+            Some(team_id),
+        )
+        .await
+        .unwrap();
+    assert!(
+        foreign_calendar.is_none(),
+        "calendar picks stay requester-scoped"
+    );
+
+    let calendars = repo.list_visible_calendars(owner_id).await.unwrap();
+    assert_eq!(
+        calendars
+            .iter()
+            .map(|calendar| (
+                calendar.name.as_str(),
+                calendar.is_primary,
+                calendar.is_writable
+            ))
+            .collect::<Vec<_>>(),
+        vec![("Primary", true, true), ("Team", false, true)]
+    );
+    assert!(
+        repo.list_visible_calendars("macro|calendar-create-stranger@example.com")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgPool) {
+    let owner_id = "macro|calendar-remove-source@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_id) = grant_and_provider_ids(&repo, link_id).await;
+    let secondary_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap();
+
+    // The same iCalUID observed through two calendars of one inbox: two
+    // sources, one canonical entity.
+    let mut primary_copy = timed_upsert(
+        owner_id,
+        link_id,
+        (account_id, primary_id),
+        "shared-remove@example.com",
+        "Primary copy",
+        2,
+    );
+    primary_copy.event.is_read_only = false;
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::UserMutation(primary_copy))
+        .await
+        .unwrap();
+    let mut team_copy = timed_upsert(
+        owner_id,
+        link_id,
+        (account_id, secondary_id),
+        "shared-remove@example.com",
+        "Team copy",
+        1,
+    );
+    team_copy.source = CalendarEventSource::Google(GoogleEventSource {
+        email_link_id: link_id,
+        account_id,
+        calendar_id: secondary_id,
+        provider_event_id: "team-copy-id".to_string(),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    repo.upsert_event(CalendarEventWrite::UserMutation(team_copy))
+        .await
+        .unwrap();
+
+    repo.remove_google_source(account_id, primary_id, "provider-shared-remove@example.com")
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            (SELECT title FROM calendar_events WHERE id = $1) AS "title!",
+            (SELECT calendar_id FROM calendar_event_sources WHERE event_id = $1) AS "calendar_id",
+            (SELECT count(*) FROM calendar_event_sources WHERE event_id = $1) AS "sources!"
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (row.title.as_str(), row.calendar_id, row.sources),
+        ("Team copy", Some(secondary_id), 1),
+        "the surviving calendar's copy is promoted back to canonical"
+    );
+
+    repo.remove_google_source(account_id, secondary_id, "team-copy-id")
+        .await
+        .unwrap();
+    let remaining = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(remaining, 0, "an event with no surviving source is deleted");
 }

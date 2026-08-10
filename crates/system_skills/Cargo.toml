@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "system_skills"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+prompt = { path = "../prompt" }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

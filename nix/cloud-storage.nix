@@ -666,12 +666,14 @@
           parallel
           docker-compose
           curl
+          wget
           kcat
           xz
           unzip
           zip
           cargo-info
           cargo-udeps
+          cargo-tauri
           cargo-lambda
           cargo-zigbuild
           zig
@@ -713,6 +715,9 @@
           nodejs_24
           pulumi
           pulumiPackages.pulumi-nodejs
+          pulumiPackages.pulumi-aws-native
+          playwright
+          playwright-mcp
           doppler
           biome
           jq

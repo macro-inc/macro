@@ -75,7 +75,12 @@ export const soupItemMatchesListView = (
   view: ListView | undefined
 ): boolean =>
   match(view)
-    .with('agents', () => item.tag === 'chat')
+    .with(
+      'agents',
+      () =>
+        item.tag === 'chat' ||
+        (item.tag === 'document' && item.data.subType?.type === 'skill')
+    )
     .with('mail', () => item.tag === 'emailThread')
     .with(
       'documents',

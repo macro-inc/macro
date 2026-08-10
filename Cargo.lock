@@ -302,6 +302,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "skills",
  "soup",
  "sqlx",
  "sqs_client",
@@ -4686,6 +4687,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
@@ -13789,6 +13791,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cowlike",
+ "document_sub_type",
+ "email",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_search",
+ "models_soup",
+ "schemars 1.2.1",
+ "search_service_client",
+ "serde",
+ "soup",
+ "system_skills",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14597,6 +14628,15 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_skills"
+version = "0.1.0"
+dependencies = [
+ "prompt",
  "uuid",
  "workspace-hack",
 ]

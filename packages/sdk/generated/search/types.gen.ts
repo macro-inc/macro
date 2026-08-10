@@ -795,7 +795,7 @@ export type DocumentSearchResult = {
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 
 /**
  * The email filters used to filter down what emails you search over.

@@ -199,6 +199,7 @@ where
                                 sub_type: match document.sub_type.as_deref() {
                                     Some("task") => Some(NotificationDocumentSubType::Task),
                                     Some("snippet") => Some(NotificationDocumentSubType::Snippet),
+                                    Some("skill") => Some(NotificationDocumentSubType::Skill),
                                     _ => None,
                                 },
                                 channel: to_channel_mention_metadata(mention),

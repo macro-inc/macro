@@ -12,11 +12,15 @@ import type {
   ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   BlockSenderRequest,
+  CalendarEvent,
+  CalendarMutationApiError,
   CancelBackfillParams,
+  CreateCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   CreateLabelRequest,
   CreateLabelResponse,
+  DeleteCalendarEventParams,
   EmptyResponse,
   ErrorResponse,
   GetActiveBackfillJobResponse,
@@ -33,6 +37,7 @@ import type {
   InitUserParams,
   ListBackfillJobsResponse,
   ListBlockedResponse,
+  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -42,11 +47,13 @@ import type {
   PatchSettingsResponse,
   PreviewsInboxCursorParams,
   ResyncResponse,
+  RsvpCalendarEventRequest,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
   UnblockSenderRequest,
   UnresolvedSignatureImagesError,
+  UpdateCalendarEventRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -58,6 +65,391 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
+
+/**
+ * @summary List the requester's visible calendars for pickers and filters.
+ */
+export type listCalendarsResponse200 = {
+  data: ListCalendarsResponse;
+  status: 200;
+};
+
+export type listCalendarsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCalendarsResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type listCalendarsResponseSuccess = listCalendarsResponse200 & {
+  headers: Headers;
+};
+export type listCalendarsResponseError = (
+  | listCalendarsResponse401
+  | listCalendarsResponse503
+) & {
+  headers: Headers;
+};
+
+export type listCalendarsResponse =
+  | listCalendarsResponseSuccess
+  | listCalendarsResponseError;
+
+export const getListCalendarsUrl = () => {
+  return `/calendar/calendars`;
+};
+
+export const listCalendars = async (
+  options?: RequestInit
+): Promise<listCalendarsResponse> => {
+  const res = await fetch(getListCalendarsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCalendarsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCalendarsResponse;
+};
+
+/**
+ * @summary Create a calendar event and return its synced entity.
+ */
+export type createCalendarEventResponse201 = {
+  data: CalendarEvent;
+  status: 201;
+};
+
+export type createCalendarEventResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type createCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type createCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type createCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type createCalendarEventResponseSuccess =
+  createCalendarEventResponse201 & {
+    headers: Headers;
+  };
+export type createCalendarEventResponseError = (
+  | createCalendarEventResponse400
+  | createCalendarEventResponse401
+  | createCalendarEventResponse403
+  | createCalendarEventResponse409
+  | createCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type createCalendarEventResponse =
+  | createCalendarEventResponseSuccess
+  | createCalendarEventResponseError;
+
+export const getCreateCalendarEventUrl = () => {
+  return `/calendar/events`;
+};
+
+export const createCalendarEvent = async (
+  createCalendarEventRequest: CreateCalendarEventRequest,
+  options?: RequestInit
+): Promise<createCalendarEventResponse> => {
+  const res = await fetch(getCreateCalendarEventUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createCalendarEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createCalendarEventResponse;
+};
+
+/**
+ * @summary Delete a calendar event at its provider.
+ */
+export type deleteCalendarEventResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type deleteCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type deleteCalendarEventResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type deleteCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type deleteCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type deleteCalendarEventResponseSuccess =
+  deleteCalendarEventResponse204 & {
+    headers: Headers;
+  };
+export type deleteCalendarEventResponseError = (
+  | deleteCalendarEventResponse401
+  | deleteCalendarEventResponse403
+  | deleteCalendarEventResponse404
+  | deleteCalendarEventResponse409
+  | deleteCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type deleteCalendarEventResponse =
+  | deleteCalendarEventResponseSuccess
+  | deleteCalendarEventResponseError;
+
+export const getDeleteCalendarEventUrl = (
+  eventId: string,
+  params?: DeleteCalendarEventParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/calendar/events/${eventId}?${stringifiedParams}`
+    : `/calendar/events/${eventId}`;
+};
+
+export const deleteCalendarEvent = async (
+  eventId: string,
+  params?: DeleteCalendarEventParams,
+  options?: RequestInit
+): Promise<deleteCalendarEventResponse> => {
+  const res = await fetch(getDeleteCalendarEventUrl(eventId, params), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteCalendarEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteCalendarEventResponse;
+};
+
+/**
+ * @summary Update fields of a calendar event and return its synced entity.
+ */
+export type updateCalendarEventResponse200 = {
+  data: CalendarEvent;
+  status: 200;
+};
+
+export type updateCalendarEventResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type updateCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type updateCalendarEventResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type updateCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type updateCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type updateCalendarEventResponseSuccess =
+  updateCalendarEventResponse200 & {
+    headers: Headers;
+  };
+export type updateCalendarEventResponseError = (
+  | updateCalendarEventResponse400
+  | updateCalendarEventResponse401
+  | updateCalendarEventResponse403
+  | updateCalendarEventResponse404
+  | updateCalendarEventResponse409
+  | updateCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type updateCalendarEventResponse =
+  | updateCalendarEventResponseSuccess
+  | updateCalendarEventResponseError;
+
+export const getUpdateCalendarEventUrl = (eventId: string) => {
+  return `/calendar/events/${eventId}`;
+};
+
+export const updateCalendarEvent = async (
+  eventId: string,
+  updateCalendarEventRequest: UpdateCalendarEventRequest,
+  options?: RequestInit
+): Promise<updateCalendarEventResponse> => {
+  const res = await fetch(getUpdateCalendarEventUrl(eventId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateCalendarEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateCalendarEventResponse;
+};
+
+/**
+ * @summary Set the requester's RSVP on a calendar event and return its synced entity.
+ */
+export type rsvpCalendarEventResponse200 = {
+  data: CalendarEvent;
+  status: 200;
+};
+
+export type rsvpCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type rsvpCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type rsvpCalendarEventResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type rsvpCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type rsvpCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type rsvpCalendarEventResponseSuccess = rsvpCalendarEventResponse200 & {
+  headers: Headers;
+};
+export type rsvpCalendarEventResponseError = (
+  | rsvpCalendarEventResponse401
+  | rsvpCalendarEventResponse403
+  | rsvpCalendarEventResponse404
+  | rsvpCalendarEventResponse409
+  | rsvpCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type rsvpCalendarEventResponse =
+  | rsvpCalendarEventResponseSuccess
+  | rsvpCalendarEventResponseError;
+
+export const getRsvpCalendarEventUrl = (eventId: string) => {
+  return `/calendar/events/${eventId}/rsvp`;
+};
+
+export const rsvpCalendarEvent = async (
+  eventId: string,
+  rsvpCalendarEventRequest: RsvpCalendarEventRequest,
+  options?: RequestInit
+): Promise<rsvpCalendarEventResponse> => {
+  const res = await fetch(getRsvpCalendarEventUrl(eventId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rsvpCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rsvpCalendarEventResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rsvpCalendarEventResponse;
+};
 
 /**
  * @summary Get an attachment by ID.

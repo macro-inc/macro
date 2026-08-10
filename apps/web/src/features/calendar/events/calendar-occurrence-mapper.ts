@@ -10,7 +10,8 @@ export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
 
 /** Maps one backend occurrence projection into the calendar view model. */
 export function mapCalendarOccurrence(
-  item: CalendarOccurrenceItem
+  item: CalendarOccurrenceItem,
+  source: CalendarSource = DEFAULT_CALENDAR_SOURCE
 ): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
@@ -34,7 +35,7 @@ export function mapCalendarOccurrence(
     attendees: event.attendees ?? [],
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: event.title,
-    calendar: DEFAULT_CALENDAR_SOURCE,
+    calendar: source,
     location: event.location ?? undefined,
     description: event.description ?? undefined,
   };

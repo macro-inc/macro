@@ -1505,7 +1505,8 @@
           "static_file",
           "crm_company",
           "crm_contact",
-          "reminder"
+          "reminder",
+          "skill"
         ]
       },
       "ErrorResponse": {
@@ -2379,6 +2380,16 @@
               "type": {
                 "type": "string",
                 "enum": ["snippet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
               }
             }
           }

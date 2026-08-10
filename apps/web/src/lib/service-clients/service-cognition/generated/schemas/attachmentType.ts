@@ -15,4 +15,5 @@ export const AttachmentType = {
   channel: 'channel',
   email: 'email',
   project: 'project',
+  skill: 'skill',
 } as const;

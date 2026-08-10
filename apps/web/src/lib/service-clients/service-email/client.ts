@@ -10,12 +10,15 @@ import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
+  CalendarEvent,
+  CreateCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
+  ListCalendarsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -23,9 +26,11 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   ResyncResponse,
+  RsvpCalendarEventRequest,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  UpdateCalendarEventRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -35,6 +40,7 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './generated/schemas';
+import { CalendarMutationErrorCode } from './generated/schemas/calendarMutationErrorCode';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -45,8 +51,33 @@ const emailHost: string = SERVER_HOSTS['email-service'];
  */
 const EMAIL_LINK_ID_HEADER = 'X-Email-Link-Id';
 
+/** How much of a recurring series a calendar deletion removes. */
+export type CalendarDeletionScope = 'all' | 'this_event' | 'this_and_following';
+
 function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
   return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
+}
+
+/**
+ * Calendar mutation failures carry a machine-readable `{ code, message }`
+ * body; surface it so callers can branch on the code and show the message.
+ */
+async function calendarMutationErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in CalendarMutationErrorCode
+      ? (body.code as CalendarMutationErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
 }
 
 function emailFetch(
@@ -525,5 +556,63 @@ export const emailClient = {
     return emailFetch(`/email/filters/${args.id}`, {
       method: 'DELETE',
     });
+  },
+  async listCalendars() {
+    return fetchWithToken<ListCalendarsResponse>(
+      `${emailHost}/calendar/calendars`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+  async createCalendarEvent(args: CreateCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async updateCalendarEvent(eventId: string, args: UpdateCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async deleteCalendarEvent(
+    eventId: string,
+    options?: { scope?: CalendarDeletionScope; recurrenceId?: string }
+  ) {
+    const params = new URLSearchParams();
+    if (options?.scope && options.scope !== 'all') {
+      params.set('scope', options.scope);
+    }
+    if (options?.recurrenceId) {
+      params.set('recurrenceId', options.recurrenceId);
+    }
+    const query = params.toString();
+    return fetchWithToken<EmptyResponse, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}${query ? `?${query}` : ''}`,
+      {
+        method: 'DELETE',
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async rsvpCalendarEvent(eventId: string, args: RsvpCalendarEventRequest) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/calendar/events/${eventId}/rsvp`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
   },
 };

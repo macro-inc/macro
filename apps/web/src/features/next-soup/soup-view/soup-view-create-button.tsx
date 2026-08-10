@@ -29,7 +29,7 @@ const VIEW_CREATE_BLOCKNAMES: Partial<
 > = {
   documents: ['md', 'snippet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['chat', 'automation'],
+  agents: ['chat', 'automation', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],

@@ -2,9 +2,10 @@ use super::*;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarEvent,
-        CalendarEventSource, CalendarOccurrence, CalendarSyncStatus, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
+        CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
+        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
+        CalendarSyncStatus, EventStatus, EventTime, EventTransparency, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
         GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
         ProviderCalendar, StoredGoogleCalendar,
     },
@@ -34,6 +35,7 @@ impl CalendarRepository for FakeRepo {
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill { upsert, .. }
+            | CalendarEventWrite::UserMutation(upsert)
             | CalendarEventWrite::Fixture(upsert) => upsert,
         };
         let id = upsert.event.id;
@@ -53,6 +55,39 @@ impl CalendarRepository for FakeRepo {
 
     async fn sync_status(&self, _requester_id: &str) -> Result<CalendarSyncStatus, Report> {
         Ok(CalendarSyncStatus::Ready)
+    }
+
+    async fn get_event_mutation_target(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<CalendarEventMutationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_creation_target(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+    ) -> Result<Option<CalendarCreationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::VisibleCalendar>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn remove_google_source(
+        &self,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+        _provider_event_id: &str,
+    ) -> Result<(), Report> {
+        unreachable!("mutation cleanup is not exercised by sync tests")
     }
 
     async fn upsert_google_calendar(
@@ -125,6 +160,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             id: event_id,
             owner_id: "macro|calendar@example.com".to_string(),
             ical_uid: "meeting@example.com".to_string(),
+            calendar_id: None,
             title: "Meeting".to_string(),
             description: None,
             location: None,
@@ -226,7 +262,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
             upserts: Vec::new(),
             observed_provider_event_ids: Some(Vec::new()),
             next_sync_token: "next".to_string(),
-            materialized_range: Some(context.range),
+            materialized_range: Some(context.target.range),
             cancelled_provider_event_ids: Vec::new(),
         })
     }
@@ -369,6 +405,100 @@ impl CalendarBackfillRepository for FakeLifecycle {
     }
 }
 
+/// Syncs the first calendar with one change, then fails the second.
+#[derive(Clone)]
+struct PartialFailureGoogleProvider;
+
+impl GoogleCalendarProvider for PartialFailureGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        let calendar = |id: &str, primary: bool| ProviderCalendar {
+            provider_calendar_id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: primary,
+            is_selected: true,
+        };
+        Ok(vec![calendar("primary", true), calendar("team", false)])
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        if context.target.provider_calendar_id == "team" {
+            return Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Transient,
+                "the second calendar's poll failed",
+            ));
+        }
+        let mut upsert = valid_upsert();
+        let CalendarEventSource::Google(source) = &mut upsert.source;
+        source.calendar_id = Uuid::nil();
+        Ok(GoogleEventSyncBatch {
+            upserts: vec![upsert],
+            observed_provider_event_ids: Some(vec!["provider-event".to_string()]),
+            next_sync_token: "next".to_string(),
+            materialized_range: Some(context.target.range),
+            cancelled_provider_event_ids: Vec::new(),
+        })
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
+}
+
+#[tokio::test]
+async fn partial_progress_reports_changes_when_a_later_calendar_fails() {
+    let lifecycle = FakeLifecycle::claimed();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        FakeRepo::default(),
+        PartialFailureGoogleProvider,
+        lifecycle.clone(),
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    let error = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        GoogleCalendarBackfillRunError::Retryable(_)
+    ));
+    assert_eq!(
+        report.events_upserted, 1,
+        "the first calendar's durable commit must surface through the failed run"
+    );
+    assert!(report.changed());
+}
+
 #[tokio::test]
 async fn google_coordinator_owns_claim_and_completion_lifecycle() {
     let lifecycle = FakeLifecycle::claimed();
@@ -379,7 +509,8 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
         None,
     );
 
-    let count = coordinator
+    let mut report = GoogleBackfillRunReport::default();
+    coordinator
         .run(
             CalendarBackfillJobKey {
                 job_id: Uuid::now_v7(),
@@ -388,11 +519,12 @@ async fn google_coordinator_owns_claim_and_completion_lifecycle() {
             "macro|calendar@example.com",
             "secret",
             OccurrenceRange::historical_sync(Utc::now()),
+            &mut report,
         )
         .await
         .unwrap();
 
-    assert_eq!(count, 0);
+    assert_eq!(report, GoogleBackfillRunReport::default());
     assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
 }
 
@@ -451,7 +583,8 @@ async fn freshly_synced_system_calendars_are_skipped() {
         None,
     );
 
-    let count = coordinator
+    let mut report = GoogleBackfillRunReport::default();
+    coordinator
         .run(
             CalendarBackfillJobKey {
                 job_id: Uuid::now_v7(),
@@ -460,11 +593,12 @@ async fn freshly_synced_system_calendars_are_skipped() {
             "macro|calendar@example.com",
             "secret",
             OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
         )
         .await
         .unwrap();
 
-    assert_eq!(count, 0);
+    assert_eq!(report, GoogleBackfillRunReport::default());
     assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
 }
 
@@ -519,6 +653,7 @@ async fn google_coordinator_surfaces_lease_loss_while_work_is_running() {
             "macro|calendar@example.com",
             "secret",
             OccurrenceRange::historical_sync(Utc::now()),
+            &mut GoogleBackfillRunReport::default(),
         )
         .await
         .unwrap_err();
@@ -547,6 +682,7 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
             "macro|calendar@example.com",
             "secret",
             OccurrenceRange::historical_sync(Utc::now()),
+            &mut GoogleBackfillRunReport::default(),
         )
         .await
         .unwrap_err();

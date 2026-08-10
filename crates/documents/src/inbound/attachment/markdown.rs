@@ -2,6 +2,7 @@
 
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentError, AttachmentPart, ResolutionError};
+use document_sub_type::DocumentSubType;
 use entity_access::domain::ports::EntityAccessService;
 use futures::future::join_all;
 use lexical_client::types::NewMdNode;
@@ -12,7 +13,7 @@ use non_empty::NonEmpty;
 
 use crate::domain::ports::DocumentService;
 
-use super::service::DocumentAttachmentService;
+use super::service::{DocumentAttachmentService, skill_type_metadata};
 
 /// Resolve a markdown document into an [`AttachmentContent`] with interleaved
 /// text and image parts.
@@ -36,6 +37,16 @@ pub(super) async fn resolve_markdown<DSvc: DocumentService, ESvc: EntityAccessSe
         }
     }))
     .await;
+
+    // Skill documents are instructions for the AI to follow; mark them so the
+    // model can tell them apart from ordinary attached documents.
+    let parts = if document.sub_type == Some(DocumentSubType::Skill) {
+        std::iter::once(skill_type_metadata())
+            .chain(parts)
+            .collect()
+    } else {
+        parts
+    };
 
     let content = NonEmpty::new(parts).map_err(|_| AttachmentError::NoContent)?;
 

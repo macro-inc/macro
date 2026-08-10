@@ -2,7 +2,7 @@
 //! values.
 
 use serde::{Deserialize, Serialize};
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -36,19 +36,13 @@ impl<'a> EntityKey<'a> {
         self.0 == ROOT_QUERY
     }
 
-    pub fn borrow(&self) -> EntityKey<'_> {
+    pub fn borrowed(&self) -> EntityKey<'_> {
         EntityKey(Cow::Borrowed(self.0.as_ref()))
     }
 
     /// Converts this key into an owned key that can be stored independently.
     pub fn into_owned(self) -> EntityKey<'static> {
         EntityKey(Cow::Owned(self.0.into_owned()))
-    }
-}
-
-impl Borrow<str> for EntityKey<'_> {
-    fn borrow(&self) -> &str {
-        self.0.as_ref()
     }
 }
 

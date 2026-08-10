@@ -3,7 +3,10 @@ import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu
 import CheckIcon from '@phosphor/check.svg';
 import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
-import { addCtrlJKMenuNavigation } from '../utils/menuKeyboardNavigation';
+import {
+  addCtrlJKMenuNavigation,
+  highlightFirstMenuItemOnOpen,
+} from '../utils/menuKeyboardNavigation';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
 
@@ -166,6 +169,7 @@ function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
 
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
+  let contentRef: HTMLElement | undefined;
   const [local, rest] = splitProps(props, [
     'depth',
     'class',
@@ -173,10 +177,18 @@ function DropdownContent(props: DropdownContentProps) {
     'portalScope',
     'children',
     'ref',
+    'onOpenAutoFocus',
   ]);
+  const handleOpenAutoFocus = (event: Event) => {
+    local.onOpenAutoFocus?.(event);
+    if (!event.defaultPrevented && contentRef) {
+      highlightFirstMenuItemOnOpen(contentRef);
+    }
+  };
   const setContentRef = (el: HTMLElement) => {
     installKeyboardNavigation(el);
     installSwipeToDismiss(el);
+    contentRef = el;
     callRef(local.ref, el);
   };
 
@@ -194,6 +206,7 @@ function DropdownContent(props: DropdownContentProps) {
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
+          onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
           <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
@@ -272,8 +285,7 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
 const CHECKBOX_ITEM_BOX_CLASS = cn(
   'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
   'border border-transparent text-surface',
-  'group-data-highlighted:not-hover:border-edge-muted',
-  'hover:border-accent',
+  'group-data-highlighted:border-edge-muted',
   'group-data-checked:bg-accent group-data-checked:border-accent'
 );
 

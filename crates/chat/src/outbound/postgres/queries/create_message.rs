@@ -12,6 +12,7 @@ fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {
         AttachmentType::Channel => EntityType::Channel,
         AttachmentType::Email => EntityType::EmailThread,
         AttachmentType::Project => EntityType::Project,
+        AttachmentType::Skill => EntityType::Skill,
     }
 }
 

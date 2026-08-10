@@ -692,13 +692,14 @@ export const SoupView = (props: SoupViewProps) => {
         </Show>
       </div>
       <Suspense>
-        {/* The board hides the AI bar: it floats over the bottom edge, where
-            it would cover the board's horizontal scrollbar. */}
+        {/* The board and Preview Controller hide the AI bar: it floats over
+            content that is already constrained in both layouts. */}
         <Show
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
+            !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }

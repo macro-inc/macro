@@ -393,10 +393,10 @@ Run the focused frontend tests for:
 - `tauri-host.test.ts`
 - grouped optimistic property tests
 
-Then run the Tauri plugin tests using the established JS-app shell:
+Then run the Tauri plugin tests using the Linux Tauri shell:
 
 ```bash
-nix develop .#js-app --command cargo test \
+nix develop .#tauri-linux --command cargo test \
   --manifest-path apps/web/tauri/graphql_cache_plugin/Cargo.toml
 ```
 

@@ -257,7 +257,7 @@ jobs:
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -316,9 +316,9 @@ jobs:
         fi
     - name: configure postgres for concurrent tests
       run: |
-        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg16" { print $1; exit }')"
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
         if [ -z "$postgres_container" ]; then
-          echo "pgvector/pgvector:pg16 service container not found" >&2
+          echo "pgvector/pgvector:pg18 service container not found" >&2
           docker ps
           exit 1
         fi

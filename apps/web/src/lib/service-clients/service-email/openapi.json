@@ -10,6 +10,371 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/calendar/calendars": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List the requester's visible calendars for pickers and filters.",
+        "operationId": "list_calendars",
+        "responses": {
+          "200": {
+            "description": "Calendars visible to the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCalendarsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "503": {
+            "description": "Transient failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Create a calendar event and return its synced entity.",
+        "operationId": "create_calendar_event",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The created calendar event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid event fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No writable calendar or the provider rejected the event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/{event_id}": {
+      "delete": {
+        "tags": ["calendar_events"],
+        "summary": "Delete a calendar event at its provider.",
+        "operationId": "delete_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Deletion scope; defaults to the entire event or series.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CalendarDeletionScopeParam"
+            }
+          },
+          {
+            "name": "recurrenceId",
+            "in": "query",
+            "description": "Original-start key of the occurrence a scoped deletion targets.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The event was deleted"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider rejected the deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["calendar_events"],
+        "summary": "Update fields of a calendar event and return its synced entity.",
+        "operationId": "update_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated calendar event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid event fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider rejected the update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/{event_id}/rsvp": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Set the requester's RSVP on a calendar event and return its synced entity.",
+        "operationId": "rsvp_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RsvpCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated calendar event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The connected account is not an attendee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/attachments/{id}": {
       "get": {
         "tags": ["Attachments"],
@@ -3832,6 +4197,11 @@
           }
         }
       },
+      "AttendeeResponseStatus": {
+        "type": "string",
+        "description": "RSVP state for an attendee.",
+        "enum": ["needs_action", "accepted", "declined", "tentative"]
+      },
       "BackfillJob": {
         "type": "object",
         "required": [
@@ -3899,6 +4269,211 @@
             "description": "The email address of the sender to block."
           }
         }
+      },
+      "CalendarAttendee": {
+        "type": "object",
+        "description": "An attendee on a calendar event.",
+        "required": [
+          "email",
+          "responseStatus",
+          "isOrganizer",
+          "isOptional",
+          "isSelf"
+        ],
+        "properties": {
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Optional attendee comment."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Provider display name."
+          },
+          "email": {
+            "type": "string",
+            "description": "Normalized email address."
+          },
+          "isOptional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          },
+          "isOrganizer": {
+            "type": "boolean",
+            "description": "Whether this attendee is the organizer."
+          },
+          "isSelf": {
+            "type": "boolean",
+            "description": "Whether this attendee represents the connected account."
+          },
+          "responseStatus": {
+            "$ref": "#/components/schemas/AttendeeResponseStatus",
+            "description": "RSVP state."
+          }
+        }
+      },
+      "CalendarAttendeeInputBody": {
+        "type": "object",
+        "description": "An attendee supplied to a calendar mutation.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Attendee email address."
+          },
+          "isOptional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          }
+        }
+      },
+      "CalendarDeletionScopeParam": {
+        "type": "string",
+        "description": "How much of a recurring series a deletion removes.",
+        "enum": ["all", "this_event", "this_and_following"]
+      },
+      "CalendarEvent": {
+        "type": "object",
+        "description": "A stable, first-class Macro calendar event entity.",
+        "required": [
+          "id",
+          "ownerId",
+          "icalUid",
+          "title",
+          "status",
+          "visibility",
+          "transparency",
+          "time",
+          "recurrenceLines",
+          "sequence",
+          "isReadOnly",
+          "attendees",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees, keyed by email during persistence."
+          },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct join URL when known."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity creation time."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "icalUid": {
+            "type": "string",
+            "description": "RFC 5545 UID used to reconcile provider and email sources."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro entity identifier."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the current user can edit the canonical source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user who owns this event entity."
+          },
+          "recurrenceLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Provider/iCalendar sequence number.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus",
+            "description": "Event status."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Timed or all-day shape."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarMutationApiError": {
+        "type": "object",
+        "description": "HTTP error body returned by calendar mutation endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CalendarMutationErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          }
+        }
+      },
+      "CalendarMutationErrorCode": {
+        "type": "string",
+        "description": "Machine-readable failure category for calendar mutations.",
+        "enum": [
+          "not_found",
+          "read_only",
+          "no_writable_calendar",
+          "not_attendee",
+          "invalid_input",
+          "reauth_required",
+          "provider_rejected",
+          "retryable",
+          "persist_failed"
+        ]
       },
       "CancelBackfillParams": {
         "type": "object",
@@ -3986,6 +4561,75 @@
           }
         ]
       },
+      "CreateCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body creating a calendar event on the requester's calendar.",
+        "required": ["title", "time"],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendeeInputBody"
+            },
+            "description": "Invited attendees."
+          },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "emailLinkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Connected inbox whose primary calendar receives the event; defaults\nto the requester's primary inbox."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional location label."
+          },
+          "recurrenceLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Timed or all-day shape."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventTransparency",
+                "description": "Availability behavior."
+              }
+            ]
+          },
+          "visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventVisibility",
+                "description": "Event visibility."
+              }
+            ]
+          }
+        }
+      },
       "CreateDraftRequest": {
         "type": "object",
         "description": "Request body for creating a draft.",
@@ -4047,6 +4691,72 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "EventStatus": {
+        "type": "string",
+        "description": "Canonical event status.",
+        "enum": ["confirmed", "tentative", "cancelled"]
+      },
+      "EventTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An event with absolute instants.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end instant."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start instant."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time-zone identifier, when supplied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An all-day event using RFC 5545's exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive local end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive local start date."
+              }
+            }
+          }
+        ],
+        "description": "The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema."
+      },
+      "EventTransparency": {
+        "type": "string",
+        "description": "Whether an event blocks availability.",
+        "enum": ["opaque", "transparent"]
+      },
+      "EventVisibility": {
+        "type": "string",
+        "description": "Visibility of event details.",
+        "enum": ["default", "public", "private", "confidential"]
       },
       "GetActiveBackfillJobResponse": {
         "type": "object",
@@ -4334,6 +5044,20 @@
               "type": "string"
             },
             "description": "List of email addresses that are currently blocked."
+          }
+        }
+      },
+      "ListCalendarsResponse": {
+        "type": "object",
+        "description": "Calendars visible to the requester across connected and delegated inboxes.",
+        "required": ["calendars"],
+        "properties": {
+          "calendars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisibleCalendar"
+            },
+            "description": "Primaries and writable calendars first."
           }
         }
       },
@@ -4693,6 +5417,27 @@
           "other"
         ]
       },
+      "RefreshCalendarEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A sync run committed changes for `link_id`; viewers should refetch.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["synced"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Connected inbox whose calendars changed."
+              }
+            }
+          }
+        ],
+        "description": "Realtime signal that a connected inbox's calendar projection changed."
+      },
       "RefreshEmailEvent": {
         "oneOf": [
           {
@@ -4836,6 +5581,17 @@
             "type": "string",
             "format": "uuid",
             "description": "The backfill job driving the (re-)sync. Either the freshly enqueued job or\nthe one already in progress."
+          }
+        }
+      },
+      "RsvpCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body setting the requester's RSVP on an event.",
+        "required": ["response"],
+        "properties": {
+          "response": {
+            "$ref": "#/components/schemas/AttendeeResponseStatus",
+            "description": "The response to record for the connected account."
           }
         }
       },
@@ -5090,6 +5846,71 @@
           }
         }
       },
+      "UpdateCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body patching an event; omitted fields are left untouched.",
+        "properties": {
+          "attendees": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendeeInputBody"
+            },
+            "description": "Replacement attendee list."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Replacement description; an empty string clears it."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Replacement location; an empty string clears it."
+          },
+          "recurrenceLines": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Replacement recurrence properties; an empty list clears them."
+          },
+          "time": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Replacement time."
+              }
+            ]
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Replacement title; an empty string clears it."
+          },
+          "transparency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventTransparency",
+                "description": "Replacement transparency."
+              }
+            ]
+          },
+          "visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventVisibility",
+                "description": "Replacement visibility."
+              }
+            ]
+          }
+        }
+      },
       "UpdateLabelBatchRequest": {
         "type": "object",
         "required": ["message_ids", "label_id", "value"],
@@ -5250,7 +6071,51 @@
         "type": "string",
         "enum": ["GMAIL"]
       },
-      "Value": {}
+      "Value": {},
+      "VisibleCalendar": {
+        "type": "object",
+        "description": "A calendar visible to a requester, listed for pickers and filters.",
+        "required": [
+          "id",
+          "emailLinkId",
+          "emailAddress",
+          "name",
+          "isPrimary",
+          "isWritable"
+        ],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "Provider color."
+          },
+          "emailAddress": {
+            "type": "string",
+            "description": "Connected inbox address, for grouping in multi-inbox pickers."
+          },
+          "emailLinkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Connected inbox that syncs this calendar."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persisted Macro calendar identifier."
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "Whether this is its account's primary calendar."
+          },
+          "isWritable": {
+            "type": "boolean",
+            "description": "Whether the grant can create and modify events on this calendar."
+          },
+          "name": {
+            "type": "string",
+            "description": "Provider display name."
+          }
+        }
+      }
     }
   },
   "tags": [

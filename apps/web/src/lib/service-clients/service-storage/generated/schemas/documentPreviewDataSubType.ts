@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataSubTypeOneOf } from './documentPreviewDataSubTypeOneOf';
+import type { DocumentPreviewDataSubTypeOneOfFive } from './documentPreviewDataSubTypeOneOfFive';
 import type { DocumentPreviewDataSubTypeOneOfThree } from './documentPreviewDataSubTypeOneOfThree';
 
 /**
@@ -13,4 +14,5 @@ Task-related properties are encoded within the variant to ensure valid states.
  */
 export type DocumentPreviewDataSubType =
   | DocumentPreviewDataSubTypeOneOf
-  | DocumentPreviewDataSubTypeOneOfThree;
+  | DocumentPreviewDataSubTypeOneOfThree
+  | DocumentPreviewDataSubTypeOneOfFive;
