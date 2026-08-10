@@ -204,6 +204,32 @@ impl DaytonaClient {
         })
     }
 
+    /// Stop a running sandbox without deleting it.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn stop(&self, sandbox_id: &str) -> Result<()> {
+        let operation = "stop sandbox";
+        let response = self
+            .http
+            .post(format!("{}/sandbox/{sandbox_id}/stop", self.base))
+            .bearer_auth(self.api_key.expose())
+            .send()
+            .await
+            .map_err(|source| DaytonaError::Request { operation, source })?;
+        let status = response.status();
+        if status.is_success() {
+            return Ok(());
+        }
+        let body = response
+            .text()
+            .await
+            .map_err(|source| DaytonaError::ReadResponse { operation, source })?;
+        Err(DaytonaError::Api {
+            operation,
+            status,
+            body,
+        })
+    }
+
     /// Execute one command in a sandbox.
     #[tracing::instrument(err, skip(self))]
     pub async fn exec(&self, sandbox_id: &str, command: &str, timeout: Duration) -> Result<String> {

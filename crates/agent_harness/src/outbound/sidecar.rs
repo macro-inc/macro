@@ -45,6 +45,19 @@ impl SidecarTransport {
     where
         Socket: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
+        Self::connect_observed(socket, || {})
+    }
+
+    /// Wire a sidecar socket up and observe each valid inbound ACP frame.
+    #[must_use]
+    pub fn connect_observed<Socket, Observer>(
+        socket: WebSocketStream<Socket>,
+        on_frame: Observer,
+    ) -> Self
+    where
+        Socket: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+        Observer: Fn() + Send + 'static,
+    {
         let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
         let (inbound_tx, inbound_rx) = mpsc::unbounded_channel();
 
@@ -55,7 +68,7 @@ impl SidecarTransport {
         };
         let _ = inbound_tx.send(ready);
 
-        tokio::spawn(pump(socket, outbound_rx, inbound_tx));
+        tokio::spawn(pump(socket, outbound_rx, inbound_tx, on_frame));
 
         Self {
             outbound: outbound_tx,
@@ -89,12 +102,14 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for SidecarTransport {
 }
 
 /// Relay frames until either side closes.
-async fn pump<Socket>(
+async fn pump<Socket, Observer>(
     socket: WebSocketStream<Socket>,
     mut outbound: mpsc::UnboundedReceiver<Outbound>,
     inbound: mpsc::UnboundedSender<ToServerMessage>,
+    on_frame: Observer,
 ) where
     Socket: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    Observer: Fn() + Send + 'static,
 {
     let (mut socket_tx, mut socket_rx) = socket.split();
 
@@ -135,6 +150,7 @@ async fn pump<Socket>(
 
                 match serde_json::from_str::<RawJsonRpcMessage>(&json) {
                     Ok(frame) => {
+                        on_frame();
                         if inbound.send(ToServerMessage::Acp(AcpMessage(frame))).is_err() {
                             break;
                         }
