@@ -6,11 +6,12 @@ use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
     ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
 };
+use agent_fold::domain::service::FoldedMessageService;
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::testing::InMemoryAgentSessionRepo;
+use agent_session::testing::{InMemoryAgentSessionRepo, RecordingComms};
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -44,7 +45,11 @@ fn open_command() -> OpenSession {
 
 fn harness() -> (
     AgentHarnessService<
-        AgentSessionServiceImpl<InMemoryAgentSessionRepo>,
+        AgentSessionServiceImpl<
+            InMemoryAgentSessionRepo,
+            FoldedMessageService<InMemoryAgentSessionRepo>,
+            RecordingComms,
+        >,
         MockContainerManager,
         AnnouncerMock,
     >,
@@ -56,7 +61,11 @@ fn harness() -> (
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
     let service = AgentHarnessService::new(
-        AgentSessionServiceImpl::new(repo.clone()),
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            RecordingComms::new(),
+        ),
         containers.clone(),
         announcer.clone(),
         SessionDefaults {

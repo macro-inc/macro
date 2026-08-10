@@ -63,12 +63,19 @@ struct PromptLine {
     is_trigger: bool,
 }
 
+/// Trimmed message content; `None` when the message has no stored body
+/// (agent-turn placeholders) or the body is blank.
+fn trimmed_content(content: Option<&str>) -> Option<String> {
+    let trimmed = content?.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// The triggering message rendered from the event itself, used when the
 /// trigger is missing from fetched context (e.g. a fetch failed).
 fn trigger_line(event: &BotEvent) -> PromptLine {
     PromptLine {
         sender: sender_label(event.requesting_user.as_ref()),
-        content: event.message.content.trim().to_string(),
+        content: trimmed_content(event.message.content.as_deref()).unwrap_or_default(),
         is_trigger: true,
     }
 }
@@ -138,11 +145,11 @@ where
             .find(|message| message.id == parent_id);
         if let Some(parent) = parent
             && parent.deleted_at.is_none()
-            && !parent.content.trim().is_empty()
+            && let Some(content) = trimmed_content(parent.content.as_deref())
         {
             lines.push(PromptLine {
                 sender: sender_label(&parent.sender_id),
-                content: parent.content.trim().to_string(),
+                content,
                 is_trigger: false,
             });
         }
@@ -155,12 +162,12 @@ where
             .unwrap_or_default();
         for reply in replies {
             thread_ids.insert(reply.id);
-            if reply.content.trim().is_empty() {
+            let Some(content) = trimmed_content(reply.content.as_deref()) else {
                 continue;
-            }
+            };
             lines.push(PromptLine {
                 sender: sender_label(&reply.sender_id),
-                content: reply.content.trim().to_string(),
+                content,
                 is_trigger: reply.id == event.message.id,
             });
         }
@@ -206,14 +213,15 @@ where
                 .iter()
                 .filter(|message| {
                     message.deleted_at.is_none()
-                        && !message.content.trim().is_empty()
                         && !thread_ids.contains(&message.id)
                         && message.thread_id != Some(parent_id)
                 })
-                .map(|message| PromptLine {
-                    sender: sender_label(&message.sender_id),
-                    content: message.content.trim().to_string(),
-                    is_trigger: false,
+                .filter_map(|message| {
+                    Some(PromptLine {
+                        sender: sender_label(&message.sender_id),
+                        content: trimmed_content(message.content.as_deref())?,
+                        is_trigger: false,
+                    })
                 })
                 .collect();
             append_block(
@@ -226,13 +234,13 @@ where
             let _ = writeln!(prompt, "{mentioner} mentioned you (@macro) in a channel.");
             let mut lines: Vec<PromptLine> = nearby
                 .iter()
-                .filter(|message| {
-                    message.deleted_at.is_none() && !message.content.trim().is_empty()
-                })
-                .map(|message| PromptLine {
-                    sender: sender_label(&message.sender_id),
-                    content: message.content.trim().to_string(),
-                    is_trigger: message.id == trigger_id,
+                .filter(|message| message.deleted_at.is_none())
+                .filter_map(|message| {
+                    Some(PromptLine {
+                        sender: sender_label(&message.sender_id),
+                        content: trimmed_content(message.content.as_deref())?,
+                        is_trigger: message.id == trigger_id,
+                    })
                 })
                 .collect();
             if !lines.iter().any(|line| line.is_trigger) {

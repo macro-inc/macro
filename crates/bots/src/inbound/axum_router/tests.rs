@@ -560,6 +560,7 @@ fn sample_self_bot(bot_id: BotId) -> Bot {
         created_at: now,
         updated_at: now,
         deleted_at: None,
+        has_agent: false,
     }
 }
 

@@ -11,7 +11,7 @@ pub struct ChannelMessageInfo {
     pub message_id: Uuid,
     pub thread_id: Option<Uuid>,
     pub sender_id: String,
-    pub content: String,
+    pub content: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,

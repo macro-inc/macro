@@ -47,7 +47,7 @@ function EditableThreadInner() {
         const current = replyInputState();
         const nextSnapshot: InputSnapshot = {
           value: buildQuoteReplyValue({
-            quotedContent: message.content,
+            quotedContent: message.content ?? '',
             existingValue: current?.value,
           }),
           mentions: current?.mentions ?? [],

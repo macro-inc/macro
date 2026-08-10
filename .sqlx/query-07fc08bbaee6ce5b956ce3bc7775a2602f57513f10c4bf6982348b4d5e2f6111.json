@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT user_id\n                FROM comms_channel_participants\n                WHERE channel_id = $1 AND role = 'owner'\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "07fc08bbaee6ce5b956ce3bc7775a2602f57513f10c4bf6982348b4d5e2f6111"
+}

@@ -9,6 +9,7 @@ name = "agent_harness_service"
 path = "src/main.rs"
 
 [dependencies]
+agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger" }

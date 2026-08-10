@@ -26,8 +26,9 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Activity, ChannelListItem, ChannelType as DomainChannelType, ChannelWithLatest,
-        GetChannelsRequest, ParticipantRole as DomainParticipantRole, RecentChannelMessage,
+        Activity, ChannelKind as DomainChannelKind, ChannelListItem,
+        ChannelType as DomainChannelType, ChannelWithLatest, GetChannelsRequest,
+        ParticipantRole as DomainParticipantRole, RecentChannelMessage,
     },
     ports::ChannelListService,
 };
@@ -260,6 +261,9 @@ pub struct ApiChannelWithLatest {
     pub name: Option<String>,
     /// Channel type.
     pub channel_type: ApiChannelListType,
+    /// Channel kind: `normal`, or `agent` for an agent session's dedicated
+    /// channel whose agent messages are folded placeholders.
+    pub kind: ApiChannelKind,
     /// Organization id.
     #[schema(value_type = Option<u32>)]
     pub org_id: Option<u32>,
@@ -306,6 +310,7 @@ impl ApiChannelWithLatest {
             id: ch.id,
             name: ch.name,
             channel_type: ch.channel_type,
+            kind: ch.kind,
             org_id: ch.org_id,
             team_id: ch.team_id,
             auto_join_team: ch.auto_join_team,
@@ -341,6 +346,9 @@ pub struct ApiChannelListItem {
     pub name: Option<String>,
     /// type of the channel
     pub channel_type: ApiChannelListType,
+    /// kind of the channel: `normal`, or `agent` for an agent session's
+    /// dedicated channel
+    pub kind: ApiChannelKind,
     /// id of the organization this channel belongs too
     #[schema(value_type = Option<u32>)]
     pub org_id: Option<u32>,
@@ -363,6 +371,7 @@ impl ApiChannelListItem {
             id: value.id,
             name: value.name,
             channel_type: ApiChannelListType::new_from_domain(value.channel_type),
+            kind: ApiChannelKind::new_from_domain(value.kind),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
             auto_join_team: value.auto_join_team,
@@ -391,6 +400,25 @@ impl ApiLatestMessage {
             latest_non_thread_message: value
                 .latest_non_thread_message
                 .map(ApiChannelListMessage::new_from_recent),
+        }
+    }
+}
+
+/// Channel kind in API responses.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiChannelKind {
+    /// An ordinary channel.
+    Normal,
+    /// An agent session's dedicated channel.
+    Agent,
+}
+
+impl ApiChannelKind {
+    fn new_from_domain(value: DomainChannelKind) -> Self {
+        match value {
+            DomainChannelKind::Normal => Self::Normal,
+            DomainChannelKind::Agent => Self::Agent,
         }
     }
 }
@@ -429,8 +457,8 @@ pub struct ApiChannelListMessage {
     pub thread_id: Option<Uuid>,
     /// Sender user id.
     pub sender_id: String,
-    /// Message content.
-    pub content: String,
+    /// Message content. `None` on agent-turn placeholder messages.
+    pub content: Option<String>,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.

@@ -10,11 +10,11 @@
 //! cargo run -p agent_fold --example fold_recording -- ~/.agent_runtime_sessions/<id>.jsonl
 //! ```
 
+use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{Author, MessagePart, ToolDetail};
 use agent_fold::domain::ports::{FoldedMessageRepo, LogRepo};
 use agent_fold::domain::service::FoldedMessageService;
-use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, AgentSessionLog, Message};
+use macro_uuid::Uuid;
 use std::collections::VecDeque;
 
 /// A [`LogRepo`] over one recording read straight off disk.
@@ -27,7 +27,7 @@ impl LogRepo for RecordedLog {
     async fn list_by_session(
         &self,
         session: AgentSessionId,
-    ) -> Result<VecDeque<AgentSessionLog>, AgentSessionError> {
+    ) -> Result<VecDeque<AgentSessionLog>, rootcause::Report> {
         Ok(if session == self.session {
             self.entries.clone()
         } else {
@@ -43,7 +43,7 @@ async fn main() {
         .expect("usage: fold_recording <recording.jsonl>");
     let jsonl = std::fs::read_to_string(&path).expect("recording is readable");
 
-    let session = AgentSessionId::TEST_A;
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
     let repo = RecordedLog {
         session,
         entries: jsonl

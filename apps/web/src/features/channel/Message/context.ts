@@ -1,3 +1,4 @@
+import type { FoldedMessageLookup } from '@queries/channel/folded-messages';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { MessageActions, MessageData } from './types';
 
@@ -10,15 +11,22 @@ export type SearchHighlightTermsLookup = (
 
 const SearchHighlightTermsContext = createContext<SearchHighlightTermsLookup>();
 
+const FoldedMessagesContext = createContext<FoldedMessageLookup>();
+
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
 export const SearchHighlightTermsProvider =
   SearchHighlightTermsContext.Provider;
+export const FoldedMessagesProvider = FoldedMessagesContext.Provider;
 
 export function useSearchHighlightTermsLookup():
   | SearchHighlightTermsLookup
   | undefined {
   return useContext(SearchHighlightTermsContext);
+}
+
+export function useFoldedMessageLookup(): FoldedMessageLookup | undefined {
+  return useContext(FoldedMessagesContext);
 }
 
 export function useMessage(): Accessor<MessageData> {

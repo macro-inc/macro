@@ -28,6 +28,7 @@ export * from './chatResponseCreatedAt';
 export * from './chatResponseModel';
 export * from './chatResponseProjectId';
 export * from './chatResponseUpdatedAt';
+export * from './connectAgentRuntimeParams';
 export * from './createAgentRequest';
 export * from './createAgentRequestKind';
 export * from './createAgentRequestName';

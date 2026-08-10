@@ -204,6 +204,7 @@ fn list_channel(id: Uuid, updated_at_seconds: i64) -> ChannelWithLatest {
                 id,
                 name: Some(format!("channel-{id}")),
                 channel_type: DomainChannelType::Private,
+                kind: DomainChannelKind::default(),
                 org_id: None,
                 team_id: None,
                 auto_join_team: false,

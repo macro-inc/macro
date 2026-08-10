@@ -6,15 +6,15 @@
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    SessionStatus,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
+    CreateAgentSessionParams, MessageId, SessionStatus,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
+use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
 use macro_uuid::Uuid;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 /// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
@@ -205,5 +205,101 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             .get(&agent_session_id)
             .cloned()
             .unwrap_or_default())
+    }
+}
+
+/// The trivial [`agent_fold::domain::ports::LogRepo`] bridge: folding reads
+/// the log through the fold crate's own port, and this store already speaks
+/// [`AgentSessionLogRepo`], so bridging is one line - the same shape as the
+/// real Postgres adapter's impl.
+impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
+    async fn list_by_session(
+        &self,
+        session: AgentSessionId,
+    ) -> std::result::Result<std::collections::VecDeque<AgentSessionLog>, rootcause::Report> {
+        let log = AgentSessionLogRepo::list_by_session(self, session)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(log.into())
+    }
+}
+
+/// A session fixture with the given id and channel; every other field is a
+/// plausible constant.
+#[must_use]
+pub fn test_agent_session(id: AgentSessionId, channel_id: Uuid) -> AgentSession {
+    let now = chrono::Utc::now();
+    AgentSession {
+        id,
+        channel_id,
+        thread_id: None,
+        originating_message_id: None,
+        bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
+        model: "claude-sonnet-5".to_string(),
+        harness: "claude-code".to_string(),
+        repo_url: "https://github.com/example/example".to_string(),
+        acp_session_id: None,
+        status: SessionStatus::NoMessages,
+        created_at: now,
+        modified_at: now,
+    }
+}
+
+/// An in-memory [`Comms`] that records the placeholder messages written
+/// through it.
+///
+/// Behaves like the real table: a placeholder written for a channel shows up
+/// in [`Comms::messages_with_placeholders`] for every session on that
+/// channel. Cheap to clone - clones share one store.
+#[derive(Debug, Clone, Default)]
+pub struct RecordingComms {
+    /// `(channel_id, message)` pairs, in write order.
+    messages: Arc<Mutex<Vec<(Uuid, MessageId)>>>,
+}
+
+impl RecordingComms {
+    /// An empty store.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Every placeholder written so far, as `(channel_id, message)` in write
+    /// order.
+    #[must_use]
+    pub fn created(&self) -> Vec<(Uuid, MessageId)> {
+        self.messages
+            .lock()
+            .expect("in-memory comms store is not poisoned")
+            .clone()
+    }
+}
+
+impl Comms for RecordingComms {
+    async fn messages_with_placeholders(
+        &self,
+        session: &AgentSession,
+    ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
+        Ok(self
+            .messages
+            .lock()
+            .expect("in-memory comms store is not poisoned")
+            .iter()
+            .filter(|(channel, _)| *channel == session.channel_id)
+            .map(|(_, id)| *id)
+            .collect())
+    }
+
+    async fn create_message_placeholder(
+        &self,
+        session: &AgentSession,
+        id: MessageId,
+        _author: &Author,
+    ) -> std::result::Result<(), rootcause::Report> {
+        self.messages
+            .lock()
+            .expect("in-memory comms store is not poisoned")
+            .push((session.channel_id, id));
+        Ok(())
     }
 }

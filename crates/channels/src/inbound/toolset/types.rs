@@ -125,7 +125,7 @@ impl ToolThreadReply {
         let TruncatedContent {
             content,
             content_truncated,
-        } = truncate_content(reply.content, max_chars_per_message);
+        } = truncate_content(reply.content.unwrap_or_default(), max_chars_per_message);
 
         Self {
             id: reply.id,
@@ -206,7 +206,7 @@ impl ToolChannelMessage {
         let TruncatedContent {
             content,
             content_truncated,
-        } = truncate_content(message.content, max_chars_per_message);
+        } = truncate_content(message.content.unwrap_or_default(), max_chars_per_message);
         let preview_replies = message.thread.preview;
         let preview_len = if include_thread_preview {
             preview_replies.len() as i64
@@ -405,7 +405,8 @@ mod tests {
             sender_id: "macro|reply@example.com".to_string(),
             triggered_by: None,
             bot_profile: None,
-            content: "reply".to_string(),
+            content: Some("reply".to_string()),
+            agent_session_message_id: None,
             created_at: dt(seconds),
             updated_at: dt(seconds),
             edited_at: None,
@@ -422,7 +423,8 @@ mod tests {
             sender_id: "macro|sender@example.com".to_string(),
             triggered_by: None,
             bot_profile: None,
-            content: "parent".to_string(),
+            content: Some("parent".to_string()),
+            agent_session_message_id: None,
             created_at: dt(1),
             updated_at: dt(1),
             edited_at: None,
