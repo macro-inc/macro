@@ -278,6 +278,8 @@ export const TOKENS = {
     taskNewSplit: 'create.taskNewSplit',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
+    automation: 'create.automation',
+    skill: 'create.skill',
     close_menu: 'create.close_menu',
   },
 

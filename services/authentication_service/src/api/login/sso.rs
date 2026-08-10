@@ -68,7 +68,9 @@ fn is_allowed_original_url(url: &Url) -> bool {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx))]
+// `query` is skipped: original_url is client-controlled (query/fragment may
+// carry tokens) and login_hint is a user email — neither belongs in span fields.
+#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<LoginQueryParams>,
@@ -83,11 +85,21 @@ pub async fn handler(
     }) = query;
 
     let original_url = original_url.map(|url| url.0);
-    if original_url
+    if let Some(url) = original_url
         .as_ref()
-        .is_some_and(|url| !is_allowed_original_url(url))
+        .filter(|url| !is_allowed_original_url(url))
     {
-        tracing::error!("original_url is not allowed");
+        // Log scheme://host/path only — the query and fragment are
+        // client-controlled and may carry tokens or PII. The path is kept
+        // because it distinguishes e.g. macro://login from macro:///login.
+        let mut redacted_url = url.clone();
+        redacted_url.set_query(None);
+        redacted_url.set_fragment(None);
+        tracing::error!(
+            auth_handoff_failure = "original_url_rejected",
+            original_url = %redacted_url,
+            "original_url is not allowed"
+        );
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {

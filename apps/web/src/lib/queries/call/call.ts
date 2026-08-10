@@ -158,6 +158,18 @@ export function useCallRecordQuery(callId: Accessor<string>) {
   }));
 }
 
+export function fetchCallRecord(
+  callId: string,
+  staleTimeMs: number
+): Promise<CallRecord> {
+  return queryClient.fetchQuery({
+    queryKey: callKeys.record(callId).queryKey,
+    queryFn: async () =>
+      await throwOnErr(() => callServiceClient.getCallRecord(callId)),
+    staleTime: staleTimeMs,
+  });
+}
+
 export function setCallRecordShareWithTeamCache(
   callId: string,
   shareWithTeam: boolean

@@ -34,6 +34,7 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import WideAutomation from '@icon/wide-automation.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import WideChannel from '@icon/wide-channel.svg';
 import { AnimatedChatIcon } from '@icon/wide-chat';
@@ -57,21 +58,97 @@ import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
-import { CommandMenuShell, cn, Hotkey, Layer } from '@ui';
+import { makePersisted } from '@solid-primitives/storage';
+import {
+  CommandMenuHotkeyHint,
+  CommandMenuList,
+  CommandMenuSearchInput,
+  CommandMenuShell,
+  cn,
+  createCommandListController,
+  Hotkey,
+  ToggleSwitch,
+} from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   createEffect,
+  createMemo,
   createSignal,
-  For,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
-import { type FocusableElement, tabbable } from 'tabbable';
 import type { CreatableBlock } from './types';
+
+const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
+const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
+const FRECENCY_COUNT_WEIGHT = 10;
+const FRECENCY_HALF_LIFE_DAYS = 14;
+
+type LauncherFrecencyEntry = {
+  count: number;
+  lastUsedAt: number;
+};
+
+type LauncherFrecencyStore = Record<string, LauncherFrecencyEntry>;
+
+const [launcherFrecencyStore, setLauncherFrecencyStore] = makePersisted(
+  createStore<LauncherFrecencyStore>({}),
+  { name: LAUNCHER_FRECENCY_STORE }
+);
+const [launcherSearchMode, setLauncherSearchModePreference] = makePersisted(
+  createSignal(false),
+  { name: LAUNCHER_SEARCH_MODE_STORE }
+);
+
+function launcherItemKey(item: CreatableBlock) {
+  return String(item.hotkeyToken ?? `${item.label}:${item.hotkey}`);
+}
+
+function launcherFrecencyScore(item: CreatableBlock, now = Date.now()) {
+  const entry = launcherFrecencyStore[launcherItemKey(item)];
+  if (!entry) return 0;
+
+  const ageMs = Math.max(now - entry.lastUsedAt, 0);
+  const halfLifeMs = FRECENCY_HALF_LIFE_DAYS * 24 * 60 * 60 * 1000;
+  const recency = Math.pow(0.5, ageMs / halfLifeMs);
+
+  return entry.count * FRECENCY_COUNT_WEIGHT + recency;
+}
+
+function trackLauncherItemUsage(item: CreatableBlock) {
+  const key = launcherItemKey(item);
+  const previous = launcherFrecencyStore[key];
+
+  setLauncherFrecencyStore(key, {
+    count: (previous?.count ?? 0) + 1,
+    lastUsedAt: Date.now(),
+  });
+}
+
+function matchesLauncherSearch(item: CreatableBlock, query: string) {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+  if (terms.length === 0) return true;
+
+  const searchableText = [
+    item.label,
+    item.description,
+    item.launcherHint,
+    item.blockName,
+    ...(item.keywords ?? []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return terms.every((term) => searchableText.includes(term));
+}
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
@@ -313,6 +390,12 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       setAutomationComposerOpen(true, false);
       return;
+    case 'skill':
+      createComponent({
+        componentId: 'skill-compose',
+        asPopover: true,
+      });
+      return;
   }
 }
 
@@ -338,7 +421,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     label: 'Agent',
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
-    description: 'Create AI chat',
+    description: 'Create agent chat',
+    launcherHint: 'New agent session',
     keywords: ['new', 'make', 'add', 'agent'],
     blockName: 'chat',
     hotkeyToken: TOKENS.create.chat,
@@ -350,7 +434,35 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Doc',
+    label: 'Automation',
+    icon: WideAutomation,
+    description: 'Create automation',
+    launcherHint: 'Scheduled agent runs',
+    keywords: ['new', 'make', 'add', 'schedule', 'agent'],
+    blockName: 'automation',
+    hotkeyToken: TOKENS.create.automation,
+    hotkey: 'u',
+    keyDownHandler: () => {
+      runCreateAction('automation');
+      return true;
+    },
+  },
+  {
+    label: 'Skill',
+    icon: getIconConfig('skill').icon,
+    description: 'Create skill',
+    launcherHint: 'Custom agent skill',
+    keywords: ['new', 'make', 'add', 'instruction', 'prompt'],
+    blockName: 'skill',
+    hotkeyToken: TOKENS.create.skill,
+    hotkey: 'k',
+    keyDownHandler: () => {
+      runCreateAction('skill');
+      return true;
+    },
+  },
+  {
+    label: 'Document',
     icon: WideFileMd,
     animatedIcon: AnimatedFileMdIcon,
     description: 'Create doc',
@@ -384,6 +496,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideSnippet,
     animatedIcon: AnimatedSnippetIcon,
     description: 'Create snippet',
+    launcherHint: 'Reusable document template',
     keywords: ['new', 'make', 'add'],
     blockName: 'snippet',
     hotkeyToken: TOKENS.create.snippet,
@@ -399,6 +512,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideChat,
     animatedIcon: AnimatedChatIcon,
     description: 'Create message',
+    launcherHint: 'Quick send message',
     keywords: ['new', 'make', 'add', 'channel'],
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
@@ -414,6 +528,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideChannel,
     animatedIcon: AnimatedChannelIcon,
     description: 'Create channel',
+    launcherHint: 'Team-wide or group chat',
     keywords: ['new', 'make', 'add', 'channel', 'group', 'conversation'],
     blockName: 'channel',
     hotkeyToken: TOKENS.create.channel,
@@ -480,93 +595,54 @@ export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
 
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;
-  onMouseEnter?: () => void;
-  onFocus?: () => void;
-  focused?: boolean;
+  selected?: boolean;
+  showHotkey?: boolean;
 };
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
-  let buttonRef!: HTMLButtonElement;
-
-  createEffect(() => {
-    if (props.focused) {
-      buttonRef?.focus();
-    }
-  });
-
-  const textFg = () => getIconConfig(props.creatableBlock.blockName).foreground;
-
   const StaticIcon = props.creatableBlock.icon;
   const AnimatedIcon = props.creatableBlock.animatedIcon;
+  const selectedIconColor = () =>
+    getIconConfig(props.creatableBlock.blockName).foreground;
+  const launcherHint = () => props.creatableBlock.launcherHint;
 
   return (
-    <Layer depth={4}>
-      <button
+    <>
+      <div
         class={cn(
-          'size-28 shadow-sm shadow-drop-shadow relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center border border-edge bg-surface transition-transform ease-click duration-200 rounded-sm',
-          `create-menu-${props.creatableBlock.label.toLowerCase()}`,
-          {
-            '-translate-y-2 text-ink': props.focused,
-            'text-ink-extra-muted': !props.focused,
-          }
+          'size-4 shrink-0 text-ink-extra-muted transition-colors',
+          props.selected && selectedIconColor()
         )}
-        onClick={() => props.creatableBlock.keyDownHandler()}
-        onFocus={props.onFocus}
-        onMouseEnter={props.onMouseEnter}
-        tabindex={0}
-        ref={buttonRef}
-        onPointerEnter={() => {
-          buttonRef?.focus();
-        }}
       >
-        <div class="absolute top-1.5 left-2 z-user-highlight p-1 px-1.5 text-ink border border-edge-muted rounded-xs text-xs">
+        <Show
+          when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
+          fallback={<Dynamic component={StaticIcon} />}
+        >
+          {(icon) => (
+            <Dynamic component={icon()} triggerAnimation={props.selected} />
+          )}
+        </Show>
+      </div>
+
+      <div class="min-w-0 flex-1 flex items-baseline gap-2">
+        <span class="truncate text-sm font-medium text-ink">
+          {props.creatableBlock.label}
+        </span>
+        <Show when={launcherHint()}>
+          {(hint) => (
+            <span class="min-w-0 truncate font-medium text-ink-extra-muted/70">
+              {hint()}
+            </span>
+          )}
+        </Show>
+      </div>
+
+      <Show when={props.showHotkey}>
+        <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal text-ink-muted">
           <Hotkey token={props.creatableBlock.hotkeyToken} />
         </div>
-
-        <div
-          class={cn(
-            'absolute size-2 right-2 top-2 z-user-highlight transition-transform ease-out duration-200 transition-color border border-edge',
-            textFg()
-          )}
-          style={{ background: props.focused ? 'currentColor' : 'transparent' }}
-        />
-
-        <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
-          <div class="text-sm font-medium">{props.creatableBlock.label}</div>
-          <div
-            class={cn(
-              'size-3 transition-[transform,opacity] ease duration-200',
-              {
-                'opacity-100': props.focused,
-                'opacity-0': !props.focused,
-              }
-            )}
-          >
-            <ArrowRight />
-          </div>
-        </div>
-
-        <div
-          class={cn(
-            'w-1/3 -translate-y-1 transition-all ease-out duration-200',
-            textFg(),
-            {
-              'text-ink-extra-muted': !props.focused,
-              'scale-110': props.focused,
-            }
-          )}
-        >
-          <Show
-            when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
-            fallback={<Dynamic component={StaticIcon} />}
-          >
-            {(icon) => (
-              <Dynamic component={icon()} triggerAnimation={props.focused} />
-            )}
-          </Show>
-        </div>
-      </button>
-    </Layer>
+      </Show>
+    </>
   );
 };
 
@@ -580,84 +656,90 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
     enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
   });
-  const blocks = () =>
+  const availableBlocks = () =>
     (props.blocks ?? CREATABLE_BLOCKS).filter(
       (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
     );
+  const sortedBlocks = createMemo(() => {
+    const now = Date.now();
+
+    return availableBlocks()
+      .map((item, index) => ({
+        item,
+        index,
+        score: launcherFrecencyScore(item, now),
+      }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ item }) => item);
+  });
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchMode = launcherSearchMode;
+  const blocks = createMemo(() => {
+    if (!searchMode()) return sortedBlocks();
+
+    return sortedBlocks().filter((item) =>
+      matchesLauncherSearch(item, searchQuery())
+    );
+  });
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
+  let searchInputRef: HTMLInputElement | undefined;
   let shiftRippleRef: HTMLSpanElement | undefined;
 
   const shiftHeld = () => pressedKeys().has('shift');
 
   const [focusedIndex, setFocusedIndex] = createSignal(0);
+  const listController = createCommandListController({
+    items: blocks,
+    selectedIndex: focusedIndex,
+    setSelectedIndex: setFocusedIndex,
+  });
 
-  const focusMenuItem = (label: string) => {
-    const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label.toLowerCase()}`
-    );
+  const runLauncherItem = (
+    item: CreatableBlock | undefined,
+    shouldReturnFocus?: boolean
+  ) => {
+    if (!item) return false;
 
-    if (!menuItem) return false;
-
-    menuItem.focus();
-
-    return true;
-  };
-
-  const moveFocus = (delta: number) => {
-    const tabbableEls = tabbable(ref);
-    const activeEl = document.activeElement as FocusableElement | null;
-    const activeElIndex = activeEl
-      ? tabbableEls.indexOf(activeEl as FocusableElement)
-      : -1;
-
-    if (activeElIndex === -1 || tabbableEls.length === 0) return false;
-
-    const nextIndex =
-      (activeElIndex + delta + tabbableEls.length) % tabbableEls.length;
-
-    const nextEl = tabbableEls[nextIndex];
-
-    if (!nextEl) return false;
-
-    nextEl.focus();
-
-    setFocusedIndex(nextIndex);
+    trackLauncherItemUsage(item);
+    item.keyDownHandler();
+    props.onClose(shouldReturnFocus);
 
     return true;
   };
 
-  const getGridColumnCount = () => {
-    const columns = window.getComputedStyle(ref).gridTemplateColumns;
-    return Math.max(columns.split(' ').filter(Boolean).length, 1);
+  const setLauncherSearchMode = (next: boolean) => {
+    setLauncherSearchModePreference(next);
+
+    if (!next) {
+      setSearchQuery('');
+    }
+
+    queueMicrotask(() => {
+      if (next) {
+        searchInputRef?.focus({ preventScroll: true });
+      } else {
+        ref?.focus({ preventScroll: true });
+      }
+    });
   };
 
-  const moveFocusRow = (direction: -1 | 1) => {
-    const columnCount = getGridColumnCount();
-    const nextIndex = focusedIndex() + columnCount * direction;
+  createEffect(() => {
+    searchMode();
+    searchQuery();
+    blocks().length;
+    setFocusedIndex(0);
+  });
 
-    if (nextIndex < 0 || nextIndex >= blocks().length) return false;
-
-    const nextEl = tabbable(ref)[nextIndex];
-    if (!nextEl) return false;
-
-    nextEl.focus();
-    setFocusedIndex(nextIndex);
-
-    return true;
-  };
-
-  blocks().forEach((item) => {
+  availableBlocks().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
       scopeId: launcherScope,
       description: item.description,
       keyDownHandler: () => {
-        item.keyDownHandler();
-        props.onClose(false);
-        return true;
+        return runLauncherItem(item, false);
       },
     }).withGroup(hkGroup);
 
@@ -668,9 +750,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         scopeId: launcherScope,
         description: `${item.description} in new split`,
         keyDownHandler: () => {
-          item.keyDownHandler();
-          props.onClose();
-          return true;
+          return runLauncherItem(item);
         },
       }).withGroup(hkGroup);
     }
@@ -687,38 +767,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     },
   }).withGroup(hkGroup);
 
-  registerHotkey({
-    hotkey: ['arrowleft', 'h'],
+  const navUpHotkey = registerHotkey({
+    hotkey: ['arrowup', 'ctrl+k', 'shift+tab'],
     scopeId: launcherScope,
-    description: 'Navigate Left',
-    keyDownHandler: () => moveFocus(-1),
-  }).withGroup(hkGroup);
-
-  registerHotkey({
-    hotkey: ['arrowright', 'l'],
-    scopeId: launcherScope,
-    description: 'Navigate Right',
-    keyDownHandler: () => moveFocus(1),
-  }).withGroup(hkGroup);
-
-  registerHotkey({
-    hotkey: ['arrowup', 'k'],
-    scopeId: launcherScope,
-    description: 'Navigate Up',
-    keyDownHandler: (e) => {
-      e?.preventDefault();
-      return moveFocusRow(-1);
+    description: 'Navigate up',
+    keyDownHandler: (event) => {
+      event?.preventDefault();
+      return listController.selectPrevious();
     },
+    runWithInputFocused: true,
   }).withGroup(hkGroup);
 
-  registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+  const navDownHotkey = registerHotkey({
+    hotkey: ['arrowdown', 'ctrl+j', 'tab'],
     scopeId: launcherScope,
-    description: 'Navigate Down',
-    keyDownHandler: (e) => {
-      e?.preventDefault();
-      return moveFocusRow(1);
+    description: 'Navigate down',
+    keyDownHandler: (event) => {
+      event?.preventDefault();
+      return listController.selectNext();
     },
+    runWithInputFocused: true,
   }).withGroup(hkGroup);
 
   registerHotkey({
@@ -736,22 +804,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
-      blocks()[focusedIndex()]?.keyDownHandler();
-      props.onClose();
-      return true;
+      return runLauncherItem(blocks()[focusedIndex()]);
     },
     runWithInputFocused: true,
     displayPriority: 7,
   }).withGroup(hkGroup);
 
-  registerHotkey({
+  const confirmHotkey = registerHotkey({
     hotkey: 'enter' as ValidHotkey,
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
-      blocks()[focusedIndex()]?.keyDownHandler();
-      props.onClose();
-      return true;
+      return runLauncherItem(blocks()[focusedIndex()]);
     },
     runWithInputFocused: true,
     displayPriority: 8,
@@ -772,10 +836,11 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onMount(() => {
     if (!ref) return;
     attachHotkeys(ref);
-    setTimeout(() => {
-      const firstItem = blocks()[0];
-      if (firstItem) {
-        focusMenuItem(firstItem.label);
+    queueMicrotask(() => {
+      if (searchMode()) {
+        searchInputRef?.focus({ preventScroll: true });
+      } else {
+        ref.focus({ preventScroll: true });
       }
     });
   });
@@ -783,60 +848,129 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <CommandMenuShell
-      depth={2}
-      class="h-auto w-fit max-w-[calc(100vw-2rem)] shadow-menu"
+    <div
+      class="w-200 max-w-[calc(100vw-16px)] rounded-xl"
+      style={{
+        'box-shadow':
+          '0 5px 40px rgba(0, 0, 0, 0.1), 0 5px 50px rgba(0,0,0,0.03)',
+      }}
     >
-      <CommandMenuShell.Header class="my-0 justify-between p-2 px-4 sm:px-6 bg-surface">
-        <h1 class="font-bold text-ink-muted">Create New</h1>
-        <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
-          <style>{`
-            @keyframes shift-ripple {
-              0%   { transform: scale(1); opacity: 0.6; }
-              100% { transform: scale(2.2); opacity: 0; }
+      <CommandMenuShell
+        depth={2}
+        class="h-auto w-full outline-none"
+        ref={ref}
+        tabindex={-1}
+      >
+        <CommandMenuShell.Header class="gap-2 px-4 my-1 bg-surface border-b-0">
+          <Show
+            when={searchMode()}
+            fallback={
+              <div class="min-w-0 flex flex-1 items-center gap-2 text-ink-muted">
+                <PlusIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <h1 class="truncate text-base font-normal">Create New</h1>
+              </div>
             }
-            .shift-ripple.rippling {
-              animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+          >
+            <div class="min-w-0 flex flex-1 items-center gap-2">
+              <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <CommandMenuSearchInput
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search create options"
+                value={searchQuery()}
+                onInput={(event) => setSearchQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setLauncherSearchMode(false);
+                  }
+                }}
+              />
+            </div>
+          </Show>
+          <ToggleSwitch
+            checked={searchMode()}
+            onChange={setLauncherSearchMode}
+            size="xs"
+            label={
+              <span class="text-[11px] font-medium leading-none text-ink-extra-muted/70">
+                Search mode
+              </span>
             }
-          `}</style>
-          Hold{' '}
-          <span class="relative inline-flex place-items-center my-1">
-            <span
-              ref={shiftRippleRef}
-              class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
-            />
-            <span
-              class={cn(
-                'border text-xs px-1.5 py-0.5 rounded-sm transition-colors duration-150',
-                shiftHeld()
-                  ? 'border-accent text-accent bg-accent/10'
-                  : 'border-edge-muted'
-              )}
-            >
-              {getNormalizedKeyString({ shortcut: 'shift' })}
-            </span>
-          </span>
-          to launch in new split
-        </p>
-      </CommandMenuShell.Header>
-      <CommandMenuShell.Body>
-        <div
-          class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
-          ref={ref}
-        >
-          <For each={blocks()}>
+            labelClass="flex items-center"
+            controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
+            class="ml-auto flex-row-reverse gap-1.5 rounded-full bg-ink/4 px-2 py-1"
+          />
+        </CommandMenuShell.Header>
+        <CommandMenuShell.Body>
+          <CommandMenuList
+            items={blocks()}
+            selectedIndex={focusedIndex()}
+            scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+            class="max-h-[min(60vh,26rem)]"
+            itemId={(item) => `create-menu-${launcherItemKey(item)}`}
+            onSelect={(item) => runLauncherItem(item)}
+            onItemMouseMove={(index) =>
+              listController.setSelectedIndexFromPointer(index)
+            }
+          >
             {(item, index) => (
               <LauncherMenuItem
                 creatableBlock={item}
-                onMouseEnter={() => setFocusedIndex(index())}
-                onFocus={() => setFocusedIndex(index())}
-                focused={focusedIndex() === index()}
+                selected={focusedIndex() === index()}
+                showHotkey={!searchMode()}
               />
             )}
-          </For>
-        </div>
-      </CommandMenuShell.Body>
-    </CommandMenuShell>
+          </CommandMenuList>
+        </CommandMenuShell.Body>
+        <CommandMenuShell.Footer>
+          <style>{`
+              @keyframes shift-ripple {
+                0%   { transform: scale(1); opacity: 0.6; }
+                100% { transform: scale(2.2); opacity: 0; }
+              }
+              .shift-ripple.rippling {
+                animation: shift-ripple 0.35s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+              }
+            `}</style>
+          <span class="flex items-center gap-1">
+            <div class="flex gap-1">
+              <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
+                <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
+              </div>
+              <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
+                <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
+              </div>
+            </div>
+            Navigate
+          </span>
+          <CommandMenuHotkeyHint
+            hotkey={<Hotkey shortcut={confirmHotkey.hotkey()} />}
+            label="Create"
+          />
+          <span class="hidden touch:hidden md:flex items-center gap-1">
+            Hold
+            <span class="relative inline-flex place-items-center">
+              <span
+                ref={shiftRippleRef}
+                class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
+              />
+              <span
+                class={cn(
+                  'border text-xxs px-1.5 py-px rounded-md transition-colors duration-150',
+                  shiftHeld()
+                    ? 'border-accent text-accent bg-accent/10'
+                    : 'border-edge-muted'
+                )}
+              >
+                {getNormalizedKeyString({ shortcut: 'shift' })}
+              </span>
+            </span>
+            New split
+          </span>
+        </CommandMenuShell.Footer>
+      </CommandMenuShell>
+    </div>
   );
 };
 
@@ -849,7 +983,7 @@ export const Launcher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay"></Dialog.Overlay>
+        <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
         <Dialog.Content>
           <div
             class={cn(
