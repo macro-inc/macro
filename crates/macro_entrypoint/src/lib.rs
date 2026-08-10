@@ -32,6 +32,7 @@ env_vars! {
 
 maybe_env_vars! {
     pub struct RustLog;
+    pub struct OtelExporterOtlpEndpoint;
     pub struct OtelTraceFilter;
 }
 
@@ -125,23 +126,45 @@ impl MacroEntrypoint {
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
-                // Keep rootcause from enabling callsites that RUST_LOG previously disabled.
                 let rust_log_filter = rust_log_env_filter();
-                let fmt_layer = tracing_subscriber::fmt::layer()
-                    .with_ansi(true)
-                    .with_file(true)
-                    .with_line_number(true)
-                    .pretty()
-                    .with_filter(rust_log_filter.clone());
+                // Local OTLP export is opt-in. xtask injects this only for
+                // trace-enabled local runs.
+                let tracer_provider = OtelExporterOtlpEndpoint::new()
+                    .map(|_| init_opentelemetry("local".to_string()));
 
-                Registry::default()
-                    .with(RootcauseLayer.with_filter(rust_log_filter))
-                    .with(fmt_layer)
-                    .init();
+                if let Some(provider) = tracer_provider.as_ref() {
+                    let otel_filter = otel_env_filter();
+                    let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
+                    let otel_layer = otel_layer_with_error_mapping(provider.tracer(service_name()))
+                        .with_filter(otel_filter);
 
-                InitializedEntrypoint {
-                    tracer_provider: None,
+                    Registry::default()
+                        .with(RootcauseLayer.with_filter(rootcause_filter))
+                        .with(
+                            tracing_subscriber::fmt::layer()
+                                .with_ansi(true)
+                                .with_file(true)
+                                .with_line_number(true)
+                                .pretty()
+                                .with_filter(rust_log_filter),
+                        )
+                        .with(otel_layer)
+                        .init();
+                } else {
+                    Registry::default()
+                        .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
+                        .with(
+                            tracing_subscriber::fmt::layer()
+                                .with_ansi(true)
+                                .with_file(true)
+                                .with_line_number(true)
+                                .pretty()
+                                .with_filter(rust_log_filter),
+                        )
+                        .init();
                 }
+
+                InitializedEntrypoint { tracer_provider }
             }
             (
                 Environment::Local,
@@ -159,21 +182,18 @@ impl MacroEntrypoint {
                 }
             }
             (Environment::Production | Environment::Develop, _) => {
-                let tracer_provider = init_opentelemetry();
-
-                // Get service name for the tracer
-                let service_name = DdService::new()
+                // Get environment from DD_ENV
+                let env = DdEnv::new()
                     .map(|e| e.to_string())
-                    .unwrap_or_else(|_| "unknown-service".to_string());
+                    .unwrap_or_else(|_| "unknown".to_string());
+                let tracer_provider = init_opentelemetry(env);
 
-                let tracer = tracer_provider.tracer(service_name);
+                let tracer = tracer_provider.tracer(service_name());
                 let rust_log_filter = rust_log_env_filter();
                 let otel_filter = otel_env_filter();
                 // Capture anything already enabled for logs or OTEL without enabling new callsites.
                 let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
-                let otel_layer = tracing_opentelemetry::layer()
-                    .with_tracer(tracer)
-                    .with_filter(otel_filter);
+                let otel_layer = otel_layer_with_error_mapping(tracer).with_filter(otel_filter);
 
                 // Build the JSON event format, then wrap it with DatadogFormat
                 // to inject dd.trace_id / dd.span_id for trace-log correlation.
@@ -213,31 +233,70 @@ impl MacroEntrypoint {
     }
 }
 
-/// Opentelemetry export endpoint to talk with datadog sidecar
-const OTEL_EXPORTER_OTLP_ENDPOINT: &str = "http://127.0.0.1:4317";
+/// Default OpenTelemetry export endpoint: the Datadog agent sidecar in prod/develop.
+const DEFAULT_OTLP_ENDPOINT: &str = "http://127.0.0.1:4317";
 
-/// Initialize OpenTelemetry with OTLP exporter to the Datadog agent.
-/// The Datadog agent sidecar listens on localhost:4317 for OTLP gRPC.
-fn init_opentelemetry() -> SdkTracerProvider {
+/// Wraps the OTel layer so `tracing::error!` events on a span (e.g.
+/// `macro_tower_layers::CustomOnFailure`'s "response failed", or an
+/// `#[instrument(err)]` failure) become an OTLP exception with a message and
+/// stack trace, and set the span's error status message. Without these, a
+/// span can be marked errored (from the HTTP status) with no `error.message`
+/// / `error.stack` for Datadog to show — "Missing error message and stack
+/// trace" in the UI.
+fn otel_layer_with_error_mapping<S>(
+    tracer: opentelemetry_sdk::trace::SdkTracer,
+) -> tracing_opentelemetry::OpenTelemetryLayer<S, opentelemetry_sdk::trace::SdkTracer>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_error_events_to_exceptions(true)
+        .with_error_events_to_status(true)
+        .with_error_fields_to_exceptions(true)
+        .with_error_records_to_exceptions(true)
+        .with_location(true)
+}
+
+/// The service name reported on traces: `DD_SERVICE` when set, otherwise the
+/// current executable's file name so each service is distinguishable locally.
+fn service_name() -> String {
+    if let Ok(service) = DdService::new() {
+        return service.to_string();
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            exe.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "unknown-service".to_string())
+}
+
+fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
+    // W3C trace-context propagation: lets macro_tower_layers parent request
+    // spans under an incoming `traceparent` (e.g. from the web app), and
+    // service clients propagate context onward.
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+
+    let endpoint = OtelExporterOtlpEndpoint::new()
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| DEFAULT_OTLP_ENDPOINT.to_string());
+
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(OTEL_EXPORTER_OTLP_ENDPOINT)
+        .with_endpoint(endpoint)
         .build()
         .expect("failed to create OTLP span exporter");
 
-    // Get service name from DD_SERVICE or OTEL_SERVICE_NAME
-    let service_name = DdService::new()
-        .map(|e| e.to_string())
-        .unwrap_or_else(|_| "unknown-service".to_string());
-
-    // Get environment from DD_ENV
-    let env = DdEnv::new()
-        .map(|e| e.to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
-
     let resource = opentelemetry_sdk::Resource::builder()
-        .with_service_name(service_name)
-        .with_attribute(opentelemetry::KeyValue::new("deployment.environment", env))
+        .with_service_name(service_name())
+        .with_attribute(opentelemetry::KeyValue::new(
+            "deployment.environment",
+            deployment_environment,
+        ))
         .build();
 
     SdkTracerProvider::builder()

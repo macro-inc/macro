@@ -37,7 +37,7 @@ where
         Self { repo }
     }
 
-    /// Get access level for optimized entity types (document, chat, project, thread).
+    /// Get access level for entity types with dedicated repository queries.
     async fn get_optimized_access(
         &self,
         entity_id: &str,
@@ -50,6 +50,11 @@ where
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
             EntityType::Call => self.repo.get_call_access(entity_id, user_id).await,
+            EntityType::CalendarEvent => {
+                self.repo
+                    .get_calendar_event_access(entity_id, user_id)
+                    .await
+            }
             _ => unreachable!("Only optimized types should call this method"),
         }
     }
@@ -230,7 +235,13 @@ where
                     role: TeamRole::Member,
                 })
             }
-            EntityType::User | EntityType::ChannelMessage | EntityType::StaticFile => {
+            EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::StaticFile
+            | EntityType::CalendarEvent
+            // A reminder belongs to a user, so a team-scoped bot never reaches one.
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }
@@ -394,11 +405,13 @@ where
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::CalendarEvent => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
+            EntityType::Reminder => self.repo.get_reminder_access(entity_id, user_id).await,
             EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
             EntityType::CrmCompany => Ok(self
                 .get_crm_company_access(entity_id, user_id)
@@ -411,7 +424,11 @@ where
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types either don't have access checks implemented yet, or they should not have access checks.
-            EntityType::Team | EntityType::User | EntityType::ChannelMessage => Ok(None),
+            // Skill refs are access-checked against the underlying skill document.
+            EntityType::Team
+            | EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill => Ok(None),
         }
     }
 
@@ -462,7 +479,8 @@ where
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::CalendarEvent => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;

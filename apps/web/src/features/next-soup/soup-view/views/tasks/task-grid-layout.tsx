@@ -113,6 +113,7 @@ export function TaskGridLayout(props: LayoutProps) {
 
   return (
     <PropertiesProvider
+      entityId={props.entity.id}
       entityType={EntityType.TASK}
       canEdit={true}
       properties={properties}

@@ -49,7 +49,7 @@ describe('Reactions', () => {
   });
 
   it('calls onReact with chip emoji when a reaction chip is clicked', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ skipHover: true });
     const onReact = vi.fn();
 
     render(() => (

@@ -5,9 +5,10 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
-    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, MacroTaskId,
-    TeamTaskReference, ValidatedGithubWebhookEvent,
+    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
+    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
+    GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
+    ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -44,12 +45,16 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
     ///
     /// Implementations should use the installation's team sources from
     /// `github_app_installation` (`source_type = 'team'`) and the referenced
-    /// team slug/task number to find the backing Macro task document.
+    /// team slug/task number to find the backing Macro task document. Each
+    /// match is returned with the team it resolved in; because team slugs are
+    /// not unique, one reference may resolve in several of the installation's
+    /// teams and callers must treat such references as ambiguous instead of
+    /// linking every match.
     fn resolve_team_task_references(
         &self,
         installation_id: &str,
         references: &[TeamTaskReference],
-    ) -> impl Future<Output = Result<Vec<MacroTaskId>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ResolvedTeamTaskReference>, Self::Err>> + Send;
 
     /// Maps GitHub user IDs to the Macro user IDs linked to them via the `github_links` table.
     ///
@@ -97,19 +102,34 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         sources: &[GithubAppInstallationSource],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Records the GitHub user that installed a GitHub App installation,
-    /// replacing any previously recorded installer for the installation.
-    fn upsert_installation_installer(
+    /// Deletes all source associations for a GitHub App installation.
+    /// Deleting an installation with no associations is a no-op (idempotent).
+    fn delete_installation_sources(
         &self,
         installation_id: &str,
-        github_user_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Returns the installation IDs installed by the given GitHub user.
-    fn get_installation_ids_by_installer(
+    /// Records the Macro source a GitHub user asked to sync when requesting an
+    /// org install that awaits admin approval. Replaces any earlier pending
+    /// request by the same GitHub user (latest intent wins).
+    fn upsert_installation_request(
         &self,
         github_user_id: &str,
-    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+        source: &GithubAppInstallationSource,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Returns the pending installation request source for a GitHub user, if any.
+    fn get_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<Option<GithubAppInstallationSource>, Self::Err>> + Send;
+
+    /// Deletes a GitHub user's pending installation request.
+    /// Deleting a missing request is a no-op (idempotent).
+    fn delete_installation_request(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Client interface for making GitHub sync API calls.
@@ -117,6 +137,26 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
 /// Abstracts HTTP communication with GitHub's API so the service
 /// layer does not need to manage its own HTTP client.
 pub trait GithubSyncClient: Send + Sync + 'static {
+    /// Exchanges a GitHub App setup callback code for a user access token.
+    fn exchange_setup_code(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+        code: &str,
+    ) -> impl Future<Output = Result<GithubSetupAccessToken, GithubError>> + Send;
+
+    /// Lists every GitHub App installation visible to a user access token.
+    fn list_user_installations(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<Vec<GithubUserInstallation>, GithubError>> + Send;
+
+    /// Fetches the GitHub user behind a user access token.
+    fn get_authenticated_user(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<GithubAuthenticatedUser, GithubError>> + Send;
+
     /// Generates an installation access token for a given GitHub App installation.
     fn generate_installation_access_token(
         &self,
@@ -168,20 +208,40 @@ pub trait GithubSyncService: Send + Sync + 'static {
         webhook_event: &ValidatedGithubWebhookEvent,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
 
-    /// Returns the github sync app installation url
-    fn get_github_sync_app_url(&self) -> &str;
-
-    /// Associates any GitHub App installations installed by the given GitHub
-    /// user with that user's Macro sources (teams or user), then backfills
-    /// open pull requests for newly associated installations.
-    ///
-    /// Intended to be called when a `github_links` row is created after the
-    /// app was installed, since the installation webhook could not resolve a
-    /// Macro user at install time.
-    fn associate_installations_for_github_user(
+    /// Begins an authenticated GitHub App installation setup flow.
+    fn begin_installation_setup(
         &self,
-        github_user_id: &str,
-    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+        _macro_user_id: &MacroUserIdStr<'_>,
+        _team_id: Option<uuid::Uuid>,
+    ) -> impl Future<Output = Result<String, GithubError>> + Send {
+        async {
+            Err(GithubError::Internal(anyhow::anyhow!(
+                "installation setup is unsupported"
+            )))
+        }
+    }
+
+    /// Completes an installation setup callback after verifying its state,
+    /// that the completing GitHub account is linked to the state's Macro user,
+    /// and (for install/update) that the account owns the installation.
+    fn complete_installation_setup(
+        &self,
+        _state: &str,
+        _code: Option<&str>,
+        _installation_id: Option<u64>,
+        _setup_action: &str,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send {
+        async {
+            Err(GithubError::Internal(anyhow::anyhow!(
+                "installation setup is unsupported"
+            )))
+        }
+    }
+
+    /// Returns the raw installation URL for legacy inbound adapters.
+    ///
+    /// New installation flows must use [`GithubSyncService::begin_installation_setup`].
+    fn get_github_sync_app_url(&self) -> &str;
 
     /// Generates an installation access token for the github sync app
     fn generate_installation_access_token(

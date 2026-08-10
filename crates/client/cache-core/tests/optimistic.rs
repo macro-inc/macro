@@ -1,10 +1,15 @@
 //! Durable optimistic mutation tests: enqueue/read/claim/retry/commit/fail,
 //! strict ordering, and lifecycle resets.
 
-use cache_core::engine::{BeginOptimisticWrite, Engine, EngineError, ReadResult};
-use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
+use cache_core::engine::{
+    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
+};
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
+    QueuedMutation,
+};
 use cache_core::store::{InMemoryStorage, Storage};
-use cache_core::value::{CacheValue, EntityKey};
+use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -47,6 +52,116 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
 "#;
 
 const PROPERTY_KEY: &str = "GraphqlProperty:prop-1";
+
+#[derive(Debug, Default)]
+struct ClaimFailingStorage {
+    inner: InMemoryStorage,
+    fail_next_claim: bool,
+}
+
+impl ClaimFailingStorage {
+    fn new() -> Self {
+        Self {
+            inner: InMemoryStorage::new(),
+            fail_next_claim: true,
+        }
+    }
+}
+
+impl Storage for ClaimFailingStorage {
+    type Error = std::io::Error;
+
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
+        Ok(self.inner.get_batch(keys).await.unwrap())
+    }
+
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.inner.put_batch(entries).await.unwrap();
+        Ok(())
+    }
+
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
+        self.inner.delete_batch(keys).await.unwrap();
+        Ok(())
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey<'static>>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        Ok(self
+            .inner
+            .scan_records(type_names, after, limit)
+            .await
+            .unwrap())
+    }
+
+    async fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> Result<MutationId, Self::Error> {
+        Ok(self.inner.enqueue_mutation(entry).await.unwrap())
+    }
+
+    async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        Ok(self.inner.load_mutation_queue().await.unwrap())
+    }
+
+    async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, Self::Error> {
+        if std::mem::take(&mut self.fail_next_claim) {
+            return Err(std::io::Error::other("injected claim failure"));
+        }
+        Ok(self.inner.claim_next_mutation(request).await.unwrap())
+    }
+
+    async fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<bool, Self::Error> {
+        Ok(self
+            .inner
+            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .await
+            .unwrap())
+    }
+
+    async fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<bool, Self::Error> {
+        Ok(self
+            .inner
+            .complete_mutation(id, claim, entries)
+            .await
+            .unwrap())
+    }
+
+    async fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.inner.discard_mutation(id, claim).await.unwrap())
+    }
+
+    async fn clear(&mut self) -> Result<(), Self::Error> {
+        self.inner.clear().await.unwrap();
+        Ok(())
+    }
+}
 
 fn query_vars() -> serde_json::Map<String, Json> {
     let Json::Object(map) = json!({ "input": { "limit": 10 } }) else {
@@ -163,7 +278,7 @@ async fn claim_head(
 async fn durable_value(engine: &Engine<InMemoryStorage>) -> Option<String> {
     let records = engine
         .storage()
-        .get_batch(&[EntityKey(PROPERTY_KEY.to_string())])
+        .get_batch(&[EntityKey(PROPERTY_KEY.to_string().into())])
         .await
         .unwrap();
     let record = records.into_iter().next().flatten()?;
@@ -210,6 +325,208 @@ fn begin_persists_mutation_and_optimistic_layer() {
         let data = read_hit(&mut engine, None).await;
         assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
         assert_eq!(durable_value(&engine).await.as_deref(), Some("todo"));
+    });
+}
+
+#[test]
+fn enqueue_claims_new_mutation_when_queue_was_empty() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        let result = engine
+            .enqueue_optimistic_mutation(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 123,
+                },
+                MutationClaimRequest {
+                    owner: "runner".into(),
+                    now_ms: 123,
+                    lease_expires_at_ms: 1_123,
+                },
+            )
+            .await
+            .unwrap();
+
+        let InitialClaimOutcome::Claimed(claimed) = result.initial_claim else {
+            panic!("new strict queue head should be claimed")
+        };
+        assert_eq!(claimed.queued.id, result.transaction_id);
+        assert_eq!(claimed.queued.mutation.attempt_count, 1);
+    });
+}
+
+#[test]
+fn enqueue_claims_older_strict_head() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        let (older, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("older"),
+                    data: &mutation_response("Status", "older"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let result = engine
+            .enqueue_optimistic_mutation(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("new"),
+                    data: &mutation_response("Status", "new"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 2,
+                },
+                MutationClaimRequest {
+                    owner: "runner".into(),
+                    now_ms: 10,
+                    lease_expires_at_ms: 1_010,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(older < result.transaction_id);
+        let InitialClaimOutcome::Claimed(claimed) = result.initial_claim else {
+            panic!("older strict queue head should be claimed")
+        };
+        assert_eq!(claimed.queued.id, older);
+    });
+}
+
+#[test]
+fn enqueue_does_not_skip_a_leased_or_deferred_head() {
+    block_on(async {
+        for deferred in [false, true] {
+            let mut engine = engine_with_base("Status", "todo").await;
+            let (older, _) = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        query: MUTATION,
+                        operation_name: Some("SetEntityProperty"),
+                        variables: &mutation_vars("older"),
+                        data: &mutation_response("Status", "older"),
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap();
+            let (_, claim) = claim_head(&mut engine, "first-runner", 10).await;
+            if deferred {
+                engine
+                    .defer_optimistic_write(older, claim, 500, "offline".into())
+                    .await
+                    .unwrap();
+            }
+
+            let result = engine
+                .enqueue_optimistic_mutation(
+                    None,
+                    BeginOptimisticWrite {
+                        query: MUTATION,
+                        operation_name: Some("SetEntityProperty"),
+                        variables: &mutation_vars("new"),
+                        data: &mutation_response("Status", "new"),
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 20,
+                    },
+                    MutationClaimRequest {
+                        owner: "second-runner".into(),
+                        now_ms: 20,
+                        lease_expires_at_ms: 1_020,
+                    },
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(
+                result.initial_claim,
+                InitialClaimOutcome::NotRunnable
+            ));
+            assert_eq!(
+                engine.storage().load_mutation_queue().await.unwrap().len(),
+                2
+            );
+            let data = read_hit(&mut engine, None).await;
+            assert_eq!(property_of(&data)["value"]["stringValue"], json!("new"));
+        }
+    });
+}
+
+#[test]
+fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
+    block_on(async {
+        let mut engine = Engine::new(ClaimFailingStorage::new());
+        engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &soup_page("Status", "todo"),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let result = engine
+            .enqueue_optimistic_mutation(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("doing"),
+                    data: &mutation_response("Status", "doing"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 123,
+                },
+                MutationClaimRequest {
+                    owner: "runner".into(),
+                    now_ms: 123,
+                    lease_expires_at_ms: 1_123,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            result.initial_claim,
+            InitialClaimOutcome::Failed(EngineError::Storage(ref error))
+                if error.to_string() == "injected claim failure"
+        ));
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].id, result.transaction_id);
+        assert_eq!(queued[0].mutation.attempt_count, 0);
+        let data = match engine
+            .read_query(None, QUERY, Some("Soup"), &query_vars())
+            .await
+            .unwrap()
+        {
+            ReadResult::Hit { data } => data,
+            ReadResult::Miss => panic!("expected optimistic hit"),
+        };
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
     });
 }
 

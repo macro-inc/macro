@@ -109,9 +109,13 @@ pub(crate) async fn refresh_google_token(
 /// Response from exchanging a Google authorization code for tokens.
 pub struct GoogleExchangeTokenResponse {
     /// The refresh token.
+    #[serde(default)]
     pub refresh_token: String,
     /// The ID token.
     pub id_token: String,
+    /// The actual scopes granted by the user.
+    #[serde(default)]
+    pub scope: String,
 }
 
 #[derive(Debug, serde::Serialize)]

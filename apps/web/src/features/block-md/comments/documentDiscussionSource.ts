@@ -13,6 +13,7 @@ import type { CommentThread } from '@service-storage/generated/schemas/commentTh
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import { createMemo } from 'solid-js';
 import { URL_PARAMS } from '../constants';
+import { mdStore } from '../signal/markdownBlockData';
 import {
   discussionThreads,
   sortComments,
@@ -71,17 +72,40 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const createReplyFn = useCreateDiscussionReply();
   const editFn = useEditDiscussionComment();
   const deleteFn = useDeleteDiscussionComment();
+  const md = mdStore.get;
 
   const threads = createMemo(() =>
     (discussionThreads() ?? []).map(toViewThread)
   );
-  const targetCommentId = createMemo(() => urlParams.commentId() ?? null);
+  const targetRequest = createMemo(
+    () => {
+      const commentId = urlParams.commentId();
+      return commentId ? { commentId } : null;
+    },
+    undefined,
+    { equals: false }
+  );
+
+  const targetCommentId = createMemo(() => {
+    const request = targetRequest();
+    if (!request) return null;
+    const { commentId } = request;
+    if (!md.locationReady) return null;
+
+    const currentThreads = threads();
+    const hasDiscussionComment = currentThreads.some((thread) =>
+      thread.comments.some((comment) => comment.id === commentId)
+    );
+    return hasDiscussionComment ? commentId : null;
+  });
+  const targetRevision = () => targetRequest();
 
   return {
     threads,
     canEdit: canComment,
     currentUserId: userId,
     targetCommentId,
+    targetRevision,
     async createThread(text, mentions) {
       await createThreadFn(text, buildCommentMentions(mentions));
     },

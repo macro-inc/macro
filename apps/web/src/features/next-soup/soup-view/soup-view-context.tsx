@@ -24,7 +24,10 @@ import {
   type Query,
   type QueryStore,
 } from '@app/features/next-soup/filters/filter-store/query-store';
-import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import {
+  getViewPreset,
+  VIEW_TAB_PRESETS,
+} from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
@@ -49,8 +52,6 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -77,11 +78,10 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import { useReactiveSoupAstItemsQuery } from '@queries/soup/reactive-items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
-import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
+import { useIsTeamAdmin } from '@queries/team/teams';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
-import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
   batch,
@@ -248,6 +248,21 @@ const persistedQueryFor = (
   return isQueryState(saved) ? saved : saved[tabId];
 };
 
+/** Resolve a remembered tab id against the view's current tabs.
+ *
+ * Persisted ids outlive the tabs themselves: renaming a tab would otherwise
+ * restore the view onto an id no preset resolves, leaving it on a tab that no
+ * longer exists with no filters applied. Anything unrecognised falls back to
+ * the view's default.
+ */
+const resolveTabId = (
+  view: ListView,
+  remembered: string | undefined
+): string => {
+  const config = VIEW_TAB_PRESETS[view];
+  return remembered && remembered in config.tabs ? remembered : config.default;
+};
+
 const persistedPredicatesFor = (
   view: ListView,
   tabId: string
@@ -294,33 +309,12 @@ export const SoupViewContextProvider: FlowComponent<
   const queryClient = useQueryClient();
   const [filterPersistenceEnabled] = useSoupFilterPersistence();
 
-  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
-  const resolveTransport = () =>
-    useGraphqlSoupFF().enabled ? 'graphql' : undefined;
-
   const panel = useSplitPanelOrThrow();
 
   const activeListView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
     if (content.type !== 'component') return;
     return isListViewID(content.id) ? content.id : undefined;
-  });
-
-  const soupParams = createMemo(() => {
-    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
-
-    // Client-only sorts (priority, status) fall back to created_at for the API
-    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
-      ? (sortId as ApiSortMethod)
-      : 'created_at';
-
-    return {
-      // Mail views use a smaller page size
-      limit: activeListView() === 'mail' ? 30 : 100,
-      sort_method: sortMethod,
-    };
   });
 
   const initialEntryState = panel.handle.currentEntryState();
@@ -332,11 +326,13 @@ export const SoupViewContextProvider: FlowComponent<
     | undefined;
   const initialView = activeListView();
   const initialTab = initialView
-    ? ((initialEntryState?.['soup.tab'] as string | undefined) ??
-      (filterPersistenceEnabled()
-        ? persistedActiveTabs()[initialView]
-        : undefined) ??
-      VIEW_TAB_PRESETS[initialView].default)
+    ? resolveTabId(
+        initialView,
+        (initialEntryState?.['soup.tab'] as string | undefined) ??
+          (filterPersistenceEnabled()
+            ? persistedActiveTabs()[initialView]
+            : undefined)
+      )
     : undefined;
   const initialPersistedQuery =
     filterPersistenceEnabled() && initialView && initialTab
@@ -380,29 +376,9 @@ export const SoupViewContextProvider: FlowComponent<
   );
   onCleanup(predicatesCaptorTeardown);
 
-  const trimToFirstPage = () => {
-    const groupBy = serverGroupByField();
-
-    // Reactive urql path keeps its own page list (no-op when inactive or
-    // already on one page). Defined below; only invoked at runtime.
-    reactiveItemsQuery.trimToFirstPage();
-
-    queryClient.setQueryData(
-      soupKeys.astItems({
-        params: soupParams(),
-        body: soupBody(),
-        groupBy,
-        transport: resolveTransport(),
-      }).queryKey,
-      (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
-        if (!prev) return;
-        if ('pages' in prev) {
-          prev.pages.splice(1, prev.pages.length);
-          return prev;
-        }
-        return prev;
-      }
-    );
+  const resetToInitialPage = () => {
+    itemsQuery.resetToInitialPage();
+    groupQueries.resetToInitialPage();
   };
 
   // Keep filters per list view and tab so refreshing or returning to a tab
@@ -440,22 +416,22 @@ export const SoupViewContextProvider: FlowComponent<
   const queryFilters: QueryStore = {
     ...store,
     set: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.set(query);
       persistQueryFilters();
     },
     replace: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.replace(query);
       persistQueryFilters();
     },
     add: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.add(query);
       persistQueryFilters();
     },
     remove: (query) => {
-      trimToFirstPage();
+      resetToInitialPage();
       store.remove(query);
       persistQueryFilters();
     },
@@ -686,6 +662,37 @@ export const SoupViewContextProvider: FlowComponent<
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+  const isTeamAdmin = useIsTeamAdmin();
+
+  // Sits below `activeTab`/`userId` because the page direction comes from the
+  // active tab's preset, which some views resolve against user context.
+  const soupParams = createMemo(() => {
+    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
+
+    // Client-only sorts (priority, status) fall back to created_at for the API
+    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
+      ? (sortId as ApiSortMethod)
+      : 'created_at';
+
+    const view = activeListView();
+    // The direction belongs to what the tab means — Reminders' Active list
+    // reads soonest-first — not to the sort method, so the preset owns it.
+    // Omitted when absent so the server default (desc) applies and the query
+    // keys of every existing view stay byte-identical.
+    const sortDirection = view
+      ? getViewPreset(view, activeTab(), {
+          userId: userId(),
+          isTeamAdmin: isTeamAdmin(),
+        })?.sortDirection
+      : undefined;
+
+    return {
+      // Mail views use a smaller page size
+      limit: view === 'mail' ? 30 : 100,
+      sort_method: sortMethod,
+      ...(sortDirection ? { sort_direction: sortDirection } : {}),
+    };
+  });
 
   // Active deal-stage set (team-customized when present). Drives the
   // Customers view's stage grouping, stage filter and group labels.
@@ -935,45 +942,26 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
+    if (item.tag === 'calendarEvent') return false;
+
     return soup.predicates.test(
       mapApiSoupItemToEntity(item) as SoupEntity,
       getFilterContext()
     );
   };
 
-  // Reactive urql path (same `enable-graphql-soup` flag as the transport):
-  // the flat soup list subscribes to the GraphQL query directly, so
-  // normalized-cache pushes (optimistic property writes, sibling writes,
-  // other tabs) re-render without a TanStack invalidation round-trip.
-  // Grouped views and ASTs without a GraphQL translation stay on TanStack.
-  const reactiveEligible = () =>
-    useGraphqlSoupFF().enabled && !serverGroupByField();
-
-  const reactiveItemsQuery = useReactiveSoupAstItemsQuery(
-    () => ({ params: soupParams(), body: soupBody() }),
-    () => ({
-      enabled: enabled() && !search.isSearching() && reactiveEligible(),
-      showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
-    })
-  );
-
-  const reactiveActive = () =>
-    reactiveEligible() && reactiveItemsQuery.isSupported();
-
+  // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
+  // implementation keeps loaded pages subscribed to the normalized cache.
   const itemsQuery = useSoupAstItemsQuery(
-    () => {
-      const groupBy = serverGroupByField();
-      return {
-        params: soupParams(),
-        body: soupBody(),
-        groupBy,
-        transport: resolveTransport(),
-      };
-    },
+    () => ({
+      params: soupParams(),
+      body: soupBody(),
+      groupBy: serverGroupByField(),
+    }),
     () => {
       const view = activeListView();
       return {
-        enabled: enabled() && !search.isSearching() && !reactiveActive(),
+        enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
@@ -982,47 +970,21 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  // Reading `.data` on a query with no data yet suspends the nearest
-  // <Suspense> until the fetch settles. Branch on the loading state first
-  // so a cold initial soup call leaves the view shell rendered and only
-  // the list region waits on data.
+  // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
+  // Read loading first so REST fallback leaves the view shell rendered.
   const itemsQueryData = () =>
     itemsQuery.isLoading ? undefined : itemsQuery.data;
 
-  /**
-   * Unified soup items surface: the reactive urql query when active, the
-   * TanStack infinite query otherwise. Grouped data (`groups`/`itemsById`)
-   * only ever comes from the TanStack side — grouping is never reactive.
-   */
   const itemsSource = {
-    data: () =>
-      reactiveActive() ? reactiveItemsQuery.data() : itemsQueryData(),
-    isLoading: () =>
-      reactiveActive() ? reactiveItemsQuery.isLoading() : itemsQuery.isLoading,
-    isFetching: () =>
-      reactiveActive()
-        ? reactiveItemsQuery.isFetching()
-        : itemsQuery.isFetching,
-    isPlaceholderData: () =>
-      reactiveActive() ? false : itemsQuery.isPlaceholderData,
-    isFetchingNextPage: () =>
-      reactiveActive()
-        ? reactiveItemsQuery.isFetchingNextPage()
-        : itemsQuery.isFetchingNextPage,
-    isEnabled: () =>
-      reactiveActive()
-        ? enabled() && !search.isSearching()
-        : itemsQuery.isEnabled,
-    hasNextPage: () =>
-      reactiveActive()
-        ? reactiveItemsQuery.hasNextPage()
-        : itemsQuery.hasNextPage,
+    data: itemsQueryData,
+    isLoading: () => itemsQuery.isLoading,
+    isFetching: () => itemsQuery.isFetching,
+    isPlaceholderData: () => itemsQuery.isPlaceholderData,
+    isFetchingNextPage: () => itemsQuery.isFetchingNextPage,
+    isEnabled: () => itemsQuery.isEnabled,
+    hasNextPage: () => itemsQuery.hasNextPage,
     fetchNextPage: () => {
-      if (reactiveActive()) {
-        reactiveItemsQuery.fetchNextPage();
-      } else {
-        itemsQuery.fetchNextPage();
-      }
+      void itemsQuery.fetchNextPage();
     },
   };
 
@@ -1133,17 +1095,18 @@ export const SoupViewContextProvider: FlowComponent<
 
   const groupQueries = createGroupedSoupQueries({
     initialPage: createMemo(() => {
-      if (itemsQuery.isPlaceholderData) return;
+      if (itemsSource.isPlaceholderData()) return;
 
-      const groups = itemsQueryData()?.groups;
-      const items = itemsQueryData()?.itemsById;
+      const groups = itemsSource.data()?.groups;
+      const items = itemsSource.data()?.itemsById;
       if (!groups || !items) return;
       return { groups, items };
     }),
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
-    transport: resolveTransport,
+    graphqlReactive: () =>
+      itemsQuery.transport === 'graphql' && serverGroupByField() !== undefined,
     queryOptions: () => {
       const view = activeListView();
       return {
@@ -1236,7 +1199,7 @@ export const SoupViewContextProvider: FlowComponent<
     return '';
   };
 
-  const rows = createMemo((): SoupRow[] => {
+  const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsSource.data()?.groups;
 
@@ -1471,7 +1434,7 @@ export const SoupViewContextProvider: FlowComponent<
       refresh: async () => {
         if (!enabled()) return;
 
-        trimToFirstPage();
+        resetToInitialPage();
 
         await Promise.all([
           queryClient.invalidateQueries(
@@ -1480,15 +1443,16 @@ export const SoupViewContextProvider: FlowComponent<
             // instead of retracting as if the refresh succeeded.
             { throwOnError: true }
           ),
-          // The reactive urql page refetches from the network directly;
-          // it is outside the TanStack cache the invalidation reaches.
-          reactiveActive() ? reactiveItemsQuery.refresh() : Promise.resolve(),
+          // urql pages are outside the TanStack cache invalidation above.
+          itemsQuery.transport === 'graphql'
+            ? itemsQuery.refresh()
+            : Promise.resolve(),
           invalidateUserNotifications(),
         ]);
       },
     },
     items,
-    rows,
+    rows: soup.rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
     searchPaused: sourceSearchPaused,
@@ -1526,7 +1490,7 @@ export const SoupViewContextProvider: FlowComponent<
     <SoupViewContext.Provider value={context}>
       {props.children}
       <Suspense>
-        <SyncWithSoup soup={soup} rows={rows()} />
+        <SyncWithSoup soup={soup} rows={builtRows()} />
       </Suspense>
     </SoupViewContext.Provider>
   );

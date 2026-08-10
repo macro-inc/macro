@@ -44,7 +44,9 @@ import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useActiveCallQuery } from '@queries/call/call';
 import {
@@ -185,6 +187,12 @@ function NewTop(props: { channelId: string }) {
 }
 
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
+  // Every other block gets its hotkey scope from `BlockContainer`, which the
+  // channel block does not render — so `blockHotkeyScopeSignal` stayed empty
+  // here and `useBlockEntityCommands` registered nothing at all. Own the scope
+  // directly instead of adopting BlockContainer and its entity tracking.
+  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('channel');
+  blockHotkeyScopeSignal.set(hotkeyScope);
   useBlockEntityCommands();
 
   const splitPanel = useSplitPanelOrThrow();
@@ -428,6 +436,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           onHandled={() => setPendingJoinCall(false)}
         />
         <div
+          ref={attachHotkeys}
           class={cn(
             'h-full flex flex-col px-2 mobile:px-0',
             // The channel block is full-frame on mobile (messages scroll

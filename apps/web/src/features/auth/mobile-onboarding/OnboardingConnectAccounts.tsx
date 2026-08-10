@@ -111,7 +111,7 @@ export function OnboardingConnectAccounts() {
           <Button
             variant="contrast"
             size="lg"
-            class="ring ring-edge-muted"
+            class="border border-edge-muted"
             disabled={!isAuthenticated()}
             onClick={() => void addInbox()}
           >
@@ -129,7 +129,7 @@ export function OnboardingConnectAccounts() {
           <Button
             variant="contrast"
             size="lg"
-            class="ring ring-edge-muted"
+            class="border border-edge-muted"
             disabled={
               !isAuthenticated() || githubLinked() || initGithubLink.isPending
             }

@@ -32,7 +32,7 @@ nested model specifies otherwise.
 | `property.created` | A property definition is persisted. A newly created TAG definition from `ensure_tag_set` also emits this event; the get-existing path does not. | `property_definition_id`, `actor_user_id`, `owner`, `display_name`, `data_type`, `is_multi_select`, `specific_entity_type`, `created_at` |
 | `property.deleted` | A property definition is deleted. | `property_definition_id`, `actor_user_id`, `owner`, `display_name`, `data_type` |
 | `property_option.created` | An option is added to a SELECT or TAG definition. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
-| `property_option.updated` | An option is renamed, recolored, or reordered. The metadata is the full post-update state, not a delta. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
+| `property_option.updated` | An option is renamed, recolored, reordered, or moved to another definition by a tag promotion. The metadata is the full post-update state, not a delta, so `property_definition_id` is the definition that owns the option *after* the change. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
 | `property_option.deleted` | An option is deleted. `value` is the pre-delete snapshot. | `option_id`, `property_definition_id`, `actor_user_id`, `value` |
 | `entity_property.updated` | An entity value is set, replaced, attached with a null value, or changed by an option add/remove. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `value`, `updated_at` |
 | `entity_property.deleted` | One entity-property row is deleted. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id` |
@@ -116,6 +116,24 @@ Definition and option deletion have effects beyond the single event:
 Consumers maintaining derived state must apply these implications. Definition
 and entity records use different keys, so the lack of cross-key ordering also
 applies while handling these cascades.
+
+Sharing a personal label with a team (`POST /properties/tags/promote` and
+`POST /properties/tags/merge`) moves entity values between two TAG definitions
+in one transaction, and reports that as a label event plus one
+`entity_property.updated` per retagged entity:
+
+- A promotion keeps the option id and emits `property_option.updated` whose
+  `property_definition_id` is the *team* definition. An option changing its
+  owning definition is the only case where that field moves; consumers keyed on
+  the previous definition must re-read rather than assume it is stable.
+- A merge emits `property_option.deleted` for the retired personal option, with
+  the same "stripped from every entity value" implication as any option
+  deletion.
+- Both emit one `entity_property.updated` per affected entity, carrying the
+  entity's team-definition row. There is no event for the personal-definition
+  row the option was stripped from; the entity event is enough for consumers
+  that rebuild an entity's whole property set (`soup_realtime` and the search
+  properties indexer both do).
 
 Parent Task and Subtasks writes update reciprocal task relationships in the
 same transaction. Version 1 emits `entity_property.updated` only for the entity

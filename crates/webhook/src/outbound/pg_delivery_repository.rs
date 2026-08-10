@@ -40,6 +40,7 @@ struct PreparedDeliveryRow {
     next_attempt_at: Option<DateTime<Utc>>,
     webhook_id: String,
     workspace_id: String,
+    namespace: String,
     name: String,
     endpoint_url: String,
     signing_secret: String,
@@ -98,6 +99,7 @@ fn row_to_prepared_delivery(
         webhook: Webhook {
             id: row.webhook_id,
             workspace_id: row.workspace_id,
+            namespace: row.namespace,
             name: row.name,
             endpoint_url: row.endpoint_url,
             signing_secret: row.signing_secret,
@@ -396,6 +398,7 @@ impl WebhookDeliveryRepository for PgWebhookDeliveryRepository {
                 d.next_attempt_at,
                 w.id AS webhook_id,
                 w.workspace_id,
+                w.namespace,
                 w.name,
                 w.endpoint_url,
                 w.signing_secret,

@@ -20,6 +20,7 @@ import {
   LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import type { Span } from '@macro-inc/observability';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
@@ -35,6 +36,7 @@ import {
 import type { MarkdownData } from '../definition';
 import { HistoryProvider } from '../history/HistoryContext';
 import { OldOverlay } from '../history/OldOverlay';
+import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
@@ -51,16 +53,78 @@ export interface BlockMarkdownProps {
 }
 
 type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+type SnapshotResult = {
+  outcome: 'seeded' | 'discarded' | 'unavailable' | 'error';
+  bytes?: number;
+};
+
+const snapshotStepNames = {
+  optimistic: 'doc.snapshot.optimistic',
+  local: 'doc.snapshot.local-cache',
+  s3: 'doc.snapshot.s3-cache',
+  remote: 'doc.snapshot.remote-sync',
+} as const;
+
+type SnapshotSource = keyof typeof snapshotStepNames;
+
+function startSnapshotIngest(
+  parentSpan: Span | undefined,
+  source: SnapshotSource,
+  loroManager: MarkdownLoroManager,
+  ingest: () => Promise<SnapshotResult>
+): void {
+  parentSpan?.event('doc.snapshot.attempt', {
+    'snapshot.source': source,
+  });
+
+  const operation = parentSpan
+    ? parentSpan.span(snapshotStepNames[source], async (snapshotSpan) => {
+        snapshotSpan.setAttr('snapshot.source', source);
+        try {
+          const result = await ingest();
+          snapshotSpan.setAttr('outcome', result.outcome);
+          if (result.bytes !== undefined) {
+            snapshotSpan.setAttr('snapshot.bytes', result.bytes);
+          }
+          if (result.outcome === 'seeded') {
+            stampLoroSnapshotState(snapshotSpan, loroManager.doc);
+          } else if (result.outcome === 'error') {
+            snapshotSpan.error('snapshot ingestion failed');
+          }
+          return result;
+        } catch (error) {
+          snapshotSpan.error(error);
+          snapshotSpan.setAttr('outcome', 'error');
+          throw error;
+        }
+      })
+    : ingest();
+
+  void operation
+    .then(({ outcome, bytes }) => {
+      parentSpan?.event('doc.snapshot.result', {
+        'snapshot.source': source,
+        ...(bytes !== undefined && { 'snapshot.bytes': bytes }),
+        outcome,
+      });
+    })
+    .catch(() => {
+      parentSpan?.event('doc.snapshot.result', {
+        'snapshot.source': source,
+        outcome: 'error',
+      });
+    });
+}
 
 async function ingestLocalSnapshot(
   loroManager: MarkdownLoroManager,
   snapshotStore: IDBSnapshotStore<RawUpdate>,
   walStore: BrowserWALStore<RawUpdate>
-) {
+): Promise<SnapshotResult> {
   const localSnapshot = await snapshotStore.load();
-  if (!localSnapshot) return;
+  if (!localSnapshot) return { outcome: 'unavailable' };
   const walEntries = await walStore.getAll();
-  await loroManager.ingest({
+  const seeded = await loroManager.ingest({
     kind: 'local',
     snapshot: localSnapshot,
     walUpdates: walEntries.map((entry) => entry.update),
@@ -79,32 +143,47 @@ async function ingestLocalSnapshot(
     });
     await snapshotStore.save(snapshot);
   }
+  return {
+    outcome: seeded ? 'seeded' : 'discarded',
+    bytes: localSnapshot.length,
+  };
 }
 
+/**
+ * Ingest the sync-service initial sync. `discarded` means the snapshot
+ * arrived fine but lost the seed race.
+ */
 async function ingestRemoteSnapshot(
   loroManager: MarkdownLoroManager,
   doInitialSync: MarkdownData['doInitialSync']
-): Promise<boolean> {
+): Promise<SnapshotResult> {
   const sync = await doInitialSync();
   if (sync.isErr()) {
     console.error('Failed to receive initial sync', sync.error);
-    return loroManager.initialized;
+    return { outcome: 'error' };
   }
-  await loroManager.ingest({
+  const bytes = sync.value.snapshot.length;
+  const seeded = await loroManager.ingest({
     kind: 'dss',
     snapshot: sync.value.snapshot,
   });
-  return true;
+  return { outcome: seeded ? 'seeded' : 'discarded', bytes };
 }
 
 async function ingestS3Snapshot(
   loroManager: MarkdownLoroManager,
   blockId: string
-) {
+): Promise<SnapshotResult> {
   const result = await storageServiceClient.fetchCachedSnapshot(blockId);
-  if (result.isOk()) {
-    await loroManager.ingest({ kind: 's3', snapshot: result.value });
-  }
+  if (result.isErr()) return { outcome: 'unavailable' };
+  const seeded = await loroManager.ingest({
+    kind: 's3',
+    snapshot: result.value,
+  });
+  return {
+    outcome: seeded ? 'seeded' : 'discarded',
+    bytes: result.value.length,
+  };
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -142,17 +221,32 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       }
       setBlockError(null);
 
+      // optimistic is the "hard coded" snapshot like the golden one when you create a
+      // new document
+      const span = resumeDocumentSpan(blockId);
       if (optimisticSnapshot) {
-        loroManager.ingest({
-          kind: 'optimistic',
-          snapshot: optimisticSnapshot,
+        startSnapshotIngest(span, 'optimistic', loroManager, async () => {
+          const seeded = await loroManager.ingest({
+            kind: 'optimistic',
+            snapshot: optimisticSnapshot,
+          });
+          return {
+            outcome: seeded ? 'seeded' : 'discarded',
+            bytes: optimisticSnapshot.length,
+          };
         });
       }
 
       // First one wins automatically (loro manager takes care of ignoring the rest)
-      ingestLocalSnapshot(loroManager, snapshotStore, walStore);
-      ingestS3Snapshot(loroManager, blockId);
-      ingestRemoteSnapshot(loroManager, data.doInitialSync);
+      startSnapshotIngest(span, 'local', loroManager, () =>
+        ingestLocalSnapshot(loroManager, snapshotStore, walStore)
+      );
+      startSnapshotIngest(span, 's3', loroManager, () =>
+        ingestS3Snapshot(loroManager, blockId)
+      );
+      startSnapshotIngest(span, 'remote', loroManager, () =>
+        ingestRemoteSnapshot(loroManager, data.doInitialSync)
+      );
     })
   );
 

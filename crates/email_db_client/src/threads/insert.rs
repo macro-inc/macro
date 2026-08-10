@@ -8,7 +8,7 @@ use crate::{contacts, messages, parse};
 use models_email::email::db::address::UpsertedRecipients;
 use models_email::email::service::thread;
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
+use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
 
 /// inserts a thread and all of its messages into the database
@@ -45,7 +45,7 @@ pub async fn insert_thread_and_messages(
 
     let result = async {
         // Insert thread
-        let thread_id = insert_thread(&mut *tx, &service_thread, link_id).await?;
+        let thread_id = insert_thread(&mut tx, &service_thread, link_id).await?;
 
         // Insert all messages
         for mut message in service_thread.messages.clone() {
@@ -95,18 +95,20 @@ pub async fn insert_thread_and_messages(
 }
 
 /// inserts a thread object into the database using the provided transaction
-#[tracing::instrument(skip(executor, service_thread), err)]
-pub async fn insert_thread<'e, E>(
-    executor: E,
+///
+/// On conflict the update is skipped entirely when it would be a no-op
+/// (incoming `latest_inbound_message_ts` is NULL or unchanged), so redelivered
+/// backfill/sync work neither rewrites the row nor wipes a populated
+/// timestamp with NULL.
+#[tracing::instrument(skip(conn, service_thread), err)]
+pub async fn insert_thread(
+    conn: &mut PgConnection,
     service_thread: &thread::Thread,
     link_id: Uuid,
-) -> anyhow::Result<Uuid>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<Uuid> {
     let db_thread = parse::service_to_db::map_service_thread_to_db(service_thread, link_id);
 
-    let result = sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read, latest_inbound_message_ts,
                              latest_outbound_message_ts, latest_non_spam_message_ts)
@@ -115,6 +117,9 @@ where
         SET
             latest_inbound_message_ts = EXCLUDED.latest_inbound_message_ts,
             updated_at = NOW()
+        WHERE
+            EXCLUDED.latest_inbound_message_ts IS NOT NULL AND
+            email_threads.latest_inbound_message_ts IS DISTINCT FROM EXCLUDED.latest_inbound_message_ts
         RETURNING id
         "#,
         db_thread.id,
@@ -126,22 +131,35 @@ where
         db_thread.latest_outbound_message_ts,
         db_thread.latest_non_spam_message_ts,
     )
-        .fetch_one(executor)
+        .fetch_optional(&mut *conn)
         .await?;
 
-    Ok(result.id)
+    if let Some(id) = result {
+        return Ok(id);
+    }
+
+    // The conflicting row already holds this data; fetch its id.
+    let existing_id = sqlx::query_scalar!(
+        r#"
+        SELECT id FROM email_threads
+        WHERE link_id = $1 AND provider_id = $2
+        "#,
+        db_thread.link_id,
+        db_thread.provider_id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(existing_id)
 }
 
 /// inserts a thread object into the database that has no metadata or rizz
-#[tracing::instrument(skip(executor), err)]
-pub async fn insert_blank_thread<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn insert_blank_thread(
+    pool: &PgPool,
     thread_provider_id: &str,
     link_id: Uuid,
-) -> anyhow::Result<Uuid>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<Uuid> {
     let thread = thread::Thread {
         db_id: macro_uuid::generate_uuid_v7(),
         provider_id: Some(thread_provider_id.to_string()),
@@ -156,5 +174,6 @@ where
         messages: vec![],
     };
 
-    insert_thread(executor, &thread, link_id).await
+    let mut conn = pool.acquire().await?;
+    insert_thread(&mut conn, &thread, link_id).await
 }

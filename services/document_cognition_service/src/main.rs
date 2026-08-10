@@ -103,7 +103,6 @@ async fn main() -> anyhow::Result<()> {
     let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let ai_projection_queue = macro_queues::AiProjectionQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
@@ -111,7 +110,6 @@ async fn main() -> anyhow::Result<()> {
         .chat_delete_queue(&chat_delete_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .gmail_ops_queue(&gmail_ops_queue)
-        .search_event_queue(&search_event_queue)
         .ai_projection_queue(&ai_projection_queue);
 
     let internal_api_key = config.internal_api_key.to_string();
@@ -260,6 +258,7 @@ async fn main() -> anyhow::Result<()> {
         CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     tracing::info!("initialized soup service");
@@ -377,20 +376,21 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized properties tool context");
 
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            EmailServiceImpl::new(
-                EmailPgRepo::new(db.clone()),
-                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-                sqs_client.clone(),
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(db.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
@@ -484,6 +484,15 @@ async fn main() -> anyhow::Result<()> {
     // replicas, where a boot-time sweep would clobber other instances' jobs.
     tracing::info!("initialized import service");
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -499,8 +508,13 @@ async fn main() -> anyhow::Result<()> {
         ),
         chat_tool_context,
         channel_tool_context,
+        project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
+        skill_tool_context: ai_tools::build_skill_tool_context(
+            search_service_client.clone(),
+            soup_service.clone(),
+        ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder,
@@ -586,18 +600,19 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_redirect_uri = format!(
-        "{}/mcp/servers/auth/callback",
-        DocumentCognitionServiceUrl::new()?,
+    let mcp_public_url = DocumentCognitionServiceUrl::new()?;
+    let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
+        format!("{mcp_public_url}/mcp/servers/auth/client-metadata"),
+        format!("{mcp_public_url}/mcp/servers/auth/callback"),
     );
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
     let mcp_pre_registered =
         mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
-    let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+    let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
-        mcp_redirect_uri,
+        mcp_client_metadata.clone(),
         mcp_pre_registered,
     );
     // The moment a connector finishes OAuth, reconcile onboarding for that
@@ -620,6 +635,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_server_repo,
         mcp_oauth,
         authorization_state.clone(),
+        mcp_client_metadata,
     )
     .with_auth_completed_hook(mcp_auth_hook);
 

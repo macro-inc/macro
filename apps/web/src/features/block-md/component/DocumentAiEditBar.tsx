@@ -24,10 +24,11 @@ export function DocumentAiEditBar(props: { documentId: string }) {
   const [focused, setFocused] = createSignal(false);
   const [prompt, setPrompt] = createSignal('');
 
-  const editor = buildChatEditor();
+  let editor = buildChatEditor();
 
   const collapse = () => {
     setExpanded(false);
+    setPrompt('');
     md.editor?.focus();
   };
 
@@ -49,16 +50,25 @@ export function DocumentAiEditBar(props: { documentId: string }) {
       .finally(() => setEditing(false));
   };
 
-  editor
-    .onEnter(() => {
-      submit();
-      return true;
-    })
-    .onEscape(() => {
-      collapse();
-      return true;
-    })
-    .onChange((markdown) => setPrompt(markdown));
+  const configureEditor = () =>
+    buildChatEditor()
+      .onEnter(() => {
+        submit();
+        return true;
+      })
+      .onEscape(() => {
+        collapse();
+        return true;
+      })
+      .onChange((markdown) => setPrompt(markdown));
+
+  editor = configureEditor();
+
+  const expand = () => {
+    editor = configureEditor();
+    setExpanded(true);
+    requestAnimationFrame(() => editor.controls.focus());
+  };
 
   return (
     <div class="flex justify-end">
@@ -77,9 +87,10 @@ export function DocumentAiEditBar(props: { documentId: string }) {
         when={expanded()}
         fallback={
           <Button
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation();
               if (editing()) cancelAiEdit(props.documentId);
-              else setExpanded(true);
+              else expand();
             }}
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
@@ -88,7 +99,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             variant="ghost"
             size="sm"
             depth={2}
-            class="gap-1.5 rounded-full px-2.5 ring ring-edge-muted"
+            class="gap-1.5 rounded-full border border-edge-muted px-2.5"
           >
             <span
               class="flex size-4 shrink-0 items-center justify-center"
@@ -121,7 +132,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
         >
           <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
-              <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center text-accent">
+              <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />
               </span>
               <div class="min-w-0 grow text-sm text-ink">

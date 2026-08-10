@@ -43,6 +43,10 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
+import {
+  type PriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from './PriorityCollapseOverflowSensor';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -64,6 +68,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   }
 
   if (data.type === 'foreign') return undefined;
+
+  // A reminder has no block of its own — it is opened through the entity it
+  // references, which the caller navigates to instead.
+  if (data.type === 'reminder') return undefined;
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
@@ -121,7 +129,9 @@ function SidebarExpandButton() {
     <div
       class={cn(
         'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible() ? 'w-8 opacity-100 mr-1' : 'w-0 opacity-0 mr-0'
+        visible()
+          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
+          : 'w-0 opacity-0 mr-0'
       )}
       aria-hidden={!visible()}
     >
@@ -245,7 +255,7 @@ function SoupNavigationButtons() {
   });
 
   const navigate = (offset: number) => {
-    const next = soup.navigate.by(offset);
+    const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
     void openEntityInSplitFromUnifiedList(next.row.original, {
@@ -426,7 +436,10 @@ function SplitHeaderContextMenu(props: ParentProps) {
   );
 }
 
-export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
+export function SplitHeader(props: {
+  ref: Setter<HTMLDivElement | null>;
+  collapseController: PriorityCollapseController;
+}) {
   const panel = useContext(SplitPanelContext);
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
@@ -501,7 +514,10 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             </Portal>
           )}
         </Show>
-        <div class="absolute inset-0 flex justify-start items-center mobile:px-(--mobile-chrome-gutter) mobile:gap-2">
+        <div
+          class="absolute inset-0 flex justify-start items-center mobile:px-(--mobile-chrome-gutter) mobile:gap-2"
+          ref={props.collapseController.setRow}
+        >
           <Show
             when={isMobile()}
             fallback={
@@ -528,10 +544,17 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
             </HeaderIsland>
           </Show>
 
-          <div
-            class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5 mobile:pl-0 mobile:gap-2"
-            ref={(ref) => {
-              panel.layoutRefs.headerLeft = ref;
+          {/* On mobile nothing clips this region (islands float over the
+              panel), so the max-content element is capped at the sensor's
+              width to let shrinkable islands truncate long titles instead of
+              painting off-screen. */}
+          <PriorityCollapseOverflowSensor
+            controller={props.collapseController}
+            truncateAsLastResort
+            class="relative min-w-0 h-full shrink overflow-hidden mobile:overflow-visible"
+            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2 mobile:max-w-full"
+            contentRef={(element) => {
+              panel.layoutRefs.headerLeft = element;
             }}
           />
 

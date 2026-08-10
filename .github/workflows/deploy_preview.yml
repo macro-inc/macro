@@ -42,8 +42,6 @@ jobs:
     - name: Build
       run: just build-dev
       env:
-        VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
-        VITE_DD_HASH: ${{ github.sha }}
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
@@ -85,6 +83,9 @@ jobs:
           --preview-id ${{ steps.preview-id.outputs.id }} \
           --sha ${{ github.sha }}
       working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true

@@ -356,6 +356,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="snippet" size="xs" />,
       },
       {
+        id: 'doc-skill',
+        label: 'Skills',
+        icon: () => <EntityIcon targetType="skill" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="files" size="xs" />,
@@ -385,6 +390,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   channels: [],
   calls: [],
   folders: [],
+  // The two tabs already split reminders on the only axis they have; there is
+  // nothing further to refine by.
+  reminders: [],
   search: [],
 };
 
@@ -486,6 +494,8 @@ interface UnifiedFilterDropdownProps {
   customTrigger?: JSX.Element;
   /** Hide the default trigger entirely (useful when controlling open state externally) */
   hideTrigger?: boolean;
+  /** Hide the default trigger's text label while retaining its tooltip. */
+  hideLabel?: boolean;
 }
 
 const READ_FILTER_OPTIONS: { id: ReadFilter; label: string }[] = [
@@ -879,9 +889,15 @@ export const UnifiedFilterDropdown = (
             <Match when={props.customTrigger}>{props.customTrigger}</Match>
             <Match when={true}>
               <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
-                <Dropdown.Trigger depth={2} class="bg-surface">
+                <Dropdown.Trigger
+                  depth={2}
+                  class="bg-surface"
+                  aria-label={props.hideLabel ? 'Filter' : undefined}
+                >
                   <FilterIcon />
-                  <span>Filter</span>
+                  <Show when={!props.hideLabel}>
+                    <span>Filter</span>
+                  </Show>
                 </Dropdown.Trigger>
               </Tooltip>
             </Match>

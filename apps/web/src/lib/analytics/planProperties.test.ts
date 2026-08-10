@@ -15,21 +15,19 @@ describe('getPlanAnalyticsProperties', () => {
     });
   });
 
-  it.each([
-    'inactive',
-    'past_due',
-    'canceled',
-    undefined,
-  ])('%s does not grant premium access', (status) => {
-    expect(getPlanAnalyticsProperties(status)).toEqual({
-      person: {
-        plan_tier: 'free',
-        has_paid_access: false,
-      },
-      event: {
-        plan_tier_at_event: 'free',
-        has_paid_access_at_event: false,
-      },
-    });
-  });
+  it.each(['inactive', 'past_due', 'canceled', undefined])(
+    '%s does not grant premium access',
+    (status) => {
+      expect(getPlanAnalyticsProperties(status)).toEqual({
+        person: {
+          plan_tier: 'free',
+          has_paid_access: false,
+        },
+        event: {
+          plan_tier_at_event: 'free',
+          has_paid_access_at_event: false,
+        },
+      });
+    }
+  );
 });

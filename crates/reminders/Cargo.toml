@@ -1,0 +1,59 @@
+[package]
+edition = "2024"
+name = "reminders"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# The queue worker. Transport-agnostic: it drives the domain through the
+# dispatch ports, so it needs an async runtime but no AWS SDK.
+dispatch = ["dep:serde_json", "dep:tokio", "dep:tokio-util", "ports"]
+# The worker plus the SQS adapter that backs it.
+dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch", "outbound"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
+notify = ["dep:model_notifications", "dep:notification", "outbound"]
+outbound = ["ports"]
+ports = ["dep:entity_access", "dep:tracing"]
+postgres = ["dep:macro_uuid", "dep:sqlx", "outbound"]
+
+[dependencies]
+aws-sdk-sqs = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+chrono-tz = { workspace = true }
+cron = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+model-entity = { path = "../model-entity" }
+rootcause = { workspace = true }
+model-error-response = { path = "../model-error-response", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+notification = { path = "../notification", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["macros", "time"] }
+tokio-util = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

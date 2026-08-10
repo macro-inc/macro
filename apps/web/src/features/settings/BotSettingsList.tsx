@@ -12,6 +12,8 @@ import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 function BotSettingsRow(props: { bot: Bot; onOpen: (botId: string) => void }) {
   const channelsQuery = useBotChannelsQuery(() => props.bot.id);
   const channels = () => channelsQuery.data ?? [];
+  const ownerLabel = () =>
+    props.bot.owner?.type === 'team' ? 'Team' : 'Personal';
 
   const channelSummary = () => {
     if (channelsQuery.isLoading) return 'Loading channels…';
@@ -30,12 +32,15 @@ function BotSettingsRow(props: { bot: Bot; onOpen: (botId: string) => void }) {
     >
       <BotAvatar bot={props.bot} size="lg" />
       <div class="min-w-0 flex-1">
-        <div class="flex min-w-0 items-baseline gap-2">
+        <div class="flex min-w-0 items-center gap-2">
           <span class="truncate text-sm font-medium text-ink">
             {props.bot.name}
           </span>
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.bot.handle}
+          </span>
+          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 font-mono text-xxs font-medium uppercase text-ink-extra-muted">
+            {ownerLabel()}
           </span>
         </div>
         <div class="mt-0.5 truncate text-xs text-ink-muted">

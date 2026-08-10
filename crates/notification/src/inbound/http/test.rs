@@ -91,6 +91,14 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
+    fn update_notifications_and_return(
+        &self,
+        _req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
+    {
+        async { unreachable!("should not be called") }
+    }
+
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
@@ -158,6 +166,7 @@ impl NotificationReader for AuthenticationTestService {
 
     fn unregister_device(
         &self,
+        _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
     ) -> impl Future<Output = Result<(), Report>> + Send {
@@ -564,6 +573,14 @@ impl NotificationReader for PresignedTestService {
         async { unreachable!() }
     }
 
+    fn update_notifications_and_return(
+        &self,
+        _req: UpdateNotificationsRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
+    {
+        async { unreachable!() }
+    }
+
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
@@ -631,6 +648,7 @@ impl NotificationReader for PresignedTestService {
 
     fn unregister_device(
         &self,
+        _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
     ) -> impl Future<Output = Result<(), Report>> + Send {

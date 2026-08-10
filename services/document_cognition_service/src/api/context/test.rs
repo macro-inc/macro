@@ -194,6 +194,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     let ingress_queue = SqsQueue::new(
@@ -296,22 +297,23 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service.clone(),
     );
 
+    let user_email_service = Arc::new(
+        email::domain::service::EmailServiceImpl::new(
+            email::outbound::EmailPgRepo::new(pool.clone()),
+            frecency::domain::services::FrecencyQueryServiceImpl::new(
+                frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
+            ),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            email::domain::service::EmailServiceImpl::new(
-                email::outbound::EmailPgRepo::new(pool.clone()),
-                frecency::domain::services::FrecencyQueryServiceImpl::new(
-                    frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
-                ),
-                sqs_client.clone(),
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(pool.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
     );
@@ -342,6 +344,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -358,8 +369,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
         ),
+        project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
+        skill_tool_context: ai_tools::build_skill_tool_context(
+            search_service_client.clone(),
+            soup_service.clone(),
+        ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
         recorder: ai_usage::pg_recorder(pool.clone()),
@@ -534,13 +550,22 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
             let mcp_state_store =
                 mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
-            let mcp_oauth = mcp_client::domain::service::OAuthService::new(
+            let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
+                "http://localhost/mcp/servers/auth/client-metadata".to_string(),
+                "http://localhost/mcp/servers/auth/callback".to_string(),
+            );
+            let mcp_oauth = mcp_client::outbound::oauth::OAuthService::new(
                 mcp_repo.clone(),
                 mcp_state_store,
-                "http://localhost/mcp/servers/auth/callback".to_string(),
+                client_metadata.clone(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
-            mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth, authorization_state)
+            mcp_client::inbound::McpRouterState::new(
+                mcp_repo,
+                mcp_oauth,
+                authorization_state,
+                client_metadata,
+            )
         },
         import_service: import_service.clone(),
         onboarding_service,

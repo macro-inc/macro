@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_graphql::Context;
 use axum::extract::FromRef;
@@ -13,14 +13,21 @@ use entity_access::{
 };
 use futures::Stream;
 use graphql_common::{extract_part, require_authorized_user};
+use graphql_email::EmailThreadMutationOutput;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
 use soup_realtime::domain::ports::SoupRealtimeSubscriptionService;
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    objects::{GroupedSoup, SoupEntityEdges, SoupPage, SoupPatch},
+    loaders::SoupItemDataLoader,
+    objects::{
+        GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage,
+        SoupPatch,
+    },
 };
 
 /// Subscribe to realtime Soup updates for the authenticated user.
@@ -75,6 +82,51 @@ where
     Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
     ))
+}
+
+/// Resolve one email thread through the existing user-scoped Soup item loader.
+///
+/// A missing or inaccessible thread is represented as `None` by the loader's
+/// filtered Soup request.
+pub async fn resolve_soup_email_thread<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    thread_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupEmailThread<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    let entity = EntityType::EmailThread.with_entity_string(thread_id.to_string());
+    let Some(item) = loader.load_one((user_id, entity)).await? else {
+        return Ok(None);
+    };
+
+    match GraphqlSoupEntity::<Edges>::new(item) {
+        GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-email entity for an email-thread request",
+        )),
+    }
+}
+
+/// Mutation-output adapter that reloads the canonical Soup email-thread object.
+pub struct SoupEmailThreadMutationOutput<Edges>(PhantomData<fn() -> Edges>);
+
+impl<Edges> EmailThreadMutationOutput for SoupEmailThreadMutationOutput<Edges>
+where
+    Edges: SoupEntityEdges,
+{
+    type Thread = GraphqlSoupEmailThread<Edges>;
+
+    fn load_email_thread<'ctx>(
+        ctx: &'ctx Context<'_>,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
+    {
+        Box::pin(resolve_soup_email_thread::<Edges>(ctx, user_id, thread_id))
+    }
 }
 
 /// Resolve a page of Soup items for the authenticated user: runs the lazy

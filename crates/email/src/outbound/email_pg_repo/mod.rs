@@ -1,11 +1,12 @@
 use crate::domain::{
     models::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel,
-        MessageRow, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage,
-        SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        EmailFilter, EmailInboxDetails, EmailThreadMetadata, EmailThreadPreview, Label, Link,
+        LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+        PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow,
+        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
-    ports::{EmailRepo, LinkEmailSettings, RecipientsByMessageId},
+    ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -24,6 +25,7 @@ mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod settings;
 mod thread;
 
 #[cfg(test)]
@@ -55,17 +57,39 @@ impl EmailPgRepo {
     }
 }
 
+impl EmailUserRepo for EmailPgRepo {
+    async fn user_accessible_inboxes(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Link>, EmailErr> {
+        link::inboxes_for_macro_id(&self.pool, macro_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_labels_for_link(&self, link_id: Uuid) -> Result<Vec<LinkLabel>, EmailErr> {
+        label::list_labels_by_link_id(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+
+    async fn user_inbox_details(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<EmailInboxDetails>, EmailErr> {
+        link::inbox_details_for_macro_id(&self.pool, &macro_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
+}
+
 impl EmailRepo for EmailPgRepo {
     type Err = sqlx::Error;
 
     async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
-        let settings = email_db_client::settings::fetch_settings(&self.pool, link_id)
+        settings::fetch_email_settings(&self.pool, link_id)
             .await
-            .map_err(EmailErr::RepoErr)?;
-        Ok(LinkEmailSettings {
-            signature: settings.signature,
-            signature_on_replies_forwards: settings.signature_on_replies_forwards,
-        })
+            .map_err(|error| EmailErr::RepoErr(error.into()))
     }
 
     async fn previews_for_view_cursor(
@@ -125,6 +149,13 @@ impl EmailRepo for EmailPgRepo {
 
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
         thread::thread_by_id(&self.pool, thread_id).await
+    }
+
+    async fn thread_metadata_by_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<EmailThreadMetadata>, Self::Err> {
+        thread::thread_metadata_by_ids(&self.pool, thread_ids).await
     }
 
     async fn messages_by_thread_id_paginated(
@@ -297,6 +328,15 @@ impl EmailRepo for EmailPgRepo {
         is_read: bool,
     ) -> Result<(), Self::Err> {
         thread::update_thread_read_status(&self.pool, thread_id, link_id, is_read).await
+    }
+
+    async fn upsert_thread_user_history(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        let mut connection = self.pool.acquire().await?;
+        thread::upsert_user_history(&mut connection, link_id, thread_id).await
     }
 
     async fn update_message_starred_status_batch(

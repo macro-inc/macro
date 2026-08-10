@@ -1,5 +1,5 @@
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleHeaderItem';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { HeaderTitleMenu } from '@components/app/split-layout/components/HeaderTitleMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -95,7 +95,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
         fallback={
           <>
             <HeaderIsland class="shrink">
-              <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
+              <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
                 <TopIcon
                   channelType={props.channelType}
                   participants={props.participants}
@@ -113,25 +113,19 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
                 id="channel-tabs"
                 priority={1}
                 containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
-                expanded={() => (
+              >
+                {(isCollapsed) => (
                   <TabsInset
-                    list={[...(props.tabs ?? [])]}
+                    list={
+                      isCollapsed() ? iconTabList() : [...(props.tabs ?? [])]
+                    }
                     value={props.activeTab}
                     onChange={(value) =>
                       props.onTabChange?.(value as ChannelTabId)
                     }
                   />
                 )}
-                collapsed={() => (
-                  <TabsInset
-                    list={iconTabList()}
-                    value={props.activeTab}
-                    onChange={(value) =>
-                      props.onTabChange?.(value as ChannelTabId)
-                    }
-                  />
-                )}
-              />
+              </CollapsibleHeaderItem>
             </Show>
           </>
         }

@@ -1,10 +1,11 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailThreadPreview, EnrichedEmailThreadPreview,
-    GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-    ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType,
-    ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
+    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
+    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
+    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage,
+    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -47,6 +48,30 @@ pub struct LinkEmailSettings {
     pub signature: Option<String>,
     /// Whether the signature should be added on replies and forwards.
     pub signature_on_replies_forwards: bool,
+}
+
+/// Outbound repository capabilities for authenticated user email catalogs.
+///
+/// The port returns persisted facts only. Accessible-inbox aggregation and
+/// synchronization-status policy remain in the email domain service.
+pub trait EmailUserRepo: Send + Sync + 'static {
+    /// Resolve every owned or delegated inbox accessible to `macro_id`.
+    fn user_accessible_inboxes(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
+
+    /// Fetch all labels belonging to one already-authorized inbox.
+    fn user_labels_for_link(
+        &self,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<LinkLabel>, EmailErr>> + Send;
+
+    /// Fetch enriched persisted facts for every owned or delegated inbox.
+    fn user_inbox_details(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<EmailInboxDetails>, EmailErr>> + Send;
 }
 
 pub trait EmailRepo: Send + Sync + 'static {
@@ -104,6 +129,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<ThreadRow>, Self::Err>> + Send;
+
+    /// Fetch canonical metadata for a batch of thread IDs.
+    fn thread_metadata_by_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EmailThreadMetadata>, Self::Err>> + Send;
 
     /// Fetch paginated messages for a thread, ordered by internal_date_ts descending.
     fn messages_by_thread_id_paginated(
@@ -260,6 +291,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         is_read: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Record that the user viewed a thread.
+    fn upsert_thread_user_history(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the starred status for a batch of messages, verified by link_id.
     fn update_message_starred_status_batch(
         &self,
@@ -347,6 +385,15 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     > + Send;
 }
 
+/// Read-only domain service used to hydrate canonical email-thread metadata edges.
+pub trait EmailThreadMetadataService: Send + Sync + 'static {
+    /// Fetch canonical metadata for authorized email threads in one batch.
+    fn get_email_thread_metadata(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
+}
+
 /// Read-only domain service used to hydrate lightweight email content edges.
 pub trait EmailContentService: Send + Sync + 'static {
     /// Fetch the newest non-draft parsed content message for each authorized thread.
@@ -354,6 +401,28 @@ pub trait EmailContentService: Send + Sync + 'static {
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
+
+    /// Fetch the newest non-draft fully hydrated message for each authorized thread.
+    fn get_latest_messages_full(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Message>, EmailErr>> + Send;
+
+    /// Fetch one page of parsed messages for an authorized thread.
+    fn get_messages_parsed(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<Vec<ParsedMessage>>, EmailErr>> + Send;
+
+    /// Fetch one page of fully hydrated messages for an authorized thread.
+    fn get_messages_full(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<Vec<Message>>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -373,6 +442,21 @@ impl<T: EmailService> EmailPreviewServiceReadOnly for ReadonlyEmailPreviewAdapte
     > + Send {
         EmailService::get_email_thread_previews(&self.0, req)
     }
+}
+
+/// User-scoped read operations consumed by email inbound adapters.
+pub trait EmailUserService: Send + Sync + 'static {
+    /// List labels across every owned or delegated inbox accessible to the user.
+    fn get_user_email_labels(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<LinkLabel>, EmailErr>> + Send;
+
+    /// List enriched owned or delegated email links accessible to the user.
+    fn get_user_email_links(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<UserEmailLink>, EmailErr>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {
@@ -465,6 +549,26 @@ pub trait EmailService: Send + Sync + 'static {
         label_id: Uuid,
         add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send;
+
+    /// Mark a caller-accessible thread as seen and read.
+    fn mark_thread_seen(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
+
+    /// Add or remove a label from a caller-accessible thread.
+    fn update_thread_labels_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+        _label_id: Uuid,
+        _add: bool,
+    ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send {
+        async { Err(no_op_email_err()) }
+    }
 
     /// Update the project assignment for a thread. Returns the old project_id.
     ///
@@ -570,6 +674,22 @@ pub struct NoOpEmailService;
 
 fn no_op_email_err() -> EmailErr {
     EmailErr::RepoErr(anyhow::anyhow!("no-op email service"))
+}
+
+impl EmailUserService for NoOpEmailService {
+    async fn get_user_email_labels(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<LinkLabel>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_user_email_links(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<UserEmailLink>, EmailErr> {
+        Err(no_op_email_err())
+    }
 }
 
 impl EmailService for NoOpEmailService {
@@ -686,11 +806,45 @@ impl EmailService for NoOpEmailService {
     }
 }
 
+impl EmailThreadMetadataService for NoOpEmailService {
+    async fn get_email_thread_metadata(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
 impl EmailContentService for NoOpEmailService {
     async fn get_latest_messages_parsed(
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_latest_messages_full(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, Message>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_messages_parsed(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_messages_full(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Vec<Message>>, EmailErr> {
         Err(no_op_email_err())
     }
 }

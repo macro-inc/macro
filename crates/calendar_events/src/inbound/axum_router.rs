@@ -1,0 +1,266 @@
+//! Axum router for calendar occurrence queries.
+
+#[cfg(test)]
+mod test;
+
+use std::sync::Arc;
+
+use axum::{
+    Json, Router,
+    extract::{FromRef, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+};
+use models_pagination::Base64Str;
+use serde::{Deserialize, Serialize};
+
+use crate::domain::{
+    models::{
+        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+        OccurrenceRange,
+    },
+    ports::CalendarOccurrenceService,
+    service::CalendarValidationError,
+};
+
+/// Router state for authenticated calendar occurrence queries.
+pub struct CalendarRouterState<S, Auth> {
+    service: Arc<S>,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<S, Auth> Clone for CalendarRouterState<S, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: Arc::clone(&self.service),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<S, Auth> CalendarRouterState<S, Auth> {
+    /// Create router state from a shared calendar service and authorization state.
+    pub fn new(service: Arc<S>, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+        Self {
+            service,
+            authorization_state,
+        }
+    }
+}
+
+impl<S, Auth> FromRef<CalendarRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CalendarRouterState<S, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the authenticated calendar occurrence router.
+pub fn calendar_router<S, Auth, T>(state: CalendarRouterState<S, Auth>) -> Router<T>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+    T: Send + Sync + 'static,
+{
+    Router::new()
+        .route("/calendar-events", get(list_occurrences::<S, Auth>))
+        .route("/calendar-events/", get(list_occurrences::<S, Auth>))
+        .with_state(state)
+}
+
+/// Query parameters for a calendar occurrence viewport.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarOccurrenceQuery {
+    /// Inclusive UTC viewport start.
+    start: DateTime<Utc>,
+    /// Exclusive UTC viewport end.
+    end: DateTime<Utc>,
+    /// Inclusive local date boundary for all-day events.
+    start_date: Option<NaiveDate>,
+    /// Exclusive local date boundary for all-day events.
+    end_date: Option<NaiveDate>,
+    /// Maximum number of occurrences, from 1 through 2,000.
+    #[param(minimum = 1, maximum = 2000)]
+    limit: Option<u16>,
+    /// Opaque continuation cursor returned by the previous page.
+    cursor: Option<String>,
+}
+
+/// One materialized occurrence paired with its stable calendar event entity.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarOccurrenceItem {
+    event: CalendarEvent,
+    occurrence: CalendarOccurrence,
+}
+
+/// Paginated calendar occurrence viewport response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarOccurrenceResponse {
+    items: Vec<CalendarOccurrenceItem>,
+    has_more: bool,
+    next_cursor: Option<String>,
+    /// Aggregate ingestion state; clients render a skeleton while `syncing`.
+    sync_status: CalendarSyncStatus,
+}
+
+/// HTTP error returned by the calendar occurrence adapter.
+#[derive(Debug)]
+pub struct CalendarApiError {
+    status: StatusCode,
+    message: &'static str,
+}
+
+impl std::fmt::Display for CalendarApiError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message)
+    }
+}
+
+impl IntoResponse for CalendarApiError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(serde_json::json!({ "message": self.message })),
+        )
+            .into_response()
+    }
+}
+
+/// Return calendar occurrences visible to the authenticated requester.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events",
+    tag = "calendar_events",
+    params(CalendarOccurrenceQuery),
+    responses(
+        (status = 200, description = "Calendar occurrences in the requested viewport", body = CalendarOccurrenceResponse),
+        (status = 400, description = "Invalid or unsupported calendar viewport"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn list_occurrences<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<CalendarOccurrenceQuery>,
+) -> Result<Json<CalendarOccurrenceResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let default_end_date = default_end_date(query.end);
+    let range = OccurrenceRange {
+        starts_at: query.start,
+        ends_at: query.end,
+        start_date: query.start_date.unwrap_or_else(|| query.start.date_naive()),
+        end_date: query
+            .end_date
+            .or(default_end_date)
+            .ok_or(CalendarApiError {
+                status: StatusCode::BAD_REQUEST,
+                message: "calendar end is outside the supported date range",
+            })?,
+    };
+    let (limit, repository_limit) = query_limits(query.limit)?;
+    let cursor = decode_cursor(query.cursor)?;
+    let mut occurrences = state
+        .service
+        .list_occurrences(
+            user.authorization.user.macro_user_id.as_ref(),
+            range,
+            cursor,
+            repository_limit,
+        )
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar range must be positive, at most 370 days, inside the maintained one-year-history/two-year-future window, with limit 1–2000",
+                };
+            }
+            tracing::error!(error = ?error, "failed to query calendar occurrences");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query calendar occurrences",
+            }
+        })?;
+    let sync_status = state
+        .service
+        .sync_status(user.authorization.user.macro_user_id.as_ref())
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "failed to query calendar sync status");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query calendar occurrences",
+            }
+        })?;
+    let has_more = occurrences.len() > usize::from(limit);
+    occurrences.truncate(usize::from(limit));
+    let next_cursor = has_more
+        .then(|| occurrences.last())
+        .flatten()
+        .map(|(_, occurrence)| {
+            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(occurrence))
+                .type_erase()
+        });
+    let items = occurrences
+        .into_iter()
+        .map(|(event, occurrence)| CalendarOccurrenceItem { event, occurrence })
+        .collect();
+
+    Ok(Json(CalendarOccurrenceResponse {
+        items,
+        has_more,
+        next_cursor,
+        sync_status,
+    }))
+}
+
+fn decode_cursor(
+    cursor: Option<String>,
+) -> Result<Option<CalendarOccurrenceCursor>, CalendarApiError> {
+    cursor
+        .map(|cursor| {
+            Base64Str::new_from_string(cursor)
+                .decode_json()
+                .map_err(|_| CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar cursor is invalid",
+                })
+        })
+        .transpose()
+}
+
+fn query_limits(requested: Option<u16>) -> Result<(u16, u16), CalendarApiError> {
+    let limit = requested.unwrap_or(1000);
+    if !(1..=2000).contains(&limit) {
+        return Err(CalendarApiError {
+            status: StatusCode::BAD_REQUEST,
+            message: "calendar limit must be between 1 and 2000",
+        });
+    }
+    Ok((limit, limit + 1))
+}
+
+fn default_end_date(end: DateTime<Utc>) -> Option<NaiveDate> {
+    if end.time() == NaiveTime::MIN {
+        Some(end.date_naive())
+    } else {
+        end.date_naive().succ_opt()
+    }
+}

@@ -21,6 +21,7 @@ import {
   mentionsPlugin,
   selectionDataPlugin,
   singleLinePlugin,
+  skillsPlugin,
   snippetsPlugin,
   tabIndentationPlugin,
   tagsPlugin,
@@ -82,6 +83,18 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   // snippets menu reads from quickAccess, which those editors bypass.
   const snippetsMenuOps =
     config.mentions && !config.mentions.entities && config.snippets !== false
+      ? createMenuOperations()
+      : undefined;
+  // Skills (`/` menu) are opt-in for AI markdown areas. They share the `/`
+  // trigger with the actions slash menu, so they only activate when actions
+  // are disabled, and they read from quickAccess like snippets, so editors
+  // with a custom mention entity source are excluded.
+  const skillsMenuOps =
+    config.skills &&
+    !actionsMenuOps &&
+    config.mentions &&
+    !config.mentions.entities &&
+    config.type !== 'plain-text'
       ? createMenuOperations()
       : undefined;
 
@@ -170,7 +183,9 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
         tagsPlugin({
           menu: tagsMenuOps,
           insertTags: config.tags.insertTags,
-          onCreateTag: config.tags.onCreate,
+          onCreateTag: config.tags.applyTargetLabel
+            ? undefined
+            : config.tags.onCreate,
           onRemoveTag: config.tags.onRemove,
           setTags: config.tags.setTags,
         })
@@ -188,6 +203,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           sourceDocumentId: config.mentions?.sourceDocumentId,
         })
       );
+    }
+
+    if (skillsMenuOps) {
+      plugins.use(skillsPlugin({ menu: skillsMenuOps }));
     }
   }
 
@@ -286,7 +305,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           (mentionsMenuOps?.isOpen() ?? false) ||
           (tagsMenuOps?.isOpen() ?? false) ||
           (emojisMenuOps?.isOpen() ?? false) ||
-          (snippetsMenuOps?.isOpen() ?? false),
+          (snippetsMenuOps?.isOpen() ?? false) ||
+          (skillsMenuOps?.isOpen() ?? false),
       })
     );
   }
@@ -311,7 +331,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       const emojis = emojisMenuOps?.isOpen() ?? false;
       const actions = actionsMenuOps?.isOpen() ?? false;
       const snippets = snippetsMenuOps?.isOpen() ?? false;
-      return mentions || tags || emojis || actions || snippets;
+      const skills = skillsMenuOps?.isOpen() ?? false;
+      return mentions || tags || emojis || actions || snippets || skills;
     },
   };
 
@@ -333,6 +354,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       tagsMenuOps,
       emojisMenuOps,
       snippetsMenuOps,
+      skillsMenuOps,
       accessoryStore,
       dragInsertStore,
       draggableBlockStore,

@@ -1,6 +1,10 @@
 #![recursion_limit = "256"]
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
+use calendar_events::{
+    domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
+    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+};
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
@@ -10,6 +14,8 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
+use email_service::calendar_tokens::CalendarTokenProviderAdapter;
+use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -65,7 +71,6 @@ async fn main() -> anyhow::Result<()> {
     let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
     let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
@@ -74,7 +79,6 @@ async fn main() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
-        .search_event_queue(&search_event_queue)
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
@@ -179,8 +183,20 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to get multiplexed redis connection for gmail token provider")?;
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
-        redis_conn,
+        redis_conn.clone(),
         auth_service_client.clone(),
+    ));
+    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
+    let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
+        PgCalendarRepository::new(db.clone()),
+        GoogleCalendarClient::with_gate(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .context("failed to build the google calendar mutation http client")?,
+            RedisCalendarRequestGate::new((*redis_client).clone()),
+        ),
+        CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
         db,
@@ -201,6 +217,8 @@ async fn main() -> anyhow::Result<()> {
         email_thread_state,
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
+        calendar_service,
+        calendar_mutation_service,
     })
     .await;
 

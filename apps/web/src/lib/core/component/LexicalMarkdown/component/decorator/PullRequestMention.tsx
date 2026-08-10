@@ -4,7 +4,10 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isPullRequestMentionNode,
+  HISTORIC_TAG,
   type PullRequestMentionDecoratorProps,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import OpenIcon from '@phosphor/arrows-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
@@ -389,7 +392,10 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
           node.setLabel(nextLabel);
         }
       },
-      { tag: 'historic', discrete: true }
+      {
+        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        discrete: true,
+      }
     );
   });
 

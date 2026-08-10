@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarEventFilters } from './calendarEventFilters';
 import type { CallFilters } from './callFilters';
 import type { ChannelFilters } from './channelFilters';
 import type { ChannelThreadFilters } from './channelThreadFilters';
@@ -14,12 +15,15 @@ import type { EmailFilters } from './emailFilters';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
+import type { ReminderFilters } from './reminderFilters';
 import type { TagFilterMode } from './tagFilterMode';
 
 /**
  * a bundle of all of the filters for each entity type
  */
 export interface EntityFilters {
+  /** the bundled [CalendarEventFilters] */
+  calendar_event_filters?: CalendarEventFilters;
   /** the bundled [CallFilters] */
   call_filters?: CallFilters;
   /** the bundled [ChannelFilters] */
@@ -40,6 +44,8 @@ export interface EntityFilters {
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */
   property_filters?: PropertyFilter[];
+  /** the bundled [ReminderFilters] */
+  reminder_filters?: ReminderFilters;
   /** How the `tag_option_ids` combine: `any` (default) matches entities
 holding at least one selected tag, `all` requires every selected tag. */
   tag_filter_mode?: TagFilterMode;

@@ -40,7 +40,7 @@ outbound = [
   "ports",
   "properties/outbound",
 ]
-ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports", "reminders/ports"]
 
 
 [dependencies]
@@ -80,6 +80,7 @@ non_empty = { path = "../non_empty" }
 properties = { path = "../properties", default-features = false, optional = true }
 readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
+reminders = { path = "../reminders", default-features = false }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

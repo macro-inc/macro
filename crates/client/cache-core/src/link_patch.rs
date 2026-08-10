@@ -22,6 +22,8 @@ pub const MAX_PATCHES: usize = 128;
 pub const MAX_PATH_DEPTH: usize = 16;
 /// Maximum list length traversed by one recipe.
 pub const MAX_TRAVERSED_LIST: usize = 10_000;
+/// Maximum scalar fields used to initialize one embedded list item.
+pub const MAX_INSERT_FIELDS: usize = 16;
 
 /// One constrained step through an embedded cache value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,27 +53,65 @@ pub struct ListItemByScalar {
 }
 
 /// Idempotent operation on the selected normalized-link list.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum LinkOperation {
     /// Removes every occurrence of the entity reference.
     Remove {
         /// Normalized entity key to remove.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
     },
     /// Removes every occurrence and inserts one reference at the front.
     PrependUnique {
         /// Normalized entity key to prepend.
         #[serde(rename = "entityKey")]
-        entity_key: EntityKey,
+        entity_key: EntityKey<'static>,
+    },
+    /// Removes a link from a matching embedded list item and decrements its
+    /// count when the link was present.
+    RemoveEmbeddedLink {
+        /// Scalar selector identifying the embedded list item.
+        #[serde(rename = "listItem")]
+        list_item: ListItemByScalar,
+        /// Field on the embedded item containing normalized links.
+        #[serde(rename = "linkField")]
+        link_field: FieldKey,
+        /// Non-negative integer field tracking the complete link count.
+        #[serde(rename = "countField")]
+        count_field: FieldKey,
+        /// Normalized entity key to remove from the link field.
+        #[serde(rename = "entityKey")]
+        entity_key: EntityKey<'static>,
+    },
+    /// Prepends a link inside a matching embedded list item, creating that
+    /// embedded item when it is absent, and increments its link count.
+    UpsertEmbeddedLink {
+        /// Scalar selector identifying the embedded list item.
+        #[serde(rename = "listItem")]
+        list_item: ListItemByScalar,
+        /// Field on the embedded item containing normalized links.
+        #[serde(rename = "linkField")]
+        link_field: FieldKey,
+        /// Non-negative integer field tracking the complete link count.
+        #[serde(rename = "countField")]
+        count_field: FieldKey,
+        /// Normalized entity key to prepend to the link field.
+        #[serde(rename = "entityKey")]
+        entity_key: EntityKey<'static>,
+        /// Additional scalar fields used only when creating the embedded item.
+        #[serde(rename = "insertFields")]
+        insert_fields: HashMap<FieldKey, Json>,
     },
 }
 
 impl LinkOperation {
-    fn entity_key(&self) -> &EntityKey {
+    fn entity_key(&self) -> EntityKey<'_> {
         match self {
-            Self::Remove { entity_key } | Self::PrependUnique { entity_key } => entity_key,
+            Self::Remove { entity_key }
+            | Self::PrependUnique { entity_key }
+            | Self::RemoveEmbeddedLink { entity_key, .. }
+            | Self::UpsertEmbeddedLink { entity_key, .. } => entity_key.borrowed(),
         }
     }
 }
@@ -131,7 +171,7 @@ pub enum LinkPatchError {
     InvalidEntityKey(String),
     /// The selected normalized record is absent.
     #[error("link update record `{0}` is missing")]
-    MissingParent(EntityKey),
+    MissingParent(EntityKey<'static>),
     /// The selected record field is absent.
     #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
@@ -156,6 +196,24 @@ pub enum LinkPatchError {
     /// The final list contains values other than normalized refs or nulls.
     #[error("link patch target list contains non-link values")]
     NonLinkTarget,
+    /// An embedded link count was absent or not a non-negative integer.
+    #[error("embedded link count must be a non-negative integer")]
+    InvalidLinkCount,
+    /// Incrementing an embedded link count exceeded the stored integer range.
+    #[error("embedded link count overflow")]
+    LinkCountOverflow,
+    /// Too many scalar fields were supplied for an embedded item insertion.
+    #[error("embedded insert field count {actual} exceeds limit {maximum}")]
+    TooManyInsertFields { actual: usize, maximum: usize },
+    /// An embedded item insertion field conflicts with a managed field.
+    #[error("embedded insert field `{0}` conflicts with a managed field")]
+    ConflictingInsertField(String),
+    /// Two managed embedded-item fields resolve to the same storage key.
+    #[error("embedded managed fields `{first}` and `{second}` conflict")]
+    ConflictingManagedField { first: String, second: String },
+    /// Embedded item insertion values must be JSON scalars.
+    #[error("embedded insert field values must be JSON scalars")]
+    NonScalarInsertField,
 }
 
 /// Removes exact duplicate recipes while retaining the first occurrence and
@@ -194,6 +252,67 @@ fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
             return Err(LinkPatchError::NonScalarSelector);
         }
     }
+    match &patch.operation {
+        LinkOperation::RemoveEmbeddedLink {
+            list_item,
+            link_field,
+            count_field,
+            ..
+        } => validate_embedded_link_fields(list_item, link_field, count_field)?,
+        LinkOperation::UpsertEmbeddedLink {
+            list_item,
+            link_field,
+            count_field,
+            insert_fields,
+            ..
+        } => {
+            validate_embedded_link_fields(list_item, link_field, count_field)?;
+            if insert_fields.len() > MAX_INSERT_FIELDS {
+                return Err(LinkPatchError::TooManyInsertFields {
+                    actual: insert_fields.len(),
+                    maximum: MAX_INSERT_FIELDS,
+                });
+            }
+            for managed in [&list_item.where_field, link_field, count_field] {
+                if insert_fields.contains_key(managed) {
+                    return Err(LinkPatchError::ConflictingInsertField(managed.clone()));
+                }
+            }
+            if insert_fields.values().any(|value| !is_json_scalar(value)) {
+                return Err(LinkPatchError::NonScalarInsertField);
+            }
+        }
+        LinkOperation::Remove { .. } | LinkOperation::PrependUnique { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_embedded_link_fields(
+    list_item: &ListItemByScalar,
+    link_field: &FieldKey,
+    count_field: &FieldKey,
+) -> Result<(), LinkPatchError> {
+    if !is_json_scalar(&list_item.equals) {
+        return Err(LinkPatchError::NonScalarSelector);
+    }
+    if list_item.where_field == *link_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: list_item.where_field.clone(),
+            second: link_field.clone(),
+        });
+    }
+    if list_item.where_field == *count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: list_item.where_field.clone(),
+            second: count_field.clone(),
+        });
+    }
+    if link_field == count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: link_field.clone(),
+            second: count_field.clone(),
+        });
+    }
     Ok(())
 }
 
@@ -220,16 +339,16 @@ fn validate_entrypoint(
     Ok(variables)
 }
 
-fn validate_entity_key(key: &EntityKey) -> Result<(), LinkPatchError> {
+fn validate_entity_key<'a>(key: EntityKey<'a>) -> Result<(), LinkPatchError> {
     let Some((typename, value)) = key.0.split_once(':') else {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     };
     let valid_name = !typename.is_empty()
         && typename.chars().enumerate().all(|(index, ch)| {
             ch == '_' || ch.is_ascii_alphabetic() || (index > 0 && ch.is_ascii_digit())
         });
     if !valid_name || value.is_empty() || value.chars().any(char::is_whitespace) {
-        return Err(LinkPatchError::InvalidEntityKey(key.0.clone()));
+        return Err(LinkPatchError::InvalidEntityKey(key.0.to_string()));
     }
     Ok(())
 }
@@ -248,7 +367,7 @@ fn is_json_scalar(value: &Json) -> bool {
 /// mode is used during hydration and successful settlement, where stale query
 /// fields must never be recreated.
 pub fn apply_link_patches(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
@@ -272,7 +391,7 @@ pub fn apply_link_patches(
 }
 
 fn apply_one(
-    effective: &mut HashMap<EntityKey, Record>,
+    effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
@@ -285,11 +404,62 @@ fn apply_one(
         .get(&resolved.field_key)
         .cloned()
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: resolved.parent_entity_key.0.clone(),
+            parent: resolved.parent_entity_key.0.to_string(),
             field: resolved.field_key.clone(),
         })?;
     let target = traverse(&mut field_value, &resolved.path)?;
-    let CacheValue::List(links) = target else {
+    match &patch.operation {
+        LinkOperation::Remove { entity_key } => {
+            let links = normalized_links(target)?;
+            links.retain(
+                |value| !matches!(value, CacheValue::Ref(key) if key.as_ref() == entity_key.as_ref()),
+            );
+        }
+        LinkOperation::PrependUnique { entity_key } => {
+            prepend_unique(normalized_links(target)?, entity_key.borrowed());
+        }
+        LinkOperation::RemoveEmbeddedLink { entity_key, .. } => {
+            let fields = resolved
+                .embedded_link
+                .as_ref()
+                .ok_or(LinkPatchError::WrongShape)?;
+            remove_embedded_link(
+                target,
+                &fields.list_item,
+                &fields.link_field,
+                &fields.count_field,
+                entity_key.borrowed(),
+            )?;
+        }
+        LinkOperation::UpsertEmbeddedLink { entity_key, .. } => {
+            let fields = resolved
+                .embedded_link
+                .as_ref()
+                .ok_or(LinkPatchError::WrongShape)?;
+            upsert_embedded_link(
+                target,
+                &fields.list_item,
+                &fields.link_field,
+                &fields.count_field,
+                entity_key.borrowed(),
+                &fields.insert_fields,
+            )?;
+        }
+    }
+
+    record
+        .fields
+        .insert(resolved.field_key.clone(), field_value.clone());
+    updates
+        .entry(resolved.parent_entity_key)
+        .or_default()
+        .fields
+        .insert(resolved.field_key, field_value);
+    Ok(())
+}
+
+fn normalized_links(value: &mut CacheValue) -> Result<&mut Vec<CacheValue>, LinkPatchError> {
+    let CacheValue::List(links) = value else {
         return Err(LinkPatchError::WrongShape);
     };
     if links.len() > MAX_TRAVERSED_LIST {
@@ -304,38 +474,195 @@ fn apply_one(
     {
         return Err(LinkPatchError::NonLinkTarget);
     }
+    Ok(links)
+}
 
-    let entity_key = patch.operation.entity_key();
-    links.retain(|value| !matches!(value, CacheValue::Ref(key) if key == entity_key));
-    if matches!(patch.operation, LinkOperation::PrependUnique { .. }) {
-        links.insert(0, CacheValue::Ref(entity_key.clone()));
+fn prepend_unique(links: &mut Vec<CacheValue>, entity_key: EntityKey<'_>) {
+    links.retain(
+        |value| !matches!(value, CacheValue::Ref(key) if key.as_ref() == entity_key.as_ref()),
+    );
+    links.insert(0, CacheValue::Ref(entity_key.into_owned()));
+}
+
+fn remove_embedded_link(
+    value: &mut CacheValue,
+    list_item: &ListItemByScalar,
+    link_field: &FieldKey,
+    count_field: &FieldKey,
+    entity_key: EntityKey<'_>,
+) -> Result<(), LinkPatchError> {
+    let items = embedded_items(value)?;
+    let index =
+        embedded_item_index(items, list_item)?.ok_or(LinkPatchError::SelectorMatchCount(0))?;
+    let CacheValue::Object(object) = &mut items[index] else {
+        return Err(LinkPatchError::WrongShape);
+    };
+    let links = object
+        .get_mut(link_field)
+        .ok_or(LinkPatchError::WrongShape)?;
+    let links = normalized_links(links)?;
+    let was_present = contains_link(links, &entity_key);
+    links.retain(
+        |value| !matches!(value, CacheValue::Ref(key) if key.as_ref() == entity_key.as_ref()),
+    );
+    if was_present {
+        adjust_link_count(object, count_field, CountAdjustment::Decrement)?;
     }
-
-    record
-        .fields
-        .insert(resolved.field_key.clone(), field_value.clone());
-    updates
-        .entry(resolved.parent_entity_key)
-        .or_default()
-        .fields
-        .insert(resolved.field_key, field_value);
     Ok(())
+}
+
+fn upsert_embedded_link(
+    value: &mut CacheValue,
+    list_item: &ListItemByScalar,
+    link_field: &FieldKey,
+    count_field: &FieldKey,
+    entity_key: EntityKey<'_>,
+    insert_fields: &HashMap<FieldKey, Json>,
+) -> Result<(), LinkPatchError> {
+    let items = embedded_items(value)?;
+    match embedded_item_index(items, list_item)? {
+        Some(index) => {
+            let CacheValue::Object(object) = &mut items[index] else {
+                return Err(LinkPatchError::WrongShape);
+            };
+            let links = object
+                .get_mut(link_field)
+                .ok_or(LinkPatchError::WrongShape)?;
+            let links = normalized_links(links)?;
+            let was_present = contains_link(links, &entity_key);
+            prepend_unique(links, entity_key);
+            if !was_present {
+                adjust_link_count(object, count_field, CountAdjustment::Increment)?;
+            }
+        }
+        None => {
+            let mut object = insert_fields
+                .iter()
+                .map(|(field, value)| Ok((field.clone(), cache_scalar(value)?)))
+                .collect::<Result<std::collections::BTreeMap<_, _>, LinkPatchError>>()?;
+            object.insert(
+                list_item.where_field.clone(),
+                cache_scalar(&list_item.equals)?,
+            );
+            object.insert(
+                count_field.clone(),
+                CacheValue::Number(CacheNumber::PosInt(1)),
+            );
+            object.insert(
+                link_field.clone(),
+                CacheValue::List(vec![CacheValue::Ref(entity_key.into_owned())]),
+            );
+            items.insert(0, CacheValue::Object(object));
+        }
+    }
+    Ok(())
+}
+
+fn embedded_items(value: &mut CacheValue) -> Result<&mut Vec<CacheValue>, LinkPatchError> {
+    let CacheValue::List(items) = value else {
+        return Err(LinkPatchError::WrongShape);
+    };
+    if items.len() > MAX_TRAVERSED_LIST {
+        return Err(LinkPatchError::ListTooLarge {
+            actual: items.len(),
+            maximum: MAX_TRAVERSED_LIST,
+        });
+    }
+    if items
+        .iter()
+        .any(|value| !matches!(value, CacheValue::Object(_)))
+    {
+        return Err(LinkPatchError::WrongShape);
+    }
+    Ok(items)
+}
+
+fn embedded_item_index(
+    items: &[CacheValue],
+    list_item: &ListItemByScalar,
+) -> Result<Option<usize>, LinkPatchError> {
+    let matches: Vec<_> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, value)| {
+            let CacheValue::Object(object) = value else {
+                return None;
+            };
+            object
+                .get(&list_item.where_field)
+                .is_some_and(|value| cache_scalar_equals(value, &list_item.equals))
+                .then_some(index)
+        })
+        .collect();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [index] => Ok(Some(*index)),
+        _ => Err(LinkPatchError::SelectorMatchCount(matches.len())),
+    }
+}
+
+fn contains_link(links: &[CacheValue], entity_key: &EntityKey<'_>) -> bool {
+    links
+        .iter()
+        .any(|value| matches!(value, CacheValue::Ref(key) if key.as_ref() == entity_key.as_ref()))
+}
+
+#[derive(Clone, Copy)]
+enum CountAdjustment {
+    Increment,
+    Decrement,
+}
+
+fn adjust_link_count(
+    object: &mut std::collections::BTreeMap<FieldKey, CacheValue>,
+    count_field: &FieldKey,
+    adjustment: CountAdjustment,
+) -> Result<(), LinkPatchError> {
+    let Some(CacheValue::Number(CacheNumber::PosInt(count))) = object.get_mut(count_field) else {
+        return Err(LinkPatchError::InvalidLinkCount);
+    };
+    *count = match adjustment {
+        CountAdjustment::Increment => count
+            .checked_add(1)
+            .ok_or(LinkPatchError::LinkCountOverflow)?,
+        CountAdjustment::Decrement => count.saturating_sub(1),
+    };
+    Ok(())
+}
+
+fn cache_scalar(value: &Json) -> Result<CacheValue, LinkPatchError> {
+    match value {
+        Json::Null => Ok(CacheValue::Null),
+        Json::Bool(value) => Ok(CacheValue::Bool(*value)),
+        Json::Number(value) => Ok(CacheValue::Number(value.into())),
+        Json::String(value) => Ok(CacheValue::String(value.clone())),
+        Json::Array(_) | Json::Object(_) => Err(LinkPatchError::NonScalarInsertField),
+    }
 }
 
 #[derive(Debug)]
 struct ResolvedTarget {
-    parent_entity_key: EntityKey,
+    parent_entity_key: EntityKey<'static>,
     field_key: FieldKey,
     path: Vec<LinkPathSegment>,
+    embedded_link: Option<ResolvedEmbeddedLink>,
+}
+
+#[derive(Debug)]
+struct ResolvedEmbeddedLink {
+    list_item: ListItemByScalar,
+    link_field: FieldKey,
+    count_field: FieldKey,
+    insert_fields: HashMap<FieldKey, Json>,
 }
 
 /// Returns the next normalized record required to resolve one query-rooted
 /// update. Engines use this to hydrate graph links from cold storage before
 /// applying the update.
 pub fn missing_patch_record(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
-) -> Option<EntityKey> {
+) -> Option<EntityKey<'static>> {
     match resolve_target(effective, patch) {
         Err(LinkPatchError::MissingParent(key)) => Some(key),
         _ => None,
@@ -343,7 +670,7 @@ pub fn missing_patch_record(
 }
 
 fn resolve_target(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let variables = validate_entrypoint(patch)?;
@@ -359,16 +686,18 @@ fn resolve_target(
         &operation.selection_set,
         &variables,
         &patch.path,
+        &patch.operation,
     )
 }
 
 fn resolve_from_record(
-    effective: &HashMap<EntityKey, Record>,
-    owner: &EntityKey,
+    effective: &HashMap<EntityKey<'static>, Record>,
+    owner: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     path: &[LinkPathSegment],
+    operation: &LinkOperation,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     let Some(LinkPathSegment::Field {
         field: response_key,
@@ -386,7 +715,7 @@ fn resolve_from_record(
         .fields
         .get(&storage_key)
         .ok_or_else(|| LinkPatchError::MissingField {
-            parent: owner.0.clone(),
+            parent: owner.0.to_string(),
             field: storage_key.clone(),
         })?;
     let named_type = selected_type(concrete, selected)?;
@@ -402,12 +731,13 @@ fn resolve_from_record(
             selections: &selected.selection_set,
         },
         &path[1..],
+        operation,
     )
 }
 
 struct ValueCursor<'a> {
     value: &'a CacheValue,
-    owner: EntityKey,
+    owner: EntityKey<'static>,
     anchor_field: FieldKey,
     relative_path: Vec<LinkPathSegment>,
     type_name: &'a str,
@@ -415,16 +745,23 @@ struct ValueCursor<'a> {
 }
 
 fn resolve_from_value(
-    effective: &HashMap<EntityKey, Record>,
+    effective: &HashMap<EntityKey<'static>, Record>,
     variables: &serde_json::Map<String, Json>,
     cursor: ValueCursor<'_>,
     path: &[LinkPathSegment],
+    operation: &LinkOperation,
 ) -> Result<ResolvedTarget, LinkPatchError> {
     if path.is_empty() {
         return Ok(ResolvedTarget {
             parent_entity_key: cursor.owner,
             field_key: cursor.anchor_field,
             path: cursor.relative_path,
+            embedded_link: resolve_embedded_link_fields(
+                cursor.selections,
+                cursor.type_name,
+                variables,
+                operation,
+            )?,
         });
     }
 
@@ -436,6 +773,7 @@ fn resolve_from_value(
             cursor.selections,
             variables,
             path,
+            operation,
         );
     }
 
@@ -472,6 +810,7 @@ fn resolve_from_value(
                     selections: &selected.selection_set,
                 },
                 &path[1..],
+                operation,
             )
         }
         (LinkPathSegment::ListItem { list_item }, CacheValue::List(items)) => {
@@ -519,10 +858,91 @@ fn resolve_from_value(
                     selections: cursor.selections,
                 },
                 &path[1..],
+                operation,
             )
         }
         _ => Err(LinkPatchError::WrongShape),
     }
+}
+
+fn resolve_embedded_link_fields(
+    selections: &[Selection],
+    concrete: &str,
+    variables: &serde_json::Map<String, Json>,
+    operation: &LinkOperation,
+) -> Result<Option<ResolvedEmbeddedLink>, LinkPatchError> {
+    let (list_item, link_field, count_field, insert_fields) = match operation {
+        LinkOperation::RemoveEmbeddedLink {
+            list_item,
+            link_field,
+            count_field,
+            ..
+        } => (list_item, link_field, count_field, None),
+        LinkOperation::UpsertEmbeddedLink {
+            list_item,
+            link_field,
+            count_field,
+            insert_fields,
+            ..
+        } => (list_item, link_field, count_field, Some(insert_fields)),
+        LinkOperation::Remove { .. } | LinkOperation::PrependUnique { .. } => return Ok(None),
+    };
+
+    let selector_key = selected_storage_key(
+        selected_field(selections, concrete, &list_item.where_field)?,
+        variables,
+    )?;
+    let resolved_link_field =
+        selected_storage_key(selected_field(selections, concrete, link_field)?, variables)?;
+    let resolved_count_field = selected_storage_key(
+        selected_field(selections, concrete, count_field)?,
+        variables,
+    )?;
+    let mut resolved_insert_fields = HashMap::new();
+    if let Some(insert_fields) = insert_fields {
+        for (field, value) in insert_fields {
+            let storage_key =
+                selected_storage_key(selected_field(selections, concrete, field)?, variables)?;
+            if resolved_insert_fields.contains_key(&storage_key) {
+                return Err(LinkPatchError::ConflictingInsertField(storage_key));
+            }
+            resolved_insert_fields.insert(storage_key, value.clone());
+        }
+    }
+
+    for managed in [&selector_key, &resolved_link_field, &resolved_count_field] {
+        if resolved_insert_fields.contains_key(managed) {
+            return Err(LinkPatchError::ConflictingInsertField(managed.clone()));
+        }
+    }
+    if selector_key == resolved_link_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: selector_key,
+            second: resolved_link_field,
+        });
+    }
+    if selector_key == resolved_count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: selector_key,
+            second: resolved_count_field,
+        });
+    }
+    if resolved_link_field == resolved_count_field {
+        return Err(LinkPatchError::ConflictingManagedField {
+            first: resolved_link_field,
+            second: resolved_count_field,
+        });
+    }
+
+    Ok(Some(ResolvedEmbeddedLink {
+        list_item: ListItemByScalar {
+            where_field: selector_key,
+            equals: list_item.equals.clone(),
+        },
+        link_field: resolved_link_field,
+        count_field: resolved_count_field,
+        insert_fields: resolved_insert_fields,
+    }))
 }
 
 fn selected_field<'a>(
@@ -620,13 +1040,19 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
-    const QUERY: &str = "query { user { groupSoup { bins { key items { id } } } } }";
+    const QUERY: &str =
+        "query { user { groupSoup { bins { key totalCount nextCursor items { id } } } } }";
 
-    fn record() -> (EntityKey, Record) {
+    fn record() -> (EntityKey<'static>, Record) {
         let parent = EntityKey("GraphqlUser:user-1".into());
-        let bin = |key: &str, items: Vec<CacheValue>| {
+        let bin = |key: &str, total_count: u64, items: Vec<CacheValue>| {
             CacheValue::Object(BTreeMap::from([
                 ("key".into(), CacheValue::String(key.into())),
+                (
+                    "totalCount".into(),
+                    CacheValue::Number(CacheNumber::PosInt(total_count)),
+                ),
+                ("nextCursor".into(), CacheValue::Null),
                 ("items".into(), CacheValue::List(items)),
             ]))
         };
@@ -635,12 +1061,13 @@ mod tests {
             CacheValue::List(vec![
                 bin(
                     "in-progress",
+                    1,
                     vec![
                         CacheValue::Ref(EntityKey("GraphqlSoupItem:task-1".into())),
                         CacheValue::Ref(EntityKey("GraphqlSoupItem:task-1".into())),
                     ],
                 ),
-                bin("completed", vec![]),
+                bin("completed", 0, vec![]),
             ]),
         )]));
         let record = Record {
@@ -676,6 +1103,139 @@ mod tests {
             ],
             operation,
         }
+    }
+
+    fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
+        OptimisticLinkPatch {
+            query: QUERY.into(),
+            operation_name: None,
+            variables_json: "{}".into(),
+            path: vec![
+                LinkPathSegment::Field {
+                    field: "user".into(),
+                },
+                LinkPathSegment::Field {
+                    field: "groupSoup".into(),
+                },
+                LinkPathSegment::Field {
+                    field: "bins".into(),
+                },
+            ],
+            operation: LinkOperation::UpsertEmbeddedLink {
+                list_item: ListItemByScalar {
+                    where_field: "key".into(),
+                    equals: json!(bin),
+                },
+                link_field: "items".into(),
+                count_field: "totalCount".into(),
+                entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+                insert_fields: HashMap::from([("nextCursor".into(), Json::Null)]),
+            },
+        }
+    }
+
+    fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
+        OptimisticLinkPatch {
+            query: QUERY.into(),
+            operation_name: None,
+            variables_json: "{}".into(),
+            path: vec![
+                LinkPathSegment::Field {
+                    field: "user".into(),
+                },
+                LinkPathSegment::Field {
+                    field: "groupSoup".into(),
+                },
+                LinkPathSegment::Field {
+                    field: "bins".into(),
+                },
+            ],
+            operation: LinkOperation::RemoveEmbeddedLink {
+                list_item: ListItemByScalar {
+                    where_field: "key".into(),
+                    equals: json!(bin),
+                },
+                link_field: "items".into(),
+                count_field: "totalCount".into(),
+                entity_key: EntityKey("GraphqlSoupItem:task-1".into()),
+            },
+        }
+    }
+
+    #[test]
+    fn rejects_conflicting_embedded_managed_fields() {
+        let mut direct_conflict = upsert_bin_patch("urgent");
+        let LinkOperation::UpsertEmbeddedLink { link_field, .. } = &mut direct_conflict.operation
+        else {
+            panic!()
+        };
+        *link_field = "key".into();
+        assert_eq!(
+            deduplicate_patches(&[direct_conflict]).unwrap_err(),
+            LinkPatchError::ConflictingManagedField {
+                first: "key".into(),
+                second: "key".into(),
+            }
+        );
+
+        let (parent, initial) = record();
+        let effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial),
+        ]);
+        let mut resolved_conflict = upsert_bin_patch("urgent");
+        resolved_conflict.query = "query { user { groupSoup { bins { selector: key link: key totalCount nextCursor items { id } } } } }".into();
+        let LinkOperation::UpsertEmbeddedLink {
+            list_item,
+            link_field,
+            ..
+        } = &mut resolved_conflict.operation
+        else {
+            panic!()
+        };
+        list_item.where_field = "selector".into();
+        *link_field = "link".into();
+        assert_eq!(
+            resolve_target(&effective, &resolved_conflict).unwrap_err(),
+            LinkPatchError::ConflictingManagedField {
+                first: "key".into(),
+                second: "key".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_insert_fields_resolving_to_the_same_storage_key() {
+        let (parent, initial) = record();
+        let effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent, initial),
+        ]);
+        let mut duplicate = upsert_bin_patch("urgent");
+        duplicate.query = "query { user { groupSoup { bins { key totalCount firstCursor: nextCursor secondCursor: nextCursor items { id } } } } }".into();
+        let LinkOperation::UpsertEmbeddedLink { insert_fields, .. } = &mut duplicate.operation
+        else {
+            panic!()
+        };
+        *insert_fields = HashMap::from([
+            ("firstCursor".into(), Json::Null),
+            ("secondCursor".into(), Json::Null),
+        ]);
+
+        assert_eq!(
+            resolve_target(&effective, &duplicate).unwrap_err(),
+            LinkPatchError::ConflictingInsertField("nextCursor".into())
+        );
     }
 
     #[test]
@@ -729,6 +1289,94 @@ mod tests {
         };
         assert_eq!(
             destination["items"],
+            CacheValue::List(vec![CacheValue::Ref(EntityKey(
+                "GraphqlSoupItem:task-1".into()
+            ))])
+        );
+        assert_eq!(updates.len(), 1);
+    }
+
+    #[test]
+    fn embedded_link_changes_create_bins_and_adjust_counts_once() {
+        let (parent, initial) = record();
+        let mut effective = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent.clone(), initial),
+        ]);
+        let mut updates = RecordUpdates::new();
+        let urgent = upsert_bin_patch("urgent");
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            &[urgent.clone(), urgent.clone()],
+            false,
+        )
+        .unwrap();
+        apply_link_patches(&mut effective, &mut updates, &[urgent], false).unwrap();
+
+        let completed = upsert_bin_patch("completed");
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            std::slice::from_ref(&completed),
+            false,
+        )
+        .unwrap();
+        apply_link_patches(&mut effective, &mut updates, &[completed], false).unwrap();
+
+        let source = remove_bin_patch("in-progress");
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            std::slice::from_ref(&source),
+            false,
+        )
+        .unwrap();
+        apply_link_patches(&mut effective, &mut updates, &[source], false).unwrap();
+
+        let CacheValue::Object(grouped) = &effective[&parent].fields["groupSoup"] else {
+            panic!()
+        };
+        let CacheValue::List(bins) = &grouped["bins"] else {
+            panic!()
+        };
+        let CacheValue::Object(urgent) = &bins[0] else {
+            panic!()
+        };
+        assert_eq!(urgent["key"], CacheValue::String("urgent".into()));
+        assert_eq!(
+            urgent["totalCount"],
+            CacheValue::Number(CacheNumber::PosInt(1))
+        );
+        assert_eq!(urgent["nextCursor"], CacheValue::Null);
+        assert_eq!(
+            urgent["items"],
+            CacheValue::List(vec![CacheValue::Ref(EntityKey(
+                "GraphqlSoupItem:task-1".into()
+            ))])
+        );
+        let CacheValue::Object(source) = &bins[1] else {
+            panic!()
+        };
+        assert_eq!(
+            source["totalCount"],
+            CacheValue::Number(CacheNumber::PosInt(0))
+        );
+        assert_eq!(source["items"], CacheValue::List(vec![]));
+        let CacheValue::Object(completed) = &bins[2] else {
+            panic!()
+        };
+        assert_eq!(
+            completed["totalCount"],
+            CacheValue::Number(CacheNumber::PosInt(1))
+        );
+        assert_eq!(
+            completed["items"],
             CacheValue::List(vec![CacheValue::Ref(EntityKey(
                 "GraphqlSoupItem:task-1".into()
             ))])

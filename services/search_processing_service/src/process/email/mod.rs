@@ -1,2 +1,2 @@
-pub mod remove;
-pub mod upsert;
+pub(crate) mod remove;
+pub(crate) mod upsert;

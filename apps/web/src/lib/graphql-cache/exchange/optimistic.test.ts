@@ -1,6 +1,13 @@
 import { GroupSoupMembershipDocument } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it } from 'vitest';
-import { prependUnique, remove, select, update } from './optimistic';
+import {
+  prependUnique,
+  remove,
+  removeEmbeddedLink,
+  select,
+  update,
+  upsertEmbeddedLink,
+} from './optimistic';
 
 const input = {
   initial: {
@@ -48,6 +55,48 @@ describe('typed optimistic graph updates', () => {
     expect(prepend.operation.kind).toBe('prependUnique');
   });
 
+  it('serializes counted embedded link changes', () => {
+    const bins = select(GroupSoupMembershipDocument, { input })
+      .field('user')
+      .field('groupSoup')
+      .field('bins');
+    const entity = { __typename: 'GraphqlSoupDocument', id: 'task-1' };
+    const removal = removeEmbeddedLink(bins, {
+      listItem: { whereField: 'key', equals: 'high' },
+      linkField: 'items',
+      countField: 'totalCount',
+      entity,
+    });
+    const insertion = upsertEmbeddedLink(bins, {
+      listItem: { whereField: 'key', equals: 'urgent' },
+      linkField: 'items',
+      countField: 'totalCount',
+      entity,
+      insertFields: { nextCursor: null },
+    });
+
+    expect(removal.operation).toEqual({
+      kind: 'removeEmbeddedLink',
+      listItem: { whereField: 'key', equals: 'high' },
+      linkField: 'items',
+      countField: 'totalCount',
+      entityKey: 'GraphqlSoupDocument:task-1',
+    });
+    expect(insertion.path).toEqual([
+      { field: 'user' },
+      { field: 'groupSoup' },
+      { field: 'bins' },
+    ]);
+    expect(insertion.operation).toEqual({
+      kind: 'upsertEmbeddedLink',
+      listItem: { whereField: 'key', equals: 'urgent' },
+      linkField: 'items',
+      countField: 'totalCount',
+      entityKey: 'GraphqlSoupDocument:task-1',
+      insertFields: { nextCursor: null },
+    });
+  });
+
   it('uses generated operation result and variable types', () => {
     const typeAssertions = () => {
       // @ts-expect-error GroupSoupMembership requires an input variable.
@@ -67,6 +116,32 @@ describe('typed optimistic graph updates', () => {
         root.field('user'),
         remove({ __typename: 'GraphqlUser', id: 'user-1' })
       );
+      upsertEmbeddedLink(bins, {
+        listItem: { whereField: 'key', equals: 'urgent' },
+        linkField: 'items',
+        // @ts-expect-error Count fields must be generated numeric fields.
+        countField: 'key',
+        entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+        insertFields: { nextCursor: null },
+      });
+      upsertEmbeddedLink(bins, {
+        listItem: { whereField: 'key', equals: 'urgent' },
+        // @ts-expect-error Link fields must be generated normalized-entity lists.
+        linkField: 'key',
+        countField: 'totalCount',
+        entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+        insertFields: { nextCursor: null },
+      });
+      upsertEmbeddedLink(bins, {
+        listItem: { whereField: 'key', equals: 'urgent' },
+        linkField: 'items',
+        countField: 'totalCount',
+        entity: { __typename: 'GraphqlSoupDocument', id: 'task-1' },
+        insertFields: {
+          // @ts-expect-error Managed fields cannot be supplied for insertion.
+          key: 'urgent',
+        },
+      });
     };
 
     expect(typeAssertions).toBeTypeOf('function');

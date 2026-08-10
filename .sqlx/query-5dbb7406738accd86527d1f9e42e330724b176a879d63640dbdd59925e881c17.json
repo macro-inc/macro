@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH updated AS (\n                UPDATE user_notification\n                SET done = $3\n                WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL\n                RETURNING\n                    user_id,\n                    notification_id,\n                    sent,\n                    done,\n                    created_at,\n                    seen_at,\n                    deleted_at\n            )\n            SELECT\n                updated.user_id as owner_id,\n                updated.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                updated.sent,\n                updated.done,\n                updated.created_at::timestamptz as \"created_at!\",\n                updated.seen_at::timestamptz as viewed_at,\n                NOW()::timestamptz as \"updated_at!\",\n                updated.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type,\n                n.sender_id\n            FROM updated\n            JOIN notification n ON n.id = updated.notification_id\n            ORDER BY array_position($2, updated.notification_id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "done",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "notification_metadata: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "notification_event_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "sender_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "5dbb7406738accd86527d1f9e42e330724b176a879d63640dbdd59925e881c17"
+}

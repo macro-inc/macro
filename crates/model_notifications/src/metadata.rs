@@ -628,6 +628,7 @@ pub struct ChannelReplyMetadata {
 pub enum NotificationDocumentSubType {
     Task,
     Snippet,
+    Skill,
 }
 
 /// Someone mentioned a document in a channel
@@ -1329,5 +1330,78 @@ impl NotificationTitle for CallStartedMetadata {
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         Ok(self.channel_name.clone().unwrap_or_default())
+    }
+}
+
+/// Metadata for a reminder the user set for themselves coming due.
+///
+/// There is no sender: a reminder is self-set, so the dispatcher sends it with
+/// `sender_id: None` (a recipient who is also the sender is filtered out of
+/// their own notification). Every formatter here must therefore work without
+/// one.
+///
+/// The associated entity, when there is one, lives on the notification row
+/// rather than in here, and clients resolve its name from that — so the
+/// dispatcher does not have to look up a name across five entity types.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderMetadata {
+    /// The reminder that fired.
+    #[schema(value_type = String, format = Uuid)]
+    pub reminder_id: Uuid,
+    /// What the user asked to be reminded about.
+    pub description: String,
+}
+
+impl Notification for ReminderMetadata {
+    const TYPE_NAME: &'static str = "reminder";
+}
+
+impl NotificationTitle for ReminderMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok("Reminder".to_string())
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        // A description can be 2000 characters, which is 8 KB of UTF-8 at four
+        // bytes each — twice Apple's 4 KB push payload limit, and the alert
+        // renders only a few lines anyway. Cut on a char boundary.
+        Ok(
+            match self.description.char_indices().nth(REMINDER_BODY_MAX_CHARS) {
+                None => self.description.clone(),
+                Some((cut, _)) => format!("{}…", &self.description[..cut]),
+            },
+        )
+    }
+}
+
+/// Characters of a reminder description kept in the notification body, chosen
+/// so the APNS payload stays well inside Apple's 4 KB limit.
+const REMINDER_BODY_MAX_CHARS: usize = 512;
+
+impl NotificationExtIos for ReminderMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        // Keyed on the reminder rather than the entity: a redelivery of the
+        // same firing should replace the alert, but a reminder is not "about"
+        // the entity in the way a mention is, so two reminders on one document
+        // stay two alerts.
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.reminder_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
     }
 }

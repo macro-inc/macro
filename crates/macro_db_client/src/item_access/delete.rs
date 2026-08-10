@@ -37,10 +37,14 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::Team
         | EntityType::Channel
         | EntityType::ChannelMessage
+        | EntityType::CalendarEvent
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::ForeignEntity => {
+        | EntityType::Skill
+        | EntityType::ForeignEntity
+        // Reminders own no entity_access rows to delete.
+        | EntityType::Reminder => {
             anyhow::bail!("invalid entity type")
         }
         EntityType::Project => {

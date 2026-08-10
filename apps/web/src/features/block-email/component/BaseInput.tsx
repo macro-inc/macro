@@ -44,7 +44,7 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
 import ChevronDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
@@ -691,7 +691,7 @@ export function BaseInput(props: {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      logger.error(
+      Telemetry.error(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;
@@ -740,12 +740,12 @@ export function BaseInput(props: {
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      logger.error(new Error('Failed to save draft: thread not found'));
+      Telemetry.error(new Error('Failed to save draft: thread not found'));
       return;
     }
 
     if (newMessage && currentThread) {
-      logger.error(
+      Telemetry.error(
         new Error(
           'Failed to save draft: new message and current thread cannot be provided together'
         )
@@ -986,14 +986,14 @@ export function BaseInput(props: {
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      logger.error(new Error("Can't send email, no email thread found"));
+      Telemetry.error(new Error("Can't send email, no email thread found"));
       toast.failure('Email failed to send');
       return;
     }
 
     if (newMessage && currentThread) {
       toast.failure('Email failed to send');
-      logger.error('New message and thread cannot be provided together');
+      Telemetry.error('New message and thread cannot be provided together');
       return;
     }
 
@@ -1006,14 +1006,14 @@ export function BaseInput(props: {
 
       if (emailLinksQuery.isError) {
         toast.failure('Email failed to send: Could not load email accounts');
-        logger.error('Failed to load email links');
+        Telemetry.error('Failed to load email links');
         return;
       }
 
       const linksData = emailLinksQuery.data;
       if (!linksData || linksData.links.length < 1) {
         toast.failure('Email failed to send: No email account connected');
-        logger.error('No links found');
+        Telemetry.error('No links found');
         return;
       }
       linkId = primaryLinkId() ?? linksData.links[0].id;
@@ -1730,6 +1730,7 @@ export function BaseInput(props: {
                         handleChipDragStart('to', option, e)
                       }
                       onChipDragEnd={handleChipDragEnd}
+                      hideMenuOnEscape
                     />
                   </RecipientDropRow>
                   {/* Expanded CC */}
@@ -1760,6 +1761,7 @@ export function BaseInput(props: {
                           handleChipDragStart('cc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1791,6 +1793,7 @@ export function BaseInput(props: {
                           handleChipDragStart('bcc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1844,6 +1847,7 @@ export function BaseInput(props: {
                 handleChipDragStart('to', option, e)
               }
               onChipDragEnd={handleChipDragEnd}
+              hideMenuOnEscape
             />
             <Button
               variant="ghost"
@@ -1888,6 +1892,7 @@ export function BaseInput(props: {
                   handleChipDragStart('cc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>
@@ -1918,6 +1923,7 @@ export function BaseInput(props: {
                   handleChipDragStart('bcc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>

@@ -45,7 +45,12 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
 /// the one bundle works on localhost and through any tunnel/preview hostname.
-pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>) -> Result<()> {
+pub fn build_static(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    prebuilt: Option<&Path>,
+) -> Result<()> {
     let dist = match prebuilt {
         Some(dir) => dir.to_owned(),
         None => {
@@ -56,6 +61,9 @@ pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>)
                 .env("NODE_ENV", "production")
                 .env("VITE_LOCAL_SERVERS", "ALL")
                 .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+            if mode.spec().runs_local_infra {
+                cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+            }
             stage.run("Building frontend bundle", &mut cmd)?;
             app_dir().join("dist")
         }
@@ -90,8 +98,15 @@ pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>)
 /// The env the dev server runs with. Both local and dev point the whole app at
 /// the local proxy origin (single backend origin); the modes differ only in
 /// what the *services* behind the proxy talk to (local infra vs dev resources).
-fn dev_env(instance: &Instance) -> Vec<(String, String)> {
-    vec![
+///
+/// When a trace collector is up (`--traces`), point the OTel exporter at the
+/// analytics-proxy through the same proxy origin (`/i/otlp`), so tracing works
+/// for any instance (named instances have no host-port binding for the proxy)
+/// and exercises the real browser -> proxy -> collector path. Left unset
+/// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
+/// (Vite lets process env win).
+fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String, String)> {
+    let mut env = vec![
         (
             "PORT".to_string(),
             instance.port(Port::Frontend).to_string(),
@@ -101,7 +116,31 @@ fn dev_env(instance: &Instance) -> Vec<(String, String)> {
             "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
             proxy::url(instance),
         ),
-    ]
+    ];
+    if mode.spec().runs_local_infra {
+        env.push((
+            "VITE_AI_EDITING_WORKER_URL".to_string(),
+            format!("{}/ai-editing", proxy::url(instance)),
+        ));
+    }
+    if traces_enabled {
+        env.push((
+            "VITE_OTEL_EXPORTER_URL".to_string(),
+            format!("{}/i/otlp/v1/traces", proxy::url(instance)),
+        ));
+        // Tag frontend telemetry with the same env the Datadog agent uses
+        // (DD_ENV, default `local`), so the summary's traces/logs links —
+        // filtered by that env — actually match the emitted spans/records.
+        env.push((
+            "VITE_OTEL_ENV".to_string(),
+            macro_env_var::maybe_read_env("DD_ENV").unwrap_or_else(|| "local".into()),
+        ));
+    }
+    env.push((
+        "VITE_ENABLE_BROWSER_OTEL".to_string(),
+        traces_enabled.to_string(),
+    ));
+    env
 }
 
 /// Poll the backend (auth health, through the proxy) until ready.
@@ -163,7 +202,12 @@ fn tail_str(s: &str, n: usize) -> String {
 /// is captured (suppressed — the vite banner would duplicate the summary's URL)
 /// but retained so an unexpected exit can be diagnosed. Returns `None` in
 /// dry-run mode.
-pub fn start(stage: &Stage, instance: &Instance, mode: Mode) -> Result<Option<Frontend>> {
+pub fn start(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    traces_enabled: bool,
+) -> Result<Option<Frontend>> {
     if mode.spec().wait_backend_before_frontend {
         wait_backend_ready(stage, instance)?;
     }
@@ -205,7 +249,7 @@ pub fn start(stage: &Stage, instance: &Instance, mode: Mode) -> Result<Option<Fr
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance) {
+    for (k, v) in dev_env(instance, mode, traces_enabled) {
         cmd.env(k, v);
     }
     let mut child = cmd.spawn().context("launching `bun run dev`")?;

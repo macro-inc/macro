@@ -60,6 +60,7 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('COMPANY', () => undefined) // huh
     .with('USER', () => undefined) // huh
     .with('THREAD', () => 'email' as ItemType)
+    .with('CALENDAR_EVENT', () => undefined) // no calendar item rendering yet
     .exhaustive();
 }
 
@@ -86,6 +87,9 @@ export function macroEntityToPropertyEntityType(
     })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
+    })
+    .with({ type: 'reminder' }, () => {
+      throw new Error('reminders do not support properties');
     })
     .exhaustive();
 }

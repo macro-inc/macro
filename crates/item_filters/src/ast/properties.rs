@@ -15,6 +15,8 @@ use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PropertyEntityType {
+    /// Calendar event entity
+    CalendarEvent,
     /// Channel entity
     Channel,
     /// Chat entity
@@ -42,6 +44,7 @@ impl FromStr for PropertyEntityType {
     type Err = PropertyEntityTypeError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "CALENDAR_EVENT" => Ok(Self::CalendarEvent),
             "CHANNEL" => Ok(Self::Channel),
             "CHAT" => Ok(Self::Chat),
             "COMPANY" => Ok(Self::Company),
@@ -58,6 +61,7 @@ impl FromStr for PropertyEntityType {
 impl fmt::Display for PropertyEntityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::CalendarEvent => write!(f, "CALENDAR_EVENT"),
             Self::Channel => write!(f, "CHANNEL"),
             Self::Chat => write!(f, "CHAT"),
             Self::Company => write!(f, "COMPANY"),

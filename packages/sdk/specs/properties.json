@@ -855,6 +855,97 @@
           }
         }
       }
+    },
+    "/properties/tags/merge": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Replace one of the caller's personal labels with an existing team label.",
+        "description": "Every entity carrying the personal label is retagged with the team label\n(deduped if it already has both) and the personal label is deleted. The team\nlabel's name and color win. This is the confirmation step after the promote\nendpoint reports a name collision.",
+        "operationId": "merge_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Label merged into the team label",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyOptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Team membership required"
+          },
+          "404": {
+            "description": "Either label was not found in the expected tag set"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/properties/tags/promote": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Share one of the caller's personal labels with their team.",
+        "description": "The label moves into the team tag set keeping its option id, so every entity\nalready carrying it keeps the label — it just becomes visible to, and usable\nby, the whole team. A 409 means the team already has a label with that name;\nits body carries that label, and confirming the replacement is a call to the\nmerge endpoint with `conflicting_option.id` as `target_option_id`.",
+        "operationId": "promote_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Label moved to the team tag set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyOptionResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Team membership required"
+          },
+          "404": {
+            "description": "Label not found in the caller's tag set"
+          },
+          "409": {
+            "description": "The team already has a label with that name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagPromotionConflictResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1324,6 +1415,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",
@@ -1358,6 +1450,35 @@
           "scope": {
             "$ref": "#/components/schemas/PropertyScope",
             "description": "Scope filter for properties"
+          }
+        }
+      },
+      "MergeTagRequest": {
+        "type": "object",
+        "description": "Request to replace a personal label with an existing team label.",
+        "required": ["option_id", "target_option_id"],
+        "properties": {
+          "option_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The personal label to retire."
+          },
+          "target_option_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team label every entity carrying `option_id` is retagged with."
+          }
+        }
+      },
+      "PromoteTagRequest": {
+        "type": "object",
+        "description": "Request to share one of the caller's personal labels with their team.",
+        "required": ["option_id"],
+        "properties": {
+          "option_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The personal label to move into the team tag set."
           }
         }
       },
@@ -2155,6 +2276,21 @@
           }
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
+      },
+      "TagPromotionConflictResponse": {
+        "type": "object",
+        "description": "Body returned when a promotion collides with a label the team already has.\nThe caller confirms with the user, then calls the merge endpoint with\n`conflicting_option.id` as the target.",
+        "required": ["message", "conflicting_option"],
+        "properties": {
+          "conflicting_option": {
+            "$ref": "#/components/schemas/PropertyOptionResponse",
+            "description": "The team label that already uses this name."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description of the collision."
+          }
+        }
       },
       "TagScope": {
         "type": "string",

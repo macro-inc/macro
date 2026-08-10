@@ -256,6 +256,37 @@ pub trait PropertiesService: Send + Sync + 'static {
         scope: TagScope,
     ) -> impl Future<Output = Result<TagSet, PropertiesErr>> + Send;
 
+    /// Share one of the caller's personal labels with their team by moving it
+    /// into the team tag set, provisioning that set if the team has none yet.
+    ///
+    /// The option id survives the move, so every entity already carrying the
+    /// label keeps resolving to it. Fails with
+    /// [`PropertiesErr::ConflictingTeamLabel`] when the team already has a label
+    /// of that name (trimmed, case-insensitive), carrying that label so the
+    /// caller can offer [`Self::merge_tag_option`] instead. Requires the option
+    /// to be a label in the caller's own tag set and the caller to be on a team.
+    fn promote_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Replace one of the caller's personal labels with an existing team label:
+    /// every entity carrying the personal label is retagged with the team label
+    /// (deduped if it already has both), then the personal label is deleted.
+    ///
+    /// The team label's name and color win. Requires the source option to be a
+    /// label in the caller's own tag set and the target to be a label in their
+    /// team's tag set.
+    fn merge_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+        target_option_id: Uuid,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
     /// Get an entity's stored properties with definitions, values, and options,
     /// sorted by display name. Personal tag properties of other users are
     /// filtered out. Does not include computed metadata properties

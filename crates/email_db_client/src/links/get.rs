@@ -173,6 +173,9 @@ pub struct InboxDetails {
     pub settings: service::settings::Settings,
     pub latest_backfill_status: Option<service::backfill::BackfillJobStatus>,
     pub photo_url: Option<String>,
+    /// The Google OAuth scopes recorded for the link's grant. An empty vector
+    /// represents either an absent grant-state row or the initial version-0 state.
+    pub google_granted_scopes: Vec<String>,
 }
 
 struct DbInboxDetailsRow {
@@ -190,6 +193,7 @@ struct DbInboxDetailsRow {
     signature_on_replies_forwards: Option<bool>,
     signature: Option<String>,
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
+    google_granted_scopes: Vec<String>,
     photo_url: Option<String>,
 }
 
@@ -220,7 +224,8 @@ pub async fn fetch_inbox_details_for_macro_id(
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
                bj.status as "latest_backfill_status?: _",
-               c.sfs_photo_url as "photo_url?"
+               c.sfs_photo_url as "photo_url?",
+               COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!"
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
@@ -235,6 +240,7 @@ pub async fn fetch_inbox_details_for_macro_id(
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
         ) l
+        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
         LEFT JOIN email_settings s ON s.link_id = l.id
         LEFT JOIN LATERAL (
             SELECT status FROM email_backfill_jobs
@@ -277,6 +283,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                 settings,
                 latest_backfill_status: row.latest_backfill_status.map(Into::into),
                 photo_url: row.photo_url,
+                google_granted_scopes: row.google_granted_scopes,
             })
         })
         .collect()

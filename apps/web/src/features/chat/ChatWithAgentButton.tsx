@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
@@ -60,6 +61,8 @@ async function createAndOpenChat(seed: {
   attachments?: Attachment[];
   /** When set, sent immediately when the chat opens instead of seeding the input */
   message?: string;
+  /** When set, replaces this split's content in place instead of opening a new split. */
+  replaceSplit?: SplitHandle;
 }) {
   const result = await createChat();
   if ('error' in result || !result.chatId) {
@@ -68,7 +71,7 @@ async function createAndOpenChat(seed: {
     return;
   }
 
-  const { message, ...stored } = seed;
+  const { message, replaceSplit, ...stored } = seed;
   if (message) {
     setPendingSendData({
       content: message,
@@ -78,10 +81,14 @@ async function createAndOpenChat(seed: {
   } else {
     storeChatStateImmediate(result.chatId, stored);
   }
-  globalSplitManager()?.openWithSplit(
-    { type: 'chat', id: result.chatId },
-    { activate: true, preferNewSplit: true }
-  );
+  if (replaceSplit) {
+    replaceSplit.replace({ next: { type: 'chat', id: result.chatId } });
+  } else {
+    globalSplitManager()?.openWithSplit(
+      { type: 'chat', id: result.chatId },
+      { activate: true, preferNewSplit: true }
+    );
+  }
 }
 
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
@@ -94,9 +101,31 @@ export async function openChatWithInput(initialInput: string) {
   await createAndOpenChat({ input: initialInput });
 }
 
+/**
+ * Replace `splitHandle`'s content with a new chat seeded with `initialInput`
+ * (not sent). Used by the search view's "Ask AI" button to hand off in place.
+ */
+export async function openChatWithInputReplacingSplit(
+  initialInput: string,
+  splitHandle: SplitHandle
+) {
+  await createAndOpenChat({ input: initialInput, replaceSplit: splitHandle });
+}
+
 /** Open a new chat and immediately send `message` (the chat picks it up via pending send) */
 export async function openChatWithMessage(message: string) {
   await createAndOpenChat({ message });
+}
+
+/**
+ * Replace `splitHandle`'s content with a new chat and immediately send
+ * `message`. Used by the search view's "Ask AI" button to hand off in place.
+ */
+export async function openChatWithMessageReplacingSplit(
+  message: string,
+  splitHandle: SplitHandle
+) {
+  await createAndOpenChat({ message, replaceSplit: splitHandle });
 }
 
 export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
@@ -130,7 +159,7 @@ export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
       variant="ghost"
       size="sm"
       depth={2}
-      class="gap-1.5 rounded-full px-2 ring ring-edge-muted"
+      class="gap-1.5 rounded-full border border-edge-muted px-2"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs font-medium">Ask Macro</span>

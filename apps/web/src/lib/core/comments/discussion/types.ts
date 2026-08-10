@@ -48,6 +48,11 @@ export interface DiscussionSource {
   currentUserId: Accessor<string | undefined>;
   /** Comment id to highlight/scroll to (deep link), or null. */
   targetCommentId: Accessor<string | null>;
+  /**
+   * Optional revision for target requests. Increment when the same target id is
+   * requested again so the UI can scroll again without replaying on remounts.
+   */
+  targetRevision?: Accessor<unknown>;
   /** Start a new thread. */
   createThread(text: string, mentions: ItemMention[]): Promise<void>;
   /** Reply to an existing thread. */

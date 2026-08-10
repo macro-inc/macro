@@ -2,12 +2,9 @@ import { isListViewID } from '@app/constants/list-views';
 import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import {
-  getChannelParams,
-  goToChannelMessage,
-} from '@block-channel/utils/link';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -20,6 +17,7 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
   makeFavoriteAction,
   makeHideCompanyAction,
@@ -36,7 +34,11 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
-import { getChannelEntityTarget } from '../utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+  reminderSplitTarget,
+} from '../utils';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -53,6 +55,7 @@ type SoupEntityActionItem = {
   shortcut?: string;
   onClick: () => void | Promise<void>;
   destructive?: boolean;
+  disabled?: boolean;
 };
 
 type SoupEntityActionGroup = {
@@ -70,6 +73,11 @@ type BuildActionGroups = (
     // Provided only where the menu host can anchor a tag picker for the
     // right-clicked row.
     openTagPicker?: () => void;
+    /**
+     * The split hosting the list. Open actions route through it so they match
+     * their click/hotkey equivalents, including Preview Pair routing.
+     */
+    splitHandle?: SplitHandle;
   }
 ) => SoupEntityActionGroup[];
 
@@ -117,6 +125,7 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -130,7 +139,7 @@ export function createSoupEntityActions(): {
   const buildActionGroups: BuildActionGroups = (
     soup,
     entities,
-    { activeTab, activeListView, viewedProjectId, openTagPicker }
+    { activeTab, activeListView, viewedProjectId, openTagPicker, splitHandle }
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
@@ -189,105 +198,85 @@ export function createSoupEntityActions(): {
       });
     }
 
-    const canOpenInSplit = () => {
-      if (isMobile()) return false;
-      if (entities.length !== 1) return false;
+    /**
+     * The single entity these open actions apply to, if any.
+     *
+     * Content already mounted in another split is skipped — reopening it would
+     * duplicate it. The Preview Pair's own Viewer is the exception: its copy is
+     * the preview of this very row, which opening supersedes rather than
+     * duplicates, so the row keeps its open actions while it is being
+     * previewed.
+     */
+    const openableEntity = (): EntityData | undefined => {
+      if (isMobile()) return undefined;
+      if (entities.length !== 1) return undefined;
       const entity = entities[0];
-      const splitManager = globalSplitManager();
-      if (!splitManager) return false;
       // TODO(dev-rb/github): Allow GitHub PRs once they map to /pr.
-      if (entity.type === 'foreign') return false;
+      if (!entity || entity.type === 'foreign') return undefined;
+      const splitManager = globalSplitManager();
+      if (!splitManager) return undefined;
+      // A reminder opens what it references. A standalone one references
+      // nothing, so there is nothing to open.
+      if (entity.type === 'reminder') {
+        const target = reminderSplitTarget(entity);
+        if (!target) return undefined;
+        const open = splitManager.getSplitByContent(target.type, target.id);
+        if (open && open.id !== splitHandle?.viewerId()) return undefined;
+        return entity;
+      }
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
           : entity.id;
       const contentType = itemToBlockName(entity);
-      return !splitManager.getSplitByContent(contentType, contentId);
+      const existing = splitManager.getSplitByContent(contentType, contentId);
+      if (existing && existing.id !== splitHandle?.viewerId()) return undefined;
+      return entity;
     };
 
-    if (canOpenInSplit()) {
-      const openInNewSplit = async () => {
-        const entity = entities[0];
+    const openEntity =
+      (options: { openInNewSplit?: boolean; replacePreview?: boolean }) =>
+      async () => {
+        const entity = openableEntity();
         if (!entity) return;
 
-        const splitManager = globalSplitManager();
-        if (!splitManager) return;
-
-        analytics.track('split_created', {
-          from: 'soup_view_entity_actions_menu',
-        });
-
-        if (entity.type === 'document') {
-          const { fileType, id, subType } = entity;
-          splitManager.createNewSplit({
-            content: {
-              type: fileTypeToBlockName(subType?.type ?? fileType),
-              id,
-            },
-            referredFrom: 'entity-actions-menu',
-          });
-        } else if (
-          entity.type === 'channel_message' ||
-          entity.type === 'channel_thread'
-        ) {
-          // Thread rows are keyed by their root; getChannelEntityTarget
-          // recovers the clicked reply from the driving notification so the
-          // new split lands on it rather than the root message. These rows
-          // always resolve to a message target (their own ids at worst), never
-          // `latest`, which only a whole-channel row produces.
-          const resolved = getChannelEntityTarget(entity);
-          const target =
-            resolved?.kind === 'message'
-              ? resolved
-              : { messageId: entity.messageId, threadId: entity.threadId };
-          splitManager.createNewSplit({
-            content: {
-              type: 'channel',
-              id: entity.channelId,
-              params: getChannelParams(target.messageId, target.threadId),
-            },
-            referredFrom: 'entity-actions-menu',
-          });
-
-          await goToChannelMessage(
-            splitManager.getOrchestrator(),
-            entity.channelId,
-            target.messageId,
-            target.threadId
-          );
-        } else if (entity.type === 'crm_company') {
-          splitManager.createNewSplit({
-            content: {
-              type: 'company',
-              id: entity.id,
-            },
-            referredFrom: 'entity-actions-menu',
-          });
-        } else if (entity.type === 'crm_contact') {
-          splitManager.createNewSplit({
-            content: {
-              type: 'contact',
-              id: entity.id,
-            },
-            referredFrom: 'entity-actions-menu',
-          });
-        } else if (entity.type !== 'foreign') {
-          splitManager.createNewSplit({
-            content: {
-              type: itemToBlockName(entity),
-              id: entity.id,
-            },
-            referredFrom: 'entity-actions-menu',
+        if (options.openInNewSplit) {
+          analytics.track('split_created', {
+            from: 'soup_view_entity_actions_menu',
           });
         }
+
+        markReminderSeenOnOpen(entity, notificationSource);
+
+        // Same path as shift/opt+click, so the menu inherits Preview Pair
+        // routing (new split when it fits; replacing the pair outright) and
+        // per-entity targeting such as a thread row's driving message.
+        await openEntityInSplitFromUnifiedList(entity, {
+          ...options,
+          splitHandle,
+          referredFrom: 'entity-actions-menu',
+        });
       };
 
+    if (openableEntity()) {
       topItems.push({
         id: 'open-in-split',
         label: 'Open in new split',
         shortcut: 'shift+enter',
-        onClick: openInNewSplit,
+        // A layout with no room for another split cannot honor this: the open
+        // would fall back to replacing a split instead of adding one.
+        disabled: !globalSplitManager()?.canAppendSplit(),
+        onClick: openEntity({ openInNewSplit: true }),
       });
+
+      if (splitHandle?.isControllerSplit()) {
+        topItems.push({
+          id: 'open-to-replace-preview',
+          label: 'Open to replace preview',
+          shortcut: 'opt+enter',
+          onClick: openEntity({ replacePreview: true }),
+        });
+      }
     }
 
     // Middle group: Rename, Move to folder, Duplicate, Copy Link, Copy Branch Name, Share
@@ -312,6 +301,16 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    // Single-entity only: a reminder points at one thing.
+    if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'create-reminder',
+        label: 'Remind me',
+        hotkeyToken: TOKENS.entity.action.createReminder,
+        onClick: handle(createReminderAction.executeWithSoup),
       });
     }
 

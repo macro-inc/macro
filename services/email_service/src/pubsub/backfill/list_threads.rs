@@ -150,7 +150,7 @@ pub async fn list_threads(
         // the listing returned none, so no per-thread message was ever
         // enqueued and the per-thread completion path will never finalize the
         // job. Complete it here.
-        increment_counters::handle_job_completed(ctx, link, scope.job_id).await?;
+        increment_counters::handle_job_completed(ctx, scope.job_id, None).await?;
         let _ = ctx
             .redis_client
             .delete_backfill_job_progress(scope.job_id)

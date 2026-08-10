@@ -1,6 +1,5 @@
 use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::{
@@ -12,11 +11,15 @@ use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment}
 use contacts::domain::models::messages::ContactConnection;
 use contacts::domain::ports::ContactsIngress;
 use email::domain::events::{
-    EmailEventOrigin, EmailMacroEvent, MessageReceivedMetadata, MessageSentMetadata,
+    EmailEventOrigin, EmailMacroEvent, MessageDraftSyncedMetadata, MessageReceivedMetadata,
+    MessageSentMetadata,
 };
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email_db_client::attachments::provider::upload_filters::{
+    attachment_is_document, attachment_is_media,
+};
 use email_db_client::threads;
 use email_utils::dedupe_emails;
 use filter_ast::Expr;
@@ -31,7 +34,9 @@ use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
+use models_email::service::attachment::{
+    Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
+};
 use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use notification::domain::models::SendNotificationRequestBuilder;
@@ -43,6 +48,37 @@ use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MessageSyncEventKind {
+    DraftSynced,
+    Received,
+    Sent,
+}
+
+fn select_message_sync_event(
+    existing_message_was_draft: Option<bool>,
+    is_draft: bool,
+    is_sent: bool,
+) -> Option<MessageSyncEventKind> {
+    if is_draft {
+        return Some(MessageSyncEventKind::DraftSynced);
+    }
+
+    if existing_message_was_draft == Some(true) && is_sent {
+        return Some(MessageSyncEventKind::Sent);
+    }
+
+    if existing_message_was_draft.is_some() {
+        return None;
+    }
+
+    if is_sent {
+        Some(MessageSyncEventKind::Sent)
+    } else {
+        Some(MessageSyncEventKind::Received)
+    }
+}
 
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
@@ -83,7 +119,7 @@ pub async fn upsert_message(
     };
 
     // Map Gmail resource to service model (IDs are generated in the parse function)
-    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
+    let mut message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
         ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::GmailApiFailed,
             source: e.context("Failed to map message resource to service".to_string()),
@@ -172,27 +208,31 @@ pub async fn upsert_message(
         })
     })?;
 
-    // before upserting, figure out if the message is new so we can send a notification for it if so
-    let message_already_exists = email_db_client::messages::get::message_exists_by_provider_id(
-        &ctx.db,
-        &payload.provider_message_id,
-        link.id,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e
-                .context("Failed to check whether provider_message_id already exists".to_string()),
-        })
-    })?;
+    // Snapshot the previous draft state before the upsert. Provider drafts are mutable,
+    // and this state distinguishes a draft-to-sent transition from an unchanged message.
+    let existing_message =
+        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
+            &ctx.db,
+            &payload.provider_message_id,
+            &link.id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .context("Failed to fetch existing message before provider upsert".to_string()),
+            })
+        })?;
+    let existing_message_was_draft = existing_message.as_ref().map(|message| message.is_draft);
+    let message_already_exists = existing_message.is_some();
 
     let is_new_thread = !thread_provider_to_db_map.contains_key(&provider_thread_id);
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
     if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
-        process_and_insert_message(ctx, link.id, *thread_db_id, message)
+        process_and_insert_message(ctx, link.id, *thread_db_id, &mut message)
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
@@ -231,17 +271,44 @@ pub async fn upsert_message(
             })
         })?;
 
-    // Publish to the macro.email topic immediately after the committed
-    // insert, BEFORE the fallible side-effect steps below: if any of them
-    // fails, the SQS retry finds the message already existing and would
-    // never emit. Drafts are skipped — a draft synced from the provider is
-    // not a received or sent message.
-    if !message_already_exists && !is_draft {
-        let event = if is_sent {
-            // Sent from another client and first observed via sync; sends
-            // performed through Macro are published by the scheduled-send
-            // worker and already exist here.
-            EmailMacroEvent::message_sent(MessageSentMetadata {
+    // Publish to the macro.email topic immediately after the committed insert.
+    // Drafts publish after every sync because their bodies are mutable. Existing
+    // immutable messages remain suppressed except when a previously synced provider
+    // draft becomes sent.
+    if let Some(event_kind) =
+        select_message_sync_event(existing_message_was_draft, is_draft, is_sent)
+    {
+        let event = match event_kind {
+            MessageSyncEventKind::DraftSynced => {
+                EmailMacroEvent::message_draft_synced(MessageDraftSyncedMetadata {
+                    link_id: link.id,
+                    owner: link.macro_id.clone(),
+                    message_id: message_db_id,
+                    provider_message_id: payload.provider_message_id.clone(),
+                    thread_id: thread_db_id,
+                    provider_thread_id: provider_thread_id.clone(),
+                    is_spam_or_trash,
+                })
+            }
+            MessageSyncEventKind::Received => {
+                EmailMacroEvent::message_received(MessageReceivedMetadata {
+                    link_id: link.id,
+                    owner: link.macro_id.clone(),
+                    message_id: message_db_id,
+                    provider_message_id: payload.provider_message_id.clone(),
+                    thread_id: thread_db_id,
+                    provider_thread_id: provider_thread_id.clone(),
+                    is_new_thread,
+                    subject: event_subject,
+                    from_email: event_from.as_ref().map(|contact| contact.email.clone()),
+                    from_name: event_from.as_ref().and_then(|contact| contact.name.clone()),
+                    to_emails: event_to_emails,
+                    attachment_count: message_attachment_count as u32,
+                    is_spam_or_trash,
+                    received_at: event_received_at,
+                })
+            }
+            MessageSyncEventKind::Sent => EmailMacroEvent::message_sent(MessageSentMetadata {
                 link_id: link.id,
                 owner: link.macro_id.clone(),
                 actor: None,
@@ -254,24 +321,7 @@ pub async fn upsert_message(
                 cc_emails: event_cc_emails,
                 origin: EmailEventOrigin::ProviderSync,
                 sent_at: event_sent_at.unwrap_or_else(chrono::Utc::now),
-            })
-        } else {
-            EmailMacroEvent::message_received(MessageReceivedMetadata {
-                link_id: link.id,
-                owner: link.macro_id.clone(),
-                message_id: message_db_id,
-                provider_message_id: payload.provider_message_id.clone(),
-                thread_id: thread_db_id,
-                provider_thread_id: provider_thread_id.clone(),
-                is_new_thread,
-                subject: event_subject,
-                from_email: event_from.as_ref().map(|c| c.email.clone()),
-                from_name: event_from.as_ref().and_then(|c| c.name.clone()),
-                to_emails: event_to_emails,
-                attachment_count: message_attachment_count as u32,
-                is_spam_or_trash,
-                received_at: event_received_at,
-            })
+            }),
         };
         publish_email_event(&ctx.macro_event_broker, &event);
     }
@@ -281,7 +331,7 @@ pub async fn upsert_message(
         &gmail_access_token,
         link,
         payload,
-        message_attachment_count,
+        &message.attachments,
     )
     .await?;
 
@@ -302,8 +352,6 @@ pub async fn upsert_message(
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
         enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
     }
-
-    notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;
 
     // trigger FE inbox refresh
     cg_refresh_email(
@@ -328,30 +376,50 @@ pub async fn upsert_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, gmail_access_token))]
+#[tracing::instrument(skip(ctx, gmail_access_token, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
     gmail_access_token: &str,
     link: &link::Link,
     payload: &UpsertMessagePayload,
-    message_attachment_count: usize,
+    attachments: &[Attachment],
 ) -> result::Result<(), ProcessingError> {
-    if cfg!(not(feature = "attachment_upload")) || message_attachment_count == 0 {
+    if cfg!(not(feature = "attachment_upload")) {
+        return Ok(());
+    }
+
+    // Keep this parsed-attachment gate at least as permissive as the database claim filters.
+    let eligibility = attachment_upload_eligibility(attachments);
+    if !eligibility.documents && !eligibility.media {
         return Ok(());
     }
 
     // upload attachments to Macro
     let (document_atts, media_atts) = tokio::try_join!(
-        email_db_client::attachments::provider::upload::new_email_document_atts(
-            &ctx.db,
-            link.id,
-            &payload.provider_message_id,
-        ),
-        email_db_client::attachments::provider::upload::new_email_media_atts(
-            &ctx.db,
-            link.id,
-            &payload.provider_message_id,
-        )
+        async {
+            if eligibility.documents {
+                email_db_client::attachments::provider::upload::new_email_document_atts(
+                    &ctx.db,
+                    link.id,
+                    &payload.provider_message_id,
+                )
+                .await
+            } else {
+                Ok(Vec::<AttachmentUploadMetadata>::new())
+            }
+        },
+        async {
+            if eligibility.media {
+                email_db_client::attachments::provider::upload::new_email_media_atts(
+                    &ctx.db,
+                    link.id,
+                    &payload.provider_message_id,
+                )
+                .await
+            } else {
+                Ok(Vec::<AttachmentUploadMetadata>::new())
+            }
+        }
     )
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
@@ -427,6 +495,27 @@ async fn handle_attachment_upload(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AttachmentUploadEligibility {
+    documents: bool,
+    media: bool,
+}
+
+fn attachment_upload_eligibility(attachments: &[Attachment]) -> AttachmentUploadEligibility {
+    let mut eligibility = AttachmentUploadEligibility::default();
+
+    for attachment in attachments {
+        let Some(mime_type) = attachment.mime_type.as_deref() else {
+            continue;
+        };
+
+        eligibility.documents |= attachment_is_document(mime_type, attachment.filename.as_deref());
+        eligibility.media |= attachment_is_media(mime_type);
+    }
+
+    eligibility
 }
 
 #[tracing::instrument(skip(ctx, link, recipient_emails, sender_email))]
@@ -548,14 +637,14 @@ async fn process_and_insert_message(
     ctx: &PubSubContext,
     link_id: Uuid,
     thread_db_id: Uuid,
-    mut message: Message,
+    message: &mut Message,
 ) -> anyhow::Result<()> {
-    process_message_pre_insert(&mut message).await;
+    process_message_pre_insert(message).await;
 
     email_db_client::messages::insert::insert_message(
         &ctx.db,
         thread_db_id,
-        &mut message,
+        message,
         link_id,
         true,
     )

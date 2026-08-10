@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, BulkUpdateEntitiesPropertyOptionsData, BulkUpdateEntitiesPropertyOptionsErrors, BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsData, BulkUpdateEntityPropertyOptionsErrors, BulkUpdateEntityPropertyOptionsResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
+import type { AddEntityPropertyOptionData, AddEntityPropertyOptionErrors, AddEntityPropertyOptionResponses, AddPropertyOptionData, AddPropertyOptionErrors, AddPropertyOptionResponses, BulkUpdateEntitiesPropertyOptionsData, BulkUpdateEntitiesPropertyOptionsErrors, BulkUpdateEntitiesPropertyOptionsResponses, BulkUpdateEntityPropertyOptionsData, BulkUpdateEntityPropertyOptionsErrors, BulkUpdateEntityPropertyOptionsResponses, CreatePropertyDefinitionData, CreatePropertyDefinitionErrors, CreatePropertyDefinitionResponses, DeleteEntityPropertyData, DeleteEntityPropertyErrors, DeleteEntityPropertyResponses, DeletePropertyDefinitionData, DeletePropertyDefinitionErrors, DeletePropertyDefinitionResponses, DeletePropertyOptionData, DeletePropertyOptionErrors, DeletePropertyOptionResponses, EnsureTagSetData, EnsureTagSetErrors, EnsureTagSetResponses, GetBulkEntityPropertiesData, GetBulkEntityPropertiesErrors, GetBulkEntityPropertiesResponses, GetEntityPropertiesData, GetEntityPropertiesErrors, GetEntityPropertiesResponses, GetPropertyDefinitionData, GetPropertyDefinitionErrors, GetPropertyDefinitionResponses, GetPropertyOptionsData, GetPropertyOptionsErrors, GetPropertyOptionsResponses, ListPropertiesData, ListPropertiesErrors, ListPropertiesResponses, ListTagsData, ListTagsErrors, ListTagsResponses, MergeTagData, MergeTagErrors, MergeTagResponses, PromoteTagData, PromoteTagErrors, PromoteTagResponses, RemoveEntityPropertyOptionData, RemoveEntityPropertyOptionErrors, RemoveEntityPropertyOptionResponses, SetEntityPropertyData, SetEntityPropertyErrors, SetEntityPropertyResponses, UpdatePropertyOptionData, UpdatePropertyOptionErrors, UpdatePropertyOptionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -263,6 +263,45 @@ export class Sdk extends HeyApiClient {
     public ensureTagSet<ThrowOnError extends boolean = false>(options: Options<EnsureTagSetData, ThrowOnError>): RequestResult<EnsureTagSetResponses, EnsureTagSetErrors, ThrowOnError> {
         return (options.client ?? this.client).post<EnsureTagSetResponses, EnsureTagSetErrors, ThrowOnError>({
             url: '/properties/tags',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Replace one of the caller's personal labels with an existing team label.
+     *
+     * Every entity carrying the personal label is retagged with the team label
+     * (deduped if it already has both) and the personal label is deleted. The team
+     * label's name and color win. This is the confirmation step after the promote
+     * endpoint reports a name collision.
+     */
+    public mergeTag<ThrowOnError extends boolean = false>(options: Options<MergeTagData, ThrowOnError>): RequestResult<MergeTagResponses, MergeTagErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MergeTagResponses, MergeTagErrors, ThrowOnError>({
+            url: '/properties/tags/merge',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Share one of the caller's personal labels with their team.
+     *
+     * The label moves into the team tag set keeping its option id, so every entity
+     * already carrying it keeps the label — it just becomes visible to, and usable
+     * by, the whole team. A 409 means the team already has a label with that name;
+     * its body carries that label, and confirming the replacement is a call to the
+     * merge endpoint with `conflicting_option.id` as `target_option_id`.
+     */
+    public promoteTag<ThrowOnError extends boolean = false>(options: Options<PromoteTagData, ThrowOnError>): RequestResult<PromoteTagResponses, PromoteTagErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PromoteTagResponses, PromoteTagErrors, ThrowOnError>({
+            url: '/properties/tags/promote',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

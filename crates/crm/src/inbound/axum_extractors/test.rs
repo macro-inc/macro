@@ -40,6 +40,7 @@ use crate::{
         companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
         model::{
             CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
+            DepopulateContactOutcome,
         },
         service::CrmService,
     },
@@ -278,8 +279,15 @@ impl CrmService for FakeCrmService {
         _team_id: &Uuid,
         _link_id: &Uuid,
         _email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         panic!("unexpected depopulate_contact call")
+    }
+
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(Uuid, String)],
+    ) -> Result<Vec<(Uuid, String)>, CrmError> {
+        panic!("unexpected link_contact_pairs_with_sources call")
     }
 
     async fn depopulate_link_in_team(

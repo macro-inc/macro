@@ -126,7 +126,9 @@ mod tests {
         assert_eq!(entity.kind, TypeKind::Interface);
         assert!(entity.possible_types.contains(&"GraphqlSoupDocument"));
         assert!(entity.possible_types.contains(&"GraphqlSoupForeignEntity"));
-        assert_eq!(entity.possible_types.len(), 9);
+        assert!(entity.possible_types.contains(&"GraphqlSoupCalendarEvent"));
+        assert!(entity.possible_types.contains(&"GraphqlSoupReminder"));
+        assert_eq!(entity.possible_types.len(), 11);
         assert!(type_matches("GraphqlSoupDocument", "GraphqlSoupEntity"));
         assert!(!type_matches("GraphqlSoupItem", "GraphqlSoupEntity"));
     }

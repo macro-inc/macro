@@ -5,6 +5,7 @@ import {
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
 import type { ObjectLike, ResultError } from '@core/util/result';
+import { ThrownResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
@@ -17,15 +18,66 @@ import type { EntityPropertiesResponse } from './generated/schemas/entityPropert
 import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
 import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
 import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';
+import type { MergeTagRequest } from './generated/schemas/mergeTagRequest';
+import type { PromoteTagRequest } from './generated/schemas/promoteTagRequest';
 import type { PropertyDefinition } from './generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
 import type { PropertyOption } from './generated/schemas/propertyOption';
+import type { PropertyOptionResponse } from './generated/schemas/propertyOptionResponse';
 import type { PropertyTargetEntityType } from './generated/schemas/propertyTargetEntityType';
 import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
+import type { TagPromotionConflictResponse } from './generated/schemas/tagPromotionConflictResponse';
 import type { TagSetResponse } from './generated/schemas/tagSetResponse';
 import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
 
 type PropertiesEntityType = PropertyTargetEntityType;
+
+/**
+ * A promote-tag call rejected because the team already owns a label with that
+ * name. The colliding label rides along on the error so the caller can prompt
+ * with it and then merge into it.
+ */
+export const TAG_NAME_CONFLICT_CODE = 'TAG_NAME_CONFLICT' as const;
+
+type TagPromoteErrorCode = typeof TAG_NAME_CONFLICT_CODE;
+
+/** safeFetch's default mapping for statuses the custom handler doesn't claim. */
+function defaultFetchError(response: Response) {
+  switch (response.status) {
+    case 401:
+      return { code: 'UNAUTHORIZED' as const, message: 'Unauthorized access' };
+    case 403:
+      return { code: 'FORBIDDEN' as const, message: 'Forbidden' };
+    case 404:
+      return { code: 'NOT_FOUND' as const, message: 'Resource not found' };
+    default:
+      return {
+        code: 'HTTP_ERROR' as const,
+        message: `HTTP error! status: ${response.status}`,
+      };
+  }
+}
+
+/**
+ * Recover the colliding team label from a thrown promote error, or `null` when
+ * the failure was something else.
+ */
+export function parseTagNameConflict(
+  error: unknown
+): TagPromotionConflictResponse | null {
+  if (!(error instanceof ThrownResultError)) return null;
+  const conflict = error.errors.find(
+    (candidate) => candidate.code === TAG_NAME_CONFLICT_CODE
+  );
+  if (!conflict) return null;
+
+  try {
+    const parsed = JSON.parse(conflict.message) as TagPromotionConflictResponse;
+    return parsed.conflicting_option ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 type ListPropertiesArgs = ListPropertiesParams;
 type CreatePropertyDefinitionArgs = {
@@ -75,6 +127,12 @@ type GetBulkEntityPropertiesArgs = {
 };
 type EnsureTagSetArgs = {
   body: EnsureTagSetRequest;
+};
+type PromoteTagArgs = {
+  body: PromoteTagRequest;
+};
+type MergeTagArgs = {
+  body: MergeTagRequest;
 };
 type UpdatePropertyOptionArgs = {
   definition_id: string;
@@ -255,6 +313,50 @@ export const propertiesServiceClient = {
       method: 'POST',
       body: JSON.stringify(args.body),
     });
+  },
+
+  /**
+   * Share a personal label with the caller's team, keeping its option id so
+   * everything already tagged stays tagged.
+   *
+   * A 409 means the team already has a label with that name. The default
+   * safeFetch mapping would collapse that to a bare `CONFLICT` and drop the
+   * body, so a custom handler carries the colliding label through as JSON for
+   * the caller to prompt with (see `parseTagNameConflict`).
+   */
+  promoteTag: async (args: PromoteTagArgs) => {
+    return await fetchWithToken<PropertyOptionResponse, TagPromoteErrorCode>(
+      `${propertiesHost}/properties/tags/promote`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            const body = (await response
+              .json()
+              .catch(() => null)) as TagPromotionConflictResponse | null;
+            if (body?.conflicting_option) {
+              return {
+                code: TAG_NAME_CONFLICT_CODE,
+                message: JSON.stringify(body),
+              };
+            }
+          }
+          return defaultFetchError(response);
+        },
+      }
+    );
+  },
+
+  /** Replace a personal label with an existing team label, retagging entities. */
+  mergeTag: async (args: MergeTagArgs) => {
+    return await propertiesFetch<PropertyOptionResponse>(
+      `/properties/tags/merge`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 
   updatePropertyOption: async (args: UpdatePropertyOptionArgs) => {

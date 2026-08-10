@@ -16,7 +16,6 @@ pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;
     pub struct FusionAuthClientSecretKey;
@@ -64,8 +63,6 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: RedisUri,
-    /// FusionAuth Tenant Id
-    pub fusionauth_tenant_id: FusionAuthTenantId,
     /// FusionAuth API key secret name
     pub fusionauth_api_key_secret_key: FusionAuthApiSecretKey,
     /// FusionAuth client id
@@ -121,6 +118,11 @@ pub struct Config {
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub kafka_brokers: KafkaBrokers,
+    /// Whether Gmail link consent requests the Google Calendar scope. Off by
+    /// default so deployed environments don't ask users for a scope the
+    /// calendar feature isn't using yet.
+    #[macro_config_default(false)]
+    pub calendar_scope_enabled: bool,
 }
 
 impl Config {

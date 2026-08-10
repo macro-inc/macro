@@ -71,10 +71,20 @@ impl SoupRealtimePublisher for FakePublisher {
 }
 
 struct Harness {
-    service: SoupRealtimeServiceImpl<FakeAccessExpander, FakePublisher>,
+    service: SoupRealtimeServiceImpl,
     access_calls: Arc<AtomicUsize>,
     access_entities: Arc<Mutex<Vec<Entity<'static>>>>,
     messages: Arc<Mutex<Vec<SoupRealtimeMessage>>>,
+}
+
+async fn wait_until(mut condition: impl FnMut() -> bool) {
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !condition() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background worker completes");
 }
 
 fn user(local: &str) -> MacroUserIdStr<'static> {
@@ -181,10 +191,9 @@ async fn zero_users_skips_publication() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .await
-        .expect("zero recipients is successful");
+        .expect("patch is queued");
 
-    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
+    wait_until(|| harness.access_calls.load(Ordering::SeqCst) == 1).await;
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 
@@ -197,8 +206,17 @@ async fn recipient_expansion_can_use_a_different_entity_from_the_patch() {
     harness
         .service
         .notify_users(SoupRealtimePatch::new(updated_document(), channel.clone()))
-        .await
-        .expect("fan-out succeeds");
+        .expect("patch is queued");
+
+    wait_until(|| {
+        harness
+            .access_entities
+            .lock()
+            .expect("access entities lock")
+            .len()
+            == 1
+    })
+    .await;
 
     assert_eq!(
         harness
@@ -222,9 +240,9 @@ async fn updated_and_deleted_patches_are_published_unchanged() {
         harness
             .service
             .notify_users(SoupRealtimePatch::for_entity(patch.clone()))
-            .await
-            .expect("fan-out succeeds");
+            .expect("patch is queued");
 
+        wait_until(|| harness.messages.lock().expect("messages lock").len() == 1).await;
         let messages = harness.messages.lock().expect("messages lock");
         assert_eq!(
             messages.as_slice(),
@@ -242,10 +260,9 @@ async fn duplicate_accessors_are_deduplicated() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .await
-        .expect("fan-out succeeds");
+        .expect("patch is queued");
 
-    assert_eq!(harness.messages.lock().expect("messages lock").len(), 2);
+    wait_until(|| harness.messages.lock().expect("messages lock").len() == 2).await;
 }
 
 #[tokio::test]
@@ -255,14 +272,14 @@ async fn access_failure_prevents_publication() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .await
-        .expect_err("access failure propagates");
+        .expect("patch is queued");
 
+    wait_until(|| harness.access_calls.load(Ordering::SeqCst) == 1).await;
     assert!(harness.messages.lock().expect("messages lock").is_empty());
 }
 
 #[tokio::test]
-async fn publisher_failure_is_returned_after_all_messages_are_attempted() {
+async fn publisher_failure_does_not_block_other_messages() {
     let users = [user("one"), user("two"), user("three")];
     let harness = harness(
         users.to_vec(),
@@ -273,8 +290,7 @@ async fn publisher_failure_is_returned_after_all_messages_are_attempted() {
     harness
         .service
         .notify_users(SoupRealtimePatch::for_entity(updated_document()))
-        .await
-        .expect_err("publication failure propagates");
+        .expect("patch is queued");
 
-    assert_eq!(harness.messages.lock().expect("messages lock").len(), 3);
+    wait_until(|| harness.messages.lock().expect("messages lock").len() == 3).await;
 }

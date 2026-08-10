@@ -18,6 +18,7 @@ use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
 use item_filters::ast::{
     EmailFilterAst, EntityFilterAst,
+    calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
     chat::ChatLiteral,
@@ -26,6 +27,7 @@ use item_filters::ast::{
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
+    reminder::ReminderLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -36,7 +38,7 @@ use rootcause::{
     markers::{Cloneable, Dynamic},
 };
 use soup::domain::{
-    models::{SoupQuery, SoupRequest, SoupType},
+    models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
 use uuid::Uuid;
@@ -134,6 +136,8 @@ where
             soup_type: SoupType::Expanded,
             limit,
             cursor: SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, filter),
+            // Batch entity load — order is irrelevant, the caller re-keys by id.
+            sort_direction: SoupSortDirection::default(),
             user: user_id.clone(),
             email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
             link_ids,
@@ -335,6 +339,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut calls = Vec::new();
     let mut crm_companies = Vec::new();
     let mut foreign_entities = Vec::new();
+    let mut calendar_events = Vec::new();
+    let mut reminders = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -357,10 +363,13 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::Call => calls.push(CallLiteral::CallId(id)),
             EntityType::CrmCompany => crm_companies.push(CrmCompanyLiteral::Id(id)),
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
+            EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
+            EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact => {
+            | EntityType::CrmContact
+            | EntityType::Skill => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -372,6 +381,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
 
     let nil = Uuid::nil();
     Ok(EntityFilterAst {
+        calendar_event_filter: Some(literal_tree(calendar_events, CalendarEventLiteral::Id(nil))),
         document_filter: Some(literal_tree(documents, DocumentLiteral::Id(nil))),
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
         chat_filter: Some(literal_tree(chats, ChatLiteral::ChatId(nil))),
@@ -390,6 +400,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             foreign_entities,
             ForeignEntityLiteral::Id(nil),
         )),
+        reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
         properties_filter: None,
     })
 }

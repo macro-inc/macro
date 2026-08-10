@@ -11,7 +11,7 @@ use crate::domain::{
     model::{
         CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact,
         CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings,
-        CrmTeamSettingsPatch, DomainMetadata,
+        CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
     },
 };
 use chrono::{DateTime, Utc};
@@ -623,9 +623,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         link_id: &uuid::Uuid,
         domain: &str,
         email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
+        let mut outcome = DepopulateContactOutcome::default();
 
         let mut tx = self
             .pool
@@ -671,11 +672,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            return Ok(());
+            return Ok(outcome);
         };
 
         // 1. Drop the per-link source row.
-        sqlx::query!(
+        let source_result = sqlx::query!(
             r#"
             DELETE FROM crm_contact_sources
             WHERE contact_id = $1 AND link_id = $2
@@ -686,6 +687,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .execute(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        outcome.source_deleted = source_result.rows_affected() > 0;
 
         // 2. Manually created contacts are user data, not derived —
         //    never torn down (they have no sources by construction, so
@@ -694,7 +696,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            return Ok(());
+            return Ok(outcome);
         }
 
         //    Otherwise keep the contact iff any other link in the team
@@ -715,13 +717,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            return Ok(());
+            return Ok(outcome);
         }
 
-        sqlx::query!(r#"DELETE FROM crm_contacts WHERE id = $1"#, row.contact_id,)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let contact_result =
+            sqlx::query!(r#"DELETE FROM crm_contacts WHERE id = $1"#, row.contact_id,)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        outcome.contact_deleted = contact_result.rows_affected() > 0;
 
         // 3. Keep killswitched companies — dropping would erase the
         //    opt-out and a future populate would recreate as enabled.
@@ -731,7 +735,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            return Ok(());
+            return Ok(outcome);
         }
 
         let other_contacts = sqlx::query_scalar!(
@@ -750,20 +754,57 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-            return Ok(());
+            return Ok(outcome);
         }
 
         // crm_domains cascades via FK.
-        sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, row.company_id,)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let company_result =
+            sqlx::query!(r#"DELETE FROM crm_companies WHERE id = $1"#, row.company_id,)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        outcome.company_deleted = company_result.rows_affected() > 0;
 
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        Ok(())
+        Ok(outcome)
+    }
+
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        if pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (link_ids, emails): (Vec<uuid::Uuid>, Vec<String>) = pairs
+            .iter()
+            .map(|(link_id, email)| (*link_id, email.to_ascii_lowercase()))
+            .unzip();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT cs.link_id AS "link_id!", LOWER(ct.email) AS "email!"
+            FROM crm_contact_sources cs
+            JOIN crm_contacts ct ON ct.id = cs.contact_id
+            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
+              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)
+            "#,
+            &link_ids,
+            &emails,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.link_id, row.email))
+            .collect())
     }
 
     #[tracing::instrument(skip(self), err)]

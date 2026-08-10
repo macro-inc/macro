@@ -10,6 +10,7 @@ use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio::task::JoinHandle;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use super::{
@@ -110,41 +111,29 @@ where
 const PUBLISH_CONCURRENCY: usize = 16;
 
 /// Domain service that expands entity access and fans out lightweight patches.
-pub struct SoupRealtimeServiceImpl<A, P> {
+pub struct SoupRealtimeServiceImpl {
+    sender: tokio::sync::mpsc::Sender<SoupRealtimePatch>,
+    _bg: JoinHandle<()>,
+}
+
+struct Worker<A, P> {
     access_expander: A,
     publisher: P,
+    rx: tokio::sync::mpsc::Receiver<SoupRealtimePatch>,
 }
 
-impl<A, P> SoupRealtimeServiceImpl<A, P> {
-    /// Creates a realtime Soup service from its outbound capabilities.
-    pub fn new(access_expander: A, publisher: P) -> Self {
-        Self {
-            access_expander,
-            publisher,
+impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
+    async fn run(&mut self) -> () {
+        while let Some(msg) = self.rx.recv().await {
+            let _ = self.process_one(msg).await;
         }
     }
-}
 
-impl<A, P> SoupRealtimeService for SoupRealtimeServiceImpl<A, P>
-where
-    A: UserAccessExpander,
-    P: SoupRealtimePublisher,
-{
-    #[tracing::instrument(
-        skip(self),
-        fields(
-            entity_type = %patch.patch.value().entity_type,
-            entity_id = %patch.patch.value().entity_id,
-            access_source_type = %patch.access_source.entity_type,
-            access_source_id = %patch.access_source.entity_id,
-            recipient_count = tracing::field::Empty,
-        ),
-        err
-    )]
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+    #[tracing::instrument(err, skip(self))]
+    async fn process_one(&self, msg: SoupRealtimePatch) -> Result<(), Report> {
         let mut users = self
             .access_expander
-            .expand_user_access(&patch.access_source)
+            .expand_user_access(&msg.access_source)
             .await
             .context("failed to expand current user access")?;
 
@@ -154,7 +143,7 @@ where
 
         let messages = users
             .into_iter()
-            .map(|user_id| SoupRealtimeMessage::new(user_id, patch.patch.clone()))
+            .map(|user_id| SoupRealtimeMessage::new(user_id, msg.patch.clone()))
             .collect::<Vec<_>>();
         let results = stream::iter(
             messages
@@ -173,7 +162,40 @@ where
                 ))
                 .into_dynamic());
         }
-
         Ok(())
+    }
+}
+
+const BACKGROUND_CHANNEL_SIZE: usize = 256;
+
+impl SoupRealtimeServiceImpl {
+    /// Creates a realtime Soup service from its outbound capabilities.
+    pub fn new<A: UserAccessExpander, P: SoupRealtimePublisher>(
+        access_expander: A,
+        publisher: P,
+    ) -> Self {
+        let (tx, rx) = tokio::sync::mpsc::channel(BACKGROUND_CHANNEL_SIZE);
+
+        let task = tokio::spawn(async move {
+            Worker {
+                rx,
+                access_expander,
+                publisher,
+            }
+            .run()
+            .await
+        });
+
+        Self {
+            sender: tx,
+            _bg: task,
+        }
+    }
+}
+
+impl SoupRealtimeService for SoupRealtimeServiceImpl {
+    #[tracing::instrument(skip(self), err)]
+    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+        Ok(self.sender.try_send(patch)?)
     }
 }

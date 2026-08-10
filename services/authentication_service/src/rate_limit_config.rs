@@ -30,5 +30,10 @@ pub static RATE_LIMIT_CONFIG: RateLimitConfig = RateLimitConfig {
     merge_email_daily: (5, 86400),
 
     create_user_hourly: (50, 3600),
-    mobile_welcome_email: (5, 3600), // 10 attempts per hour per IP
+    // 100 attempts per hour per IP. Mobile carriers put thousands of phones
+    // behind one CGNAT address, so a low cap here rejects real visitors on the
+    // marketing site's mobile signup form rather than abusers. Abuse stays
+    // bounded because an address can only ever be sent this email once (the
+    // handler claims it in `mobile_welcome_email` before sending).
+    mobile_welcome_email: (100, 3600),
 };

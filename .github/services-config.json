@@ -98,6 +98,7 @@
         "services/document_storage_service/**",
         "crates/call/**",
         "crates/github/**",
+        "crates/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",
         "services/document_upload_finalizer_handler/**"

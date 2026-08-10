@@ -29,6 +29,8 @@ pub(crate) async fn get_idp_id_by_name(
     base_url: &str,
     name: &str,
 ) -> Result<String> {
+    // NOTE: this API matches ZERO identity providers when an
+    // X-FusionAuth-TenantId header is present.
     let res = client
         .client()
         .get(format!(

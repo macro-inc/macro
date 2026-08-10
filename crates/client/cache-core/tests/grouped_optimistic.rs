@@ -39,6 +39,22 @@ query GroupSoup($input: GroupedSoupInput!) {
 }
 "#;
 
+const GROUP_MEMBERSHIP_QUERY: &str = r#"
+query GroupSoupMembership($input: GroupedSoupInput!) {
+  user {
+    id
+    groupSoup(input: $input) {
+      bins {
+        key
+        totalCount
+        nextCursor
+        items { __typename id }
+      }
+    }
+  }
+}
+"#;
+
 const MUTATION: &str = r#"
 mutation SetEntityProperty($input: SetEntityPropertyInput!) {
   setEntityProperty(input: $input) {
@@ -122,10 +138,19 @@ fn mutation_response(option: &str) -> Json {
     json!({ "setEntityProperty": property(option) })
 }
 
+fn group_page_without_destination() -> Json {
+    let mut page = group_page();
+    page["user"]["groupSoup"]["bins"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(1);
+    page
+}
+
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
-        query: GROUP_QUERY.into(),
-        operation_name: Some("GroupSoup".into()),
+        query: GROUP_MEMBERSHIP_QUERY.into(),
+        operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
         path: vec![
             LinkPathSegment::Field {
@@ -151,6 +176,63 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     }
 }
 
+fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
+    OptimisticLinkPatch {
+        query: GROUP_MEMBERSHIP_QUERY.into(),
+        operation_name: Some("GroupSoupMembership".into()),
+        variables_json: serde_json::to_string(&query_variables()).unwrap(),
+        path: vec![
+            LinkPathSegment::Field {
+                field: "user".into(),
+            },
+            LinkPathSegment::Field {
+                field: "groupSoup".into(),
+            },
+            LinkPathSegment::Field {
+                field: "bins".into(),
+            },
+        ],
+        operation: LinkOperation::RemoveEmbeddedLink {
+            list_item: ListItemByScalar {
+                where_field: "key".into(),
+                equals: json!(bin),
+            },
+            link_field: "items".into(),
+            count_field: "totalCount".into(),
+            entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
+        },
+    }
+}
+
+fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
+    OptimisticLinkPatch {
+        query: GROUP_MEMBERSHIP_QUERY.into(),
+        operation_name: Some("GroupSoupMembership".into()),
+        variables_json: serde_json::to_string(&query_variables()).unwrap(),
+        path: vec![
+            LinkPathSegment::Field {
+                field: "user".into(),
+            },
+            LinkPathSegment::Field {
+                field: "groupSoup".into(),
+            },
+            LinkPathSegment::Field {
+                field: "bins".into(),
+            },
+        ],
+        operation: LinkOperation::UpsertEmbeddedLink {
+            list_item: ListItemByScalar {
+                where_field: "key".into(),
+                equals: json!(bin),
+            },
+            link_field: "items".into(),
+            count_field: "totalCount".into(),
+            entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
+            insert_fields: std::collections::HashMap::from([("nextCursor".into(), Json::Null)]),
+        },
+    }
+}
+
 async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {
     match engine
         .read_query(None, GROUP_QUERY, Some("GroupSoup"), &query_variables())
@@ -163,6 +245,10 @@ async fn read_group(engine: &mut Engine<InMemoryStorage>) -> Json {
 }
 
 async fn setup() -> Engine<InMemoryStorage> {
+    setup_with_page(group_page()).await
+}
+
+async fn setup_with_page(page: Json) -> Engine<InMemoryStorage> {
     let mut engine = Engine::new(InMemoryStorage::new());
     engine
         .write_query(
@@ -170,7 +256,7 @@ async fn setup() -> Engine<InMemoryStorage> {
             GROUP_QUERY,
             Some("GroupSoup"),
             &query_variables(),
-            &group_page(),
+            &page,
             None,
         )
         .await
@@ -200,18 +286,8 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
     block_on(async {
         let mut engine = setup().await;
         let patches = [
-            patch(
-                "in-progress",
-                LinkOperation::Remove {
-                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
-                },
-            ),
-            patch(
-                "completed",
-                LinkOperation::PrependUnique {
-                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
-                },
-            ),
+            remove_bin_patch("in-progress"),
+            upsert_bin_patch("completed"),
         ];
         let (transaction, _) = engine
             .begin_optimistic_write(
@@ -233,9 +309,9 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
         let bins = optimistic["user"]["groupSoup"]["bins"].as_array().unwrap();
         assert!(bins[0]["items"].as_array().unwrap().is_empty());
         assert_eq!(bins[1]["items"][0]["id"], json!("task-1"));
-        // Server-owned pagination metadata is deliberately untouched.
-        assert_eq!(bins[0]["totalCount"], json!(1));
-        assert_eq!(bins[1]["totalCount"], json!(0));
+        assert_eq!(bins[0]["totalCount"], json!(0));
+        assert_eq!(bins[1]["totalCount"], json!(1));
+        // Server-owned pagination cursors are deliberately untouched.
         assert_eq!(bins[1]["nextCursor"], json!("destination-cursor"));
 
         // Durable recipes reconstruct the complete property + relation layer
@@ -251,6 +327,14 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
         assert_eq!(
             hydrated["user"]["groupSoup"]["bins"][1]["items"][0]["id"],
             json!("task-1")
+        );
+        assert_eq!(
+            hydrated["user"]["groupSoup"]["bins"][0]["totalCount"],
+            json!(0)
+        );
+        assert_eq!(
+            hydrated["user"]["groupSoup"]["bins"][1]["totalCount"],
+            json!(1)
         );
 
         let claim = claim(&mut engine, transaction).await;
@@ -269,6 +353,14 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
                 .unwrap()
                 .is_empty()
         );
+        assert_eq!(
+            restored["user"]["groupSoup"]["bins"][0]["totalCount"],
+            json!(1)
+        );
+        assert_eq!(
+            restored["user"]["groupSoup"]["bins"][1]["totalCount"],
+            json!(0)
+        );
     });
 }
 
@@ -277,18 +369,8 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
     block_on(async {
         let mut engine = setup().await;
         let patches = [
-            patch(
-                "in-progress",
-                LinkOperation::Remove {
-                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
-                },
-            ),
-            patch(
-                "completed",
-                LinkOperation::PrependUnique {
-                    entity_key: EntityKey("GraphqlSoupDocument:task-1".into()),
-                },
-            ),
+            remove_bin_patch("in-progress"),
+            upsert_bin_patch("completed"),
         ];
         let (transaction, _) = engine
             .begin_optimistic_write(
@@ -315,6 +397,7 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             "id": "task-2",
             "properties": []
         }]);
+        concurrent["user"]["groupSoup"]["bins"][1]["totalCount"] = json!(1);
         engine
             .write_query(
                 None,
@@ -348,6 +431,80 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
         assert_eq!(
             committed["user"]["groupSoup"]["bins"][1]["items"][1]["id"],
             json!("task-2")
+        );
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][0]["totalCount"],
+            json!(0)
+        );
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][1]["totalCount"],
+            json!(2)
+        );
+    });
+}
+
+#[test]
+fn missing_destination_is_created_with_the_updated_item() {
+    block_on(async {
+        let mut engine = setup_with_page(group_page_without_destination()).await;
+        let patches = [
+            remove_bin_patch("in-progress"),
+            upsert_bin_patch("completed"),
+        ];
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_variables("completed"),
+                    data: &mutation_response("completed"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+
+        let optimistic = read_group(&mut engine).await;
+        let bins = optimistic["user"]["groupSoup"]["bins"].as_array().unwrap();
+        assert_eq!(bins.len(), 2);
+        assert_eq!(bins[0]["key"], json!("completed"));
+        assert_eq!(bins[0]["totalCount"], json!(1));
+        assert_eq!(bins[0]["nextCursor"], Json::Null);
+        assert_eq!(bins[0]["items"][0]["id"], json!("task-1"));
+        assert_eq!(
+            bins[0]["items"][0]["properties"][0]["value"]["optionIds"],
+            json!(["completed"])
+        );
+        assert!(bins[1]["items"].as_array().unwrap().is_empty());
+        assert_eq!(bins[1]["totalCount"], json!(0));
+
+        let claim = claim(&mut engine, transaction).await;
+        engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_variables("completed"),
+                &mutation_response("completed"),
+            )
+            .await
+            .unwrap();
+        let committed = read_group(&mut engine).await;
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][0]["items"][0]["id"],
+            json!("task-1")
+        );
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][0]["totalCount"],
+            json!(1)
+        );
+        assert_eq!(
+            committed["user"]["groupSoup"]["bins"][1]["totalCount"],
+            json!(0)
         );
     });
 }

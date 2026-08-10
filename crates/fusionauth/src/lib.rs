@@ -29,25 +29,19 @@ use anyhow::Context;
 
 use reqwest::Url;
 
-/// An HTTP client with default Authorization and optional tenant headers.
+/// An HTTP client with a default Authorization header.
 #[derive(Clone, Debug)]
 pub struct AuthedClient {
     inner: reqwest::Client,
 }
 
-/// Used to specify what tenant id we want to use
-const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
-
 impl AuthedClient {
-    /// Creates a new authenticated client with the given API key and tenant ID.
-    pub fn new(url: &str, api_key: String, tenant_id: String) -> Self {
-        Self::with_tenant_header(api_key, tenant_id, should_infer_local_tenant_header(url))
-    }
-
-    fn with_tenant_header(api_key: String, tenant_id: String, include_tenant: bool) -> Self {
-        let auth_headers = auth_headers(api_key, tenant_id, include_tenant);
+    /// Creates a new authenticated client with the given API key.
+    pub fn new(api_key: String) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
         let client = reqwest::Client::builder()
-            .default_headers(auth_headers)
+            .default_headers(headers)
             .build()
             .unwrap();
 
@@ -58,25 +52,6 @@ impl AuthedClient {
     pub fn client(&self) -> &reqwest::Client {
         &self.inner
     }
-}
-
-fn auth_headers(
-    api_key: String,
-    tenant_id: String,
-    include_tenant: bool,
-) -> reqwest::header::HeaderMap {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
-
-    if include_tenant {
-        tracing::trace!(
-            "inserting {} header into fusionauth authed client",
-            FUSIONAUTH_TENANT_ID_HEADER
-        );
-        headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id.parse().unwrap());
-    }
-
-    headers
 }
 
 /// An HTTP client without authentication headers.
@@ -122,9 +97,7 @@ pub struct FusionAuthClient {
 
 impl FusionAuthClient {
     /// Creates a new FusionAuth client with the given configuration.
-    #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
     pub fn new(
-        tenant_id: String,
         api_key: String,
         client_id: String,
         client_secret: String,
@@ -133,70 +106,7 @@ impl FusionAuthClient {
         google_client_id: String,
         google_client_secret: String,
     ) -> Self {
-        Self::new_inner(
-            tenant_id,
-            api_key,
-            client_id,
-            client_secret,
-            fusion_auth_base_url,
-            oauth_redirect_uri,
-            google_client_id,
-            google_client_secret,
-            false,
-        )
-    }
-
-    /// Creates a client for a local FusionAuth instance.
-    ///
-    /// Local FusionAuth contains multiple tenants, so this always sends the
-    /// tenant header instead of inferring locality from the host port.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "matches the existing constructor"
-    )]
-    pub fn new_for_local_instance(
-        tenant_id: String,
-        api_key: String,
-        client_id: String,
-        client_secret: String,
-        fusion_auth_base_url: String,
-        oauth_redirect_uri: String,
-        google_client_id: String,
-        google_client_secret: String,
-    ) -> Self {
-        Self::new_inner(
-            tenant_id,
-            api_key,
-            client_id,
-            client_secret,
-            fusion_auth_base_url,
-            oauth_redirect_uri,
-            google_client_id,
-            google_client_secret,
-            true,
-        )
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "shared constructor implementation"
-    )]
-    fn new_inner(
-        tenant_id: String,
-        api_key: String,
-        client_id: String,
-        client_secret: String,
-        fusion_auth_base_url: String,
-        oauth_redirect_uri: String,
-        google_client_id: String,
-        google_client_secret: String,
-        force_tenant_header: bool,
-    ) -> Self {
-        let auth_client = if force_tenant_header {
-            AuthedClient::with_tenant_header(api_key, tenant_id, true)
-        } else {
-            AuthedClient::new(&fusion_auth_base_url, api_key, tenant_id)
-        };
+        let auth_client = AuthedClient::new(api_key);
         let unauth_client = UnauthedClient::new();
         let fusion_auth_public_url = fusion_auth_base_url.clone();
 
@@ -262,14 +172,6 @@ impl FusionAuthClient {
 
         Ok(url.to_string())
     }
-}
-
-/// Preserves automatic tenant-header behavior for the default local endpoints.
-/// Named-instance clients opt into local tenant behavior explicitly instead of
-/// inferring service identity from a host port.
-#[tracing::instrument(level = tracing::Level::TRACE)]
-fn should_infer_local_tenant_header(url: &str) -> bool {
-    url.starts_with("http://fusionauth:9011") || url.starts_with("http://localhost:9011")
 }
 
 #[cfg(test)]

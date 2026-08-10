@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
@@ -12,6 +13,7 @@ import { Select } from '@kobalte/core/select';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import LinkIcon from '@phosphor/link.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -20,6 +22,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
+import { useGithubLinkStatusQuery } from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -68,7 +71,11 @@ import {
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
-import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+import {
+  buildTeamTaskAutolinkTargetUrl,
+  getTeamSlugError,
+  normalizeTeamSlugInput,
+} from './teamSlug';
 
 const roleOrder: Record<string, number> = {
   [TeamRole.owner]: 0,
@@ -124,7 +131,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-50 bg-surface ring ring-edge rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -155,12 +162,8 @@ function InviteEntryRow(props: {
           onInput={(e) => props.onEmailChange(e.currentTarget.value)}
           onBlur={() => props.onBlur()}
           placeholder="Enter email address"
-          class={cn(
-            'flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-            props.error
-              ? 'border-failure focus:border-failure'
-              : 'border-edge-muted focus:border-accent'
-          )}
+          class="settings-input flex-1 min-w-0"
+          aria-invalid={!!props.error}
         />
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
@@ -655,12 +658,8 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               onInput={(e) => handleTeamNameChange(e.currentTarget.value)}
               onBlur={() => validateTeamName()}
               placeholder="My Team"
-              class={cn(
-                'w-full px-3 py-2 text-sm border rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none',
-                teamNameError()
-                  ? 'border-failure focus:border-failure'
-                  : 'border-edge-muted focus:border-accent'
-              )}
+              class="settings-input w-full"
+              aria-invalid={!!teamNameError()}
             />
             <Show when={teamNameError()}>
               <p class="text-xs text-failure-ink">{teamNameError()}</p>
@@ -813,6 +812,7 @@ function TeamManagement(props: {
 
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
+  const githubLink = useGithubLinkStatusQuery();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -1035,6 +1035,20 @@ function TeamManagement(props: {
     setTeamSlugError(undefined);
   };
 
+  const handleCopyGithubAutolinkUrl = async () => {
+    const targetUrl = buildTeamTaskAutolinkTargetUrl(
+      props.teamSlug,
+      getWebOrigin()
+    );
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+      toast.success('GitHub autolink URL copied');
+    } catch (error) {
+      console.error('Failed to copy GitHub autolink URL', error);
+      toast.failure('Failed to copy GitHub autolink URL');
+    }
+  };
+
   const handleDeleteTeam = () => {
     if (!props.teamId) return;
 
@@ -1232,6 +1246,27 @@ function TeamManagement(props: {
               </Show>
             </SettingsRow>
 
+            <SettingsRow
+              label="GitHub autolink"
+              description={
+                <>
+                  Use <code>{props.teamSlug}-</code> as the reference prefix in
+                  GitHub, then paste this target URL.
+                </>
+              }
+              hideDescriptionOnMobile
+            >
+              <Button
+                variant="base"
+                size="sm"
+                class="rounded-xs"
+                onClick={handleCopyGithubAutolinkUrl}
+              >
+                <CopyIcon class="size-4" />
+                Copy target URL
+              </Button>
+            </SettingsRow>
+
             <Show when={isAdminOrOwner()}>
               <SettingsRow
                 label="Auto-join on domain"
@@ -1274,15 +1309,29 @@ function TeamManagement(props: {
               title="GitHub App"
               description="Connect your team's repositories for pull request sync."
             >
-              <a
-                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              {/* The install callback rejects users without a linked GitHub
+                  account, so don't offer the flow until they've connected one
+                  in their personal settings. */}
+              <Show
+                when={githubLink.data?.status === 'linked'}
+                fallback={
+                  <span class="text-xs text-ink-muted">
+                    {githubLink.isLoading
+                      ? 'Loading…'
+                      : 'Connect your GitHub account first'}
+                  </span>
+                }
               >
-                Configure app
-                <ArrowUpRightIcon class="size-3.5 opacity-70" />
-              </a>
+                <a
+                  href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+                >
+                  Configure app
+                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
+                </a>
+              </Show>
             </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
@@ -1313,7 +1362,7 @@ function TeamManagement(props: {
                 value={memberQuery()}
                 onInput={(e) => setMemberQuery(e.currentTarget.value)}
                 placeholder="Filter members"
-                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+                class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
               />
               <Show when={memberQuery()}>
                 <button
@@ -1435,7 +1484,7 @@ function TeamManagement(props: {
               value={deleteConfirmation()}
               onInput={(e) => setDeleteConfirmation(e.currentTarget.value)}
               placeholder={deleteConfirmationPhrase()}
-              class="w-full px-3 py-2 text-sm border border-edge-muted rounded-lg bg-surface text-ink placeholder:text-ink/30 outline-none focus:border-accent"
+              class="settings-input w-full"
             />
             <div class="flex justify-end gap-1 pt-2">
               <Button

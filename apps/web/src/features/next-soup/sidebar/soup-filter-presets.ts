@@ -7,6 +7,7 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   ENABLE_NEW_INBOX,
+  ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -24,6 +25,11 @@ type SoupFiltersPreset = {
    * `entity_type`, `project`, or `property:<definition-id>`).
    */
   groupBy?: string;
+  /**
+   * Direction to order the server page in. Defaults to `desc` when absent,
+   * matching every feed that reads newest-first.
+   */
+  sortDirection?: 'asc' | 'desc';
 };
 
 // Tab preset configuration types
@@ -98,6 +104,12 @@ const getInboxSignalFilters = () => {
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
+      // Reminders are off by default server-side rather than excluded by
+      // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
+      // this literal is the only thing that surfaces them — and Signal is the
+      // only view that sends it. Behind the flag so an unflagged user never
+      // pays for the reminders lookup on every Signal fetch.
+      ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
@@ -137,8 +149,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: {
-          // crm companies aren't surfaced outside the Companies view.
+          // Calendar events are not rendered by Soup, and CRM companies are
+          // not surfaced outside the Companies view.
           include: {
+            calendarEventId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
               ? { foreignEntitySource: ['github_pull_request'] }
@@ -197,6 +211,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         // into the soup client-side via `additionalEntities`.
         filters: defineQueryFilters({}),
         clientFilters: { and: ['automation'] },
+      }),
+      skills: () => ({
+        filters: defineQueryFilters({
+          include: { subType: ['skill'] },
+        }),
+        clientFilters: { and: ['doc-skill'] },
       }),
     },
   },
@@ -482,19 +502,65 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  // Reminders are the one entity type that is opt-in server-side, so naming
+  // `includeReminders` both surfaces them and — via defineQueryFilters, which
+  // NIL-excludes every target this query does not reference — makes the view
+  // reminders-only. Soup already orders them by when they fire.
+  reminders: {
+    default: 'active',
+    tabs: {
+      // Fired and waiting on you — an inbox, so newest arrival on top like
+      // every other feed. `reminderFired` is a server filter rather than a
+      // client one for a reason: both this tab and Scheduled would otherwise
+      // share one `comp:false` query, and the page limit would be spent on
+      // whichever end the sort direction favours, so a user with a hundred
+      // future reminders could open Active on an empty list.
+      active: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: true,
+          },
+        }),
+        clientFilters: { and: ['reminders-fired'] },
+      }),
+      // Not due yet. Soonest first: "newest first" on a future date means
+      // furthest away first, which puts December above tomorrow.
+      scheduled: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+            reminderFired: false,
+          },
+        }),
+        clientFilters: { and: ['reminders-scheduled'] },
+        sortDirection: 'asc',
+      }),
+      // Dealt with. Most-recently-due first, like every other archive view.
+      done: () => ({
+        filters: defineQueryFilters({
+          include: { includeReminders: true, reminderCompleted: true },
+        }),
+        clientFilters: { and: ['reminders-done'] },
+      }),
+    },
+  },
   search: {
     default: 'all',
     tabs: {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. CRM rows and non-displayable channel-thread rows are
+        // them. Calendar, CRM, and non-displayable channel-thread rows are
         // NIL-excluded the same way. `search-supported` mirrors these
         // exclusions client-side so entities that enter the soup cache outside
         // this query (e.g. websocket-driven inserts) don't surface in the
         // search feed.
         filters: {
           include: {
+            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],

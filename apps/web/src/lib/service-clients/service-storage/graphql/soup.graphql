@@ -63,6 +63,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						ownerId
 						inboxVisible
 						linkId
+						latestInboundMessageTs
 						emailName: name
 						snippet
 						senderEmail
@@ -229,6 +230,27 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						sourceMetadata
 						createdAt
 						updatedAt
+					}
+					... on GraphqlSoupReminder {
+						reminderDescription: description
+						scheduleType
+						remindAt
+						cron
+						timezone
+						nextRunAt
+						enabled
+						completedAt
+						createdAt
+						updatedAt
+						referencedEntity {
+							id
+							entityType
+							fileType
+							subType
+						}
+						properties {
+							...SoupPropertyFields
+						}
 					}
 }
 

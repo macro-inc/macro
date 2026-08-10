@@ -6,7 +6,7 @@ use opensearch_client::{
     upsert::{project::UpsertProjectArgs, properties::IndexedProperty},
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
-use sqs_client::search::project::{RemoveProject, UpsertProject};
+use sqs_client::search::project::UpsertProject;
 
 /// Fetch the project's indexed properties, flattened for the search index.
 async fn fetch_indexed_properties(
@@ -83,22 +83,6 @@ pub async fn upsert_project(
         )
         .await
         .context("failed to upsert project")?;
-
-    Ok(())
-}
-
-/// Handles the removal of a project from the opensearch index
-#[tracing::instrument(skip(opensearch_client), err)]
-pub async fn remove_project(
-    opensearch_client: &OpensearchClient,
-    message: &RemoveProject,
-) -> anyhow::Result<()> {
-    opensearch_client
-        .delete_project(
-            message.project_id.as_str(),
-            message.index_override.as_deref(),
-        )
-        .await?;
 
     Ok(())
 }

@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use calendar_events::domain::models::google_calendar_scope_parameter;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -127,9 +128,19 @@ pub async fn init_gmail_link_handler(
         return Err(InitGmailLinkError::TooManyInProgressLinks);
     }
 
-    let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
+    let authorization_scopes = if ctx.calendar_scope_enabled {
+        format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter())
+    } else {
+        GMAIL_SCOPES.to_string()
+    };
+    let requested_google_scopes: Vec<String> = authorization_scopes
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect();
+    let link_id = macro_db_client::in_progress_user_link::create_in_progress_google_link(
         &ctx.db,
         &authorization.authorization.user.user_context.fusion_user_id,
+        &requested_google_scopes,
     )
     .await?;
 
@@ -149,22 +160,38 @@ pub async fn init_gmail_link_handler(
     let redirect_uri = crate::api::oauth2::format_redirect_uri("google");
     let state_str = serde_json::to_string(&state).context("failed to serialize OAuth state")?;
 
-    let mut authorization_url =
-        Url::parse(GOOGLE_AUTHORIZATION_URL).context("invalid Google authorization URL")?;
-    authorization_url
-        .query_pairs_mut()
-        .append_pair("client_id", ctx.auth_client.google_client_id())
-        .append_pair("redirect_uri", &redirect_uri)
-        .append_pair("response_type", "code")
-        .append_pair("scope", GMAIL_SCOPES)
-        .append_pair("state", &state_str)
-        .append_pair("access_type", "offline")
-        .append_pair("prompt", "consent");
+    let authorization_url = google_authorization_url(
+        ctx.auth_client.google_client_id(),
+        &redirect_uri,
+        &authorization_scopes,
+        &state_str,
+    )?;
 
     Ok(Json(InitGmailLinkResponse {
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+fn google_authorization_url(
+    client_id: &str,
+    redirect_uri: &str,
+    scopes: &str,
+    state: &str,
+) -> anyhow::Result<Url> {
+    let mut authorization_url =
+        Url::parse(GOOGLE_AUTHORIZATION_URL).context("invalid Google authorization URL")?;
+    authorization_url
+        .query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("response_type", "code")
+        .append_pair("scope", scopes)
+        .append_pair("state", state)
+        .append_pair("access_type", "offline")
+        .append_pair("include_granted_scopes", "true")
+        .append_pair("prompt", "consent");
+    Ok(authorization_url)
 }
 
 #[tracing::instrument(skip(db, macro_user_id), err)]

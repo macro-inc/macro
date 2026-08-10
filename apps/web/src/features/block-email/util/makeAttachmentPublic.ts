@@ -1,7 +1,8 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 
-import { logger } from '@observability';
+import { Telemetry } from '@macro-inc/observability';
+
 import { storageServiceClient } from '@service-storage/client';
 
 export const makeAttachmentPublic = async (attachmentId: string) => {
@@ -35,6 +36,8 @@ export const makeAttachmentPublic = async (attachmentId: string) => {
     toast.alert('Recipients may not be able to view this file', {
       subtext: 'Please consult the document owner to change share permissions',
     });
-    logger.error('Failed to make attachment public', { errors: result.error });
+    Telemetry.error('Failed to make attachment public', {
+      errors: JSON.stringify(result.error),
+    });
   }
 };

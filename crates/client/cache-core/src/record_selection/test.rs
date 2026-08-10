@@ -101,7 +101,7 @@ fn validates_page_limits() {
 
 #[test]
 fn cursor_has_opaque_roundtrip() {
-    let cursor = RecordCursor::new(EntityKey("GraphqlSoupDocument:item-1".to_string()));
+    let cursor = RecordCursor::new(EntityKey("GraphqlSoupDocument:item-1".into()));
     let encoded = serde_json::to_value(&cursor).unwrap();
     assert_eq!(
         serde_json::from_value::<RecordCursor>(encoded).unwrap(),

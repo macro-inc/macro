@@ -84,6 +84,26 @@ export class Document
     return new Document(client, documentId);
   }
 
+  /**
+   * Create a skill: a markdown document containing instructions that AI reads
+   * and follows when the skill is referenced in an AI input.
+   */
+  static async createSkill(
+    client: MacroClient,
+    opts: { name: string; markdown?: string; project?: Project },
+  ): Promise<Document> {
+    const { documentId } = unwrap(
+      await client.storage.createSkillHandler({
+        body: {
+          skillName: opts.name,
+          markdown: opts.markdown ?? null,
+          projectId: opts.project?.id ?? null,
+        },
+      }),
+    );
+    return new Document(client, documentId);
+  }
+
   /** The user's recent documents, most recent first, auto-paginated. */
   static recent(
     client: MacroClient,

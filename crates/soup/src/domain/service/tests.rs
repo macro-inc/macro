@@ -249,6 +249,7 @@ fn foreign_entity_id_from_receipt(
     })
 }
 use crm::domain::service::NoOpCrmService;
+use reminders::domain::service::NoOpRemindersService;
 
 #[derive(Clone)]
 struct NoopForeignEntityService;
@@ -619,9 +620,11 @@ async fn simple_soup_includes_channel_threads() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -679,9 +682,11 @@ async fn simple_soup_includes_call_records() {
         call_query_service.clone(),
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -731,9 +736,11 @@ async fn simple_soup_uses_channel_thread_filters_without_touching_channel_filter
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -799,9 +806,11 @@ async fn simple_soup_includes_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         foreign_entity_service.clone(),
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -880,9 +889,11 @@ async fn frecency_soup_does_not_query_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         foreign_entity_service.clone(),
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -926,9 +937,11 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         foreign_entity_service.clone(),
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -986,9 +999,11 @@ async fn crm_filters_without_team_receipt_are_rejected() {
             NoopCallRecordQueryService,
             NoOpCrmService,
             RecordingForeignEntityService::new(Vec::new()),
+            NoOpRemindersService,
         )
         .get_user_soup(
             SoupRequest {
+                sort_direction: SoupSortDirection::default(),
                 email_preview_view: PreviewView::StandardLabel(
                     email::domain::models::PreviewViewStandardLabel::Inbox,
                 ),
@@ -1032,9 +1047,11 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         foreign_entity_service.clone(),
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1103,9 +1120,11 @@ async fn it_should_not_query_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1164,9 +1183,11 @@ async fn properties_are_populated_once_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_properties(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1237,9 +1258,11 @@ async fn frecency_is_populated_once_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1305,9 +1328,11 @@ async fn properties_and_frecency_are_composed_after_pagination() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_properties_and_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1378,6 +1403,7 @@ async fn grouped_properties_are_populated_by_the_service() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     );
     let items = service
         .get_user_soup_grouped(GroupedSortRequest {
@@ -1468,9 +1494,11 @@ async fn it_should_query_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1552,9 +1580,11 @@ async fn it_should_sort_frecency_descending() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1650,9 +1680,11 @@ async fn frecency_should_fallback() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1732,9 +1764,11 @@ async fn frecency_should_paginate() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1816,9 +1850,11 @@ async fn frecency_should_resume_cursor() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1916,9 +1952,11 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup_with_frecency(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -1989,9 +2027,11 @@ async fn cursor_should_return_simple_sort() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2061,9 +2101,11 @@ async fn cursor_should_return_frecency() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2120,9 +2162,11 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2169,9 +2213,11 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2218,9 +2264,11 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2279,9 +2327,11 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
@@ -2362,9 +2412,11 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopCallRecordQueryService,
         NoOpCrmService,
         NoopForeignEntityService,
+        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {
+            sort_direction: SoupSortDirection::default(),
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),

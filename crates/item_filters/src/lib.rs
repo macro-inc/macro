@@ -369,6 +369,83 @@ impl IsEmpty for CallFilters {
     }
 }
 
+/// Filters for canonical calendar-event entities.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CalendarEventFilters {
+    /// Canonical event ids.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calendar_event_ids: Vec<String>,
+    /// Event statuses such as `confirmed`, `tentative`, or `cancelled`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub statuses: Vec<String>,
+    /// Include master events starting before this instant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starts_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Include master events ending after this instant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ends_after: Option<chrono::DateTime<chrono::Utc>>,
+    /// Attendee email addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attendees: Vec<String>,
+    /// Organizer email addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub organizers: Vec<String>,
+}
+
+impl IsEmpty for CalendarEventFilters {
+    fn is_empty(&self) -> bool {
+        self.calendar_event_ids.is_empty()
+            && self.statuses.is_empty()
+            && self.starts_before.is_none()
+            && self.ends_after.is_none()
+            && self.attendees.is_empty()
+            && self.organizers.is_empty()
+    }
+}
+
+/// Filters for reminders.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct ReminderFilters {
+    /// Opt this query into reminders at all. Reminders are off by default —
+    /// see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
+    /// specific `ids` or `entities` also opts in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include: bool,
+    /// Reminder ids to filter by. Empty to include all of the caller's reminders.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
+    /// Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entities: Vec<String>,
+    /// Filter on whether the owner has marked the reminder done. `None` returns
+    /// both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed: Option<bool>,
+    /// Filter on whether the reminder's next run has come due, i.e. it has
+    /// fired and is awaiting its owner. `None` returns both.
+    ///
+    /// Evaluated server-side against the database clock rather than a
+    /// timestamp supplied by the caller: a timestamp would land in the query
+    /// cache key and change on every render.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fired: Option<bool>,
+}
+
+impl IsEmpty for ReminderFilters {
+    fn is_empty(&self) -> bool {
+        let ReminderFilters {
+            include,
+            ids,
+            entities,
+            completed,
+            fired,
+        } = self;
+        !include && ids.is_empty() && entities.is_empty() && completed.is_none() && fired.is_none()
+    }
+}
+
 /// Filters for foreign entity records.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -634,6 +711,9 @@ pub enum TagFilterMode {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
+    /// the bundled [CalendarEventFilters]
+    #[serde(default)]
+    pub calendar_event_filters: CalendarEventFilters,
     /// the bundled [ProjectFilters]
     #[serde(default)]
     pub project_filters: ProjectFilters,
@@ -661,6 +741,9 @@ pub struct EntityFilters {
     /// the bundled [ForeignEntityFilters]
     #[serde(default)]
     pub foreign_entity_filters: ForeignEntityFilters,
+    /// the bundled [ReminderFilters]
+    #[serde(default)]
+    pub reminder_filters: ReminderFilters,
     /// property-based filters applied across entity types
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_filters: Vec<PropertyFilter>,
@@ -678,6 +761,7 @@ pub struct EntityFilters {
 impl IsEmpty for EntityFilters {
     fn is_empty(&self) -> bool {
         let EntityFilters {
+            calendar_event_filters,
             project_filters,
             document_filters,
             chat_filters,
@@ -687,12 +771,14 @@ impl IsEmpty for EntityFilters {
             email_filters,
             crm_company_filters,
             foreign_entity_filters,
+            reminder_filters,
             property_filters,
             tag_option_ids,
             // Mode is a modifier on tag_option_ids, not a filter by itself.
             tag_filter_mode: _,
         } = self;
-        project_filters.is_empty()
+        calendar_event_filters.is_empty()
+            && project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
             && channel_filters.is_empty()
@@ -701,6 +787,7 @@ impl IsEmpty for EntityFilters {
             && email_filters.is_empty()
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
+            && reminder_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
             && tag_option_ids.is_empty()
     }

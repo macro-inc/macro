@@ -14,6 +14,7 @@ import {
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
+import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
@@ -81,6 +82,9 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'refresh_email' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleRefreshEmail);
+      })
+      .with({ type: 'refresh_calendar' }, () => {
+        withParsedWebsocketPayload(data.type, data.data, handleRefreshCalendar);
       })
       // Signup seeding is fire-and-forget, so refresh Soup and the provisioned
       // properties and favorites when it finishes.

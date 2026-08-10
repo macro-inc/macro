@@ -1,8 +1,10 @@
 use std::marker::PhantomData;
 
-use async_graphql::{Context, Object};
+use async_graphql::{Context, ID, Object};
 use graphql_email::{
-    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailContentEdgeReader, load_latest_email_message,
+    EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
+    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
+    load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
@@ -46,7 +48,7 @@ impl<NR, PR, ER, FR, AR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
 {
@@ -111,7 +113,7 @@ impl<NR, PR, ER, FR, AR> SoupEdges<NR, PR, ER, FR, AR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
 {
@@ -142,6 +144,39 @@ where
     }
 }
 
+/// default limit of messages if none is provided
+/// REST-compatible default number of email messages returned per page.
+const DEFAULT_EMAIL_MESSAGE_LIMIT: i32 = 5;
+/// max possible limit of messages
+/// Maximum number of email messages one field may request.
+const MAX_EMAIL_MESSAGE_LIMIT: i32 = 100;
+
+/// parses the incoming optional limits into the actual range
+/// Validate email-message pagination and apply REST-compatible defaults.
+fn parse_email_message_pagination(
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> async_graphql::Result<(u32, u32)> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(DEFAULT_EMAIL_MESSAGE_LIMIT);
+
+    let offset = u32::try_from(offset)
+        .map_err(|_| async_graphql::Error::new("offset must be non-negative"))?;
+    if limit <= 0 {
+        return Err(async_graphql::Error::new("limit must be positive"));
+    }
+    if limit > MAX_EMAIL_MESSAGE_LIMIT {
+        return Err(async_graphql::Error::new(format!(
+            "limit must not exceed {MAX_EMAIL_MESSAGE_LIMIT}"
+        )));
+    }
+
+    Ok((
+        offset,
+        u32::try_from(limit).expect("positive GraphQL Int fits in u32"),
+    ))
+}
+
 /// Email-content fields attached only to Soup email-thread entities.
 pub struct SoupEmailThreadEdges<ER> {
     /// The uuid of the email thread
@@ -163,19 +198,49 @@ impl<ER> Clone for SoupEmailThreadEdges<ER> {
 #[Object]
 impl<ER> SoupEmailThreadEdges<ER>
 where
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
 {
+    /// The canonical identifier of the email link that owns this thread.
+    async fn link_id(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(ID(metadata.link_id.to_string()))
+    }
+
+    /// Timestamp of the latest inbound message, in RFC 3339 format.
+    async fn latest_inbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_inbound_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// A page of messages in this thread, newest first.
+    async fn messages(
+        &self,
+        ctx: &Context<'_>,
+        offset: Option<i32>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupEmailMessage>> {
+        let (offset, limit) = parse_email_message_pagination(offset, limit)?;
+        let key = if email_message_selection_requires_full_payload(ctx) {
+            EmailContentKey::page_full(self.thread_id, offset, limit)
+        } else {
+            EmailContentKey::page(self.thread_id, offset, limit)
+        };
+        load_email_messages::<ER>(ctx, key).await
+    }
+
     /// The newest non-draft content message in this thread.
     async fn latest_content_message(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
-        load_latest_email_message::<ER>(
-            ctx,
-            EmailContentKey {
-                thread_id: self.thread_id,
-            },
-        )
-        .await
+        load_latest_email_message::<ER>(ctx, self.thread_id).await
     }
 }
+
+#[cfg(test)]
+mod test;

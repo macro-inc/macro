@@ -16,9 +16,12 @@ export type FavoriteEntityType =
   | 'document'
   | 'project'
   | 'email_thread'
+  | 'calendar_event'
   | 'team'
   | 'call'
   | 'foreign_entity'
   | 'static_file'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'reminder'
+  | 'skill';

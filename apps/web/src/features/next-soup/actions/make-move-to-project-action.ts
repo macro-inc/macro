@@ -10,7 +10,9 @@ export const makeMoveToProjectAction = () => {
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
-      entity.type !== 'foreign'
+      entity.type !== 'foreign' &&
+      // Reminders are private to their owner and live outside the folder tree.
+      entity.type !== 'reminder'
     );
   };
 

@@ -5,11 +5,11 @@ use foreign_entity::domain::models::{
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
-use model::document::DocumentMetadata;
+use model::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::models::GithubPullRequest;
-use crate::domain::ports::MockDocumentRepo;
+use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
 
@@ -343,9 +343,17 @@ struct PublishedEvent {
 #[derive(Clone, Default)]
 struct TestEventBroker {
     published: Arc<Mutex<Vec<PublishedEvent>>>,
+    fail_send: bool,
 }
 
 impl TestEventBroker {
+    fn failing() -> Self {
+        Self {
+            fail_send: true,
+            ..Self::default()
+        }
+    }
+
     fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
         Arc::clone(&self.published)
     }
@@ -356,30 +364,16 @@ impl MacroEventBroker for TestEventBroker {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        if self.fail_send {
+            return Err(EventBrokerError::Publish("test broker failure".to_string()));
+        }
+
         self.published.lock().unwrap().push(PublishedEvent {
             topic: event.topic(),
             key: event.key().to_string(),
             payload: serde_json::to_value(event.event())?,
         });
         Ok(tokio::spawn(async { Ok(()) }))
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-struct TestDocumentSearchIndexer {
-    enqueued: Arc<Mutex<Vec<String>>>,
-}
-
-impl crate::domain::ports::DocumentSearchIndexer for TestDocumentSearchIndexer {
-    fn enqueue_name_update(
-        &self,
-        document_id: String,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>> {
-        let enqueued = Arc::clone(&self.enqueued);
-        Box::pin(async move {
-            enqueued.lock().unwrap().push(document_id);
-            Ok(())
-        })
     }
 }
 
@@ -449,34 +443,17 @@ fn make_test_service_with_entity_access(
     (service, entity_access)
 }
 
-/// Build a test service along with a handle to its recording search indexer.
-fn make_test_service_with_search_indexer(
-    repo: MockDocumentRepo,
-) -> (TestDocumentService, TestDocumentSearchIndexer) {
-    let search_indexer = TestDocumentSearchIndexer::default();
-    let service = DocumentServiceImpl::new(
-        repo,
-        test_cloudfront_config(),
-        sync_service_client::SyncServiceClient::new(
-            "test-sync-key".to_string(),
-            "http://sync-service.test".to_string(),
-        ),
-        TestUploadUrlPort,
-        TestTaskPropertiesPort,
-        TestConnectionService,
-        TestEntityAccessManagementService::default(),
-        TestForeignEntityService::default(),
-        TestEventBroker::default(),
-    )
-    .with_search_indexer(Arc::new(search_indexer.clone()));
-    (service, search_indexer)
-}
-
 /// Build a test service along with a handle to its recording event broker.
 fn make_test_service_with_event_broker(
     repo: MockDocumentRepo,
 ) -> (TestDocumentService, TestEventBroker) {
-    let event_broker = TestEventBroker::default();
+    make_test_service_with_configured_event_broker(repo, TestEventBroker::default())
+}
+
+fn make_test_service_with_configured_event_broker(
+    repo: MockDocumentRepo,
+    event_broker: TestEventBroker,
+) -> (TestDocumentService, TestEventBroker) {
     let service = DocumentServiceImpl::new(
         repo,
         test_cloudfront_config(),
@@ -1538,6 +1515,92 @@ fn edit_receipt(document_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
 }
 
 #[tokio::test]
+async fn content_uploaded_publishes_document_event_with_owner_and_version() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .withf(|document_id| document_id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .publish_content_uploaded("doc-1", FileType::Pdf, Some("convert".to_string()))
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.documents");
+    assert_eq!(event.key, "doc-1");
+    assert_eq!(event.payload["event_type"], "document.content_uploaded");
+    assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["owner"], "macro|owner@user.com");
+    assert_eq!(event.payload["metadata"]["file_type"], "pdf");
+    assert_eq!(event.payload["metadata"]["document_version_id"], "convert");
+}
+
+#[tokio::test]
+async fn content_uploaded_preserves_an_absent_version() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(
+        published[0].payload["metadata"]["document_version_id"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn content_uploaded_maps_a_missing_document_to_not_found() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document().return_once(|_| {
+        Box::pin(std::future::ready(Err(anyhow!(
+            "no rows returned by a query that expected to return at least one row"
+        ))))
+    });
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let result = service
+        .publish_content_uploaded("missing-doc", FileType::Pdf, None)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(DocumentError::NotFound(document_id)) if document_id == "missing-doc"
+    ));
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+    let event_broker = TestEventBroker::failing();
+    let (service, event_broker) =
+        make_test_service_with_configured_event_broker(repo, event_broker);
+
+    let result = service
+        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Internal(_))));
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
     repo.expect_soft_delete_document()
@@ -1673,65 +1736,6 @@ async fn test_edit_document_rename_only_keeps_project_access() {
             .is_empty()
     );
     assert!(entity_access.added_to_projects.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn test_edit_document_rename_enqueues_search_name_update() {
-    let mut repo = make_mock_repo();
-    repo.expect_edit_document()
-        .withf(|args| args.document_id == "doc-1")
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
-
-    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
-
-    service
-        .edit_document(
-            edit_receipt("doc-1"),
-            task_document_context("doc-1"),
-            EditDocumentServiceArgs {
-                document_name: Some("New name".to_string()),
-                project_id: None,
-                share_permission: None,
-                file_type: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(
-        *search_indexer.enqueued.lock().unwrap(),
-        vec!["doc-1".to_string()]
-    );
-}
-
-#[tokio::test]
-async fn test_edit_document_without_rename_does_not_enqueue_search_name_update() {
-    let document_id = uuid::Uuid::new_v4().to_string();
-    let new_project_id = uuid::Uuid::new_v4();
-
-    let mut repo = make_mock_repo();
-    repo.expect_edit_document()
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
-    repo.expect_update_project_modified()
-        .returning(|_| Box::pin(std::future::ready(Ok(()))));
-
-    let (service, search_indexer) = make_test_service_with_search_indexer(repo);
-
-    service
-        .edit_document(
-            edit_receipt(&document_id),
-            task_document_context(&document_id),
-            EditDocumentServiceArgs {
-                document_name: None,
-                project_id: Some(new_project_id.to_string()),
-                share_permission: None,
-                file_type: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    assert!(search_indexer.enqueued.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -1,15 +1,19 @@
 /**
  * Generated-operation cache inspection.
  *
- * Callers select one response field without supplying variables. Cache-core
- * discovers every cached argument variant and returns generated variables
- * plus the selected effective value when the complete query is available.
+ * Callers select one response field without supplying concrete variables.
+ * They can recover typed cached variable variants without materialization, or
+ * request selected effective values for complete cached queries.
  */
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type AnyVariables, stringifyDocument } from '@urql/core';
 import type { CacheHost } from '../host/types';
-import type { CachedQueryInstanceWire } from '../protocol';
+import type {
+  CachedQueryInstanceWire,
+  CachedQueryVariantWire,
+  QueryVariableFilter,
+} from '../protocol';
 import {
   documentOperationName,
   type ObjectFieldKey,
@@ -40,11 +44,28 @@ export type InspectionSelection<TValue, TVariables> =
           ): InspectionSelection<Present<TValue>[K], TVariables>;
         });
 
-/** One cached generated operation-variable instance and selected value. */
-export type CachedSelection<TValue, TVariables> = {
+/** One cached generated operation-variable variant. */
+export type CachedVariant<TVariables> = {
   variables: TVariables;
+};
+
+/** One cached generated operation-variable instance and selected value. */
+export type CachedSelection<TValue, TVariables> = CachedVariant<TVariables> & {
   /** Absent when the field exists but the complete generated query is a miss. */
   value?: TValue;
+};
+
+/** Recursive partial match over generated operation variables. */
+export type InspectionVariableFilter<T> = T extends readonly unknown[]
+  ? T
+  : T extends object
+    ? { [K in keyof T]?: InspectionVariableFilter<T[K]> }
+    : T;
+
+/** Limits which cached variants an inspection materializes. */
+export type InspectionOptions<TVariables> = {
+  /** OR-ed recursive partial matches; omitted or empty means every variant. */
+  variableFilters?: readonly InspectionVariableFilter<TVariables>[];
 };
 
 function createInspectionSelection<TValue, TVariables>(
@@ -75,6 +96,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function validateVariants(value: unknown): CachedQueryVariantWire[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid cache query variant inspection result');
+  }
+  return value.map((variant) => {
+    if (!isRecord(variant) || !isRecord(variant.variables)) {
+      throw new Error('invalid cache query inspection variant');
+    }
+    return { variables: variant.variables };
+  });
+}
+
 function validateInstances(value: unknown): CachedQueryInstanceWire[] {
   if (!Array.isArray(value)) {
     throw new Error('invalid cache query inspection result');
@@ -91,13 +124,34 @@ function validateInstances(value: unknown): CachedQueryInstanceWire[] {
 }
 
 /**
- * Enumerates every cached argument variant of one generated selected field.
- * Only the serialized document, operation name, and response-key path cross
- * the host boundary.
+ * Recovers every cached variable variant without materializing selected
+ * values. Only the serialized document, operation name, and response-key path
+ * cross the host boundary.
+ */
+export async function inspectVariants<TValue, TVariables extends AnyVariables>(
+  host: CacheHost,
+  selection: InspectionSelection<TValue, TVariables>
+): Promise<CachedVariant<TVariables>[]> {
+  if (selection.path.length === 0) {
+    throw new Error('cache query inspection requires a selected field');
+  }
+  const result: unknown = await host.inspectQueryVariants({
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    path: [...selection.path],
+  });
+  return validateVariants(result) as CachedVariant<TVariables>[];
+}
+
+/**
+ * Enumerates matching cached argument variants of one generated selected
+ * field. Only the serialized document, operation name, response-key path, and
+ * optional partial-variable filters cross the host boundary.
  */
 export async function inspect<TValue, TVariables extends AnyVariables>(
   host: CacheHost,
-  selection: InspectionSelection<TValue, TVariables>
+  selection: InspectionSelection<TValue, TVariables>,
+  options: InspectionOptions<TVariables> = {}
 ): Promise<CachedSelection<TValue, TVariables>[]> {
   if (selection.path.length === 0) {
     throw new Error('cache query inspection requires a selected field');
@@ -106,6 +160,13 @@ export async function inspect<TValue, TVariables extends AnyVariables>(
     query: stringifyDocument(selection.document),
     operationName: documentOperationName(selection.document),
     path: [...selection.path],
+    ...(options.variableFilters
+      ? {
+          variableFilters: options.variableFilters.map(
+            (filter) => filter as QueryVariableFilter
+          ),
+        }
+      : {}),
   });
   return validateInstances(result) as CachedSelection<TValue, TVariables>[];
 }

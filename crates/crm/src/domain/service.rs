@@ -11,7 +11,7 @@ use crate::domain::{
     generic_email_domains::is_generic_email_domain,
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch,
+        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, Utc};
@@ -103,12 +103,27 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// it through the retry path. The caller is expected to gate this
     /// call on a prior check that the link has no other sent messages to
     /// `email`.
+    ///
+    /// Returns which rows the cascade actually deleted; a malformed email
+    /// yields the default (nothing removed).
     fn depopulate_contact(
         &self,
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
-    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+    ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
+
+    /// Filters `(link_id, email)` pairs down to those with a live
+    /// `crm_contact_sources` row — the pairs a teardown would actually touch.
+    /// See
+    /// [`crate::domain::companies_repo::CompaniesRepository::link_contact_pairs_with_sources`].
+    ///
+    /// Used by the nightly cleanup job to prune candidates for contacts CRM
+    /// never tracked, before they become one SQS message each.
+    fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> impl Future<Output = Result<Vec<(uuid::Uuid, String)>, CrmError>> + Send;
 
     /// Bulk teardown for one user's email link within one team: drops
     /// the team's `crm_contact_sources` rows owned by `link_id`, then
@@ -620,24 +635,34 @@ where
         team_id: &uuid::Uuid,
         link_id: &uuid::Uuid,
         email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
             tracing::debug!(
                 email,
                 "depopulate_contact: skipping malformed email (no '@')"
             );
-            return Ok(());
+            return Ok(DepopulateContactOutcome::default());
         };
         if local_part.is_empty() || domain.is_empty() || domain.contains('@') {
             tracing::debug!(
                 email,
                 "depopulate_contact: skipping malformed email (empty part or multiple '@')"
             );
-            return Ok(());
+            return Ok(DepopulateContactOutcome::default());
         }
         self.companies_repository
             .depopulate_contact(team_id, link_id, domain, email)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
+    async fn link_contact_pairs_with_sources(
+        &self,
+        pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        self.companies_repository
+            .link_contact_pairs_with_sources(pairs)
             .await
     }
 
@@ -1050,8 +1075,15 @@ impl CrmService for NoOpCrmService {
         _team_id: &uuid::Uuid,
         _link_id: &uuid::Uuid,
         _email: &str,
-    ) -> Result<(), CrmError> {
+    ) -> Result<DepopulateContactOutcome, CrmError> {
         unimplemented!("NoOpCrmService.depopulate_contact")
+    }
+
+    async fn link_contact_pairs_with_sources(
+        &self,
+        _pairs: &[(uuid::Uuid, String)],
+    ) -> Result<Vec<(uuid::Uuid, String)>, CrmError> {
+        unimplemented!("NoOpCrmService.link_contact_pairs_with_sources")
     }
 
     async fn depopulate_link_in_team(

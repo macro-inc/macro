@@ -7,10 +7,6 @@ inputs:
     description: sccache release version to install
     required: false
     default: v0.15.0
-  cache-key-prefix:
-    description: Prefix for the local GitHub Actions cache key
-    required: false
-    default: sccache
 
 runs:
   using: composite
@@ -107,19 +103,5 @@ runs:
           echo "SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-5G}"
           echo "SCCACHE_BASEDIR=${GITHUB_WORKSPACE:-$PWD}"
         } >> "$GITHUB_ENV"
-
-        # Configure an S3 backend when SCCACHE_BUCKET is provided. AWS credentials
-        # are intentionally not persisted here; scope them to the cargo steps that
-        # actually compile code so third-party setup actions don't receive them.
-        if [[ -n "${SCCACHE_BUCKET:-}" ]]; then
-          {
-            echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
-            echo "SCCACHE_REGION=${SCCACHE_REGION:-us-east-1}"
-            echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX:-sccache/}"
-          } >> "$GITHUB_ENV"
-          echo "Configured sccache for S3 bucket ${SCCACHE_BUCKET}"
-        else
-          echo "No remote sccache bucket configured; using local cached sccache directory."
-        fi
 
         "$sccache_bin" --version

@@ -13,6 +13,7 @@ import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tabl
 export function buildChatEditor() {
   return buildConfig('chat')
     .namespace('chat-markdown-area')
+    .withSkills()
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })

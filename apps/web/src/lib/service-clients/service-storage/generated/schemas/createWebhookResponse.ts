@@ -33,6 +33,9 @@ export interface CreateWebhookResponse {
   is_valid: boolean;
   /** Display name. */
   name: string;
+  /** Caller-chosen namespace, unique among the owning workspace's webhooks.
+Set at creation time only; it cannot be changed afterwards. */
+  namespace: string;
   /** Signing secret used to verify webhook delivery signatures. */
   signing_secret: string;
   /** Webhook lifecycle status. */

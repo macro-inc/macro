@@ -1,3 +1,4 @@
+import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
 import { enableUserInfoQuery } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
@@ -50,7 +51,13 @@ export function invalidateUserInfo() {
 /** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
   enableUserInfoQuery();
-  return queryClient.invalidateQueries();
+  const invalidated = queryClient.invalidateQueries();
+  // Rebind this device's push registrations once the refetches above have
+  // exercised the fresh session — registering earlier can race auth state
+  // that is still settling. Fire-and-forget so login isn't blocked on the
+  // notification service.
+  void invalidated.catch(() => {}).then(() => syncPushRegistrations());
+  return invalidated;
 }
 
 /** Ensure user info is in the query cache. Fetches if not present. */

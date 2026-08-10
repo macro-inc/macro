@@ -45,7 +45,7 @@ export const TabsInset = (props: TabsInsetProps) => {
       class={cn('h-full flex items-center', local.class)}
     >
       <Layer depth={trackDepth()}>
-        <div class="relative flex items-center bg-surface rounded-lg p-0.5 ring ring-edge-muted">
+        <div class="relative flex items-center border border-edge-muted bg-surface rounded-lg p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20">
           <For each={local.list}>
             {(item) => (
               <Layer depth={itemDepth()}>

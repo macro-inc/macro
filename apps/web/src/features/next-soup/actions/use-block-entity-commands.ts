@@ -1,5 +1,8 @@
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  openEntityInSplitFromUnifiedList,
+  restoreSoupFocus,
+} from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -11,7 +14,7 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { type EntityData, isTaskEntity } from '@entity';
+import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { macroEntityToPropertyEntityType } from '@property/utils';
@@ -21,6 +24,7 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
   makeFavoriteAction,
   makeMarkDoneAction,
@@ -33,8 +37,18 @@ import {
  * This should be called and mounted
  * Note: several of these do not register with an actual hot key so that they
  * can be found by the command menu.
+ *
+ * `resolveEntity` lets a block supply its own entity for blocks quick access
+ * cannot resolve. Quick access is built from history, channels, users, companies
+ * and snippets — email threads appear in none of them, so without an override
+ * `getEntity` returns undefined there and every command below silently drops
+ * out of the command menu. Blocks that pass one must use a non-suspending
+ * source: `condition()` runs inside command-menu evaluation, where a pending
+ * query must not suspend.
  */
-export const useBlockEntityCommands = () => {
+export const useBlockEntityCommands = (
+  resolveEntity?: () => EntityData | undefined
+) => {
   const blockId = useBlockId();
   const quickAccess = useQuickAccess();
   const userId = useUserId();
@@ -55,6 +69,7 @@ export const useBlockEntityCommands = () => {
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
   const favoriteAction = makeFavoriteAction();
+  const createReminderAction = makeCreateReminderAction();
 
   const allProperties = useAllProperties();
 
@@ -66,6 +81,8 @@ export const useBlockEntityCommands = () => {
   const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
 
   const getEntity = (): EntityData | undefined => {
+    const provided = resolveEntity?.();
+    if (provided) return provided;
     const item = quickAccess.getById(blockId);
     if (item?.kind === 'entity') return item.data;
     return undefined;
@@ -77,7 +94,11 @@ export const useBlockEntityCommands = () => {
   ) => {
     const entity = getEntity();
     if (entity) {
-      openPropertyEditor([entity], mode, property);
+      openPropertyEditor([entity], mode, property, {
+        restoreFocus: () => {
+          if (soup) return restoreSoupFocus(entity.id);
+        },
+      });
     }
   };
   const canAssignTags = (entity: EntityData) => {
@@ -95,6 +116,27 @@ export const useBlockEntityCommands = () => {
   const canUseMarkDoneHotkey = () => {
     const referredFrom = splitPanel?.handle.referredFrom();
     return referredFrom === 'inbox' || referredFrom === 'mail';
+  };
+
+  // The canvas block binds 'h' to its hand tool in this same scope
+  // (CanvasController). Canvas keeps the key; the reminder falls back to its
+  // command-menu-only registration there so no shortcut is advertised that the
+  // hand tool would swallow.
+  const canUseReminderHotkey = () => {
+    const entity = getEntity();
+    return !(
+      entity &&
+      isDocumentEntity(entity) &&
+      entity.fileType === 'canvas'
+    );
+  };
+
+  const runCreateReminder = () => {
+    const entity = getEntity();
+    if (!entity) return false;
+    if (!createReminderAction.canExecute(entity)) return false;
+    createReminderAction.execute([entity]);
+    return true;
   };
 
   const runMarkDone = () => {
@@ -308,21 +350,54 @@ export const useBlockEntityCommands = () => {
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Copy entity id (command menu only, no keybinding)
+    // Copy entity id (command menu only, no keybinding). Deliberately not
+    // gated on getEntity(): a block is keyed by its entity id, and Quick
+    // Access — a recents cache built from history, channels, contacts,
+    // companies and snippets — has no entry for entity types it never indexes
+    // (emails, calls) or for an item created moments ago. Requiring the entity
+    // hid Copy ID on exactly those blocks, and since it has no keybinding the
+    // command menu is the only way to reach it.
     registerHotkey({
       hotkeyToken: TOKENS.entity.action.copyEntityId,
       scopeId,
       description: 'Copy ID',
       keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!copyEntityIdAction.canExecute(entity)) return false;
-        copyEntityIdAction.execute([entity]);
+        copyEntityIdAction.executeById(blockId);
         return true;
       },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Set a reminder - 'h'. 'add' rather than the default 'override', so this
+    // and the canvas hand tool coexist in the scope instead of whichever
+    // registered last evicting the other.
+    registerHotkey({
+      hotkey: ['h'],
+      hotkeyToken: TOKENS.entity.action.createReminder,
+      scopeId,
+      description: 'Remind me',
+      keyDownHandler: runCreateReminder,
       condition: () => {
+        if (!canUseReminderHotkey()) return false;
         const entity = getEntity();
-        return entity !== undefined && copyEntityIdAction.canExecute(entity);
+        return entity !== undefined && createReminderAction.canExecute(entity);
+      },
+      registrationType: 'add',
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Set a reminder without a keybinding on canvas, so it stays reachable
+    // from the command menu
+    registerHotkey({
+      scopeId,
+      description: 'Remind me',
+      keyDownHandler: runCreateReminder,
+      condition: () => {
+        if (canUseReminderHotkey()) return false;
+        const entity = getEntity();
+        return entity !== undefined && createReminderAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -355,7 +430,11 @@ export const useBlockEntityCommands = () => {
       keyDownHandler: () => {
         const entity = getEntity();
         if (!entity) return false;
-        openPropertyEditor([entity], 'tag');
+        openPropertyEditor([entity], 'tag', undefined, {
+          restoreFocus: () => {
+            if (soup) return restoreSoupFocus(entity.id);
+          },
+        });
         return true;
       },
       condition: () => {

@@ -1874,6 +1874,78 @@ async fn participants_roles_parsed_correctly(pool: Pool<Postgres>) -> anyhow::Re
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn channel_participant_readers_handle_bot_principals(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // An unnamed private channel resolves its display name from its
+    // participants; bot participants contribute their bot name (never their
+    // raw `bot|<uuid>` principal) and must not fail the call.
+    let channel_id = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c31);
+    let bot_uuid = Uuid::from_u128(0x00000000_0000_0000_0000_0000_b0b0);
+    sqlx::query(
+        "INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+         VALUES ($1, NULL, 'private', $2, now(), now())",
+    )
+    .bind(channel_id)
+    .bind(USER_A)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO bots (id, kind, owner_user_id, name, handle, created_by)
+         VALUES ($1, 'owned', $2, 'Deploy Bot', 'deploybot', $2)",
+    )
+    .bind(bot_uuid)
+    .bind(USER_A)
+    .execute(&pool)
+    .await?;
+    sqlx::query(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES
+         ($1, $2, 'owner'),
+         ($1, $3, 'member'),
+         ($1, $4, 'member')",
+    )
+    .bind(channel_id)
+    .bind(USER_A)
+    .bind(USER_B)
+    .bind(format!("bot|{bot_uuid}"))
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let metadata = repo
+        .get_channel_metadata(channel_id, MacroUserIdStr::try_from(USER_A.to_string())?)
+        .await?;
+    let participants = repo.get_participants(channel_id).await?;
+
+    assert_eq!(metadata.channel_type, ChannelType::Private);
+    assert!(
+        !metadata.channel_name.contains("bot|"),
+        "raw bot principals must not appear in the channel display name: {}",
+        metadata.channel_name
+    );
+    assert!(
+        metadata.channel_name.contains("user-b"),
+        "user participants should appear in the channel display name: {}",
+        metadata.channel_name
+    );
+    assert!(
+        metadata.channel_name.contains("Deploy Bot"),
+        "bot participants should appear by bot name in the channel display name: {}",
+        metadata.channel_name
+    );
+    assert!(
+        participants
+            .iter()
+            .any(|participant| participant.user_id == format!("bot|{bot_uuid}")),
+        "the mutation-time participant snapshot must retain installed bots"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
     // ch3 thread parent (msg id 0x..31) was authored by an active participant,

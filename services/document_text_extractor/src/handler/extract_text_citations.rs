@@ -155,8 +155,8 @@ pub async fn extract_text_from_document(
         Error::from("invalid key format")
     })?;
 
-    if document_key.is_bom_part() {
-        tracing::trace!("skipping bom part key");
+    if document_key.is_bom_part() || document_key.is_sync_service_snapshot() {
+        tracing::trace!(?document_key, "skipping non-document key");
         return Ok(None);
     }
 

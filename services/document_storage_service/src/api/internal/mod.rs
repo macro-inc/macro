@@ -28,8 +28,6 @@ use macro_middleware::cloud_storage::{
     document::ensure_document_exists, thread::ensure_thread_exists,
 };
 
-mod associate_github_installations;
-
 /// Internal routes authenticate through extractors on each handler.
 /// These routes are not part of the public Swagger documentation.
 pub fn router(state: ApiContext) -> Router<ApiContext> {
@@ -57,6 +55,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/documents/{document_id}/basic",
             get(get_document::get_document_basic_handler)
                 .layer(ensure_document_exists_middleware.clone()),
+        )
+        .route(
+            "/documents/{document_id}/content-uploaded",
+            post(
+                documents_hex::inbound::axum_router::content_uploaded::content_uploaded_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
         )
         .route(
             "/documents/{document_id}/export",
@@ -186,11 +194,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))
         .route("/validate_item_ids", post(validate_item_ids::handler))
-        // Github routes
-        .route(
-            "/github/installations/{github_user_id}/associate",
-            post(associate_github_installations::associate_github_installations_handler),
-        )
         .route("/health", get(health_handler))
 }
 

@@ -67,7 +67,8 @@
         cargoVendorDir = rootCargoVendorDir;
         nativeBuildInputs = [
           pkgs.binaryen
-          pkgs.wasm-bindgen-cli
+          # wasm-pack requires the CLI version to exactly match Cargo.lock.
+          pkgs.wasm-bindgen-cli_0_2_126
           pkgs.wasm-pack
         ];
         doCheck = false;

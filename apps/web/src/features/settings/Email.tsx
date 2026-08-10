@@ -1,3 +1,4 @@
+import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
@@ -388,6 +389,7 @@ function InboxRow(props: {
   const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
     enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   });
+  const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
   return (
@@ -477,6 +479,25 @@ function InboxRow(props: {
               aria-label={`Reconnect ${props.link.email_address}`}
             >
               Reconnect
+            </Button>
+          </Show>
+          {/* Reconnecting re-runs consent with the calendar scope, so a link
+              that already shows Reconnect doesn't need a second button. */}
+          <Show
+            when={
+              calendarUiEnabled() &&
+              props.link.needs_calendar_permission &&
+              props.link.sync_status !== SyncStatus.NEEDS_REAUTH
+            }
+          >
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              onClick={props.onReconnect}
+              aria-label={`Enable calendar for ${props.link.email_address}`}
+            >
+              Enable calendar
             </Button>
           </Show>
           <Show when={ENABLE_INBOX_RESYNC}>

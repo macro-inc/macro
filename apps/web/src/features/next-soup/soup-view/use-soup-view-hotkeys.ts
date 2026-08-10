@@ -2,9 +2,13 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -45,6 +49,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   } = options;
 
   const analytics = useAnalytics();
+  const notificationSource = useGlobalNotificationSource();
 
   const splitIsUnifiedList = () => isListViewID(splitHandle.content().id);
 
@@ -174,6 +179,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
@@ -201,6 +207,27 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       return false;
     },
     displayPriority: 4,
+  }).withGroup(group);
+
+  // opt+enter - Open in place of the whole Preview Pair
+  registerHotkey({
+    hotkey: ['opt+enter'],
+    scopeId,
+    description: 'Open to replace preview',
+    condition: () =>
+      splitHandle.isControllerSplit() && soup.focus.id() !== undefined,
+    keyDownHandler: () => {
+      const entity = soup.focus.item();
+      if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+        replacePreview: true,
+        referredFrom: currentView(),
+      });
+      return true;
+    },
+    hide: true,
   }).withGroup(group);
 
   // x - Toggle select item
@@ -303,6 +330,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
+      markReminderSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,

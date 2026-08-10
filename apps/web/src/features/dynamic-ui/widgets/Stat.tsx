@@ -16,7 +16,7 @@ const DELTA_GLYPH: Record<'up' | 'down' | 'neutral', string> = {
 export function Stat(props: StatProps) {
   return (
     <div class="w-full gap-1 rounded-lg border border-edge-muted bg-surface p-3">
-      <span class="text-ink-extra-muted text-xxs font-medium uppercase tracking-wide">
+      <span class="text-ink-extra-muted text-xxs font-medium uppercase tracking-wide break-words">
         {props.label}
       </span>
       <div class="flex items-baseline gap-1">

@@ -150,10 +150,10 @@ export type ChatEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
-/** Named sub types - 'task' and 'snippet' */
-export type NamedSubType = 'task' | 'snippet';
+/** Named sub types - 'task', 'snippet' and 'skill' */
+export type NamedSubType = 'task' | 'snippet' | 'skill';
 
-/** SubType for documents - tasks and snippets */
+/** SubType for documents - tasks, snippets and skills */
 export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
@@ -178,6 +178,13 @@ export type SnippetEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
   subType: { type: 'snippet' };
+  projectId?: string;
+};
+
+export type SkillEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType: { type: 'skill' };
   projectId?: string;
 };
 
@@ -298,6 +305,43 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+export type ReminderEntity = EntityBase & {
+  type: 'reminder';
+  /** What to remind the user about. Doubles as {@link EntityBase.name}. */
+  description: string;
+  /** The entity the reminder is about, when it is attached to one. Clicking a
+   * reminder navigates here rather than to the reminder itself, and the row
+   * borrows this entity's icon.
+   *
+   * `type` is already mapped to the display {@link EntityType} (`email`,
+   * `foreign`), not the canonical API names (`email_thread`,
+   * `foreign_entity`). `fileType`/`subType` are resolved server-side and only
+   * present for documents — without them a referenced document has no
+   * resolvable block, since the icon and open paths are both synchronous.
+   *
+   * A reminder never references another reminder — the mapper yields
+   * `undefined` for that — so the type excludes it and the reference stays
+   * assignable to the preview/open helpers, which only know real targets. */
+  referencedEntity?: {
+    id: string;
+    type: Exclude<EntityType, 'reminder'>;
+    fileType?: string;
+    subType?: string;
+  };
+  /** Whether the reminder fires once or on a cron schedule. */
+  scheduleType: 'once' | 'recurring';
+  /** Cron expression, for a recurring reminder. */
+  cron?: string;
+  /** Timezone the cron is evaluated in, for a recurring reminder. */
+  timezone?: string;
+  /** The next firing. Soup orders reminders on this. */
+  nextRunAt: DateValue;
+  /** When false, the dispatcher skips this reminder. */
+  enabled: boolean;
+  /** Set once a one-shot reminder has fired. */
+  completedAt?: DateValue | null;
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -312,6 +356,7 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | AutomationEntity
+  | ReminderEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -326,6 +371,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'automation',
+  'reminder',
   'foreign',
 ]);
 
@@ -356,6 +402,14 @@ export const isSnippetEntity = (
     entity.type === 'document' &&
     entity.fileType === 'md' &&
     entity.subType?.type === 'snippet'
+  );
+};
+
+export const isSkillEntity = (entity: EntityData): entity is SkillEntity => {
+  return (
+    entity.type === 'document' &&
+    entity.fileType === 'md' &&
+    entity.subType?.type === 'skill'
   );
 };
 
@@ -420,6 +474,12 @@ export const isCallEntity = (entity: EntityData): entity is CallEntity => {
   return entity.type === 'call';
 };
 
+export const isReminderEntity = (
+  entity: EntityData
+): entity is ReminderEntity => {
+  return entity.type === 'reminder';
+};
+
 export const isAutomationEntity = (
   entity: EntityData
 ): entity is AutomationEntity => {
@@ -456,13 +516,14 @@ const _isPureDocumentEntity = (
   return (
     entity.type === 'document' &&
     entity.subType?.type !== 'task' &&
-    entity.subType?.type !== 'snippet'
+    entity.subType?.type !== 'snippet' &&
+    entity.subType?.type !== 'skill'
   );
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | 'task' | 'snippet';
+export type ExpandedEntityType = EntityType | 'task' | 'snippet' | 'skill';
 
 export type EntityWithProperties<T extends EntityData> = T & {
   properties?: SoupProperty[];

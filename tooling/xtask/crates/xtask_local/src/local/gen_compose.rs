@@ -29,16 +29,19 @@ use super::{Mode, repo_root};
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
+pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
 /// instances we drop their host-port bindings so concurrent stacks don't collide
-/// on 8787/6969/8096/8100.
+/// on 8787/6969/8096/8100/8933.
 const AUX_HOST_PORT_SERVICES: &[&str] = &[
     "sync_service",
     "websocket_service",
     "lexical_service",
     "static_file_cdn",
+    "ai_editing_worker",
+    "analytics_proxy",
 ];
 
 /// The host directory bind-mounted into FusionAuth at
@@ -60,6 +63,7 @@ pub fn generate(
     instance: &Instance,
     binaries: &BinariesDir,
     static_frontend: bool,
+    gmail_forwarder: bool,
 ) -> Result<PathBuf> {
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
@@ -93,6 +97,42 @@ pub fn generate(
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
         add_local_infra(&mut services, instance, static_frontend);
+        add_sdk_webhook_relay(&mut services, instance)?;
+    }
+    // Live Gmail sync: forward watch notifications from the instance's own
+    // Pub/Sub subscription to the email service's webhook. Per-instance
+    // subscriptions (created by the forwarder on startup) let concurrent
+    // stacks sync independently — a subscription is a queue, not a broadcast,
+    // so sharing one would make instances steal each other's notifications.
+    // Gated on the SA key being present in the resolved env.
+    if gmail_forwarder && mode.spec().runs_local_infra {
+        services.insert(
+            "gmail_forwarder".to_string(),
+            Some(dct::Service {
+                image: Some(RUNTIME_IMAGE_TAG.to_string()),
+                volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(
+                    [
+                        "/app/out/seed_cli",
+                        "gmail",
+                        "forward",
+                        "--target",
+                        "http://email-service:8080/gmail/webhook",
+                        "--subscription",
+                        &format!(
+                            "projects/macro-email-testing/subscriptions/gmail-local-watch-{}",
+                            instance.name()
+                        ),
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                )),
+                env_file: Some(dct::StringOrList::Simple("${MACRO_ENV_FILE}".to_string())),
+                networks: net_aliases(&[("services", &["gmail-forwarder"])]),
+                ..Default::default()
+            }),
+        );
     }
 
     let compose = dct::Compose {
@@ -121,6 +161,41 @@ pub fn generate(
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
+}
+
+fn add_sdk_webhook_relay(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+) -> Result<()> {
+    super::sdk_webhook::ensure_keys(instance)?;
+    let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
+        context: repo_root()
+            .join("infra/local/sdk-webhook-relay")
+            .display()
+            .to_string(),
+        ..Default::default()
+    });
+    services.insert(
+        "sdk-webhook-relay".to_string(),
+        Some(dct::Service {
+            image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
+            build_: Some(build),
+            ports: dct::Ports::Short(vec![format!(
+                "127.0.0.1:{}:22",
+                super::sdk_webhook::ssh_port(instance)
+            )]),
+            volumes: vec![dct::Volumes::Simple(format!(
+                "{}:/etc/ssh/authorized_keys/{}:ro",
+                super::sdk_webhook::key_dir(instance)
+                    .join("id_ed25519.pub")
+                    .display(),
+                "sdk-webhook"
+            ))],
+            networks: net_aliases(&[("services", &["sdk-webhook-relay"])]),
+            ..Default::default()
+        }),
+    );
+    Ok(())
 }
 
 /// LocalStack (S3/SQS/DynamoDB), reachable as `localstack` on both networks.

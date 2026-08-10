@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { LexicalSession } from '../ai-toolkit';
@@ -18,6 +19,8 @@ export type RunCodeToolOptions = {
   onOps?: (ops: DocumentOp[]) => void;
   /** Called when a runCode call begins executing. */
   onRunCode?: (snippets?: Record<string, string>) => void;
+  /** Parent for the per-call `edit.run_code` span (the dispatch span). */
+  span?: Span;
 };
 
 /** The writer's one tool: run a JS snippet against `editor`, returning compact
@@ -38,19 +41,33 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
     }),
     execute: async ({ code, snippets }) => {
       opts.onRunCode?.(snippets);
-      const result = await runEditorCode({
-        session: opts.session,
-        doc: opts.doc,
-        code,
-        awarenessSource: opts.awarenessSource,
-        snippets,
-        params: opts.params,
-        typingAnimations: opts.typingAnimations,
-        sleep: opts.sleep,
-        runner: opts.runner,
-        onOps: opts.onOps,
-      });
-      return result;
+      const span = opts.span
+        ? opts.span.span('edit.run_code')
+        : Telemetry.span('edit.run_code');
+      span.setAttr('code.bytes', code.length);
+      span.setAttr('snippets.count', Object.keys(snippets ?? {}).length);
+      try {
+        const result = await runEditorCode({
+          session: opts.session,
+          doc: opts.doc,
+          code,
+          awarenessSource: opts.awarenessSource,
+          snippets,
+          params: opts.params,
+          typingAnimations: opts.typingAnimations,
+          sleep: opts.sleep,
+          runner: opts.runner,
+          onOps: opts.onOps,
+          span,
+        });
+        span.setAttr('result', result.startsWith('error:') ? 'error' : 'ok');
+        return result;
+      } catch (e) {
+        span.error(e);
+        throw e;
+      } finally {
+        span.end();
+      }
     },
   });
 }

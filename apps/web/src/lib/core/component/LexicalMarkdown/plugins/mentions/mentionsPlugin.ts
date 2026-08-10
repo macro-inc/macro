@@ -26,14 +26,18 @@ import {
   ContactMentionNode,
   type DateMentionInfo,
   DateMentionNode,
+  DocumentCardNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
   type GroupMentionInfo,
   GroupMentionNode,
+  HISTORIC_TAG,
   InlineSearchNode,
   InlineSearchNodesType,
   type PullRequestMentionInfo,
   PullRequestMentionNode,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
   type SnapshotNodeInfo,
   type ThemeMentionInfo,
   type UserMentionInfo,
@@ -133,7 +137,8 @@ export type ItemMention = {
     | 'group'
     | 'automation'
     | 'crm_company'
-    | 'crm_contact';
+    | 'crm_contact'
+    | 'skill';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -172,7 +177,12 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     // task/snippet aliases are markdown documents
     else if (blockName === 'task') fileType = 'md';
     else if (blockName === 'snippet') fileType = 'md';
-    else if (blockName === 'csv') fileType = 'csv';
+    // skills are their own attachment type: either a markdown skill
+    // document or a built-in system skill
+    else if (blockName === 'skill') {
+      fileType = 'md';
+      itemType = 'skill';
+    } else if (blockName === 'csv') fileType = 'csv';
     else if (blockName === 'canvas') fileType = 'canvas';
     else if (blockName === 'code') {
       const blockParams = node.getBlockParams();
@@ -642,10 +652,12 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(
           () => {
-            const nodesToUpdate: DocumentMentionNode[] = [];
+            const nodesToUpdate: Array<DocumentMentionNode | DocumentCardNode> =
+              [];
             $traverseNodes($getRoot(), (node) => {
               if (
-                node instanceof DocumentMentionNode &&
+                (node instanceof DocumentMentionNode ||
+                  node instanceof DocumentCardNode) &&
                 payload[node.getDocumentId()] &&
                 node.getDocumentName() !== payload[node.getDocumentId()]
               ) {
@@ -663,7 +675,11 @@ function registerMentionsPlugin(
             // they don't get recorded into the undo stack. This was breaking the predictability
             // of undo with document mentions. This hacks around that by using the an undocumented
             // "historic" tag from the LexicalHistoryPlugin.
-            tag: 'historic',
+            tag: [
+              HISTORIC_TAG,
+              SKIP_DOM_SELECTION_TAG,
+              SKIP_SCROLL_INTO_VIEW_TAG,
+            ],
             discrete: true,
           }
         );

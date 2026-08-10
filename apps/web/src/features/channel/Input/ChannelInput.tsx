@@ -14,6 +14,7 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
+import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -65,6 +66,8 @@ export type ChannelInputProps = InputCallbacks & {
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
   participants?: Accessor<IUser[]>;
+  /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
+  bots?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
@@ -74,6 +77,18 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /**
+   * Whether focus leaving the input may collapse it. Defaults to `true`.
+   * Composed alternate input faces can disable this while the message face is
+   * hidden so it remains expanded for the return transition.
+   */
+  collapseOnFocusOut?: boolean;
+  /**
+   * Optional composition slot around the message face inside the shared input
+   * surface. Used by alternate input modes that need to preserve the surface
+   * while switching content.
+   */
+  renderContent?: (messageFace: JSX.Element) => JSX.Element;
 };
 
 function WebDefaultActions(props: { input: InputData }) {
@@ -176,6 +191,7 @@ export function ChannelInput(props: ChannelInputProps) {
     inputId: () => props.input.id,
     attachFiles: (files) => inputState.commands.attachFiles(files),
   });
+
   const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
 
   let isEditorConnected = false;
@@ -230,13 +246,16 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // Macro AI is mentionable in every channel. It is surfaced through the same
-  // `@`-mention typeahead as participants and re-tagged as a bot at send time.
+  // Macro AI is mentionable in every channel, and any bot added to the
+  // channel is mentionable too. Both are surfaced through the same
+  // `@`-mention typeahead as participants and re-tagged as bot mentions at
+  // send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const base = props.participants?.() ?? [];
-    return base.some((user) => isMacroAiId(user.id))
-      ? base
-      : [macroAiMentionUser(), ...base];
+    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    if (!base.some((user) => isMacroAiId(user.id))) {
+      base.unshift(macroAiMentionUser());
+    }
+    return uniqueByKey(base, (user) => user.id);
   };
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -382,6 +401,72 @@ export function ChannelInput(props: ChannelInputProps) {
     },
   });
 
+  const renderSurfaceContent = () => {
+    const messageFace = (
+      <Input.DropZone
+        onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+        onDragEnd={() => inputState.setIsDraggedOver(false)}
+      >
+        <Input.Layout>
+          <Input.DropOverlay />
+          <Input.FormatRibbon>
+            <FormatButtons
+              selectionState={() => markdownEditor.selection}
+              onInlineFormat={(format) =>
+                applyInlineFormat(markdownEditor.lexical, format)
+              }
+              onNodeFormat={(format) =>
+                applyNodeFormat(markdownEditor.lexical, format)
+              }
+            />
+          </Input.FormatRibbon>
+          <Input.EditorShell
+            ref={setScrollContainer}
+            onClick={(event) => {
+              if (!isMobile()) {
+                event.stopPropagation();
+                markdownEditor.controls.focus();
+              }
+            }}
+          >
+            <Input.Editor>
+              <MarkdownShell
+                config={markdownEditor}
+                placeholder={props.input.placeholder}
+                initialValue={inputState.view().value}
+                autofocus={!isMobile() && (props.autofocus ?? true)}
+                class="text-sm"
+                refFn={attach}
+                onConnect={() => {
+                  isEditorConnected = true;
+                  flushPendingRestore();
+                  flushPendingFocus();
+                }}
+              />
+              <DragInsertIndicator
+                editor={lexicalEditor()}
+                state={entityDragInsertStore}
+                active
+              />
+            </Input.Editor>
+          </Input.EditorShell>
+          <Input.Attachments kind="media" />
+          <Input.Attachments kind="document" />
+          <Input.Footer>
+            <Switch>
+              <Match when={props.children}>{props.children}</Match>
+              <Match when>
+                <DefaultActions input={inputState.view()} />
+              </Match>
+            </Switch>
+          </Input.Footer>
+        </Input.Layout>
+      </Input.DropZone>
+    );
+
+    return props.renderContent?.(messageFace) ?? messageFace;
+  };
+
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
       <Show when={isCollapsed()}>
@@ -405,7 +490,9 @@ export function ChannelInput(props: ChannelInputProps) {
               singleLine
             />
           )}
-          placeholder={inputState.view().placeholder}
+          // Read through the reactive prop — the view freezes the input at
+          // mount, but the placeholder can update (e.g. channel name loads).
+          placeholder={props.input.placeholder}
           attachmentCount={inputState.view().attachments?.length ?? 0}
           pending={inputState.view().hasPendingAttachments}
           disabled={!hasSendableInputContent(inputState.view())}
@@ -420,6 +507,7 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
+          if (props.collapseOnFocusOut === false) return;
           collapsedInput.collapse();
         }}
         class={cn(
@@ -431,65 +519,7 @@ export function ChannelInput(props: ChannelInputProps) {
         depth={isMobile() ? 3 : 2}
         solid
       >
-        <Input.DropZone
-          onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-          onDragEnd={() => inputState.setIsDraggedOver(false)}
-        >
-          <Input.Layout>
-            <Input.DropOverlay />
-            <Input.FormatRibbon>
-              <FormatButtons
-                selectionState={() => markdownEditor.selection}
-                onInlineFormat={(format) =>
-                  applyInlineFormat(markdownEditor.lexical, format)
-                }
-                onNodeFormat={(format) =>
-                  applyNodeFormat(markdownEditor.lexical, format)
-                }
-              />
-            </Input.FormatRibbon>
-            <Input.EditorShell
-              ref={setScrollContainer}
-              onClick={(event) => {
-                if (!isMobile()) {
-                  event.stopPropagation();
-                  markdownEditor.controls.focus();
-                }
-              }}
-            >
-              <Input.Editor>
-                <MarkdownShell
-                  config={markdownEditor}
-                  placeholder={inputState.view().placeholder}
-                  initialValue={inputState.view().value}
-                  autofocus={!isMobile() && (props.autofocus ?? true)}
-                  class="text-sm"
-                  refFn={attach}
-                  onConnect={() => {
-                    isEditorConnected = true;
-                    flushPendingRestore();
-                    flushPendingFocus();
-                  }}
-                />
-                <DragInsertIndicator
-                  editor={lexicalEditor()}
-                  state={entityDragInsertStore}
-                  active
-                />
-              </Input.Editor>
-            </Input.EditorShell>
-            <Input.Attachments kind="media" />
-            <Input.Attachments kind="document" />
-            <Input.Footer>
-              <Switch>
-                <Match when={props.children}>{props.children}</Match>
-                <Match when>
-                  <DefaultActions input={inputState.view()} />
-                </Match>
-              </Switch>
-            </Input.Footer>
-          </Input.Layout>
-        </Input.DropZone>
+        {renderSurfaceContent()}
       </Surface>
     </Input.Root>
   );

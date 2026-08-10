@@ -21,6 +21,79 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    pub(crate) async fn mark_thread_seen_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id.clone())
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+
+        let messages = self
+            .email_repo
+            .get_thread_label_messages(thread_id, link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        if messages.is_empty() {
+            return Err(EmailErr::ThreadNotFound);
+        }
+
+        self.email_repo
+            .upsert_thread_user_history(link.id, thread_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+
+        let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
+        let labels_by_message = self
+            .email_repo
+            .labels_by_message_ids(&message_ids)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        let unread_label_id = labels_by_message
+            .values()
+            .flatten()
+            .find(|label| label.provider_label_id == system_labels::UNREAD)
+            .and_then(|label| label.id);
+
+        let Some(unread_label_id) = unread_label_id else {
+            // Preserve the seen endpoint's repair behavior when the UNREAD
+            // assignments are already absent but the denormalized flag is stale.
+            self.email_repo
+                .update_thread_read_status(thread_id, link.id, true)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+            return Ok(());
+        };
+
+        self.update_thread_labels_impl(&link, thread_id, unread_label_id, false)
+            .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
+    pub(crate) async fn update_thread_labels_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        label_id: Uuid,
+        add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+
+        self.update_thread_labels_impl(&link, thread_id, label_id, add)
+            .await
+    }
+
     #[tracing::instrument(err, skip(self, link))]
     pub(crate) async fn update_thread_labels_impl(
         &self,

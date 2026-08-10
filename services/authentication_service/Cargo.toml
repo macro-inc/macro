@@ -28,6 +28,7 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+calendar_events = { path = "../../crates/calendar_events" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [

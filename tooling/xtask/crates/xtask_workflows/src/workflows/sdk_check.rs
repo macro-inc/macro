@@ -42,6 +42,7 @@ fn check_sdk() -> Job {
         .add_step(verify_fresh())
         .add_step(typecheck())
         .add_step(check_coverage())
+        .add_step(steps::teardown_nix())
 }
 
 fn update_generated() -> Step<Run> {

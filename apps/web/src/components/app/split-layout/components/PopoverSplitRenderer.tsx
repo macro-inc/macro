@@ -125,6 +125,7 @@ function PopoverSplitModal(props: {
     titleFileMenuActions,
     setTitleFileMenuActions,
     headerCollapser: { register: () => () => {} },
+    toolbarCollapser: { register: () => () => {} },
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(

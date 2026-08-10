@@ -3,6 +3,7 @@ import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import { ItemPreview, useItemPreviewData } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   createTheme,
@@ -29,6 +30,7 @@ import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
+import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
 import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -40,6 +42,7 @@ import {
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/channel/message-sender';
+import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
@@ -125,6 +128,13 @@ const getNotificationSenderFallbackName = (
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
+  // Reminders sort on when they fire, so the row has to show that field too.
+  // The notification's time drifts from it for anything recurring, retried, or
+  // dispatched late, and the list then reads as unsorted.
+  if (entity.type === 'reminder') {
+    return entity.nextRunAt != null ? String(entity.nextRunAt) : undefined;
+  }
+
   const messageTime =
     entity.type === 'channel'
       ? entity.latestRootMessage?.createdAt
@@ -245,6 +255,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <UserPlusIcon class="size-4" />
     ))
     .with('call_started', () => () => <PhoneIcon class="size-4" />)
+    .with('reminder', () => () => <BellSimpleIcon class="size-4" />)
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',
@@ -473,6 +484,12 @@ function BaseCard(props: {
   leading: JSX.Element;
   title: JSX.Element;
   preview?: string;
+  /**
+   * Inline element rendered at the head of the preview line, before the text,
+   * and on its own when there is no text. Must be inline-level — the line
+   * truncates as one run, the way an inline mention does in a message preview.
+   */
+  previewInline?: JSX.Element;
   attachments?: InboxCardAttachment[];
   entityId: string;
   properties?: PropertyT[];
@@ -494,16 +511,19 @@ function BaseCard(props: {
         </InboxCard.Header>
 
         <div class="col-start-2 row-start-2 flex min-w-0 flex-col">
-          <Show when={props.preview?.trim()}>
-            {(value) => (
-              <InboxCard.Content class="truncate text-sm">
-                <StaticMarkdown
-                  markdown={value()}
-                  singleLine
-                  theme={unifiedListMarkdownTheme}
-                />
-              </InboxCard.Content>
-            )}
+          <Show when={props.previewInline || props.preview?.trim()}>
+            <InboxCard.Content class="truncate text-sm">
+              {props.previewInline}
+              <Show when={props.preview?.trim()}>
+                {(value) => (
+                  <StaticMarkdown
+                    markdown={value()}
+                    singleLine
+                    theme={unifiedListMarkdownTheme}
+                  />
+                )}
+              </Show>
+            </InboxCard.Content>
           </Show>
 
           <PropertyPills
@@ -1419,6 +1439,108 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
+/**
+ * A reminder is self-set, so there is no sender and no action to describe.
+ *
+ * With something to point at, the description leads and the chip below says
+ * what it is about. Standalone, there is nothing to link to, so the generic
+ * title leads — matching `ReminderMetadata::format_title` on the backend, so
+ * the row and the push notification read the same — and the description
+ * becomes the body.
+ */
+export function ReminderCardLayout(props: InboxCardLayoutProps) {
+  // The current description, not the notification's copy of it, so editing a
+  // reminder after it fires updates the row.
+  const description = () => props.item.entity.name;
+
+  const referenced = () =>
+    props.item.entity.type === 'reminder'
+      ? props.item.entity.referencedEntity
+      : undefined;
+
+  return (
+    <BaseCard
+      entityId={props.item.entity.id}
+      selected={props.selected}
+      highlighted={props.highlighted}
+      onClick={props.onClick}
+      unread={props.item.unread}
+      timestamp={props.item.timestamp}
+      leading={
+        // Always the bell, never the referenced entity's icon: the row is a
+        // reminder first, and the thing it points at is named right below.
+        <InboxCard.Icon fallback={<BellSimpleIcon class="size-4" />} />
+      }
+      title={
+        <Show when={referenced()} fallback="Reminder">
+          {(reference) => (
+            <ReminderTitle
+              description={description()}
+              id={reference().id}
+              type={reference().type}
+            />
+          )}
+        </Show>
+      }
+      // Shown as the body only when it isn't already the title.
+      preview={referenced() ? undefined : description()}
+      previewInline={
+        <Show when={referenced()}>
+          {(reference) => (
+            <ReminderReferenceChip
+              id={reference().id}
+              type={reference().type}
+            />
+          )}
+        </Show>
+      }
+    />
+  );
+}
+
+/**
+ * The reminder's description, unless it says nothing the chip below doesn't.
+ *
+ * The composer derives the description from the entity, so today it usually
+ * *is* the referenced entity's name — printing it as the title would just
+ * repeat the chip. Falling back to the generic title keeps the row readable
+ * until descriptions become editable, and gets out of the way once they are.
+ */
+function ReminderTitle(props: ItemEntity & { description: string }) {
+  const { item, name } = useItemPreviewData(() => ({
+    id: props.id,
+    type: props.type,
+  }));
+
+  const ownText = () => {
+    const description = props.description.trim();
+    // While the reference is resolving, `name()` is a placeholder, so the two
+    // cannot be compared yet — hold the generic title rather than flash text
+    // that is about to collapse into it.
+    if (!description || item().loading) return undefined;
+    return description === name().trim() ? undefined : description;
+  };
+
+  return <>{ownText() ?? 'Reminder'}</>;
+}
+
+/**
+ * What the reminder is about, as an inline mention chip — the same icon, name,
+ * and hover preview a document mention gets inside a message. `ItemPreview`
+ * resolves the name and handles the deleted / no-access cases; the classes
+ * strip its default boxed-button look back to inline text.
+ */
+function ReminderReferenceChip(props: ItemEntity) {
+  return (
+    <ItemPreview
+      {...props}
+      class="inline-flex h-auto max-w-full rounded-none px-0 align-[-0.15em] ring-0 hover:bg-transparent"
+      iconClass="mr-1 size-3.5"
+      textClass="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2"
+    />
+  );
+}
+
 export function GenericCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => ({
     title: props.item.entity.name
@@ -1513,6 +1635,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'channel_thread'}>
         <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'reminder'}>
+        <ReminderCardLayout {...props} />
       </Match>
       <Match when={true}>
         <GenericCardLayout {...props} />

@@ -205,7 +205,10 @@ export function FloatingFormatMenu(props: {
     editor.dispatchCommand(NODE_TRANSFORM, isActive ? 'paragraph' : transform);
   };
 
-  const handleLink = () => {
+  const handleLink = (e?: MouseEvent | KeyboardEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
     if (selection()?.hasLinks) {
       editor.dispatchCommand(UNLINK_COMMAND, undefined);
       setTimeout(() => {
@@ -229,7 +232,7 @@ export function FloatingFormatMenu(props: {
         <Layer depth={2}>
           <div
             ref={setMenuRef}
-            class="fixed top-0 left-0 z-highlight-menu bg-surface shadow-xl ring ring-edge rounded-lg p-1 flex flex-row items-center gap-1"
+            class="fixed top-0 left-0 z-highlight-menu border border-edge bg-surface shadow-xl rounded-lg p-1 flex flex-row items-center gap-1"
             use:floatWithSelection={{
               selection: domSelection(),
               reactiveOnContainer: editor.getRootElement(),

@@ -104,6 +104,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest.workspace = true
+reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = [
   "outbound",
 ] }
@@ -120,7 +121,6 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "document_text_extractor",
   "email",
   "gmail",
-  "search",
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }

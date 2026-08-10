@@ -1,11 +1,15 @@
 //! `Deploy Sync Service` — deploys the `sync_service` Cloudflare Worker
 //! (`services/sync-service`) via wrangler, applying its D1 migrations first.
 //! Unlike [`crate::workflows::deploy_ai_editing_worker`] this worker is Rust, so
-//! the job needs a toolchain and the wasm target. Generated into
-//! `deploy_sync_service.yml`.
+//! the job needs a toolchain and the wasm target. Call/dispatch-only: push
+//! deploys to dev come through [`crate::workflows::deploy_on_push`] (which owns
+//! the path gating) and prod deploys through `release-production`. Generated
+//! into `deploy_sync_service.yml`.
 
 use anyhow::Result;
-use gh_workflow::{Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow};
+use gh_workflow::{
+    Concurrency, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowDispatch,
+};
 
 use crate::workflows::{runners, steps, vars};
 
@@ -13,23 +17,11 @@ const ENVIRONMENT: &str = "${{ inputs.environment || 'dev' }}";
 
 pub fn deploy_sync_service() -> Workflow {
     Workflow::new("Deploy Sync Service")
-        .on(Event::default()
-            // Only redeploy when the worker, its one path dependency, or the
-            // workspace's Rust pinning changes.
-            .push(
-                Push::default()
-                    .add_branch("main")
-                    .add_path(xtask_paths::repo_glob!(
-                        ".github/workflows/deploy_sync_service.yml"
-                    ))
-                    .add_path(xtask_paths::repo_glob!("services/sync-service/**"))
-                    .add_path(xtask_paths::repo_glob!("crates/macro_sync_service_jwt/**"))
-                    .add_path(xtask_paths::repo_glob!("Cargo.toml"))
-                    .add_path(xtask_paths::repo_glob!("Cargo.lock"))
-                    .add_path(xtask_paths::repo_glob!("rust-toolchain.toml")),
-            ))
         // The `workflow_call` / `workflow_dispatch` input blocks are filled in
         // by `patch` below.
+        .on(Event::default()
+            .workflow_dispatch(WorkflowDispatch::default())
+            .workflow_call(WorkflowCall::default()))
         .concurrency(
             // Literal prefix rather than `github.workflow`: for workflow_call
             // runs that expression expands to the *caller's* name.

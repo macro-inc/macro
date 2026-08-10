@@ -1,4 +1,3 @@
-import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
@@ -17,7 +16,7 @@ export function LightboxToolbar(props: LightboxToolbarProps) {
           ? 'opacity-100'
           : 'opacity-0 pointer-events-none'
       )}
-      style={{ 'z-index': stackingContext.zModal + 1 }}
+      style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
     >
       {props.children}
     </div>

@@ -50,6 +50,9 @@ export interface MentionsOptions {
 export interface TagsOptions {
   /** Insert inline tag mentions into the editor document. Defaults to true. */
   insertTags?: boolean;
+  /** When set, selecting a tag opens a one-row prompt to apply it to this entity label. */
+  applyTargetLabel?: string;
+  isApplied?: (tag: TagMentionLifecycle) => boolean;
   onCreate?: (tag: TagMentionLifecycle) => void;
   onRemove?: (tag: TagMentionLifecycle) => void;
   setTags?: (tags: ReadonlySet<TagMentionLifecycle>) => void;
@@ -140,6 +143,12 @@ export interface EditorConfig {
   tags?: TagsOptions;
   /** Snippets (`;` menu) follow mentions by default; pass false to opt out. */
   snippets?: false;
+  /**
+   * Skills (`/` menu) are opt-in for AI markdown areas. Skills share the `/`
+   * trigger with the actions slash menu, so this only takes effect when
+   * actions are disabled.
+   */
+  skills?: boolean;
   emojis?: EmojisOptions;
   links?: LinksOptions;
   history?: HistoryOptions;
@@ -176,6 +185,7 @@ export interface EditorInternals {
   tagsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
+  skillsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
   draggableBlockStore:

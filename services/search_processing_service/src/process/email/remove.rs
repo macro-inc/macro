@@ -1,12 +1,13 @@
 use opensearch_client::OpensearchClient;
-use sqs_client::search::email::{EmailLinkMessage, EmailMessage};
+use uuid::Uuid;
 
 pub async fn process_remove_message(
     opensearch_client: &OpensearchClient,
-    remove_message: &EmailMessage,
+    message_id: Uuid,
+    index_override: Option<&str>,
 ) -> anyhow::Result<()> {
     opensearch_client
-        .delete_email_message_by_id(remove_message.message_id.as_str())
+        .delete_email_message_by_id(&message_id.to_string(), index_override)
         .await?;
 
     Ok(())
@@ -14,10 +15,10 @@ pub async fn process_remove_message(
 
 pub async fn process_remove_messages_by_link_id(
     opensearch_client: &OpensearchClient,
-    remove_link_message: &EmailLinkMessage,
+    link_id: Uuid,
 ) -> anyhow::Result<()> {
     opensearch_client
-        .delete_email_messages_by_link_id(remove_link_message.link_id.as_str())
+        .delete_email_messages_by_link_id(&link_id.to_string())
         .await?;
 
     Ok(())

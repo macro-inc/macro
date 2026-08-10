@@ -237,6 +237,18 @@ export const syncServiceClient = {
       }
     );
 
+    // Without this an error body decodes as a snapshot, surfacing as a bogus
+    // Loro parse failure. Transport failures (offline, CORS) reject instead,
+    // which callers already see.
+    if (!response.ok) {
+      return err([
+        {
+          code: 'SNAPSHOT_HTTP_ERROR',
+          message: `The sync service returned HTTP ${response.status}.`,
+        },
+      ]);
+    }
+
     const data = await response.arrayBuffer();
 
     const array = new Uint8Array(data);
