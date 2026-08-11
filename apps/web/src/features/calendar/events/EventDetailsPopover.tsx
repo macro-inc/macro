@@ -297,6 +297,14 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   event.preventDefault();
                 }
               }}
+              onFocusOutside={(event) => {
+                // Deep links open this popover while their freshly-opened
+                // split is still claiming focus; that focus movement lands
+                // outside the popover and would dismiss it on arrival. Focus
+                // alone never closes the details — pointer interaction
+                // outside or Escape still does.
+                event.preventDefault();
+              }}
               onCloseAutoFocus={(event) => {
                 const shouldRestoreFocus = !event.defaultPrevented;
                 event.preventDefault();
