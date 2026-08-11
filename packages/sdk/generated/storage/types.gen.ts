@@ -6604,31 +6604,35 @@ export type SoupAttachment = {
 
 /**
  * Timed or all-day calendar event span.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores — the generated OpenAPI schema would otherwise
+ * claim snake_case fields the wire never carries.
  */
 export type SoupCalendarEventTime = {
     /**
      * Exclusive end.
      */
-    ends_at: string;
+    endsAt: string;
     kind: 'timed';
     /**
      * Inclusive start.
      */
-    starts_at: string;
+    startsAt: string;
     /**
      * Original IANA time zone.
      */
-    time_zone?: string | null;
+    timeZone?: string | null;
 } | {
     /**
      * Exclusive end date.
      */
-    end_date: string;
+    endDate: string;
     kind: 'allDay';
     /**
      * Inclusive start date.
      */
-    start_date: string;
+    startDate: string;
 };
 
 /**

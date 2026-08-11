@@ -21827,9 +21827,9 @@
           {
             "type": "object",
             "description": "Absolute timed event.",
-            "required": ["starts_at", "ends_at", "kind"],
+            "required": ["startsAt", "endsAt", "kind"],
             "properties": {
-              "ends_at": {
+              "endsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Exclusive end."
@@ -21838,12 +21838,12 @@
                 "type": "string",
                 "enum": ["timed"]
               },
-              "starts_at": {
+              "startsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Inclusive start."
               },
-              "time_zone": {
+              "timeZone": {
                 "type": ["string", "null"],
                 "description": "Original IANA time zone."
               }
@@ -21852,9 +21852,9 @@
           {
             "type": "object",
             "description": "All-day event with an exclusive end date.",
-            "required": ["start_date", "end_date", "kind"],
+            "required": ["startDate", "endDate", "kind"],
             "properties": {
-              "end_date": {
+              "endDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Exclusive end date."
@@ -21863,7 +21863,7 @@
                 "type": "string",
                 "enum": ["allDay"]
               },
-              "start_date": {
+              "startDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Inclusive start date."
@@ -21871,7 +21871,7 @@
             }
           }
         ],
-        "description": "Timed or all-day calendar event span."
+        "description": "Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries."
       },
       "SoupCalendarEvent_SoupPropertiesField": {
         "type": "object",
