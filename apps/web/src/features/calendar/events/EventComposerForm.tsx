@@ -1,6 +1,6 @@
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Button, Checkbox, Select } from '@ui';
+import { Button, Checkbox, cn, Select } from '@ui';
 import { addMonths, format, parseISO } from 'date-fns';
 import {
   type Accessor,
@@ -8,6 +8,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   Show,
 } from 'solid-js';
 import { EventDateTimePill } from './EventDateTimeField';
@@ -22,21 +23,26 @@ import {
   convertTimesForAllDay,
   defaultEditorInitialValues,
   type EventEditorCalendarOption,
+  type EventEditorDisabledFields,
   type EventEditorGuestOption,
   type EventEditorInitialValues,
   type EventEditorSubmitValues,
   guestEmail,
+  initialGuestOptions,
   moveAllDayRange,
   type SelectedEventEditorGuest,
 } from './EventEditorForm';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
+  parseRecurrenceConfig,
   type RecurrenceConfig,
+  recurrenceConfigsEqual,
   recurrencePresetsFor,
   WEEKDAY_CODES,
   type WeekdayCode,
 } from './recurrence-editor';
+import { formatRecurrenceDescription } from './recurrence-description';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 type ComposerSelectOption<Value extends string = string> = {
@@ -54,29 +60,46 @@ const REPEAT_FREQUENCY_OPTIONS: ComposerSelectOption<
 ];
 
 export interface EventComposerFormProps {
+  initialValues?: EventEditorInitialValues;
+  disabledFields?: EventEditorDisabledFields;
   calendarOptions: EventEditorCalendarOption[];
   guestOptions: Accessor<EventEditorGuestOption[]>;
+  showRecurringEditNotice?: boolean;
+  titleMeta?: JSX.Element;
   pending: boolean;
+  class?: string;
   onCancel: () => void;
   onSubmit: (values: EventEditorSubmitValues) => void;
 }
 
-/** Create-only event form laid out like the standalone task composer. */
+/** Create/edit event form laid out like the standalone task composer. */
 export function EventComposerForm(props: EventComposerFormProps) {
   const formId = createUniqueId();
 
   const recurrenceEndsName = `event-composer-recurrence-ends-${formId}`;
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
 
-  const [state, setState] = createSignal<EventEditorInitialValues>(
-    defaultEditorInitialValues(new Date())
-  );
+  const isEdit = () => props.initialValues !== undefined;
+  const initialValues =
+    props.initialValues ?? defaultEditorInitialValues(new Date());
+  const initialLines = [...initialValues.recurrenceLines];
+  const initialConfig =
+    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
+  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
+
+  const [state, setState] = createSignal<EventEditorInitialValues>({
+    ...initialValues,
+    recurrenceLines: [...initialLines],
+  });
 
   const [selectedGuests, setSelectedGuests] = createSignal<
     SelectedEventEditorGuest[]
-  >([]);
+  >(initialGuestOptions(initialValues.guests, props.guestOptions()));
 
-  const [recurrenceChoice, setRecurrenceChoice] = createSignal('none');
+  const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
+    props.disabledFields?.[field] === true;
+  const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
+    props.pending || fieldIsReadOnly(field);
 
   const startForRecurrence = createMemo(() => {
     const start = state().start;
@@ -86,21 +109,46 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
 
-  const recurrenceOptions = createMemo<ComposerSelectOption[]>(() => [
-    { value: 'none', label: 'Does not repeat' },
-    ...presets().map((preset) => ({
-      value: preset.id,
-      label: preset.label,
-    })),
-    { value: 'custom', label: 'Custom' },
-  ]);
+  const initialChoice = () => {
+    if (initialLines.length === 0) return 'none';
+    if (!initialConfig) return 'existing';
+    const initialStart = initialValues.allDay
+      ? parseISO(initialValues.start)
+      : new Date(initialValues.start);
+    const preset = recurrencePresetsFor(initialStart).find((candidate) =>
+      recurrenceConfigsEqual(candidate.config, initialConfig)
+    );
+    return preset?.id ?? 'custom';
+  };
+
+  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
+
+  const recurrenceOptions = createMemo<ComposerSelectOption[]>(() => {
+    const options = [
+      { value: 'none', label: 'Does not repeat' },
+      ...presets().map((preset) => ({
+        value: preset.id,
+        label: preset.label,
+      })),
+    ];
+    if (hasUnrepresentableRule) {
+      options.push({
+        value: 'existing',
+        label: `Custom: ${
+          formatRecurrenceDescription(initialLines) ?? 'existing rule'
+        } (unchanged)`,
+      });
+    }
+    options.push({ value: 'custom', label: 'Custom' });
+    return options;
+  });
 
   const selectedRecurrenceOption = () =>
     recurrenceOptions().find((option) => option.value === recurrenceChoice()) ??
     recurrenceOptions()[0];
 
   const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
-    defaultCustomConfig(startForRecurrence())
+    initialConfig ?? defaultCustomConfig(startForRecurrence())
   );
 
   const selectedFrequencyOption = () =>
@@ -120,6 +168,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
     if (choice === 'custom') {
       const seed =
         presets().find((preset) => preset.id === recurrenceChoice())?.config ??
+        initialConfig ??
         defaultCustomConfig(startForRecurrence());
       setCustomConfig(seed);
     }
@@ -152,8 +201,9 @@ export function EventComposerForm(props: EventComposerFormProps) {
     return true;
   });
 
-  const recurrenceLines = () => {
+  const recurrenceLines = (): string[] | undefined => {
     const choice = recurrenceChoice();
+    if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
     if (choice === 'custom') {
       return buildRecurrenceLines(customConfig(), state().allDay);
@@ -181,11 +231,11 @@ export function EventComposerForm(props: EventComposerFormProps) {
   });
 
   const eventTime = createMemo(() => buildEventTime(state()));
-  const canCreate = () => eventTime() !== undefined && customValid();
+  const canSave = () => eventTime() !== undefined && customValid();
 
   const submit = () => {
     const time = eventTime();
-    if (!time || !canCreate() || props.pending) return;
+    if (!time || !canSave() || props.pending) return;
     const current = state();
     props.onSubmit({
       title: current.title,
@@ -213,7 +263,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                   : { ...state(), start }
               )
             }
-            disabled={props.pending}
+            disabled={fieldIsDisabled('start')}
             invalid={dateRangeError() !== undefined}
             describedBy={dateRangeError() ? dateRangeErrorId : undefined}
           />
@@ -228,14 +278,14 @@ export function EventComposerForm(props: EventComposerFormProps) {
             value={state().end}
             allDay={state().allDay}
             onChange={(end) => setState({ ...state(), end })}
-            disabled={props.pending}
+            disabled={fieldIsDisabled('end')}
             invalid={dateRangeError() !== undefined}
             describedBy={dateRangeError() ? dateRangeErrorId : undefined}
           />
         </div>
         <Checkbox
           checked={state().allDay}
-          disabled={props.pending}
+          disabled={fieldIsDisabled('allDay')}
           onChange={(allDay) =>
             setState(convertTimesForAllDay(state(), allDay))
           }
@@ -257,7 +307,10 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   return (
     <form
-      class="flex min-h-0 flex-1 flex-col gap-4 text-sm text-ink-muted [&_:disabled]:cursor-not-allowed"
+      class={cn(
+        'flex min-h-0 flex-1 flex-col gap-4 text-sm text-ink-muted [&_:disabled]:cursor-not-allowed',
+        props.class
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -273,10 +326,13 @@ export function EventComposerForm(props: EventComposerFormProps) {
             }
             placeholder="New event"
             aria-label="Title"
-            autofocus
-            disabled={props.pending}
+            autofocus={!isEdit()}
+            disabled={fieldIsDisabled('title')}
             class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
           />
+          <Show when={props.titleMeta}>
+            <div class="mt-1">{props.titleMeta}</div>
+          </Show>
         </div>
 
         <div class="flex flex-col gap-4 px-2">
@@ -290,7 +346,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
             placeholder="Add description..."
             aria-label="Description"
             rows={5}
-            disabled={props.pending}
+            disabled={fieldIsDisabled('description')}
             class="min-h-24 w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
           />
         </div>
@@ -301,24 +357,27 @@ export function EventComposerForm(props: EventComposerFormProps) {
             selected={selectedGuests()}
             onChange={setSelectedGuests}
             disabled={props.pending}
+            readOnly={fieldIsReadOnly('guests')}
           />
           <EventComposerLocationPill
             value={state().location}
             onChange={(location) => setState({ ...state(), location })}
-            disabled={props.pending}
+            disabled={fieldIsDisabled('location')}
           />
           <EventComposerRecurrencePill
             options={recurrenceOptions()}
             value={selectedRecurrenceOption()}
             onChange={changeRecurrenceChoice}
             disabled={props.pending}
+            readOnly={fieldIsReadOnly('recurrence')}
           />
-          <Show when={props.calendarOptions.length > 1}>
+          <Show when={props.calendarOptions.length > 1 || isEdit()}>
             <EventComposerCalendarPill
               options={props.calendarOptions}
               value={selectedCalendarOption()}
               onChange={(calendarId) => setState({ ...state(), calendarId })}
               disabled={props.pending}
+              readOnly={fieldIsReadOnly('calendar')}
             />
           </Show>
         </div>
@@ -338,7 +397,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                 }
                 aria-label="Repeat interval"
                 class="settings-input h-7 w-16"
-                disabled={props.pending}
+                disabled={fieldIsDisabled('recurrence')}
               />
               <Select<ComposerSelectOption<RecurrenceConfig['frequency']>>
                 options={REPEAT_FREQUENCY_OPTIONS}
@@ -352,7 +411,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                 }
                 optionValue="value"
                 optionTextValue="label"
-                disabled={props.pending}
+                disabled={fieldIsDisabled('recurrence')}
               >
                 <Select.Trigger
                   aria-label="Repeat unit"
@@ -385,7 +444,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                       class="rounded-full text-xxs"
                       aria-label={code}
                       aria-pressed={customConfig().byDay.includes(code)}
-                      disabled={props.pending}
+                      disabled={fieldIsDisabled('recurrence')}
                       onClick={() => toggleWeekday(code)}
                     >
                       {code[0]}
@@ -403,7 +462,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                   name={recurrenceEndsName}
                   checked={customConfig().ends.kind === 'never'}
                   onChange={() => setEnds({ kind: 'never' })}
-                  disabled={props.pending}
+                  disabled={fieldIsDisabled('recurrence')}
                 />
                 Never
               </label>
@@ -421,7 +480,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                       ),
                     })
                   }
-                  disabled={props.pending}
+                  disabled={fieldIsDisabled('recurrence')}
                 />
                 On
                 <Show when={customConfig().ends.kind === 'on'}>
@@ -440,7 +499,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                     }
                     aria-label="Ends on date"
                     class="settings-input h-7"
-                    disabled={props.pending}
+                    disabled={fieldIsDisabled('recurrence')}
                   />
                 </Show>
               </label>
@@ -450,7 +509,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                   name={recurrenceEndsName}
                   checked={customConfig().ends.kind === 'after'}
                   onChange={() => setEnds({ kind: 'after', count: 13 })}
-                  disabled={props.pending}
+                  disabled={fieldIsDisabled('recurrence')}
                 />
                 After
                 <Show when={customConfig().ends.kind === 'after'}>
@@ -470,7 +529,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
                     }
                     aria-label="Ends after occurrences"
                     class="settings-input h-7 w-20"
-                    disabled={props.pending}
+                    disabled={fieldIsDisabled('recurrence')}
                   />
                   occurrences
                 </Show>
@@ -481,6 +540,11 @@ export function EventComposerForm(props: EventComposerFormProps) {
       </div>
 
       <div class="flex shrink-0 items-center justify-end gap-3">
+        <Show when={props.showRecurringEditNotice}>
+          <p class="mr-auto text-xs text-ink-extra-muted">
+            Changes apply to all occurrences
+          </p>
+        </Show>
         <Button
           type="button"
           variant="ghost"
@@ -493,13 +557,16 @@ export function EventComposerForm(props: EventComposerFormProps) {
         </Button>
         <Button
           type="submit"
-          variant={canCreate() ? 'active' : 'ghost'}
+          variant={canSave() ? 'active' : 'ghost'}
           depth={3}
           class="rounded-lg border-0"
-          disabled={!canCreate() || props.pending}
-          label="Create event"
+          disabled={!canSave() || props.pending}
+          label={isEdit() ? 'Save' : 'Create event'}
         >
-          <Show when={props.pending} fallback="Create event">
+          <Show
+            when={props.pending}
+            fallback={isEdit() ? 'Save' : 'Create event'}
+          >
             <SpinnerIcon class="size-4 animate-spin" />
           </Show>
         </Button>

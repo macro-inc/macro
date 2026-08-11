@@ -16,6 +16,7 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  For,
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -56,10 +57,99 @@ export interface EventComposerGuestsPillProps {
   selected: SelectedEventEditorGuest[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
-/** Compact guest property pill with a searchable, virtualized combobox. */
-export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
+function guestDisplayName(guest: SelectedEventEditorGuest) {
+  return ('name' in guest.data && guest.data.name) || guest.data.email;
+}
+
+function guestPropertyLabel(selected: SelectedEventEditorGuest[]) {
+  if (selected.length === 0) return 'Guests';
+  if (selected.length > 1) return `${selected.length} guests`;
+  return guestDisplayName(selected[0]);
+}
+
+function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
+  const [open, setOpen] = createSignal(false);
+
+  return (
+    <Popover
+      open={open() && !props.disabled}
+      onOpenChange={setOpen}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <Tooltip label="View event guests" placement="bottom">
+        <Popover.Trigger
+          disabled={props.disabled}
+          aria-label="Guests"
+          aria-readonly="true"
+          class={PROPERTY_TRIGGER_CLASS}
+        >
+          <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <span
+            class={cn(
+              'truncate',
+              props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
+            )}
+          >
+            {guestPropertyLabel(props.selected)}
+          </span>
+          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Popover.Trigger>
+      </Tooltip>
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation">
+            <Popover.Title class="sr-only">Event guests</Popover.Title>
+            <Show
+              when={props.selected.length > 0}
+              fallback={
+                <p class="px-2 py-4 text-center text-sm text-ink-muted">
+                  No guests
+                </p>
+              }
+            >
+              <div class="flex max-h-64 flex-col gap-1 overflow-y-auto">
+                <For each={props.selected}>
+                  {(guest) => (
+                    <div class="flex h-9 min-w-0 items-start gap-2 rounded-lg px-2 text-sm text-ink">
+                      <div class="flex size-6 shrink-0">
+                        <UserIcon
+                          id={guest.id}
+                          size="md"
+                          isDeleted={false}
+                          suppressClick
+                        />
+                      </div>
+                      <div class="flex min-w-0 flex-1 flex-col leading-tight">
+                        <span class="truncate text-sm">
+                          {guestDisplayName(guest)}
+                        </span>
+                        <Show
+                          when={guestDisplayName(guest) !== guestEmail(guest)}
+                        >
+                          <span class="truncate text-xs text-ink-extra-muted">
+                            {guestEmail(guest)}
+                          </span>
+                        </Show>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
   const inputId = `event-composer-guests-${createUniqueId()}`;
 
   const [open, setOpen] = createSignal(false);
@@ -69,14 +159,7 @@ export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
 
   let input: HTMLInputElement | undefined;
 
-  const guestDisplayName = (guest: SelectedEventEditorGuest) =>
-    ('name' in guest.data && guest.data.name) || guest.data.email;
-
-  const propertyLabel = () => {
-    if (props.selected.length === 0) return 'Guests';
-    if (props.selected.length > 1) return `${props.selected.length} guests`;
-    return guestDisplayName(props.selected[0]);
-  };
+  const propertyLabel = () => guestPropertyLabel(props.selected);
 
   const pickerOptions = createMemo(() => {
     const byEmail = new Map<string, SelectedEventEditorGuest>();
@@ -189,6 +272,7 @@ export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
         <Tooltip label="Add guests to this event" placement="bottom">
           <Combobox.Trigger
             tabIndex={0}
+            aria-readonly={props.readOnly || undefined}
             class={PROPERTY_TRIGGER_CLASS}
             onKeyDown={(event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -369,6 +453,18 @@ export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
   );
 }
 
+/** Compact guest property pill with editable and read-only dropdown views. */
+export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
+  return (
+    <Show
+      when={props.readOnly}
+      fallback={<EditableEventComposerGuestsPill {...props} />}
+    >
+      <ReadOnlyEventComposerGuestsPill {...props} />
+    </Show>
+  );
+}
+
 export interface EventComposerLocationPillProps {
   value: string;
   onChange: (value: string) => void;
@@ -449,6 +545,7 @@ export interface EventComposerRecurrencePillProps {
   value: EventComposerSelectOption;
   onChange: (value: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
 /** Compact recurrence property pill. */
@@ -459,14 +556,20 @@ export function EventComposerRecurrencePill(
     <Select<EventComposerSelectOption>
       options={props.options}
       value={props.value}
-      onChange={(option) => option && props.onChange(option.value)}
+      onChange={(option) => {
+        if (option && !props.readOnly) props.onChange(option.value);
+      }}
       optionValue="value"
       optionTextValue="label"
+      optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
-      class="w-fit max-w-48 shrink-0"
     >
       <Tooltip label="Set how this event repeats" placement="bottom">
-        <Select.Trigger aria-label="Repeats" class={PROPERTY_TRIGGER_CLASS}>
+        <Select.Trigger
+          aria-label="Repeats"
+          aria-readonly={props.readOnly || undefined}
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
+        >
           <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
           <Select.Value<EventComposerSelectOption>>
             {(selectState) => selectState.selectedOption().label}
@@ -486,6 +589,7 @@ export interface EventComposerCalendarPillProps {
   value: EventEditorCalendarOption;
   onChange: (calendarId: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
 /** Compact calendar property pill. */
@@ -496,14 +600,20 @@ export function EventComposerCalendarPill(
     <Select<EventEditorCalendarOption>
       options={props.options}
       value={props.value}
-      onChange={(option) => option && props.onChange(option.id)}
+      onChange={(option) => {
+        if (option && !props.readOnly) props.onChange(option.id);
+      }}
       optionValue="id"
       optionTextValue="label"
+      optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
-      class="w-40 shrink-0"
     >
       <Tooltip label="Choose the calendar for this event" placement="bottom">
-        <Select.Trigger aria-label="Calendar" class={PROPERTY_TRIGGER_CLASS}>
+        <Select.Trigger
+          aria-label="Calendar"
+          aria-readonly={props.readOnly || undefined}
+          class={cn(PROPERTY_TRIGGER_CLASS, 'w-40')}
+        >
           <CalendarDotsIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
           <Select.Value<EventEditorCalendarOption>>
             {(selectState) => selectState.selectedOption().label}

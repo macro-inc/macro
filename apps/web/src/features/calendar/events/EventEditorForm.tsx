@@ -233,7 +233,7 @@ export function guestEmail(option: SelectedEventEditorGuest) {
   return option.data.email;
 }
 
-function initialGuestOptions(
+export function initialGuestOptions(
   value: string,
   options: EventEditorGuestOption[]
 ): SelectedEventEditorGuest[] {
