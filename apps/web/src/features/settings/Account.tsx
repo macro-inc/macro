@@ -368,28 +368,36 @@ export function Account() {
     if (isDeleting()) return;
     setIsDeleting(true);
 
-    const deleted = await performAccountDeletion({
-      captureFeedback: () => {
-        if (deleteFeedbackCaptured()) return;
+    try {
+      const deleted = await performAccountDeletion({
+        captureFeedback: () => {
+          if (deleteFeedbackCaptured()) return;
 
-        analytics.track(
-          'account_deletion_feedback',
-          buildAccountDeletionFeedbackPayload(deleteReason(), deleteFeedback()),
-          ['posthog'],
-          {
-            posthog: {
-              send_instantly: true,
-              transport: 'sendBeacon',
-            },
-          }
-        );
-        setDeleteFeedbackCaptured(true);
-      },
-      deleteUser: () => authServiceClient.deleteUser(),
-      logout,
-    });
+          analytics.track(
+            'account_deletion_feedback',
+            buildAccountDeletionFeedbackPayload(
+              deleteReason(),
+              deleteFeedback()
+            ),
+            ['posthog'],
+            {
+              posthog: {
+                send_instantly: true,
+                transport: 'sendBeacon',
+              },
+            }
+          );
+          setDeleteFeedbackCaptured(true);
+        },
+        deleteUser: () => authServiceClient.deleteUser(),
+        logout,
+      });
 
-    if (!deleted) {
+      if (!deleted) {
+        setIsDeleting(false);
+        toast.failure('Unable to delete your account. Please try again.');
+      }
+    } catch {
       setIsDeleting(false);
       toast.failure('Unable to delete your account. Please try again.');
     }
