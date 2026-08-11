@@ -820,6 +820,73 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     }
 }
 
+/// A single-quoted SQL string literal with embedded quotes doubled. The
+/// calendar filter inlines caller-supplied strings (statuses, attendee and
+/// organizer emails), which unlike the ids the sibling builders inline are
+/// not shaped by a parser first.
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Renders the calendar-event filter bind-free, like every other arm of the
+/// hand-numbered grouped query: `push_bind` placeholders would start at `$1`
+/// and collide with the positionally-bound user id. The notification clauses
+/// reference `$1` as the requesting user, which both this query and
+/// `cursor_soup` guarantee.
+fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> String {
+    let Some(expr) = ast else {
+        return String::new();
+    };
+    let expr = push_not_inward(expr, false);
+    let formatting = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => {
+            format!("event.id = '{id}'")
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Status(status)) => {
+            format!("event.status = {}", sql_string_literal(&status))
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::StartsBefore(value)) => {
+            format!(
+                "COALESCE(event.starts_at, event.start_date::timestamp AT TIME ZONE 'UTC') < '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::EndsAfter(value)) => {
+            format!(
+                "COALESCE(event.ends_at, event.end_date::timestamp AT TIME ZONE 'UTC') > '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Attendee(email)) => {
+            format!(
+                "EXISTS (SELECT 1 FROM calendar_event_attendees attendee \
+                 WHERE attendee.event_id = event.id AND attendee.email = lower({}))",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Organizer(email)) => {
+            format!(
+                "lower(event.organizer_email) = lower({})",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("event.id", "calendar_event", done)
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("event.id", "calendar_event", seen)
+        }
+    });
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
 fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -1900,21 +1967,9 @@ fn build_grouped_query<'a>(
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
-        // FIXME: `push_filter` uses `push_bind` for most literals, whose
-        // placeholders come from the builder's own counter starting at $1 —
-        // but this query numbers its parameters by hand ($1..$10) and binds
-        // them positionally. The first bind pushed here therefore collides
-        // with $1 (the user id), and Postgres rejects the statement with
-        // `operator does not exist: text = uuid`. The notification literals
-        // (`NotificationDone`/`NotificationSeen`) are deliberately bind-free
-        // and reference $1 as the user id, so the inbox's done filter renders
-        // correctly here; a grouped view that grows any other calendar
-        // literal needs its binds rendered at $11+ instead.
-        if let Some(filter) = filter_ast.calendar_event_filter.as_deref() {
-            builder.push(" AND (");
-            super::super::calendar_event::push_filter(&mut builder, filter);
-            builder.push(")");
-        }
+        builder.push(build_calendar_event_filter(
+            filter_ast.calendar_event_filter.as_deref(),
+        ));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "event.id::text",

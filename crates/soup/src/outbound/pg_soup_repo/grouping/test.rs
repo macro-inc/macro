@@ -552,6 +552,108 @@ async fn grouped_soup_runs_when_calendar_arm_excluded(pool: Pool<Postgres>) -> a
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn grouped_soup_renders_bind_bearing_calendar_literals(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|user-1@test.com";
+    const LINK_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000030");
+    const EVENT_ID: uuid::Uuid = uuid::uuid!("ca1e0000-0000-0000-0000-000000000031");
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, 'calendar-binds-soup@example.com', 'GMAIL')
+        "#,
+        LINK_ID,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title, organizer_email,
+            starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+        )
+        VALUES (
+            $1, $2, $3, 'binds@example.com', 'Bind-bearing event', 'Host@Example.com',
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google',
+            '2026-07-24T12:00:00Z'
+        )
+        "#,
+        EVENT_ID,
+        OWNER_ID,
+        LINK_ID,
+    )
+    .execute(&pool)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
+    // Every bind-bearing literal at once: the grouped query numbers its
+    // parameters by hand, so these must render inline — `push_bind`
+    // placeholders would collide with `$1` (the user id) and fail with a
+    // Postgres type error.
+    let filter = EntityFilterAst {
+        calendar_event_filter: Some(Arc::new(Expr::and(
+            Expr::val(CalendarEventLiteral::Id(EVENT_ID)),
+            Expr::and(
+                Expr::val(CalendarEventLiteral::Status("confirmed".to_string())),
+                Expr::and(
+                    Expr::val(CalendarEventLiteral::StartsBefore(
+                        "2026-07-25T00:00:00Z".parse::<chrono::DateTime<chrono::Utc>>()?,
+                    )),
+                    Expr::and(
+                        Expr::val(CalendarEventLiteral::EndsAfter(
+                            "2026-07-24T14:30:00Z".parse::<chrono::DateTime<chrono::Utc>>()?,
+                        )),
+                        Expr::or(
+                            Expr::val(CalendarEventLiteral::Organizer(
+                                "host@example.com".to_string(),
+                            )),
+                            Expr::val(CalendarEventLiteral::Attendee(
+                                "guest's+friend@example.com".to_string(),
+                            )),
+                        ),
+                    ),
+                ),
+            ),
+        ))),
+        ..EntityFilterAst::mock_empty()
+    };
+
+    let calendar_items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .filter(|item| matches!(item.item, models_soup::item::SoupItem::CalendarEvent(_)))
+    .collect::<Vec<_>>();
+
+    assert_eq!(calendar_items.len(), 1);
+    assert_eq!(calendar_items[0].item.id(), EVENT_ID);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn grouped_soup_filters_calendar_events_by_notification_done(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

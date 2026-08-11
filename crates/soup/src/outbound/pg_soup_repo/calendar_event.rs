@@ -259,10 +259,10 @@ pub(super) fn push_filter(
             builder.push(")");
         }
         // Bind-free on purpose: `$1` is the requesting user in every query
-        // that renders this filter (`cursor_soup` binds it first; the grouped
-        // dynamic query numbers it by hand), the same contract the other
-        // arms' notification clauses rely on. A `push_bind` here would
-        // collide with the grouped query's hand-numbered parameters.
+        // that renders this clause (`cursor_soup` binds it first; the grouped
+        // dynamic query renders the whole filter bind-free via
+        // `build_calendar_event_filter` for the same reason), the contract
+        // the other arms' notification clauses rely on.
         Expr::Literal(CalendarEventLiteral::NotificationDone(done)) => {
             builder.push(super::expanded::dynamic::build_notification_done_clause(
                 "event.id",
