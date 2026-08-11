@@ -109,7 +109,8 @@ pub struct GraphqlActivityPropertyChanged {
     pub property: String,
     /// The previous value, when the source event carried it.
     pub from: Option<Json<Value>>,
-    /// The new value; absent when the value was cleared.
+    /// The new value. `null` means the value was cleared — or was literally
+    /// set to JSON null; the wire cannot distinguish the two.
     pub to: Option<Json<Value>>,
 }
 

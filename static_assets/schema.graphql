@@ -347,7 +347,8 @@ type GraphqlActivityPropertyChanged {
 	"""
 	from: JSON
 	"""
-	The new value; absent when the value was cleared.
+	The new value. `null` means the value was cleared — or was literally
+	set to JSON null; the wire cannot distinguish the two.
 	"""
 	to: JSON
 }

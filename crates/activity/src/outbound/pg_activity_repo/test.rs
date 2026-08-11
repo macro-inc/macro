@@ -239,11 +239,13 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
             model_entity::EntityType::Document,
             "doc-untouched".to_string(),
         ),
+        // Repeated on purpose: duplicates must not stack extra rows.
+        (model_entity::EntityType::Document, "doc-a".to_string()),
     ];
     let by_entity = repo.entity_activity(&keys, 2).await.unwrap();
 
     let doc_a = &by_entity[&keys[0]];
-    assert_eq!(doc_a.len(), 2, "limit caps per entity");
+    assert_eq!(doc_a.len(), 2, "limit caps per entity, duplicates deduped");
     assert_eq!(doc_a[0].action, RecordedAction::Known(Action::Edited));
     assert!(doc_a[0].occurred_at > doc_a[1].occurred_at, "newest first");
 

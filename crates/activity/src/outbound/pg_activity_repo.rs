@@ -243,11 +243,16 @@ impl ActivityReads for PgActivityRepo {
             return Ok(HashMap::new());
         }
 
-        let entity_types: Vec<String> = keys
+        // Dedupe: a repeated key would run its lateral twice and stack
+        // 2x the limit into that entity's map entry.
+        let mut seen = std::collections::HashSet::new();
+        let unique: Vec<&(EntityType, String)> =
+            keys.iter().filter(|key| seen.insert(*key)).collect();
+        let entity_types: Vec<String> = unique
             .iter()
             .map(|(entity_type, _)| entity_type.as_ref().to_owned())
             .collect();
-        let entity_ids: Vec<String> = keys.iter().map(|(_, id)| id.clone()).collect();
+        let entity_ids: Vec<String> = unique.iter().map(|(_, id)| id.clone()).collect();
 
         // One lateral scan of the (entity_type, entity_id, occurred_at DESC,
         // id DESC) index per requested entity, in a single round trip.

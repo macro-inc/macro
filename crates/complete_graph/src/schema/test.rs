@@ -537,12 +537,13 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
             .lock()
             .expect("activity feed calls lock")
             .push((subject_id.to_owned(), cursor, limit));
-        // Emulate the repo: newest-first keyset order, strictly after the
-        // cursor position, at most `limit` rows, with `next` set whenever
-        // more rows remain past the page.
+        // Emulate the repo: subject-scoped, newest-first keyset order,
+        // strictly after the cursor position, at most `limit` rows, with
+        // `next` set whenever more rows remain past the page.
         let records = self.records.lock().expect("activity records lock").clone();
         let mut page: Vec<activity::ActivityRecord> = records
             .into_iter()
+            .filter(|record| record.subject_id == subject_id)
             .filter(|record| {
                 cursor.is_none_or(|(occurred_at, id)| {
                     (record.occurred_at, record.id) < (occurred_at, id)
