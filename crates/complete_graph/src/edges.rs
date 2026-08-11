@@ -1,6 +1,10 @@
 use std::marker::PhantomData;
 
 use async_graphql::{Context, ID, Object};
+use graphql_activity::{
+    ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
+    parse_activity_edge_limit,
+};
 use graphql_email::{
     EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
     email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
@@ -18,23 +22,23 @@ use graphql_soup::SoupEntityEdges;
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
-type EdgeReaders<NR, PR, ER, FR, AR> = PhantomData<fn() -> (NR, PR, ER, FR, AR)>;
+type EdgeReaders<NR, PR, ER, FR, AR, AcR> = PhantomData<fn() -> (NR, PR, ER, FR, AR, AcR)>;
 
-/// Notification, property, email-content, favorite, and permission fields
-/// attached to Soup entities.
+/// Notification, property, email-content, favorite, permission, and activity
+/// fields attached to Soup entities.
 ///
 /// This concrete edge shape lives in the composition crate so `graphql_soup`
 /// does not know which cross-domain fields are attached to its objects.
-pub struct SoupEdges<NR, PR, ER, FR, AR> {
+pub struct SoupEdges<NR, PR, ER, FR, AR, AcR> {
     /// Entity whose cross-domain fields are being resolved.
     entity: model_entity::Entity<'static>,
     /// Entity whose access determines the viewer permission for this object.
     permission_entity: model_entity::Entity<'static>,
     /// Associates the edge with its configured reader types.
-    _readers: EdgeReaders<NR, PR, ER, FR, AR>,
+    _readers: EdgeReaders<NR, PR, ER, FR, AR, AcR>,
 }
 
-impl<NR, PR, ER, FR, AR> Clone for SoupEdges<NR, PR, ER, FR, AR> {
+impl<NR, PR, ER, FR, AR, AcR> Clone for SoupEdges<NR, PR, ER, FR, AR, AcR> {
     fn clone(&self) -> Self {
         Self {
             entity: self.entity.clone(),
@@ -44,13 +48,14 @@ impl<NR, PR, ER, FR, AR> Clone for SoupEdges<NR, PR, ER, FR, AR> {
     }
 }
 
-impl<NR, PR, ER, FR, AR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR>
+impl<NR, PR, ER, FR, AR, AcR> SoupEntityEdges for SoupEdges<NR, PR, ER, FR, AR, AcR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
+    AcR: SoupActivityEdgeReader,
 {
     type Property = GraphqlProperty;
     type Notification = GraphqlNotification;
@@ -109,13 +114,14 @@ where
 
 /// Cross-domain fields attached to a property-bearing Soup entity.
 #[Object(name = "SoupEdges")]
-impl<NR, PR, ER, FR, AR> SoupEdges<NR, PR, ER, FR, AR>
+impl<NR, PR, ER, FR, AR, AcR> SoupEdges<NR, PR, ER, FR, AR, AcR>
 where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
+    AcR: SoupActivityEdgeReader,
 {
     /// Properties assigned to this entity that the authenticated user may view.
     async fn properties(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlProperty>> {
@@ -141,6 +147,25 @@ where
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
         self.resolve_viewer_permission(ctx).await
+    }
+
+    /// The newest activity on this entity, newest first. Loaded lazily and
+    /// batched across entities; an activity outage degrades to an empty
+    /// timeline. Deeper history belongs to the viewer's activity feed.
+    async fn activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let limit = parse_activity_edge_limit(limit)?;
+        load_entity_activity::<AcR>(
+            ctx,
+            ActivityEdgeKey {
+                entity: self.entity.clone(),
+                limit,
+            },
+        )
+        .await
     }
 }
 
