@@ -5,7 +5,6 @@ import { Popover } from '@kobalte/core/popover';
 import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import MapPinIcon from '@phosphor/map-pin.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
@@ -34,7 +33,7 @@ const GUEST_NAME_COLLATOR = new Intl.Collator(undefined, {
 const GUEST_OPTION_HEIGHT_PX = 36;
 const GUEST_OPTION_MAX_VISIBLE_COUNT = 5;
 const PROPERTY_TRIGGER_CLASS =
-  'flex h-7 w-full items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover';
+  'flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover';
 
 export type EventComposerSelectOption = {
   value: string;
@@ -89,12 +88,12 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
           disabled={props.disabled}
           aria-label="Guests"
           aria-readonly="true"
-          class={PROPERTY_TRIGGER_CLASS}
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
         >
           <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
           <span
             class={cn(
-              'truncate',
+              'min-w-0 truncate',
               props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
             )}
           >
@@ -255,12 +254,12 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       placement="bottom-start"
       disabled={props.disabled || comboboxDisabled()}
     >
-      <Combobox.Control<GuestPickerItem> class="inline-flex min-w-0">
+      <Combobox.Control<GuestPickerItem> class="inline-flex min-w-0 max-w-48 shrink-0">
         <Tooltip label="Add guests to this event" placement="bottom">
           <Combobox.Trigger
             tabIndex={0}
             aria-readonly={props.readOnly || undefined}
-            class={PROPERTY_TRIGGER_CLASS}
+            class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
             onKeyDown={(event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
               event.preventDefault();
@@ -271,7 +270,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
             <span
               class={cn(
-                'truncate',
+                'min-w-0 truncate',
                 props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
               )}
             >
@@ -449,81 +448,6 @@ export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
     >
       <ReadOnlyEventComposerGuestsPill {...props} />
     </Show>
-  );
-}
-
-export interface EventComposerLocationPillProps {
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}
-
-/** Compact location property pill with a focused text popover. */
-export function EventComposerLocationPill(
-  props: EventComposerLocationPillProps
-) {
-  const [open, setOpen] = createSignal(false);
-  let input: HTMLInputElement | undefined;
-
-  const changeOpen = (next: boolean) => {
-    setOpen(next);
-    if (!next) return;
-    queueMicrotask(() => {
-      input?.focus();
-      input?.select();
-    });
-  };
-
-  return (
-    <Popover
-      open={open() && !props.disabled}
-      onOpenChange={changeOpen}
-      placement="bottom-start"
-      gutter={4}
-      flip
-      slide
-    >
-      <Tooltip label="Set the event location" placement="bottom">
-        <Popover.Trigger
-          disabled={props.disabled}
-          class="inline-flex h-7 max-w-56 min-w-0 items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover"
-        >
-          <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <span
-            class={cn(
-              'truncate',
-              props.value !== '' ? 'text-ink' : 'text-ink-extra-muted'
-            )}
-          >
-            {props.value || 'No location'}
-          </span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Popover.Trigger>
-      </Tooltip>
-      <Popover.Portal>
-        <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation">
-            <Popover.Title class="sr-only">Edit location</Popover.Title>
-            <input
-              ref={input}
-              type="text"
-              value={props.value}
-              onInput={(event) => props.onChange(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return;
-                event.preventDefault();
-                setOpen(false);
-              }}
-              placeholder="Add location"
-              aria-label="Location"
-              autofocus
-              disabled={props.disabled}
-              class="settings-input h-9 w-full"
-            />
-          </Popover.Content>
-        </Layer>
-      </Popover.Portal>
-    </Popover>
   );
 }
 

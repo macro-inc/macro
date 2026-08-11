@@ -1,4 +1,5 @@
 import CorvuCalendar, {
+  type RootRangeProps as CorvuCalendarRootRangeProps,
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
@@ -149,6 +150,135 @@ export function Calendar(props: CalendarProps) {
                                 : undefined
                             }
                             class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
+                          >
+                            {day().getDate()}
+                          </CorvuCalendar.CellTrigger>
+                        </CorvuCalendar.Cell>
+                      )}
+                    </Index>
+                  </tr>
+                )}
+              </Index>
+            </tbody>
+          </CorvuCalendar.Table>
+        </div>
+      )}
+    </CorvuCalendar>
+  );
+}
+
+export type CalendarRangeValue = {
+  from: Date | null;
+  to: Date | null;
+};
+
+const isSameCalendarDay = (left: Date, right: Date) =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+const isInSelectedCalendarRange = (date: Date, range: CalendarRangeValue) =>
+  range.from !== null &&
+  range.to !== null &&
+  date >= range.from &&
+  date <= range.to;
+
+const selectedRangeCellBackground = (date: Date, range: CalendarRangeValue) => {
+  if (!isInSelectedCalendarRange(date, range)) return undefined;
+  const isStart = range.from !== null && isSameCalendarDay(date, range.from);
+  const isEnd = range.to !== null && isSameCalendarDay(date, range.to);
+  if (isStart && isEnd) return undefined;
+  if (isStart) {
+    return 'linear-gradient(to right, transparent 50%, var(--color-active) 50%)';
+  }
+  if (isEnd) {
+    return 'linear-gradient(to right, var(--color-active) 50%, transparent 50%)';
+  }
+  return 'var(--color-active)';
+};
+
+export type CalendarRangeProps = Omit<
+  CorvuCalendarRootRangeProps,
+  'children' | 'mode'
+> & {
+  /** Additional classes applied to the calendar container. */
+  class?: string;
+};
+
+/** An accessible single-month date-range calendar. */
+export function CalendarRange(props: CalendarRangeProps) {
+  const [local, calendarProps] = splitProps(props, ['class']);
+  const initialFallbackDate =
+    calendarProps.value?.from ?? calendarProps.value?.to ?? new Date();
+
+  return (
+    <CorvuCalendar
+      mode="range"
+      {...calendarProps}
+      initialMonth={calendarProps.initialMonth ?? initialFallbackDate}
+      initialFocusedDay={calendarProps.initialFocusedDay ?? initialFallbackDate}
+    >
+      {(calendar) => (
+        <div class={cn('w-full min-w-0 text-ink', local.class)}>
+          <div class="flex items-center gap-2">
+            <CorvuCalendar.Label class="min-w-0 flex-1">
+              <CalendarMonthDropdown
+                month={calendar.month}
+                onChange={calendar.setMonth}
+              />
+            </CorvuCalendar.Label>
+            <div class="ml-auto flex shrink-0 items-center gap-0.5">
+              <CorvuCalendar.Nav
+                action="prev-month"
+                aria-label="Go to previous month"
+                class="flex size-7 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent"
+              >
+                <CaretLeftIcon class="size-3" />
+              </CorvuCalendar.Nav>
+              <CorvuCalendar.Nav
+                action="next-month"
+                aria-label="Go to next month"
+                class="flex size-7 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent"
+              >
+                <CaretRightIcon class="size-3" />
+              </CorvuCalendar.Nav>
+            </div>
+          </div>
+
+          <CorvuCalendar.Table class="mt-2 w-full table-fixed border-collapse">
+            <thead>
+              <tr>
+                <Index each={calendar.weekdays}>
+                  {(weekday) => (
+                    <CorvuCalendar.HeadCell
+                      abbr={formatWeekdayLong(weekday())}
+                      class="h-7 text-center text-[10px] font-medium text-ink-extra-muted"
+                    >
+                      {formatWeekdayNarrow(weekday())}
+                    </CorvuCalendar.HeadCell>
+                  )}
+                </Index>
+              </tr>
+            </thead>
+            <tbody>
+              <Index each={calendar.weeks}>
+                {(week) => (
+                  <tr>
+                    <Index each={week()}>
+                      {(day) => (
+                        <CorvuCalendar.Cell
+                          class="p-0 text-center"
+                          style={{
+                            background: selectedRangeCellBackground(
+                              day(),
+                              calendar.value
+                            ),
+                          }}
+                        >
+                          <CorvuCalendar.CellTrigger
+                            day={day()}
+                            month={calendar.month}
+                            class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-in-range:text-ink data-range-start:bg-accent data-range-start:text-surface data-range-end:bg-accent data-range-end:text-surface"
                           >
                             {day().getDate()}
                           </CorvuCalendar.CellTrigger>

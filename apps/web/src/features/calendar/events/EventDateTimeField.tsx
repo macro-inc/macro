@@ -1,11 +1,16 @@
 import type { CollectionNode } from '@kobalte/core';
 import { Listbox } from '@kobalte/core/listbox';
 import { Popover } from '@kobalte/core/popover';
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Calendar } from '@ui/components/Calendar';
+import {
+  Calendar,
+  CalendarRange,
+  type CalendarRangeValue,
+} from '@ui/components/Calendar';
+import { Checkbox } from '@ui/components/Checkbox';
 import { Layer } from '@ui/components/Layer';
 import { Tooltip } from '@ui/components/Tooltip';
 import { cn } from '@ui/utils/classname';
@@ -134,6 +139,7 @@ interface EventTimeInputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onFocus?: () => void;
   disabled?: boolean;
 }
 
@@ -185,7 +191,10 @@ function EventTimeInput(props: EventTimeInputProps) {
           aria-expanded={open()}
           aria-haspopup="listbox"
           class="h-7 w-full appearance-none rounded-md border border-edge-muted bg-surface py-1 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent [&::-webkit-calendar-picker-indicator]:hidden"
-          onFocus={() => setDropdownOpen(true)}
+          onFocus={() => {
+            props.onFocus?.();
+            setDropdownOpen(true);
+          }}
           onClick={() => setDropdownOpen(true)}
           onInput={(event) => {
             const value = event.currentTarget.value;
@@ -378,41 +387,82 @@ export function EventDateField(props: EventDateFieldProps) {
   );
 }
 
-export interface EventDateTimePillProps {
-  endpoint: 'start' | 'end';
-  value: string;
+export interface EventDateTimeRangePillProps {
+  start: string;
+  end: string;
   allDay: boolean;
-  onChange: (value: string) => void;
+  onStartChange: (value: string) => void;
+  onEndChange: (value: string) => void;
+  onAllDayChange: (allDay: boolean) => void;
   disabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
 }
 
-/** Composer pill trigger backed by the shared event date/time popover content. */
-export function EventDateTimePill(props: EventDateTimePillProps) {
+/** Combined composer date-range pill backed by a range and time popover. */
+export function EventDateTimeRangePill(props: EventDateTimeRangePillProps) {
+  const fieldId = createUniqueId();
   const [open, setOpen] = createSignal(false);
+  const [activeEndpoint, setActiveEndpoint] = createSignal<'start' | 'end'>(
+    'start'
+  );
+  const [rangeDraft, setRangeDraft] = createSignal<CalendarRangeValue>();
   let pill: HTMLButtonElement | undefined;
 
-  const parts = () => splitLocalDateTime(props.value);
-  const selectedDate = () => parseLocalDate(parts().date);
-  const label = () => (props.endpoint === 'start' ? 'Start' : 'End');
-  const dateLabel = () =>
-    selectedDate()
-      ? dateLabelFormatter.format(selectedDate())
-      : `${label()} date`;
+  const startParts = () => splitLocalDateTime(props.start);
+  const endParts = () => splitLocalDateTime(props.end);
+  const currentRange = createMemo<CalendarRangeValue>(() => ({
+    from: parseLocalDate(startParts().date) ?? null,
+    to: parseLocalDate(endParts().date) ?? null,
+  }));
+  const displayedRange = () => rangeDraft() ?? currentRange();
+  const dateLabel = (date: Date | null, fallback: string) =>
+    date ? dateLabelFormatter.format(date) : fallback;
+  const withDate = (value: string, date: string) =>
+    props.allDay ? date : withLocalDate(value, date);
+  const changeRange = (range: CalendarRangeValue) => {
+    setRangeDraft(range);
+    if (!range.from) {
+      setActiveEndpoint('start');
+      return;
+    }
+    if (!range.to) {
+      setActiveEndpoint('end');
+      return;
+    }
+    setActiveEndpoint('start');
+    props.onStartChange(withDate(props.start, formatLocalDate(range.from)));
+    props.onEndChange(withDate(props.end, formatLocalDate(range.to)));
+  };
+  const openPopover = () => {
+    if (props.disabled) return;
+    setRangeDraft(currentRange());
+    setActiveEndpoint('start');
+    setOpen(true);
+  };
+  const close = () => {
+    setOpen(false);
+    setRangeDraft(undefined);
+  };
 
   return (
     <Popover
       anchorRef={() => pill}
       open={open() && !props.disabled}
-      onOpenChange={setOpen}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          openPopover();
+        } else {
+          close();
+        }
+      }}
       placement="bottom-start"
       gutter={4}
       flip
       slide
     >
       <Tooltip
-        label={`Set ${label().toLowerCase()} date and time`}
+        label="Set the event date and time range"
         placement="bottom"
         disabled={open()}
       >
@@ -420,80 +470,128 @@ export function EventDateTimePill(props: EventDateTimePillProps) {
           ref={pill}
           type="button"
           disabled={props.disabled}
-          aria-label={`Edit ${label().toLowerCase()} date and time`}
+          aria-label="Edit event date and time range"
           aria-expanded={open()}
           aria-haspopup="dialog"
           aria-invalid={props.invalid || undefined}
           aria-describedby={props.describedBy}
           class={cn(
-            'flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left font-normal text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink',
-            props.endpoint === 'start' && '-ml-2',
-            open() && 'bg-hover text-ink',
-            props.invalid && 'text-failure'
+            'inline-flex h-7 min-w-0 max-w-full items-center rounded-full border border-edge-muted bg-surface px-1 text-left font-normal text-ink transition-colors hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10',
+            open() && 'bg-hover',
+            props.invalid && 'border-failure'
           )}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => (open() ? close() : openPopover())}
           onKeyDown={(event) => {
             if (event.key !== 'Escape' || !open()) return;
             event.preventDefault();
             event.stopPropagation();
-            setOpen(false);
+            close();
           }}
         >
-          {props.endpoint === 'end' ? (
-            <CalendarCheckIcon class="size-5 shrink-0 text-ink-extra-muted" />
-          ) : (
-            <CalendarBlankIcon class="size-5 shrink-0 text-ink-extra-muted" />
-          )}
-          <span class="min-w-0 truncate text-sm">{dateLabel()}</span>
-          {!props.allDay && (
-            <>
-              <span
-                aria-hidden="true"
-                class="shrink-0 text-sm text-ink-extra-muted"
-              >
-                @
+          <span
+            class={cn(
+              '-ml-1 flex h-full min-w-0 items-center gap-1 rounded-full pr-1.5 pl-2',
+              open() &&
+                activeEndpoint() === 'start' &&
+                'bg-accent-bg text-accent ring ring-inset ring-accent/20 [&_svg]:text-accent'
+            )}
+          >
+            <CalendarBlankIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            <span class="truncate text-xs">
+              {dateLabel(displayedRange().from, 'Start date')}
+            </span>
+            {!props.allDay && (
+              <span class="shrink-0 text-xs">
+                {formatTimeLabel(startParts().time)}
               </span>
-              <span class="shrink-0 text-sm">
-                {formatTimeLabel(parts().time)}
+            )}
+          </span>
+          <ArrowRightIcon
+            aria-label="to"
+            class="mx-1 size-3 shrink-0 text-ink-extra-muted"
+          />
+          <span
+            class={cn(
+              '-mr-1 flex h-full min-w-0 items-center gap-1 rounded-full pr-2 pl-1.5',
+              open() &&
+                activeEndpoint() === 'end' &&
+                'bg-accent-bg text-accent ring ring-inset ring-accent/20 [&_svg]:text-accent'
+            )}
+          >
+            <span class="truncate text-xs">
+              {dateLabel(displayedRange().to, 'End date')}
+            </span>
+            {!props.allDay && (
+              <span class="shrink-0 text-xs">
+                {formatTimeLabel(endParts().time)}
               </span>
-            </>
-          )}
+            )}
+            <CaretDownIcon class="ml-1 size-3 shrink-0 text-ink-extra-muted" />
+          </span>
         </button>
       </Tooltip>
 
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class={cn(
-              'portal-scope z-action-menu max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation',
-              props.allDay ? 'w-72' : 'w-[31rem]'
-            )}
+            class="portal-scope z-action-menu w-[31rem] max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();
               event.stopPropagation();
-              setOpen(false);
+              close();
             }}
             onOpenAutoFocus={(event) => event.preventDefault()}
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             <Popover.Title class="sr-only">
-              Choose {label().toLowerCase()} date and time
+              Choose event date and time range
             </Popover.Title>
-            <EventDateTimePopoverContent
-              label={label()}
-              date={parts().date}
-              time={props.allDay ? undefined : parts().time}
-              onDateChange={(date) =>
-                props.onChange(
-                  props.allDay ? date : withLocalDate(props.value, date)
-                )
-              }
-              onTimeChange={(time) =>
-                props.onChange(withLocalTime(props.value, time))
-              }
-              disabled={props.disabled}
-            />
+            <div class="grid grid-cols-[minmax(0,1fr)_11rem]">
+              <div class="min-w-0 p-3">
+                <CalendarRange
+                  required
+                  fixedWeeks
+                  value={rangeDraft() ?? currentRange()}
+                  onValueChange={changeRange}
+                />
+              </div>
+              <div class="flex min-w-0 flex-col gap-3 border-l border-edge p-3">
+                {!props.allDay && (
+                  <>
+                    <EventTimeInput
+                      id={`event-start-time-${fieldId}`}
+                      label="Start time"
+                      value={startParts().time}
+                      onChange={(time) =>
+                        props.onStartChange(withLocalTime(props.start, time))
+                      }
+                      onFocus={() => setActiveEndpoint('start')}
+                      disabled={props.disabled}
+                    />
+                    <EventTimeInput
+                      id={`event-end-time-${fieldId}`}
+                      label="End time"
+                      value={endParts().time}
+                      onChange={(time) =>
+                        props.onEndChange(withLocalTime(props.end, time))
+                      }
+                      onFocus={() => setActiveEndpoint('end')}
+                      disabled={props.disabled}
+                    />
+                  </>
+                )}
+                <Checkbox
+                  checked={props.allDay}
+                  disabled={props.disabled}
+                  onChange={props.onAllDayChange}
+                  class="mt-auto text-xs text-ink-muted"
+                >
+                  <Checkbox.Control />
+                  <Checkbox.Label>All day</Checkbox.Label>
+                </Checkbox>
+              </div>
+            </div>
           </Popover.Content>
         </Layer>
       </Popover.Portal>

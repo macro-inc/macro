@@ -1,7 +1,7 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import MapPinIcon from '@phosphor/map-pin.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
-import { Button, Checkbox, cn, Select } from '@ui';
+import { Button, cn, Select } from '@ui';
 import { addMonths, format, parseISO } from 'date-fns';
 import {
   type Accessor,
@@ -11,11 +11,10 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { EventDateTimePill } from './EventDateTimeField';
+import { EventDateTimeRangePill } from './EventDateTimeField';
 import {
   EventComposerCalendarPill,
   EventComposerGuestsPill,
-  EventComposerLocationPill,
   EventComposerRecurrencePill,
 } from './EventComposerPropertyPills';
 import {
@@ -249,60 +248,29 @@ export function EventComposerForm(props: EventComposerFormProps) {
   };
 
   const DateTimeRange = () => (
-    <div class="flex min-w-0 flex-col gap-1">
-      <div class="flex min-w-0 items-center gap-3">
-        <div class="flex min-w-0 flex-1 items-center gap-4">
-          <EventDateTimePill
-            endpoint="start"
-            value={state().start}
-            allDay={state().allDay}
-            onChange={(start) =>
-              setState(
-                state().allDay
-                  ? moveAllDayRange(state(), start)
-                  : { ...state(), start }
-              )
-            }
-            disabled={fieldIsDisabled('start')}
-            invalid={dateRangeError() !== undefined}
-            describedBy={dateRangeError() ? dateRangeErrorId : undefined}
-          />
-          <span
-            aria-label="to"
-            class="flex h-11 shrink-0 items-center text-ink-extra-muted"
-          >
-            <ArrowRightIcon aria-hidden="true" class="size-4" />
-          </span>
-          <EventDateTimePill
-            endpoint="end"
-            value={state().end}
-            allDay={state().allDay}
-            onChange={(end) => setState({ ...state(), end })}
-            disabled={fieldIsDisabled('end')}
-            invalid={dateRangeError() !== undefined}
-            describedBy={dateRangeError() ? dateRangeErrorId : undefined}
-          />
-        </div>
-        <Checkbox
-          checked={state().allDay}
-          disabled={fieldIsDisabled('allDay')}
-          onChange={(allDay) =>
-            setState(convertTimesForAllDay(state(), allDay))
-          }
-          class="ml-auto shrink-0 pl-3 text-xs text-ink-muted"
-        >
-          <Checkbox.Control />
-          <Checkbox.Label>All day</Checkbox.Label>
-        </Checkbox>
-      </div>
-      <Show when={dateRangeError()}>
-        {(error) => (
-          <p id={dateRangeErrorId} role="alert" class="text-xs text-failure">
-            {error()}
-          </p>
-        )}
-      </Show>
-    </div>
+    <EventDateTimeRangePill
+      start={state().start}
+      end={state().end}
+      allDay={state().allDay}
+      onStartChange={(start) =>
+        setState(
+          state().allDay
+            ? moveAllDayRange(state(), start)
+            : { ...state(), start }
+        )
+      }
+      onEndChange={(end) => setState({ ...state(), end })}
+      onAllDayChange={(allDay) =>
+        setState(convertTimesForAllDay(state(), allDay))
+      }
+      disabled={
+        fieldIsDisabled('start') ||
+        fieldIsDisabled('end') ||
+        fieldIsDisabled('allDay')
+      }
+      invalid={dateRangeError() !== undefined}
+      describedBy={dateRangeError() ? dateRangeErrorId : undefined}
+    />
   );
 
   return (
@@ -317,7 +285,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
       }}
     >
       <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scrollbar-hidden">
-        <div class="flex flex-col gap-2 px-2">
+        <div class="px-2">
           <input
             type="text"
             value={state().title}
@@ -330,23 +298,10 @@ export function EventComposerForm(props: EventComposerFormProps) {
             disabled={fieldIsDisabled('title')}
             class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
           />
-
-          <DateTimeRange />
-
-          <textarea
-            value={state().description}
-            onInput={(event) =>
-              setState({ ...state(), description: event.currentTarget.value })
-            }
-            placeholder="Add description..."
-            aria-label="Description"
-            rows={5}
-            disabled={fieldIsDisabled('description')}
-            class="min-h-24 w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
-          />
         </div>
 
         <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
+          <DateTimeRange />
           <EventComposerGuestsPill
             options={props.guestOptions}
             selected={selectedGuests()}
@@ -354,11 +309,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
             onChange={setSelectedGuests}
             disabled={props.pending}
             readOnly={fieldIsReadOnly('guests')}
-          />
-          <EventComposerLocationPill
-            value={state().location}
-            onChange={(location) => setState({ ...state(), location })}
-            disabled={fieldIsDisabled('location')}
           />
           <EventComposerRecurrencePill
             options={recurrenceOptions()}
@@ -377,6 +327,46 @@ export function EventComposerForm(props: EventComposerFormProps) {
             />
           </Show>
         </div>
+
+        <Show when={dateRangeError()}>
+          {(error) => (
+            <p
+              id={dateRangeErrorId}
+              role="alert"
+              class="px-2 text-xs text-failure"
+            >
+              {error()}
+            </p>
+          )}
+        </Show>
+
+        <div class="flex min-w-0 items-center gap-2 px-2">
+          <MapPinIcon class="size-4 shrink-0 text-ink-extra-muted" />
+          <input
+            type="text"
+            value={state().location}
+            onInput={(event) =>
+              setState({ ...state(), location: event.currentTarget.value })
+            }
+            placeholder="Add location..."
+            aria-label="Location"
+            disabled={fieldIsDisabled('location')}
+            class="h-8 min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
+          />
+        </div>
+
+        <textarea
+          value={state().description}
+          onInput={(event) =>
+            setState({ ...state(), description: event.currentTarget.value })
+          }
+          placeholder="Add description..."
+          aria-label="Description"
+          rows={5}
+          disabled={fieldIsDisabled('description')}
+          class="min-h-24 w-full resize-none bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
+        />
+
         <Show when={recurrenceChoice() === 'custom'}>
           <div class="flex flex-col gap-2.5 rounded-lg border border-edge-muted p-3 text-xs text-ink-muted">
             <div class="flex flex-wrap items-center gap-2">
