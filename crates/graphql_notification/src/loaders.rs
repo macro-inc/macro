@@ -29,12 +29,12 @@ fn notification_item_type(entity_type: model_entity::EntityType) -> Option<Notif
         EntityType::Call => Some(NotificationItemType::Call),
         EntityType::ForeignEntity => Some(NotificationItemType::Github),
         EntityType::Reminder => Some(NotificationItemType::Reminder),
+        EntityType::CalendarEvent => Some(NotificationItemType::Calendar),
         EntityType::User
         | EntityType::Team
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::CalendarEvent
         | EntityType::Skill => None,
     }
 }
