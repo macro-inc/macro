@@ -1,5 +1,6 @@
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Button, Checkbox, cn, Select } from '@ui';
 import { addMonths, format, parseISO } from 'date-fns';
 import {
@@ -8,7 +9,6 @@ import {
   createSignal,
   createUniqueId,
   For,
-  type JSX,
   Show,
 } from 'solid-js';
 import { EventDateTimePill } from './EventDateTimeField';
@@ -65,7 +65,7 @@ export interface EventComposerFormProps {
   calendarOptions: EventEditorCalendarOption[];
   guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
-  titleMeta?: JSX.Element;
+  attendees?: CalendarAttendee[];
   pending: boolean;
   class?: string;
   onCancel: () => void;
@@ -250,8 +250,8 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const DateTimeRange = () => (
     <div class="flex min-w-0 flex-col gap-1">
-      <div class="flex min-w-0 items-center gap-1">
-        <div class="inline-flex min-w-0 max-w-full items-center gap-1">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-4">
           <EventDateTimePill
             endpoint="start"
             value={state().start}
@@ -269,9 +269,9 @@ export function EventComposerForm(props: EventComposerFormProps) {
           />
           <span
             aria-label="to"
-            class="flex h-7 shrink-0 items-center px-0.5 text-ink-extra-muted"
+            class="flex h-11 shrink-0 items-center text-ink-extra-muted"
           >
-            <ArrowRightIcon aria-hidden="true" class="size-3" />
+            <ArrowRightIcon aria-hidden="true" class="size-4" />
           </span>
           <EventDateTimePill
             endpoint="end"
@@ -316,8 +316,8 @@ export function EventComposerForm(props: EventComposerFormProps) {
         submit();
       }}
     >
-      <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
-        <div class="mb-4 px-2">
+      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scrollbar-hidden">
+        <div class="flex flex-col gap-2 px-2">
           <input
             type="text"
             value={state().title}
@@ -330,12 +330,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
             disabled={fieldIsDisabled('title')}
             class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
           />
-          <Show when={props.titleMeta}>
-            <div class="mt-1">{props.titleMeta}</div>
-          </Show>
-        </div>
 
-        <div class="flex flex-col gap-4 px-2">
           <DateTimeRange />
 
           <textarea
@@ -351,10 +346,11 @@ export function EventComposerForm(props: EventComposerFormProps) {
           />
         </div>
 
-        <div class="mt-6 flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px">
+        <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
           <EventComposerGuestsPill
             options={props.guestOptions}
             selected={selectedGuests()}
+            attendees={props.attendees}
             onChange={setSelectedGuests}
             disabled={props.pending}
             readOnly={fieldIsReadOnly('guests')}
@@ -382,7 +378,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
           </Show>
         </div>
         <Show when={recurrenceChoice() === 'custom'}>
-          <div class="mt-3 flex flex-col gap-2.5 rounded-lg border border-edge-muted p-3 text-xs text-ink-muted">
+          <div class="flex flex-col gap-2.5 rounded-lg border border-edge-muted p-3 text-xs text-ink-muted">
             <div class="flex flex-wrap items-center gap-2">
               <span>Repeat every</span>
               <input

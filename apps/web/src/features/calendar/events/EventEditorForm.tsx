@@ -151,7 +151,7 @@ export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
   const guests = event.attendees
-    .filter((attendee) => !attendee.isSelf && !attendee.isOrganizer)
+    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
     .map((attendee) => attendee.email)
     .join(', ');
 

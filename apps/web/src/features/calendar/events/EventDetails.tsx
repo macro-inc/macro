@@ -21,7 +21,7 @@ import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
-import { Avatar, Button } from '@ui';
+import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -111,6 +111,7 @@ function CalendarUserItem(props: {
   secondaryLabelPosition?: 'above' | 'below';
   details?: JSX.Element;
   trailing?: JSX.Element;
+  nameClass?: string;
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
 
@@ -145,7 +146,12 @@ function CalendarUserItem(props: {
             {props.secondaryLabel}
           </div>
         </Show>
-        <span class="block select-text truncate text-ink-muted">
+        <span
+          class={cn(
+            'block select-text truncate text-ink-muted',
+            props.nameClass
+          )}
+        >
           {props.displayName()}
           <Show when={props.isSelf}> (you)</Show>
         </span>
@@ -163,7 +169,10 @@ function CalendarUserItem(props: {
   );
 }
 
-function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
+function CalendarAttendeeItem(props: {
+  item: ResolvedCalendarAttendee;
+  nameClass?: string;
+}) {
   const attendee = props.item.attendee;
   const response =
     attendee.responseStatus === 'needs_action'
@@ -204,29 +213,49 @@ function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
       secondaryLabel={secondaryLabel}
       details={details}
       trailing={trailing}
+      nameClass={props.nameClass}
     />
   );
 }
 
-function CalendarAttendeeList(props: { attendees: CalendarAttendee[] }) {
+export interface CalendarAttendeeListProps {
+  attendees: CalendarAttendee[];
+  organizerFirst?: boolean;
+  itemClass?: (attendee: CalendarAttendee) => string | undefined;
+  nameClass?: string;
+}
+
+/** Resolved attendee rows shared by event details and read-only guest views. */
+export function CalendarAttendeeList(props: CalendarAttendeeListProps) {
   const attendees = props.attendees.map(resolveCalendarAttendee);
   const sortedAttendees = createMemo(() =>
     attendees
       .map((item) => ({ item, name: item.displayName() }))
-      .toSorted(
-        (first, second) =>
+      .toSorted((first, second) => {
+        if (
+          props.organizerFirst &&
+          first.item.attendee.isOrganizer !== second.item.attendee.isOrganizer
+        ) {
+          return first.item.attendee.isOrganizer ? -1 : 1;
+        }
+        return (
           compareAttendeeNames(first.name, second.name) ||
           compareAttendeeNames(
             first.item.attendee.email,
             second.item.attendee.email
           )
-      )
+        );
+      })
       .map(({ item }) => item)
   );
 
   return (
     <For each={sortedAttendees()}>
-      {(item) => <CalendarAttendeeItem item={item} />}
+      {(item) => (
+        <div class={cn(props.itemClass?.(item.attendee))}>
+          <CalendarAttendeeItem item={item} nameClass={props.nameClass} />
+        </div>
+      )}
     </For>
   );
 }

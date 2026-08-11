@@ -24,7 +24,9 @@ const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
 });
 
 /** Every quarter-hour in a day, with canonical values and localized labels. */
@@ -424,9 +426,10 @@ export function EventDateTimePill(props: EventDateTimePillProps) {
           aria-invalid={props.invalid || undefined}
           aria-describedby={props.describedBy}
           class={cn(
-            'inline-flex h-7 min-w-0 max-w-full items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 font-normal text-ink transition-colors hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10',
-            open() && 'bg-hover',
-            props.invalid && 'border-failure'
+            'flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left font-normal text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink',
+            props.endpoint === 'start' && '-ml-2',
+            open() && 'bg-hover text-ink',
+            props.invalid && 'text-failure'
           )}
           onClick={() => setOpen((current) => !current)}
           onKeyDown={(event) => {
@@ -437,17 +440,24 @@ export function EventDateTimePill(props: EventDateTimePillProps) {
           }}
         >
           {props.endpoint === 'end' ? (
-            <CalendarCheckIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            <CalendarCheckIcon class="size-5 shrink-0 text-ink-extra-muted" />
           ) : (
-            <CalendarBlankIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            <CalendarBlankIcon class="size-5 shrink-0 text-ink-extra-muted" />
           )}
-          <span class="text-xs">{dateLabel()}</span>
-          <span aria-hidden="true" class="text-sm text-ink-extra-muted">
-            @
-          </span>
-          <span class="text-xs">
-            {props.allDay ? 'All day' : formatTimeLabel(parts().time)}
-          </span>
+          <span class="min-w-0 truncate text-sm">{dateLabel()}</span>
+          {!props.allDay && (
+            <>
+              <span
+                aria-hidden="true"
+                class="shrink-0 text-sm text-ink-extra-muted"
+              >
+                @
+              </span>
+              <span class="shrink-0 text-sm">
+                {formatTimeLabel(parts().time)}
+              </span>
+            </>
+          )}
         </button>
       </Tooltip>
 

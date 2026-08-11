@@ -9,6 +9,7 @@ import MapPinIcon from '@phosphor/map-pin.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
+import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { cn, Layer, Select, Tooltip } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
@@ -16,10 +17,10 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
-  For,
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { CalendarAttendeeList } from './EventDetails';
 import {
   type EventEditorCalendarOption,
   type EventEditorGuestOption,
@@ -55,6 +56,7 @@ function guestPickerItemValue(item: GuestPickerItem) {
 export interface EventComposerGuestsPillProps {
   options: Accessor<EventEditorGuestOption[]>;
   selected: SelectedEventEditorGuest[];
+  attendees?: CalendarAttendee[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -103,43 +105,28 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       </Tooltip>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation">
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 text-sm shadow-menu menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
             <Show
-              when={props.selected.length > 0}
+              when={(props.attendees?.length ?? 0) > 0}
               fallback={
                 <p class="px-2 py-4 text-center text-sm text-ink-muted">
                   No guests
                 </p>
               }
             >
-              <div class="flex max-h-64 flex-col gap-1 overflow-y-auto">
-                <For each={props.selected}>
-                  {(guest) => (
-                    <div class="flex h-9 min-w-0 items-start gap-2 rounded-lg px-2 text-sm text-ink">
-                      <div class="flex size-6 shrink-0">
-                        <UserIcon
-                          id={guest.id}
-                          size="md"
-                          isDeleted={false}
-                          suppressClick
-                        />
-                      </div>
-                      <div class="flex min-w-0 flex-1 flex-col leading-tight">
-                        <span class="truncate text-sm">
-                          {guestDisplayName(guest)}
-                        </span>
-                        <Show
-                          when={guestDisplayName(guest) !== guestEmail(guest)}
-                        >
-                          <span class="truncate text-xs text-ink-extra-muted">
-                            {guestEmail(guest)}
-                          </span>
-                        </Show>
-                      </div>
-                    </div>
-                  )}
-                </For>
+              <div class="flex max-h-64 flex-col gap-2 overflow-y-auto px-2">
+                <CalendarAttendeeList
+                  attendees={props.attendees ?? []}
+                  organizerFirst
+                  nameClass="text-xs"
+                  itemClass={(attendee) =>
+                    cn(
+                      'py-2',
+                      attendee.isOrganizer && 'border-b border-edge-muted'
+                    )
+                  }
+                />
               </div>
             </Show>
           </Popover.Content>
