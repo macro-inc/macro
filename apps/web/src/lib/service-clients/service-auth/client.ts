@@ -209,10 +209,18 @@ export const authServiceClient = {
     return result;
   },
   async deleteUser() {
-    setAccessTokenData(null);
-    return fetchWithAuth<GenericSuccessResponse>(`${authHost}/user/me`, {
-      method: 'DELETE',
-    });
+    const result = await fetchWithAuth<GenericSuccessResponse>(
+      `${authHost}/user/me`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+    if (result.isOk()) {
+      setAccessTokenData(null);
+    }
+
+    return result;
   },
   async appleLogin(args: AppleLoginRequest) {
     return authApiFetch<EmptyResponse>(`/login/apple`, {

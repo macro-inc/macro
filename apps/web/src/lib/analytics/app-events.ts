@@ -18,6 +18,17 @@ export type EntityEventPayload = {
   source?: string;
 } & Record<string, unknown>;
 
+/** A normalized reason selected before deleting an account. */
+export type AccountDeletionReason =
+  | 'not_using_enough'
+  | 'missing_features'
+  | 'difficult_to_use'
+  | 'bugs_or_performance'
+  | 'too_expensive'
+  | 'prefer_another_product'
+  | 'privacy_or_security_concerns'
+  | 'other';
+
 export type AppEvents = {
   // --- Acquisition & auth -------------------------------------------------
   /**
@@ -32,6 +43,10 @@ export type AppEvents = {
   sign_up_click: { method?: string } & Record<string, unknown>;
   login: Record<string, unknown>; // payload - include link status
   sign_out: Record<string, unknown>;
+  account_deletion_feedback: {
+    reason: AccountDeletionReason | 'not_provided';
+    feedback?: string;
+  };
   login_from_onboarding: Record<string, unknown>;
   mobile_web_welcome_viewed: Record<string, unknown>;
   mobile_web_signup_sent_viewed: Record<string, unknown>;
