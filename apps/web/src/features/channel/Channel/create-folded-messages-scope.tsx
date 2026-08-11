@@ -4,7 +4,7 @@ import {
   type FoldedMessageLookup,
 } from '@queries/channel/folded-messages';
 import type { Accessor, JSX, Resource } from 'solid-js';
-import { useAiAgentsFlag } from '../use-ai-agents-flag';
+import { useChatV3AgentsFlag } from '../use-chat-v3-agents-flag';
 
 /**
  * A channel's fold, as `Channel.tsx` needs it: one thing to create, one
@@ -40,7 +40,7 @@ export type FoldedMessagesScope = {
 export function createFoldedMessagesScope(
   channelId: Accessor<string>
 ): FoldedMessagesScope {
-  const aiAgentsEnabled = useAiAgentsFlag();
+  const aiAgentsEnabled = useChatV3AgentsFlag();
   const foldedMessages = createFoldedMessages(channelId, aiAgentsEnabled);
 
   const readyLookup = () =>

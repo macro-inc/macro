@@ -11,7 +11,7 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { ENABLE_AI_AGENTS } from '@core/constant/featureFlags';
+import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -259,7 +259,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // when the flag is on, and stripped even if it arrived as a channel bot.
   const mentionUsers: Accessor<IUser[]> = () => {
     let base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
-    if (!ENABLE_AI_AGENTS()) {
+    if (!ENABLE_CHAT_V3_AGENTS()) {
       base = base.filter((user) => !isMacroCoderId(user.id));
     } else if (!base.some((user) => isMacroCoderId(user.id))) {
       base.unshift(macroCoderMentionUser());
