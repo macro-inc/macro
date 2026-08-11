@@ -362,7 +362,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
         {props.children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent width="md">
+        <ContextMenuContent class="w-60">
           <MenuItem
             icon={SplitIcon}
             iconClass="rotate-180"
@@ -385,6 +385,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
           <MenuSeparator />
           <MenuItem
             icon={panel.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
+            hotkeyToken={TOKENS.window.spotlight.toggle}
             text={
               panel.handle.isSpotLight() ? 'Minimize split' : 'Spotlight split'
             }
