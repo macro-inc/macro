@@ -13,10 +13,12 @@ import {
 import {
   createTargetMessageController,
   restoreDefaultChannelPaginationAfterTargetLoad,
+  TARGETED_MESSAGE_FLASH_MS,
 } from '../create-target-message-controller';
 
 afterEach(() => {
   queryClient.clear();
+  vi.useRealTimers();
 });
 
 function createController(
@@ -152,6 +154,86 @@ describe('createTargetMessageController', () => {
 
     controller!.completePendingScroll('message-1');
     expect(controller!.pendingScrollTargetId()).toBeUndefined();
+    dispose();
+  });
+
+  it('releases a root target after the accent flash once its scroll completes', async () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    let controller!: ReturnType<typeof createTargetMessageController>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      controller = createController({
+        messageKeys: ['message-1'],
+      }).controller;
+    });
+    await Promise.resolve();
+
+    controller.goToMessage('message-1');
+    controller.completePendingScroll('message-1');
+    await Promise.resolve();
+    expect(controller.activeTargetMessageId()).toBe('message-1');
+
+    vi.advanceTimersByTime(TARGETED_MESSAGE_FLASH_MS);
+    expect(controller.activeTargetMessageId()).toBeUndefined();
+    dispose();
+  });
+
+  it('holds the flash until a nested reply target completes its scroll', async () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    let controller!: ReturnType<typeof createTargetMessageController>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      controller = createController({
+        initialTargetMessageId: 'message-1',
+        initialTargetMessageReplyId: 'reply-4',
+        messageKeys: ['message-1'],
+        withNavigation: true,
+        didInitialScroll: true,
+      }).controller;
+    });
+    await Promise.resolve();
+
+    // The outer row is acknowledged, but the reply scroll is still pending —
+    // the flash countdown must not start yet.
+    expect(controller.pendingScrollTargetId()).toBeUndefined();
+    vi.advanceTimersByTime(TARGETED_MESSAGE_FLASH_MS);
+    expect(controller.activeTargetMessageId()).toBe('message-1');
+
+    controller.completePendingReplyScroll('message-1', 'reply-4');
+    await Promise.resolve();
+    vi.advanceTimersByTime(TARGETED_MESSAGE_FLASH_MS);
+    expect(controller.activeTargetMessageId()).toBeUndefined();
+    expect(controller.activeTargetMessageReplyId()).toBeUndefined();
+    dispose();
+  });
+
+  it('cancels the flash when navigation moves to a new target', async () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    let controller!: ReturnType<typeof createTargetMessageController>;
+
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      controller = createController({
+        messageKeys: ['message-1', 'message-2'],
+      }).controller;
+    });
+    await Promise.resolve();
+
+    controller.goToMessage('message-1');
+    controller.completePendingScroll('message-1');
+    controller.goToMessage('message-2');
+    vi.advanceTimersByTime(TARGETED_MESSAGE_FLASH_MS);
+    expect(controller.activeTargetMessageId()).toBe('message-2');
+
+    controller.completePendingScroll('message-2');
+    await Promise.resolve();
+    vi.advanceTimersByTime(TARGETED_MESSAGE_FLASH_MS);
+    expect(controller.activeTargetMessageId()).toBeUndefined();
     dispose();
   });
 

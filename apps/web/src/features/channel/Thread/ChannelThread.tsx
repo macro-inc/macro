@@ -244,7 +244,6 @@ export function ChannelThread(props: ThreadProps) {
       ],
       ([activeTargetReplyId, _targetReplyId, replies]) => {
         if (!activeTargetReplyId) {
-          if (replySelection.selectedId()) replySelection.clear();
           return;
         }
         const found = replies.some((r) => r.id === activeTargetReplyId);
