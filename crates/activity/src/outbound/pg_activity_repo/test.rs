@@ -4,7 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{Actor, CommonAction};
+use crate::domain::models::{Action, Actor, CommonAction};
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -88,4 +88,216 @@ async fn purge_removes_only_that_entitys_activities(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(remaining, vec!["doc-kept".to_string()]);
+}
+
+fn seed_at(
+    source_event: u128,
+    action: CommonAction,
+    entity_id: &str,
+    occurred_at: chrono::DateTime<Utc>,
+) -> Activity {
+    Activity::common(
+        Uuid::from_u128(source_event),
+        0,
+        Actor::new_from_user(user("macro|actor@example.com")),
+        None,
+        model_entity::EntityType::Document,
+        entity_id,
+        action,
+        occurred_at,
+    )
+}
+
+fn base_time() -> chrono::DateTime<Utc> {
+    chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let t = base_time();
+    let seeded: Vec<Activity> = (0..5u32)
+        .map(|i| {
+            seed_at(
+                u128::from(10 + i),
+                CommonAction::Edited,
+                &format!("doc-{i}"),
+                t + chrono::Duration::seconds(i64::from(i)),
+            )
+        })
+        .collect();
+    repo.insert_activities(&seeded).await.unwrap();
+
+    let first = repo
+        .subject_feed("macro|actor@example.com", None, 2)
+        .await
+        .unwrap();
+    assert_eq!(first.len(), 2);
+    assert_eq!(first[0].entity_id, "doc-4");
+    assert_eq!(first[1].entity_id, "doc-3");
+    assert_eq!(first[0].action, RecordedAction::Known(Action::Edited));
+
+    let cursor = (first[1].occurred_at, first[1].id);
+    let second = repo
+        .subject_feed("macro|actor@example.com", Some(cursor), 2)
+        .await
+        .unwrap();
+    assert_eq!(second.len(), 2);
+    assert_eq!(second[0].entity_id, "doc-2");
+    assert_eq!(second[1].entity_id, "doc-1");
+
+    let cursor = (second[1].occurred_at, second[1].id);
+    let last = repo
+        .subject_feed("macro|actor@example.com", Some(cursor), 2)
+        .await
+        .unwrap();
+    assert_eq!(last.len(), 1);
+    assert_eq!(last[0].entity_id, "doc-0");
+
+    let other = repo
+        .subject_feed("macro|someone-else@example.com", None, 10)
+        .await
+        .unwrap();
+    assert!(other.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subject_feed_breaks_timestamp_ties_by_id(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let t = base_time();
+    // Same occurred_at on every row: order must fall back to id DESC.
+    let seeded: Vec<Activity> = (0..3u32)
+        .map(|i| {
+            seed_at(
+                u128::from(20 + i),
+                CommonAction::Edited,
+                &format!("doc-{i}"),
+                t,
+            )
+        })
+        .collect();
+    repo.insert_activities(&seeded).await.unwrap();
+
+    let mut expected_ids: Vec<Uuid> = seeded.iter().map(|a| a.id).collect();
+    expected_ids.sort();
+    expected_ids.reverse();
+
+    let first = repo
+        .subject_feed("macro|actor@example.com", None, 2)
+        .await
+        .unwrap();
+    let rest = repo
+        .subject_feed(
+            "macro|actor@example.com",
+            Some((first[1].occurred_at, first[1].id)),
+            2,
+        )
+        .await
+        .unwrap();
+
+    let fetched_ids: Vec<Uuid> = first.iter().chain(rest.iter()).map(|r| r.id).collect();
+    assert_eq!(fetched_ids, expected_ids);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let t = base_time();
+    repo.insert_activities(&[
+        seed_at(30, CommonAction::Created, "doc-a", t),
+        seed_at(31, CommonAction::Edited, "doc-a", t + chrono::Duration::seconds(1)),
+        seed_at(32, CommonAction::Edited, "doc-a", t + chrono::Duration::seconds(2)),
+        seed_at(33, CommonAction::Created, "doc-b", t),
+    ])
+    .await
+    .unwrap();
+
+    let keys = vec![
+        (model_entity::EntityType::Document, "doc-a".to_string()),
+        (model_entity::EntityType::Document, "doc-b".to_string()),
+        (model_entity::EntityType::Document, "doc-untouched".to_string()),
+    ];
+    let by_entity = repo.entity_activity(&keys, 2).await.unwrap();
+
+    let doc_a = &by_entity[&keys[0]];
+    assert_eq!(doc_a.len(), 2, "limit caps per entity");
+    assert_eq!(doc_a[0].action, RecordedAction::Known(Action::Edited));
+    assert!(doc_a[0].occurred_at > doc_a[1].occurred_at, "newest first");
+
+    assert_eq!(by_entity[&keys[1]].len(), 1);
+    assert!(
+        !by_entity.contains_key(&keys[2]),
+        "entities with no activity are absent"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rows_written_by_a_newer_vocabulary_read_as_unknown(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    sqlx::query!(
+        r#"
+        INSERT INTO activity_events
+            (id, actor_id, subject_id, action, action_payload,
+             entity_type, entity_id, occurred_at)
+        VALUES ($1, 'macro|actor@example.com', 'macro|actor@example.com',
+                'transmogrified', '{"into": "a newt"}',
+                'document', 'doc-new', $2)
+        "#,
+        Uuid::from_u128(40),
+        base_time(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let feed = repo
+        .subject_feed("macro|actor@example.com", None, 10)
+        .await
+        .unwrap();
+    assert_eq!(feed.len(), 1);
+    assert_eq!(
+        feed[0].action,
+        RecordedAction::Unknown {
+            tag: "transmogrified".to_string(),
+            payload: Some(serde_json::json!({ "into": "a newt" })),
+        }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn corrupt_rows_are_skipped_not_page_failures(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    // An actor without a recognizable principal prefix is unrepresentable in
+    // the model; the row is dropped from the page rather than failing it.
+    sqlx::query!(
+        r#"
+        INSERT INTO activity_events
+            (id, actor_id, subject_id, action, action_payload,
+             entity_type, entity_id, occurred_at)
+        VALUES ($1, 'garbled', 'macro|actor@example.com', 'edited', NULL,
+                'document', 'doc-corrupt', $2)
+        "#,
+        Uuid::from_u128(41),
+        base_time(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.insert_activities(&[seed_at(
+        42,
+        CommonAction::Edited,
+        "doc-fine",
+        base_time() + chrono::Duration::seconds(1),
+    )])
+    .await
+    .unwrap();
+
+    let feed = repo
+        .subject_feed("macro|actor@example.com", None, 10)
+        .await
+        .unwrap();
+    assert_eq!(feed.len(), 1);
+    assert_eq!(feed[0].entity_id, "doc-fine");
 }

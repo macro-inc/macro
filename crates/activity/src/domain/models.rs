@@ -169,6 +169,120 @@ impl Action {
         };
         (tag, payload)
     }
+
+    /// Inverse of [`Action::to_columns`]: rebuilds the action from its stored
+    /// `(action, action_payload)` column values.
+    ///
+    /// A payload on a payload-free tag is ignored — a newer writer may have
+    /// started attaching one, and old readers must keep decoding the tag they
+    /// know. The tag literals are pinned against the strum derivation by the
+    /// codec round-trip test.
+    pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
+        fn parsed<T: for<'de> Deserialize<'de>>(
+            payload: Option<&Value>,
+        ) -> Result<T, ActionDecodeError> {
+            let value = payload.ok_or(ActionDecodeError::MissingPayload)?;
+            serde_json::from_value(value.clone()).map_err(ActionDecodeError::InvalidPayload)
+        }
+
+        match tag {
+            "created" => Ok(Action::Created),
+            "edited" => Ok(Action::Edited),
+            "opened" => Ok(Action::Opened),
+            "deleted" => Ok(Action::Deleted),
+            "messaged" => Ok(Action::Messaged),
+            "sent" => Ok(Action::Sent),
+            "property_changed" => Ok(Action::PropertyChanged(parsed(payload)?)),
+            "participant_added" => Ok(Action::ParticipantAdded(parsed(payload)?)),
+            "participant_removed" => Ok(Action::ParticipantRemoved(parsed(payload)?)),
+            "call_started" => Ok(Action::CallStarted(parsed(payload)?)),
+            _ => Err(ActionDecodeError::UnknownTag),
+        }
+    }
+}
+
+/// Why one stored `(action, action_payload)` pair failed to decode.
+#[derive(Debug)]
+pub enum ActionDecodeError {
+    /// The tag is not in this reader's vocabulary (row written by a newer
+    /// deployment).
+    UnknownTag,
+    /// The tag requires a payload but the column is NULL.
+    MissingPayload,
+    /// The payload column doesn't deserialize into the tag's payload shape.
+    InvalidPayload(serde_json::Error),
+}
+
+impl std::fmt::Display for ActionDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ActionDecodeError::UnknownTag => write!(f, "unknown action tag"),
+            ActionDecodeError::MissingPayload => write!(f, "action payload missing"),
+            ActionDecodeError::InvalidPayload(e) => write!(f, "invalid action payload: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ActionDecodeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ActionDecodeError::InvalidPayload(e) => Some(e),
+            ActionDecodeError::UnknownTag | ActionDecodeError::MissingPayload => None,
+        }
+    }
+}
+
+/// A stored action as a reader sees it: decoded into the closed [`Action`]
+/// vocabulary, or preserved raw when this reader can't decode it (a row
+/// written by a newer deployment, or a corrupt payload). [`Action`] itself
+/// stays closed — forward tolerance is a read-side concern.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordedAction {
+    /// An action in this reader's vocabulary.
+    Known(Action),
+    /// An action this reader can't decode, carried through raw.
+    Unknown {
+        /// The stored tag.
+        tag: String,
+        /// The stored payload, verbatim.
+        payload: Option<Value>,
+    },
+}
+
+impl RecordedAction {
+    /// Total decode of the stored column pair: falls back to
+    /// [`RecordedAction::Unknown`] instead of failing. The error is handed
+    /// back so callers with a logging dependency can distinguish a new
+    /// vocabulary word ([`ActionDecodeError::UnknownTag`], expected during
+    /// rollouts) from a known tag with an undecodable payload (corruption —
+    /// worth a warning). This module stays dependency-free on purpose.
+    pub fn from_columns(tag: String, payload: Option<Value>) -> (Self, Option<ActionDecodeError>) {
+        match Action::from_columns(&tag, payload.as_ref()) {
+            Ok(action) => (RecordedAction::Known(action), None),
+            Err(error) => (RecordedAction::Unknown { tag, payload }, Some(error)),
+        }
+    }
+}
+
+/// One activity as read back from storage — the read-side projection of an
+/// `activity_events` row. Plain fields: unlike [`Activity`] there are no
+/// construction invariants to seal; the row already exists.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityRecord {
+    /// The stored activity id.
+    pub id: Uuid,
+    /// Who mechanically acted.
+    pub actor: Actor<'static>,
+    /// Whose activity this is (a principal string: `macro|…` or `bot|…`).
+    pub subject_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: EntityType,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// What they did, decoded forward-tolerantly.
+    pub action: RecordedAction,
+    /// When it happened.
+    pub occurred_at: DateTime<Utc>,
 }
 
 /// The capability a domain implements to feed activity: given one of its

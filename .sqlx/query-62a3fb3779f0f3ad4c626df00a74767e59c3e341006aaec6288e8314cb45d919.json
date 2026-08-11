@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id AS \"id!\", a.actor_id AS \"actor_id!\",\n                   a.action AS \"action!\", a.action_payload,\n                   a.subject_id AS \"subject_id!\",\n                   a.entity_type AS \"entity_type!\", a.entity_id AS \"entity_id!\",\n                   a.occurred_at AS \"occurred_at!\"\n            FROM UNNEST($1::text[], $2::text[]) AS k(entity_type, entity_id)\n            JOIN LATERAL (\n                SELECT * FROM activity_events e\n                WHERE e.entity_type = k.entity_type AND e.entity_id = k.entity_id\n                ORDER BY e.occurred_at DESC, e.id DESC\n                LIMIT $3\n            ) a ON TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "action!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "action_payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "occurred_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "62a3fb3779f0f3ad4c626df00a74767e59c3e341006aaec6288e8314cb45d919"
+}
