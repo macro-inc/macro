@@ -801,7 +801,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 
 @keyframes targeted-message-accent-fade-out-selected {
   from {
-    background-color: oklch(from var(--color-accent) l c h / 30%);
+    background-color: oklch(from var(--color-accent) l c h / 40%);
     border-radius: var(--radius-sm);
   }
   to {
