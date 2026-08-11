@@ -97,8 +97,14 @@ pub struct CallStart {
 /// fields must tolerate absence on old rows. The stored tag is derived
 /// from the variant name (strum, snake_case), so **renaming a variant is a
 /// storage migration** — the pinned codec test exists to make that loud.
-#[derive(Debug, Clone, PartialEq, strum::IntoStaticStr)]
+#[derive(Debug, Clone, PartialEq, strum::IntoStaticStr, strum::EnumDiscriminants)]
 #[strum(serialize_all = "snake_case")]
+#[strum_discriminants(
+    name(ActionTag),
+    vis(pub(crate)),
+    derive(strum::EnumString),
+    strum(serialize_all = "snake_case")
+)]
 pub enum Action {
     /// The entity was created.
     Created,
@@ -175,28 +181,34 @@ impl Action {
     ///
     /// A payload on a payload-free tag is ignored — a newer writer may have
     /// started attaching one, and old readers must keep decoding the tag they
-    /// know. The tag literals are pinned against the strum derivation by the
-    /// codec round-trip test.
+    /// know. The tag vocabulary is the same strum derivation `to_columns`
+    /// writes with ([`ActionTag`], derived from the variant names), and the
+    /// match below is exhaustive on it — a new variant fails compilation here
+    /// until its decode is written.
     pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
+        // Deserializing from `&Value` borrows; no payload clone on the read
+        // hot path.
         fn parsed<T: for<'de> Deserialize<'de>>(
             payload: Option<&Value>,
         ) -> Result<T, ActionDecodeError> {
             let value = payload.ok_or(ActionDecodeError::MissingPayload)?;
-            serde_json::from_value(value.clone()).map_err(ActionDecodeError::InvalidPayload)
+            T::deserialize(value).map_err(ActionDecodeError::InvalidPayload)
         }
 
+        let tag = tag
+            .parse::<ActionTag>()
+            .map_err(|_| ActionDecodeError::UnknownTag)?;
         match tag {
-            "created" => Ok(Action::Created),
-            "edited" => Ok(Action::Edited),
-            "opened" => Ok(Action::Opened),
-            "deleted" => Ok(Action::Deleted),
-            "messaged" => Ok(Action::Messaged),
-            "sent" => Ok(Action::Sent),
-            "property_changed" => Ok(Action::PropertyChanged(parsed(payload)?)),
-            "participant_added" => Ok(Action::ParticipantAdded(parsed(payload)?)),
-            "participant_removed" => Ok(Action::ParticipantRemoved(parsed(payload)?)),
-            "call_started" => Ok(Action::CallStarted(parsed(payload)?)),
-            _ => Err(ActionDecodeError::UnknownTag),
+            ActionTag::Created => Ok(Action::Created),
+            ActionTag::Edited => Ok(Action::Edited),
+            ActionTag::Opened => Ok(Action::Opened),
+            ActionTag::Deleted => Ok(Action::Deleted),
+            ActionTag::Messaged => Ok(Action::Messaged),
+            ActionTag::Sent => Ok(Action::Sent),
+            ActionTag::PropertyChanged => Ok(Action::PropertyChanged(parsed(payload)?)),
+            ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
+            ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
+            ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
         }
     }
 }

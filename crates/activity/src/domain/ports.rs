@@ -11,6 +11,18 @@ use super::models::{Activity, ActivityRecord};
 /// Activity rows grouped per requested entity, newest first within each.
 pub type EntityActivityMap = HashMap<(EntityType, String), Vec<ActivityRecord>>;
 
+/// One keyset page of a subject's activity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityFeedPage {
+    /// Decoded rows, newest first. May be shorter than the requested limit
+    /// when corrupt rows were skipped; `next` still advances past them.
+    pub records: Vec<ActivityRecord>,
+    /// Keyset position to resume after; `None` when the feed is exhausted.
+    /// Derived from the raw fetched rows *before* decode-skipping, so one
+    /// bad row can never end pagination early.
+    pub next: Option<(DateTime<Utc>, Uuid)>,
+}
+
 /// Persists activities.
 pub trait ActivityRepo {
     /// The adapter's error type.
@@ -41,14 +53,15 @@ pub trait ActivityReads {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// One page of a subject's activity, newest first. `cursor` is the
-    /// `(occurred_at, id)` of the last row of the previous page; rows
-    /// strictly before it (in keyset order) are returned.
+    /// `(occurred_at, id)` returned as the previous page's
+    /// [`next`](ActivityFeedPage::next); rows strictly before it (in keyset
+    /// order) are returned.
     fn subject_feed(
         &self,
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: u32,
-    ) -> impl Future<Output = Result<Vec<ActivityRecord>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 
     /// The newest `per_entity_limit` activities for each requested entity,
     /// in one round trip. Entities with no activity are absent from the map.

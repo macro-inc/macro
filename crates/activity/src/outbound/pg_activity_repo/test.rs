@@ -134,33 +134,36 @@ async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
         .subject_feed("macro|actor@example.com", None, 2)
         .await
         .unwrap();
-    assert_eq!(first.len(), 2);
-    assert_eq!(first[0].entity_id, "doc-4");
-    assert_eq!(first[1].entity_id, "doc-3");
-    assert_eq!(first[0].action, RecordedAction::Known(Action::Edited));
+    assert_eq!(first.records.len(), 2);
+    assert_eq!(first.records[0].entity_id, "doc-4");
+    assert_eq!(first.records[1].entity_id, "doc-3");
+    assert_eq!(
+        first.records[0].action,
+        RecordedAction::Known(Action::Edited)
+    );
 
-    let cursor = (first[1].occurred_at, first[1].id);
     let second = repo
-        .subject_feed("macro|actor@example.com", Some(cursor), 2)
+        .subject_feed("macro|actor@example.com", first.next, 2)
         .await
         .unwrap();
-    assert_eq!(second.len(), 2);
-    assert_eq!(second[0].entity_id, "doc-2");
-    assert_eq!(second[1].entity_id, "doc-1");
+    assert_eq!(second.records.len(), 2);
+    assert_eq!(second.records[0].entity_id, "doc-2");
+    assert_eq!(second.records[1].entity_id, "doc-1");
 
-    let cursor = (second[1].occurred_at, second[1].id);
     let last = repo
-        .subject_feed("macro|actor@example.com", Some(cursor), 2)
+        .subject_feed("macro|actor@example.com", second.next, 2)
         .await
         .unwrap();
-    assert_eq!(last.len(), 1);
-    assert_eq!(last[0].entity_id, "doc-0");
+    assert_eq!(last.records.len(), 1);
+    assert_eq!(last.records[0].entity_id, "doc-0");
+    assert_eq!(last.next, None, "exhausted feed carries no cursor");
 
     let other = repo
         .subject_feed("macro|someone-else@example.com", None, 10)
         .await
         .unwrap();
-    assert!(other.is_empty());
+    assert!(other.records.is_empty());
+    assert_eq!(other.next, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -189,15 +192,16 @@ async fn subject_feed_breaks_timestamp_ties_by_id(pool: PgPool) {
         .await
         .unwrap();
     let rest = repo
-        .subject_feed(
-            "macro|actor@example.com",
-            Some((first[1].occurred_at, first[1].id)),
-            2,
-        )
+        .subject_feed("macro|actor@example.com", first.next, 2)
         .await
         .unwrap();
 
-    let fetched_ids: Vec<Uuid> = first.iter().chain(rest.iter()).map(|r| r.id).collect();
+    let fetched_ids: Vec<Uuid> = first
+        .records
+        .iter()
+        .chain(rest.records.iter())
+        .map(|r| r.id)
+        .collect();
     assert_eq!(fetched_ids, expected_ids);
 }
 
@@ -269,9 +273,9 @@ async fn rows_written_by_a_newer_vocabulary_read_as_unknown(pool: PgPool) {
         .subject_feed("macro|actor@example.com", None, 10)
         .await
         .unwrap();
-    assert_eq!(feed.len(), 1);
+    assert_eq!(feed.records.len(), 1);
     assert_eq!(
-        feed[0].action,
+        feed.records[0].action,
         RecordedAction::Unknown {
             tag: "transmogrified".to_string(),
             payload: Some(serde_json::json!({ "into": "a newt" })),
@@ -311,6 +315,55 @@ async fn corrupt_rows_are_skipped_not_page_failures(pool: PgPool) {
         .subject_feed("macro|actor@example.com", None, 10)
         .await
         .unwrap();
-    assert_eq!(feed.len(), 1);
-    assert_eq!(feed[0].entity_id, "doc-fine");
+    assert_eq!(feed.records.len(), 1);
+    assert_eq!(feed.records[0].entity_id, "doc-fine");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_corrupt_row_shrinks_the_page_but_never_ends_pagination(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool.clone());
+    let t = base_time();
+    // Newest-first raw order: doc-new (2s), corrupt (1s), doc-old (0s).
+    // With limit 2 the corrupt row sits inside the first raw page.
+    repo.insert_activities(&[
+        seed_at(50, CommonAction::Edited, "doc-old", t),
+        seed_at(
+            51,
+            CommonAction::Edited,
+            "doc-new",
+            t + chrono::Duration::seconds(2),
+        ),
+    ])
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO activity_events
+            (id, actor_id, subject_id, action, action_payload,
+             entity_type, entity_id, occurred_at)
+        VALUES ($1, 'garbled', 'macro|actor@example.com', 'edited', NULL,
+                'document', 'doc-corrupt', $2)
+        "#,
+        Uuid::from_u128(52),
+        t + chrono::Duration::seconds(1),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let first = repo
+        .subject_feed("macro|actor@example.com", None, 2)
+        .await
+        .unwrap();
+    assert_eq!(first.records.len(), 1, "the corrupt row shrinks the page");
+    assert_eq!(first.records[0].entity_id, "doc-new");
+    let next = first.next.expect("a skipped row must not end pagination");
+
+    let second = repo
+        .subject_feed("macro|actor@example.com", Some(next), 2)
+        .await
+        .unwrap();
+    assert_eq!(second.records.len(), 1);
+    assert_eq!(second.records[0].entity_id, "doc-old");
+    assert_eq!(second.next, None);
 }

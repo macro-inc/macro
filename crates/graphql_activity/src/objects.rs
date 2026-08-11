@@ -74,47 +74,33 @@ pub enum GraphqlActivityAction {
     Unknown(GraphqlActivityUnknownAction),
 }
 
-/// The entity was created.
-#[derive(SimpleObject)]
-pub struct GraphqlActivityCreated {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
+/// Declares the payload-free union members: each needs a distinct object
+/// type, and GraphQL objects need at least one field.
+macro_rules! payload_free_action_objects {
+    ($($(#[$doc:meta])* $name:ident),+ $(,)?) => {$(
+        $(#[$doc])*
+        #[derive(Default, SimpleObject)]
+        pub struct $name {
+            /// this object has nothing as a field but we need at least 1 field
+            nothing: bool,
+        }
+    )+};
 }
 
-/// The entity's content or metadata was edited.
-#[derive(SimpleObject)]
-pub struct GraphqlActivityEdited {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
-}
-
-/// The entity was opened by its subject.
-#[derive(SimpleObject)]
-pub struct GraphqlActivityOpened {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
-}
-
-/// The entity was soft-deleted.
-#[derive(SimpleObject)]
-pub struct GraphqlActivityDeleted {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
-}
-
-/// A message was sent in the entity.
-#[derive(SimpleObject)]
-pub struct GraphqlActivityMessaged {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
-}
-
-/// An email message was sent on the thread.
-#[derive(SimpleObject)]
-pub struct GraphqlActivitySent {
-    /// this object has nothing as a field but we need at least 1 field
-    nothing: bool,
-}
+payload_free_action_objects!(
+    /// The entity was created.
+    GraphqlActivityCreated,
+    /// The entity's content or metadata was edited.
+    GraphqlActivityEdited,
+    /// The entity was opened by its subject.
+    GraphqlActivityOpened,
+    /// The entity was soft-deleted.
+    GraphqlActivityDeleted,
+    /// A message was sent in the entity.
+    GraphqlActivityMessaged,
+    /// An email message was sent on the thread.
+    GraphqlActivitySent,
+);
 
 /// A property value changed on the entity.
 #[derive(SimpleObject)]
@@ -160,24 +146,12 @@ pub struct GraphqlActivityUnknownAction {
 impl From<RecordedAction> for GraphqlActivityAction {
     fn from(action: RecordedAction) -> Self {
         match action {
-            RecordedAction::Known(Action::Created) => {
-                Self::Created(GraphqlActivityCreated { nothing: false })
-            }
-            RecordedAction::Known(Action::Edited) => {
-                Self::Edited(GraphqlActivityEdited { nothing: false })
-            }
-            RecordedAction::Known(Action::Opened) => {
-                Self::Opened(GraphqlActivityOpened { nothing: false })
-            }
-            RecordedAction::Known(Action::Deleted) => {
-                Self::Deleted(GraphqlActivityDeleted { nothing: false })
-            }
-            RecordedAction::Known(Action::Messaged) => {
-                Self::Messaged(GraphqlActivityMessaged { nothing: false })
-            }
-            RecordedAction::Known(Action::Sent) => {
-                Self::Sent(GraphqlActivitySent { nothing: false })
-            }
+            RecordedAction::Known(Action::Created) => Self::Created(Default::default()),
+            RecordedAction::Known(Action::Edited) => Self::Edited(Default::default()),
+            RecordedAction::Known(Action::Opened) => Self::Opened(Default::default()),
+            RecordedAction::Known(Action::Deleted) => Self::Deleted(Default::default()),
+            RecordedAction::Known(Action::Messaged) => Self::Messaged(Default::default()),
+            RecordedAction::Known(Action::Sent) => Self::Sent(Default::default()),
             RecordedAction::Known(Action::PropertyChanged(change)) => {
                 Self::PropertyChanged(GraphqlActivityPropertyChanged {
                     property: change.property,

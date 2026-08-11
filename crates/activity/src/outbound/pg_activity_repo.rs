@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
-    ports::{ActivityReads, ActivityRepo, EntityActivityMap},
+    ports::{ActivityFeedPage, ActivityReads, ActivityRepo, EntityActivityMap},
 };
 
 /// Writes activities to MacroDB.
@@ -175,11 +175,14 @@ impl ActivityReads for PgActivityRepo {
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: u32,
-    ) -> Result<Vec<ActivityRecord>, Self::Err> {
-        let limit = i64::from(limit);
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        // One extra raw row as the has-more probe. The page boundary and the
+        // next cursor come from the raw rows, before decoding: a corrupt row
+        // shrinks the visible page but never ends pagination.
+        let fetch = i64::from(limit) + 1;
         // Two static queries instead of one `$x IS NULL OR …` merge, which
         // would defeat the (subject_id, occurred_at DESC, id DESC) index.
-        let rows = match cursor {
+        let mut rows = match cursor {
             None => {
                 sqlx::query_as!(
                     StoredRow,
@@ -192,7 +195,7 @@ impl ActivityReads for PgActivityRepo {
                     LIMIT $2
                     "#,
                     subject_id,
-                    limit,
+                    fetch,
                 )
                 .fetch_all(&self.pool)
                 .await?
@@ -211,13 +214,22 @@ impl ActivityReads for PgActivityRepo {
                     subject_id,
                     cursor_at,
                     cursor_id,
-                    limit,
+                    fetch,
                 )
                 .fetch_all(&self.pool)
                 .await?
             }
         };
-        Ok(rows.into_iter().filter_map(StoredRow::decode).collect())
+
+        let has_more = rows.len() > limit as usize;
+        rows.truncate(limit as usize);
+        let next = has_more
+            .then(|| rows.last().map(|row| (row.occurred_at, row.id)))
+            .flatten();
+        Ok(ActivityFeedPage {
+            records: rows.into_iter().filter_map(StoredRow::decode).collect(),
+            next,
+        })
     }
 
     async fn entity_activity(
@@ -252,6 +264,7 @@ impl ActivityReads for PgActivityRepo {
                 ORDER BY e.occurred_at DESC, e.id DESC
                 LIMIT $3
             ) a ON TRUE
+            ORDER BY a.occurred_at DESC, a.id DESC
             "#,
             &entity_types,
             &entity_ids,

@@ -1,29 +1,16 @@
-use activity::{Action, RecordedAction};
-use macro_user_id::user_id::MacroUserIdStr;
-
 use super::*;
 
 #[test]
 fn cursor_round_trips_the_keyset_position() {
-    let record = ActivityRecord {
-        id: Uuid::from_u128(9),
-        actor: activity::Actor::new_from_user(
-            MacroUserIdStr::try_from("macro|teo@example.com".to_string()).expect("valid user id"),
-        ),
-        subject_id: "macro|teo@example.com".to_string(),
-        entity_type: activity::EntityType::Document,
-        entity_id: "doc-1".to_string(),
-        action: RecordedAction::Known(Action::Edited),
-        occurred_at: DateTime::parse_from_rfc3339("2026-08-01T12:34:56Z")
-            .unwrap()
-            .with_timezone(&Utc),
-    };
+    let at = DateTime::parse_from_rfc3339("2026-08-01T12:34:56Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let id = Uuid::from_u128(9);
 
-    let encoded = encode_cursor(&record, 25);
-    let (occurred_at, id) = decode_cursor(encoded).expect("cursor decodes");
+    let encoded = encode_cursor(at, id, 25);
+    let decoded = decode_cursor(encoded).expect("cursor decodes");
 
-    assert_eq!(occurred_at, record.occurred_at);
-    assert_eq!(id, record.id);
+    assert_eq!(decoded, (at, id));
 }
 
 #[test]

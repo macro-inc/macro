@@ -1,16 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
-use activity::{ActivityReads, ActivityRecord, EntityType};
+use activity::{ActivityFeedPage, ActivityReads, ActivityRecord, EntityType};
 use async_graphql::dataloader::{DataLoader, Loader};
 use chrono::{DateTime, Utc};
+use futures::future::join_all;
 use uuid::Uuid;
 
 use crate::objects::GraphqlActivityEvent;
 
-/// Most entity-activity keys one GraphQL operation may load.
-const MAX_ACTIVITY_EDGE_KEYS: usize = 100;
-/// Most activity rows one GraphQL operation may request across all keys.
-const MAX_ACTIVITY_EDGE_ROWS: usize = 1000;
+/// Most entity-activity keys one coalesced batch may load. Soup pages cap at
+/// 500 items, so a legitimate operation always fits in one batch.
+const MAX_ACTIVITY_EDGE_KEYS: usize = 500;
+/// Most activity rows one coalesced batch may request across all keys — a
+/// full Soup page at the default per-entity limit.
+const MAX_ACTIVITY_EDGE_ROWS: usize = 5000;
 /// Rows returned by the `activity` edge when no limit is given.
 pub const DEFAULT_ACTIVITY_EDGE_LIMIT: i32 = 10;
 /// Most rows the `activity` edge may return per entity. Deeper history
@@ -19,16 +22,7 @@ pub const MAX_ACTIVITY_EDGE_LIMIT: i32 = 100;
 
 /// Validate an `activity` edge limit argument and apply the default.
 pub fn parse_activity_edge_limit(limit: Option<i32>) -> async_graphql::Result<u32> {
-    let limit = limit.unwrap_or(DEFAULT_ACTIVITY_EDGE_LIMIT);
-    if limit <= 0 {
-        return Err(async_graphql::Error::new("limit must be positive"));
-    }
-    if limit > MAX_ACTIVITY_EDGE_LIMIT {
-        return Err(async_graphql::Error::new(format!(
-            "limit must not exceed {MAX_ACTIVITY_EDGE_LIMIT}"
-        )));
-    }
-    Ok(u32::try_from(limit).expect("positive GraphQL Int fits in u32"))
+    graphql_common::parse_limit(limit, DEFAULT_ACTIVITY_EDGE_LIMIT, MAX_ACTIVITY_EDGE_LIMIT)
 }
 
 /// A request for the newest activity on one entity.
@@ -69,13 +63,15 @@ pub trait SoupActivityEdgeReader: Send + Sync + 'static {
 /// Reader used by the authenticated user's activity feed.
 pub trait ActivityFeedReader: Send + Sync + 'static {
     /// One page of the subject's activity, newest first, keyset-paginated
-    /// on `(occurred_at, id)`.
+    /// on `(occurred_at, id)`. The page's `next` position is the pagination
+    /// authority — the storage side derives it from raw rows so skipped
+    /// corrupt rows never end the feed.
     fn subject_feed<'a>(
         &'a self,
         subject_id: &'a str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: u32,
-    ) -> impl Future<Output = Result<Vec<ActivityRecord>, ActivityReadFailed>> + Send + 'a;
+    ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
 }
 
 /// Combined reader capability required by the complete activity surface —
@@ -105,8 +101,11 @@ impl ActivityFeedReader for NoOpActivityReader {
         _subject_id: &str,
         _cursor: Option<(DateTime<Utc>, Uuid)>,
         _limit: u32,
-    ) -> Result<Vec<ActivityRecord>, ActivityReadFailed> {
-        Ok(Vec::new())
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        Ok(ActivityFeedPage {
+            records: Vec::new(),
+            next: None,
+        })
     }
 }
 
@@ -142,19 +141,26 @@ where
     ) -> HashMap<ActivityEdgeKey, ActivityEdgeLoad> {
         // The port takes one per-entity limit per call; group keys by their
         // requested limit so differing limits still batch (one query each,
-        // and in practice one field selection means one distinct limit).
+        // run concurrently — in practice one field selection means one
+        // distinct limit anyway).
         let mut by_limit: HashMap<u32, Vec<ActivityEdgeKey>> = HashMap::new();
         for key in keys {
             by_limit.entry(key.limit).or_default().push(key);
         }
 
-        let mut loads = HashMap::new();
-        for (limit, keys) in by_limit {
+        let groups = join_all(by_limit.into_iter().map(|(limit, keys)| async move {
             let entities: Vec<(EntityType, String)> = keys
                 .iter()
                 .map(|key| (key.entity.entity_type, key.entity.entity_id.to_string()))
                 .collect();
-            match self.reads.entity_activity(&entities, limit).await {
+            let result = self.reads.entity_activity(&entities, limit).await;
+            (limit, keys, entities, result)
+        }))
+        .await;
+
+        let mut loads = HashMap::new();
+        for (limit, keys, entities, result) in groups {
+            match result {
                 Ok(mut by_entity) => {
                     for (key, entity) in keys.into_iter().zip(entities) {
                         let records = by_entity.remove(&entity).unwrap_or_default();
@@ -180,7 +186,7 @@ where
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: u32,
-    ) -> Result<Vec<ActivityRecord>, ActivityReadFailed> {
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
         self.reads
             .subject_feed(subject_id, cursor, limit)
             .await
@@ -204,46 +210,22 @@ impl<R> EntityActivityLoader<R> {
     }
 }
 
-/// Error returned when a GraphQL operation exceeds the activity cost cap.
-#[derive(Debug)]
-pub struct ActivityEdgeLoaderError {
-    /// How many keys the operation requested.
-    key_count: usize,
-    /// How many rows the operation requested across all keys.
-    row_count: usize,
-}
-
-impl std::fmt::Display for ActivityEdgeLoaderError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.key_count > MAX_ACTIVITY_EDGE_KEYS {
-            return write!(
-                formatter,
-                "activity edge supports at most {MAX_ACTIVITY_EDGE_KEYS} entities per operation (received {})",
-                self.key_count
-            );
-        }
-
-        write!(
-            formatter,
-            "activity edge supports at most {MAX_ACTIVITY_EDGE_ROWS} requested rows per operation (received {})",
-            self.row_count
-        )
-    }
-}
-
-impl std::error::Error for ActivityEdgeLoaderError {}
-
 impl<R> Loader<ActivityEdgeKey> for EntityActivityLoader<R>
 where
     R: SoupActivityEdgeReader,
 {
     type Value = ActivityEdgeLoad;
-    type Error = Arc<ActivityEdgeLoaderError>;
+    type Error = std::convert::Infallible;
 
     async fn load(
         &self,
         keys: &[ActivityEdgeKey],
     ) -> Result<HashMap<ActivityEdgeKey, Self::Value>, Self::Error> {
+        // Cost caps guard the database, not the client: an over-budget batch
+        // is refused before any query runs, and its fields degrade to empty
+        // timelines (logged) instead of erroring the whole Soup response.
+        // No max_batch_size is set, so a batch is an operation's full set of
+        // coalesced keys and these caps hold per operation.
         let row_count: usize = keys.iter().map(|key| key.limit as usize).sum();
         if keys.len() > MAX_ACTIVITY_EDGE_KEYS || row_count > MAX_ACTIVITY_EDGE_ROWS {
             tracing::warn!(
@@ -251,12 +233,13 @@ where
                 row_count,
                 max_key_count = MAX_ACTIVITY_EDGE_KEYS,
                 max_row_count = MAX_ACTIVITY_EDGE_ROWS,
-                "rejecting oversized Soup activity batch"
+                "refusing oversized Soup activity batch"
             );
-            return Err(Arc::new(ActivityEdgeLoaderError {
-                key_count: keys.len(),
-                row_count,
-            }));
+            return Ok(keys
+                .iter()
+                .cloned()
+                .map(|key| (key, ActivityEdgeLoad::Failed))
+                .collect());
         }
 
         Ok(self.reader.entity_activity(keys.to_vec()).await)
@@ -268,8 +251,9 @@ pub fn entity_activity_loader<R>(reader: R) -> DataLoader<EntityActivityLoader<R
 where
     R: SoupActivityEdgeReader,
 {
-    let loader = DataLoader::new(EntityActivityLoader::new(reader), tokio::spawn)
-        .max_batch_size(MAX_ACTIVITY_EDGE_KEYS);
+    // No max_batch_size: the cost caps in `load` are per-operation, and
+    // splitting batches would turn them into per-chunk caps.
+    let loader = DataLoader::new(EntityActivityLoader::new(reader), tokio::spawn);
     // Subscription connection data outlives one payload: coalesce concurrent
     // fields, but never serve stale activity across update events.
     loader.enable_all_cache(false);

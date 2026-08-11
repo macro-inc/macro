@@ -531,23 +531,32 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
         subject_id: &str,
         cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
         limit: u32,
-    ) -> Result<Vec<activity::ActivityRecord>, graphql_activity::ActivityReadFailed> {
+    ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
         self.feed_calls
             .lock()
             .expect("activity feed calls lock")
             .push((subject_id.to_owned(), cursor, limit));
         // Emulate the repo: newest-first keyset order, strictly after the
-        // cursor position, at most `limit` rows.
+        // cursor position, at most `limit` rows, with `next` set whenever
+        // more rows remain past the page.
         let records = self.records.lock().expect("activity records lock").clone();
-        Ok(records
+        let mut page: Vec<activity::ActivityRecord> = records
             .into_iter()
             .filter(|record| {
                 cursor.is_none_or(|(occurred_at, id)| {
                     (record.occurred_at, record.id) < (occurred_at, id)
                 })
             })
-            .take(limit as usize)
-            .collect())
+            .collect();
+        let has_more = page.len() > limit as usize;
+        page.truncate(limit as usize);
+        let next = has_more
+            .then(|| page.last().map(|record| (record.occurred_at, record.id)))
+            .flatten();
+        Ok(activity::ActivityFeedPage {
+            records: page,
+            next,
+        })
     }
 }
 
@@ -1608,11 +1617,11 @@ async fn activity_feed_pages_by_cursor_and_carries_unknown_actions() {
         .lock()
         .expect("activity feed calls lock")
         .clone();
-    // The resolver asks for limit + 1 as a has-more probe and binds the
-    // viewer's principal string as the subject.
+    // The resolver binds the viewer's principal string as the subject and
+    // passes the client limit through; the has-more probe lives in storage.
     assert_eq!(feed_calls.len(), 2);
     assert_eq!(feed_calls[0].0, VALID_USER_ID);
-    assert_eq!(feed_calls[0].2, 3);
+    assert_eq!(feed_calls[0].2, 2);
     let (cursor_at, cursor_id) = feed_calls[1].1.expect("second page carries the cursor");
     assert_eq!(cursor_at, chrono::DateTime::from_timestamp(200, 0).unwrap());
     assert_eq!(cursor_id, Uuid::from_u128(2));

@@ -8,6 +8,7 @@ version = "0.1.0"
 activity = { path = "../activity", default-features = false }
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
+futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }

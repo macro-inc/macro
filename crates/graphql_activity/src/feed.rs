@@ -1,4 +1,3 @@
-use activity::ActivityRecord;
 use async_graphql::{Context, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -49,16 +48,7 @@ pub struct GraphqlActivityPage {
 
 /// Validate a feed limit argument and apply the default.
 fn parse_feed_limit(limit: Option<i32>) -> async_graphql::Result<u32> {
-    let limit = limit.unwrap_or(DEFAULT_ACTIVITY_FEED_LIMIT);
-    if limit <= 0 {
-        return Err(async_graphql::Error::new("limit must be positive"));
-    }
-    if limit > MAX_ACTIVITY_FEED_LIMIT {
-        return Err(async_graphql::Error::new(format!(
-            "limit must not exceed {MAX_ACTIVITY_FEED_LIMIT}"
-        )));
-    }
-    Ok(u32::try_from(limit).expect("positive GraphQL Int fits in u32"))
+    graphql_common::parse_limit(limit, DEFAULT_ACTIVITY_FEED_LIMIT, MAX_ACTIVITY_FEED_LIMIT)
 }
 
 /// Decode an opaque feed cursor into its keyset position.
@@ -69,14 +59,14 @@ fn decode_cursor(cursor: String) -> async_graphql::Result<(DateTime<Utc>, Uuid)>
     Ok((cursor.val.last_val, cursor.id))
 }
 
-/// Encode the keyset position of a page's last record as an opaque cursor.
-fn encode_cursor(record: &ActivityRecord, limit: u32) -> String {
+/// Encode a keyset position as an opaque cursor.
+fn encode_cursor(occurred_at: DateTime<Utc>, id: Uuid, limit: u32) -> String {
     Base64Str::encode_json(ActivityFeedCursor {
-        id: record.id,
+        id,
         limit: limit as usize,
         val: CursorVal {
             sort_type: OccurredAt,
-            last_val: record.occurred_at,
+            last_val: occurred_at,
         },
         filter: (),
     })
@@ -86,7 +76,9 @@ fn encode_cursor(record: &ActivityRecord, limit: u32) -> String {
 /// Resolve one page of the authenticated user's activity feed, newest first.
 ///
 /// The subject is the viewer's principal string, so delegated actions a bot
-/// performed on the user's behalf appear in the user's own feed.
+/// performed on the user's behalf appear in the user's own feed. Pagination
+/// follows the page's `next` position, which storage derives from raw rows —
+/// a corrupt row shrinks a page but never ends the feed.
 pub async fn resolve_activity_feed<R>(
     ctx: &Context<'_>,
     user_id: &MacroUserIdStr<'static>,
@@ -99,21 +91,15 @@ where
     let limit = parse_feed_limit(input.limit)?;
     let cursor = input.cursor.map(decode_cursor).transpose()?;
 
-    // Fetch one extra row purely as a has-more probe; the cursor itself is
-    // the keyset position of the page's last returned item.
-    let mut records = reader
-        .subject_feed(user_id.as_ref(), cursor, limit + 1)
+    let page = reader
+        .subject_feed(user_id.as_ref(), cursor, limit)
         .await
         .map_err(|_| async_graphql::Error::new("activity feed is unavailable"))?;
 
-    let has_more = records.len() > limit as usize;
-    records.truncate(limit as usize);
-    let next_cursor = has_more
-        .then(|| records.last().map(|record| encode_cursor(record, limit)))
-        .flatten();
-
     Ok(GraphqlActivityPage {
-        items: records.into_iter().map(Into::into).collect(),
-        next_cursor,
+        items: page.records.into_iter().map(Into::into).collect(),
+        next_cursor: page
+            .next
+            .map(|(occurred_at, id)| encode_cursor(occurred_at, id, limit)),
     })
 }
