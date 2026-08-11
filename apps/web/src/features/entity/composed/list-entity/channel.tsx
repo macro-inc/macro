@@ -1,7 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
+  singleLineMarkdownTheme,
   twoLineClampMarkdownTheme,
-  unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
@@ -59,7 +59,7 @@ function ChannelMessage(props: {
           fallback={<span class="italic">Attached Items</span>}
         >
           <StaticMarkdown
-            theme={unifiedListMarkdownTheme}
+            theme={singleLineMarkdownTheme}
             markdown={props.message.content}
             singleLine
           />
