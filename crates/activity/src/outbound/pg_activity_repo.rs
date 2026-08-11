@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
-    ports::{ActivityReads, ActivityRepo},
+    ports::{ActivityReads, ActivityRepo, EntityActivityMap},
 };
 
 /// Writes activities to MacroDB.
@@ -224,7 +224,7 @@ impl ActivityReads for PgActivityRepo {
         &self,
         keys: &[(EntityType, String)],
         per_entity_limit: u32,
-    ) -> Result<HashMap<(EntityType, String), Vec<ActivityRecord>>, Self::Err> {
+    ) -> Result<EntityActivityMap, Self::Err> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
@@ -260,7 +260,7 @@ impl ActivityReads for PgActivityRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut by_entity: HashMap<(EntityType, String), Vec<ActivityRecord>> = HashMap::new();
+        let mut by_entity = EntityActivityMap::new();
         for row in rows {
             let Some(record) = row.decode() else { continue };
             by_entity

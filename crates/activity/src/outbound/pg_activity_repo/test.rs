@@ -207,8 +207,18 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
     let t = base_time();
     repo.insert_activities(&[
         seed_at(30, CommonAction::Created, "doc-a", t),
-        seed_at(31, CommonAction::Edited, "doc-a", t + chrono::Duration::seconds(1)),
-        seed_at(32, CommonAction::Edited, "doc-a", t + chrono::Duration::seconds(2)),
+        seed_at(
+            31,
+            CommonAction::Edited,
+            "doc-a",
+            t + chrono::Duration::seconds(1),
+        ),
+        seed_at(
+            32,
+            CommonAction::Edited,
+            "doc-a",
+            t + chrono::Duration::seconds(2),
+        ),
         seed_at(33, CommonAction::Created, "doc-b", t),
     ])
     .await
@@ -217,7 +227,10 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
     let keys = vec![
         (model_entity::EntityType::Document, "doc-a".to_string()),
         (model_entity::EntityType::Document, "doc-b".to_string()),
-        (model_entity::EntityType::Document, "doc-untouched".to_string()),
+        (
+            model_entity::EntityType::Document,
+            "doc-untouched".to_string(),
+        ),
     ];
     let by_entity = repo.entity_activity(&keys, 2).await.unwrap();
 

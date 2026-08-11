@@ -288,9 +288,7 @@ where
 {
     let loader = ctx.data::<DataLoader<EntityActivityLoader<R>>>()?;
     match loader.load_one(key).await? {
-        Some(ActivityEdgeLoad::Found(records)) => {
-            Ok(records.into_iter().map(Into::into).collect())
-        }
+        Some(ActivityEdgeLoad::Found(records)) => Ok(records.into_iter().map(Into::into).collect()),
         Some(ActivityEdgeLoad::Failed) | None => Ok(Vec::new()),
     }
 }

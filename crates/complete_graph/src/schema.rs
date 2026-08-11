@@ -11,13 +11,13 @@ use email::{
 };
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
 use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
-use graphql_channel::{
-    ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
-    NoOpChannelActivityMutationService,
-};
 use graphql_activity::{
     ActivityFeedInput, ActivityReader, GraphqlActivityPage, NoOpActivityReader,
     resolve_activity_feed,
+};
+use graphql_channel::{
+    ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
+    NoOpChannelActivityMutationService,
 };
 use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{
@@ -227,7 +227,9 @@ pub struct SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR> {
     _marker: PhantomData<fn() -> (Auth, St, NR, PR, ER, FR, AR, AcR)>,
 }
 
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR> SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR> {
+impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+{
     /// Creates a root GraphQL subscription object.
     pub fn new(service: R) -> Self {
         Self {
@@ -471,7 +473,8 @@ where
 
 /// Root entry point for realtime Soup subscriptions.
 #[Subscription]
-impl<R, Auth, St, NR, PR, ER, FR, AR, AcR> SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+impl<R, Auth, St, NR, PR, ER, FR, AR, AcR>
+    SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>
 where
     R: SoupRealtimeSubscriptionService,
     Auth: MacroAuthorizationService,

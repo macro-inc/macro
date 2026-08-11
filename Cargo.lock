@@ -3092,13 +3092,16 @@ dependencies = [
 name = "complete_graph"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "chrono",
  "email",
  "entity_access",
  "entity_mutation",
+ "graphql_activity",
  "graphql_channel",
  "graphql_common",
  "graphql_email",

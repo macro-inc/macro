@@ -30,4 +30,4 @@ pub use domain::models::{
     CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
     RecordedAction, activity_id, event_time,
 };
-pub use domain::ports::ActivityReads;
+pub use domain::ports::{ActivityReads, EntityActivityMap};

@@ -8,6 +8,9 @@ use uuid::Uuid;
 
 use super::models::{Activity, ActivityRecord};
 
+/// Activity rows grouped per requested entity, newest first within each.
+pub type EntityActivityMap = HashMap<(EntityType, String), Vec<ActivityRecord>>;
+
 /// Persists activities.
 pub trait ActivityRepo {
     /// The adapter's error type.
@@ -53,5 +56,5 @@ pub trait ActivityReads {
         &self,
         keys: &[(EntityType, String)],
         per_entity_limit: u32,
-    ) -> impl Future<Output = Result<HashMap<(EntityType, String), Vec<ActivityRecord>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EntityActivityMap, Self::Err>> + Send;
 }
