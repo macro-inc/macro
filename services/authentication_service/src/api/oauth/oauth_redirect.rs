@@ -1,6 +1,6 @@
 use crate::api::{
     context::ApiContext,
-    login::sso::SsoState,
+    login::sso::{SsoState, is_allowed_original_url, redact_original_url_for_logging},
     utils::{
         append_signed_up_param_if_new_user, create_access_token_cookie,
         create_refresh_token_cookie, default_redirect_url, generate_session_code,
@@ -187,6 +187,8 @@ enum InnerErr {
     MacroCacheErr(anyhow::Error),
     #[error("Failed to parse url {0}")]
     ParseErr(#[from] url::ParseError),
+    #[error("original_url is not allowed")]
+    DisallowedOriginalUrl,
 }
 
 impl IntoResponse for InnerErr {
@@ -221,6 +223,14 @@ impl IntoResponse for InnerErr {
                 }),
             )
                 .into_response(),
+
+            InnerErr::DisallowedOriginalUrl => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "provided original_url is not allowed".into(),
+                }),
+            )
+                .into_response(),
         }
     }
 }
@@ -244,6 +254,23 @@ async fn get_redirect_url(
         );
         return Ok(default_redirect_url());
     };
+
+    // The state round-trips through the identity provider as a client-visible
+    // query param, so re-validate original_url here — /login/sso checking it
+    // on the way in does not prevent a forged state on the way back.
+    if let Some(url) = state
+        .original_url
+        .as_ref()
+        .filter(|url| !is_allowed_original_url(url))
+    {
+        let redacted_url = redact_original_url_for_logging(url);
+        tracing::error!(
+            auth_handoff_failure = "original_url_rejected",
+            original_url = %redacted_url,
+            "original_url in oauth state is not allowed"
+        );
+        return Err(InnerErr::DisallowedOriginalUrl);
+    }
 
     // Generate the session code if necessary
     let session_code = state.is_mobile.then(generate_session_code).map(SessionCode);

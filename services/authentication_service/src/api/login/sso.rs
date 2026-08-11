@@ -35,7 +35,7 @@ pub(crate) struct LoginQueryParams {
     referral_code: Option<String>,
 }
 
-fn is_allowed_original_url(url: &Url) -> bool {
+pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
     match url.scheme() {
         // The app owns the custom scheme and handles all macro URI routes itself.
         "macro" => true,
@@ -47,6 +47,16 @@ fn is_allowed_original_url(url: &Url) -> bool {
         ),
         _ => false,
     }
+}
+
+/// Strips the query and fragment from an `original_url` so it is safe to log —
+/// both are client-controlled and may carry tokens or PII. The path is kept
+/// because it distinguishes e.g. macro://login from macro:///login.
+pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
+    let mut redacted_url = url.clone();
+    redacted_url.set_query(None);
+    redacted_url.set_fragment(None);
+    redacted_url
 }
 
 /// Initiates an SSO login
@@ -89,12 +99,7 @@ pub async fn handler(
         .as_ref()
         .filter(|url| !is_allowed_original_url(url))
     {
-        // Log scheme://host/path only — the query and fragment are
-        // client-controlled and may carry tokens or PII. The path is kept
-        // because it distinguishes e.g. macro://login from macro:///login.
-        let mut redacted_url = url.clone();
-        redacted_url.set_query(None);
-        redacted_url.set_fragment(None);
+        let redacted_url = redact_original_url_for_logging(url);
         tracing::error!(
             auth_handoff_failure = "original_url_rejected",
             original_url = %redacted_url,
