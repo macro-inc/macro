@@ -12,6 +12,8 @@ pub mod recipient;
 pub mod request;
 /// Cryptographic URL signing and verification.
 pub mod signing;
+/// Broker event models for WebSocket notification delivery.
+pub mod websocket_notification_event;
 
 use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
 use chrono::{DateTime, Utc};

@@ -20,7 +20,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_event_broker::KafkaEventPublisher;
+use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
@@ -197,10 +197,11 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let websocket_adapter = KafkaWebSocketSender::new(
+    let websocket_adapter = KafkaWebSocketSender::new(MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create Kafka WebSocket notification publisher")?,
-    );
+        GlobalSpawner,
+    ));
 
     let mobile_adapter = MobilePushAdapter {
         push_service: aws_sdk_sns::Client::new(&aws_config),

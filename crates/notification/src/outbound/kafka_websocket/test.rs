@@ -1,11 +1,15 @@
 use std::sync::{Arc, Mutex};
 
-use macro_event_broker::{EventBrokerError, EventPublisher};
+use macro_event_broker::{
+    EventBrokerError, EventPublisher, MacroEvent, MacroEventBrokerService, Spawner,
+};
 use macro_event_topics::Topic;
 use serde::ser::Error as _;
-use sha2::{Digest as _, Sha256};
 
 use super::*;
+use crate::domain::models::websocket_notification_event::{
+    NotificationMacroEvent, NotificationTopicEvent, WebSocketNotificationMetadata,
+};
 
 #[derive(Debug)]
 struct PublishedRecord {
@@ -38,17 +42,33 @@ impl EventPublisher for RecordingPublisher {
     }
 }
 
+#[derive(Clone, Copy)]
+struct TokioSpawner;
+
+impl Spawner for TokioSpawner {
+    fn spawn<F>(&self, future: F) -> tokio::task::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        tokio::spawn(future)
+    }
+}
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }
 
 #[tokio::test]
-async fn publishes_one_message_per_call_with_all_recipients() {
+async fn publishes_one_event_per_call_with_all_recipients() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(RecordingPublisher {
-        records: records.clone(),
-        fail: false,
-    });
+    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: records.clone(),
+            fail: false,
+        },
+        TokioSpawner,
+    ));
     let recipients = [
         user("macro|first@example.com"),
         user("macro|second@example.com"),
@@ -69,28 +89,46 @@ async fn publishes_one_message_per_call_with_all_recipients() {
 
     let record = &records[0];
     assert_eq!(record.topic, "macro.notifications");
-    assert_eq!(
-        record.key,
-        hex::encode(Sha256::digest(&record.payload)),
-        "the Kafka key should deterministically identify the payload"
-    );
+    let expected_metadata = WebSocketNotificationMetadata {
+        recipients: recipients.to_vec(),
+        notification: notification.clone(),
+    };
 
     let payload: serde_json::Value =
         serde_json::from_slice(&record.payload).expect("payload is valid JSON");
     assert_eq!(
-        payload["recipients"],
+        record.key,
+        payload["event_id"].as_str().expect("event id is a string")
+    );
+    assert_eq!(payload["schema_version"], 1);
+    assert_eq!(
+        payload["event_type"],
+        "notification.websocket_delivery_requested"
+    );
+    assert_eq!(
+        payload["metadata"]["recipients"],
         serde_json::json!(["macro|first@example.com", "macro|second@example.com"])
     );
-    assert_eq!(payload["notification"], notification);
+    assert_eq!(payload["metadata"]["notification"], notification);
+
+    let decoded = NotificationMacroEvent::decode(record.key.clone(), &record.payload)
+        .expect("event round-trips");
+    assert_eq!(
+        decoded.event().event,
+        NotificationTopicEvent::WebSocketDeliveryRequested(expected_metadata)
+    );
 }
 
 #[tokio::test]
-async fn empty_recipients_still_publishes_one_message() {
+async fn empty_recipients_still_publishes_one_event() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(RecordingPublisher {
-        records: records.clone(),
-        fail: false,
-    });
+    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: records.clone(),
+            fail: false,
+        },
+        TokioSpawner,
+    ));
 
     sender
         .send_notifications(&[], &serde_json::json!({ "kind": "test" }))
@@ -101,15 +139,18 @@ async fn empty_recipients_still_publishes_one_message() {
     assert_eq!(records.len(), 1);
     let payload: serde_json::Value =
         serde_json::from_slice(&records[0].payload).expect("payload is valid JSON");
-    assert_eq!(payload["recipients"], serde_json::json!([]));
+    assert_eq!(payload["metadata"]["recipients"], serde_json::json!([]));
 }
 
 #[tokio::test]
 async fn propagates_publish_failures() {
-    let sender = KafkaWebSocketSender::new(RecordingPublisher {
-        records: Arc::new(Mutex::new(Vec::new())),
-        fail: true,
-    });
+    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: Arc::new(Mutex::new(Vec::new())),
+            fail: true,
+        },
+        TokioSpawner,
+    ));
 
     sender
         .send_notifications(
@@ -134,10 +175,13 @@ impl Serialize for SerializationFailure {
 #[tokio::test]
 async fn propagates_serialization_failures_without_publishing() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(RecordingPublisher {
-        records: records.clone(),
-        fail: false,
-    });
+    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: records.clone(),
+            fail: false,
+        },
+        TokioSpawner,
+    ));
 
     sender
         .send_notifications(
