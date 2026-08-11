@@ -4,6 +4,7 @@ import {
   type FoldedMessageLookup,
 } from '@queries/channel/folded-messages';
 import type { Accessor, JSX, Resource } from 'solid-js';
+import { useChatV3AgentsFlag } from '../use-chat-v3-agents-flag';
 
 /**
  * A channel's fold, as `Channel.tsx` needs it: one thing to create, one
@@ -31,11 +32,16 @@ export type FoldedMessagesScope = {
   Provider: (props: { children: JSX.Element }) => JSX.Element;
 };
 
-/** Create and wire up a channel's fold. See {@link FoldedMessagesScope}. */
+/**
+ * Create and wire up a channel's fold. See {@link FoldedMessagesScope}.
+ * Inert while the AI agents flag is off: the fold never fetches or follows,
+ * and `readyLookup` stays `undefined`.
+ */
 export function createFoldedMessagesScope(
   channelId: Accessor<string>
 ): FoldedMessagesScope {
-  const foldedMessages = createFoldedMessages(channelId);
+  const aiAgentsEnabled = useChatV3AgentsFlag();
+  const foldedMessages = createFoldedMessages(channelId, aiAgentsEnabled);
 
   const readyLookup = () =>
     foldedMessages.state === 'ready' ? foldedMessages() : undefined;
