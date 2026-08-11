@@ -90,7 +90,6 @@ import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
 import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
 import { isUnifiedInputMode } from '../unified-input-mode';
-import { useAiAgentsFlag } from '../use-ai-agents-flag';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
 import { createChannelDragState } from './create-channel-drag-state';
@@ -237,7 +236,6 @@ export function Channel(props: ChannelProps) {
   // placeholder rows (null content + agent_session_message_id) render their
   // folded side. See `FoldedMessagesScope` for what wrapping the tree in
   // `foldedMessages.Provider` below does.
-  const aiAgentsEnabled = useAiAgentsFlag();
   const foldedMessages = createFoldedMessagesScope(() => props.channelId);
 
   // A prompt typed into an agent channel arrives twice - posted, and folded
@@ -250,18 +248,9 @@ export function Channel(props: ChannelProps) {
   // the whole channel's message list, and suspending it on the fold would mean
   // an unresolved fold empties the list instead of just leaving prompts
   // unhidden until it lands.
-  const hiddenPromptRows = createMemo(() => {
-    const duplicates = duplicatePromptRowIds(
-      [...messageIndex.items],
-      foldedMessages.readyLookup()
-    );
-    if (aiAgentsEnabled()) return duplicates;
-    const hidden = new Set(duplicates);
-    for (const message of messageIndex.items) {
-      if (message.agent_session_message_id != null) hidden.add(message.id);
-    }
-    return hidden;
-  });
+  const hiddenPromptRows = createMemo(() =>
+    duplicatePromptRowIds([...messageIndex.items], foldedMessages.readyLookup())
+  );
   const messages = createMemo(() =>
     messageIndex.items.filter((message) => !hiddenPromptRows().has(message.id))
   );
