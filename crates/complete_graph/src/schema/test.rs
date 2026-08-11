@@ -530,8 +530,9 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
         &self,
         subject_id: &str,
         cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
-        limit: u32,
+        limit: std::num::NonZeroU32,
     ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
+        let limit = limit.get();
         self.feed_calls
             .lock()
             .expect("activity feed calls lock")

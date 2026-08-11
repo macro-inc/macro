@@ -10,6 +10,10 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }
 
+fn nz(limit: u32) -> NonZeroU32 {
+    NonZeroU32::new(limit).expect("non-zero test limit")
+}
+
 fn seed(source_event: u128, action: CommonAction, entity_id: &str) -> Activity {
     Activity::common(
         Uuid::from_u128(source_event),
@@ -131,7 +135,7 @@ async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
     repo.insert_activities(&seeded).await.unwrap();
 
     let first = repo
-        .subject_feed("macro|actor@example.com", None, 2)
+        .subject_feed("macro|actor@example.com", None, nz(2))
         .await
         .unwrap();
     assert_eq!(first.records.len(), 2);
@@ -143,7 +147,7 @@ async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
     );
 
     let second = repo
-        .subject_feed("macro|actor@example.com", first.next, 2)
+        .subject_feed("macro|actor@example.com", first.next, nz(2))
         .await
         .unwrap();
     assert_eq!(second.records.len(), 2);
@@ -151,7 +155,7 @@ async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
     assert_eq!(second.records[1].entity_id, "doc-1");
 
     let last = repo
-        .subject_feed("macro|actor@example.com", second.next, 2)
+        .subject_feed("macro|actor@example.com", second.next, nz(2))
         .await
         .unwrap();
     assert_eq!(last.records.len(), 1);
@@ -159,7 +163,7 @@ async fn subject_feed_pages_by_keyset_newest_first(pool: PgPool) {
     assert_eq!(last.next, None, "exhausted feed carries no cursor");
 
     let other = repo
-        .subject_feed("macro|someone-else@example.com", None, 10)
+        .subject_feed("macro|someone-else@example.com", None, nz(10))
         .await
         .unwrap();
     assert!(other.records.is_empty());
@@ -188,11 +192,11 @@ async fn subject_feed_breaks_timestamp_ties_by_id(pool: PgPool) {
     expected_ids.reverse();
 
     let first = repo
-        .subject_feed("macro|actor@example.com", None, 2)
+        .subject_feed("macro|actor@example.com", None, nz(2))
         .await
         .unwrap();
     let rest = repo
-        .subject_feed("macro|actor@example.com", first.next, 2)
+        .subject_feed("macro|actor@example.com", first.next, nz(2))
         .await
         .unwrap();
 
@@ -270,7 +274,7 @@ async fn rows_written_by_a_newer_vocabulary_read_as_unknown(pool: PgPool) {
     .unwrap();
 
     let feed = repo
-        .subject_feed("macro|actor@example.com", None, 10)
+        .subject_feed("macro|actor@example.com", None, nz(10))
         .await
         .unwrap();
     assert_eq!(feed.records.len(), 1);
@@ -312,7 +316,7 @@ async fn corrupt_rows_are_skipped_not_page_failures(pool: PgPool) {
     .unwrap();
 
     let feed = repo
-        .subject_feed("macro|actor@example.com", None, 10)
+        .subject_feed("macro|actor@example.com", None, nz(10))
         .await
         .unwrap();
     assert_eq!(feed.records.len(), 1);
@@ -352,7 +356,7 @@ async fn a_corrupt_row_shrinks_the_page_but_never_ends_pagination(pool: PgPool) 
     .unwrap();
 
     let first = repo
-        .subject_feed("macro|actor@example.com", None, 2)
+        .subject_feed("macro|actor@example.com", None, nz(2))
         .await
         .unwrap();
     assert_eq!(first.records.len(), 1, "the corrupt row shrinks the page");
@@ -360,7 +364,7 @@ async fn a_corrupt_row_shrinks_the_page_but_never_ends_pagination(pool: PgPool) 
     let next = first.next.expect("a skipped row must not end pagination");
 
     let second = repo
-        .subject_feed("macro|actor@example.com", Some(next), 2)
+        .subject_feed("macro|actor@example.com", Some(next), nz(2))
         .await
         .unwrap();
     assert_eq!(second.records.len(), 1);

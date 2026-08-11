@@ -1,6 +1,7 @@
 //! Storage ports for activities.
 
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
 use model_entity::EntityType;
@@ -55,12 +56,14 @@ pub trait ActivityReads {
     /// One page of a subject's activity, newest first. `cursor` is the
     /// `(occurred_at, id)` returned as the previous page's
     /// [`next`](ActivityFeedPage::next); rows strictly before it (in keyset
-    /// order) are returned.
+    /// order) are returned. `limit` is non-zero by type: a zero-row page
+    /// could not carry a `next` position and would misreport an exhausted
+    /// feed.
     fn subject_feed(
         &self,
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
-        limit: u32,
+        limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 
     /// The newest `per_entity_limit` activities for each requested entity,

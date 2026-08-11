@@ -20,8 +20,8 @@ fn garbage_cursors_are_rejected() {
 
 #[test]
 fn feed_limits_are_defaulted_and_clamped() {
-    assert_eq!(parse_feed_limit(None).unwrap(), 25);
-    assert_eq!(parse_feed_limit(Some(100)).unwrap(), 100);
+    assert_eq!(parse_feed_limit(None).unwrap().get(), 25);
+    assert_eq!(parse_feed_limit(Some(100)).unwrap().get(), 100);
     assert!(parse_feed_limit(Some(0)).is_err());
     assert!(parse_feed_limit(Some(-3)).is_err());
     assert!(parse_feed_limit(Some(101)).is_err());

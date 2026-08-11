@@ -191,24 +191,11 @@ fn parse_email_message_pagination(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> async_graphql::Result<(u32, u32)> {
-    let offset = offset.unwrap_or(0);
-    let limit = limit.unwrap_or(DEFAULT_EMAIL_MESSAGE_LIMIT);
-
-    let offset = u32::try_from(offset)
+    let offset = u32::try_from(offset.unwrap_or(0))
         .map_err(|_| async_graphql::Error::new("offset must be non-negative"))?;
-    if limit <= 0 {
-        return Err(async_graphql::Error::new("limit must be positive"));
-    }
-    if limit > MAX_EMAIL_MESSAGE_LIMIT {
-        return Err(async_graphql::Error::new(format!(
-            "limit must not exceed {MAX_EMAIL_MESSAGE_LIMIT}"
-        )));
-    }
-
-    Ok((
-        offset,
-        u32::try_from(limit).expect("positive GraphQL Int fits in u32"),
-    ))
+    let limit =
+        graphql_common::parse_limit(limit, DEFAULT_EMAIL_MESSAGE_LIMIT, MAX_EMAIL_MESSAGE_LIMIT)?;
+    Ok((offset, limit))
 }
 
 /// Email-content fields attached only to Soup email-thread entities.

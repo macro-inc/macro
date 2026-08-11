@@ -182,9 +182,9 @@ impl Action {
     /// A payload on a payload-free tag is ignored — a newer writer may have
     /// started attaching one, and old readers must keep decoding the tag they
     /// know. The tag vocabulary is the same strum derivation `to_columns`
-    /// writes with ([`ActionTag`], derived from the variant names), and the
-    /// match below is exhaustive on it — a new variant fails compilation here
-    /// until its decode is written.
+    /// writes with (the crate-private `ActionTag` discriminant enum, derived
+    /// from the variant names), and the match below is exhaustive on it — a
+    /// new variant fails compilation here until its decode is written.
     pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
         // Deserializing from `&Value` borrows; no payload clone on the read
         // hot path.

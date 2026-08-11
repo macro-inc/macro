@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use async_graphql::{Context, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -47,8 +49,10 @@ pub struct GraphqlActivityPage {
 }
 
 /// Validate a feed limit argument and apply the default.
-fn parse_feed_limit(limit: Option<i32>) -> async_graphql::Result<u32> {
-    graphql_common::parse_limit(limit, DEFAULT_ACTIVITY_FEED_LIMIT, MAX_ACTIVITY_FEED_LIMIT)
+fn parse_feed_limit(limit: Option<i32>) -> async_graphql::Result<NonZeroU32> {
+    let limit =
+        graphql_common::parse_limit(limit, DEFAULT_ACTIVITY_FEED_LIMIT, MAX_ACTIVITY_FEED_LIMIT)?;
+    Ok(NonZeroU32::new(limit).expect("parse_limit rejects zero"))
 }
 
 /// Decode an opaque feed cursor into its keyset position.
@@ -100,6 +104,6 @@ where
         items: page.records.into_iter().map(Into::into).collect(),
         next_cursor: page
             .next
-            .map(|(occurred_at, id)| encode_cursor(occurred_at, id, limit)),
+            .map(|(occurred_at, id)| encode_cursor(occurred_at, id, limit.get())),
     })
 }

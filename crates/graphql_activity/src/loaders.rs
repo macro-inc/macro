@@ -1,19 +1,22 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use activity::{ActivityFeedPage, ActivityReads, ActivityRecord, EntityType};
 use async_graphql::dataloader::{DataLoader, Loader};
 use chrono::{DateTime, Utc};
-use futures::future::join_all;
+use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::objects::GraphqlActivityEvent;
 
-/// Most entity-activity keys one coalesced batch may load. Soup pages cap at
-/// 500 items, so a legitimate operation always fits in one batch.
-const MAX_ACTIVITY_EDGE_KEYS: usize = 500;
-/// Most activity rows one coalesced batch may request across all keys — a
-/// full Soup page at the default per-entity limit.
-const MAX_ACTIVITY_EDGE_ROWS: usize = 5000;
+/// Keys per SQL round trip. Bounds the size of one UNNEST+LATERAL query, not
+/// what a client may request: per-entity work is already bounded by
+/// [`MAX_ACTIVITY_EDGE_LIMIT`], so total cost scales with what the operation
+/// legitimately selected — the same posture as the other Soup edges.
+const ACTIVITY_EDGE_BATCH_KEYS: usize = 500;
+/// Concurrent per-limit queries per batch. Distinct limits come from client
+/// field aliases; the bound keeps an aliased query from holding one pool
+/// connection per alias.
+const MAX_CONCURRENT_LIMIT_GROUPS: usize = 4;
 /// Rows returned by the `activity` edge when no limit is given.
 pub const DEFAULT_ACTIVITY_EDGE_LIMIT: i32 = 10;
 /// Most rows the `activity` edge may return per entity. Deeper history
@@ -70,7 +73,7 @@ pub trait ActivityFeedReader: Send + Sync + 'static {
         &'a self,
         subject_id: &'a str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
-        limit: u32,
+        limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
 }
 
@@ -100,7 +103,7 @@ impl ActivityFeedReader for NoOpActivityReader {
         &self,
         _subject_id: &str,
         _cursor: Option<(DateTime<Utc>, Uuid)>,
-        _limit: u32,
+        _limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
         Ok(ActivityFeedPage {
             records: Vec::new(),
@@ -141,22 +144,25 @@ where
     ) -> HashMap<ActivityEdgeKey, ActivityEdgeLoad> {
         // The port takes one per-entity limit per call; group keys by their
         // requested limit so differing limits still batch (one query each,
-        // run concurrently — in practice one field selection means one
+        // boundedly concurrent — in practice one field selection means one
         // distinct limit anyway).
         let mut by_limit: HashMap<u32, Vec<ActivityEdgeKey>> = HashMap::new();
         for key in keys {
             by_limit.entry(key.limit).or_default().push(key);
         }
 
-        let groups = join_all(by_limit.into_iter().map(|(limit, keys)| async move {
-            let entities: Vec<(EntityType, String)> = keys
-                .iter()
-                .map(|key| (key.entity.entity_type, key.entity.entity_id.to_string()))
-                .collect();
-            let result = self.reads.entity_activity(&entities, limit).await;
-            (limit, keys, entities, result)
-        }))
-        .await;
+        let groups: Vec<_> = futures::stream::iter(by_limit)
+            .map(|(limit, keys)| async move {
+                let entities: Vec<(EntityType, String)> = keys
+                    .iter()
+                    .map(|key| (key.entity.entity_type, key.entity.entity_id.to_string()))
+                    .collect();
+                let result = self.reads.entity_activity(&entities, limit).await;
+                (limit, keys, entities, result)
+            })
+            .buffer_unordered(MAX_CONCURRENT_LIMIT_GROUPS)
+            .collect()
+            .await;
 
         let mut loads = HashMap::new();
         for (limit, keys, entities, result) in groups {
@@ -185,7 +191,7 @@ where
         &self,
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
-        limit: u32,
+        limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
         self.reads
             .subject_feed(subject_id, cursor, limit)
@@ -221,27 +227,6 @@ where
         &self,
         keys: &[ActivityEdgeKey],
     ) -> Result<HashMap<ActivityEdgeKey, Self::Value>, Self::Error> {
-        // Cost caps guard the database, not the client: an over-budget batch
-        // is refused before any query runs, and its fields degrade to empty
-        // timelines (logged) instead of erroring the whole Soup response.
-        // No max_batch_size is set, so a batch is an operation's full set of
-        // coalesced keys and these caps hold per operation.
-        let row_count: usize = keys.iter().map(|key| key.limit as usize).sum();
-        if keys.len() > MAX_ACTIVITY_EDGE_KEYS || row_count > MAX_ACTIVITY_EDGE_ROWS {
-            tracing::warn!(
-                key_count = keys.len(),
-                row_count,
-                max_key_count = MAX_ACTIVITY_EDGE_KEYS,
-                max_row_count = MAX_ACTIVITY_EDGE_ROWS,
-                "refusing oversized Soup activity batch"
-            );
-            return Ok(keys
-                .iter()
-                .cloned()
-                .map(|key| (key, ActivityEdgeLoad::Failed))
-                .collect());
-        }
-
         Ok(self.reader.entity_activity(keys.to_vec()).await)
     }
 }
@@ -251,9 +236,12 @@ pub fn entity_activity_loader<R>(reader: R) -> DataLoader<EntityActivityLoader<R
 where
     R: SoupActivityEdgeReader,
 {
-    // No max_batch_size: the cost caps in `load` are per-operation, and
-    // splitting batches would turn them into per-chunk caps.
-    let loader = DataLoader::new(EntityActivityLoader::new(reader), tokio::spawn);
+    // There is deliberately no client-facing cost cap here: every
+    // schema-valid selection is served, with per-entity work bounded by the
+    // limit argument's validation. max_batch_size only sizes each SQL round
+    // trip.
+    let loader = DataLoader::new(EntityActivityLoader::new(reader), tokio::spawn)
+        .max_batch_size(ACTIVITY_EDGE_BATCH_KEYS);
     // Subscription connection data outlives one payload: coalesce concurrent
     // fields, but never serve stale activity across update events.
     loader.enable_all_cache(false);

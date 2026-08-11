@@ -4,6 +4,7 @@
 mod test;
 
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -174,11 +175,12 @@ impl ActivityReads for PgActivityRepo {
         &self,
         subject_id: &str,
         cursor: Option<(DateTime<Utc>, Uuid)>,
-        limit: u32,
+        limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, Self::Err> {
         // One extra raw row as the has-more probe. The page boundary and the
         // next cursor come from the raw rows, before decoding: a corrupt row
         // shrinks the visible page but never ends pagination.
+        let limit = limit.get();
         let fetch = i64::from(limit) + 1;
         // Two static queries instead of one `$x IS NULL OR …` merge, which
         // would defeat the (subject_id, occurred_at DESC, id DESC) index.
