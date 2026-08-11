@@ -22,6 +22,14 @@ export interface ReminderDraft {
   remindAt: Date;
   /** Whether the owner has marked it done, which a reschedule has to undo. */
   completed: boolean;
+  /**
+   * What a blank description falls back to — the name of the entity this
+   * reminder is about, as creating one would have derived it.
+   *
+   * Absent for a standalone reminder, and for a reference whose name is not
+   * cached; blanking the field then leaves the description alone.
+   */
+  fallbackDescription?: string;
 }
 
 interface ReminderComposerState {

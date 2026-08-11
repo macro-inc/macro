@@ -10,8 +10,10 @@ import {
   REMINDER_DESCRIPTION_MAX_LENGTH,
   reminderDefaultOptions,
   reminderDescriptionFor,
+  reminderDescriptionForReference,
   reminderEditOptions,
   reminderEditPatch,
+  resolveEditedDescription,
   resolveReminderDescription,
 } from './reminder-schedule';
 
@@ -494,5 +496,87 @@ describe('reminderEditPatch', () => {
         { description: 'Follow up', remindAt: new Date(remindAt) }
       )
     ).toEqual({ description: 'Follow up' });
+  });
+});
+
+describe('reminderDescriptionForReference', () => {
+  it('uses the resolved reference name', () => {
+    expect(reminderDescriptionForReference('Q3 Contract', 'document')).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  it('trims the reference name', () => {
+    expect(reminderDescriptionForReference('  Q3 Contract  ', 'document')).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  // Same fallbacks as reminderDescriptionFor, so blanking an edit lands on the
+  // name creating the reminder would have chosen.
+  it('names an unnamed reference the way lists label it', () => {
+    expect(reminderDescriptionForReference('', 'email')).toBe('(No Subject)');
+    expect(reminderDescriptionForReference('   ', 'document')).toBe('Untitled');
+    expect(reminderDescriptionForReference(undefined, 'crm_company')).toBe(
+      'Unknown Company'
+    );
+    expect(reminderDescriptionForReference(undefined, 'crm_contact')).toBe(
+      'Unknown Contact'
+    );
+  });
+
+  it('truncates an over-long reference name instead of failing', () => {
+    const long = 'x'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 50);
+
+    expect(reminderDescriptionForReference(long, 'document')).toHaveLength(
+      REMINDER_DESCRIPTION_MAX_LENGTH
+    );
+  });
+});
+
+describe('resolveEditedDescription', () => {
+  it('uses what was typed', () => {
+    expect(
+      resolveEditedDescription('Follow up', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Follow up');
+  });
+
+  it('trims what was typed', () => {
+    expect(
+      resolveEditedDescription('  Follow up  ', 'Chase the contract')
+    ).toBe('Follow up');
+  });
+
+  // Blanking the field means the same thing it means when creating: name this
+  // after whatever it is about.
+  it('falls back to the reference name when left blank', () => {
+    expect(
+      resolveEditedDescription('', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Q3 Contract');
+  });
+
+  it('treats a whitespace-only description as blank', () => {
+    expect(
+      resolveEditedDescription('   ', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Q3 Contract');
+  });
+
+  // A standalone reminder has nothing to name itself after, and a reference
+  // whose name did not resolve must not rename it to a placeholder.
+  it('keeps the current description when there is nothing to fall back to', () => {
+    expect(resolveEditedDescription('', 'Chase the contract')).toBe(
+      'Chase the contract'
+    );
+    expect(
+      resolveEditedDescription('  ', 'Chase the contract', undefined)
+    ).toBe('Chase the contract');
+  });
+
+  it('caps an over-long typed description at the API limit', () => {
+    const long = 'y'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 50);
+
+    expect(resolveEditedDescription(long, 'Chase the contract')).toHaveLength(
+      REMINDER_DESCRIPTION_MAX_LENGTH
+    );
   });
 });

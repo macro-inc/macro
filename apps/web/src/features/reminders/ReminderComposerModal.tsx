@@ -51,6 +51,7 @@ import {
   reminderDefaultOptions,
   reminderEditOptions,
   reminderEditPatch,
+  resolveEditedDescription,
   resolveReminderDescription,
 } from './reminder-schedule';
 
@@ -66,9 +67,9 @@ type Step = 'description' | 'when';
  * description step in front of it is optional when creating, and Enter on an
  * empty field falls straight through to the date list.
  *
- * Editing runs the same two steps prefilled. The difference is that both
- * answers already have values, so neither step can be skipped into a blank: the
- * description must stay non-empty, and the date list leads with keeping the
+ * Editing runs the same two steps, prefilled from the reminder. Both keep the
+ * create flow's meaning of a blank answer: clearing the description names the
+ * reminder after whatever it is about, and the date list leads with keeping the
  * time it already has.
  */
 export function ReminderComposerModal() {
@@ -126,20 +127,7 @@ export function ReminderComposerModal() {
     })
   );
 
-  /**
-   * Leave the description step, if the current answer is allowed to.
-   *
-   * Creating treats a blank field as "skip" and derives a name from the entity.
-   * Editing cannot: the field was prefilled, so a blank one is a deletion, and
-   * the API rejects an empty description.
-   */
-  const advanceFromDescription = () => {
-    if (editing() && !description().trim()) {
-      toast.failure('A reminder needs a description');
-      return;
-    }
-    setStep('when');
-  };
+  const advanceFromDescription = () => setStep('when');
 
   // The dialog's Enter binding is a single shared slot, so whichever step is on
   // screen has to claim it or the other step's stale handler stays live.
@@ -170,7 +158,13 @@ export function ReminderComposerModal() {
 
   const submitEdit = async (date: Date, draft: ReminderDraft) => {
     const patch = reminderEditPatch(draft, {
-      description: description(),
+      // Blank means the same here as it does when creating: name it after
+      // whatever it is about.
+      description: resolveEditedDescription(
+        description(),
+        draft.description,
+        draft.fallbackDescription
+      ),
       remindAt: date,
     });
     closeReminderComposer();
@@ -366,8 +360,10 @@ function StepInput(props: {
 /**
  * The optional first step: name the reminder, or press Enter past it.
  *
- * The entity name a blank field falls back to is never pre-filled, so skipping
- * stays a single keystroke instead of a select-all and delete.
+ * When creating, the entity name a blank field falls back to is never
+ * pre-filled, so skipping stays a single keystroke instead of a select-all and
+ * delete. When editing it necessarily is pre-filled — clearing it back out asks
+ * for that same fallback.
  */
 function DescriptionStep(props: { onContinue: VoidFunction }) {
   return (

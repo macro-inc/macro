@@ -229,6 +229,39 @@ export function resolveReminderDescription(
   return clampDescription(input) || reminderDescriptionFor(entity);
 }
 
+/**
+ * The same entity-derived description, from a resolved name rather than a whole
+ * entity.
+ *
+ * An edited reminder only knows its reference as a type and an id — the name
+ * lives in the preview cache — so it cannot go through
+ * {@link reminderDescriptionFor}. The fallbacks are the same, so blanking the
+ * field lands on the name creating it would have chosen.
+ */
+export function reminderDescriptionForReference(
+  name: string | undefined,
+  type: EntityData['type']
+): string {
+  return clampDescription(name?.trim() || untitledName(type));
+}
+
+/**
+ * What to store when an edited reminder's description is left blank.
+ *
+ * Blanking the field means the same thing it means when creating: name this
+ * after whatever it is about. `fallback` is that name, already derived — absent
+ * for a standalone reminder, or one whose reference could not be resolved. With
+ * nothing to derive from, the reminder keeps what it says: renaming it to
+ * "Untitled" because a lookup missed would be worse than leaving it alone.
+ */
+export function resolveEditedDescription(
+  input: string,
+  current: string,
+  fallback?: string
+): string {
+  return clampDescription(input) || fallback || current;
+}
+
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Confirmation text for a reminder that was just set.

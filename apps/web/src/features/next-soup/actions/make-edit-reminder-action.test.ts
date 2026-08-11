@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   openReminderEditor: vi.fn(),
   remindersEnabled: true,
+  cachedPreview: undefined as { rawName: string; access: string } | undefined,
 }));
 
 vi.mock('@app/features/reminders/reminder-composer', () => ({
   openReminderEditor: mocks.openReminderEditor,
+}));
+
+// The reference name comes from the preview cache the row already populated.
+vi.mock('@queries/preview', () => ({
+  getCachedItemPreview: () => mocks.cachedPreview,
+  isAccessiblePreviewItem: (item: { access?: string } | undefined) =>
+    item?.access === 'access',
 }));
 
 // Spread the original so the other flags in this module keep working; only the
@@ -42,6 +50,7 @@ describe('makeEditReminderAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.remindersEnabled = true;
+    mocks.cachedPreview = undefined;
   });
 
   it('can run for a one-shot reminder', () => {
@@ -87,6 +96,67 @@ describe('makeEditReminderAction', () => {
 
     expect(mocks.openReminderEditor).toHaveBeenCalledWith(
       expect.objectContaining({ completed: true })
+    );
+  });
+
+  // Blanking the description in the editor means "name it after what it is
+  // about", exactly as it does when creating — so the name has to travel with
+  // the draft.
+  it('carries the reference name as the blank-description fallback', () => {
+    mocks.cachedPreview = { rawName: 'Q3 Contract', access: 'access' };
+
+    makeEditReminderAction().execute([
+      reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
+    ]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackDescription: 'Q3 Contract' })
+    );
+  });
+
+  it('falls back to how lists label an unnamed reference', () => {
+    mocks.cachedPreview = { rawName: '', access: 'access' };
+
+    makeEditReminderAction().execute([
+      reminder({ referencedEntity: { id: 'thread-1', type: 'email' } }),
+    ]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackDescription: '(No Subject)' })
+    );
+  });
+
+  // Without a fallback the editor keeps the existing description, rather than
+  // renaming the reminder to a placeholder because a lookup missed.
+  it('carries no fallback for a standalone reminder', () => {
+    makeEditReminderAction().execute([reminder()]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackDescription: undefined })
+    );
+  });
+
+  it('carries no fallback when the reference is not cached', () => {
+    mocks.cachedPreview = undefined;
+
+    makeEditReminderAction().execute([
+      reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
+    ]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackDescription: undefined })
+    );
+  });
+
+  it('carries no fallback when the reference is inaccessible', () => {
+    mocks.cachedPreview = { rawName: 'Secret', access: 'no_access' };
+
+    makeEditReminderAction().execute([
+      reminder({ referencedEntity: { id: 'doc-1', type: 'document' } }),
+    ]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackDescription: undefined })
     );
   });
 
