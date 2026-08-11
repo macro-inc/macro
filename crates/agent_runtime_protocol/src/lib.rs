@@ -8,7 +8,6 @@
 /// Protocol schema, role-oriented connections, and the runtime wire port.
 pub mod domain;
 /// Adapters implementing the domain wire port over physical transports.
-#[cfg(feature = "transport")]
 pub mod outbound;
 
 /// Utilities for asserting direction-labelled JSON messages at the wire boundary.

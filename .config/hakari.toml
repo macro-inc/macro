@@ -63,19 +63,6 @@ workspace-members = [
     # maybe_send: zero-dep marker traits used by cache-core; must stay
     # wasm-safe (workspace-hack pulls native-only deps like mio into wasm32).
     "maybe_send",
-    # agent_fold and the leaf crates its model is built from. The fold runs in
-    # the browser (crates/client/agent-fold-wasm) as well as in services, so
-    # the whole chain must stay wasm-safe; workspace-hack pulls tokio, and so
-    # mio, which does not build for wasm32.
-    #
-    # Cheap to exclude: what these contribute to the union - serde, uuid,
-    # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
-    # other members anyway, so the deploy dependency layers are unchanged.
-    "agent_fold",
-    "macro_user_id",
-    "macro_uuid",
-    "non_empty",
-    "cowlike",
 ]
 
 # Xtask extension (the hakari engine ignores this table; `cargo x deps` in

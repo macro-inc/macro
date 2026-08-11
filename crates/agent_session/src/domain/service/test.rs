@@ -580,14 +580,17 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
 }
 
 // Streaming: the same writer that keeps the channel's placeholders in step
-// pushes each frame at whoever is watching the channel right now.
+// pushes each folded message a frame changes at whoever is watching the
+// channel right now.
 
-/// Every frame a connection writes goes out once, addressed at the session's
-/// channel and carrying the frame verbatim - a viewer folds what it is sent
-/// with the same code that folds the fetched log, so anything altered on the
-/// way out would fold to something else.
+/// A viewer who replaces whatever it holds under each published message's key
+/// ends up with exactly what folding the whole log derives - the property the
+/// client relies on instead of folding anything itself. Along the way: events
+/// address the session's channel, frames that change nothing publish nothing,
+/// a message is `New` exactly once, and `log_index` advances with the log so
+/// events can be aligned against a fetched snapshot.
 #[tokio::test]
-async fn a_connections_frames_are_published_to_its_channel() {
+async fn published_messages_replay_to_what_the_log_folds_to() {
     let repo = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
@@ -595,6 +598,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     let logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime.clone());
 
     let log = parse_log_as(test_session(), TURN);
+    let frames = log.len() as u64;
     for entry in log.clone() {
         AgentSessionLogRepo::create(&logs, entry)
             .await
@@ -602,28 +606,56 @@ async fn a_connections_frames_are_published_to_its_channel() {
     }
 
     let published = realtime.published();
-    assert_eq!(published.len(), log.len(), "one event per frame, no more");
+    assert!(!published.is_empty(), "the fixture derives messages");
+    assert!(
+        published.len() < log.len(),
+        "most frames are handshakes and bookkeeping - publishing one event \
+         per frame would mean the fold is not deciding what goes out"
+    );
     assert!(
         published
             .iter()
             .all(|event| event.channel_id == channel && event.agent_session_id == test_session()),
         "every event names the session's channel and the session"
     );
-    // Compared as the JSON they are published as: the client folds these
-    // bytes with the same code it folds the fetched log with.
-    let frame = |entry: AgentSessionLog| {
-        (
-            entry.user_id.map(|user| user.to_string()),
-            serde_json::to_value(entry.content).expect("a frame serializes"),
-        )
-    };
+
+    let mut indices = published.iter().map(|event| event.log_index);
+    let mut previous = 0;
+    assert!(
+        indices.all(|index| {
+            let ordered = index > previous && index <= frames;
+            previous = index;
+            ordered
+        }),
+        "log_index advances with the log, never past it"
+    );
+
+    // Apply the events the way a viewer does: `New` appends, `Updated`
+    // replaces in place.
+    let mut held: Vec<FoldedMessage> = Vec::new();
+    for event in published {
+        let key = event.message.id();
+        match event.change {
+            crate::domain::model::FoldedMessageChange::New => {
+                assert!(
+                    held.iter().all(|message| message.id() != key),
+                    "{key} was reported new twice"
+                );
+                held.push(event.message);
+            }
+            crate::domain::model::FoldedMessageChange::Updated => {
+                let slot = held
+                    .iter_mut()
+                    .find(|message| message.id() == key)
+                    .expect("an update names a message already reported new");
+                *slot = event.message;
+            }
+        }
+    }
     assert_eq!(
-        published
-            .into_iter()
-            .map(|event| frame(event.entry))
-            .collect::<Vec<_>>(),
-        log.into_iter().map(frame).collect::<Vec<_>>(),
-        "the frames go out as they were logged"
+        held,
+        fold(log),
+        "replaying the stream reproduces the fold of the whole log"
     );
 }
 
@@ -696,10 +728,11 @@ async fn a_failed_publish_does_not_fail_the_append() {
     );
 }
 
-/// `channel_log` resolves a dedicated channel to its session and hands back
-/// the log unfolded, in order.
+/// `channel_messages` resolves a dedicated channel to its session and hands
+/// back the fold of its whole log, stamped with the frame count it was folded
+/// from - the pair a reader aligns the live stream against.
 #[tokio::test]
-async fn channel_log_returns_the_sessions_frames_in_order() {
+async fn channel_messages_returns_the_folded_log() {
     let store = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
     store.insert_session(test_agent_session(test_session(), channel));
@@ -713,40 +746,36 @@ async fn channel_log_returns_the_sessions_frames_in_order() {
         NoOpRealtime,
     );
 
-    let log = service
-        .channel_log(channel)
+    let folded = service
+        .channel_messages(channel)
         .await
         .expect("lookup succeeds")
         .expect("the channel belongs to a session");
 
-    assert_eq!(log.agent_session_id, test_session());
+    assert_eq!(folded.agent_session_id, test_session());
+    assert_eq!(folded.bot.name, "Test Agent");
     assert_eq!(
-        log.entries.len(),
-        recorded.len(),
-        "every frame is served, none folded away"
+        folded.log_length,
+        recorded.len() as u64,
+        "the snapshot names how many frames it folded"
     );
-
-    // The order is the contract: folding is a left fold from the first frame,
-    // so a reordered log derives different turn numbering.
-    let served = fold(log.entries);
     assert_eq!(
-        served,
+        folded.messages,
         fold(recorded),
-        "the served log folds to what the stored one does"
+        "the served messages are the fold of the stored log"
     );
 }
 
-/// A channel no session owns yields `None`, not an error - same as the folded
-/// endpoint.
+/// A channel no session owns yields `None`, not an error.
 #[tokio::test]
-async fn channel_log_without_a_session_is_none() {
+async fn channel_messages_without_a_session_is_none() {
     let fx = fixture();
 
-    let log = fx
+    let folded = fx
         .service
-        .channel_log(Uuid::from_u128(0xffff))
+        .channel_messages(Uuid::from_u128(0xffff))
         .await
         .expect("lookup succeeds");
 
-    assert!(log.is_none());
+    assert!(folded.is_none());
 }

@@ -135,35 +135,36 @@ pub trait Comms {
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
-/// Pushing a live session's frames to whoever is watching its channel.
+/// Pushing a live session's folded messages to whoever is watching its
+/// channel.
 ///
 /// Separate from [`Comms`] because it answers a different question. `Comms`
-/// writes the durable rows a channel is rebuilt from; this tells a client that
-/// is already looking at the channel what just happened, so it can fold the
-/// frame and redraw without refetching.
+/// writes the durable rows a channel is rebuilt from; this tells a client
+/// that is already looking at the channel which message just changed, so it
+/// can redraw without refetching.
 ///
-/// Best-effort by contract. A dropped frame costs a viewer some liveness until
-/// they reload, and the log it was derived from is already durable - so an
-/// implementation may drop, and callers must not fail an append over it.
+/// Best-effort by contract. A dropped message costs a viewer some liveness
+/// until they reload, and the log it was folded from is already durable - so
+/// an implementation may drop, and callers must not fail an append over it.
 pub trait AgentSessionRealtime {
-    /// Publish one appended frame to the channel's viewers.
+    /// Publish one changed folded message to the channel's viewers.
     fn publish(
         &self,
-        event: LogAppended,
+        event: FoldedMessagePublished,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
 /// An [`AgentSessionRealtime`] that streams nowhere.
 ///
-/// Dropping every frame is a legal implementation of the port - it is
-/// best-effort by contract - so this is what a writer with no viewers to serve
-/// gets: `seed_jsonl` replaying a recording into the database, and tests that
-/// are asserting on the durable side of an append.
+/// Dropping every message is a legal implementation of the port - it is
+/// best-effort by contract - so this is what a writer with no viewers to
+/// serve gets: `seed_jsonl` replaying a recording into the database, and
+/// tests that are asserting on the durable side of an append.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoOpRealtime;
 
 impl AgentSessionRealtime for NoOpRealtime {
-    async fn publish(&self, _event: LogAppended) -> Result<(), rootcause::Report> {
+    async fn publish(&self, _event: FoldedMessagePublished) -> Result<(), rootcause::Report> {
         Ok(())
     }
 }

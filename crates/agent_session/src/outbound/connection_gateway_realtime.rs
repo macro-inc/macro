@@ -1,41 +1,40 @@
-//! The wire contract for streaming a live session's log, and the
+//! The wire contract for streaming a live session's folded messages, and the
 //! connection-gateway adapter that speaks it.
 //!
 //! # The contract
 //!
 //! Websocket payloads are not part of the OpenAPI surface, so nothing
-//! generates the client's half of this. The paired type is
-//! `apps/web/src/lib/core/agent-fold/stream-protocol.ts`, hand-written against
-//! what is here; the two doc comments point at each other and are the whole
-//! agreement.
+//! generates the client's half of this. The message body is the same
+//! [`FoldedMessageDto`] the REST endpoint serves
+//! (`GET /agent-sessions/channel/{id}/messages`), so the generated schema for
+//! that endpoint *is* the client's type for the event body; only the thin
+//! envelope here is hand-written against, in
+//! `apps/web/src/lib/queries/channel/agent-session-messages.ts`.
 //!
-//! Messages go out as type [`AGENT_SESSION_LOG`] with a
-//! [`AgentSessionLogEvent`] body:
+//! Messages go out as type [`AGENT_SESSION_MESSAGE`] with an
+//! [`AgentSessionMessageEvent`] body:
 //!
 //! ```json
 //! {
 //!   "channelId":      "019f…",
 //!   "agentSessionId": "019f…",
-//!   "userId":         "macro|someone@example.com",
-//!   "direction":      "to_server",
-//!   "content":        { "type": "acp", "jsonrpc": "2.0", … }
+//!   "kind":           "new",
+//!   "logIndex":       42,
+//!   "message":        { "agentSessionMessageId": "019f…:0:agent", … }
 //! }
 //! ```
 //!
-//! The last three fields are exactly the entry shape
-//! `GET /agent-sessions/channel/{id}/log` serves, flattened in the same way.
-//! That is the point of the contract rather than an accident of it: a client
-//! catching up on a log and a client following one are folding the same bytes,
-//! so they can share one fold and cannot disagree about what a frame means.
-//!
-//! `channelId` addresses it — a viewer opened a channel and may not know a
-//! session exists. `agentSessionId` is what the fold keys its messages on, so
-//! it must be passed through unchanged: it is half of the
-//! `"{agent_session_id}:{turn}:{author}"` that joins a folded message to the
-//! placeholder row rendering it.
+//! `channelId` addresses it - a viewer opened a channel and may not know a
+//! session exists. `kind` is `"new"` the first time a message is reported and
+//! `"update"` after; either way `message` is the whole message as it now
+//! stands, so a reader applies both the same way - replace whatever it holds
+//! under that `agentSessionMessageId`. `logIndex` pairs with the snapshot's
+//! `logLength`: an event with `logIndex <= logLength` is already contained in
+//! that snapshot and can be dropped.
 
-use crate::domain::model::{AgentSessionLog, LogAppended, Message};
+use crate::domain::model::{FoldedMessageChange, FoldedMessagePublished};
 use crate::domain::ports::AgentSessionRealtime;
+use crate::wire::FoldedMessageDto;
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -43,55 +42,49 @@ use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 
-/// The realtime message type carrying one appended log frame.
+/// The realtime message type carrying one changed folded message.
 ///
 /// Matched on by the web client's websocket dispatch; changing it breaks
 /// streaming silently, since an unrecognized type is ignored rather than
 /// rejected.
-pub const AGENT_SESSION_LOG: &str = "agent_session_log";
+pub const AGENT_SESSION_MESSAGE: &str = "agent_session_message";
 
-/// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
+/// The body of an [`AGENT_SESSION_MESSAGE`] message - the module docs are the
 /// contract.
 #[derive(Debug, Serialize)]
-pub struct AgentSessionLogEvent {
-    /// The channel whose viewers should fold this.
-    #[serde(rename = "channelId")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionMessageEvent {
+    /// The channel whose viewers should see this.
     pub channel_id: Uuid,
-    /// The session the frame belongs to, and half of the composite id its
-    /// folded messages are keyed by.
-    #[serde(rename = "agentSessionId")]
+    /// The session the message was folded from.
     pub agent_session_id: Uuid,
-    /// The user whose action produced the frame, when one did.
-    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    /// `direction` and `content`, flattened in - the frame's own two fields,
-    /// serialized by [`Message`] itself so they match the log verbatim.
-    #[serde(flatten)]
-    pub message: Message,
+    /// `"new"` the first time a message is reported, `"update"` after.
+    pub kind: &'static str,
+    /// How many log frames the fold had consumed when it produced this - see
+    /// the module docs for how a reader uses it.
+    pub log_index: u64,
+    /// The message as it now stands.
+    pub message: FoldedMessageDto,
 }
 
-impl AgentSessionLogEvent {
-    /// The event for one appended frame.
+impl AgentSessionMessageEvent {
+    /// The event for one changed message.
     #[must_use]
-    pub fn new(event: LogAppended) -> Self {
-        let LogAppended {
-            channel_id,
-            agent_session_id,
-            entry: AgentSessionLog {
-                user_id, content, ..
-            },
-        } = event;
-
+    pub fn new(event: FoldedMessagePublished) -> Self {
         Self {
-            channel_id,
-            agent_session_id: agent_session_id.as_uuid(),
-            user_id: user_id.map(|user| user.to_string()),
-            message: content,
+            channel_id: event.channel_id,
+            agent_session_id: event.agent_session_id.as_uuid(),
+            kind: match event.change {
+                FoldedMessageChange::New => "new",
+                FoldedMessageChange::Updated => "update",
+            },
+            log_index: event.log_index,
+            message: FoldedMessageDto::new(event.agent_session_id, event.message),
         }
     }
 }
 
-/// Publishes appended frames to a channel's participants through the
+/// Publishes changed folded messages to a channel's participants through the
 /// connection gateway.
 #[derive(Clone)]
 pub struct ConnectionGatewayAgentSessionRealtime<Participants> {
@@ -110,7 +103,7 @@ impl<Participants> ConnectionGatewayAgentSessionRealtime<Participants> {
     }
 }
 
-/// Who should receive a channel's frames.
+/// Who should receive a channel's messages.
 ///
 /// The gateway addresses users, not channels, so publishing needs the
 /// membership list. Named as its own capability rather than reaching for a
@@ -128,19 +121,19 @@ impl<Participants> AgentSessionRealtime for ConnectionGatewayAgentSessionRealtim
 where
     Participants: ChannelAudience,
 {
-    async fn publish(&self, event: LogAppended) -> Result<(), rootcause::Report> {
+    async fn publish(&self, event: FoldedMessagePublished) -> Result<(), rootcause::Report> {
         let channel_id = event.channel_id;
         let recipients = self.participants.participants(channel_id).await?;
         if recipients.is_empty() {
             return Ok(());
         }
 
-        let payload = serde_json::to_value(AgentSessionLogEvent::new(event))
+        let payload = serde_json::to_value(AgentSessionMessageEvent::new(event))
             .map_err(|error| rootcause::report!(error))?;
 
         self.client
             .batch_send_message(
-                AGENT_SESSION_LOG.to_string(),
+                AGENT_SESSION_MESSAGE.to_string(),
                 payload,
                 recipients
                     .iter()
@@ -157,58 +150,50 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::domain::model::AgentSessionId;
+    use agent_fold::domain::fold::fold;
     use agent_fold::testing::{TURN, parse_log_as, test_session};
 
-    /// The event is the REST entry shape plus two ids - the property the
-    /// client relies on to fold a streamed frame and a fetched one with the
-    /// same code. Asserted on the serialized keys rather than the types,
-    /// because it is the bytes the two halves actually agree on.
-    #[test]
-    fn an_event_is_a_log_entry_plus_two_ids() {
-        let entry = parse_log_as(test_session(), TURN)
-            .into_iter()
-            .find(|entry| entry.user_id.is_some())
-            .expect("the fixture attributes its prompt");
-
-        let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
+    fn folded_event(session: AgentSessionId) -> AgentSessionMessageEvent {
+        let messages = fold(parse_log_as(session, TURN));
+        let message = messages.into_iter().next().expect("the fixture folds");
+        AgentSessionMessageEvent::new(FoldedMessagePublished {
             channel_id: Uuid::from_u128(0xc4a2),
-            agent_session_id: test_session(),
-            entry,
-        }))
-        .expect("the event serializes");
+            agent_session_id: session,
+            change: FoldedMessageChange::New,
+            log_index: 7,
+            message,
+        })
+    }
+
+    /// The event's `message` is the REST endpoint's DTO shape - the property
+    /// the client relies on to render a streamed message and a fetched one
+    /// with the same code. Asserted on the serialized keys because it is the
+    /// bytes the two halves actually agree on.
+    #[test]
+    fn an_event_carries_the_rest_message_shape_plus_the_envelope() {
+        let value =
+            serde_json::to_value(folded_event(test_session())).expect("the event serializes");
 
         let object = value.as_object().expect("an event is a JSON object");
         assert_eq!(
             object.keys().map(String::as_str).collect::<Vec<_>>(),
-            vec![
-                "channelId",
-                "agentSessionId",
-                "userId",
-                "direction",
-                "content"
-            ],
-            "the frame is flattened in beside the ids, not nested under them"
+            vec!["channelId", "agentSessionId", "kind", "logIndex", "message"],
+            "the message is nested under a thin addressed envelope"
         );
-        assert_eq!(object["direction"], "to_runtime");
-        assert_eq!(object["content"]["method"], "session/prompt");
-    }
+        assert_eq!(object["kind"], "new");
+        assert_eq!(object["logIndex"], 7);
 
-    /// An unattributed frame omits the key rather than sending null, matching
-    /// the REST entry and keeping `userId` optional on the client.
-    #[test]
-    fn an_unattributed_frame_omits_the_user() {
-        let entry = parse_log_as(test_session(), TURN)
-            .into_iter()
-            .find(|entry| entry.user_id.is_none())
-            .expect("the fixture has unattributed frames");
-
-        let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
-            channel_id: Uuid::from_u128(0xc4a2),
-            agent_session_id: test_session(),
-            entry,
-        }))
-        .expect("the event serializes");
-
-        assert!(value.get("userId").is_none(), "got {value}");
+        let message = object["message"]
+            .as_object()
+            .expect("the body is a folded message");
+        assert!(
+            message["agentSessionMessageId"]
+                .as_str()
+                .expect("the composite id is a string")
+                .starts_with(&test_session().as_uuid().to_string()),
+            "the composite id is keyed by the session"
+        );
+        assert!(message["parts"].is_array(), "got {message:?}");
     }
 }

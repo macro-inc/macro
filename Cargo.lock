@@ -165,13 +165,12 @@ dependencies = [
  "non_empty",
  "rootcause",
  "serde",
- "serde-wasm-bindgen",
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "wasm-bindgen",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3693,6 +3692,7 @@ dependencies = [
  "bot_id",
  "either",
  "macro_user_id",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9108,6 +9108,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9116,6 +9117,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10124,6 +10126,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -17219,6 +17222,7 @@ dependencies = [
  "subtle",
  "syn 1.0.109",
  "syn 2.0.117",
+ "syn 3.0.3",
  "sync_wrapper",
  "thiserror 2.0.18",
  "time",

@@ -16,9 +16,9 @@
  *   channel does not end up with the turn twice.
  */
 
-import type { FoldedMessage } from '@core/agent-fold/types';
 import type { ApiChannelMessage } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { FoldedMessageDto } from '@service-storage/generated/schemas/foldedMessageDto';
 import type { SessionBotDto } from '@service-storage/generated/schemas/sessionBotDto';
 import {
   findTopLevelMessageInChannelMessagesWhere,
@@ -86,7 +86,7 @@ type PlaceholderSender = Pick<ApiChannelMessage, 'sender' | 'sender_id'>;
  */
 async function placeholderSender(
   channelId: string,
-  folded: FoldedMessage
+  folded: FoldedMessageDto
 ): Promise<PlaceholderSender | undefined> {
   if (folded.author.kind === 'user' && folded.author.userId) {
     const userId = folded.author.userId;
@@ -122,7 +122,7 @@ async function placeholderSender(
  */
 function findPlaceholderFromSameAuthor(
   channelId: string,
-  folded: FoldedMessage
+  folded: FoldedMessageDto
 ): ApiChannelMessage | undefined {
   const suffix = `:${folded.author.kind}`;
   return findTopLevelMessageInChannelMessagesWhere(channelId, (message) =>
@@ -140,7 +140,7 @@ function findPlaceholderFromSameAuthor(
  */
 export async function ensureAgentSessionPlaceholder(
   channelId: string,
-  folded: FoldedMessage
+  folded: FoldedMessageDto
 ): Promise<void> {
   const agentSessionMessageId = folded.agentSessionMessageId;
   if (findPlaceholder(channelId, agentSessionMessageId)) return;

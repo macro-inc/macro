@@ -1,6 +1,6 @@
-import type { FoldedMessage } from '@core/agent-fold/types';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
+import type { FoldedMessageDto } from '@service-storage/generated/schemas/foldedMessageDto';
 import { useQueryClient } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -9,12 +9,14 @@ import {
   type Resource,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { rememberSessionBot } from './agent-session-placeholders';
 import {
-  abandonAgentSessionStream,
-  beginAgentSessionStream,
-  followAgentSession,
-} from './agent-session-stream';
+  type AgentSessionMessageEvent,
+  followAgentSessionMessages,
+} from './agent-session-messages';
+import {
+  ensureAgentSessionPlaceholder,
+  rememberSessionBot,
+} from './agent-session-placeholders';
 import { channelKeys } from './keys';
 
 /**
@@ -24,43 +26,41 @@ import { channelKeys } from './keys';
  * **Reactive.** The lookup reads a store the live stream writes into, so a
  * caller reading it inside a tracking scope re-runs when the session appends
  * to the message it is showing. That is the whole rendering path for a live
- * agent turn: no message is refetched, the fold just gets longer.
+ * agent turn: no message is refetched, the server just sends it again longer.
  */
 export type FoldedMessageLookup = (
   messageId: string
-) => FoldedMessage | undefined;
+) => FoldedMessageDto | undefined;
 
 /**
- * Fetch an agent channel's protocol log, fold it, and keep folding it.
+ * Fetch an agent channel's folded messages and keep them current.
  *
- * The server does not fold any more — it serves the frames and this folds
- * them — so both halves live behind one resource and an agent channel has a
- * single "ready" to gate on. Once the log is folded, the channel follows the
- * session over the websocket through the same fold machine, so nothing is
- * refetched for the rest of the session.
+ * The server folds — this fetches the snapshot and then overlays the
+ * `agent_session_message` events the websocket delivers, each of which
+ * carries a whole message to store under its id. Events received while the
+ * fetch is in flight are buffered and applied after it, minus the ones the
+ * snapshot already contains (`logIndex <= logLength` — see
+ * `agent-session-messages.ts`).
  *
  * Asked of **every** channel, agent or not. Knowing which is which first
  * would mean consulting the channel record, and nothing fetches that per
  * channel - it arrives as part of a cached list that can predate the channel
- * being opened, which is exactly how this silently folded nothing before. The
- * endpoint answers an empty log for a channel with no session, so the question
- * is cheap and always safe to ask.
+ * being opened. The endpoint answers empty for a channel with no session, so
+ * the question is cheap and always safe to ask.
  *
  * **Reading this suspends.** The channel reads it inside its `<Suspense>` so
- * nothing renders until the messages are folded: the fold is fast, and a
- * channel that appears and then fills itself in a message at a time looks
- * worse than one that appears complete. This runs in parallel with the
- * messages query, which the channel already waits on, so an ordinary channel
- * pays nothing for asking.
+ * nothing renders until the messages are here: a channel that appears and
+ * then fills itself in a message at a time looks worse than one that appears
+ * complete. This runs in parallel with the messages query, which the channel
+ * already waits on, so an ordinary channel pays nothing for asking.
  *
- * It resolves rather than rejects when the log cannot be fetched: a suspended
- * resource that throws would take the whole channel down with it, and
- * placeholders with nothing behind them are much the milder failure.
+ * It resolves rather than rejects when the fetch fails: a suspended resource
+ * that throws would take the whole channel down with it, and placeholders
+ * with nothing behind them are much the milder failure.
  *
- * While `enabled` is false nothing runs — no fetch, no stream, no fold
- * worker — and the resource stays unresolved, which reads as `undefined`
- * without suspending. Flipping it on starts the fetch for the current
- * channel.
+ * While `enabled` is false nothing runs — no fetch, no follow — and the
+ * resource stays unresolved, which reads as `undefined` without suspending.
+ * Flipping it on starts the fetch for the current channel.
  */
 export function createFoldedMessages(
   channelId: Accessor<string>,
@@ -74,11 +74,11 @@ export function createFoldedMessages(
   // lands in their own tracking scope and only the rows whose message changed
   // re-render.
   const [byMessageId, setByMessageId] = createStore<
-    Record<string, FoldedMessage>
+    Record<string, FoldedMessageDto>
   >({});
   const lookup: FoldedMessageLookup = (messageId) => byMessageId[messageId];
 
-  const remember = (messages: FoldedMessage[]) =>
+  const remember = (messages: FoldedMessageDto[]) =>
     setByMessageId(
       produce((current) => {
         for (const message of messages) {
@@ -93,10 +93,9 @@ export function createFoldedMessages(
     unfollow = undefined;
   };
 
-  // Opening a fold is async and following one holds a machine open, so both
-  // ends of a run have to be able to tell that the run is over: the channel
-  // moved on to another id, or the view closed while the log was in flight.
-  // Without this a superseded run leaks its reader and its machine.
+  // A superseded run - the channel moved on to another id, or the view closed
+  // while the fetch was in flight - must stop listening rather than keep
+  // writing into a store nothing reads.
   let generation = 0;
   let closed = false;
   onCleanup(() => {
@@ -113,78 +112,82 @@ export function createFoldedMessages(
       stopFollowing();
       setByMessageId(reconcile({}));
 
-      // Before the fetch, deliberately: frames that arrive while it is in
-      // flight belong after the snapshot it returns, and only a buffered
-      // frame can be told apart from one the snapshot already contains.
-      beginAgentSessionStream(id);
+      // Until the snapshot lands there is nothing to align an event against,
+      // so hold what arrives; afterwards events apply directly.
+      let snapshotLogLength: number | undefined;
+      let buffered: AgentSessionMessageEvent[] = [];
 
-      const log = await queryClient
+      const apply = (event: AgentSessionMessageEvent) => {
+        // Already contained in the snapshot - see agent-session-messages.ts.
+        if (event.logIndex <= (snapshotLogLength ?? 0)) return;
+        remember([event.message]);
+        // A message the server just derived has a placeholder row in the
+        // database, but nothing pushes that row to open channels - so make
+        // one locally and let the real row adopt it when it arrives.
+        if (event.kind === 'new') {
+          void ensureAgentSessionPlaceholder(id, event.message);
+        }
+      };
+
+      // Before the fetch, deliberately: an event that arrives while it is in
+      // flight may or may not be in the snapshot, and only a held event can
+      // be filtered against it afterwards.
+      const stop = followAgentSessionMessages(id, (event) => {
+        if (snapshotLogLength === undefined) {
+          buffered.push(event);
+        } else {
+          apply(event);
+        }
+      });
+      unfollow = stop;
+
+      const snapshot = await queryClient
         .fetchQuery({
           queryKey: channelKeys.foldedMessages(id).queryKey,
           queryFn: async () =>
             await throwOnErr(
               async () =>
-                await storageServiceClient.getAgentChannelLog({
+                await storageServiceClient.getAgentChannelMessages({
                   channel_id: id,
                 })
             ),
-          // The websocket keeps this channel's fold current, so the cached log
+          // The websocket keeps this channel current, so the cached snapshot
           // only matters for a channel reopened after its stream was dropped.
           staleTime: 30_000,
         })
         .catch((error: unknown) => {
-          // A channel with no agent session is answered, not an error, so this
-          // really is a fault - a warning and an empty channel rather than a
-          // throw that would take the channel down.
-          console.warn('[agent-fold] log could not be fetched', error);
+          // A channel with no agent session is answered, not an error, so
+          // this really is a fault - a warning and an empty channel rather
+          // than a throw that would take the channel down.
+          console.warn('[agent-fold] messages could not be fetched', error);
           return undefined;
         });
 
-      console.info('[agent-fold] log fetched', {
-        channelId: id,
-        agentSessionId: log?.agentSessionId ?? '(none - not an agent channel)',
-        acpMessages: log?.entries.length ?? 0,
-      });
-
-      // Before following, so the first frame of the first turn already has an
-      // agent to attribute its message to.
-      rememberSessionBot(id, log?.bot);
-
-      // No session id means no agent session owns this channel - the ordinary
-      // answer for most channels, and nothing to fold or follow.
-      const sessionId = log?.agentSessionId;
-      if (!sessionId || superseded()) {
-        abandonAgentSessionStream(id);
+      if (superseded()) {
+        stopFollowing();
         return lookup;
       }
 
-      try {
-        const followed = await followAgentSession({
-          channelId: id,
-          sessionId,
-          fetched: log.entries,
-          sink: remember,
-        });
-        if (superseded()) {
-          followed.unfollow();
-          return lookup;
-        }
-        unfollow = followed.unfollow;
-        remember(followed.messages);
+      rememberSessionBot(id, snapshot?.bot);
 
-        console.info('[agent-fold] folded', {
-          acpMessages: log.entries.length,
-          messages: followed.messages.length,
-          ids: followed.messages.map(
-            (message) => message.agentSessionMessageId
-          ),
-        });
-      } catch (error) {
-        // Same trade as a failed fetch: an unfoldable log leaves the
-        // placeholders bodyless rather than taking the channel down with it.
-        console.error('[agent-fold] log could not be folded', error);
-        abandonAgentSessionStream(id);
+      // No session id means no agent session owns this channel - the
+      // ordinary answer for most channels, and nothing to follow.
+      if (!snapshot?.agentSessionId) {
+        stopFollowing();
+        return lookup;
       }
+
+      remember(snapshot.messages);
+      snapshotLogLength = snapshot.logLength;
+      for (const event of buffered) apply(event);
+      buffered = [];
+
+      console.info('[agent-fold] folded messages fetched', {
+        channelId: id,
+        agentSessionId: snapshot.agentSessionId,
+        messages: snapshot.messages.length,
+        logLength: snapshot.logLength,
+      });
 
       return lookup;
     }

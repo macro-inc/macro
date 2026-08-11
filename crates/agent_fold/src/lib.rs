@@ -80,9 +80,6 @@
 /// Domain models, the fold, and the query port.
 pub mod domain;
 
-/// Adapters that drive the fold from outside - today, the browser's.
-pub mod inbound;
-
 /// In-memory port implementations and recorded fixtures, for tests.
 #[cfg(any(test, feature = "test-utils"))]
 pub mod testing;

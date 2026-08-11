@@ -77,11 +77,10 @@ impl std::str::FromStr for MessageId {
 ///
 /// Folded messages have no table of their own, so this composite is the whole
 /// mapping between a comms row and the message it renders. Whoever writes a
-/// placeholder builds it, and whoever renders one reproduces it from the same
-/// parts - which now includes the browser, folding the same log through this
-/// crate compiled to WASM. It lives here, with the ids it is made of, so those
-/// two cannot drift; the string is persisted, so drift would silently
-/// unrender a channel.
+/// placeholder builds it, and whoever serves a folded message stamps it with
+/// the same string. It lives here, with the ids it is made of, so those two
+/// cannot drift; the string is persisted, so drift would silently unrender a
+/// channel.
 ///
 /// Keyed per message rather than per turn: a turn yields a prompt and a reply
 /// with different senders, and each needs its own row.
@@ -418,7 +417,7 @@ pub enum StopReason {
 /// The message is borrowed from the machine rather than cloned. Folding a
 /// whole log discards every result, so cloning here would make the batch path
 /// pay for the streaming one; a caller that needs to keep a message - to
-/// serialize it across a WASM boundary, or to write a comms placeholder -
+/// publish it to a channel's viewers, or to write a comms placeholder -
 /// clones only the ones it uses.
 ///
 /// [`Self::NewMessage`] and [`Self::MessageUpdate`] carry the whole message as

@@ -12,7 +12,7 @@ pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 // Folded messages are derived, but a `MessageId` is also what a comms
 // placeholder's agent_session_turn/agent_session_author columns persist to
 // say which message it renders - see PgAgentSessionRepo's `Comms` impl.
-pub use agent_fold::domain::model::{Author, AuthorKind, MessageId, TurnId};
+pub use agent_fold::domain::model::{Author, AuthorKind, FoldedMessage, MessageId, TurnId};
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -84,37 +84,53 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
-/// One frame appended to a live session's log, for anyone watching.
+/// One folded message a live session's frame just derived or changed, for
+/// anyone watching.
 ///
-/// The streaming counterpart of [`ChannelSessionLog`]: that is the whole log
-/// for a reader arriving late, this is one frame for a reader already here.
-/// Both carry the same entry shape, so a client folds them the same way -
-/// catching up on the log and then following it is one fold, not two.
+/// The streaming counterpart of [`ChannelFoldedMessages`]: that is every
+/// message for a reader arriving late, this is the one message a frame
+/// changed for a reader already here. Both carry whole messages rather than
+/// deltas, so a reader applies either the same way - replace whatever it
+/// holds under the message's id.
 ///
 /// Addressed by channel rather than by session because that is what a viewer
 /// has: they opened a channel, and may not know a session exists.
 #[derive(Debug, Clone)]
-pub struct LogAppended {
+pub struct FoldedMessagePublished {
     /// The channel whose viewers should see this.
     pub channel_id: Uuid,
-    /// The session the entry belongs to. The fold keys its messages on this,
-    /// so a client must pass it through unchanged.
+    /// The session the message was folded from - half of the composite id
+    /// that joins it to the placeholder row rendering it.
     pub agent_session_id: AgentSessionId,
-    /// The frame, exactly as the log stored it.
-    pub entry: AgentSessionLog,
+    /// Whether the frame derived the message or extended one already
+    /// reported. `New` is the one moment a viewer can learn a row for this
+    /// message is about to exist.
+    pub change: FoldedMessageChange,
+    /// How many log frames the fold had consumed when it produced this, the
+    /// last one included. A reader who fetched the messages of a log
+    /// `log_length` frames long already holds everything an event with
+    /// `log_index <= log_length` says.
+    pub log_index: u64,
+    /// The message as it now stands.
+    pub message: FoldedMessage,
 }
 
-/// A session's raw protocol log, looked up by its dedicated channel.
-///
-/// Served rather than the messages it derives: the reader folds it. The web
-/// client runs the same fold compiled to WASM, so a streamed session and a
-/// reloaded one are rendered by one implementation rather than two that have
-/// to be kept agreeing.
+/// Whether a published folded message is new or an update to one already
+/// published.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FoldedMessageChange {
+    /// The frame derived a message the fold had not reported before.
+    New,
+    /// The frame changed a message the fold had already reported.
+    Updated,
+}
+
+/// A session's folded messages, looked up by its dedicated channel.
 #[derive(Debug, Clone)]
-pub struct ChannelSessionLog {
-    /// The session the entries belong to.
+pub struct ChannelFoldedMessages {
+    /// The session whose log derived the messages.
     pub agent_session_id: AgentSessionId,
-    /// The agent whose messages the log derives.
+    /// The agent whose messages these are.
     ///
     /// Sent because a reader has to render those messages and cannot work out
     /// who sent them: the sender of an agent message is this session's bot,
@@ -122,8 +138,13 @@ pub struct ChannelSessionLog {
     /// is the wrong question - those are bots explicitly added to a channel,
     /// which a session's agent need not be.
     pub bot: SessionBot,
-    /// Every logged frame, oldest first. Folding depends on this order.
-    pub entries: Vec<AgentSessionLog>,
+    /// How many log frames the messages were folded from. The realtime
+    /// counterpart ([`FoldedMessagePublished::log_index`]) carries the same
+    /// counter, which is what lets a reader align a fetched snapshot with a
+    /// live stream without comparing content.
+    pub log_length: u64,
+    /// The session's folded messages, oldest first.
+    pub messages: Vec<FoldedMessage>,
 }
 
 /// How an incoming channel context relates to an agent session.

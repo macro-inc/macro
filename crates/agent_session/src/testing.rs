@@ -7,7 +7,7 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, LogAppended, MessageId, SessionBot, SessionStatus,
+    CreateAgentSessionParams, FoldedMessagePublished, MessageId, SessionBot, SessionStatus,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, Comms};
 use agent_client_protocol::schema::v1::SessionId;
@@ -331,7 +331,7 @@ impl RecordingComms {
 /// Cheap to clone - clones share one store.
 #[derive(Debug, Clone, Default)]
 pub struct RecordingRealtime {
-    published: Arc<Mutex<Vec<LogAppended>>>,
+    published: Arc<Mutex<Vec<FoldedMessagePublished>>>,
     down: bool,
 }
 
@@ -353,7 +353,7 @@ impl RecordingRealtime {
 
     /// Everything published, in order.
     #[must_use]
-    pub fn published(&self) -> Vec<LogAppended> {
+    pub fn published(&self) -> Vec<FoldedMessagePublished> {
         self.published
             .lock()
             .expect("in-memory realtime store is not poisoned")
@@ -362,7 +362,10 @@ impl RecordingRealtime {
 }
 
 impl AgentSessionRealtime for RecordingRealtime {
-    async fn publish(&self, event: LogAppended) -> std::result::Result<(), rootcause::Report> {
+    async fn publish(
+        &self,
+        event: FoldedMessagePublished,
+    ) -> std::result::Result<(), rootcause::Report> {
         if self.down {
             return Err(rootcause::report!("the connection gateway is down"));
         }

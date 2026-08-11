@@ -1,8 +1,3 @@
-import type {
-  FoldedMessage,
-  FoldedMessagePart,
-  ToolDetail,
-} from '@core/agent-fold/types';
 import { Tool } from '@core/component/AI/component/tool/Tool';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -12,10 +7,13 @@ import PencilSimple from '@phosphor/pencil-simple.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Terminal from '@phosphor/terminal.svg';
 import Wrench from '@phosphor/wrench.svg';
+import type { FoldedMessageDto } from '@service-storage/generated/schemas/foldedMessageDto';
+import type { FoldedMessagePartDto } from '@service-storage/generated/schemas/foldedMessagePartDto';
+import type { ToolDetailDto } from '@service-storage/generated/schemas/toolDetailDto';
 import { For, type JSX, Show } from 'solid-js';
 
 /** Icon and one-line detail for a tool call, keyed off what the tool did. */
-function toolPresentation(detail: ToolDetail) {
+function toolPresentation(detail: ToolDetailDto) {
   switch (detail.kind) {
     case 'terminal':
       return { icon: Terminal, summary: detail.command ?? undefined };
@@ -36,7 +34,7 @@ function toolPresentation(detail: ToolDetail) {
 
 /** What the user chose on a permission request, as a trailing label. */
 function permissionOutcomeLabel(
-  part: Extract<FoldedMessagePart, { kind: 'permission' }>
+  part: Extract<FoldedMessagePartDto, { kind: 'permission' }>
 ): string | undefined {
   const outcome = part.outcome;
   if (!outcome) return undefined;
@@ -65,7 +63,7 @@ function Thought(props: { text: string }) {
 
 // Folded parts are plain immutable query data — a new array arrives on each
 // refetch — so rendering them non-reactively in a switch is safe.
-function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
+function FoldedPart(props: { part: FoldedMessagePartDto }): JSX.Element {
   const part = props.part;
   switch (part.kind) {
     case 'text':
@@ -127,7 +125,7 @@ function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
  * reasoning, and tool calls — in place of a placeholder channel message's
  * missing content.
  */
-export function FoldedContent(props: { folded: FoldedMessage }) {
+export function FoldedContent(props: { folded: FoldedMessageDto }) {
   return (
     <div class="flex flex-col gap-1 min-w-0">
       <For each={props.folded.parts}>

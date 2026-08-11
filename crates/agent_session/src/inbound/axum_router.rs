@@ -30,10 +30,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSessionLog, Message, SessionStatus,
-};
+use crate::domain::model::{AgentSession, AgentSessionId, ChannelFoldedMessages, SessionStatus};
 use crate::domain::service::AgentSessionService;
+use crate::wire::{FoldedMessageDto, SessionBotDto};
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -84,8 +83,8 @@ where
                 .delete(delete_agent_session_handler::<T, Auth>),
         )
         .route(
-            "/channel/{channel_id}/log",
-            get(get_agent_channel_log_handler::<T, Auth>),
+            "/channel/{channel_id}/messages",
+            get(get_agent_channel_messages_handler::<T, Auth>),
         )
         .with_state(state)
 }
@@ -348,14 +347,12 @@ pub async fn delete_agent_session_handler<
     Ok(StatusCode::OK)
 }
 
-/// Response body for a channel's raw agent-session log.
-///
-/// The frames themselves: this endpoint does not fold, its readers do.
+/// Response body for a channel's folded agent-session messages.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentChannelLogResponse {
-    /// The session the entries belong to, absent when no agent session owns
-    /// the channel.
+pub struct AgentChannelMessagesResponse {
+    /// The session whose log derived the messages, absent when no agent
+    /// session owns the channel.
     ///
     /// Absent rather than a `404`, because every channel asks. A client has
     /// no cheap way to know whether a channel is an agent channel before it
@@ -365,8 +362,8 @@ pub struct AgentChannelLogResponse {
     /// failure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_session_id: Option<Uuid>,
-    /// The agent whose messages the log derives, absent for the same reason
-    /// the session id is.
+    /// The agent whose messages these are, absent for the same reason the
+    /// session id is.
     ///
     /// Here because a client renders those messages and cannot otherwise work
     /// out who sent them: the sender of an agent message is this session's
@@ -375,159 +372,87 @@ pub struct AgentChannelLogResponse {
     /// to a channel, which a session's agent need not be.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bot: Option<SessionBotDto>,
-    /// Every logged frame, oldest first. Folding depends on this order. Empty
-    /// when there is no session.
-    pub entries: Vec<AgentSessionLogEntryDto>,
+    /// How many log frames the messages were folded from. Zero when there is
+    /// no session.
+    ///
+    /// The live `agent_session_message` websocket event carries the same
+    /// counter as `logIndex`: an event with `logIndex <= logLength` is
+    /// already contained in this snapshot and can be dropped, which is how a
+    /// reader aligns the two without comparing content.
+    pub log_length: u64,
+    /// The session's folded messages, oldest first. Empty when there is no
+    /// session.
+    pub messages: Vec<FoldedMessageDto>,
 }
 
-impl AgentChannelLogResponse {
+impl AgentChannelMessagesResponse {
     /// The answer for a channel no agent session owns.
     fn none() -> Self {
         Self {
             agent_session_id: None,
             bot: None,
-            entries: Vec::new(),
+            log_length: 0,
+            messages: Vec::new(),
         }
     }
 }
 
-impl From<ChannelSessionLog> for AgentChannelLogResponse {
-    fn from(log: ChannelSessionLog) -> Self {
+impl From<ChannelFoldedMessages> for AgentChannelMessagesResponse {
+    fn from(folded: ChannelFoldedMessages) -> Self {
+        let session = folded.agent_session_id;
         Self {
-            agent_session_id: Some(log.agent_session_id.as_uuid()),
-            bot: Some(SessionBotDto {
-                id: log.bot.id.as_uuid(),
-                name: log.bot.name,
-                avatar_url: log.bot.avatar_url,
-            }),
-            entries: log.entries.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-/// The agent behind a session, mirroring [`SessionBot`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionBotDto {
-    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
-    pub id: Uuid,
-    /// Display name.
-    pub name: String,
-    /// Avatar, when it has one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub avatar_url: Option<String>,
-}
-
-/// One entry of a session's protocol log.
-///
-/// Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
-/// frame's own two fields, flattened in beside the attribution, which is the
-/// same shape a recorded session's JSONL carries. A reader can deserialize the
-/// `direction`/`content` pair straight back into the fold's own log type
-/// rather than through a transport vocabulary of its own.
-///
-/// `agentSessionId` is not repeated per entry: every entry in a response
-/// belongs to the session named once at the top.
-///
-/// `Deserialize` is for the wire-contract tests only - nothing server-side
-/// decodes its own response type.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AgentSessionLogEntryDto {
-    /// The user whose action produced the frame, absent when no user did.
-    ///
-    /// Only prompts carry one, and only when the frame was attributed at the
-    /// time - a replayed or recorded session's are anonymous.
-    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    /// The frame: `direction` and the protocol envelope under `content`.
-    ///
-    /// Serialized by [`Message`] itself rather than rebuilt field by field, so
-    /// the bytes on the wire are exactly what the fold's own log type reads
-    /// back. [`LogFrameDto`] describes the two fields that produces.
-    #[serde(flatten)]
-    #[schema(value_type = LogFrameDto)]
-    pub message: Message,
-}
-
-/// The two fields [`AgentSessionLogEntryDto`] flattens in.
-///
-/// Schema only. Nothing constructs one: the entry serializes through
-/// [`Message`], and this exists so the generated clients see `direction` and
-/// `content` as named fields instead of an open map. A hand-built copy could
-/// drift from the fold's wire format, and the point of the endpoint is that it
-/// cannot - so this describes that format without being able to produce it.
-#[derive(Debug, Serialize, ToSchema)]
-pub struct LogFrameDto {
-    /// Which way the frame travelled.
-    pub direction: LogDirectionDto,
-    /// The protocol envelope, verbatim. Opaque here: it is Agent Runtime
-    /// Protocol, whose shape belongs to the fold rather than this endpoint.
-    #[schema(value_type = Object)]
-    pub content: serde_json::Value,
-}
-
-/// Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum LogDirectionDto {
-    /// Runtime → server.
-    ToServer,
-    /// Server → runtime.
-    ToRuntime,
-}
-
-impl From<AgentSessionLog> for AgentSessionLogEntryDto {
-    fn from(entry: AgentSessionLog) -> Self {
-        Self {
-            user_id: entry.user_id.map(|user| user.to_string()),
-            message: entry.content,
+            agent_session_id: Some(session.as_uuid()),
+            bot: Some(folded.bot.into()),
+            log_length: folded.log_length,
+            messages: folded
+                .messages
+                .into_iter()
+                .map(|message| FoldedMessageDto::new(session, message))
+                .collect(),
         }
     }
 }
 
 #[utoipa::path(
     get,
-    path = "/agent-sessions/channel/{channel_id}/log",
+    path = "/agent-sessions/channel/{channel_id}/messages",
     tag = "agent-sessions",
-    operation_id = "get_agent_channel_log",
+    operation_id = "get_agent_channel_messages",
     params(("channel_id" = Uuid, Path, description = "ID of the session's dedicated channel")),
     responses(
-        (status = 200, body = AgentChannelLogResponse),
+        (status = 200, body = AgentChannelMessagesResponse),
         (status = 401, body = String),
         (status = 403, body = String),
-        (status = 404, body = String),
         (status = 500, body = String),
     )
 )]
-/// The raw protocol log of the agent session behind a channel.
+/// The folded messages of the agent session behind a channel.
 ///
-/// Served unfolded for a client that runs the fold itself.
+/// Placeholder comms messages in an agent channel store no body, only an
+/// `agent_session_message_id`; each message here carries the same composite
+/// id, so a reader joins the two to render the channel.
 ///
 /// Answers for any channel, not only an agent one: a channel with no session
-/// gets an empty log rather than a `404`. Clients call this on every channel
-/// load, because knowing whether a channel is an agent channel first would
-/// cost them a lookup they do not otherwise make.
-///
-/// The whole log, with no paging: the fold is a left fold over the frames from
-/// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering - and turn numbering is what joins these to the channel's
-/// placeholder rows.
+/// gets an empty answer rather than a `404`. Clients call this on every
+/// channel load, because knowing whether a channel is an agent channel first
+/// would cost them a lookup they do not otherwise make.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), channel_id = %channel_id),
     err(Debug)
 )]
-pub async fn get_agent_channel_log_handler<
+pub async fn get_agent_channel_messages_handler<
     T: AgentSessionService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentSessionRouterState<T, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(channel_id): Path<Uuid>,
-) -> Result<Json<AgentChannelLogResponse>, AgentSessionApiError> {
-    let log = state.service.channel_log(channel_id).await?;
+) -> Result<Json<AgentChannelMessagesResponse>, AgentSessionApiError> {
+    let folded = state.service.channel_messages(channel_id).await?;
 
-    Ok(Json(
-        log.map_or_else(AgentChannelLogResponse::none, Into::into),
-    ))
+    Ok(Json(folded.map_or_else(
+        AgentChannelMessagesResponse::none,
+        Into::into,
+    )))
 }

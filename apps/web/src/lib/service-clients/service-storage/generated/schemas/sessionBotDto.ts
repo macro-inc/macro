@@ -7,7 +7,8 @@
 import type { SessionBotDtoAvatarUrl } from './sessionBotDtoAvatarUrl';
 
 /**
- * The agent behind a session, mirroring [`SessionBot`].
+ * The agent behind a session, mirroring
+[`SessionBot`](crate::domain::model::SessionBot).
  */
 export interface SessionBotDto {
   /** Avatar, when it has one. */

@@ -7,9 +7,4 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 uuid = { workspace = true }
-
-# In a browser there is no OS entropy source, so `uuid`'s generators need its
-# `js` feature to reach `crypto.getRandomValues`. Additive, so it changes
-# nothing for the native builds.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { workspace = true, features = ["js"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

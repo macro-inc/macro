@@ -33,7 +33,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
-import type { AgentChannelLogResponse } from './generated/schemas/agentChannelLogResponse';
+import type { AgentChannelMessagesResponse } from './generated/schemas/agentChannelMessagesResponse';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -926,20 +926,17 @@ export const storageServiceClient = {
   },
 
   /**
-   * The raw protocol log of the agent session behind a channel. `404` when the
-   * channel has no agent session.
+   * The folded messages of the agent session behind a channel, with the bot
+   * that authored them and the number of log frames they were folded from.
    *
-   * What `getAgentChannelMessages` folds before answering, served unfolded for
-   * a caller that runs the fold itself. The whole log, in order, with no
-   * paging: folding is a left fold from the first frame, so a reader that
-   * skipped any of them would derive turn numbering that no longer matches the
-   * channel's placeholder messages.
+   * Answers for any channel: one with no agent session gets an empty
+   * response (no session id, no bot, no messages) rather than a `404`.
    */
-  async getAgentChannelLog(args: WithChannelId) {
+  async getAgentChannelMessages(args: WithChannelId) {
     const { channel_id } = args;
     return (
-      await dssFetch<AgentChannelLogResponse>(
-        `/agent-sessions/channel/${channel_id}/log`,
+      await dssFetch<AgentChannelMessagesResponse>(
+        `/agent-sessions/channel/${channel_id}/messages`,
         { method: 'GET' }
       )
     ).map((result) => result);

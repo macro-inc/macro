@@ -168,30 +168,31 @@ export const getRecentActivityHandlerResponse = zod.object({
 });
 
 /**
- * Served unfolded for a client that runs the fold itself.
+ * Placeholder comms messages in an agent channel store no body, only an
+`agent_session_message_id`; each message here carries the same composite
+id, so a reader joins the two to render the channel.
 
 Answers for any channel, not only an agent one: a channel with no session
-gets an empty log rather than a `404`. Clients call this on every channel
-load, because knowing whether a channel is an agent channel first would
-cost them a lookup they do not otherwise make.
-
-The whole log, with no paging: the fold is a left fold over the frames from
-the beginning, so a reader that skipped any of them would derive different
-turn numbering - and turn numbering is what joins these to the channel's
-placeholder rows.
- * @summary The raw protocol log of the agent session behind a channel.
+gets an empty answer rather than a `404`. Clients call this on every
+channel load, because knowing whether a channel is an agent channel first
+would cost them a lookup they do not otherwise make.
+ * @summary The folded messages of the agent session behind a channel.
  */
-export const getAgentChannelLogParams = zod.object({
+export const getAgentChannelMessagesParams = zod.object({
   channel_id: zod.uuid().describe("ID of the session's dedicated channel"),
 });
 
-export const getAgentChannelLogResponse = zod
+export const getAgentChannelMessagesResponseLogLengthMin = 0;
+
+export const getAgentChannelMessagesResponseMessagesItemTurnMin = 0;
+
+export const getAgentChannelMessagesResponse = zod
   .object({
     agentSessionId: zod
       .uuid()
       .nullish()
       .describe(
-        'The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks. A client has\nno cheap way to know whether a channel is an agent channel before it\nlooks: the channel record it would have to consult is only ever\nfetched as part of a list, which can predate the channel. So \"no\nsession here\" is an ordinary answer to an ordinary question, not a\nfailure.'
+        'The session whose log derived the messages, absent when no agent\nsession owns the channel.\n\nAbsent rather than a `404`, because every channel asks. A client has\nno cheap way to know whether a channel is an agent channel before it\nlooks: the channel record it would have to consult is only ever\nfetched as part of a list, which can predate the channel. So \"no\nsession here\" is an ordinary answer to an ordinary question, not a\nfailure.'
       ),
     bot: zod
       .union([
@@ -209,48 +210,288 @@ export const getAgentChannelLogResponse = zod
               ),
             name: zod.string().describe('Display name.'),
           })
-          .describe('The agent behind a session, mirroring [`SessionBot`].'),
+          .describe(
+            'The agent behind a session, mirroring\n[`SessionBot`](crate::domain::model::SessionBot).'
+          ),
       ])
       .optional(),
-    entries: zod
+    logLength: zod
+      .number()
+      .min(getAgentChannelMessagesResponseLogLengthMin)
+      .describe(
+        'How many log frames the messages were folded from. Zero when there is\nno session.\n\nThe live `agent_session_message` websocket event carries the same\ncounter as `logIndex`: an event with `logIndex <= logLength` is\nalready contained in this snapshot and can be dropped, which is how a\nreader aligns the two without comparing content.'
+      ),
+    messages: zod
       .array(
         zod
           .object({
-            content: zod
-              .object({})
+            agentSessionMessageId: zod
+              .string()
               .describe(
-                'The protocol envelope, verbatim. Opaque here: it is Agent Runtime\nProtocol, whose shape belongs to the fold rather than this endpoint.'
+                'The composite id the placeholder comms message for this folded message\ncarries in its `agent_session_message_id`:\n`\"{agent_session_id}:{turn}:{author}\"`. Readers join folded messages\nonto placeholder rows by this, one to one.'
               ),
-            direction: zod
-              .enum(['to_server', 'to_runtime'])
+            author: zod
+              .union([
+                zod
+                  .object({
+                    kind: zod.enum(['user']),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The user's macro id, absent when the prompt was unattributed."
+                      ),
+                  })
+                  .describe('A person, via `session\/prompt`.'),
+                zod
+                  .object({
+                    kind: zod.enum(['agent']),
+                  })
+                  .describe('The agent.'),
+              ])
+              .describe('Who produced a folded message, mirroring [`Author`].'),
+            parts: zod
+              .array(
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['text']),
+                        text: zod.string().describe('The prose.'),
+                      })
+                      .describe('Prose from the user or the agent.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['thought']),
+                        text: zod.string().describe('The reasoning.'),
+                      })
+                      .describe(
+                        "The agent's reasoning, which a reader may want to hide by default."
+                      ),
+                    zod
+                      .object({
+                        detail: zod
+                          .union([
+                            zod
+                              .object({
+                                command: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'The command line, when the harness reported one.'
+                                  ),
+                                exitCode: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Process exit code, when the harness reported one.'
+                                  ),
+                                kind: zod.enum(['terminal']),
+                                output: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    "Captured output, ANSI escape sequences left in place - turning\nthem into something a reader can see is the reader's business."
+                                  ),
+                              })
+                              .describe('A shell command.'),
+                            zod
+                              .object({
+                                diffs: zod
+                                  .array(
+                                    zod
+                                      .object({
+                                        newText: zod
+                                          .string()
+                                          .describe('New contents.'),
+                                        oldText: zod
+                                          .string()
+                                          .nullish()
+                                          .describe(
+                                            'Prior contents, absent when the file is new.'
+                                          ),
+                                        path: zod
+                                          .string()
+                                          .describe('The file that changed.'),
+                                      })
+                                      .describe(
+                                        'A file modification a tool reported, mirroring [`FileDiff`].'
+                                      )
+                                  )
+                                  .describe(
+                                    'The diffs ACP reported for this call.'
+                                  ),
+                                kind: zod.enum(['edit']),
+                              })
+                              .describe('One or more file modifications.'),
+                            zod
+                              .object({
+                                kind: zod.enum(['read']),
+                                paths: zod
+                                  .array(zod.string())
+                                  .describe('Paths this call touched.'),
+                              })
+                              .describe('A file read.'),
+                            zod
+                              .object({
+                                acpKind: zod
+                                  .string()
+                                  .describe(
+                                    "ACP's tool kind, as its wire string."
+                                  ),
+                                input: zod
+                                  .object({})
+                                  .nullish()
+                                  .describe("The tool's input, when reported."),
+                                kind: zod.enum(['other']),
+                              })
+                              .describe(
+                                'Anything else, including tools the fold has no special rendering for.'
+                              ),
+                          ])
+                          .describe(
+                            'What a tool call actually did, mirroring [`ToolDetail`].'
+                          ),
+                        id: zod.string().describe('The ACP `toolCallId`.'),
+                        kind: zod.enum(['tool_use']),
+                        label: zod
+                          .string()
+                          .describe("What to show as the tool's name."),
+                        status: zod
+                          .enum(['pending', 'running', 'completed', 'failed'])
+                          .describe(
+                            'How far a tool call progressed, mirroring [`ToolStatus`].'
+                          ),
+                      })
+                      .describe('A tool the agent invoked.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['permission']),
+                        options: zod
+                          .array(
+                            zod
+                              .object({
+                                id: zod
+                                  .string()
+                                  .describe(
+                                    'The id to report back when this option is chosen.'
+                                  ),
+                                kind: zod
+                                  .enum([
+                                    'allow_once',
+                                    'allow_always',
+                                    'reject_once',
+                                    'reject_always',
+                                  ])
+                                  .describe(
+                                    "What kind of choice a permission option offers, mirroring\n[`PermissionOptionKind`] - ACP's wire strings."
+                                  ),
+                                name: zod.string().describe('Label to show.'),
+                              })
+                              .describe(
+                                'One choice offered for a permission request, mirroring\n[`PermissionOption`].'
+                              )
+                          )
+                          .describe(
+                            'The choices offered, in the order ACP listed them.'
+                          ),
+                        outcome: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .union([
+                                zod
+                                  .object({
+                                    kind: zod.enum(['selected']),
+                                    optionId: zod
+                                      .string()
+                                      .describe("The chosen option's id."),
+                                  })
+                                  .describe('An option was chosen.'),
+                                zod
+                                  .object({
+                                    kind: zod.enum(['cancelled']),
+                                  })
+                                  .describe(
+                                    'The request was cancelled without a choice.'
+                                  ),
+                              ])
+                              .describe(
+                                'How a permission request resolved, mirroring the resolved half of\n[`PermissionOutcome`].'
+                              ),
+                          ])
+                          .optional(),
+                        toolCall: zod
+                          .string()
+                          .describe(
+                            'The `toolCallId` permission was requested for.'
+                          ),
+                      })
+                      .describe(
+                        'The agent asking to proceed with a tool call.'
+                      ),
+                  ])
+                  .describe(
+                    'A unit of renderable content, mirroring [`MessagePart`].'
+                  )
+              )
+              .describe('Ordered renderable content. Never empty.'),
+            stop: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['end_turn']),
+                      })
+                      .describe('The agent finished its turn.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['max_tokens']),
+                      })
+                      .describe('The model hit its token limit.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['max_turn_requests']),
+                      })
+                      .describe('The agent hit its turn-request limit.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['refusal']),
+                      })
+                      .describe('The agent declined.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['cancelled']),
+                      })
+                      .describe('The turn was cancelled.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['other']),
+                        reason: zod.string().describe('The wire string.'),
+                      })
+                      .describe('A stop reason the fold does not model.'),
+                  ])
+                  .describe('Why a turn stopped, mirroring [`StopReason`].'),
+              ])
+              .optional(),
+            turn: zod
+              .number()
+              .min(getAgentChannelMessagesResponseMessagesItemTurnMin)
               .describe(
-                "Which way a logged frame travelled, mirroring [`Message`]'s discriminant."
+                'The turn within the session, assigned in log order from zero.'
               ),
           })
           .describe(
-            "The two fields [`AgentSessionLogEntryDto`] flattens in.\n\nSchema only. Nothing constructs one: the entry serializes through\n[`Message`], and this exists so the generated clients see `direction` and\n`content` as named fields instead of an open map. A hand-built copy could\ndrift from the fold's wire format, and the point of the endpoint is that it\ncannot - so this describes that format without being able to produce it."
-          )
-          .and(
-            zod.object({
-              userId: zod
-                .string()
-                .nullish()
-                .describe(
-                  "The user whose action produced the frame, absent when no user did.\n\nOnly prompts carry one, and only when the frame was attributed at the\ntime - a replayed or recorded session's are anonymous."
-                ),
-            })
-          )
-          .describe(
-            'One entry of a session\'s protocol log.\n\nSerializes as `{\"userId\": ..., \"direction\": ..., \"content\": ...}` - the\nframe\'s own two fields, flattened in beside the attribution, which is the\nsame shape a recorded session\'s JSONL carries. A reader can deserialize the\n`direction`\/`content` pair straight back into the fold\'s own log type\nrather than through a transport vocabulary of its own.\n\n`agentSessionId` is not repeated per entry: every entry in a response\nbelongs to the session named once at the top.\n\n`Deserialize` is for the wire-contract tests only - nothing server-side\ndecodes its own response type.'
+            "One renderable message folded from a session's protocol log, mirroring\n[`FoldedMessage`]."
           )
       )
       .describe(
-        'Every logged frame, oldest first. Folding depends on this order. Empty\nwhen there is no session.'
+        "The session's folded messages, oldest first. Empty when there is no\nsession."
       ),
   })
-  .describe(
-    "Response body for a channel's raw agent-session log.\n\nThe frames themselves: this endpoint does not fold, its readers do."
-  );
+  .describe("Response body for a channel's folded agent-session messages.");
 
 /**
  * @summary Get an agent session by id.

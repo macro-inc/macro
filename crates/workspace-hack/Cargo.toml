@@ -253,6 +253,7 @@ sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2" }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["visit-mut"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }

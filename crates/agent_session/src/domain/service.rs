@@ -21,11 +21,13 @@
 //! push and no I/O. That is a session's actor, and equally `seed_jsonl`
 //! replaying a recording.
 //!
-//! [`PlaceholderSyncingLogs`] is also where a live session's frames are
-//! streamed from, for the same reason: it is the one place every frame of a
-//! connected session passes through, so anything a viewer should see as it
-//! happens has to be published from there. Neither the placeholder write nor
-//! the push can fail the durable append - see [`AgentSessionRealtime`].
+//! [`PlaceholderSyncingLogs`] is also where a live session's folded messages
+//! are streamed from, for the same reason: it is the one place every frame of
+//! a connected session passes through, and its fold is what knows which
+//! message a frame changed. Viewers are sent the changed message itself, not
+//! the frame - folding is the server's job, and most frames change nothing a
+//! reader can see. Neither the placeholder write nor the push can fail the
+//! durable append - see [`AgentSessionRealtime`].
 //!
 //! A lone frame has no run to amortize over, so
 //! [`AgentSessionService::append_event`] - and the
@@ -53,8 +55,9 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession, ChannelSessionLog,
-    CreateAgentSessionParams, LogAppended, MessageId,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelFoldedMessages, ChannelSession,
+    CreateAgentSessionParams, FoldedMessage, FoldedMessageChange, FoldedMessagePublished,
+    MessageId,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, Comms,
@@ -121,17 +124,16 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn sync_placeholders(&self, session: AgentSessionId)
     -> impl Future<Output = Result<()>> + Send;
 
-    /// The raw protocol log of the agent session behind a channel, or `None`
+    /// The folded messages of the agent session behind a channel, or `None`
     /// when no session owns the channel.
     ///
-    /// Served unfolded because nothing here folds for a reader any more: the
-    /// web client runs the same fold compiled to WASM, so a streamed session
-    /// and a reloaded one are rendered by one implementation rather than two
-    /// that have to be kept agreeing. See [`ChannelSessionLog`].
-    fn channel_log(
+    /// The one fold a reader ever sees: the log is read once, folded here,
+    /// and served with the frame count it was folded from so a reader can
+    /// align the snapshot with the live stream. See [`ChannelFoldedMessages`].
+    fn channel_messages(
         &self,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ChannelSessionLog>>> + Send;
+    ) -> impl Future<Output = Result<Option<ChannelFoldedMessages>>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -332,16 +334,21 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn channel_log(&self, channel_id: Uuid) -> Result<Option<ChannelSessionLog>> {
+    async fn channel_messages(&self, channel_id: Uuid) -> Result<Option<ChannelFoldedMessages>> {
         let Some(session) = self.session_for_channel(channel_id).await? else {
             return Ok(None);
         };
 
+        // Folded from one log read rather than through the `Folds` port, so
+        // the frame count and the messages describe the same instant - the
+        // pair is what lets a reader align this snapshot with the stream.
         let entries = AgentSessionLogRepo::list_by_session(&self.repo, session.id).await?;
-        Ok(Some(ChannelSessionLog {
+        let log_length = entries.len() as u64;
+        Ok(Some(ChannelFoldedMessages {
             agent_session_id: session.id,
             bot: self.repo.session_bot(session.bot_id).await?,
-            entries,
+            log_length,
+            messages: agent_fold::domain::fold::fold(entries),
         }))
     }
 }
@@ -381,7 +388,8 @@ pub struct PlaceholderSyncingLogs<R, C, Rt> {
 
 impl<R, C, Rt> PlaceholderSyncingLogs<R, C, Rt> {
     /// A log writer that keeps `session`'s channel in step as it writes, and
-    /// streams each frame to whoever is watching that channel.
+    /// streams each folded message a frame changes to whoever is watching
+    /// that channel.
     ///
     /// The fold starts empty and catches itself up on whatever is already
     /// stored when the first frame arrives, so this is cheap to build and
@@ -404,6 +412,15 @@ struct PlaceholderState {
     /// `None` until the first frame catches it up on the session's stored
     /// log. See [`PlaceholderSyncingLogs::catch_up`].
     fold: Option<FoldMachineImpl>,
+    /// How many log frames the fold has consumed, the stored log it caught
+    /// itself up on included.
+    ///
+    /// Stamped onto every published message as
+    /// [`FoldedMessagePublished::log_index`], and comparable with the
+    /// `log_length` a snapshot reports because both count the same thing:
+    /// this writer is the only thing appending to the session's log, so its
+    /// count and the stored row count cannot drift.
+    frames: u64,
     /// Messages the fold has derived that comms has not accepted yet.
     ///
     /// The fold announces a message exactly once, so a placeholder write that
@@ -443,26 +460,35 @@ where
         // A failed sync must not fail the append. The actor treats a log
         // error as fatal to the connection, and placeholders are derived and
         // rebuildable (`sync_placeholders`) - killing a live session over a
-        // projection it can recreate would be the wrong trade.
-        if let Err(error) = self.place(session, log.clone()).await {
-            tracing::error!(
-                error = ?error,
-                %session,
-                "failed to sync agent session placeholders"
-            );
-        }
+        // projection it can recreate would be the wrong trade. A failure here
+        // also costs this frame its stream - the change is what `place`
+        // folds - which is the same class of loss: a viewer redraws on the
+        // next frame, or reloads.
+        let change = match self.place(session, log).await {
+            Ok(change) => change,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session,
+                    "failed to sync agent session placeholders"
+                );
+                None
+            }
+        };
 
-        // Streamed after the placeholders, so a viewer never receives a frame
-        // deriving a message whose row is not in the channel yet.
+        // Streamed after the placeholders, so a viewer never learns of a
+        // message whose row is not in the channel yet.
         //
-        // Best-effort for the same reason, and a weaker one: the port drops
-        // frames by contract, and the log this was derived from is already
-        // durable, so the worst a failure costs is a viewer who has to reload.
-        if let Err(error) = self.stream(session, log).await {
+        // Best-effort for a weaker reason: the port drops messages by
+        // contract, and the log this was folded from is already durable, so
+        // the worst a failure costs is a viewer who has to reload.
+        if let Some(change) = change
+            && let Err(error) = self.stream(session, change).await
+        {
             tracing::error!(
                 error = ?error,
                 %session,
-                "failed to stream agent session frame"
+                "failed to stream folded agent session message"
             );
         }
         Ok(())
@@ -531,18 +557,21 @@ where
     C: Comms,
     Rt: AgentSessionRealtime,
 {
-    /// Push the frame just appended out to the session's channel.
+    /// Push the message the frame just appended changed out to the session's
+    /// channel.
     async fn stream(
         &self,
         agent_session_id: AgentSessionId,
-        entry: AgentSessionLog,
+        change: FoldedChange,
     ) -> std::result::Result<(), rootcause::Report> {
         let channel_id = self.channel_id(agent_session_id).await?;
         self.realtime
-            .publish(LogAppended {
+            .publish(FoldedMessagePublished {
                 channel_id,
                 agent_session_id,
-                entry,
+                change: change.change,
+                log_index: change.log_index,
+                message: change.message,
             })
             .await
     }
@@ -568,26 +597,42 @@ where
 
     /// Fold the frame just appended and place whatever it newly derived,
     /// along with anything an earlier frame left unplaced.
+    ///
+    /// Answers with the message the frame changed - what the caller streams
+    /// once the placeholders are in - or `None` for the frames that change
+    /// nothing renderable, which is most of them.
     async fn place(
         &self,
         session_id: AgentSessionId,
         entry: AgentSessionLog,
-    ) -> std::result::Result<(), rootcause::Report> {
+    ) -> std::result::Result<Option<FoldedChange>, rootcause::Report> {
         let mut guard = self.state.lock().await;
         // Reborrow once, so the fold and the unplaced list can be held as the
         // separate fields they are rather than through the guard.
         let state = &mut *guard;
 
-        if let Some(fold) = &mut state.fold {
-            state.unplaced.extend(newly_derived(fold.push(entry)));
+        let change = if let Some(fold) = &mut state.fold {
+            state.frames += 1;
+            let change = FoldedChange::of(fold.push(entry), state.frames);
+            if let Some(FoldedChange {
+                change: FoldedMessageChange::New,
+                message,
+                ..
+            }) = &change
+            {
+                state.unplaced.push((message.id(), message.author.clone()));
+            }
+            change
         } else {
-            let (fold, derived) = self.catch_up(session_id).await?;
-            state.fold = Some(fold);
-            state.unplaced.extend(derived);
-        }
+            let caught_up = self.catch_up(session_id).await?;
+            state.fold = Some(caught_up.fold);
+            state.frames = caught_up.frames;
+            state.unplaced.extend(caught_up.derived);
+            caught_up.last_change
+        };
 
         if state.unplaced.is_empty() {
-            return Ok(());
+            return Ok(change);
         }
 
         let session = self
@@ -622,7 +667,7 @@ where
         }
         state.unplaced = refused;
 
-        failure.map_or(Ok(()), Err)
+        failure.map_or(Ok(change), Err)
     }
 
     /// Walk this connection's fold through the session's stored log, so it
@@ -630,7 +675,10 @@ where
     ///
     /// Runs once per connection, on its first frame - by which point that
     /// frame is already in the log, so replaying the log folds it too and the
-    /// caller must not push it again.
+    /// caller must not push it again. The change to stream for that frame is
+    /// the replay's final one ([`CaughtUp::last_change`]); everything the
+    /// earlier frames changed was streamed as it happened, or is served by
+    /// the snapshot a late reader fetches.
     ///
     /// This is what makes re-attaching correct, and it is about turn
     /// numbering rather than duplicate writes. [`TurnId`](agent_fold::domain::model::TurnId)s
@@ -642,29 +690,89 @@ where
     async fn catch_up(
         &self,
         session: AgentSessionId,
-    ) -> std::result::Result<(FoldMachineImpl, Vec<(MessageId, Author)>), rootcause::Report> {
+    ) -> std::result::Result<CaughtUp, rootcause::Report> {
         let log = AgentSessionLogRepo::list_by_session(&self.repo, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
         let mut fold = FoldMachineImpl::new();
         let mut derived = Vec::new();
+        let mut frames = 0;
+        let mut last_change = None;
         for stored in log {
-            derived.extend(newly_derived(fold.push(stored)));
+            frames += 1;
+            // Only the final frame's change leaves this loop, so remember it
+            // by key rather than cloning a whole message per frame - a
+            // resumed session replays thousands.
+            last_change = match fold.push(stored) {
+                IncrementalFoldResult::NewMessage(message) => {
+                    derived.push((message.id(), message.author.clone()));
+                    Some((FoldedMessageChange::New, message.id()))
+                }
+                IncrementalFoldResult::MessageUpdate(message) => {
+                    Some((FoldedMessageChange::Updated, message.id()))
+                }
+                IncrementalFoldResult::Unchanged => None,
+            };
         }
-        Ok((fold, derived))
+
+        let last_change = last_change.and_then(|(change, id)| {
+            let message = fold
+                .messages()
+                .iter()
+                .find(|message| message.id() == id)?
+                .clone();
+            Some(FoldedChange {
+                change,
+                log_index: frames,
+                message,
+            })
+        });
+
+        Ok(CaughtUp {
+            fold,
+            derived,
+            frames,
+            last_change,
+        })
     }
 }
 
-/// The message a push newly derived, if it derived one.
-///
-/// An update to a message already announced needs no placeholder: the row is
-/// bodyless, so there is nothing on it to keep in step. It exists to reserve
-/// the message's place in the channel, and the content is folded on read.
-fn newly_derived(result: IncrementalFoldResult<'_>) -> Option<(MessageId, Author)> {
-    match result {
-        IncrementalFoldResult::NewMessage(message) => Some((message.id(), message.author.clone())),
-        IncrementalFoldResult::MessageUpdate(_) | IncrementalFoldResult::Unchanged => None,
+/// What [`PlaceholderSyncingLogs::catch_up`] hands back: the caught-up fold,
+/// the messages it derived (all of them - a re-attach re-offers every
+/// placeholder), how many frames it consumed, and the change the final frame
+/// - the one whose append triggered the catch-up - made.
+struct CaughtUp {
+    fold: FoldMachineImpl,
+    derived: Vec<(MessageId, Author)>,
+    frames: u64,
+    last_change: Option<FoldedChange>,
+}
+
+/// One frame's renderable effect, as [`PlaceholderSyncingLogs::place`] reports
+/// it for streaming: [`FoldedMessagePublished`] minus the channel address,
+/// which `stream` adds.
+struct FoldedChange {
+    change: FoldedMessageChange,
+    log_index: u64,
+    message: FoldedMessage,
+}
+
+impl FoldedChange {
+    /// The change a push reported, the message cloned out of the machine.
+    fn of(result: IncrementalFoldResult<'_>, log_index: u64) -> Option<Self> {
+        let (change, message) = match result {
+            IncrementalFoldResult::NewMessage(message) => (FoldedMessageChange::New, message),
+            IncrementalFoldResult::MessageUpdate(message) => {
+                (FoldedMessageChange::Updated, message)
+            }
+            IncrementalFoldResult::Unchanged => return None,
+        };
+        Some(Self {
+            change,
+            log_index,
+            message: message.clone(),
+        })
     }
 }
 

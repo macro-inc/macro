@@ -43,7 +43,8 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/non_empty"
+      "crates/non_empty",
+      "crates/workspace-hack"
     ],
     "agent_harness": [
       "crates/activity",
@@ -1581,7 +1582,8 @@
       "services/convert_service"
     ],
     "cowlike": [
-      "crates/cowlike"
+      "crates/cowlike",
+      "crates/workspace-hack"
     ],
     "crm": [
       "crates/activity",
@@ -4090,10 +4092,12 @@
     ],
     "macro_user_id": [
       "crates/cowlike",
-      "crates/macro_user_id"
+      "crates/macro_user_id",
+      "crates/workspace-hack"
     ],
     "macro_uuid": [
-      "crates/macro_uuid"
+      "crates/macro_uuid",
+      "crates/workspace-hack"
     ],
     "maybe_send": [
       "crates/maybe_send"
@@ -4708,7 +4712,8 @@
       "crates/workspace-hack"
     ],
     "non_empty": [
-      "crates/non_empty"
+      "crates/non_empty",
+      "crates/workspace-hack"
     ],
     "notification": [
       "crates/ai_toolset",

@@ -1,5 +1,5 @@
-import type { FoldedMessage } from '@core/agent-fold/types';
 import type { FoldedMessageLookup } from '@queries/channel/folded-messages';
+import type { FoldedMessageDto } from '@service-storage/generated/schemas/foldedMessageDto';
 import { describe, expect, it } from 'vitest';
 import { duplicatePromptRowIds } from '../hide-duplicate-prompts';
 
@@ -9,7 +9,7 @@ function folded(
   turn: number,
   kind: 'user' | 'agent',
   text: string
-): FoldedMessage {
+): FoldedMessageDto {
   return {
     agentSessionMessageId: `${SESSION}:${turn}:${kind}`,
     turn,
@@ -22,7 +22,7 @@ function folded(
  * Taken from a real session: turn 0 arrived by mentioning the agent elsewhere,
  * so it was never posted here; turns 1 and 2 were typed into the channel.
  */
-const FOLD: Record<string, FoldedMessage> = {
+const FOLD: Record<string, FoldedMessageDto> = {
   [`${SESSION}:0:user`]: folded(
     0,
     'user',
