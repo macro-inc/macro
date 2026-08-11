@@ -111,4 +111,29 @@ describe('createChannelHotkeys', () => {
     fireEvent.keyDown(messageList, { key: 'Enter', repeat: true });
     expect(onReply).not.toHaveBeenCalled();
   });
+
+  it('does not turn a straggler keyup after saving an edit into a reply', () => {
+    const onSave = vi.fn();
+    const onReply = vi.fn();
+    render(() => <ChannelEditHarness onSave={onSave} onReply={onReply} />);
+
+    const messageList = screen.getByTestId('message-list');
+    messageList.focus();
+
+    fireEvent.keyDown(messageList, { key: 'e' });
+    const editor = screen.getByTestId('message-editor');
+    expect(document.activeElement).toBe(editor);
+
+    // Fast typing rolls over: Enter goes down before the last typed letter
+    // is released, so the letter's keyup lands after the editor closed and
+    // focus returned to the message list — with 'enter' still pressed.
+    fireEvent.keyDown(editor, { key: 'd' });
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(messageList);
+
+    fireEvent.keyUp(messageList, { key: 'd' });
+    fireEvent.keyUp(messageList, { key: 'Enter' });
+    expect(onReply).not.toHaveBeenCalled();
+  });
 });
