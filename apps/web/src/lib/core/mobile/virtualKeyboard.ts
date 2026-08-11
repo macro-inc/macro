@@ -7,7 +7,7 @@ import { createSignal } from 'solid-js';
  * keyboardAnimationDurationUserInfoKey); `height` is absent on hide.
  */
 export type VirtualKeyboardEvent = CustomEventInit<{
-  height: number;
+  height?: number;
   duration: number;
 }>;
 
