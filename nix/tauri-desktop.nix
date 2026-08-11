@@ -506,12 +506,49 @@
         };
       };
       tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
-      tauriDesktopDmgAppleLinker = pkgs.writeShellScript "tauri-desktop-apple-linker" ''
-        # Apple clang looks up `ld` on PATH. Keep Nix's cctools wrapper from
-        # intercepting the link by putting the native macOS tools first.
-        export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-        exec /usr/bin/clang -B/usr/bin "$@"
+      tauriDesktopDmgAppleLd = pkgs.writeShellScriptBin "ld" ''
+        appleLd=$(/usr/bin/xcrun --sdk macosx --find ld)
+        if [ ! -x "$appleLd" ]; then
+          echo "xcrun did not return an executable Apple linker: $appleLd" >&2
+          exit 1
+        fi
+        case "$appleLd" in
+          /nix/store/*)
+            echo "xcrun unexpectedly selected a Nix linker: $appleLd" >&2
+            exit 1
+            ;;
+        esac
+        if [ -n "''${TAURI_DESKTOP_APPLE_LD_MARKER:-}" ]; then
+          printf '%s\n' "$appleLd" > "$TAURI_DESKTOP_APPLE_LD_MARKER"
+        fi
+        exec "$appleLd" "$@"
       '';
+      tauriDesktopDmgAppleLinker = pkgs.writeShellScript "tauri-desktop-apple-linker" ''
+        # Point clang at a known-present ld shim. The macOS clang driver ignored
+        # /usr/bin in -B/PATH and otherwise kept selecting Nix's cctools wrapper.
+        export PATH="${tauriDesktopDmgAppleLd}/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        exec /usr/bin/clang -B"${tauriDesktopDmgAppleLd}/bin" "$@"
+      '';
+      tauriDesktopDmgAppleLinkerSmoke = pkgs.stdenv.mkDerivation {
+        name = "tauri-desktop-apple-linker-smoke";
+        dontUnpack = true;
+        buildPhase = ''
+          cat > smoke.c <<'EOF'
+          int main(void) { return 0; }
+          EOF
+          export TAURI_DESKTOP_APPLE_LD_MARKER="$PWD/apple-ld-used"
+          ${tauriDesktopDmgAppleLinker} -v smoke.c -o smoke
+          if [ ! -s "$TAURI_DESKTOP_APPLE_LD_MARKER" ]; then
+            echo "Apple clang did not invoke the xcrun-backed ld shim" >&2
+            exit 1
+          fi
+          echo "Apple linker smoke test used $(cat "$TAURI_DESKTOP_APPLE_LD_MARKER")"
+          ./smoke
+        '';
+        installPhase = ''
+          touch "$out"
+        '';
+      };
       tauriDesktopDmgConfig = builtins.toJSON (
         lib.recursiveUpdate
           {
@@ -830,6 +867,7 @@
       // lib.optionalAttrs isAarch64Darwin {
         tauri-frontend = frontend;
         tauri-desktop-dmg = tauriDesktopDmg;
+        tauri-desktop-apple-linker-smoke = tauriDesktopDmgAppleLinkerSmoke;
         tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
       };
     };
