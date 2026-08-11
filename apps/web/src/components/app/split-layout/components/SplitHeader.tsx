@@ -74,7 +74,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   if (data.type === 'reminder') return undefined;
 
   // A calendar event opens the calendar component split, not a block.
-  if (data.type === 'calendar_event') return undefined;
+  if (data.type === 'calendar_event')
+    return { type: 'component', id: 'calendar' };
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };

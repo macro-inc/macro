@@ -767,7 +767,7 @@ function requestCalendarFocusForEntity(
     : startDate
       ? parseISO(startDate)
       : undefined;
-  if (!date) return;
+  if (!date || !Number.isFinite(date.getTime())) return;
   requestCalendarFocus({
     eventId: entity.id,
     occurrenceKey: content?.occurrenceKey ?? '',
@@ -830,7 +830,7 @@ function getEntitySplitContent(entity: EntityData) {
       // Calendar events open the calendar component split; the open path
       // branches before reaching here, so this only serves duplicate checks.
       .with({ type: 'calendar_event' }, () => {
-        return { type: 'unknown' as const, id: 'calendar' };
+        return { type: 'component' as const, id: 'calendar' };
       })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };

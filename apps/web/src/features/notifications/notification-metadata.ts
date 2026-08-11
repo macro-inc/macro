@@ -89,7 +89,10 @@ export function getNotificationTargetName(
       // The reminder's entity name is resolved from the notification's entity,
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
-      .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title)
+      .with(
+        { tag: 'calendar_event_reminder' },
+        (m) => m.content.title || '(No title)'
+      )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .exhaustive()
   );

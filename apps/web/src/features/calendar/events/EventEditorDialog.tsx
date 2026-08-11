@@ -24,6 +24,7 @@ import {
   buildReminderOverrides,
   formatReminderOffset,
   popupMinutes,
+  REMINDER_METHOD_POPUP,
   REMINDER_OVERRIDES_MAX,
   REMINDER_PRESET_MINUTES,
 } from './event-reminders';
@@ -287,6 +288,15 @@ export function EventEditorDialog(props: {
   });
   const reminderOptions = (current: number) =>
     [...new Set([...REMINDER_PRESET_MINUTES, current])].sort((a, b) => a - b);
+  // Non-popup overrides (e.g. Google email reminders) are preserved by the
+  // save, so they occupy override slots the popup rows can't use.
+  const preservedReminderCount = createMemo(() => {
+    const reminders = props.event?.reminders;
+    if (!reminders || reminders.useDefault) return 0;
+    return (reminders.overrides ?? []).filter(
+      (reminder) => reminder.method !== REMINDER_METHOD_POPUP
+    ).length;
+  });
   const addReminder = () => {
     const existing = reminderMinutes();
     const next =
@@ -680,7 +690,12 @@ export function EventEditorDialog(props: {
                 </div>
               )}
             </For>
-            <Show when={reminderMinutes().length < REMINDER_OVERRIDES_MAX}>
+            <Show
+              when={
+                reminderMinutes().length + preservedReminderCount() <
+                REMINDER_OVERRIDES_MAX
+              }
+            >
               <Button
                 variant="ghost"
                 size="sm"
