@@ -128,7 +128,11 @@ function AddServerForm(props: {
       { server_name: n, url: u, headers: headersObject() },
       {
         onSuccess: () => {
-          startAuth(n, u);
+          // Only start OAuth when the server has no static headers —
+          // API-key / bearer-token servers authenticate via headers directly.
+          if (!headersObject()) {
+            startAuth(n, u);
+          }
           reset();
           props.onOpenChange(false);
         },
