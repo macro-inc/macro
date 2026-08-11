@@ -7,7 +7,6 @@ import type { UnifiedNotification } from '@notifications/types';
 import {
   type NotificationUpdateOperation,
   type SoupInput,
-  type SoupNotificationFieldsFragment,
   SoupNotificationsDocument,
   type SoupNotificationsQuery,
   type SoupNotificationsQueryVariables,
@@ -15,7 +14,10 @@ import {
   type UpdateNotificationsMutation,
   type UpdateNotificationsMutationVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  mapGraphqlNotification,
+} from '@service-storage/graphql-soup';
 import { executeGraphqlUpdateNotifications } from '@service-storage/graphql-update-notifications';
 import { CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
@@ -27,27 +29,6 @@ function normalizeLimit(limit?: number): number {
   return limit && limit > 0 && limit <= MAX_NOTIFICATION_LIMIT
     ? limit
     : DEFAULT_NOTIFICATION_LIMIT;
-}
-
-/** Maps one GraphQL notification fragment to the shared UI shape. */
-export function mapGraphqlNotification(
-  record: SoupNotificationFieldsFragment
-): UnifiedNotification {
-  return {
-    id: record.id,
-    notification_event_type: record.eventType,
-    notification_metadata:
-      record.metadata as UnifiedNotification['notification_metadata'],
-    entity_id: record.entityId,
-    entity_type:
-      record.entityType.toLowerCase() as UnifiedNotification['entity_type'],
-    sent: record.sent,
-    done: record.done,
-    created_at: record.createdAt,
-    viewed_at: record.viewedAt,
-    updated_at: record.updatedAt,
-    sender_id: record.senderId,
-  };
 }
 
 function soupInput(cursor: string | null, limit: number): SoupInput {

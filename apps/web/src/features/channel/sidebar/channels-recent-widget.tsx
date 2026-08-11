@@ -368,7 +368,9 @@ export const ChannelsRecentWidget = (props: {
     () => ({
       // Sized to the id list, not RECENT_CHANNELS_LIMIT: this query must
       // return every exact-id match, and a fixed limit would silently drop
-      // the oldest ones past it. The server clamps to its own [20, 500].
+      // the oldest ones past it. (The server's [20, 500] clamp covers only
+      // the merged page; the channel SQL takes this limit verbatim, safe
+      // here because the exact-id filter runs before LIMIT.)
       params: {
         limit: missingUnreadChannelIds().length,
         sort_method: 'updated_at',

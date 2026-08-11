@@ -16,6 +16,7 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import {
   type Client,
   createClient,
@@ -41,6 +42,7 @@ import {
   type GroupSoupQueryVariables,
   type SoupInitialInput,
   type SoupInput,
+  type SoupNotificationFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
   SoupDocument as SoupQueryDocument,
@@ -267,10 +269,6 @@ type GraphqlSoupChannelMessage = NonNullable<
     { __typename: 'GraphqlSoupChannel' }
   >['latestMessage']
 >;
-type GraphqlSoupNotification = Extract<
-  GraphqlSoupEntity,
-  { __typename: 'GraphqlSoupDocument' }
->['notifications'][number];
 
 function mapGraphqlPropertyValue(
   value: GraphqlPropertyValue | null | undefined
@@ -377,30 +375,41 @@ function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
 
-function mapGraphqlNotificationEntityType(
-  entityType: GraphqlSoupNotification['entityType']
-) {
-  return entityType.toLowerCase();
+/**
+ * Rebuilds the REST notification shape from the flat GraphQL fields. The
+ * server stores the event tag apart from the metadata JSON and only REST
+ * re-joins them (`UserNotificationRow::into_tagged`); GraphQL ships them
+ * flat, so the adjacently-tagged `notification_metadata` union must be
+ * reassembled here. Consumers pattern-match on `notification_metadata.tag`
+ * and treat an untagged channel notification as read — every GraphQL
+ * notification must go through this mapper.
+ */
+export function mapGraphqlNotification(
+  record: SoupNotificationFieldsFragment
+): Omit<ApiUserNotification, 'owner_id'> {
+  return {
+    id: record.id,
+    notification_event_type: record.eventType,
+    notification_metadata: {
+      tag: record.eventType,
+      content: record.metadata,
+    } as ApiUserNotification['notification_metadata'],
+    entity_id: record.entityId,
+    entity_type:
+      record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
+    sent: record.sent,
+    done: record.done,
+    created_at: record.createdAt,
+    viewed_at: record.viewedAt ?? undefined,
+    updated_at: record.updatedAt,
+    sender_id: record.senderId ?? undefined,
+  };
 }
 
-function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
-  return notifications.map((notification) => ({
-    id: notification.id,
-    notification_event_type: notification.eventType,
-    notification_metadata: {
-      tag: notification.eventType,
-      content: notification.metadata,
-    },
-    entity_id: notification.entityId,
-    entity_type: mapGraphqlNotificationEntityType(notification.entityType),
-    sent: notification.sent,
-    done: notification.done,
-    seen: notification.seen,
-    created_at: notification.createdAt,
-    viewed_at: notification.viewedAt ?? undefined,
-    updated_at: notification.updatedAt,
-    sender_id: notification.senderId ?? undefined,
-  }));
+function mapGraphqlNotifications(
+  notifications: SoupNotificationFieldsFragment[]
+) {
+  return notifications.map(mapGraphqlNotification);
 }
 
 /**
