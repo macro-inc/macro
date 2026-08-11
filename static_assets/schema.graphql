@@ -4719,6 +4719,10 @@ interface GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	The newest activity on this entity, newest first.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 }
 
 """

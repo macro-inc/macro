@@ -25,6 +25,7 @@ struct TestEmailThreadEdges {
 impl SoupEntityEdges for TestSoupEdges {
     type Property = String;
     type Notification = String;
+    type ActivityEvent = String;
     type EmailThreadEdges = TestEmailThreadEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
@@ -58,6 +59,14 @@ impl SoupEntityEdges for TestSoupEdges {
         _ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<graphql_permission::GraphqlEntityPermission>> {
         Ok(None)
+    }
+
+    async fn resolve_activity(
+        &self,
+        _ctx: &Context<'_>,
+        _limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<Self::ActivityEvent>> {
+        Ok(Vec::new())
     }
 }
 

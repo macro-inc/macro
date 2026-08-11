@@ -59,6 +59,7 @@ where
 {
     type Property = GraphqlProperty;
     type Notification = GraphqlNotification;
+    type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
@@ -110,6 +111,22 @@ where
     ) -> async_graphql::Result<Option<GraphqlEntityPermission>> {
         load_entity_permission::<AR>(ctx, self.permission_entity.clone()).await
     }
+
+    async fn resolve_activity(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let limit = parse_activity_edge_limit(limit)?;
+        load_entity_activity::<AcR>(
+            ctx,
+            ActivityEdgeKey {
+                entity: self.entity.clone(),
+                limit,
+            },
+        )
+        .await
+    }
 }
 
 /// Cross-domain fields attached to a property-bearing Soup entity.
@@ -157,15 +174,7 @@ where
         ctx: &Context<'_>,
         limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
-        let limit = parse_activity_edge_limit(limit)?;
-        load_entity_activity::<AcR>(
-            ctx,
-            ActivityEdgeKey {
-                entity: self.entity.clone(),
-                limit,
-            },
-        )
-        .await
+        self.resolve_activity(ctx, limit).await
     }
 }
 
