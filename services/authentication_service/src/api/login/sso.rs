@@ -49,13 +49,17 @@ pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
     }
 }
 
-/// Strips the query and fragment from an `original_url` so it is safe to log —
-/// both are client-controlled and may carry tokens or PII. The path is kept
-/// because it distinguishes e.g. macro://login from macro:///login.
+/// Strips the userinfo, query, and fragment from an `original_url` so it is
+/// safe to log — all are client-controlled and may carry credentials, tokens,
+/// or PII. The path is kept because it distinguishes e.g. macro://login from
+/// macro:///login.
 pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
     let mut redacted_url = url.clone();
     redacted_url.set_query(None);
     redacted_url.set_fragment(None);
+    // These only fail for cannot-be-a-base URLs, which carry no userinfo.
+    let _ = redacted_url.set_username("");
+    let _ = redacted_url.set_password(None);
     redacted_url
 }
 

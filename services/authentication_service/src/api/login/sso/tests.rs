@@ -49,6 +49,22 @@ fn untrusted_original_urls_are_rejected() {
     }
 }
 
+#[test]
+fn redacted_url_strips_credentials_query_and_fragment_but_keeps_path() {
+    let url =
+        Url::parse("https://alice:secret@evil.example.com/app/login?token=abc123#access_token=xyz")
+            .expect("test URL should parse");
+    let redacted = redact_original_url_for_logging(&url);
+    assert_eq!(redacted.as_str(), "https://evil.example.com/app/login");
+}
+
+#[test]
+fn redacted_url_handles_cannot_be_a_base_urls() {
+    let url = Url::parse("mailto:alice@example.com?subject=hi").expect("test URL should parse");
+    let redacted = redact_original_url_for_logging(&url);
+    assert_eq!(redacted.as_str(), "mailto:alice@example.com");
+}
+
 #[tokio::test]
 async fn it_works_with_no_params() {
     let request = Request::builder()
