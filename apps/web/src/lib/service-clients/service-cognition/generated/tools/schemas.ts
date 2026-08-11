@@ -1702,6 +1702,7 @@ export const ListNotifications = z.object({
             'task',
             'github',
             'reminder',
+            'calendar',
           ]),
           id: z.string(),
         })
@@ -1723,6 +1724,7 @@ export const ListNotifications = z.object({
           'task',
           'github',
           'reminder',
+          'calendar',
         ])
       ),
       z.null(),
