@@ -12,7 +12,7 @@ import { Widget as WidgetNS } from './widget';
  * plus a few composed views — the same data shape the eventual `compose_view` AI
  * tool will emit. No AI involved: everything below is hand-written fixtures.
  *
- * The `card`/`list`/`timeline` entity refs below are REAL ids from dev-assets
+ * The `list`/`timeline` entity refs below are REAL ids from dev-assets
  * (the macro-db-dev RDS the running app talks to), owned by eric.hayes@macro.com,
  * so they resolve to real previews via ItemPreview. Swap them for other ids as
  * needed.
@@ -45,16 +45,6 @@ const CATALOG: Array<{ label: string; widget: Widget }> = [
       type: 'md',
       markdown:
         '## Weekly summary\n\nYou shipped **4 PRs** and closed *6 tickets*. See the [tracker](https://macro.com) for the full breakdown.\n\n- Auth race fix\n- Tool render stabilization\n\n> Nice momentum this week.',
-    },
-  },
-  {
-    label: 'stat',
-    widget: {
-      type: 'stat',
-      label: 'PRs merged',
-      value: 12,
-      unit: 'PRs',
-      delta: { value: 40, direction: 'up', label: 'vs last week' },
     },
   },
   {
@@ -98,19 +88,6 @@ const CATALOG: Array<{ label: string; widget: Widget }> = [
     },
   },
   {
-    // Both card kinds (a task and an md doc) in one labeled section.
-    label: 'card',
-    widget: {
-      type: 'container',
-      direction: 'col',
-      gap: 3,
-      children: [
-        { type: 'card', entity: { id: TASK_REVIEW_PR, type: 'document' } },
-        { type: 'card', entity: { id: DOC_SHOWCASE, type: 'document' } },
-      ],
-    },
-  },
-  {
     label: 'channelMessage',
     widget: {
       type: 'channelMessage',
@@ -127,16 +104,14 @@ const CATALOG: Array<{ label: string; widget: Widget }> = [
       gap: 3,
       children: [
         {
-          type: 'stat',
-          label: 'Throughput',
-          value: 14,
-          unit: '/day',
-          delta: { value: 3, direction: 'up', label: 'vs last week' },
+          type: 'md',
+          markdown:
+            '### Throughput\n\nUp **3/day** vs last week. Steady climb since the sprint started.',
         },
         {
           type: 'md',
           markdown:
-            '### Notes\n\nLayout is flexbox — child **order** sets position. This row places a stat and notes side by side.',
+            '### Notes\n\nLayout is flexbox — child **order** sets position. This row places two notes side by side.',
         },
       ],
     },
@@ -149,27 +124,9 @@ const COMPOSED: View[] = [
     title: 'What did I get done yesterday?',
     widgets: [
       {
-        type: 'container',
-        direction: 'row',
-        gap: 3,
-        children: [
-          {
-            type: 'stat',
-            label: 'PRs merged',
-            value: 4,
-            delta: { value: 2, direction: 'up', label: 'vs avg' },
-          },
-          {
-            type: 'stat',
-            label: 'Tickets closed',
-            value: 6,
-          },
-          {
-            type: 'stat',
-            label: 'Messages sent',
-            value: 28,
-          },
-        ],
+        type: 'md',
+        markdown:
+          'You merged **4 PRs** (up 2 vs avg), closed **6 tickets**, and sent **28 messages**.',
       },
       {
         type: 'timeline',
@@ -186,25 +143,8 @@ const COMPOSED: View[] = [
     title: 'My current work',
     widgets: [
       {
-        type: 'card',
-        entity: { id: DOC_STABILIZE, type: 'document' },
-      },
-      {
-        type: 'container',
-        direction: 'row',
-        gap: 3,
-        children: [
-          {
-            type: 'stat',
-            label: 'In review',
-            value: 3,
-          },
-          {
-            type: 'stat',
-            label: 'Blocked',
-            value: 1,
-          },
-        ],
+        type: 'md',
+        markdown: '**3 items** in review, **1** blocked.',
       },
       {
         type: 'list',
@@ -219,38 +159,15 @@ const COMPOSED: View[] = [
       {
         type: 'md',
         markdown:
-          '### Tool render stabilization\n\nA compact project readout that mixes narrative, metrics, trends, and the source document driving the work.',
+          '### Tool render stabilization\n\nA compact project readout that mixes narrative, metrics, and the source document driving the work.\n\n- Ready checks: **7/9** (up 3 since standup)\n- Open risks: **2** (down 1 from yesterday)\n- Confidence: **82%** (up 6 this week)',
       },
       {
-        type: 'container',
-        direction: 'row',
-        gap: 3,
-        wrap: true,
-        children: [
-          {
-            type: 'stat',
-            label: 'Ready checks',
-            value: '7/9',
-            delta: { value: 3, direction: 'up', label: 'since standup' },
-          },
-          {
-            type: 'stat',
-            label: 'Open risks',
-            value: 2,
-            delta: { value: 1, direction: 'down', label: 'from yesterday' },
-          },
-          {
-            type: 'stat',
-            label: 'Confidence',
-            value: 82,
-            unit: '%',
-            delta: { value: 6, direction: 'up', label: 'this week' },
-          },
-        ],
-      },
-      {
-        type: 'card',
-        entity: { id: DOC_STABILIZE, type: 'document' },
+        type: 'list',
+        title: 'Source document',
+        source: {
+          kind: 'items',
+          entities: [{ id: DOC_STABILIZE, type: 'document' }],
+        },
       },
     ],
   },
@@ -258,22 +175,9 @@ const COMPOSED: View[] = [
     title: 'Review queue',
     widgets: [
       {
-        type: 'container',
-        direction: 'row',
-        gap: 3,
-        children: [
-          {
-            type: 'stat',
-            label: 'In queue',
-            value: 6,
-            delta: { value: 2, direction: 'down', label: 'since 9a' },
-          },
-          {
-            type: 'md',
-            markdown:
-              '### Triage notes\n\n- Prioritize items with product impact\n- Pull docs into review comments\n- Leave owners with one clear next action',
-          },
-        ],
+        type: 'md',
+        markdown:
+          '### Triage notes\n\n**6 in queue** (down 2 since 9a).\n\n- Prioritize items with product impact\n- Pull docs into review comments\n- Leave owners with one clear next action',
       },
       {
         type: 'list',
@@ -318,31 +222,9 @@ const COMPOSED: View[] = [
         messageId: '019eb2e2-c4f5-730e-8aee-70794417ddbd',
       },
       {
-        type: 'container',
-        direction: 'row',
-        gap: 3,
-        children: [
-          {
-            type: 'stat',
-            label: 'Replies needed',
-            value: 3,
-          },
-          {
-            type: 'stat',
-            label: 'Linked tasks',
-            value: 2,
-          },
-          {
-            type: 'stat',
-            label: 'ETA',
-            value: 'Today',
-          },
-        ],
-      },
-      {
         type: 'md',
         markdown:
-          '### Draft response checklist\n\n- Confirm the owner\n- Link the relevant task\n- Call out the next checkpoint',
+          '### Draft response checklist\n\n**3 replies needed**, 2 linked tasks, ETA today.\n\n- Confirm the owner\n- Link the relevant task\n- Call out the next checkpoint',
       },
     ],
   },

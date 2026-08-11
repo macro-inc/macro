@@ -127,6 +127,7 @@ enum RepoDocumentSubtype {
     Regular,
     MarkdownTask,
     MarkdownSnippet,
+    MarkdownSkill,
 }
 
 impl RepoDocumentSubtype {
@@ -137,6 +138,7 @@ impl RepoDocumentSubtype {
             RepoDocumentSubtype::MarkdownSnippet => {
                 Some(document_sub_type::DocumentSubType::Snippet)
             }
+            RepoDocumentSubtype::MarkdownSkill => Some(document_sub_type::DocumentSubType::Skill),
         }
     }
 }
@@ -160,6 +162,9 @@ pub enum MarkdownSubtype {
     /// A snippet document — reusable markdown insertable in any markdown area.
     /// Snippets are created personal; team sharing is toggled separately.
     Snippet,
+    /// A skill document — markdown instructions that AI reads and follows when
+    /// the skill is referenced in an AI input.
+    Skill,
 }
 
 impl MarkdownSubtype {
@@ -321,6 +326,11 @@ impl NewPlainTextDocumentBuilder<FileType, String> {
                 MarkdownSubtype::Snippet => {
                     return Err(DocumentError::BadRequest(
                         "snippets must be markdown documents".to_string(),
+                    ));
+                }
+                MarkdownSubtype::Skill => {
+                    return Err(DocumentError::BadRequest(
+                        "skills must be markdown documents".to_string(),
                     ));
                 }
                 MarkdownSubtype::Note => {}
@@ -512,7 +522,7 @@ where
             subtype,
         } = document;
         let task = match &subtype {
-            MarkdownSubtype::Note | MarkdownSubtype::Snippet => None,
+            MarkdownSubtype::Note | MarkdownSubtype::Snippet | MarkdownSubtype::Skill => None,
             MarkdownSubtype::Task {
                 property_values,
                 share_with_team,
@@ -537,6 +547,7 @@ where
                     MarkdownSubtype::Note => RepoDocumentSubtype::Regular,
                     MarkdownSubtype::Task { .. } => RepoDocumentSubtype::MarkdownTask,
                     MarkdownSubtype::Snippet => RepoDocumentSubtype::MarkdownSnippet,
+                    MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
                 },
                 team_id,
             },

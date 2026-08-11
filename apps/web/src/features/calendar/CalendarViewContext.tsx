@@ -1,177 +1,170 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { useUserId } from '@core/context/user';
-import {
-  type CalendarOccurrenceQueryRange,
-  createCalendarOccurrenceQueryRange,
-  useCalendarOccurrencesQuery,
-} from '@queries/calendar/occurrences';
-import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { batch, createEffect, createMemo, createSignal, on } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { makePersisted } from '@solid-primitives/storage';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { isCalendarRangeSupported } from './calendar-supported-range';
-import {
-  DEFAULT_CALENDAR_SOURCE,
-  mapCalendarOccurrence,
-} from './events/calendar-occurrence-mapper';
-import { mapCalendarEventToFullCalendar } from './events/event-mapper';
-import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
+import { calendarDisplayLabel, spansMultipleInboxes } from './calendar-label';
+import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
+import type {
+  CalendarEvent,
+  CalendarPeriodView,
+  CalendarSource,
+  CalendarTimeFormat,
+  CalendarWeekStart,
+} from './events/types';
 import { getDefaultCalendarTimeFormat } from './time-format';
 
 interface CalendarEventState {
-  visibleSourceIds: string[];
-  selectedEventId: string | undefined;
+  readonly visibleSourceIds: string[];
+  readonly selectedEventId: string | undefined;
 }
 
 interface CalendarDisplaySettings {
+  readonly periodView: CalendarPeriodView;
+  readonly showWeekends: boolean;
+  readonly weekStartsOn: CalendarWeekStart;
+  readonly timeFormat: CalendarTimeFormat;
+}
+
+interface CalendarPreferences {
+  periodView: CalendarPeriodView;
+  hiddenSourceIds: string[];
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
 }
 
-const CALENDAR_SOURCES = [DEFAULT_CALENDAR_SOURCE];
+const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
 
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {
-    const userId = useUserId();
-    const [visibleRange, setVisibleRange] =
-      createSignal<CalendarOccurrenceQueryRange>();
-    const [eventState, setEventState] = createStore<CalendarEventState>({
-      visibleSourceIds: CALENDAR_SOURCES.map((source) => source.id),
-      selectedEventId: undefined,
+    const defaultPreferences: CalendarPreferences = {
+      periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
+      hiddenSourceIds: [],
+      showWeekends: true,
+      weekStartsOn: 0,
+      timeFormat: getDefaultCalendarTimeFormat(),
+    };
+    const [preferences, setPreferences] = makePersisted(
+      createStore<CalendarPreferences>(defaultPreferences),
+      {
+        name: CALENDAR_PREFERENCES_KEY,
+        deserialize: (value) => ({
+          ...defaultPreferences,
+          ...(JSON.parse(value) as Partial<CalendarPreferences>),
+        }),
+      }
+    );
+    const calendarsQuery = useVisibleCalendarsQuery();
+    const sources = createMemo<CalendarSource[]>(() => {
+      const calendars = calendarsQuery.data;
+      if (!calendars || calendars.length === 0) {
+        return [DEFAULT_CALENDAR_SOURCE];
+      }
+      const spansInboxes = spansMultipleInboxes(calendars);
+      return calendars.map((calendar) => ({
+        id: calendar.id,
+        name: calendarDisplayLabel(calendar, spansInboxes),
+        color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      }));
     });
+    const sourceById = createMemo(
+      () => new Map(sources().map((source) => [source.id, source]))
+    );
+    // Sources default to visible, so calendars discovered after a
+    // preference was saved (or events whose calendar is still loading)
+    // never silently disappear.
+    const isSourceVisible = (sourceId: string) =>
+      !preferences.hiddenSourceIds.includes(sourceId);
 
-    const [displaySettings, setDisplaySettings] =
-      createStore<CalendarDisplaySettings>({
-        showWeekends: true,
-        weekStartsOn: 0,
-        timeFormat: getDefaultCalendarTimeFormat(),
-      });
+    const [selectedEventId, setSelectedEventId] = createSignal<string>();
+    const eventState: CalendarEventState = {
+      get visibleSourceIds() {
+        return sources()
+          .filter((source) => isSourceVisible(source.id))
+          .map((source) => source.id);
+      },
+      get selectedEventId() {
+        return selectedEventId();
+      },
+    };
+    const displaySettings: CalendarDisplaySettings = {
+      get periodView() {
+        return preferences.periodView;
+      },
+      get showWeekends() {
+        return preferences.showWeekends;
+      },
+      get weekStartsOn() {
+        return preferences.weekStartsOn;
+      },
+      get timeFormat() {
+        return preferences.timeFormat;
+      },
+    };
 
+    const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
     const [selectedEventAnchor, setSelectedEventAnchor] =
       createSignal<HTMLElement>();
     const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
 
-    const isVisibleRangeSupported = createMemo(() => {
-      const range = visibleRange();
-      return range !== undefined && isCalendarRangeSupported(range);
-    });
-    const occurrencesQuery = useCalendarOccurrencesQuery(
-      () => ({ userId: userId(), range: visibleRange() }),
-      () => ({ enabled: isVisibleRangeSupported() })
-    );
-    const events = createMemo(() =>
-      isVisibleRangeSupported()
-        ? (occurrencesQuery.data?.items ?? []).map(mapCalendarOccurrence)
-        : []
-    );
-    const visibleEvents = createMemo(() =>
-      events().filter((event) =>
-        eventState.visibleSourceIds.includes(event.calendar.id)
-      )
-    );
-    const eventsById = createMemo(
-      () => new Map(events().map((event) => [event.id, event]))
-    );
-    const selectedEvent = createMemo(() => {
-      const eventId = eventState.selectedEventId;
-      return eventId ? eventsById().get(eventId) : undefined;
-    });
-    const fullCalendarEvents = createMemo(() =>
-      visibleEvents().map(mapCalendarEventToFullCalendar)
-    );
-    const isLoading = () =>
-      visibleRange() === undefined ||
-      (isVisibleRangeSupported() && occurrencesQuery.isPending);
-    const isSyncing = () =>
-      occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
-
     const closeEventDetails = () => {
       batch(() => {
-        setEventState('selectedEventId', undefined);
+        setSelectedEventId(undefined);
+        setSelectedEvent(undefined);
         setSelectedEventAnchor(undefined);
       });
     };
 
-    createEffect(
-      on(
-        () =>
-          [eventState.selectedEventId, occurrencesQuery.dataUpdatedAt] as const,
-        ([selectedEventId]) => {
-          if (
-            selectedEventId &&
-            occurrencesQuery.isSuccess &&
-            !eventsById().has(selectedEventId)
-          ) {
-            closeEventDetails();
-          }
-        }
-      )
-    );
-
-    const updateVisibleRange = (start: Date, end: Date) => {
-      const nextRange = createCalendarOccurrenceQueryRange(start, end);
-      const currentRange = visibleRange();
-
-      if (
-        currentRange?.start === nextRange.start &&
-        currentRange.end === nextRange.end &&
-        currentRange.startDate === nextRange.startDate &&
-        currentRange.endDate === nextRange.endDate
-      ) {
-        return;
-      }
-
-      closeEventDetails();
-      setVisibleRange(nextRange);
-    };
-
     const setSourceVisibility = (sourceId: string, visible: boolean) => {
-      setEventState('visibleSourceIds', (current) => {
-        if (visible) {
-          return current.includes(sourceId) ? current : [...current, sourceId];
-        }
-
-        return current.filter((id) => id !== sourceId);
-      });
+      setPreferences('hiddenSourceIds', (current) =>
+        visible
+          ? current.filter((id) => id !== sourceId)
+          : current.includes(sourceId)
+            ? current
+            : [...current, sourceId]
+      );
 
       if (!visible && selectedEvent()?.calendar.id === sourceId) {
         closeEventDetails();
       }
     };
 
-    const selectEvent = (eventId: string, anchor: HTMLElement) => {
+    const selectEvent = (event: CalendarEvent, anchor: HTMLElement) => {
       batch(() => {
-        setEventState('selectedEventId', eventId);
+        setSelectedEventId(event.id);
+        setSelectedEvent(() => event);
         setSelectedEventAnchor(anchor);
       });
+    };
+
+    const refreshSelectedEvent = (event: CalendarEvent) => {
+      if (eventState.selectedEventId !== event.id) return;
+      setSelectedEvent(event);
     };
 
     return {
       eventState,
       displaySettings,
-      visibleRange,
-      updateVisibleRange,
-      occurrencesQuery,
-      events,
-      sources: () => CALENDAR_SOURCES,
-      isSourceVisible: (sourceId: string) =>
-        eventState.visibleSourceIds.includes(sourceId),
+      sources,
+      sourceById,
+      isSourceVisible,
       setSourceVisibility,
-      eventsById,
       selectedEvent,
-      fullCalendarEvents,
-      isLoading,
-      isSyncing,
       selectedEventAnchor,
       useNarrowDayHeaders,
       setUseNarrowDayHeaders,
+      setPeriodView: (periodView: CalendarPeriodView) =>
+        setPreferences('periodView', periodView),
       setShowWeekends: (showWeekends: boolean) =>
-        setDisplaySettings('showWeekends', showWeekends),
+        setPreferences('showWeekends', showWeekends),
       setWeekStartsOn: (weekStartsOn: CalendarWeekStart) =>
-        setDisplaySettings('weekStartsOn', weekStartsOn),
+        setPreferences('weekStartsOn', weekStartsOn),
       setTimeFormat: (timeFormat: CalendarTimeFormat) =>
-        setDisplaySettings('timeFormat', timeFormat),
+        setPreferences('timeFormat', timeFormat),
       closeEventDetails,
       selectEvent,
+      refreshSelectedEvent,
     };
   });

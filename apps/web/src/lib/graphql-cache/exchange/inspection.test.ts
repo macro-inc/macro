@@ -6,7 +6,7 @@ import {
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { createNoopCacheHost } from '../host/noop-host';
 import type { CacheHost } from '../host/types';
-import { inspect, selectAll } from './inspection';
+import { inspect, inspectVariants, selectAll } from './inspection';
 
 const input = {
   initial: {
@@ -19,6 +19,27 @@ const input = {
 };
 
 describe('typed generated query inspection', () => {
+  it('discovers typed variables without materializing query values', async () => {
+    const inspectQueryVariants = async (request: unknown) => {
+      expect(request).toMatchObject({
+        operationName: 'GroupSoupMembership',
+        path: [{ field: 'user' }, { field: 'groupSoup' }],
+      });
+      expect(request).not.toHaveProperty('variables');
+      expect(request).not.toHaveProperty('variableFilters');
+      return [{ variables: { input } }];
+    };
+    const host = { inspectQueryVariants } as unknown as CacheHost;
+
+    const result = await inspectVariants(
+      host,
+      selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
+    );
+
+    expect(result).toEqual([{ variables: { input } }]);
+    expect(result[0]).not.toHaveProperty('value');
+  });
+
   it('serializes the document, field path, and typed variable filters', async () => {
     const inspectQuery = async (request: unknown) => {
       expect(request).toMatchObject({
@@ -81,11 +102,15 @@ describe('typed generated query inspection', () => {
       // @ts-expect-error Lists cannot be traversed by v1 inspection paths.
       selected.field('bins').field('length');
 
+      const variants = await inspectVariants(host, selected);
       const results = await inspect(host, selected, {
         variableFilters: [{ input: { initial: { limit: 20 } } }],
       });
       // @ts-expect-error Filters are typed from the generated operation variables.
       inspect(host, selected, { variableFilters: [{ missing: true }] });
+      expectTypeOf(
+        variants[0]!.variables
+      ).toEqualTypeOf<GroupSoupMembershipQueryVariables>();
       expectTypeOf(
         results[0]!.variables
       ).toEqualTypeOf<GroupSoupMembershipQueryVariables>();
@@ -104,10 +129,13 @@ describe('typed generated query inspection', () => {
   it('returns no selections through the no-op host', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const result = await inspect(
-        createNoopCacheHost('test'),
-        selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
-      );
+      const host = createNoopCacheHost('test');
+      const selection = selectAll(GroupSoupMembershipDocument)
+        .field('user')
+        .field('groupSoup');
+      const variants = await inspectVariants(host, selection);
+      const result = await inspect(host, selection);
+      expect(variants).toEqual([]);
       expect(result).toEqual([]);
     } finally {
       warn.mockRestore();
@@ -115,14 +143,18 @@ describe('typed generated query inspection', () => {
   });
 
   it('rejects malformed host results', async () => {
+    const selection = selectAll(GroupSoupMembershipDocument)
+      .field('user')
+      .field('groupSoup');
     const host = {
       inspectQuery: async () => [{ variables: null }],
+      inspectQueryVariants: async () => [{ variables: null }],
     } as unknown as CacheHost;
-    await expect(
-      inspect(
-        host,
-        selectAll(GroupSoupMembershipDocument).field('user').field('groupSoup')
-      )
-    ).rejects.toThrow('invalid cache query inspection instance');
+    await expect(inspectVariants(host, selection)).rejects.toThrow(
+      'invalid cache query inspection variant'
+    );
+    await expect(inspect(host, selection)).rejects.toThrow(
+      'invalid cache query inspection instance'
+    );
   });
 });

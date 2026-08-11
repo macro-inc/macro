@@ -105,6 +105,11 @@ use utoipa::OpenApi;
         email::contacts::list_blocked::handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
+        calendar_events::inbound::mutation_router::list_calendars,
+        calendar_events::inbound::mutation_router::create_calendar_event,
+        calendar_events::inbound::mutation_router::update_calendar_event,
+        calendar_events::inbound::mutation_router::delete_calendar_event,
+        calendar_events::inbound::mutation_router::rsvp_calendar_event,
     ),
     components(
         schemas(
@@ -186,7 +191,25 @@ use utoipa::OpenApi;
             service::thread::Thread,
             service::message::Message,
             PatchSettingsRequest,
-            PatchSettingsResponse
+            PatchSettingsResponse,
+            // Calendar mutation types
+            calendar_events::inbound::mutation_router::CreateCalendarEventRequest,
+            calendar_events::inbound::mutation_router::ListCalendarsResponse,
+            calendar_events::domain::models::VisibleCalendar,
+            calendar_events::inbound::mutation_router::UpdateCalendarEventRequest,
+            calendar_events::inbound::mutation_router::RsvpCalendarEventRequest,
+            calendar_events::inbound::mutation_router::CalendarAttendeeInputBody,
+            calendar_events::inbound::mutation_router::CalendarMutationApiError,
+            calendar_events::inbound::mutation_router::CalendarMutationErrorCode,
+            calendar_events::inbound::mutation_router::CalendarDeletionScopeParam,
+            calendar_events::domain::models::CalendarEvent,
+            calendar_events::domain::models::CalendarAttendee,
+            calendar_events::domain::models::AttendeeResponseStatus,
+            calendar_events::domain::models::EventTime,
+            calendar_events::domain::models::EventStatus,
+            calendar_events::domain::models::EventVisibility,
+            calendar_events::domain::models::EventTransparency,
+            calendar_events::domain::models::RefreshCalendarEvent
         ),
     ),
     tags(

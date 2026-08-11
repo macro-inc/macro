@@ -18,6 +18,7 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { cn } from '../utils/classname';
+import { Button } from './Button';
 import { Dropdown } from './Dropdown';
 
 const formatWeekdayLong = new Intl.DateTimeFormat(undefined, {
@@ -40,6 +41,13 @@ const isRangeStart = (date: Date, range: HighlightedRange | undefined) =>
 
 const isRangeEnd = (date: Date, range: HighlightedRange | undefined) =>
   isDateInRange(date, range) && !isDateInRange(offsetDate(date, 1), range);
+
+export interface CalendarMonthSelectorProps {
+  /** Month currently displayed by the calendar. */
+  month: Date;
+  /** Displays another month. */
+  onChange: (month: Date) => void;
+}
 
 export type CalendarProps = Omit<
   CorvuCalendarRootSingleProps,
@@ -70,23 +78,10 @@ export function Calendar(props: CalendarProps) {
         <div class={cn('w-full min-w-0 text-ink', local.class)}>
           <div class="flex items-center gap-2">
             <CorvuCalendar.Label class="min-w-0 flex-1">
-              <Dropdown placement="bottom-start">
-                <Dropdown.Trigger
-                  aria-label="Choose month"
-                  class="h-7 max-w-full min-w-0 justify-start gap-1 border-none bg-transparent px-1 text-xs font-medium text-ink hover:bg-hover"
-                >
-                  <span class="min-w-0 truncate">
-                    {formatCalendarMonth(calendar.month)}
-                  </span>
-                  <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="min-w-40 p-1">
-                  <CalendarMonthMenu
-                    month={calendar.month}
-                    onChange={calendar.setMonth}
-                  />
-                </Dropdown.Content>
-              </Dropdown>
+              <CalendarMonthDropdown
+                month={calendar.month}
+                onChange={calendar.setMonth}
+              />
             </CorvuCalendar.Label>
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               <CorvuCalendar.Nav
@@ -172,8 +167,9 @@ export function Calendar(props: CalendarProps) {
 
 const MONTH_RANGE_YEARS = 100;
 const MONTH_OPTION_HEIGHT = 32;
+const DRAWER_MONTH_OPTION_HEIGHT = 44;
 
-const formatCalendarMonth = new Intl.DateTimeFormat(undefined, {
+export const formatCalendarMonth = new Intl.DateTimeFormat(undefined, {
   month: 'long',
   year: 'numeric',
 }).format;
@@ -189,10 +185,37 @@ type MonthOptionRange = {
   startYear: number;
 };
 
-type CalendarMonthMenuProps = {
-  month: Date;
-  onChange: (month: Date) => void;
+export type CalendarMonthMenuProps = CalendarMonthSelectorProps & {
+  /** Semantic presentation used for month options. */
+  presentation?: 'menu' | 'radio-group';
+  /** Action invoked by the drawer's Go To Today button. */
+  onToday?: () => void;
 };
+
+/** Dropdown presentation for selecting a calendar month. */
+function CalendarMonthDropdown(props: CalendarMonthSelectorProps) {
+  const [open, setOpen] = createSignal(false);
+
+  const selectMonth = (month: Date) => {
+    props.onChange(month);
+    setOpen(false);
+  };
+
+  return (
+    <Dropdown open={open()} onOpenChange={setOpen} placement="bottom-start">
+      <Dropdown.Trigger
+        aria-label="Choose month"
+        class="h-7 max-w-full min-w-0 justify-start gap-1 border-none bg-transparent px-1 text-xs font-medium text-ink hover:bg-hover"
+      >
+        <span class="min-w-0 truncate">{formatCalendarMonth(props.month)}</span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-40 p-1">
+        <CalendarMonthMenu month={props.month} onChange={selectMonth} />
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
 
 const monthValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -228,7 +251,8 @@ const createMonthOptionRange = (
 const monthIndex = (month: Date, startYear: number) =>
   (month.getFullYear() - startYear) * 12 + month.getMonth();
 
-function CalendarMonthMenu(props: CalendarMonthMenuProps) {
+/** Virtualized month menu reusable across dropdown and drawer presentations. */
+export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
   const now = new Date();
   const todayMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayValue = monthValue(todayMonth);
@@ -239,18 +263,24 @@ function CalendarMonthMenu(props: CalendarMonthMenuProps) {
     props.month > todayMonth ? 'up' : 'down'
   );
   let initialPositionComplete = false;
+  let focusFrame: number | undefined;
+  let menu!: HTMLDivElement;
 
   const range = createMemo(() =>
     createMonthOptionRange(props.month, todayMonth)
   );
   const options = () => range().options;
   const selectedValue = () => monthValue(props.month);
+  const optionHeight = () =>
+    props.presentation === 'radio-group'
+      ? DRAWER_MONTH_OPTION_HEIGHT
+      : MONTH_OPTION_HEIGHT;
   const selectedIndex = () => monthIndex(props.month, range().startYear);
   const todayIndex = () => monthIndex(todayMonth, range().startYear);
 
   const centeredOffset = (index: number) => {
     const handle = virtualizer();
-    if (!handle) return index * MONTH_OPTION_HEIGHT;
+    if (!handle) return index * optionHeight();
 
     return Math.max(
       0,
@@ -262,6 +292,41 @@ function CalendarMonthMenu(props: CalendarMonthMenuProps) {
   const scrollToIndex = (index: number) => {
     if (index < 0 || index >= options().length) return;
     virtualizer()?.scrollToIndex(index, { align: 'center' });
+  };
+
+  const focusIndex = (index: number) => {
+    scrollToIndex(index);
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
+
+    focusFrame = requestAnimationFrame(() => {
+      focusFrame = undefined;
+      menu.querySelector<HTMLElement>(`[data-month-index="${index}"]`)?.focus();
+    });
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const option = (event.target as Element).closest<HTMLElement>(
+      '[data-month-index]'
+    );
+    if (!option || !menu.contains(option)) return;
+
+    const currentIndex = Number(option.dataset.monthIndex);
+    let nextIndex: number | undefined;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      nextIndex = Math.min(options().length - 1, currentIndex + 1);
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      nextIndex = Math.max(0, currentIndex - 1);
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = options().length - 1;
+    }
+
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    focusIndex(nextIndex);
   };
 
   const handleScroll = (offset: number) => {
@@ -296,42 +361,66 @@ function CalendarMonthMenu(props: CalendarMonthMenuProps) {
       scrollToIndex(selectedIndex());
       positionedFrame = requestAnimationFrame(() => {
         initialPositionComplete = true;
+        menu
+          .querySelector<HTMLElement>(`[data-month-index="${selectedIndex()}"]`)
+          ?.focus({ preventScroll: true });
       });
     });
 
     onCleanup(() => {
       cancelAnimationFrame(frame);
       if (positionedFrame !== undefined) cancelAnimationFrame(positionedFrame);
+      if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
     });
   });
 
   return (
-    <div class="relative">
-      <Dropdown.RadioGroup
-        value={selectedValue()}
-        onChange={(value) => {
-          const option = options().find(
-            (candidate) => candidate.value === value
-          );
-          if (option) props.onChange(option.date);
-        }}
+    <div
+      ref={menu}
+      class="relative"
+      role={props.presentation === 'radio-group' ? 'radiogroup' : undefined}
+      aria-label={
+        props.presentation === 'radio-group' ? 'Choose month' : undefined
+      }
+      onKeyDown={handleKeyDown}
+    >
+      <div
+        class={cn(
+          'h-72 overflow-y-auto overscroll-contain',
+          props.presentation === 'radio-group' && 'rounded-2xl'
+        )}
+        style={{ contain: 'strict' }}
       >
-        <div
-          class="h-72 overflow-y-auto overscroll-contain"
-          style={{ contain: 'strict' }}
+        <Virtualizer
+          data={options()}
+          itemSize={optionHeight()}
+          onScroll={handleScroll}
+          ref={setVirtualizer}
         >
-          <Virtualizer
-            data={options()}
-            itemSize={MONTH_OPTION_HEIGHT}
-            onScroll={handleScroll}
-            ref={setVirtualizer}
-          >
-            {(option) => (
-              <Dropdown.RadioItem
+          {(option) => {
+            const index = () => monthIndex(option.date, range().startYear);
+            const selected = () => option.value === selectedValue();
+
+            return (
+              <button
+                type="button"
+                role={
+                  props.presentation === 'radio-group'
+                    ? 'radio'
+                    : 'menuitemradio'
+                }
+                aria-checked={selected()}
                 aria-current={option.value === todayValue ? 'date' : undefined}
-                class="h-8 text-xs"
-                closeOnSelect
-                value={option.value}
+                data-month-index={index()}
+                class={cn(
+                  'flex w-full items-center gap-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover',
+                  selected() ? 'text-accent' : 'text-ink',
+                  props.presentation === 'radio-group'
+                    ? 'relative h-11 bg-surface px-4 text-sm'
+                    : 'h-8 rounded-lg px-2 text-xs'
+                )}
+                tabIndex={selected() ? 0 : -1}
+                onClick={() => props.onChange(option.date)}
               >
                 <span
                   aria-hidden="true"
@@ -342,22 +431,67 @@ function CalendarMonthMenu(props: CalendarMonthMenuProps) {
                   </Show>
                 </span>
                 <span>{option.label}</span>
-                <Dropdown.ItemIndicator class="ml-auto">
-                  <CheckIcon class="size-3.5 text-accent" />
-                </Dropdown.ItemIndicator>
-              </Dropdown.RadioItem>
-            )}
-          </Virtualizer>
-        </div>
-      </Dropdown.RadioGroup>
+                <CheckIcon
+                  class="ml-auto size-3.5 text-accent"
+                  classList={{ invisible: !selected() }}
+                />
+                <Show
+                  when={
+                    props.presentation === 'radio-group' &&
+                    index() < options().length - 1
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    class="absolute inset-x-2 bottom-0 h-px bg-edge-muted"
+                  />
+                </Show>
+              </button>
+            );
+          }}
+        </Virtualizer>
+      </div>
 
-      <Show when={hasScrolled() && !isTodayVisible()}>
+      <Show when={props.presentation === 'radio-group'}>
+        <div class="flex pt-3">
+          <Button
+            fullWidth
+            variant="base"
+            size="sm"
+            depth={3}
+            class="rounded-full bg-surface px-3 text-ink shadow-menu"
+            label="Go To Today"
+            onClick={() => {
+              if (props.onToday) {
+                props.onToday();
+                return;
+              }
+              focusIndex(todayIndex());
+            }}
+          >
+            Go To Today
+          </Button>
+        </div>
+      </Show>
+
+      <Show
+        when={
+          props.presentation !== 'radio-group' &&
+          hasScrolled() &&
+          !isTodayVisible()
+        }
+      >
         <div class="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">
-          <Dropdown.Item
-            class="pointer-events-auto w-auto min-w-16 justify-center rounded-full border border-edge-muted bg-surface px-3 text-xs shadow-menu hover:bg-active data-highlighted:bg-active"
-            closeOnSelect={false}
+          <button
+            type="button"
+            class={cn(
+              'pointer-events-auto flex min-w-16 items-center justify-center gap-1.5 rounded-full border border-edge-muted bg-surface px-3 text-ink shadow-menu hover:bg-active',
+              props.presentation === 'radio-group'
+                ? 'h-11 text-sm'
+                : 'h-8 text-xs'
+            )}
             data-direction={todayDirection()}
-            onSelect={() => scrollToIndex(todayIndex())}
+            onClick={() => focusIndex(todayIndex())}
           >
             <Show
               when={todayDirection() === 'up'}
@@ -366,7 +500,7 @@ function CalendarMonthMenu(props: CalendarMonthMenuProps) {
               <ArrowUpIcon aria-hidden="true" class="size-3" />
             </Show>
             Today
-          </Dropdown.Item>
+          </button>
         </div>
       </Show>
     </div>

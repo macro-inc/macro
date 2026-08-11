@@ -904,7 +904,7 @@ pub enum PatchMessageNotificationPolicy {
     /// Apply the normal edit behavior: realtime/search only, no notifications.
     #[default]
     Default,
-    /// Broadcast and notify as though the patched message content had just been posted.
+    /// Notify as though the patched message content had just been posted.
     NotifyAsPostedMessage,
 }
 

@@ -1,6 +1,7 @@
 use async_lock::Mutex;
 use cache_core::deps::OpId;
-use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult};
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
@@ -70,12 +71,21 @@ struct JsInspectionPathSegment {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsOptimisticWriteResult {
+struct JsEnqueueOptimisticMutationResult {
     transaction_id: String,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    initial_claim: JsInitialMutationClaim,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum JsInitialMutationClaim {
+    Claimed { mutation: JsClaimedMutation },
+    NotRunnable,
+    Failed { error: String },
 }
 
 #[derive(Serialize)]
@@ -207,6 +217,22 @@ fn parse_vec<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<Vec<T>, J
     serde_wasm_bindgen::from_value(value).map_err(err_js)
 }
 
+fn parse_query_inspection(
+    query: String,
+    operation_name: Option<String>,
+    path: JsValue,
+    variable_filters: Vec<serde_json::Map<String, serde_json::Value>>,
+) -> Result<QueryInspection, JsValue> {
+    let path: Vec<JsInspectionPathSegment> =
+        serde_wasm_bindgen::from_value(path).map_err(err_js)?;
+    Ok(QueryInspection {
+        query,
+        operation_name,
+        path: path.into_iter().map(|segment| segment.field).collect(),
+        variable_filters,
+    })
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
     /// Returns the opaque identity bound to this cache, or `null` when no
@@ -235,15 +261,23 @@ impl CacheEngine {
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
+        entity_resolvers: JsValue,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let vars = parse_variables(variables)?;
+            let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
             let op = op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
             let result = engine
-                .read_query(op, &query, operation_name.as_deref(), &vars)
+                .read_query_with_entity_resolvers(
+                    op,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &entity_resolvers,
+                )
                 .await
                 .map_err(err_js)?;
             to_js(&match result {
@@ -311,7 +345,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -319,11 +357,12 @@ impl CacheEngine {
         })
     }
 
-    /// Durably queues a mutation and its optimistic response. Resolves to
-    /// `{transactionId: string, changed: string[], affectedOps: string[],
-    /// reset: false}` where changes reflect the composed view.
-    #[wasm_bindgen(js_name = beginOptimisticWrite)]
-    pub fn begin_optimistic_write(
+    /// Durably queues a mutation and its optimistic response, then attempts
+    /// to claim the strict queue head before resolving. Claim failures are
+    /// returned as a nested diagnostic outcome because enqueue succeeded.
+    #[wasm_bindgen(js_name = enqueueOptimisticMutation)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
         query: String,
@@ -333,6 +372,9 @@ impl CacheEngine {
         link_patches: JsValue,
         revalidations: JsValue,
         created_at_ms: f64,
+        lease_owner: String,
+        now_ms: f64,
+        lease_expires_at_ms: f64,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
@@ -342,10 +384,18 @@ impl CacheEngine {
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
+            let claim = MutationClaimRequest {
+                owner: lease_owner,
+                now_ms: parse_timestamp(now_ms, "claim timestamp")?,
+                lease_expires_at_ms: parse_timestamp(
+                    lease_expires_at_ms,
+                    "lease expiration timestamp",
+                )?,
+            };
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
-            let (transaction, result) = engine
-                .begin_optimistic_write(
+            let result = engine
+                .enqueue_optimistic_mutation(
                     origin,
                     BeginOptimisticWrite {
                         query: &query,
@@ -356,20 +406,57 @@ impl CacheEngine {
                         revalidations: &revalidations,
                         created_at_ms,
                     },
+                    claim,
                 )
                 .await
                 .map_err(err_js)?;
-            to_js(&JsOptimisticWriteResult {
-                transaction_id: transaction.to_string(),
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
+            let initial_claim = match result.initial_claim {
+                InitialClaimOutcome::Claimed(claimed) => JsInitialMutationClaim::Claimed {
+                    mutation: JsClaimedMutation::try_from(*claimed)?,
+                },
+                InitialClaimOutcome::NotRunnable => JsInitialMutationClaim::NotRunnable,
+                InitialClaimOutcome::Failed(error) => JsInitialMutationClaim::Failed {
+                    error: error.to_string(),
+                },
+            };
+            to_js(&JsEnqueueOptimisticMutationResult {
+                transaction_id: result.transaction_id.to_string(),
+                changed: result
+                    .write_result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
+                affected_ops: ops.borrow().names(result.write_result.affected_ops),
+                reset: result.write_result.reset,
+                revalidations: result.write_result.revalidations,
+                initial_claim,
             })
         })
     }
 
-    /// Enumerates cached variants of one generated query field.
+    /// Recovers cached query variables without materializing each variant.
+    #[wasm_bindgen(js_name = inspectQueryVariants)]
+    pub fn inspect_query_variants(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        path: JsValue,
+    ) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            let inspection = parse_query_inspection(query, operation_name, path, Vec::new())?;
+            let variants = engine
+                .lock()
+                .await
+                .inspect_query_variants(&inspection)
+                .await
+                .map_err(err_js)?;
+            to_js(&variants)
+        })
+    }
+
+    /// Enumerates and materializes cached variants of one generated query field.
     #[wasm_bindgen(js_name = inspectQuery)]
     pub fn inspect_query(
         &self,
@@ -380,16 +467,8 @@ impl CacheEngine {
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         future_to_promise(async move {
-            let path: Vec<JsInspectionPathSegment> =
-                serde_wasm_bindgen::from_value(path).map_err(err_js)?;
-            let variable_filters: Vec<serde_json::Map<String, serde_json::Value>> =
-                serde_wasm_bindgen::from_value(variable_filters).map_err(err_js)?;
-            let inspection = QueryInspection {
-                query,
-                operation_name,
-                path: path.into_iter().map(|segment| segment.field).collect(),
-                variable_filters,
-            };
+            let variable_filters = parse_vec(variable_filters)?;
+            let inspection = parse_query_inspection(query, operation_name, path, variable_filters)?;
             let instances = engine
                 .lock()
                 .await
@@ -496,7 +575,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -527,7 +610,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|k| k.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,
@@ -543,7 +630,8 @@ impl CacheEngine {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+            let keys: Vec<EntityKey<'static>> =
+                keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
             to_js(&ops.borrow().names(affected))
@@ -557,7 +645,8 @@ impl CacheEngine {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
-            let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+            let keys: Vec<EntityKey<'static>> =
+                keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let affected = engine
                 .lock()
                 .await
@@ -582,7 +671,11 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {
-                changed: result.changed.into_iter().map(|key| key.0).collect(),
+                changed: result
+                    .changed
+                    .into_iter()
+                    .map(|key| key.0.into_owned())
+                    .collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
                 reset: result.reset,
                 revalidations: result.revalidations,

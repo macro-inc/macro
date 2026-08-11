@@ -609,6 +609,15 @@ queue! {
             dev: "document-upload-finalizer-queue-dev",
             prod: "document-upload-finalizer-queue-prod",
         },
+        /// Queue for reminder dispatch.
+        ///
+        /// Carries both the minutely sweep tick, which an EventBridge rule
+        /// publishes directly, and the per-firing messages that sweep fans out.
+        pub ReminderDispatchQueue {
+            local: "reminder-dispatch-queue",
+            dev: "reminder-dispatch-queue-dev",
+            prod: "reminder-dispatch-queue-prod",
+        },
         /// Queue for the organization retention handler
         /// (organization_retention_trigger `ORGANIZATION_RETENTION_QUEUE`).
         pub OrganizationRetentionQueue {

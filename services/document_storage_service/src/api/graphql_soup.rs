@@ -166,6 +166,10 @@ fn insert_graphql_context_data(
     ));
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
+        email_content_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_metadata_loader(
+        macro_user_id.clone(),
         email_content_reader,
     ));
     data.insert(complete_graph::entity_favorite_loader(

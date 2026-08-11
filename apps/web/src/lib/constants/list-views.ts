@@ -16,6 +16,7 @@ export const LIST_VIEWS = [
   'calls',
   'companies',
   'folders',
+  'reminders',
   'search',
 ] as const;
 
@@ -31,6 +32,7 @@ export const LIST_VIEW_PATHS = {
   calls: '/calls',
   companies: '/companies',
   folders: '/folders',
+  reminders: '/reminders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
 
@@ -44,6 +46,7 @@ export const LIST_VIEW_ID = {
   calls: 'calls',
   companies: 'companies',
   folders: 'folders',
+  reminders: 'reminders',
   search: 'search',
 } as const satisfies Record<ListView, string>;
 
@@ -72,7 +75,12 @@ export const soupItemMatchesListView = (
   view: ListView | undefined
 ): boolean =>
   match(view)
-    .with('agents', () => item.tag === 'chat')
+    .with(
+      'agents',
+      () =>
+        item.tag === 'chat' ||
+        (item.tag === 'document' && item.data.subType?.type === 'skill')
+    )
     .with('mail', () => item.tag === 'emailThread')
     .with(
       'documents',
@@ -87,6 +95,7 @@ export const soupItemMatchesListView = (
     .with('folders', () => item.tag === 'project')
     .with('inbox', 'search', undefined, () => true)
     .with('companies', () => item.tag === 'crmCompany')
+    .with('reminders', () => item.tag === 'reminder')
     .exhaustive();
 
 const propertiesMatchTagFilter = (

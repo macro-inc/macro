@@ -299,7 +299,6 @@ fn to_queue_message(row: &OutboxRow) -> anyhow::Result<BackfillPubsubMessage> {
     };
     let backfill_operation = match row.kind.as_str() {
         "google_calendar" => BackfillOperation::CalendarGoogleBackfill(scope),
-        "email_ics" => BackfillOperation::CalendarEmailIcsBackfill(scope),
         kind => anyhow::bail!("unsupported calendar backfill kind: {kind}"),
     };
     Ok(BackfillPubsubMessage { backfill_operation })

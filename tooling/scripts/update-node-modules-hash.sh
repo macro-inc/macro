@@ -65,6 +65,12 @@ trap 'rm -f "$log"' EXIT
 set +e
 nix build .#js-node-modules --no-link 2>&1 | tee "$log"
 status=${PIPESTATUS[0]}
+if [ "$status" -eq 0 ]; then
+  # Fixed-output paths only depend on the declared hash and name. Force a
+  # rebuild so a cached output cannot hide changes to bun.lock or manifests.
+  nix build .#js-node-modules --no-link --rebuild 2>&1 | tee -a "$log"
+  status=${PIPESTATUS[0]}
+fi
 set -e
 
 if [ "$status" -eq 0 ]; then

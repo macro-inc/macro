@@ -45,9 +45,8 @@ function Root(props: RootProps): JSX.Element {
         {
           'bg-accent/8': props.selected,
           'bg-accent/16': props.selected && props.highlighted,
-          'bg-hover/50':
-            props.highlighted && !props.selected && !isTouchDevice(),
-          'hover:bg-hover/50':
+          'bg-hover': props.highlighted && !props.selected && !isTouchDevice(),
+          'hover:bg-hover/65':
             !props.highlighted && !props.selected && !isTouchDevice(),
         },
         props.class

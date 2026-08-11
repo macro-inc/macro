@@ -9,6 +9,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "activity"
+version = "0.1.0"
+dependencies = [
+ "channel_sender",
+ "chrono",
+ "kafka_util",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "model-entity",
+ "rdkafka",
+ "readonly",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -293,6 +317,7 @@ dependencies = [
  "properties",
  "rand 0.9.4",
  "readonly_pool",
+ "reminders",
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
@@ -301,6 +326,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "skills",
  "soup",
  "sqlx",
  "sqs_client",
@@ -2445,7 +2471,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2522,7 +2548,6 @@ dependencies = [
  "axum",
  "chrono",
  "futures",
- "icalendar",
  "macro_authorization",
  "macro_db_migrator",
  "models_pagination",
@@ -2530,7 +2555,6 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -2545,6 +2569,7 @@ dependencies = [
 name = "call"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "ai_usage",
@@ -2763,6 +2788,7 @@ dependencies = [
 name = "channels"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -2830,6 +2856,7 @@ dependencies = [
 name = "chat"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "anyhow",
@@ -4373,6 +4400,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
@@ -4407,6 +4435,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_tools",
  "ai_usage",
  "analytics_client",
@@ -4505,6 +4534,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -4627,6 +4657,7 @@ dependencies = [
 name = "documents"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -4685,6 +4716,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
@@ -4927,6 +4959,7 @@ dependencies = [
 name = "email"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7178,22 +7211,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "icalendar"
-version = "0.17.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3478c3b7a2411366daf20457373174bff6cfbc1089333038b1f95594d23d985"
-dependencies = [
- "chrono",
- "chrono-tz",
- "iso8601",
- "nom 8.0.0",
- "nom-language",
- "rrule",
- "thiserror 2.0.18",
- "uuid",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7692,15 +7709,6 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
-
-[[package]]
-name = "iso8601"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84d00640a3a46595e984f1b124b21d56506a5844dc799f831dde9b05cb2f6c51"
-dependencies = [
- "nom 8.0.0",
-]
 
 [[package]]
 name = "item_filters"
@@ -9145,6 +9153,7 @@ dependencies = [
  "prompt",
  "readonly_pool",
  "redis",
+ "reminders",
  "rmcp",
  "search_service_client",
  "secretsmanager_client",
@@ -9224,6 +9233,7 @@ dependencies = [
  "macro_uuid",
  "notification",
  "readonly_pool",
+ "reminders",
  "search_service_client",
  "serde",
  "serde_json",
@@ -9689,6 +9699,7 @@ dependencies = [
  "model-entity",
  "models_pagination",
  "models_properties",
+ "reminders",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -9916,15 +9927,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "nom-language"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
-dependencies = [
- "nom 8.0.0",
 ]
 
 [[package]]
@@ -11488,6 +11490,7 @@ dependencies = [
 name = "projects"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-recursion",
@@ -11557,6 +11560,7 @@ dependencies = [
 name = "properties"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -12071,6 +12075,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67a77cd6f1a55ff3cb1969c2618f73107efaa6de1daf796ad60ce8f737ae97c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "readonly_pool"
 version = "0.1.0"
 dependencies = [
@@ -12224,6 +12239,40 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+
+[[package]]
+name = "reminders"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "entity_access",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "remote_env_var"
@@ -12512,19 +12561,6 @@ dependencies = [
  "hashbrown 0.14.5",
  "rustc-hash 1.1.0",
  "text-size",
-]
-
-[[package]]
-name = "rrule"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
-dependencies = [
- "chrono",
- "chrono-tz",
- "log",
- "regex",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -13798,6 +13834,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cowlike",
+ "document_sub_type",
+ "email",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_search",
+ "models_soup",
+ "schemars 1.2.1",
+ "search_service_client",
+ "serde",
+ "soup",
+ "system_skills",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13917,6 +13982,7 @@ dependencies = [
  "properties",
  "readonly_pool",
  "recursion",
+ "reminders",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -14496,6 +14562,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -14605,6 +14682,15 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_skills"
+version = "0.1.0"
+dependencies = [
+ "prompt",
  "uuid",
  "workspace-hack",
 ]
@@ -16796,7 +16882,6 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "chrono-tz",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16853,6 +16938,7 @@ dependencies = [
  "percent-encoding",
  "phf 0.13.1",
  "phf_shared 0.10.0",
+ "phf_shared 0.11.3",
  "phf_shared 0.13.1",
  "prettyplease",
  "proc-macro2",
@@ -16861,8 +16947,8 @@ dependencies = [
  "rand 0.10.1",
  "rand 0.8.6",
  "rand 0.9.4",
+ "rand_core 0.6.4",
  "redis",
- "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",

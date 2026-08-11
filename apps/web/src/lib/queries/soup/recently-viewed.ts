@@ -58,11 +58,13 @@ export function useRecentlyViewedSoupQuery() {
             })
         );
         return page.items.flatMap((item): RecentlyViewedItem[] => {
+          // Reminders have no `viewedAt` — they are never "viewed", only fired.
           if (
             item.tag === 'call' ||
             item.tag === 'foreignEntity' ||
             item.tag === 'channelThread' ||
-            item.tag === 'calendarEvent'
+            item.tag === 'calendarEvent' ||
+            item.tag === 'reminder'
           ) {
             return [];
           }

@@ -356,6 +356,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="snippet" size="xs" />,
       },
       {
+        id: 'doc-skill',
+        label: 'Skills',
+        icon: () => <EntityIcon targetType="skill" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="files" size="xs" />,
@@ -385,6 +390,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   channels: [],
   calls: [],
   folders: [],
+  // The two tabs already split reminders on the only axis they have; there is
+  // nothing further to refine by.
+  reminders: [],
   search: [],
 };
 

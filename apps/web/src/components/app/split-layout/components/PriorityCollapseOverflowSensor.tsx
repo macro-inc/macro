@@ -3,6 +3,8 @@ import {
   type Accessor,
   createEffect,
   createSignal,
+  createUniqueId,
+  onCleanup,
   type ParentProps,
 } from 'solid-js';
 import {
@@ -10,6 +12,10 @@ import {
   type OverflowProbe,
   type PriorityCollapser,
 } from '../utils/createPriorityCollapser';
+
+/** Collapses only after every real collapse item has already given up its
+ * space. */
+const TRUNCATE_LAST_RESORT_PRIORITY = Number.MAX_SAFE_INTEGER;
 
 export type PriorityCollapseController = {
   collapser: PriorityCollapser;
@@ -101,8 +107,33 @@ export function PriorityCollapseOverflowSensor(
     class?: string;
     contentClass?: string;
     contentRef?: (element: HTMLDivElement) => void;
+    /**
+     * Cap the max-content element at the sensor's width as the collapser's
+     * last resort. The cap registers as a final collapse item, so it engages
+     * only once every other registered item has collapsed and the content
+     * still overflows, and it lifts again before any of them re-expands.
+     * While capped, shrinkable content (e.g. a title's `truncate` span)
+     * ellipsizes instead of painting past the sensor's clipped edge; without
+     * it, content that outgrows the fully-collapsed row is clipped mid-glyph.
+     */
+    truncateAsLastResort?: boolean;
   }>
 ) {
+  const [capped, setCapped] = createSignal(false);
+
+  // Read once by design: the flag decides whether this sensor owns a collapse
+  // registration, which can't be torn down and re-created reactively.
+  if (props.truncateAsLastResort) {
+    onCleanup(
+      props.controller.collapser.register({
+        id: `truncate-last-resort-${createUniqueId()}`,
+        priority: TRUNCATE_LAST_RESORT_PRIORITY,
+        collapsed: capped,
+        setCollapsed: (value) => setCapped(value),
+      })
+    );
+  }
+
   const setContentRef = (element: HTMLDivElement) => {
     props.controller.setContent(element);
     props.contentRef?.(element);
@@ -110,7 +141,10 @@ export function PriorityCollapseOverflowSensor(
 
   return (
     <div ref={props.controller.setViewport} class={props.class}>
-      <div ref={setContentRef} class={cn('w-max', props.contentClass)}>
+      <div
+        ref={setContentRef}
+        class={cn('w-max', capped() && 'max-w-full', props.contentClass)}
+      >
         {props.children}
       </div>
     </div>

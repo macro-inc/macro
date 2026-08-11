@@ -100,12 +100,9 @@ pub async fn resync_link_handler(
         .enqueue_email_backfill_message(ps_message)
         .await
     {
-        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
-            &ctx.db,
-            backfill_job.id,
-        )
-        .await
-        .context("failed to persist backfill publication failure")?;
+        email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
+            .await
+            .context("failed to persist backfill publication failure")?;
 
         return Err(e.context("failed to enqueue backfill message").into());
     }

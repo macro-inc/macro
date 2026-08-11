@@ -8,11 +8,13 @@
  * src/lib/graphql-cache/wasm/ (gitignored).
  */
 
+import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   CachedQueryInstanceWire,
+  CachedQueryVariantWire,
   ClaimedMutation,
+  EnqueueOptimisticMutationResult,
   OptimisticLinkPatchWire,
-  OptimisticWriteResult,
   QueryRevalidationWire,
   ReadResult,
   RecordCursor,
@@ -26,7 +28,8 @@ export interface CacheEngine {
     opId: string | undefined,
     query: string,
     operationName: string | undefined,
-    variables: Record<string, unknown> | undefined
+    variables: Record<string, unknown> | undefined,
+    entityResolvers: readonly EntityResolverWire[] | undefined
   ): Promise<ReadResult>;
   readRecords(
     document: string,
@@ -42,7 +45,7 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<WriteResult>;
-  beginOptimisticWrite(
+  enqueueOptimisticMutation(
     originOpId: string | undefined,
     query: string,
     operationName: string | undefined,
@@ -50,8 +53,16 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
-    createdAtMs: number
-  ): Promise<OptimisticWriteResult>;
+    createdAtMs: number,
+    leaseOwner: string,
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): Promise<EnqueueOptimisticMutationResult>;
+  inspectQueryVariants(
+    query: string,
+    operationName: string | undefined,
+    path: Array<{ field: string }>
+  ): Promise<CachedQueryVariantWire[]>;
   inspectQuery(
     query: string,
     operationName: string | undefined,

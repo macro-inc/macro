@@ -1,5 +1,7 @@
 import type { FeaturedMcpServer } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import { isTauri } from '@core/util/platform';
+import { openExternalUrl } from '@core/util/url';
 import {
   useAddMcpServerMutation,
   useStartMcpAuthMutation,
@@ -16,6 +18,11 @@ import { type Accessor, createSignal } from 'solid-js';
  * keeps the provider page from reaching back into the app (reverse
  * tabnabbing).
  *
+ * Inside the Tauri shell there are no popup blockers and `_blank` opens
+ * never reach the native navigation hook (on iOS they're silently dropped),
+ * so the popup dance is skipped and the URL is handed to the system browser
+ * via `openExternalUrl` once it's known.
+ *
  * Completion is observed, not returned: the server reconciles the moment
  * OAuth completes, and the caller's polled servers query flips the state.
  */
@@ -31,7 +38,7 @@ export function createConnectorConnect(options: {
   const connect = async () => {
     if (options.authenticated() || busy()) return;
     setBusy(true);
-    const popup = window.open('about:blank', '_blank');
+    const popup = isTauri() ? null : window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
     try {
       if (!options.connected()) {
@@ -47,9 +54,11 @@ export function createConnectorConnect(options: {
       if (popup) {
         popup.location.href = result.authorization_url;
       } else {
-        // Popup was blocked outright — fall back to a plain open (may
-        // still be blocked, but nothing else to try).
-        window.open(result.authorization_url, '_blank', 'noopener,noreferrer');
+        // Native shell, or the popup was blocked outright — openExternalUrl
+        // routes through the system browser on Tauri and is a plain
+        // noopener open on web (may still be blocked, but nothing else to
+        // try).
+        openExternalUrl(result.authorization_url);
       }
     } catch {
       popup?.close();

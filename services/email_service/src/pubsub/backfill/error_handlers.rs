@@ -102,19 +102,6 @@ pub async fn handle_non_retryable_error(
                     .ok();
             }
         }
-        BackfillOperation::CalendarEmailIcsBackfill(scope) => {
-            ctx.calendar_backfills
-                .email_ics
-                .fail_terminal(
-                    CalendarBackfillJobKey {
-                        job_id: scope.payload.calendar_job_id,
-                        email_link_id: scope.link_id,
-                    },
-                    &format!("{:#}", e.source),
-                )
-                .await
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        }
         // Best-effort side seed — a failure must not fail the backfill job.
         BackfillOperation::SeedSentContact(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
@@ -146,10 +133,7 @@ fn coordinator_reauth_edge(error: &anyhow::Error) -> Option<bool> {
 #[tracing::instrument(skip(ctx), err)]
 async fn mark_job_failed(ctx: &PubSubContext, job_id: Uuid) -> anyhow::Result<()> {
     let transitioned =
-        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
-            &ctx.db, job_id,
-        )
-        .await?;
+        email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, job_id).await?;
 
     if transitioned {
         notify_job_failed(ctx, job_id).await;
@@ -240,12 +224,6 @@ pub async fn handle_retryable_error(
             tracing::debug!(
                 calendar_job_id = %scope.payload.calendar_job_id,
                 "Retryable error backfilling Google Calendar"
-            )
-        }
-        BackfillOperation::CalendarEmailIcsBackfill(scope) => {
-            tracing::debug!(
-                calendar_job_id = %scope.payload.calendar_job_id,
-                "Retryable error scheduling email calendar extraction"
             )
         }
         BackfillOperation::SeedSentContact(scope) => {

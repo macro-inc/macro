@@ -40,6 +40,7 @@ import {
   isSearchEntity,
   isWithNotification,
   queryKeys,
+  type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
   type WithSearch,
@@ -48,6 +49,7 @@ import {
   compositeEntity,
   getAllNotificationsFromGroup,
   getChannelNotificationParams,
+  markNotificationsForEntityAsRead,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
@@ -63,6 +65,10 @@ import {
   restoreUserNotifications,
   snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
+import {
+  invalidateRemindersById,
+  setReminderCompleted,
+} from '@queries/reminders/reminders';
 import {
   getSoupEntityById,
   invalidateSoupEntity,
@@ -202,6 +208,18 @@ export const openEntityInNewTab = ({
   entity: EntityData;
   location?: SearchLocation;
 }) => {
+  // A reminder has no route of its own — it opens what it references, the
+  // same as the split paths. A standalone one references nothing, so there is
+  // no tab to open.
+  if (entity.type === 'reminder') {
+    const target = reminderSplitTarget(entity);
+    if (!target) return;
+    openExternalUrl(
+      new URL(`/app/${target.type}/${target.id}`, window.location.origin).href
+    );
+    return;
+  }
+
   // Build URL for the entity
   let entityPath: string;
   if (entity.type === 'document') {
@@ -586,6 +604,9 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
+  // A standalone reminder points at nothing, so there is nothing to open.
+  if (entity.type === 'reminder' && !entity.referencedEntity) return;
+
   const content = getEntitySplitContent(entity);
 
   if (
@@ -667,6 +688,48 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 };
 
+/**
+ * Mark a reminder's notification read when the user opens it.
+ *
+ * Every other entity type gets this for free from the block it opens into,
+ * which mounts `DebouncedNotificationReadMarker`. A reminder has no block of
+ * its own — it navigates to whatever it references, and that block's marker
+ * clears the referenced entity's notifications, not the reminder's. So opening
+ * is the only signal we get, and without this the row keeps its unread dot
+ * forever.
+ *
+ * Seen, not done: the reminder stays in Signal until the user dismisses it.
+ */
+export function markReminderSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  if (entity.type !== 'reminder') return;
+  void markNotificationsForEntityAsRead(notificationSource, {
+    type: entity.type,
+    id: entity.id,
+  });
+}
+
+/**
+ * The split a reminder opens: the entity it references, never itself.
+ * `undefined` for a standalone reminder, which points at nothing — callers use
+ * that to decide whether opening is possible at all.
+ *
+ * `fileType`/`subType` come resolved from the server, so a referenced document
+ * lands on its real block rather than 'unknown'.
+ */
+export function reminderSplitTarget(entity: ReminderEntity) {
+  const referenced = entity.referencedEntity;
+  if (!referenced) return undefined;
+  return {
+    type: fileTypeToBlockName(
+      referenced.subType ?? referenced.fileType ?? referenced.type
+    ),
+    id: referenced.id,
+  };
+}
+
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return match(entity)
@@ -690,6 +753,14 @@ function getEntitySplitContent(entity: EntityData) {
     })
     .with({ type: 'crm_contact' }, (entity) => {
       return { type: 'contact' as const, id: entity.id };
+    })
+    .with({ type: 'reminder' }, (entity) => {
+      return (
+        reminderSplitTarget(entity) ?? {
+          type: 'unknown' as const,
+          id: entity.id,
+        }
+      );
     })
     .otherwise((entity) => {
       return { type: entity.type, id: entity.id };
@@ -1033,18 +1104,32 @@ export function resolveMarkEntitiesDoneVariables(args: {
    * channel_thread mark-done only targets that thread's stack.
    */
   scopeChannelNotificationsToEntity?: boolean;
-}): { emailIds: string[]; notificationIds: string[] } {
+}): { emailIds: string[]; notificationIds: string[]; reminderIds: string[] } {
   const {
     entities,
     notificationSource,
     scopeChannelNotificationsToEntity = false,
   } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
+  // A reminder's done state is its own column, not its notification's: a
+  // reminder that has not fired yet has no notification to mark, and the
+  // Reminders view filters on the column.
+  const reminderIds = entities
+    .filter((e) => e.type === 'reminder')
+    .map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
+    // GraphQL Soup rows carry their own notification edge. Prefer that edge
+    // over the global notification query, which may not have paged far enough
+    // to include this entity yet.
+    const attachedNotifications = isWithNotification(entity)
+      ? entity.notifications?.()
+      : undefined;
     const notificationsForEntity =
+      attachedNotifications ??
       notificationSource.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))
-      ] ?? [];
+      ] ??
+      [];
 
     return notificationsForMarkDone(
       entity,
@@ -1056,6 +1141,7 @@ export function resolveMarkEntitiesDoneVariables(args: {
   return {
     emailIds: [...new Set(emailIds)],
     notificationIds: [...new Set(notificationIds)],
+    reminderIds: [...new Set(reminderIds)],
   };
 }
 
@@ -1069,8 +1155,9 @@ export function applyEntitiesDoneOptimistic(args: {
   entityIds: string[];
   emailIds: string[];
   notificationIds: string[];
+  reminderIds?: string[];
 }): MarkEntitiesDoneContext {
-  const { entityIds, emailIds, notificationIds } = args;
+  const { entityIds, emailIds, notificationIds, reminderIds = [] } = args;
   const emailIdSet = new Set(emailIds);
   const entityIdSet = new Set(entityIds);
 
@@ -1142,6 +1229,8 @@ export function applyEntitiesDoneOptimistic(args: {
 
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
   let emailRowTxns: { rollback: () => void }[] = [];
+  let reminderRowTxns: { rollback: () => void }[] = [];
+  const completedStamp = new Date().toISOString();
 
   const reapply = () => {
     // Remove the marked entities from done-filtered soup queries (inbox,
@@ -1159,11 +1248,25 @@ export function applyEntitiesDoneOptimistic(args: {
         frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
       })
     );
+    // Stamping `completedAt` is what drops a reminder out of the Active and
+    // Scheduled tabs, both of which require `!entity.completedAt` — so this
+    // takes effect before any refetch, whether or not it had already fired.
+    reminderRowTxns = reminderIds.map((id) =>
+      optimisticUpdateSoupEntity({
+        tag: 'reminder',
+        data: { id, completedAt: completedStamp },
+        frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+      })
+    );
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
 
   const rollbackSoup = () => {
+    for (const txn of [...reminderRowTxns].reverse()) {
+      txn.rollback();
+    }
+    reminderRowTxns = [];
     for (const txn of [...emailRowTxns].reverse()) {
       txn.rollback();
     }
@@ -1201,8 +1304,18 @@ export function applyEntitiesDoneOptimistic(args: {
 export function applyEntitiesNotDoneOptimistic(args: {
   emailIds: string[];
   notificationIds: string[];
+  reminderIds?: string[];
 }): { rollback: () => void } {
-  const { emailIds, notificationIds } = args;
+  const { emailIds, notificationIds, reminderIds = [] } = args;
+  // Clearing `completedAt` is what returns a reminder to Active or Scheduled
+  // (whichever its `nextRunAt` puts it in); both predicates require it unset.
+  const reminderRowTxns = reminderIds.map((id) =>
+    optimisticUpdateSoupEntity({
+      tag: 'reminder',
+      data: { id, completedAt: null },
+      frecency_score: getSoupEntityById(id)?.frecency_score ?? 0,
+    })
+  );
 
   const emailRowTxns = emailIds.map((id) =>
     optimisticUpdateSoupEntity({
@@ -1215,6 +1328,9 @@ export function applyEntitiesNotDoneOptimistic(args: {
 
   return {
     rollback: () => {
+      for (const txn of [...reminderRowTxns].reverse()) {
+        txn.rollback();
+      }
       for (const txn of [...emailRowTxns].reverse()) {
         txn.rollback();
       }
@@ -1228,11 +1344,23 @@ export function applyEntitiesNotDoneOptimistic(args: {
  * failure; caller is responsible for rollback via the context returned by
  * `applyEntitiesDoneOptimistic`.
  */
+/**
+ * Flip the reminders' own `completed` column. One PATCH each — the reminders
+ * API has no bulk endpoint, and a mark-done selection is normally one row.
+ */
+function setRemindersCompleted(
+  reminderIds: string[],
+  completed: boolean
+): Promise<unknown>[] {
+  return reminderIds.map((id) => setReminderCompleted(id, completed));
+}
+
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
+  reminderIds?: string[];
 }): Promise<void> {
-  const { emailIds, notificationIds } = args;
+  const { emailIds, notificationIds, reminderIds = [] } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
@@ -1247,6 +1375,7 @@ export async function executeMarkEntitiesDone(args: {
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
       : Promise.resolve(),
+    ...setRemindersCompleted(reminderIds, true),
   ]);
 
   const rejected = results.find(
@@ -1255,15 +1384,20 @@ export async function executeMarkEntitiesDone(args: {
 
   if (rejected) {
     // Real refetch to reconcile server state with the UI after the caller
-    // rolls back its optimistic cache writes.
+    // rolls back its optimistic cache writes. `allSettled` means some
+    // reminders may have been written even though the caller rolls all of
+    // them back, so they have to be reconciled too, not just the emails.
+    invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
       ...emailIds.map((id) => invalidateSoupEntity(id)),
+      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to mark as done');
   }
 
+  invalidateRemindersById(reminderIds);
   await Promise.all([
     queryClient.invalidateQueries({
       queryKey: queryKeys.all.email,
@@ -1284,8 +1418,9 @@ export async function executeMarkEntitiesDone(args: {
 export async function executeMarkEntitiesUndone(args: {
   emailIds: string[];
   notificationIds: string[];
+  reminderIds?: string[];
 }): Promise<void> {
-  const { emailIds, notificationIds } = args;
+  const { emailIds, notificationIds, reminderIds = [] } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
@@ -1300,6 +1435,7 @@ export async function executeMarkEntitiesUndone(args: {
     notificationIds.length > 0
       ? bulkMarkNotificationsAsUndone(notificationIds)
       : Promise.resolve(),
+    ...setRemindersCompleted(reminderIds, false),
   ]);
 
   const rejected = results.find(
@@ -1307,12 +1443,21 @@ export async function executeMarkEntitiesUndone(args: {
   );
 
   if (rejected) {
+    // `allSettled`, so some of these may have succeeded even though the caller
+    // rolls every optimistic transaction back. Reconcile both kinds against the
+    // server or their Soup rows keep the state the rollback restored — an
+    // unarchived thread would sit there still showing as done.
+    invalidateRemindersById(reminderIds, { refetch: true });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
       queryClient.invalidateQueries({ queryKey: notificationKeys.user._def }),
+      ...emailIds.map((id) => invalidateSoupEntity(id)),
+      ...reminderIds.map((id) => invalidateSoupEntity(id)),
     ]);
     throw rejected.reason ?? new Error('Failed to undo');
   }
+
+  invalidateRemindersById(reminderIds);
 
   await Promise.all([
     queryClient.invalidateQueries({

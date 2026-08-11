@@ -4,6 +4,7 @@ import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Fla
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -504,6 +505,9 @@ export function Login(props: { signupMode?: boolean }) {
               }
             }
           );
+        } else {
+          console.error('Failed to redeem session code', res.error);
+          toast.failure('Sign-in failed. Please try again.');
         }
       });
     }

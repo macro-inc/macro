@@ -31,8 +31,20 @@ describe('createTauriCacheHost', () => {
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1', hotCapacity: 42 });
+    const entityResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupEmailThread',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
 
-    const result = await host.readQuery({ opKey: 7, query: '{ x }' });
+    const result = await host.readQuery({
+      opKey: 7,
+      query: '{ x }',
+      entityResolvers,
+    });
     expect(result).toEqual({ kind: 'miss' });
 
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init', {
@@ -44,6 +56,7 @@ describe('createTauriCacheHost', () => {
       query: '{ x }',
       operationName: undefined,
       variables: undefined,
+      entityResolvers,
     });
   });
 
@@ -124,9 +137,10 @@ describe('createTauriCacheHost', () => {
       changed: ['A:1'],
       affectedOps: [],
       reset: false,
+      initialClaim: { kind: 'not-runnable' as const },
     };
     invokeMock.mockImplementation((command: string) => {
-      if (command === 'graphql_cache_begin_optimistic_write') {
+      if (command === 'graphql_cache_enqueue_optimistic_mutation') {
         return Promise.resolve(optimistic);
       }
       if (
@@ -149,15 +163,28 @@ describe('createTauriCacheHost', () => {
       ],
       operation: { kind: 'remove' as const, entityKey: 'Thing:1' },
     };
-    const begun = await host.beginOptimisticWrite({
-      query: 'mutation { m }',
-      data: { m: 1 },
-      linkPatches: [patch],
-    });
+    const begun = await host.enqueueOptimisticMutation(
+      {
+        query: 'mutation { m }',
+        data: { m: 1 },
+        linkPatches: [patch],
+      },
+      {
+        owner: 'runner',
+        nowMs: 123,
+        leaseExpiresAtMs: 1_123,
+      }
+    );
     expect(begun).toEqual(optimistic);
     expect(invokeMock).toHaveBeenCalledWith(
-      'graphql_cache_begin_optimistic_write',
-      expect.objectContaining({ linkPatches: [patch] })
+      'graphql_cache_enqueue_optimistic_mutation',
+      expect.objectContaining({
+        linkPatches: [patch],
+        createdAtMs: 123,
+        owner: 'runner',
+        nowMs: 123,
+        leaseExpiresAtMs: 1_123,
+      })
     );
 
     const claim = { owner: 'runner', generation: '2' };
@@ -187,29 +214,42 @@ describe('createTauriCacheHost', () => {
     );
   });
 
-  it('inspects generated query variants through the native command', async () => {
-    const instances = [
-      {
-        variables: { input: { initial: { limit: 20 } } },
-        value: { bins: [] },
-      },
-    ];
+  it('inspects generated query variants through the native commands', async () => {
+    const variants = [{ variables: { input: { initial: { limit: 20 } } } }];
+    const instances = variants.map((variant) => ({
+      ...variant,
+      value: { bins: [] },
+    }));
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_inspect_query' ? instances : null
+        command === 'graphql_cache_inspect_query'
+          ? instances
+          : command === 'graphql_cache_inspect_query_variants'
+            ? variants
+            : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const request = {
+    const variantRequest = {
       query:
         'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }',
       operationName: 'Views',
       path: [{ field: 'user' }, { field: 'groupSoup' }],
+    };
+    const request = {
+      ...variantRequest,
       variableFilters: [
         { input: { initial: { groupBy: { field: 'PROPERTY' } } } },
       ],
     };
 
+    await expect(host.inspectQueryVariants(variantRequest)).resolves.toEqual(
+      variants
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_inspect_query_variants',
+      variantRequest
+    );
     await expect(host.inspectQuery(request)).resolves.toEqual(instances);
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_inspect_query',
@@ -303,6 +343,42 @@ describe('createTauriCacheHost', () => {
       );
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not time out an uncertain durable enqueue', async () => {
+    vi.useFakeTimers();
+    try {
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_init'
+          ? Promise.resolve(null)
+          : new Promise(() => {})
+      );
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
+
+      let settled = false;
+      void host
+        .enqueueOptimisticMutation(
+          { query: 'mutation Rename { rename { id } }', data: {} },
+          { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
+        )
+        .then(
+          () => {
+            settled = true;
+          },
+          () => {
+            settled = true;
+          }
+        );
+      await vi.advanceTimersByTimeAsync(60);
+
+      expect(settled).toBe(false);
+      host.dispose();
     } finally {
       vi.useRealTimers();
     }

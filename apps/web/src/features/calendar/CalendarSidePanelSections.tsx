@@ -1,22 +1,22 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
 import { CalendarControls } from './events/CalendarControls';
-import { useFullCalendar } from './fullcalendar-solid';
 
 function CalendarMiniCalendarSidePanelSection() {
   const calendarView = useCalendarView();
-  const calendar = useFullCalendar();
+  const calendarPager = useCalendarPager();
   const initialDate = new Date();
   const [focusedDay, setFocusedDay] = createSignal(initialDate);
 
   const currentDate = createMemo(
-    () => calendar.dateInfo()?.view.calendar.getDate() ?? initialDate
+    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
   const highlightedRange = createMemo(() => {
-    const dateInfo = calendar.dateInfo();
+    const dateInfo = calendarPager.activeDateInfo();
     return dateInfo?.view.type === 'timeGridWeek'
       ? { end: dateInfo.end, start: dateInfo.start }
       : undefined;
@@ -25,7 +25,7 @@ function CalendarMiniCalendarSidePanelSection() {
   const selectDate = (date: Date | null) => {
     if (!date) return;
     setFocusedDay(date);
-    calendar.api()?.gotoDate(date);
+    calendarPager.gotoDate(date);
   };
 
   const navigateMonth = (month: Date) => {
@@ -36,7 +36,7 @@ function CalendarMiniCalendarSidePanelSection() {
         ? focused
         : month;
     setFocusedDay(targetDate);
-    calendar.api()?.gotoDate(targetDate);
+    calendarPager.gotoDate(targetDate);
   };
 
   createEffect(on(currentDate, setFocusedDay));

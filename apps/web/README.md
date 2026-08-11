@@ -48,8 +48,17 @@ You will need the following dependencies installed on your system to develop in 
 1. *For Android Development* The [Android Studio IDE](https://developer.android.com/studio)
 1. *For iOS Development* [XCode](https://developer.apple.com/xcode/) for MacOS
 
-If you do not want to manage these dependencies manually, it is recommended to use `nix develop`
+The default shell contains the shared frontend and Tauri CLI tooling. Use the
+focused shells when developing targets with large platform dependencies:
 
+```bash
+nix develop .#tauri-linux    # GTK/WebKitGTK/GStreamer desktop stack
+nix develop .#tauri-android  # Android Studio, SDK/NDK, emulator, and Rust targets
+```
+
+`tauri-android` is available on x86_64 Linux. On macOS, use the default shell
+with the platform IDE installed outside Nix (Xcode for iOS or Android Studio
+for Android).
 
 ### Running Tauri
 

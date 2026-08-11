@@ -255,6 +255,10 @@ pub struct CalendarEvent {
     pub owner_id: String,
     /// RFC 5545 UID used to reconcile provider and email sources.
     pub ical_uid: String,
+    /// Calendar the canonical source belongs to, when known. Absent only in
+    /// projections stored before calendars were attributed.
+    #[serde(default)]
+    pub calendar_id: Option<Uuid>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -307,6 +311,12 @@ pub struct CalendarEventOverride {
     pub location: Option<String>,
     /// Optional replacement status.
     pub status: Option<EventStatus>,
+    /// Replacement attendee list for this occurrence alone. `None` inherits
+    /// the series attendees. Google carries the complete list on every
+    /// exception it returns, so a single instance-scoped RSVP — including the
+    /// auto-decline an out-of-office event performs — arrives here rather than
+    /// on the master.
+    pub attendees: Option<Vec<CalendarAttendee>>,
 }
 
 /// A start-only value used to identify an overridden occurrence.
@@ -479,23 +489,6 @@ fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
 #[cfg(test)]
 mod test;
 
-/// Email attachment/message identity for an iCalendar source.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EmailIcsSource {
-    /// Connected inbox.
-    pub email_link_id: Uuid,
-    /// Email thread containing the invitation.
-    pub email_thread_id: Option<Uuid>,
-    /// Email message containing the invitation.
-    pub email_message_id: Uuid,
-    /// Provider attachment identifier, or `None` for inline calendar MIME parts.
-    pub email_attachment_id: Option<String>,
-    /// SHA-256 of the source bytes.
-    pub content_hash: String,
-    /// Source payload retained for reconciliation/debugging.
-    pub raw_payload: serde_json::Value,
-}
-
 /// Google provider identity for an event source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GoogleEventSource {
@@ -518,8 +511,6 @@ pub struct GoogleEventSource {
 /// Source-specific metadata attached to a canonical event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CalendarEventSource {
-    /// Event found in an email iCalendar part.
-    EmailIcs(EmailIcsSource),
     /// Event fetched from Google Calendar.
     Google(GoogleEventSource),
 }
@@ -535,6 +526,198 @@ pub struct CalendarEventUpsert {
     pub overrides: Vec<CalendarEventOverride>,
     /// Materialized instances within the maintained horizon.
     pub occurrences: Vec<CalendarOccurrence>,
+}
+
+/// Stable identity of one provider calendar targeted by a sync or mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoogleCalendarTarget {
+    /// Macro user who owns the resulting entities.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Whether the provider role prohibits event mutation.
+    pub is_read_only: bool,
+    /// Occurrence window to materialize.
+    pub range: OccurrenceRange,
+}
+
+/// An attendee supplied to a user-initiated event mutation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarAttendeeInput {
+    /// Attendee email address.
+    pub email: String,
+    /// Whether attendance is optional.
+    pub is_optional: bool,
+}
+
+/// User-supplied fields for a new provider event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventDraft {
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional location label.
+    pub location: Option<String>,
+    /// Timed or all-day shape.
+    pub time: EventTime,
+    /// Invited attendees.
+    pub attendees: Vec<CalendarAttendeeInput>,
+    /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+    pub recurrence_lines: Vec<String>,
+    /// Event visibility.
+    pub visibility: Option<EventVisibility>,
+    /// Availability behavior.
+    pub transparency: Option<EventTransparency>,
+}
+
+/// User-supplied changes to an existing provider event. `None` fields are
+/// left untouched at the provider; `Some` fields replace the stored value.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CalendarEventPatch {
+    /// Replacement title.
+    pub title: Option<String>,
+    /// Replacement description; an empty string clears it.
+    pub description: Option<String>,
+    /// Replacement location; an empty string clears it.
+    pub location: Option<String>,
+    /// Replacement time.
+    pub time: Option<EventTime>,
+    /// Replacement attendee list.
+    pub attendees: Option<Vec<CalendarAttendeeInput>>,
+    /// Replacement recurrence properties; an empty list clears them.
+    pub recurrence_lines: Option<Vec<String>>,
+    /// Replacement visibility.
+    pub visibility: Option<EventVisibility>,
+    /// Replacement transparency.
+    pub transparency: Option<EventTransparency>,
+}
+
+impl CalendarEventPatch {
+    /// Whether the patch changes anything at all.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+/// OAuth identity used to mint an access token for a connected inbox.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarLinkTokenIdentity {
+    /// FusionAuth user holding the refresh token.
+    pub fusionauth_user_id: String,
+    /// Connected inbox address.
+    pub email_address: String,
+    /// Provider discriminator stored on the link.
+    pub provider: String,
+}
+
+/// Everything a user mutation needs to address an event at its provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarEventMutationTarget {
+    /// Macro entity identifier.
+    pub event_id: Uuid,
+    /// Whether the canonical source prohibits mutation.
+    pub is_read_only: bool,
+    /// Google event identifier of the best-ranked provider source.
+    pub provider_event_id: String,
+    /// Recurring master identifier when the stored source is an instance.
+    pub provider_recurring_event_id: Option<String>,
+    /// Provider calendar identity for the mutation request.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Token identity of the connected inbox.
+    pub token_identity: CalendarLinkTokenIdentity,
+}
+
+impl CalendarEventMutationTarget {
+    /// Provider identifier the mutation must address: the recurring master
+    /// when the stored source is an expanded instance acting as canonical.
+    pub fn master_provider_event_id(&self) -> &str {
+        self.provider_recurring_event_id
+            .as_deref()
+            .unwrap_or(&self.provider_event_id)
+    }
+
+    /// Build the provider target for a mutation over the supplied window.
+    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
+        GoogleCalendarTarget {
+            owner_id: self.owner_id.clone(),
+            email_link_id: self.email_link_id,
+            account_id: self.account_id,
+            calendar_id: self.calendar_id,
+            provider_calendar_id: self.provider_calendar_id.clone(),
+            is_read_only: self.is_read_only,
+            range,
+        }
+    }
+}
+
+/// A calendar visible to a requester, listed for pickers and filters.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct VisibleCalendar {
+    /// Persisted Macro calendar identifier.
+    pub id: Uuid,
+    /// Connected inbox that syncs this calendar.
+    pub email_link_id: Uuid,
+    /// Connected inbox address, for grouping in multi-inbox pickers.
+    pub email_address: String,
+    /// Provider display name.
+    pub name: String,
+    /// Provider color.
+    pub color: Option<String>,
+    /// Whether this is its account's primary calendar.
+    pub is_primary: bool,
+    /// Whether the grant can create and modify events on this calendar.
+    pub is_writable: bool,
+}
+
+/// The writable calendar a new user-created event lands in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarCreationTarget {
+    /// Macro user who will own the created entity.
+    pub owner_id: String,
+    /// Connected inbox whose grant authorizes the request.
+    pub email_link_id: Uuid,
+    /// Calendar account persisted for the connected inbox.
+    pub account_id: Uuid,
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// Provider calendar identifier used in Google API paths.
+    pub provider_calendar_id: String,
+    /// Whether the provider role prohibits event creation.
+    pub is_read_only: bool,
+    /// Token identity of the connected inbox.
+    pub token_identity: CalendarLinkTokenIdentity,
+}
+
+impl CalendarCreationTarget {
+    /// Build the provider target for a creation over the supplied window.
+    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
+        GoogleCalendarTarget {
+            owner_id: self.owner_id.clone(),
+            email_link_id: self.email_link_id,
+            account_id: self.account_id,
+            calendar_id: self.calendar_id,
+            provider_calendar_id: self.provider_calendar_id.clone(),
+            is_read_only: self.is_read_only,
+            range,
+        }
+    }
 }
 
 /// Persisted state needed to choose an incremental or full provider sync.
@@ -674,13 +857,41 @@ pub struct GoogleCalendarSyncSnapshot {
     pub cancelled_provider_event_ids: Vec<String>,
 }
 
+/// What one Google backfill run changed, for change-driven notifications.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GoogleBackfillRunReport {
+    /// Events written through the ingestion upsert this run.
+    pub events_upserted: usize,
+    /// Cancellation tombstones the change feed reported this run.
+    pub cancellations_observed: usize,
+}
+
+impl GoogleBackfillRunReport {
+    /// Whether the run plausibly changed the local projection. Quiet
+    /// token-only polls report nothing and skip client notifications.
+    pub fn changed(&self) -> bool {
+        self.events_upserted > 0 || self.cancellations_observed > 0
+    }
+}
+
+/// Realtime signal that a connected inbox's calendar projection changed.
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum RefreshCalendarEvent {
+    /// A sync run committed changes for `link_id`; viewers should refetch.
+    #[serde(rename_all = "snake_case")]
+    Synced {
+        /// Connected inbox whose calendars changed.
+        link_id: Uuid,
+    },
+}
+
 /// Kind of idempotent historical work triggered by a Google grant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalendarBackfillKind {
     /// Fetch calendars and canonical provider events.
     GoogleCalendar,
-    /// Re-scan existing email for iCalendar MIME parts.
-    EmailIcs,
 }
 
 impl CalendarBackfillKind {
@@ -688,7 +899,6 @@ impl CalendarBackfillKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::GoogleCalendar => "google_calendar",
-            Self::EmailIcs => "email_ics",
         }
     }
 }
@@ -758,57 +968,6 @@ pub struct CalendarBackfillFailureOutcome {
     pub job_transitioned: bool,
     /// Whether the associated inbox newly transitioned to require reauthorization.
     pub link_reauth_transitioned: bool,
-}
-
-/// Durable state of the email scan associated with calendar extraction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarScanStatus {
-    /// The email scan is created but has not begun listing threads.
-    Init,
-    /// The email scan is actively processing messages.
-    InProgress,
-    /// The scan and calendar extraction completed.
-    Complete,
-    /// The scan ended before calendar extraction completed.
-    Failed,
-}
-
-/// Minimal email scan identity needed by calendar backfill policy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EmailCalendarScanJob {
-    /// Durable email backfill job identifier.
-    pub id: Uuid,
-    /// Current scan lifecycle state.
-    pub status: EmailCalendarScanStatus,
-    /// Whether the scan covers the entire mailbox rather than a bounded subset.
-    pub is_full_scan: bool,
-}
-
-/// Durable state of an email-ICS calendar backfill.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarBackfillState {
-    /// No email scan has been associated yet.
-    Unassociated,
-    /// A scan is already durably associated.
-    Associated {
-        /// Durable email scan identifier.
-        email_job_id: Uuid,
-    },
-    /// Calendar extraction already completed.
-    Complete,
-    /// No matching email-ICS calendar job exists.
-    NotFound,
-}
-
-/// Result of atomically associating an email scan with calendar extraction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EmailCalendarScanAssociation {
-    /// The scan was associated at its current safe state.
-    Associated(EmailCalendarScanStatus),
-    /// An unrelated scan is already in progress and cannot provide a full rescan.
-    Busy,
-    /// The email scan no longer exists.
-    NotFound,
 }
 
 /// Result of applying an OAuth grant.

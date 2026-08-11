@@ -107,19 +107,18 @@ pub(crate) async fn handle_job_completed(
     init_lease_token: Option<Uuid>,
 ) -> Result<(), ProcessingError> {
     tracing::info!("Backfill complete for job {}", job_id);
-    let outcome =
-        email_db_client::backfill::job::update::complete_backfill_job_and_calendar_extraction(
-            &ctx.db,
-            job_id,
-            init_lease_token,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to complete email and calendar backfill jobs"),
-            })
-        })?;
+    let outcome = email_db_client::backfill::job::update::complete_backfill_job(
+        &ctx.db,
+        job_id,
+        init_lease_token,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to complete email backfill job"),
+        })
+    })?;
 
     completion_result(job_id, outcome)
 }

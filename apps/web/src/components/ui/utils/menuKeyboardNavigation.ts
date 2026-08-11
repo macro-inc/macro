@@ -25,6 +25,31 @@ export type CtrlJKMenuNavigationOptions = {
 const NAVIGABLE_ITEM_SELECTOR =
   '[role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]';
 
+export function highlightFirstMenuItemOnOpen(el: HTMLElement) {
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      if (!el.isConnected || el.querySelector('[data-highlighted]')) return;
+
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement !== el && el.contains(activeElement)) {
+        return;
+      }
+
+      if (!el.querySelector(NAVIGABLE_ITEM_SELECTOR)) return;
+
+      el.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          code: 'ArrowDown',
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        })
+      );
+    });
+  }, 0);
+}
+
 declare module 'solid-js' {
   namespace JSX {
     interface Directives {

@@ -93,6 +93,8 @@ export const useGetChatAttachmentInfo = () => {
   ): Attachment | undefined => {
     if (mention.itemType === 'document') {
       return getDocumentAttachment(mention.itemId, mention.fileType);
+    } else if (mention.itemType === 'skill') {
+      return { entity_id: mention.itemId, entity_type: 'skill' };
     } else if (mention.itemType === 'call') {
       return { entity_id: mention.itemId, entity_type: 'document' };
     } else if (mention.itemType === 'channel') {

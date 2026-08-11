@@ -238,7 +238,10 @@ where
             EntityType::User
             | EntityType::ChannelMessage
             | EntityType::StaticFile
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            // A reminder belongs to a user, so a team-scoped bot never reaches one.
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }
@@ -408,6 +411,7 @@ where
                     .await
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
+            EntityType::Reminder => self.repo.get_reminder_access(entity_id, user_id).await,
             EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
             EntityType::CrmCompany => Ok(self
                 .get_crm_company_access(entity_id, user_id)
@@ -420,7 +424,11 @@ where
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types either don't have access checks implemented yet, or they should not have access checks.
-            EntityType::Team | EntityType::User | EntityType::ChannelMessage => Ok(None),
+            // Skill refs are access-checked against the underlying skill document.
+            EntityType::Team
+            | EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill => Ok(None),
         }
     }
 

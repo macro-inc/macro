@@ -1,7 +1,8 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
 import {
-  fetchGraphqlSoup,
+  fetchGraphqlSoupBackfill,
   type GraphqlSoupInitialInput,
+  type GraphqlSoupInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { useQueries, useQueryClient } from '@tanstack/solid-query';
@@ -15,10 +16,10 @@ import {
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 3;
+const BACKFILL_VERSION = 4;
 const PAGE_LIMIT = 250;
-// The email-content DataLoader rejects operations with more than 20 threads.
-const EMAIL_CONTENT_PAGE_LIMIT = 20;
+// Five threads × twenty messages reaches the DataLoader's 100-message cap.
+const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
@@ -42,6 +43,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
       callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
@@ -52,17 +54,19 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 };
 
 /**
- * Backfills email threads and their newest content message while excluding
- * every other entity variant with an impossible id filter.
+ * Backfills email threads and the first message page used by the thread view
+ * while excluding every other entity variant with an impossible id filter.
  */
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'email-content',
+  // Restart completed legacy newest-message checkpoints with the new shape.
+  checkpointId: 'email-thread-pages',
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
       chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
@@ -84,6 +88,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     sortMethod: 'VIEWED_UPDATED',
     emailView: 'ALL',
     filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
       chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
@@ -314,23 +319,18 @@ export async function runSoupBackfill(
   const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
 
   while (!signal.aborted) {
-    const page = await fetchGraphqlSoup(
-      checkpoint.nextCursor
-        ? {
-            continuation: {
-              cursor: checkpoint.nextCursor,
-              expand: passInput.expand,
-              emailView: passInput.emailView,
-            },
-          }
-        : { initial: passInput },
-      {
-        signal,
-        // Backfill must stop on a network failure instead of advancing from
-        // an old offline page. TanStack retries from the persisted cursor.
-        allowOfflineFallback: false,
-      }
-    );
+    const input: GraphqlSoupInput = checkpoint.nextCursor
+      ? {
+          continuation: {
+            cursor: checkpoint.nextCursor,
+            expand: passInput.expand,
+            emailView: passInput.emailView,
+          },
+        }
+      : { initial: passInput };
+    // Network-only fetching leaves the persisted cursor unchanged on failure,
+    // so TanStack retries from the same page.
+    const page = await fetchGraphqlSoupBackfill(input, { signal });
 
     const completed = page.next_cursor == null;
     checkpoint = {

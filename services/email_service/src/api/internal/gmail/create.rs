@@ -148,28 +148,28 @@ pub async fn handler(
             .await
         {
             tracing::error!(error = ?error, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
-            email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
-                &ctx.db,
-                backfill_job.id,
-            )
-            .await
-            .inspect_err(|update_error| {
-                tracing::error!(
-                    error = ?update_error,
-                    backfill_id = %backfill_job.id,
-                    "Failed to persist backfill publication failure"
-                );
-            })
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: format!("Failed to clean up backfill job for link {}", link_id)
+            email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
+                .await
+                .inspect_err(|update_error| {
+                    tracing::error!(
+                        error = ?update_error,
+                        backfill_id = %backfill_job.id,
+                        "Failed to persist backfill publication failure"
+                    );
+                })
+                .map_err(|_| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: format!(
+                                "Failed to clean up backfill job for link {}",
+                                link_id
+                            )
                             .into(),
-                    }),
-                )
-                    .into_response()
-            })?;
+                        }),
+                    )
+                        .into_response()
+                })?;
 
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import {
   invalidateActiveCallQueries,
@@ -10,6 +11,7 @@ import { useMutation } from '@tanstack/solid-query';
 import type { DisconnectReason } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { publishCallResolution } from './call-resolution';
 import { LK_DISCONNECT_REASON, LK_ROOM_EVENT } from './livekit-loader';
 import { registerCallKitCallEndedHandler } from './use-callkit';
 
@@ -67,6 +69,7 @@ let leaveInFlight = false;
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
   const channelsCtx = useChannelsContext();
+  const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
 
   // Track the disconnect listener so we can swap it when the room changes.
@@ -176,6 +179,19 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           channelTitle:
             channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null,
         });
+        if (cancelled) return;
+
+        // Publish only once the session is connected — a cancelled or
+        // timed-out join must not silence this user's ring on other tabs.
+        // (onError sets `cancelled` via cancelCurrentJoin.)
+        const answeringUserId = userId();
+        if (answeringUserId) {
+          publishCallResolution({
+            type: 'answered',
+            callId: tokenResponse.callId,
+            answeredBy: answeringUserId,
+          });
+        }
       };
 
       const timeout = new Promise<never>((_, reject) =>

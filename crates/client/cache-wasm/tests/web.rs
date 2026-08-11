@@ -51,6 +51,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -84,6 +85,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -91,8 +93,20 @@ async fn write_then_read_through_js_boundary() {
     assert_eq!(read["kind"], "hit");
     assert_eq!(read["data"], data);
 
-    // Generated-query inspection crosses the wasm boundary with one wire
-    // shape and recovers the operation variables from the normalized field.
+    // Variables-only inspection crosses the wasm boundary without
+    // materializing the selected value.
+    let variants = JsFuture::from(engine.inspect_query_variants(
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!([{"field": "user"}, {"field": "soup"}])),
+    ))
+    .await
+    .unwrap();
+    let variants: serde_json::Value = serde_wasm_bindgen::from_value(variants).unwrap();
+    assert_eq!(variants[0]["variables"], vars);
+    assert!(variants[0].get("value").is_none());
+
+    // Full generated-query inspection also materializes the selected value.
     let inspected = JsFuture::from(engine.inspect_query(
         QUERY.into(),
         Some("Soup".into()),
@@ -120,6 +134,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -134,6 +149,7 @@ async fn write_then_read_through_js_boundary() {
         QUERY.into(),
         Some("Soup".into()),
         js(vars),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -144,6 +160,64 @@ async fn write_then_read_through_js_boundary() {
     // on a live connection without versionchange auto-close).
     JsFuture::from(engine.close()).await.unwrap();
     destroy_cache("wasm-shell-test".into()).await.unwrap();
+}
+
+#[wasm_bindgen_test]
+async fn entity_resolvers_cross_the_js_boundary() {
+    destroy_cache("wasm-shell-entity-resolver".into())
+        .await
+        .unwrap();
+    let engine = open_cache("wasm-shell-entity-resolver".into(), None)
+        .await
+        .unwrap();
+    let soup_variables = serde_json::json!({"input": {"limit": 1}});
+    JsFuture::from(engine.write_query(
+        None,
+        QUERY.into(),
+        Some("Soup".into()),
+        js(soup_variables),
+        js(serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupEmailThread",
+                        "id": "thread-1"
+                    }]
+                }
+            }
+        })),
+        None,
+    ))
+    .await
+    .unwrap();
+
+    let direct_query = r#"query Email($input: EmailThreadInput!) {
+        user { id emailThread(input: $input) { __typename id } }
+    }"#;
+    let result = JsFuture::from(engine.read_query(
+        Some("tab1:entity".into()),
+        direct_query.into(),
+        Some("Email".into()),
+        js(serde_json::json!({"input": {"threadId": "thread-1"}})),
+        js(serde_json::json!([{
+            "parentType": "GraphqlUser",
+            "fieldName": "emailThread",
+            "targetType": "GraphqlSoupEmailThread",
+            "argumentPath": ["input", "threadId"]
+        }])),
+    ))
+    .await
+    .unwrap();
+    let result: serde_json::Value = serde_wasm_bindgen::from_value(result).unwrap();
+    assert_eq!(result["kind"], "hit");
+    assert_eq!(result["data"]["user"]["emailThread"]["id"], "thread-1");
+
+    JsFuture::from(engine.close()).await.unwrap();
+    destroy_cache("wasm-shell-entity-resolver".into())
+        .await
+        .unwrap();
 }
 
 const PROPERTY_QUERY: &str = r#"query Soup($input: SoupInput!) {
@@ -189,6 +263,7 @@ async fn optimistic_write_round_trip() {
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -202,8 +277,8 @@ async fn optimistic_write_round_trip() {
         "value": { "string": "x" }
     }});
 
-    // Begin: op 1 is affected, a string transaction id comes back.
-    let begin = JsFuture::from(engine.begin_optimistic_write(
+    // Enqueue: op 1 is affected and the strict head is already claimed.
+    let enqueue = JsFuture::from(engine.enqueue_optimistic_mutation(
         None,
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
@@ -212,16 +287,21 @@ async fn optimistic_write_round_trip() {
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         123.0,
+        "runner".into(),
+        10.0,
+        1_000.0,
     ))
     .await
     .unwrap();
-    let begin: serde_json::Value = serde_wasm_bindgen::from_value(begin).unwrap();
-    let txn = begin["transactionId"].as_str().unwrap().to_string();
-    assert_eq!(begin["affectedOps"], serde_json::json!(["tab1:1"]));
+    let enqueue: serde_json::Value = serde_wasm_bindgen::from_value(enqueue).unwrap();
+    let txn = enqueue["transactionId"].as_str().unwrap().to_string();
+    assert_eq!(enqueue["affectedOps"], serde_json::json!(["tab1:1"]));
     assert_eq!(
-        begin["changed"],
+        enqueue["changed"],
         serde_json::json!(["GraphqlProperty:prop-1"])
     );
+    assert_eq!(enqueue["initialClaim"]["kind"], "claimed");
+    assert_eq!(enqueue["initialClaim"]["mutation"]["transactionId"], txn);
 
     // The optimistic layer is visible through reads.
     let read = JsFuture::from(engine.read_query(
@@ -229,6 +309,7 @@ async fn optimistic_write_round_trip() {
         PROPERTY_QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
+        JsValue::UNDEFINED,
     ))
     .await
     .unwrap();
@@ -238,12 +319,10 @@ async fn optimistic_write_round_trip() {
         serde_json::json!("Stage")
     );
 
-    let claimed = JsFuture::from(engine.claim_next_mutation("runner".into(), 10.0, 1_000.0))
-        .await
-        .unwrap();
-    let claimed: serde_json::Value = serde_wasm_bindgen::from_value(claimed).unwrap();
-    assert_eq!(claimed["transactionId"], txn);
-    let generation = claimed["leaseGeneration"].as_str().unwrap().to_string();
+    let generation = enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Commit with the real response; the layer flushes durably.
     let commit = JsFuture::from(engine.commit_optimistic_write(

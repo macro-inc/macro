@@ -184,7 +184,10 @@ fn favoritable(entity_type: EntityType) -> bool {
         | EntityType::ChannelMessage
         | EntityType::StaticFile
         | EntityType::CrmContact
-        | EntityType::CalendarEvent => false,
+        | EntityType::CalendarEvent
+        // Reminders are managed through the reminders API, not favorites.
+        | EntityType::Reminder
+        | EntityType::Skill => false,
     }
 }
 
@@ -455,7 +458,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "rename");
             }
         };
@@ -498,7 +503,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "move");
             }
         };
@@ -543,7 +550,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "share policy updates");
             }
         };
@@ -591,7 +600,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "trash");
             }
         };
@@ -618,7 +629,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "restore");
             }
         };
@@ -665,7 +678,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -722,7 +737,9 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::Reminder
+            | EntityType::Skill => {
                 return unsupported(requested, "duplication");
             }
         };

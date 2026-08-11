@@ -1,6 +1,8 @@
 import type { ListView } from '@app/constants/list-views';
+import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import {
   CREATABLE_BLOCKS,
+  type CreatableBlock,
   runCreateAction,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
@@ -18,6 +20,7 @@ import { hapticImpact } from '@core/mobile/haptics';
 import { openFilePicker } from '@core/util/upload';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import IconGear from '@icon/macro-gear.svg';
+import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -45,7 +48,7 @@ import { pressPulse } from './pressPulse';
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
 
-type DockId = ListView;
+type DockId = ListView | 'calendar';
 
 type MobileDockButtonProps = {
   icon: MobileTouchIconComponent;
@@ -105,26 +108,33 @@ function MobileDockButton(props: MobileDockButtonProps) {
   );
 }
 
-const MORE_VIEWS: {
-  id: ListView;
-  label: string;
-  icon: MobileTouchIconComponent;
-}[] = [
-  { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon },
-  { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
-  { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-  { id: 'documents', label: 'Documents', icon: AnimatedFileMdIcon },
-  { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
-  { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
-  { id: 'folders', label: 'Folders', icon: AnimatedFolderIcon },
-];
-
 function MoreViewsMenu(props: {
   isActive: (id: DockId) => boolean;
   onNavigate: (id: DockId) => void;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
+  const calendarUiEnabled = useCalendarUiFlag();
+
+  // Rows render top → bottom, ending at the thumb, so bottom → top this reads
+  // Inbox, Email, Channels, Documents, Tasks, Agents, Calls, Folders — keep
+  // that order in sync with the Create menu's matching entries.
+  const moreViews = (): Array<{
+    id: DockId;
+    label: string;
+    icon: MobileTouchIconComponent;
+  }> => [
+    { id: 'folders', label: 'Folders', icon: AnimatedFolderIcon },
+    { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
+    { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
+    { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
+    ...(calendarUiEnabled()
+      ? [{ id: 'calendar' as const, label: 'Calendar', icon: WideCalendarIcon }]
+      : []),
+    { id: 'documents', label: 'Documents', icon: AnimatedFileMdIcon },
+    { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
+    { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
+    { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon },
+  ];
 
   return (
     <MobileTouchMenu
@@ -140,7 +150,7 @@ function MoreViewsMenu(props: {
           animateIcon: false,
           onSelect: toggleSettings,
         },
-        ...MORE_VIEWS.map((item) => ({
+        ...moreViews().map((item) => ({
           id: item.id,
           label: item.label,
           icon: item.icon,
@@ -152,6 +162,24 @@ function MoreViewsMenu(props: {
   );
 }
 
+// Rows render top → bottom, ending at the thumb, so bottom → top this reads
+// Email, Message, Doc, Task, Agent, Folder, Code, Canvas, Snippet — keep the
+// entries both menus share in sync with the Views menu order. Each name
+// resolves to its first CREATABLE_BLOCKS match, which drops the
+// desktop-only 'Channel' entry: it shares the 'channel' blockName with
+// 'Message', so on mobile both would run the same create action.
+const CREATE_MENU_BLOCK_ORDER: CreatableBlock['blockName'][] = [
+  'snippet',
+  'canvas',
+  'code',
+  'project',
+  'chat',
+  'task',
+  'md',
+  'channel',
+  'email',
+];
+
 function CreateMenu() {
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
     enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
@@ -159,9 +187,12 @@ function CreateMenu() {
   const handleFileUpload = useHandleFileUpload();
 
   const blocks = () =>
-    CREATABLE_BLOCKS.filter(
-      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
-    ).toReversed();
+    CREATE_MENU_BLOCK_ORDER.filter(
+      (blockName) => blockName !== 'snippet' || snippetsFlag().enabled
+    ).flatMap((blockName) => {
+      const block = CREATABLE_BLOCKS.find((b) => b.blockName === blockName);
+      return block ? [block] : [];
+    });
 
   const uploadItem: MobileTouchMenuItem = {
     id: 'upload-file',

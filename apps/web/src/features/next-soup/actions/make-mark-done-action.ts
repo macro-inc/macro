@@ -30,6 +30,12 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'mail-all',
   'mail-noise',
   'mail-shared',
+  // Completing a reminder is the whole point of the Reminders view: without
+  // it the only way to clear one is to delete it. Done is listed too so a
+  // reminder marked by mistake can be reopened from where it landed.
+  'reminders-active',
+  'reminders-scheduled',
+  'reminders-done',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
@@ -54,6 +60,7 @@ type MarkDoneVariables = {
   entities: EntityData[];
   emailIds: string[];
   notificationIds: string[];
+  reminderIds: string[];
   restoreFocus?: () => void;
   /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
    *  where it would replace the "Email sent" toast. */
@@ -108,11 +115,13 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         entityIds: variables.entities.map((entity) => entity.id),
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
+        reminderIds: variables.reminderIds,
       }),
     mutationFn: (variables) =>
       executeMarkEntitiesDone({
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
+        reminderIds: variables.reminderIds,
       }),
     onError: (_err, _variables, context) => {
       context?.rollback();
@@ -124,6 +133,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         await executeMarkEntitiesUndone({
           emailIds: variables.emailIds,
           notificationIds: variables.notificationIds,
+          reminderIds: variables.reminderIds,
         });
       } catch (err) {
         context?.reapply();
@@ -136,6 +146,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         await executeMarkEntitiesDone({
           emailIds: variables.emailIds,
           notificationIds: variables.notificationIds,
+          reminderIds: variables.reminderIds,
         });
       } catch (err) {
         context?.applyUndone();
@@ -198,7 +209,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'chat' ||
       entity.type === 'document' ||
       entity.type === 'project' ||
-      entity.type === 'foreign'
+      entity.type === 'foreign' ||
+      // Marked done by hand like everything else — opening a reminder does not
+      // dismiss it. Signal gates on the not-done notification either way.
+      entity.type === 'reminder'
     ) {
       return true;
     }
@@ -216,15 +230,17 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
 
-    const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
-      entities: targets,
-      notificationSource: notificationSource(),
-      scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
-    });
+    const { emailIds, notificationIds, reminderIds } =
+      resolveMarkEntitiesDoneVariables({
+        entities: targets,
+        notificationSource: notificationSource(),
+        scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
+      });
     await mutation.mutateAsync({
       entities: targets,
       emailIds,
       notificationIds,
+      reminderIds,
       restoreFocus,
       silent: opts?.silent,
       onUndoHandle: opts?.onUndoHandle,

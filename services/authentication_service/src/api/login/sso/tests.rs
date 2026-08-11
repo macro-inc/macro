@@ -10,6 +10,9 @@ use super::*;
 fn allowed_original_urls_are_accepted() {
     for original_url in [
         "macro://login",
+        "macro:///welcome",
+        "macro:///otherthing",
+        "macro://otherthing/path",
         "tauri://localhost/app/login",
         "http://tauri.localhost/app/login",
         "https://tauri.localhost/app/login",
@@ -34,7 +37,6 @@ fn untrusted_original_urls_are_rejected() {
         "https://staging.macro.com/app/login",
         "http://macro.com/app/login",
         "http://dev.macro.com/app/login",
-        "macro://attacker.example",
         "tauri://example.com/app/login",
         "http://127.0.0.1:3000/app/login",
         "javascript:alert('redirected')",

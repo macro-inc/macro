@@ -210,6 +210,10 @@ nix develop          # Rust toolchain, Bun, sqlx, zig, cargo-zigbuild
 just run_local       # local infra + backend services + proxy + frontend
 ```
 
+Tauri's large platform dependencies live in focused shells: use
+`nix develop .#tauri-linux` for Linux desktop development or
+`nix develop .#tauri-android` for Android development on x86_64 Linux.
+
 `run_local` prints the frontend URL once the stack is up; `r` rebuilds changed Rust services, `q` tears it down. See [Running locally](docs/RUNNING_LOCALLY.md) for Doppler setup and named instances.
 
 ```bash

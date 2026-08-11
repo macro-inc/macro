@@ -24,7 +24,10 @@ import {
   type Query,
   type QueryStore,
 } from '@app/features/next-soup/filters/filter-store/query-store';
-import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import {
+  getViewPreset,
+  VIEW_TAB_PRESETS,
+} from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
@@ -76,6 +79,7 @@ import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -244,6 +248,21 @@ const persistedQueryFor = (
   return isQueryState(saved) ? saved : saved[tabId];
 };
 
+/** Resolve a remembered tab id against the view's current tabs.
+ *
+ * Persisted ids outlive the tabs themselves: renaming a tab would otherwise
+ * restore the view onto an id no preset resolves, leaving it on a tab that no
+ * longer exists with no filters applied. Anything unrecognised falls back to
+ * the view's default.
+ */
+const resolveTabId = (
+  view: ListView,
+  remembered: string | undefined
+): string => {
+  const config = VIEW_TAB_PRESETS[view];
+  return remembered && remembered in config.tabs ? remembered : config.default;
+};
+
 const persistedPredicatesFor = (
   view: ListView,
   tabId: string
@@ -298,21 +317,6 @@ export const SoupViewContextProvider: FlowComponent<
     return isListViewID(content.id) ? content.id : undefined;
   });
 
-  const soupParams = createMemo(() => {
-    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
-
-    // Client-only sorts (priority, status) fall back to created_at for the API
-    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
-      ? (sortId as ApiSortMethod)
-      : 'created_at';
-
-    return {
-      // Mail views use a smaller page size
-      limit: activeListView() === 'mail' ? 30 : 100,
-      sort_method: sortMethod,
-    };
-  });
-
   const initialEntryState = panel.handle.currentEntryState();
   const initialEntryQuery = initialEntryState?.['search.filters'] as
     | Query
@@ -322,11 +326,13 @@ export const SoupViewContextProvider: FlowComponent<
     | undefined;
   const initialView = activeListView();
   const initialTab = initialView
-    ? ((initialEntryState?.['soup.tab'] as string | undefined) ??
-      (filterPersistenceEnabled()
-        ? persistedActiveTabs()[initialView]
-        : undefined) ??
-      VIEW_TAB_PRESETS[initialView].default)
+    ? resolveTabId(
+        initialView,
+        (initialEntryState?.['soup.tab'] as string | undefined) ??
+          (filterPersistenceEnabled()
+            ? persistedActiveTabs()[initialView]
+            : undefined)
+      )
     : undefined;
   const initialPersistedQuery =
     filterPersistenceEnabled() && initialView && initialTab
@@ -656,6 +662,37 @@ export const SoupViewContextProvider: FlowComponent<
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+  const isTeamAdmin = useIsTeamAdmin();
+
+  // Sits below `activeTab`/`userId` because the page direction comes from the
+  // active tab's preset, which some views resolve against user context.
+  const soupParams = createMemo(() => {
+    const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
+
+    // Client-only sorts (priority, status) fall back to created_at for the API
+    const sortMethod = VALID_API_SORT_METHODS.includes(sortId as ApiSortMethod)
+      ? (sortId as ApiSortMethod)
+      : 'created_at';
+
+    const view = activeListView();
+    // The direction belongs to what the tab means — Reminders' Active list
+    // reads soonest-first — not to the sort method, so the preset owns it.
+    // Omitted when absent so the server default (desc) applies and the query
+    // keys of every existing view stay byte-identical.
+    const sortDirection = view
+      ? getViewPreset(view, activeTab(), {
+          userId: userId(),
+          isTeamAdmin: isTeamAdmin(),
+        })?.sortDirection
+      : undefined;
+
+    return {
+      // Mail views use a smaller page size
+      limit: view === 'mail' ? 30 : 100,
+      sort_method: sortMethod,
+      ...(sortDirection ? { sort_direction: sortDirection } : {}),
+    };
+  });
 
   // Active deal-stage set (team-customized when present). Drives the
   // Customers view's stage grouping, stage filter and group labels.

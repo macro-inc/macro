@@ -9,14 +9,13 @@ use super::{
     models::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarOccurrenceCursor, EmailCalendarBackfillState, EmailCalendarScanAssociation,
-        EmailCalendarScanStatus, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
+        CalendarOccurrenceCursor, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, EmailCalendarBackfillPublisher, EmailCalendarBackfillRepository,
-        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
-        GoogleProviderError, GoogleProviderErrorKind,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
     },
 };
 
@@ -37,137 +36,6 @@ pub enum CalendarValidationError {
     /// A page size was outside the supported bound.
     #[error("calendar repository query limit must be between 1 and 2001")]
     InvalidLimit,
-}
-
-/// Queue-visible outcome of scheduling a full email rescan for ICS extraction.
-#[derive(Debug, thiserror::Error)]
-pub enum EmailCalendarBackfillRunError {
-    /// An unrelated email scan is already in progress.
-    #[error("email calendar extraction is waiting for the active email backfill")]
-    Busy,
-    /// The calendar job or its associated email scan was not found.
-    #[error("email calendar extraction job was not found")]
-    NotFound,
-    /// The associated email scan already failed.
-    #[error("email calendar extraction scan failed")]
-    ScanFailed,
-    /// Persistence or queue publication can be retried.
-    #[error("email calendar extraction failed transiently: {0}")]
-    Retryable(String),
-}
-
-/// Application service that associates a complete email scan with ICS extraction.
-pub struct EmailCalendarBackfillCoordinator<R, P> {
-    repository: R,
-    publisher: P,
-}
-
-impl<R, P> EmailCalendarBackfillCoordinator<R, P>
-where
-    R: EmailCalendarBackfillRepository,
-    P: EmailCalendarBackfillPublisher,
-{
-    /// Construct the coordinator from persistence and queue ports.
-    pub fn new(repository: R, publisher: P) -> Self {
-        Self {
-            repository,
-            publisher,
-        }
-    }
-
-    /// Start or resume one durable email-ICS calendar backfill.
-    #[tracing::instrument(skip(self, fusionauth_user_id), fields(job_id = %key.job_id), err)]
-    pub async fn run(
-        &self,
-        key: CalendarBackfillJobKey,
-        fusionauth_user_id: &str,
-    ) -> Result<(), EmailCalendarBackfillRunError> {
-        let state = self
-            .repository
-            .get_email_calendar_backfill_state(key)
-            .await
-            .map_err(retryable_email_backfill)?;
-        let (email_job, allow_in_progress) = match state {
-            EmailCalendarBackfillState::Complete => return Ok(()),
-            EmailCalendarBackfillState::NotFound => {
-                return Err(EmailCalendarBackfillRunError::NotFound);
-            }
-            EmailCalendarBackfillState::Associated { email_job_id } => {
-                let job = self
-                    .repository
-                    .get_email_scan_job(key.email_link_id, email_job_id)
-                    .await
-                    .map_err(retryable_email_backfill)?
-                    .ok_or(EmailCalendarBackfillRunError::NotFound)?;
-                if !job.is_full_scan {
-                    return Err(EmailCalendarBackfillRunError::ScanFailed);
-                }
-                (job, true)
-            }
-            EmailCalendarBackfillState::Unassociated => {
-                let job = match self
-                    .repository
-                    .get_active_email_scan_job(key.email_link_id)
-                    .await
-                    .map_err(retryable_email_backfill)?
-                {
-                    Some(job) => job,
-                    None => self
-                        .repository
-                        .create_email_scan_job(key.email_link_id, fusionauth_user_id)
-                        .await
-                        .map_err(retryable_email_backfill)?,
-                };
-                if !job.is_full_scan || job.status == EmailCalendarScanStatus::InProgress {
-                    return Err(EmailCalendarBackfillRunError::Busy);
-                }
-                (job, false)
-            }
-        };
-
-        let association = self
-            .repository
-            .associate_email_scan(key, email_job.id, allow_in_progress)
-            .await
-            .map_err(retryable_email_backfill)?;
-        let status = match association {
-            EmailCalendarScanAssociation::Associated(status) => status,
-            EmailCalendarScanAssociation::Busy => {
-                return Err(EmailCalendarBackfillRunError::Busy);
-            }
-            EmailCalendarScanAssociation::NotFound => {
-                return Err(EmailCalendarBackfillRunError::NotFound);
-            }
-        };
-        match status {
-            EmailCalendarScanStatus::Complete => Ok(()),
-            EmailCalendarScanStatus::Failed => Err(EmailCalendarBackfillRunError::ScanFailed),
-            EmailCalendarScanStatus::InProgress => Ok(()),
-            EmailCalendarScanStatus::Init => self
-                .publisher
-                .publish_email_scan_init(key.email_link_id, email_job.id)
-                .await
-                .map_err(retryable_email_backfill),
-        }
-    }
-
-    /// Apply a terminal queue failure through the calendar lifecycle port.
-    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
-    pub async fn fail_terminal(
-        &self,
-        key: CalendarBackfillJobKey,
-        message: &str,
-    ) -> Result<(), EmailCalendarBackfillRunError> {
-        self.repository
-            .fail_email_calendar_backfill(key, message)
-            .await
-            .map_err(retryable_email_backfill)?;
-        Ok(())
-    }
-}
-
-fn retryable_email_backfill(error: Report) -> EmailCalendarBackfillRunError {
-    EmailCalendarBackfillRunError::Retryable(format!("{error:?}"))
 }
 
 /// Calendar use cases with provider and persistence details behind ports.
@@ -196,23 +64,6 @@ where
     ) -> Result<AppliedGoogleGrant, Report> {
         self.repository
             .apply_google_grant(email_link_id, scopes)
-            .await
-    }
-
-    /// Validate and atomically reconcile a provider or email source.
-    #[tracing::instrument(skip(self, upsert), fields(ical_uid = %upsert.event.ical_uid), err)]
-    pub async fn upsert_email_event(&self, upsert: CalendarEventUpsert) -> Result<Uuid, Report> {
-        validate_upsert(&upsert)?;
-        if !matches!(
-            upsert.source,
-            super::models::CalendarEventSource::EmailIcs(_)
-        ) {
-            return Err(rootcause::report!(
-                "unfenced calendar ingestion only accepts email ICS sources"
-            ));
-        }
-        self.repository
-            .upsert_event(CalendarEventWrite::EmailIcs(upsert))
             .await
     }
 
@@ -428,14 +279,19 @@ where
     }
 
     /// Execute one idempotent queue delivery under a fenced renewable lease.
-    #[tracing::instrument(skip(self, owner_id, access_token, range), fields(job_id = %key.job_id), err)]
+    ///
+    /// `report` accumulates durable progress and remains meaningful on
+    /// failure: per-calendar commits that landed before the error survive
+    /// the retry, so callers should act on the report either way.
+    #[tracing::instrument(skip(self, owner_id, access_token, range, report), fields(job_id = %key.job_id), err)]
     pub async fn run(
         &self,
         key: CalendarBackfillJobKey,
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<usize, GoogleCalendarBackfillRunError> {
+        report: &mut GoogleBackfillRunReport,
+    ) -> Result<(), GoogleCalendarBackfillRunError> {
         let (lease_token, account_id) = match self
             .lifecycle
             .claim_google_backfill(key)
@@ -446,7 +302,7 @@ where
                 lease_token,
                 account_id,
             } => (lease_token, account_id),
-            CalendarBackfillClaim::Complete => return Ok(0),
+            CalendarBackfillClaim::Complete => return Ok(()),
             CalendarBackfillClaim::Busy => return Err(GoogleCalendarBackfillRunError::Busy),
             CalendarBackfillClaim::Failed => {
                 return Err(GoogleCalendarBackfillRunError::AlreadyFailed);
@@ -477,7 +333,15 @@ where
             self.provider.clone(),
             self.watch.clone(),
         );
-        let work = backfill.backfill(key, lease_token, account_id, owner_id, access_token, range);
+        let work = backfill.backfill(
+            key,
+            lease_token,
+            account_id,
+            owner_id,
+            access_token,
+            range,
+            report,
+        );
         let lease = self
             .lifecycle
             .maintain_google_backfill_lease(key, lease_token);
@@ -491,12 +355,12 @@ where
         };
 
         match result {
-            Ok(count) => {
+            Ok(()) => {
                 self.lifecycle
                     .complete_google_backfill(key, lease_token)
                     .await
                     .map_err(|_| GoogleCalendarBackfillRunError::LeaseLost)?;
-                Ok(count)
+                Ok(())
             }
             Err(error) => {
                 let provider_error = error
@@ -571,7 +435,13 @@ where
     }
 
     /// Fetch and reconcile calendars and events for a connected inbox.
-    #[tracing::instrument(skip(self, owner_id, access_token, range), err)]
+    ///
+    /// Progress accumulates into `report` as each calendar commits, so a
+    /// caller observes durable partial progress even when a later calendar
+    /// fails the run: those commits survive the retry, whose quiet re-run
+    /// would never report them again.
+    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(self, owner_id, access_token, range, report), err)]
     pub async fn backfill(
         &self,
         key: CalendarBackfillJobKey,
@@ -580,7 +450,8 @@ where
         owner_id: &str,
         access_token: &str,
         range: OccurrenceRange,
-    ) -> Result<usize, Report> {
+        report: &mut GoogleBackfillRunReport,
+    ) -> Result<(), Report> {
         if !range.is_valid_for_backfill() {
             return Err(rootcause::report!(CalendarValidationError::InvalidRange).into());
         }
@@ -589,7 +460,6 @@ where
             .list_calendars(access_token, key.email_link_id)
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
-        let mut count = 0;
         let mut calendar_ids = Vec::with_capacity(calendars.len());
 
         for provider_calendar in calendars {
@@ -618,13 +488,15 @@ where
                 .sync_events(
                     access_token,
                     GoogleEventSyncContext {
-                        owner_id: owner_id.to_string(),
-                        email_link_id: key.email_link_id,
-                        account_id,
-                        calendar_id,
-                        provider_calendar_id,
-                        is_read_only,
-                        range: range.clone(),
+                        target: super::models::GoogleCalendarTarget {
+                            owner_id: owner_id.to_string(),
+                            email_link_id: key.email_link_id,
+                            account_id,
+                            calendar_id,
+                            provider_calendar_id,
+                            is_read_only,
+                            range: range.clone(),
+                        },
                         sync_token: stored_calendar.sync_token,
                         plan,
                     },
@@ -642,9 +514,8 @@ where
                     );
                     continue;
                 }
-                if let super::models::CalendarEventSource::Google(source) = &upsert.source {
-                    debug_assert_eq!(source.calendar_id, calendar_id);
-                }
+                let super::models::CalendarEventSource::Google(source) = &upsert.source;
+                debug_assert_eq!(source.calendar_id, calendar_id);
                 self.repository
                     .upsert_event(CalendarEventWrite::GoogleBackfill {
                         key,
@@ -654,7 +525,10 @@ where
                     .await?;
                 calendar_count += 1;
             }
-            count += calendar_count;
+            // The upserts above committed individually, so they count even
+            // if this calendar's snapshot commit below fails.
+            report.events_upserted += calendar_count;
+            let cancellation_count = batch.cancelled_provider_event_ids.len();
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
@@ -673,6 +547,9 @@ where
                     calendar_count,
                 )
                 .await?;
+            // Tombstones only apply inside the snapshot commit, so they
+            // count once it succeeds.
+            report.cancellations_observed += cancellation_count;
 
             // Channel upkeep is best-effort: the poll remains the backstop,
             // so a failed watch call must not fail the sync that just
@@ -728,7 +605,7 @@ where
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
 
-        Ok(count)
+        Ok(())
     }
 }
 

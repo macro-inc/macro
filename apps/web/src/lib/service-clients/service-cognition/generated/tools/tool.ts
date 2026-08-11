@@ -75,6 +75,7 @@ type ToolParserMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
@@ -121,6 +122,10 @@ type ToolParserMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {
@@ -226,6 +231,10 @@ const toolParserMap = {
     call: schemas.ListNotifications,
     response: schemas.ListNotificationsResponse,
   },
+  ListSkills: {
+    call: schemas.ListSkills,
+    response: schemas.ListSkillsResponse,
+  },
   ListTags: { call: schemas.ListTags, response: schemas.ListTagsResponse },
   ListTeamMembers: {
     call: schemas.ListTeamMembers,
@@ -281,6 +290,10 @@ const toolParserMap = {
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
+  },
+  SearchSkills: {
+    call: schemas.SearchSkills,
+    response: schemas.SearchSkillsResponse,
   },
   SearchTools: {
     call: schemas.SearchTools,
@@ -388,6 +401,7 @@ type ToolDataMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
@@ -434,6 +448,10 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {

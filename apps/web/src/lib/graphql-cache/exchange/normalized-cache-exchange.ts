@@ -43,6 +43,7 @@ import {
   type OperationDefinitionNode,
   parse,
 } from 'graphql';
+import { match } from 'ts-pattern';
 import {
   empty,
   filter,
@@ -57,7 +58,15 @@ import {
   tap,
 } from 'wonka';
 import type { CacheHost } from '../host/types';
-import type { OptimisticWriteResult, QueryRevalidationWire } from '../protocol';
+import type {
+  ClaimedMutation,
+  EnqueueOptimisticMutationResult,
+  QueryRevalidationWire,
+} from '../protocol';
+import {
+  compileEntityResolvers,
+  type EntityResolverConfig,
+} from './entity-resolvers';
 import {
   normalizedEntityKey,
   optimisticContextOf,
@@ -278,6 +287,8 @@ function queuedMutationResult(
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Schema-typed singular entity relations derived from field arguments. */
+  entityResolvers?: EntityResolverConfig;
   /** Called when a cache read/write fails (diagnostics; flow already degraded to network). */
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
@@ -301,6 +312,7 @@ export function normalizedCacheExchange(
   host: CacheHost,
   options: NormalizedCacheExchangeOptions = {}
 ): Exchange {
+  const entityResolvers = compileEntityResolvers(options.entityResolvers);
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
@@ -364,6 +376,67 @@ export function normalizedCacheExchange(
         }
       }
 
+      /** Routes one already-leased strict queue head to the network. */
+      async function routeClaimedMutation(
+        claimed: ClaimedMutation
+      ): Promise<void> {
+        deferredUntil = undefined;
+        attemptInFlight = true;
+        const attempt: QueueAttemptContext = {
+          transactionId: claimed.transactionId,
+          leaseOwner: queueOwner,
+          leaseGeneration: claimed.leaseGeneration,
+          attemptCount: claimed.attemptCount,
+        };
+        const live = liveQueuedOps.get(claimed.transactionId);
+        if (live) {
+          liveQueuedOps.delete(claimed.transactionId);
+          live.resolveRoute(undefined);
+          enqueueForward(
+            withQueueRequestTimeout(
+              makeOperation(live.operation.kind, live.operation, {
+                ...live.operation.context,
+                [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
+              })
+            )
+          );
+        } else {
+          try {
+            const replay = client.mutation(
+              replayDocument(claimed.query, claimed.operationName),
+              claimed.variables,
+              {
+                requestPolicy: 'network-only',
+                [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
+              }
+            );
+            await replay.toPromise().then((result) => {
+              // Normal exchange results settle the attempt in writeThrough
+              // before resolving. Reject only an otherwise-unhandled error.
+              if (result.error && attemptInFlight) {
+                return Promise.reject(result.error);
+              }
+            });
+          } catch (error) {
+            try {
+              await host.rollbackOptimisticWrite(
+                claimed.transactionId,
+                {
+                  owner: queueOwner,
+                  generation: claimed.leaseGeneration,
+                },
+                error instanceof Error ? error.message : String(error)
+              );
+            } finally {
+              attemptInFlight = false;
+              scheduleDrain();
+            }
+          }
+        }
+        // Any other live operation is ordered behind the claimed head.
+        resolveLiveOperationsAsQueued();
+      }
+
       async function drainQueue(): Promise<void> {
         if (attemptInFlight) {
           // Every newly enqueued operation is behind the claimed head. Its
@@ -390,52 +463,7 @@ export function normalizedCacheExchange(
             return;
           }
 
-          deferredUntil = undefined;
-          attemptInFlight = true;
-          const attempt: QueueAttemptContext = {
-            transactionId: claimed.transactionId,
-            leaseOwner: queueOwner,
-            leaseGeneration: claimed.leaseGeneration,
-            attemptCount: claimed.attemptCount,
-          };
-          const live = liveQueuedOps.get(claimed.transactionId);
-          if (live) {
-            liveQueuedOps.delete(claimed.transactionId);
-            live.resolveRoute(undefined);
-            enqueueForward(
-              withQueueRequestTimeout(
-                makeOperation(live.operation.kind, live.operation, {
-                  ...live.operation.context,
-                  [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
-                })
-              )
-            );
-          } else {
-            try {
-              const replay = client.mutation(
-                replayDocument(claimed.query, claimed.operationName),
-                claimed.variables,
-                {
-                  requestPolicy: 'network-only',
-                  [QUEUE_ATTEMPT_CONTEXT_KEY]: attempt,
-                }
-              );
-              void replay.toPromise();
-            } catch (error) {
-              await host.rollbackOptimisticWrite(
-                claimed.transactionId,
-                {
-                  owner: queueOwner,
-                  generation: claimed.leaseGeneration,
-                },
-                error instanceof Error ? error.message : String(error)
-              );
-              attemptInFlight = false;
-              scheduleDrain();
-            }
-          }
-          // Any other live operation is ordered behind the claimed head.
-          resolveLiveOperationsAsQueued();
+          await routeClaimedMutation(claimed);
         } catch {
           // Enqueue already succeeded, so callers must observe these as
           // queued even if the runner cannot currently inspect the head.
@@ -492,6 +520,7 @@ export function normalizedCacheExchange(
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
+            entityResolvers,
             priority:
               op.context[AFFECTED_READ_CONTEXT_KEY] === true
                 ? 'user-visible'
@@ -536,50 +565,84 @@ export function normalizedCacheExchange(
           enqueueForward(op);
           return undefined;
         }
+        const args = {
+          query: queryText(op),
+          operationName: operationName(op),
+          variables: op.variables as Record<string, unknown> | undefined,
+          data: optimistic.optimisticResponse,
+          linkPatches: optimistic.linkPatches,
+          revalidations: optimistic.revalidations,
+        };
+        const now = Date.now();
+        const claim = {
+          owner: queueOwner,
+          nowMs: now,
+          leaseExpiresAtMs: now + QUEUE_LEASE_MS,
+        };
+        let enqueue: EnqueueOptimisticMutationResult;
         try {
-          const args = {
-            query: queryText(op),
-            operationName: operationName(op),
-            variables: op.variables as Record<string, unknown> | undefined,
-            data: optimistic.optimisticResponse,
-            linkPatches: optimistic.linkPatches,
-            revalidations: optimistic.revalidations,
-          };
-          let begin: OptimisticWriteResult;
-          try {
-            begin = await host.beginOptimisticWrite(args);
-          } catch (error) {
-            // A cached bin/page may disappear between inspect and begin. Do
-            // not expose a partial relation move: retain entity optimism and
-            // the post-success revalidation descriptors instead.
-            if (args.linkPatches.length === 0) throw error;
-            options.onCacheError?.(error, op);
-            begin = await host.beginOptimisticWrite({
-              ...args,
-              linkPatches: [],
-              revalidations: [
-                ...args.revalidations,
-                ...args.linkPatches.map((patch) => ({
-                  query: patch.query,
-                  operationName: patch.operationName,
-                  variablesJson: patch.variablesJson,
-                })),
-              ],
-            });
-          }
-          const routed = new Promise<OperationResult | undefined>((resolve) => {
-            liveQueuedOps.set(begin.transactionId, {
-              operation: op,
-              resolveRoute: resolve,
-            });
-          });
-          scheduleDrain();
-          return await routed;
+          enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
+          // A cached bin/page may disappear between inspect and enqueue. Do
+          // not expose a partial relation move: retain entity optimism and
+          // the post-success revalidation descriptors instead.
+          if (args.linkPatches.length === 0) {
+            options.onCacheError?.(error, op);
+            enqueueForward(op);
+            return undefined;
+          }
           options.onCacheError?.(error, op);
-          enqueueForward(op);
-          return undefined;
+          try {
+            enqueue = await host.enqueueOptimisticMutation(
+              {
+                ...args,
+                linkPatches: [],
+                revalidations: [
+                  ...args.revalidations,
+                  ...args.linkPatches.map((patch) => ({
+                    query: patch.query,
+                    operationName: patch.operationName,
+                    variablesJson: patch.variablesJson,
+                  })),
+                ],
+              },
+              claim
+            );
+          } catch (fallbackError) {
+            options.onCacheError?.(fallbackError, op);
+            enqueueForward(op);
+            return undefined;
+          }
         }
+        const routed = new Promise<OperationResult | undefined>((resolve) => {
+          liveQueuedOps.set(enqueue.transactionId, {
+            operation: op,
+            resolveRoute: resolve,
+          });
+        });
+        try {
+          await match(enqueue.initialClaim)
+            .with({ kind: 'claimed' }, ({ mutation }) =>
+              routeClaimedMutation(mutation)
+            )
+            .with({ kind: 'not-runnable' }, () => {
+              resolveLiveOperationsAsQueued();
+              scheduleDrain();
+            })
+            .with({ kind: 'failed' }, ({ error }) => {
+              options.onCacheError?.(new Error(error), op);
+              resolveLiveOperationsAsQueued();
+              scheduleDrain(EMPTY_QUEUE_POLL_MS);
+            })
+            .exhaustive();
+        } catch (error) {
+          // Enqueue already succeeded. Preserve durable-runner ownership even
+          // if routing or claim rollback fails unexpectedly.
+          options.onCacheError?.(error, op);
+          resolveLiveOperationsAsQueued();
+          scheduleDrain(EMPTY_QUEUE_POLL_MS);
+        }
+        return await routed;
       }
 
       /** Applies operation cache effects serially and isolates every failure. */
@@ -636,6 +699,7 @@ export function normalizedCacheExchange(
               query: queryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
+              entityResolvers,
             };
             await host.writeQuery({
               ...args,

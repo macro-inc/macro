@@ -36,7 +36,7 @@ pub enum NormalizeError {
 /// Records produced by normalizing one response. Each record contains only
 /// the fields this response provided — the store merges them into existing
 /// records.
-pub type RecordUpdates = BTreeMap<EntityKey, Record>;
+pub type RecordUpdates = BTreeMap<EntityKey<'static>, Record>;
 
 /// Normalizes a response's `data` object into record updates.
 ///
@@ -79,7 +79,7 @@ pub fn normalize(
     Ok(records)
 }
 
-fn merge_into(records: &mut RecordUpdates, key: EntityKey, record: Record) {
+fn merge_into(records: &mut RecordUpdates, key: EntityKey<'static>, record: Record) {
     records.entry(key).or_default().merge(record);
 }
 

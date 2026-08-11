@@ -15,8 +15,8 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
 `cache-core`/`cache-sqlite`. Test it from `apps/web/tauri` with
-`cargo test -p graphql_cache_plugin` (on NixOS use the `js-app` dev shell —
-tauri's Linux desktop stack needs its webkitgtk/dbus system libs).
+`cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
+Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 ## Tests
 

@@ -26,4 +26,7 @@ pub enum DocumentSubType {
     /// A snippet document — a reusable block of markdown that can be inserted
     /// into any markdown area
     Snippet,
+    /// A skill document — a markdown document containing instructions that AI
+    /// can read and follow when referenced in an AI input
+    Skill,
 }

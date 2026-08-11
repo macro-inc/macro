@@ -1,5 +1,11 @@
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 
+/** Supported FullCalendar period views. */
+export type CalendarPeriodView =
+  | 'dayGridMonth'
+  | 'timeGridWeek'
+  | 'timeGridDay';
+
 /** Supported first day of the calendar week. */
 export type CalendarWeekStart = 0 | 1;
 

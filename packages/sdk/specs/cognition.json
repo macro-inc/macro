@@ -2009,7 +2009,7 @@
       },
       "AttachmentType": {
         "type": "string",
-        "enum": ["document", "image", "channel", "email", "project"]
+        "enum": ["document", "image", "channel", "email", "project", "skill"]
       },
       "CallToolRequest": {
         "type": "object",
@@ -2626,7 +2626,9 @@
           "foreign_entity",
           "static_file",
           "crm_company",
-          "crm_contact"
+          "crm_contact",
+          "reminder",
+          "skill"
         ]
       },
       "ErrorBody": {

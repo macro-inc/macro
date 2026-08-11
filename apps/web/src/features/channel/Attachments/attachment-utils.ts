@@ -61,5 +61,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'crm_contact' }, () => {
       throw new Error('crm contacts are not openable as attachments');
     })
+    .with({ type: 'reminder' }, () => {
+      throw new Error('reminders are not openable as attachments');
+    })
     .exhaustive();
 }

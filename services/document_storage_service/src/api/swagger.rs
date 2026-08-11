@@ -124,6 +124,8 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
+use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
+use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -186,6 +188,8 @@ use utoipa::OpenApi;
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
+        documents_hex::inbound::axum_router::create_skill::create_skill_handler,
+        documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
@@ -305,6 +309,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
+        // reminders
+        reminders::inbound::axum_router::list_reminders_handler,
+        reminders::inbound::axum_router::create_reminder_handler,
+        reminders::inbound::axum_router::get_reminder_handler,
+        reminders::inbound::axum_router::update_reminder_handler,
+        reminders::inbound::axum_router::delete_reminder_handler,
+
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
 
@@ -370,6 +381,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateTaskResponse,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
+            documents_hex::domain::models::CreateSkillRequest,
+            documents_hex::domain::models::CreateSkillResponse,
             documents_hex::domain::models::DocumentTeamShareResponse,
             documents_hex::domain::models::SetDocumentTeamShareRequest,
             documents_hex::domain::models::PropertyInput,
@@ -436,6 +449,11 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            Reminder,
+            RemindersList,
+            ReminderSchedule,
+            CreateReminderRequest,
+            UpdateReminderRequest,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,

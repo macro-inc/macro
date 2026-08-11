@@ -506,6 +506,52 @@ pub struct CreateSnippetResponse {
     pub document_id: String,
 }
 
+/// Request body for creating a skill — a markdown document containing
+/// instructions that AI reads and follows when the skill is referenced in an
+/// AI input.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillRequest {
+    /// The name of the skill.
+    pub skill_name: String,
+    /// Markdown source text. Defaults to an empty skill document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the skill with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a skill.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillResponse {
+    /// The document ID of the created skill.
+    pub document_id: String,
+}
+
+/// A built-in system skill: static, code-defined AI instructions surfaced
+/// through the same tools as user-authored skill documents, but with no
+/// document behind them.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillSummary {
+    /// The well-known id the skill is referenced by in mentions and AI tools.
+    pub id: uuid::Uuid,
+    /// The name of the skill.
+    pub name: String,
+}
+
+/// Response listing the built-in system skills.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillsResponse {
+    /// Every system skill, in display order.
+    pub skills: Vec<SystemSkillSummary>,
+}
+
 /// The team-share state of a document. The team is resolved from the document
 /// owner's team membership.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

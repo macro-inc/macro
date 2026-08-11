@@ -66,12 +66,14 @@ models_soup = { path = "../models_soup" }
 rand.workspace = true
 reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
+reminders = { path = "../reminders", default-features = false, features = ["ports"] }
 rootcause = { workspace = true }
 schemars.workspace = true
 search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
 projects = { path = "../projects", default-features = false, features = ["ai_tools", "outbound", "service"] }
+skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }

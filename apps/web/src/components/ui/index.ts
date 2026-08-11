@@ -11,8 +11,16 @@ export { Avatar, AvatarGroup } from './components/Avatar';
 export type { ButtonProps } from './components/Button';
 export { Button } from './components/Button';
 export { ButtonGroup } from './components/ButtonGroup';
-export type { CalendarProps } from './components/Calendar';
-export { Calendar } from './components/Calendar';
+export type {
+  CalendarMonthMenuProps,
+  CalendarMonthSelectorProps,
+  CalendarProps,
+} from './components/Calendar';
+export {
+  Calendar,
+  CalendarMonthMenu,
+  formatCalendarMonth,
+} from './components/Calendar';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
 export type { CheckboxProps } from './components/Checkbox';
 export {
@@ -69,5 +77,6 @@ export {
   addCtrlJKMenuNavigation,
   ctrlJKMenuNavigation,
   handleCtrlJKMenuNavigation,
+  highlightFirstMenuItemOnOpen,
   wrapIndex,
 } from './utils/menuKeyboardNavigation';

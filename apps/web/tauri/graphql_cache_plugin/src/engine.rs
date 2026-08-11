@@ -12,9 +12,12 @@
 //! internally — the same scheme as the `cache-wasm` shell.
 
 use cache_core::deps::OpId;
-use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult, WriteResult};
+use cache_core::engine::{
+    BeginOptimisticWrite, Engine, InitialClaimOutcome, ReadResult, WriteResult,
+};
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::{CachedQueryInstance, QueryInspection};
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
 use cache_core::value::EntityKey;
@@ -52,17 +55,37 @@ pub struct WriteResultWire {
     pub revalidations: Vec<QueryRevalidation>,
 }
 
-/// Mirrors `OptimisticWriteResult` in
-/// `apps/web/src/lib/graphql-cache/protocol.ts`.
+/// Result of durably enqueueing an optimistic mutation and attempting to
+/// claim the strict queue head.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OptimisticWriteResultWire {
+pub struct EnqueueOptimisticMutationResultWire {
     /// Engine-assigned id; settle with commit/rollback. A string because JS
     /// numbers lose precision past 2^53 (same as the wasm shell).
     pub transaction_id: String,
-    /// Visible (composed-view) changes — nothing is durable until commit.
+    /// Visible composed-view changes caused by the new optimistic layer.
     #[serde(flatten)]
     pub result: WriteResultWire,
+    /// Claim outcome determined before cache-change events are emitted.
+    pub initial_claim: InitialMutationClaimWire,
+}
+
+/// Tagged outcome of the initial strict-head claim attempt.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum InitialMutationClaimWire {
+    /// The strict queue head was durably leased.
+    Claimed {
+        /// Mutation request and lease metadata for the claimed head.
+        mutation: ClaimedMutationWire,
+    },
+    /// The queue head is currently leased, deferred, or absent.
+    NotRunnable,
+    /// Enqueue succeeded, but the claim attempt failed.
+    Failed {
+        /// Diagnostic claim error.
+        error: String,
+    },
 }
 
 /// Claimed queue head returned to the JavaScript mutation runner.
@@ -153,7 +176,11 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
-        changed: result.changed.into_iter().map(|k| k.0).collect(),
+        changed: result
+            .changed
+            .into_iter()
+            .map(|key| key.0.into_owned())
+            .collect(),
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
@@ -193,12 +220,19 @@ impl EngineHandle {
         query: String,
         operation_name: Option<String>,
         variables: Variables,
+        entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
-            .read_query(op, &query, operation_name.as_deref(), &variables)
+            .read_query_with_entity_resolvers(
+                op,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &entity_resolvers,
+            )
             .await
             .map(|result| match result {
                 ReadResult::Hit { data } => ReadResultWire::Hit { data },
@@ -215,8 +249,8 @@ impl EngineHandle {
         cursor: Option<RecordCursor>,
         limit: u32,
     ) -> Result<SelectedRecordPage, String> {
-        let selection = RecordSelection::parse(&document, &fragment_name)
-            .map_err(|error| error.to_string())?;
+        let selection =
+            RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
         self.inner
             .lock()
             .await
@@ -226,7 +260,28 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Enumerates cached variants of one generated query field.
+    /// Recovers cached query variables without materializing each variant.
+    pub async fn inspect_query_variants(
+        &self,
+        query: String,
+        operation_name: Option<String>,
+        path: Vec<String>,
+    ) -> Result<Vec<CachedQueryVariant>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .inspect_query_variants(&QueryInspection {
+                query,
+                operation_name,
+                path,
+                variable_filters: Vec::new(),
+            })
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Enumerates and materializes cached variants of one generated query field.
     pub async fn inspect_query(
         &self,
         query: String,
@@ -275,8 +330,10 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
-    /// Durably queues a mutation and its optimistic layer.
-    pub async fn begin_optimistic_write(
+    /// Durably queues a mutation and its optimistic layer, then attempts to
+    /// claim the strict queue head while retaining the same engine lock.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
         query: String,
@@ -286,12 +343,15 @@ impl EngineHandle {
         link_patches: Vec<OptimisticLinkPatch>,
         revalidations: Vec<QueryRevalidation>,
         created_at_ms: i64,
-    ) -> Result<OptimisticWriteResultWire, String> {
+        lease_owner: String,
+        now_ms: i64,
+        lease_expires_at_ms: i64,
+    ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
-        engine
-            .begin_optimistic_write(
+        let result = engine
+            .enqueue_optimistic_mutation(
                 origin,
                 BeginOptimisticWrite {
                     query: &query,
@@ -302,13 +362,28 @@ impl EngineHandle {
                     revalidations: &revalidations,
                     created_at_ms,
                 },
+                MutationClaimRequest {
+                    owner: lease_owner,
+                    now_ms,
+                    lease_expires_at_ms,
+                },
             )
             .await
-            .map(|(transaction, result)| OptimisticWriteResultWire {
-                transaction_id: transaction.to_string(),
-                result: wire_write_result(ops, result),
-            })
-            .map_err(|e| e.to_string())
+            .map_err(|error| error.to_string())?;
+        let initial_claim = match result.initial_claim {
+            InitialClaimOutcome::Claimed(claimed) => InitialMutationClaimWire::Claimed {
+                mutation: ClaimedMutationWire::try_from(*claimed)?,
+            },
+            InitialClaimOutcome::NotRunnable => InitialMutationClaimWire::NotRunnable,
+            InitialClaimOutcome::Failed(error) => InitialMutationClaimWire::Failed {
+                error: error.to_string(),
+            },
+        };
+        Ok(EnqueueOptimisticMutationResultWire {
+            transaction_id: result.transaction_id.to_string(),
+            result: wire_write_result(ops, result.write_result),
+            initial_claim,
+        })
     }
 
     /// Claims the strict mutation queue head when it is runnable.
@@ -410,7 +485,8 @@ impl EngineHandle {
 
     /// Evicts records by entity key; returns the affected registered op ids.
     pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.invalidate_keys(keys.iter());
@@ -420,7 +496,8 @@ impl EngineHandle {
     /// Deletes stale records from durable and hot storage and returns the
     /// registered operations that traversed them.
     pub async fn delete_records(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
-        let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;

@@ -68,6 +68,9 @@ import type { CreateInstructionsDocumentResponse } from './generated/schemas/cre
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
+import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
+import type { CreateSkillHandler200 } from './generated/schemas/createSkillHandler200';
+import type { CreateSkillRequest } from './generated/schemas/createSkillRequest';
 import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
 import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequest';
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
@@ -111,12 +114,14 @@ import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreateP
 import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
+import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
@@ -132,6 +137,8 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { PostTypingRequest } from './generated/schemas/postTypingRequest';
 import type { Project } from './generated/schemas/project';
+import type { Reminder } from './generated/schemas/reminder';
+import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
@@ -144,6 +151,7 @@ import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersio
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
+import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -1354,6 +1362,43 @@ export const storageServiceClient = {
     return ok(response);
   },
 
+  /**
+   * Creates a skill and initializes its sync-service content on the backend.
+   * Skills are markdown documents containing instructions that AI reads and
+   * follows when the skill is referenced in an AI input.
+   */
+  async createSkill(request: CreateSkillRequest) {
+    const result = await dssFetch<CreateSkillHandler200>(
+      `/documents/create_skill`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!result.isOk()) {
+      const errors = result.error;
+      if (errors[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return err(result.error);
+    }
+
+    const response = result.value;
+    return ok(response);
+  },
+
+  /**
+   * Lists the built-in system skills. System skills are static, code-defined
+   * AI instructions with well-known ids; they surface like skill documents
+   * but have no document behind them and must not be opened as documents.
+   */
+  async getSystemSkills() {
+    return dssFetch<GetSystemSkillsHandler200>(`/documents/system_skills`, {
+      method: 'GET',
+    });
+  },
+
   async getSnippetRaw(args: {
     documentId: string;
   }): Promise<SerializedEditorState> {
@@ -2327,6 +2372,40 @@ export const storageServiceClient = {
         method: 'PATCH',
         body: JSON.stringify(params),
       });
+    },
+  },
+  reminders: {
+    async createReminder(params: CreateReminderRequest) {
+      return await dssFetch<Reminder>('/reminders', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+    async listReminders(params?: ListRemindersParams) {
+      const query = new URLSearchParams();
+      if (params?.entityType) query.set('entityType', params.entityType);
+      if (params?.entityId) query.set('entityId', params.entityId);
+      if (params?.includeCompleted !== undefined) {
+        query.set('includeCompleted', String(params.includeCompleted));
+      }
+      if (params?.limit !== undefined) query.set('limit', String(params.limit));
+      if (params?.cursor) query.set('cursor', params.cursor);
+      const qs = query.toString();
+      return await dssFetch<RemindersList>(`/reminders${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+      });
+    },
+    async getReminder(id: string) {
+      return await dssFetch<Reminder>(`/reminders/${id}`, { method: 'GET' });
+    },
+    async updateReminder(id: string, params: UpdateReminderRequest) {
+      return await dssFetch<Reminder>(`/reminders/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(params),
+      });
+    },
+    async deleteReminder(id: string) {
+      return await dssFetch(`/reminders/${id}`, { method: 'DELETE' });
     },
   },
   async editThread(params) {

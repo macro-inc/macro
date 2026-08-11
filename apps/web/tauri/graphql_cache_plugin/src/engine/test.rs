@@ -52,14 +52,9 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
+        Vec::new(),
     ))
     .unwrap()
-}
-
-fn claim(handle: &EngineHandle) -> ClaimedMutationWire {
-    block_on(handle.claim_next_mutation("runner".to_string(), 10, 1_000))
-        .unwrap()
-        .expect("queue head")
 }
 
 #[test]
@@ -75,6 +70,53 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn entity_resolvers_cross_the_native_engine_boundary() {
+    let handle = spawn_handle();
+    write(
+        &handle,
+        None,
+        serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupEmailThread",
+                        "id": "thread-1"
+                    }]
+                }
+            }
+        }),
+        None,
+    );
+    let query = r#"query Email($input: EmailThreadInput!) {
+        user { id emailThread(input: $input) { __typename id } }
+    }"#;
+    let serde_json::Value::Object(variables) =
+        serde_json::json!({"input": {"threadId": "thread-1"}})
+    else {
+        unreachable!()
+    };
+    let result = block_on(handle.read(
+        Some("webview:1".to_string()),
+        query.to_string(),
+        Some("Email".to_string()),
+        variables,
+        vec![EntityResolver {
+            parent_type: "GraphqlUser".to_string(),
+            field_name: "emailThread".to_string(),
+            target_type: "GraphqlSoupEmailThread".to_string(),
+            argument_path: vec!["input".to_string(), "threadId".to_string()],
+        }],
+    ))
+    .unwrap();
+    let ReadResultWire::Hit { data } = result else {
+        panic!("expected resolver hit")
+    };
+    assert_eq!(data["user"]["emailThread"]["id"], "thread-1");
 }
 
 #[test]
@@ -170,6 +212,25 @@ fn query_inspection_serializes_generated_variables_and_value() {
 }
 
 #[test]
+fn query_variant_inspection_serializes_only_generated_variables() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+
+    let variants = block_on(handle.inspect_query_variants(
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        vec!["user".to_string(), "soup".to_string()],
+    ))
+    .unwrap();
+    assert_eq!(variants.len(), 1);
+    assert_eq!(variants[0].variables, variables());
+    assert_eq!(
+        serde_json::to_value(&variants).unwrap(),
+        serde_json::json!([{"variables": {"input": {"limit": 1}}}])
+    );
+}
+
+#[test]
 fn registered_op_is_affected_by_later_writes() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);
@@ -203,7 +264,7 @@ fn optimistic_layer_commits_durably() {
     write(&handle, None, soup_data(false), None);
     read(&handle, Some("client:1"));
 
-    let optimistic = block_on(handle.begin_optimistic_write(
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
         Some("client:2".to_string()),
         QUERY.to_string(),
         Some("Soup".to_string()),
@@ -212,9 +273,22 @@ fn optimistic_layer_commits_durably() {
         vec![],
         vec![],
         0,
+        "runner".to_string(),
+        10,
+        1_000,
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
+    let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["initialClaim"]["kind"], "claimed");
+    assert_eq!(
+        serialized["initialClaim"]["mutation"]["transactionId"],
+        optimistic.transaction_id
+    );
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
+    assert_eq!(claimed.transaction_id, optimistic.transaction_id);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -222,7 +296,6 @@ fn optimistic_layer_commits_durably() {
     };
     assert_eq!(data, soup_data(true));
 
-    let claimed = claim(&handle);
     let committed = block_on(handle.commit_optimistic_write(
         optimistic.transaction_id,
         "runner".to_string(),
@@ -246,7 +319,7 @@ fn rollback_drops_optimistic_contribution() {
     let handle = spawn_handle();
     write(&handle, None, soup_data(false), None);
 
-    let optimistic = block_on(handle.begin_optimistic_write(
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
         None,
         QUERY.to_string(),
         Some("Soup".to_string()),
@@ -255,10 +328,15 @@ fn rollback_drops_optimistic_contribution() {
         vec![],
         vec![],
         0,
+        "runner".to_string(),
+        10,
+        1_000,
     ))
     .unwrap();
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
 
-    let claimed = claim(&handle);
     block_on(handle.rollback_optimistic_write(
         optimistic.transaction_id,
         "runner".to_string(),

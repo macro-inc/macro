@@ -146,7 +146,7 @@ export type AttachmentMetadata = {
     type: 'email';
 };
 
-export type AttachmentType = 'document' | 'image' | 'channel' | 'email' | 'project';
+export type AttachmentType = 'document' | 'image' | 'channel' | 'email' | 'project' | 'skill';
 
 /**
  * Request body for executing a pending tool call.
@@ -508,7 +508,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 
 /**
  * Error response body.

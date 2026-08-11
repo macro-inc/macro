@@ -15,6 +15,7 @@ const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  calendar_event_filters: { calendar_event_ids: EXCLUDE },
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   channel_thread_filters: { thread_ids: EXCLUDE },
@@ -160,6 +161,10 @@ export function filterSoupItemByRequestBody(
       )
       // Calendar soup rendering lands with the calendar FE; never cache-match.
       .with({ tag: 'calendarEvent' }, () => false)
+      .with(
+        { tag: 'reminder' },
+        ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
+      )
       .exhaustive()
   );
 }

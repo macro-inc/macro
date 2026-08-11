@@ -170,6 +170,40 @@ export function ENABLE_CRM(): boolean {
   return analytics.posthog.isFeatureEnabled(ENABLE_CRM_FLAG) ?? false;
 }
 
+// Reminders: the "Remind me" entry in the command menu, the soup
+// context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
+// Every surface routes through `makeCreateReminderAction().canExecute`, so this
+// is the single gate for all of them. PostHog-gated with a dev-mode default.
+export const ENABLE_REMINDERS_FLAG = 'enable-reminders';
+// Read statically rather than through `getFeatureFlagOverride`: Vite replaces
+// `import.meta.env.VITE_X` by text substitution at build time, so the dynamic
+// `import.meta.env[key]` lookup that helper does can come back undefined in a
+// production bundle. Same form as VITE_ENABLE_BROWSER_OTEL in observability/.
+//
+// Written out rather than using `|| undefined` so an explicit
+// VITE_ENABLE_REMINDERS=false stays false instead of being coerced to undefined
+// and falling through to PostHog.
+const REMINDERS_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_REMINDERS;
+export const ENABLE_REMINDERS_OVERRIDE: boolean | undefined =
+  REMINDERS_ENV_OVERRIDE === 'true'
+    ? true
+    : REMINDERS_ENV_OVERRIDE === 'false'
+      ? false
+      : DEV_MODE_ENV
+        ? true
+        : undefined;
+
+/**
+ * Non-reactive check for imperative call sites. For reactive UI, prefer
+ * `useFeatureFlag(ENABLE_REMINDERS_FLAG, { enabledOverride: ENABLE_REMINDERS_OVERRIDE })`.
+ */
+export function ENABLE_REMINDERS(): boolean {
+  if (ENABLE_REMINDERS_OVERRIDE !== undefined) {
+    return ENABLE_REMINDERS_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_REMINDERS_FLAG) ?? false;
+}
+
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
   true

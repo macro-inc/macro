@@ -5,13 +5,14 @@
 
 import {
   type CachedQueryInstanceWire,
+  type CachedQueryVariantWire,
   type CacheNotice,
   type CacheRequest,
   type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
   isCachePush,
   type MutationClaim,
   type MutationSettlement,
-  type OptimisticWriteResult,
   type ReadRecordsArgs,
   type ReadResult,
   type SelectedRecordPageWire,
@@ -21,11 +22,13 @@ import {
 } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
 import type {
-  BeginOptimisticWriteArgs,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
+  EnqueueOptimisticMutationArgs,
+  InitialMutationClaimArgs,
   InspectQueryArgs,
+  InspectQueryVariantsArgs,
 } from './types';
 
 type Pending = {
@@ -140,7 +143,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (
         msg.kind === 'read' ||
         msg.kind === 'read-records' ||
-        msg.kind === 'inspect-query'
+        msg.kind === 'inspect-query' ||
+        msg.kind === 'inspect-query-variants'
       ) {
         entry.timer = setTimeout(() => {
           if (pending.delete(id)) {
@@ -182,6 +186,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         priority: args.priority,
+        entityResolvers: args.entityResolvers,
       })) as ReadResult;
     },
 
@@ -210,12 +215,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as WriteResult;
     },
 
-    async beginOptimisticWrite(
-      args: BeginOptimisticWriteArgs
-    ): Promise<OptimisticWriteResult> {
+    async enqueueOptimisticMutation(
+      args: EnqueueOptimisticMutationArgs,
+      claim: InitialMutationClaimArgs
+    ): Promise<EnqueueOptimisticMutationResult> {
       await ready;
       return (await request({
-        kind: 'begin-optimistic-write',
+        kind: 'enqueue-optimistic-mutation',
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
         query: args.query,
         operationName: args.operationName,
@@ -223,8 +229,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         data: args.data,
         linkPatches: args.linkPatches,
         revalidations: args.revalidations,
-        createdAtMs: Date.now(),
-      })) as OptimisticWriteResult;
+        createdAtMs: claim.nowMs,
+        owner: claim.owner,
+        nowMs: claim.nowMs,
+        leaseExpiresAtMs: claim.leaseExpiresAtMs,
+      })) as EnqueueOptimisticMutationResult;
+    },
+
+    async inspectQueryVariants(
+      args: InspectQueryVariantsArgs
+    ): Promise<CachedQueryVariantWire[]> {
+      await ready;
+      return (await request({
+        kind: 'inspect-query-variants',
+        query: args.query,
+        operationName: args.operationName,
+        path: args.path,
+      })) as CachedQueryVariantWire[];
     },
 
     async inspectQuery(

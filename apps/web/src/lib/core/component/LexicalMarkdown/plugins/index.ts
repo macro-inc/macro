@@ -36,6 +36,7 @@ export * from './popup';
 export * from './selection-data';
 export * from './shared';
 export * from './single-line';
+export * from './skills';
 export * from './snippets';
 export * from './tab-indentation';
 export * from './tables';

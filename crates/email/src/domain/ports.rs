@@ -1,11 +1,11 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadPreview,
-    EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel, MessageAttachment,
-    MessageLabel, MessageRow, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
-    RecipientType, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
-    UserProvider,
+    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
+    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
+    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
+    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SimpleMessage,
+    SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -129,6 +129,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<ThreadRow>, Self::Err>> + Send;
+
+    /// Fetch canonical metadata for a batch of thread IDs.
+    fn thread_metadata_by_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EmailThreadMetadata>, Self::Err>> + Send;
 
     /// Fetch paginated messages for a thread, ordered by internal_date_ts descending.
     fn messages_by_thread_id_paginated(
@@ -379,6 +385,15 @@ pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     > + Send;
 }
 
+/// Read-only domain service used to hydrate canonical email-thread metadata edges.
+pub trait EmailThreadMetadataService: Send + Sync + 'static {
+    /// Fetch canonical metadata for authorized email threads in one batch.
+    fn get_email_thread_metadata(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
+}
+
 /// Read-only domain service used to hydrate lightweight email content edges.
 pub trait EmailContentService: Send + Sync + 'static {
     /// Fetch the newest non-draft parsed content message for each authorized thread.
@@ -387,6 +402,12 @@ pub trait EmailContentService: Send + Sync + 'static {
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, ParsedMessage>, EmailErr>> + Send;
 
+    /// Fetch the newest non-draft fully hydrated message for each authorized thread.
+    fn get_latest_messages_full(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Message>, EmailErr>> + Send;
+
     /// Fetch one page of parsed messages for an authorized thread.
     fn get_messages_parsed(
         &self,
@@ -394,6 +415,14 @@ pub trait EmailContentService: Send + Sync + 'static {
         offset: i64,
         limit: i64,
     ) -> impl Future<Output = Result<Option<Vec<ParsedMessage>>, EmailErr>> + Send;
+
+    /// Fetch one page of fully hydrated messages for an authorized thread.
+    fn get_messages_full(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> impl Future<Output = Result<Option<Vec<Message>>, EmailErr>> + Send;
 }
 
 /// Newtype adapter that restricts a full `EmailService` to read-only preview access.
@@ -777,11 +806,27 @@ impl EmailService for NoOpEmailService {
     }
 }
 
+impl EmailThreadMetadataService for NoOpEmailService {
+    async fn get_email_thread_metadata(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
 impl EmailContentService for NoOpEmailService {
     async fn get_latest_messages_parsed(
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_latest_messages_full(
+        &self,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, Message>, EmailErr> {
         Err(no_op_email_err())
     }
 
@@ -791,6 +836,15 @@ impl EmailContentService for NoOpEmailService {
         _offset: i64,
         _limit: i64,
     ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn get_messages_full(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _offset: i64,
+        _limit: i64,
+    ) -> Result<Option<Vec<Message>>, EmailErr> {
         Err(no_op_email_err())
     }
 }

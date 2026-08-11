@@ -69,6 +69,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 
   if (data.type === 'foreign') return undefined;
 
+  // A reminder has no block of its own — it is opened through the entity it
+  // references, which the caller navigates to instead.
+  if (data.type === 'reminder') return undefined;
+
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
   if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
@@ -251,7 +255,7 @@ function SoupNavigationButtons() {
   });
 
   const navigate = (offset: number) => {
-    const next = soup.navigate.by(offset);
+    const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
     void openEntityInSplitFromUnifiedList(next.row.original, {
@@ -540,10 +544,15 @@ export function SplitHeader(props: {
             </HeaderIsland>
           </Show>
 
+          {/* On mobile nothing clips this region (islands float over the
+              panel), so the max-content element is capped at the sensor's
+              width to let shrinkable islands truncate long titles instead of
+              painting off-screen. */}
           <PriorityCollapseOverflowSensor
             controller={props.collapseController}
+            truncateAsLastResort
             class="relative min-w-0 h-full shrink overflow-hidden mobile:overflow-visible"
-            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2"
+            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2 mobile:max-w-full"
             contentRef={(element) => {
               panel.layoutRefs.headerLeft = element;
             }}

@@ -5522,6 +5522,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         call_filter: None,
         crm_company_filter: None,
         foreign_entity_filter: None,
+        reminder_filter: None,
         properties_filter: None,
     }
 }

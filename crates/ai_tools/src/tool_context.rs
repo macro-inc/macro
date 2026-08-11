@@ -40,6 +40,7 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
+use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 use system_properties::{
@@ -233,6 +234,29 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
         entity_access_service,
         properties,
     }
+}
+
+/// Type alias for the skill service implementation used by AI tools.
+pub type ToolSkillService = skills::domain::service::SkillServiceImpl<
+    skills::outbound::search_service_searcher::SearchServiceSkillSearcher,
+    skills::outbound::soup_skill_lister::SoupSkillLister<ToolSoupService>,
+>;
+
+/// Type alias for the skill AI tool context.
+pub type ToolSkillToolContext = SkillToolContext<ToolSkillService>;
+
+/// Build the skill AI tool context from a search service client (skill
+/// search) and the soup service (skill listing).
+pub fn build_skill_tool_context(
+    search_service_client: Arc<search_service_client::SearchServiceClient>,
+    soup_service: Arc<ToolSoupService>,
+) -> ToolSkillToolContext {
+    SkillToolContext::new(skills::domain::service::SkillServiceImpl::new(
+        skills::outbound::search_service_searcher::SearchServiceSkillSearcher::new(
+            search_service_client,
+        ),
+        skills::outbound::soup_skill_lister::SoupSkillLister::new(soup_service),
+    ))
 }
 
 /// Type alias for the team member listing service used by AI tools.
@@ -600,6 +624,7 @@ pub type ToolSoupService = SoupImpl<
     ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolForeignEntityService,
+    reminders::domain::service::NoOpRemindersService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)
@@ -1107,6 +1132,7 @@ pub struct ToolServiceContext {
     pub project_tool_context: ToolProjectToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
+    pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.

@@ -10,13 +10,15 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire, ReadResultWire,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
 };
+use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::query_inspection::CachedQueryInstance;
+use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
 use cache_sqlite::SqliteStorage;
 use serde::Deserialize;
@@ -88,9 +90,16 @@ pub async fn graphql_cache_read(
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
 ) -> Result<ReadResultWire, String> {
     engine_handle(&state)?
-        .read(op_id, query, operation_name, variables.unwrap_or_default())
+        .read(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+        )
         .await
 }
 
@@ -136,10 +145,11 @@ pub async fn graphql_cache_write<R: Runtime>(
     Ok(result)
 }
 
-/// Durably queues a mutation and its optimistic response. The one engine is
-/// shared by all webviews, so visible changes are broadcast too.
+/// Durably queues an optimistic mutation and attempts to claim the strict
+/// queue head before broadcasting visible changes to every webview.
 #[tauri::command]
-pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
+#[allow(clippy::too_many_arguments)]
+pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
@@ -150,9 +160,12 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
     created_at_ms: i64,
-) -> Result<OptimisticWriteResultWire, String> {
+    owner: String,
+    now_ms: i64,
+    lease_expires_at_ms: i64,
+) -> Result<EnqueueOptimisticMutationResultWire, String> {
     let result = engine_handle(&state)?
-        .begin_optimistic_write(
+        .enqueue_optimistic_mutation(
             origin_op_id,
             query,
             operation_name,
@@ -161,6 +174,9 @@ pub async fn graphql_cache_begin_optimistic_write<R: Runtime>(
             link_patches.unwrap_or_default(),
             revalidations.unwrap_or_default(),
             created_at_ms,
+            owner,
+            now_ms,
+            lease_expires_at_ms,
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
@@ -175,7 +191,24 @@ pub struct InspectionPathSegment {
     pub field: String,
 }
 
-/// Enumerates cached variants of one generated query field.
+/// Recovers cached query variables without materializing each variant.
+#[tauri::command]
+pub async fn graphql_cache_inspect_query_variants(
+    state: State<'_, CacheState>,
+    query: String,
+    operation_name: Option<String>,
+    path: Vec<InspectionPathSegment>,
+) -> Result<Vec<CachedQueryVariant>, String> {
+    engine_handle(&state)?
+        .inspect_query_variants(
+            query,
+            operation_name,
+            path.into_iter().map(|segment| segment.field).collect(),
+        )
+        .await
+}
+
+/// Enumerates and materializes cached variants of one generated query field.
 #[tauri::command]
 pub async fn graphql_cache_inspect_query(
     state: State<'_, CacheState>,

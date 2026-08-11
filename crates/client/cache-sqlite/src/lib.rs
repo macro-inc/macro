@@ -224,13 +224,13 @@ fn claim_is_current(
 impl Storage for SqliteStorage {
     type Error = SqliteStorageError;
 
-    async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         let conn = self.conn();
         let mut stmt = conn.prepare_cached("SELECT value FROM records WHERE key = ?1")?;
         let mut out = Vec::with_capacity(keys.len());
         for key in keys {
             let bytes: Option<Vec<u8>> = stmt
-                .query_row(params![key.0], |row| row.get(0))
+                .query_row(params![key.0.as_ref()], |row| row.get(0))
                 .optional()?;
             out.push(match bytes {
                 Some(b) => Some(decode_record(&b)?),
@@ -240,7 +240,10 @@ impl Storage for SqliteStorage {
         Ok(out)
     }
 
-    async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         {
@@ -249,20 +252,20 @@ impl Storage for SqliteStorage {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             )?;
             for (key, record) in &entries {
-                stmt.execute(params![key.0, encode_record(record)])?;
+                stmt.execute(params![key.0.as_ref(), encode_record(record)])?;
             }
         }
         tx.commit()?;
         Ok(())
     }
 
-    async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare_cached("DELETE FROM records WHERE key = ?1")?;
             for key in keys {
-                stmt.execute(params![key.0])?;
+                stmt.execute(params![key.0.as_ref()])?;
             }
         }
         tx.commit()?;
@@ -272,9 +275,9 @@ impl Storage for SqliteStorage {
     async fn scan_records(
         &self,
         type_names: &[String],
-        after: Option<&EntityKey>,
+        after: Option<&EntityKey<'static>>,
         limit: usize,
-    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
         if type_names.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
@@ -283,7 +286,7 @@ impl Storage for SqliteStorage {
         let mut values = Vec::<rusqlite::types::Value>::new();
         if let Some(after) = after {
             sql.push_str("key > ? AND ");
-            values.push(after.0.clone().into());
+            values.push(after.0.to_string().into());
         }
         sql.push('(');
         for (index, type_name) in type_names.iter().enumerate() {
@@ -305,7 +308,7 @@ impl Storage for SqliteStorage {
         let mut records = Vec::new();
         for row in rows {
             let (key, value) = row?;
-            records.push((EntityKey(key), decode_record(&value)?));
+            records.push((EntityKey(key.into()), decode_record(&value)?));
         }
         Ok(records)
     }
@@ -498,7 +501,7 @@ impl Storage for SqliteStorage {
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         let sql_id = mutation_id_to_sql(id)?;
         let mut conn = self.conn();
@@ -513,7 +516,7 @@ impl Storage for SqliteStorage {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             )?;
             for (key, record) in &entries {
-                stmt.execute(params![key.0, encode_record(record)])?;
+                stmt.execute(params![key.0.as_ref(), encode_record(record)])?;
             }
         }
         tx.execute("DELETE FROM mutation_queue WHERE id = ?1", params![sql_id])?;
@@ -562,8 +565,8 @@ mod tests {
         r
     }
 
-    fn key(s: &str) -> EntityKey {
-        EntityKey(s.to_string())
+    fn key(s: &str) -> EntityKey<'static> {
+        EntityKey(s.to_string().into())
     }
 
     #[test]
@@ -616,7 +619,7 @@ mod tests {
             assert_eq!(
                 first
                     .iter()
-                    .map(|(key, _)| key.0.as_str())
+                    .map(|(key, _)| key.0.as_ref())
                     .collect::<Vec<_>>(),
                 vec!["TypeA:1", "TypeA:2"]
             );
@@ -627,7 +630,7 @@ mod tests {
             assert_eq!(
                 second
                     .iter()
-                    .map(|(key, _)| key.0.as_str())
+                    .map(|(key, _)| key.0.as_ref())
                     .collect::<Vec<_>>(),
                 vec!["TypeB:2"]
             );

@@ -724,12 +724,9 @@ async fn init_user(
     {
         tracing::error!(error = ?e, backfill_id = %backfill_job.id, "Failed to enqueue backfill message");
 
-        email_db_client::backfill::job::update::fail_backfill_job_and_calendar_extraction(
-            &ctx.db,
-            backfill_job.id,
-        )
-        .await
-        .context("Failed to persist initial backfill publication failure")?;
+        email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, backfill_job.id)
+            .await
+            .context("Failed to persist initial backfill publication failure")?;
 
         return Err(InitError::EnqueueError);
     }

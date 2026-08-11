@@ -253,6 +253,10 @@ fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_t
                 .iter()
                 .any(|t| t == "github")
                 .then_some(GITHUB_EVENT_TYPES_SQL),
+            include_types
+                .iter()
+                .any(|t| t == "reminder")
+                .then_some("n.event_item_type = 'reminder'"),
         ]
         .into_iter()
         .flatten()
@@ -298,6 +302,10 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
         builder.push(")) OR ");
 
         builder.push("(n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'reminder' AND 'reminder:' || n.event_item_id = ANY(");
         builder.push_bind(entity_tokens);
         builder.push(")) OR ");
 
@@ -360,6 +368,7 @@ fn notification_ref_matches_row(
             event_item_type == "foreign_entity"
                 && notification_event_type_is_github(notification_event_type)
         }
+        NotificationItemType::Reminder => event_item_type == "reminder",
         NotificationItemType::Message => false,
     }
 }
@@ -1022,7 +1031,7 @@ impl NotificationDbOps for PgPool {
             let entity = match EntityType::from_str(&event_item_type) {
                 Ok(entity_type) => entity_type.with_entity_string(event_item_id),
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1032,7 +1041,7 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(sender_id) => sender_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1040,14 +1049,14 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(owner_id) => owner_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
             let notification_metadata = match serde_json::from_value::<T>(notification_metadata) {
                 Ok(metadata) => metadata,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1120,7 +1129,7 @@ impl NotificationDbOps for PgPool {
             let entity = match EntityType::from_str(&event_item_type) {
                 Ok(entity_type) => entity_type.with_entity_string(event_item_id),
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1130,7 +1139,7 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(sender_id) => sender_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1138,14 +1147,14 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(owner_id) => owner_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
             let notification_metadata = match serde_json::from_value::<T>(notification_metadata) {
                 Ok(metadata) => metadata,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1253,7 +1262,7 @@ impl NotificationDbOps for PgPool {
             let entity = match EntityType::from_str(&event_item_type) {
                 Ok(entity_type) => entity_type.with_entity_string(event_item_id.clone()),
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1263,7 +1272,7 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(sender_id) => sender_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };
@@ -1271,7 +1280,7 @@ impl NotificationDbOps for PgPool {
             {
                 Ok(owner_id) => owner_id,
                 Err(e) => {
-                    tracing::warn!(?notification_id, error = ?e, "skipping invalid notification");
+                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
                     continue;
                 }
             };

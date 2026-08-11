@@ -2,6 +2,7 @@ import type { MacroClient } from '../../utils/client';
 import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search';
 import { Document } from './document';
+import { SystemSkill } from './system-skill';
 
 export class DocumentNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -27,6 +28,23 @@ export class DocumentNamespace {
     project?: Project;
   }): Promise<Document> {
     return Document.createSnippet(this.client, opts);
+  }
+
+  /** Create a skill: markdown instructions that AI reads and follows. */
+  createSkill(opts: {
+    name: string;
+    markdown?: string;
+    project?: Project;
+  }): Promise<Document> {
+    return Document.createSkill(this.client, opts);
+  }
+
+  /**
+   * The built-in system skills: static AI instructions with no document
+   * behind them. Unlike user skills they cannot be opened or edited.
+   */
+  systemSkills(): Promise<SystemSkill[]> {
+    return SystemSkill.list(this.client);
   }
 
   /** Search documents by name and content, most relevant first, auto-paginated. */

@@ -48,6 +48,162 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it('finishes the initial claim before pushes or queued reads run', async () => {
+    const order: string[] = [];
+    let resolveEnqueue!: (result: {
+      transactionId: string;
+      changed: string[];
+      affectedOps: string[];
+      reset: false;
+      initialClaim: { kind: 'not-runnable' };
+    }) => void;
+    const enqueueOptimisticMutation = vi.fn(() => {
+      order.push('enqueue:start');
+      return new Promise<{
+        transactionId: string;
+        changed: string[];
+        affectedOps: string[];
+        reset: false;
+        initialClaim: { kind: 'not-runnable' };
+      }>((resolve) => {
+        resolveEnqueue = (result) => {
+          order.push('enqueue:resolved');
+          resolve(result);
+        };
+      });
+    });
+    const readQuery = vi.fn(async () => {
+      order.push('read');
+      return { kind: 'miss' as const };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        enqueueOptimisticMutation,
+        readQuery,
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    messages.length = 0;
+
+    const enqueue = core.handleRequest(port, {
+      id: 2,
+      kind: 'enqueue-optimistic-mutation',
+      query: 'mutation Update { update }',
+      data: { update: true },
+      createdAtMs: 10,
+      owner: 'runner',
+      nowMs: 10,
+      leaseExpiresAtMs: 1_010,
+    });
+    await vi.waitFor(() =>
+      expect(enqueueOptimisticMutation).toHaveBeenCalled()
+    );
+    const read = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'client:query',
+      query: 'query Read { value }',
+      priority: 'user-visible',
+    });
+
+    expect(readQuery).not.toHaveBeenCalled();
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({
+        kind: 'ops-affected',
+      })
+    );
+    resolveEnqueue({
+      transactionId: '1',
+      changed: ['Thing:1'],
+      affectedOps: ['client:query'],
+      reset: false,
+      initialClaim: { kind: 'not-runnable' },
+    });
+    await Promise.all([enqueue, read]);
+
+    expect(order).toEqual(['enqueue:start', 'enqueue:resolved', 'read']);
+    expect(messages).toContainEqual({
+      kind: 'ops-affected',
+      opIds: ['client:query'],
+      keys: ['Thing:1'],
+    });
+  });
+
+  it('runs standalone claims ahead of queued observational reads', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(async (opId: string | undefined) => {
+      order.push(`read:${opId}`);
+      if (opId === 'client:blocker') {
+        markBlockerStarted();
+        await blocker;
+      }
+      return { kind: 'miss' as const };
+    });
+    const claimNextMutation = vi.fn(async () => {
+      order.push('claim');
+      return undefined;
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        claimNextMutation,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const read = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'client:visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+    const claim = core.handleRequest(port, {
+      id: 4,
+      kind: 'claim-next-mutation',
+      owner: 'runner',
+      nowMs: 10,
+      leaseExpiresAtMs: 1_010,
+    });
+
+    releaseBlocker();
+    await Promise.all([running, read, claim]);
+    expect(order).toEqual([
+      'read:client:blocker',
+      'claim',
+      'read:client:visible',
+    ]);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -66,21 +222,22 @@ describe('CacheWorkerCore', () => {
       }
       return { kind: 'hit' as const, data: { opId } };
     });
-    const beginOptimisticWrite = vi.fn(
+    const enqueueOptimisticMutation = vi.fn(
       async (_originOpId: string | undefined, query: string) => {
-        order.push(`begin:${query}`);
+        order.push(`enqueue:${query}`);
         return {
           transactionId: query,
           changed: [],
           affectedOps: [],
           reset: false,
+          initialClaim: { kind: 'not-runnable' as const },
         };
       }
     );
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
         readQuery,
-        beginOptimisticWrite,
+        enqueueOptimisticMutation,
       }),
     });
     const messages: unknown[] = [];
@@ -112,19 +269,25 @@ describe('CacheWorkerCore', () => {
       opId: 'client:child',
       query: 'query Child { child }',
     });
-    const firstBegin = core.handleRequest(port, {
+    const firstEnqueue = core.handleRequest(port, {
       id: 5,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation First { first }',
       data: { first: true },
       createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
     });
-    const secondBegin = core.handleRequest(port, {
+    const secondEnqueue = core.handleRequest(port, {
       id: 6,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation Second { second }',
       data: { second: true },
       createdAtMs: 2,
+      owner: 'runner',
+      nowMs: 2,
+      leaseExpiresAtMs: 1_002,
     });
     const affectedDuplicate = core.handleRequest(port, {
       id: 7,
@@ -140,15 +303,15 @@ describe('CacheWorkerCore', () => {
       running,
       ordinaryDuplicate,
       incidental,
-      firstBegin,
-      secondBegin,
+      firstEnqueue,
+      secondEnqueue,
       affectedDuplicate,
     ]);
 
     expect(order).toEqual([
       'read:client:blocker',
-      'begin:mutation First { first }',
-      'begin:mutation Second { second }',
+      'enqueue:mutation First { first }',
+      'enqueue:mutation Second { second }',
       'read:client:group-soup',
       'read:client:child',
     ]);
@@ -175,6 +338,91 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it('does not coalesce reads with different entity resolver semantics', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(
+      async (
+        opId: string | undefined,
+        _query?: string,
+        _operationName?: string,
+        _variables?: Record<string, unknown>,
+        _entityResolvers?: readonly unknown[]
+      ) => {
+        if (opId === 'client:blocker') {
+          markBlockerStarted();
+          await blocker;
+        }
+        return { kind: 'miss' as const };
+      }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const firstResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupEmailThread',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
+    const secondResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupDocument',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
+    const first = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'client:entity',
+      query: 'query Entity { entity }',
+      entityResolvers: firstResolvers,
+    });
+    const second = core.handleRequest(port, {
+      id: 4,
+      kind: 'read',
+      opId: 'client:entity',
+      query: 'query Entity { entity }',
+      entityResolvers: secondResolvers,
+    });
+
+    releaseBlocker();
+    await Promise.all([running, first, second]);
+    const entityCalls = readQuery.mock.calls.filter(
+      ([opId]) => opId === 'client:entity'
+    );
+    expect(entityCalls).toHaveLength(2);
+    expect(entityCalls.map((call) => call[4])).toEqual([
+      firstResolvers,
+      secondResolvers,
+    ]);
+  });
+
   it('does not reorder or coalesce reads across operation teardown', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -196,20 +444,21 @@ describe('CacheWorkerCore', () => {
     const teardownOperation = vi.fn(async (opId: string) => {
       order.push(`teardown:${opId}`);
     });
-    const beginOptimisticWrite = vi.fn(async () => {
-      order.push('begin');
+    const enqueueOptimisticMutation = vi.fn(async () => {
+      order.push('enqueue');
       return {
         transactionId: '1',
         changed: [],
         affectedOps: [],
         reset: false,
+        initialClaim: { kind: 'not-runnable' as const },
       };
     });
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
         readQuery,
         teardownOperation,
-        beginOptimisticWrite,
+        enqueueOptimisticMutation,
       }),
     });
     const port = { postMessage: vi.fn() };
@@ -238,12 +487,15 @@ describe('CacheWorkerCore', () => {
       kind: 'teardown',
       opId: 'client:group-soup',
     });
-    const begin = core.handleRequest(port, {
+    const enqueue = core.handleRequest(port, {
       id: 5,
-      kind: 'begin-optimistic-write',
+      kind: 'enqueue-optimistic-mutation',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
     });
     const readAfterTeardown = core.handleRequest(port, {
       id: 6,
@@ -258,7 +510,7 @@ describe('CacheWorkerCore', () => {
       running,
       readBeforeTeardown,
       teardown,
-      begin,
+      enqueue,
       readAfterTeardown,
     ]);
 
@@ -266,12 +518,42 @@ describe('CacheWorkerCore', () => {
       'read:client:blocker',
       'read:client:group-soup',
       'teardown:client:group-soup',
-      'begin',
+      'enqueue',
       'read:client:group-soup',
     ]);
     expect(
       readQuery.mock.calls.filter(([opId]) => opId === 'client:group-soup')
     ).toHaveLength(2);
+  });
+
+  it('dispatches variables-only inspection to the wasm engine', async () => {
+    const variants = [{ variables: { input: { initial: { limit: 20 } } } }];
+    const inspectQueryVariants = vi.fn().mockResolvedValue(variants);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ inspectQueryVariants }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    const query =
+      'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }';
+    const path = [{ field: 'user' }, { field: 'groupSoup' }];
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'inspect-query-variants',
+      query,
+      operationName: 'Views',
+      path,
+    });
+
+    expect(inspectQueryVariants).toHaveBeenCalledWith(query, 'Views', path);
+    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: variants });
   });
 
   it('pushes cache changes even without affected operations', async () => {

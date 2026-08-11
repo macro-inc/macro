@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
@@ -691,13 +692,14 @@ export const SoupView = (props: SoupViewProps) => {
         </Show>
       </div>
       <Suspense>
-        {/* The board hides the AI bar: it floats over the bottom edge, where
-            it would cover the board's horizontal scrollbar. */}
+        {/* The board and Preview Controller hide the AI bar: it floats over
+            content that is already constrained in both layouts. */}
         <Show
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isMobile() &&
             !isNewInboxEnabled() &&
+            !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
@@ -925,6 +927,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     const entity = (
       type === 'entity' ? args.entity : args.projectEntity
     ) as EntityData;
+
+    markReminderSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {

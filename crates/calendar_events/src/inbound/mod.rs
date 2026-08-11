@@ -4,6 +4,6 @@
 #[cfg(feature = "inbound")]
 pub mod axum_router;
 
-/// RFC 5545 iCalendar invitation parsing.
-#[cfg(feature = "ics")]
-pub mod ics;
+/// Axum routes for authenticated calendar event mutations.
+#[cfg(feature = "inbound")]
+pub mod mutation_router;

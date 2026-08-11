@@ -1,21 +1,20 @@
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '../service-notification/client';
-import {
-  type NotificationUpdateOperation,
-  UpdateNotificationsDocument,
-  type UpdateNotificationsMutation,
-  type UpdateNotificationsMutationVariables,
-} from './graphql/generated/graphql';
+import type { NotificationUpdateOperation } from './graphql/generated/graphql';
 import { getGraphqlSoupClient } from './graphql-soup';
+import {
+  executeGraphqlUpdateNotifications,
+  type GraphqlUpdateNotificationsArgs,
+  type GraphqlUpdateNotificationsResult,
+} from './graphql-update-notifications';
 
 export type { NotificationUpdateOperation };
 
 /** Update user-owned notification statuses through the configured transport. */
-export async function updateNotifications(args: {
-  notificationIds: string[];
-  operation: NotificationUpdateOperation;
-}): Promise<UpdateNotificationsMutation['updateNotifications']> {
+export async function updateNotifications(
+  args: GraphqlUpdateNotificationsArgs
+): Promise<GraphqlUpdateNotificationsResult> {
   if (!ENABLE_GRAPHQL_SOUP()) {
     const request = { notificationIds: args.notificationIds };
     switch (args.operation) {
@@ -43,15 +42,10 @@ export async function updateNotifications(args: {
     return [];
   }
 
-  const variables: UpdateNotificationsMutationVariables = {
-    input: {
-      notificationIds: args.notificationIds,
-      operation: args.operation,
-    },
-  };
-  const result = await getGraphqlSoupClient()
-    .mutation(UpdateNotificationsDocument, variables)
-    .toPromise();
+  const result = await executeGraphqlUpdateNotifications(
+    getGraphqlSoupClient(),
+    args
+  );
   if (result.error) throw result.error;
   if (!result.data) {
     throw new Error('updateNotifications mutation returned no data');

@@ -26,4 +26,6 @@ export const EntityType = {
   static_file: 'static_file',
   crm_company: 'crm_company',
   crm_contact: 'crm_contact',
+  reminder: 'reminder',
+  skill: 'skill',
 } as const;

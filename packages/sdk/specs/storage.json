@@ -5586,6 +5586,73 @@
         }
       }
     },
+    "/documents/create_skill": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "operationId": "create_skill_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a skill.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created skill."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_snippet": {
       "post": {
         "tags": ["document"],
@@ -6176,6 +6243,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/system_skills": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "operationId": "get_system_skills_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response listing the built-in system skills.",
+                  "required": ["skills"],
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemSkillSummary"
+                      },
+                      "description": "Every system skill, in display order."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7821,7 +7928,9 @@
                 "foreign_entity",
                 "static_file",
                 "crm_company",
-                "crm_contact"
+                "crm_contact",
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -8288,6 +8397,15 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
+            }
+          },
+          {
+            "name": "sort_direction",
+            "in": "query",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SoupApiSortDirection"
             }
           },
           {
@@ -9596,6 +9714,398 @@
         }
       }
     },
+    "/reminders": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "List the caller's reminders, soonest firing first.",
+        "operationId": "list_reminders",
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "description": "Restrict to reminders attached to this entity type. Requires `entityId`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The type of an entity in Macro",
+              "enum": [
+                "user",
+                "chat",
+                "channel",
+                "channel_message",
+                "document",
+                "project",
+                "email_thread",
+                "calendar_event",
+                "team",
+                "call",
+                "foreign_entity",
+                "static_file",
+                "crm_company",
+                "crm_contact",
+                "reminder",
+                "skill"
+              ]
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "description": "Restrict to reminders attached to this entity id. Requires `entityType`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeCompleted",
+            "in": "query",
+            "description": "Include reminders that have already fired.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size. Defaults to 100; larger values are capped at 500. A value\nthat is not a non-negative integer is rejected by the query extractor.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "`nextCursor` from a previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindersList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["reminders"],
+        "summary": "Create a reminder, optionally attached to an entity the caller can view.",
+        "operationId": "create_reminder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the requested entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested entity does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reminders/{id}": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "Fetch one of the caller's reminders.",
+        "operationId": "get_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["reminders"],
+        "summary": "Delete one of the caller's reminders.",
+        "operationId": "delete_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reminder deleted"
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["reminders"],
+        "summary": "Modify one of the caller's reminders.",
+        "operationId": "update_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views": {
       "get": {
         "tags": ["saved_views"],
@@ -10613,7 +11123,9 @@
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -11627,6 +12139,9 @@
           },
           "propf": {
             "description": "the filters that should be applied based on entity properties"
+          },
+          "remf": {
+            "description": "Filters applied to reminders (wire key `remf`). Unlike every other\nfilter here, empty/omitted returns **no** reminders: they are opt-in,\nso the caller must send `inc`, an id, or an entity to get any."
           }
         }
       },
@@ -12048,6 +12563,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -12360,6 +12886,11 @@
               "$ref": "#/components/schemas/CalendarAttendee"
             },
             "description": "Attendees, keyed by email during persistence."
+          },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
           "conferenceUrl": {
             "type": ["string", "null"],
@@ -14647,6 +15178,86 @@
           }
         }
       },
+      "CreateReminderRequest": {
+        "type": "object",
+        "description": "Request body for creating a reminder.",
+        "required": ["description", "schedule"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What to remind the caller about."
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Id of the entity to attach the reminder to. Requires `entityType`."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "Type of the entity to attach the reminder to. Requires `entityId`."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "When and how often the reminder fires."
+          }
+        }
+      },
+      "CreateSkillRequest": {
+        "type": "object",
+        "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "required": ["skillName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty skill document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the skill with."
+          },
+          "skillName": {
+            "type": "string",
+            "description": "The name of the skill."
+          }
+        }
+      },
+      "CreateSkillResponse": {
+        "type": "object",
+        "description": "Response for creating a skill.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created skill."
+          }
+        }
+      },
       "CreateSnippetRequest": {
         "type": "object",
         "description": "Request body for creating a snippet — a reusable markdown document that can\nbe inserted into any markdown area.",
@@ -16084,6 +16695,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -16231,7 +16853,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -16870,6 +17492,10 @@
             },
             "description": "property-based filters applied across entity types"
           },
+          "reminder_filters": {
+            "$ref": "#/components/schemas/ReminderFilters",
+            "description": "the bundled [ReminderFilters]"
+          },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
             "description": "How the `tag_option_ids` combine: `any` (default) matches entities\nholding at least one selected tag, `all` requires every selected tag."
@@ -17164,7 +17790,9 @@
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17209,7 +17837,9 @@
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -19060,6 +19690,17 @@
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -20458,6 +21099,182 @@
           }
         }
       },
+      "Reminder": {
+        "type": "object",
+        "description": "A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.",
+        "required": [
+          "id",
+          "description",
+          "schedule",
+          "nextRunAt",
+          "enabled",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reminder was created."
+          },
+          "description": {
+            "type": "string",
+            "description": "What to remind the user about."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "When false, the dispatcher skips this reminder."
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Id of the associated entity, when the reminder is attached to one."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "Type of the associated entity, when the reminder is attached to one."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reminder id."
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The next firing, derived from `schedule` on write."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "When and how often the reminder fires."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reminder was last modified."
+          }
+        }
+      },
+      "ReminderFilters": {
+        "type": "object",
+        "description": "Filters for reminders.",
+        "properties": {
+          "completed": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "fired": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
+      "ReminderSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Fires once, at a fixed instant.",
+            "required": ["remindAt", "type"],
+            "properties": {
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant to fire at."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
+            "required": ["cron", "timezone", "type"],
+            "properties": {
+              "cron": {
+                "type": "string",
+                "description": "Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 * * *` and\n`0 0 9 * * *` are the same schedule and both read back as the latter."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The timezone the cron expression is evaluated in."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["recurring"]
+              }
+            }
+          }
+        ],
+        "description": "When a reminder fires."
+      },
+      "RemindersList": {
+        "type": "object",
+        "description": "The caller's reminders, soonest firing first.",
+        "required": ["reminders"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Pass back as `cursor` to fetch the next page. Absent on the last page —\nits absence is the only end-of-list signal, since a page can be short."
+          },
+          "reminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reminder"
+            },
+            "description": "The reminders."
+          }
+        }
+      },
       "RemoveParticipantsRequest": {
         "type": "object",
         "description": "Request to remove participants.",
@@ -20917,6 +21734,11 @@
           "viewed_updated",
           "frecency"
         ]
+      },
+      "SoupApiSortDirection": {
+        "type": "string",
+        "description": "Sort direction accepted by non-grouped soup API endpoints.",
+        "enum": ["asc", "desc"]
       },
       "SoupAttachment": {
         "type": "object",
@@ -21589,6 +22411,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -22044,6 +22877,21 @@
                 "enum": ["foreignEntity"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Reminder item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupReminder_SoupPropertiesField",
+                "description": "Reminder item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["reminder"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -22297,6 +23145,173 @@
           }
         }
       },
+      "SoupReminderReference": {
+        "type": "object",
+        "description": "The entity a reminder is about, resolved server-side.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, and the client's icon path is synchronous, so this is resolved here\nrather than costing a fetch per row.",
+        "required": ["id", "entityType"],
+        "properties": {
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "The referenced entity's type."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "File type, when the reference is a document — `md`, `pdf`, and so on."
+          },
+          "id": {
+            "type": "string",
+            "description": "The referenced entity's id."
+          },
+          "subType": {
+            "type": ["string", "null"],
+            "description": "Sub type, when the reference is a task or snippet document."
+          }
+        }
+      },
+      "SoupReminderSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Fires once, at a fixed instant.",
+            "required": ["remindAt", "type"],
+            "properties": {
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant to fire at."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
+            "required": ["cron", "timezone", "type"],
+            "properties": {
+              "cron": {
+                "type": "string",
+                "description": "Cron expression, normalized to the 6-field form."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The timezone the cron expression is evaluated in."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["recurring"]
+              }
+            }
+          }
+        ],
+        "description": "How often a reminder fires, flattened for the wire.\n\nThe domain's [`ReminderSchedule`] is an internally-tagged enum carrying a\nvalidated cron type; Soup only needs enough to render \"once\" vs \"every\nweekday at 9am\", so the cron is exposed as a plain string."
+      },
+      "SoupReminder_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "description",
+              "schedule",
+              "nextRunAt",
+              "enabled",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "completedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Set once a one-shot reminder has fired."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was created."
+              },
+              "description": {
+                "type": "string",
+                "description": "What to remind the user about. Doubles as the display name."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "When false, the dispatcher skips this reminder."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The reminder id."
+              },
+              "nextRunAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The next firing. This is what Soup sorts reminders on."
+              },
+              "referencedEntity": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupReminderReference",
+                    "description": "The entity this reminder is about, when attached to one, with enough\ndetail for the client to render and open it without a second fetch."
+                  }
+                ]
+              },
+              "schedule": {
+                "$ref": "#/components/schemas/SoupReminderSchedule",
+                "description": "When and how often the reminder fires."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was last modified."
+              }
+            }
+          }
+        ],
+        "description": "A reminder as displayed in Soup.\n\nReminders are user-owned rather than shared, so unlike most Soup items they\ncarry no access metadata — the repository only ever returns the caller's own."
+      },
       "SoupThreadInfo": {
         "type": "object",
         "description": "Thread metadata and preview replies for soup channel messages.",
@@ -22421,6 +23436,22 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "SystemSkillSummary": {
+        "type": "object",
+        "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The well-known id the skill is referenced by in mentions and AI tools."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the skill."
           }
         }
       },
@@ -22711,6 +23742,28 @@
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
+      },
+      "UpdateReminderRequest": {
+        "type": "object",
+        "description": "Request body for modifying a reminder. Omitted fields are left unchanged;\nthe entity association is not modifiable.\n\nEvery field is optional but **not** nullable. `Option` here means \"absent\",\nand serde cannot tell an explicit `null` from an omitted key — so a body of\n`{\"enabled\": null}` would deserialize to an empty patch and be rejected as\nhaving no fields to update. `nullable = false` keeps the schema from\nadvertising a value the API has no meaning for; the deserializer still\ntolerates `null` rather than erroring on it.",
+        "properties": {
+          "completed": {
+            "type": "boolean",
+            "description": "Mark the reminder as dealt with, or live again. Distinct from\n`enabled`, which controls whether the dispatcher considers it."
+          },
+          "description": {
+            "type": "string",
+            "description": "Replacement description."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the reminder should fire at all."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "Replacement schedule."
+          }
+        }
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",

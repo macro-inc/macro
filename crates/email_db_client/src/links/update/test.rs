@@ -58,6 +58,23 @@ async fn clear_needs_reauth_resets_health(pool: Pool<Postgres>) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_sync_status_skips_row_when_already_set(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "guard@sync.test").await?;
+
+    update_link_sync_status(&pool, id, false).await?;
+    let link = fetch_link_by_id(&pool, id).await?.expect("link exists");
+    assert!(!link.is_sync_active);
+
+    // A repeat call must not touch the row (updated_at unchanged), so it never
+    // waits on a row lock held by an in-flight link deletion.
+    update_link_sync_status(&pool, id, false).await?;
+    let after = fetch_link_by_id(&pool, id).await?.expect("link exists");
+    assert_eq!(after.updated_at, link.updated_at);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_needs_reauth_on_missing_link_is_not_a_transition(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

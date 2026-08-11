@@ -1,14 +1,9 @@
-use crate::pubsub::calendar_backfill_adapters::{
-    PgEmailCalendarBackfillRepository, RedisCalendarRequestGate, SqsEmailCalendarBackfillPublisher,
-};
+use crate::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use calendar_events::{
     domain::models::GoogleWatchConfig,
-    domain::service::{
-        EmailCalendarBackfillCoordinator, GoogleCalendarBackfillCoordinator,
-        GoogleCalendarBackfillFailureService,
-    },
+    domain::service::{GoogleCalendarBackfillCoordinator, GoogleCalendarBackfillFailureService},
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -44,12 +39,6 @@ pub type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
     PgCalendarRepository,
 >;
 
-/// Concrete email-ICS backfill application service.
-pub type EmailIcsBackfillService = EmailCalendarBackfillCoordinator<
-    PgEmailCalendarBackfillRepository,
-    SqsEmailCalendarBackfillPublisher,
->;
-
 /// Concrete pre-lease Google Calendar failure application service.
 pub type GoogleCalendarBackfillFailureHandler =
     GoogleCalendarBackfillFailureService<PgCalendarRepository>;
@@ -59,16 +48,14 @@ pub type GoogleCalendarBackfillFailureHandler =
 pub struct CalendarBackfillServices {
     /// Google provider backfill coordinator.
     pub google: Arc<GoogleCalendarBackfillService>,
-    /// Email-ICS backfill coordinator.
-    pub email_ics: Arc<EmailIcsBackfillService>,
     /// Applies terminal provider failures that happen before a lease is claimed.
     pub google_failure: Arc<GoogleCalendarBackfillFailureHandler>,
 }
 
 impl CalendarBackfillServices {
     /// Compose calendar application services from process-level adapters.
-    pub fn new(db: PgPool, sqs_client: sqs_client::SQS, redis_client: RedisClient) -> Self {
-        let repository = PgCalendarRepository::new(db.clone());
+    pub fn new(db: PgPool, redis_client: RedisClient) -> Self {
+        let repository = PgCalendarRepository::new(db);
         Self {
             google: Arc::new(GoogleCalendarBackfillCoordinator::new(
                 repository.clone(),
@@ -81,10 +68,6 @@ impl CalendarBackfillServices {
                 ),
                 repository.clone(),
                 calendar_watch_config(),
-            )),
-            email_ics: Arc::new(EmailCalendarBackfillCoordinator::new(
-                PgEmailCalendarBackfillRepository::new(db),
-                SqsEmailCalendarBackfillPublisher::new(sqs_client),
             )),
             google_failure: Arc::new(GoogleCalendarBackfillFailureService::new(repository)),
         }

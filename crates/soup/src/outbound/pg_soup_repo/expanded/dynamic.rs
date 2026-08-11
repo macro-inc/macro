@@ -8,6 +8,7 @@ use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    calendar_event::CalendarEventLiteral,
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
@@ -1012,6 +1013,18 @@ fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
     })
 }
 
+fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
 fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separator: &mut bool) {
     if *needs_separator {
         builder.push(" UNION ALL ");
@@ -1817,10 +1830,15 @@ fn build_grouped_query<'a>(
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Project],
         );
-    let include_calendar_events = properties_filter_can_apply_to(
-        filter_ast.properties_filter.as_deref(),
-        &[PropertyEntityType::CalendarEvent],
-    );
+    // Gated like the other three legs. Beyond skipping a union branch that can
+    // never match, this keeps the NIL-id exclusion every Soup query now sends
+    // from reaching `push_filter` below — see the bind-numbering note there.
+    let include_calendar_events =
+        !calendar_event_filter_is_impossible(filter_ast.calendar_event_filter.as_deref())
+            && properties_filter_can_apply_to(
+                filter_ast.properties_filter.as_deref(),
+                &[PropertyEntityType::CalendarEvent],
+            );
 
     push_accessible_items_cte(
         &mut builder,
@@ -1874,6 +1892,14 @@ fn build_grouped_query<'a>(
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
+        // FIXME: `push_filter` uses `push_bind`, whose placeholders come from
+        // the builder's own counter starting at $1 — but this query numbers its
+        // parameters by hand ($1..$10) and binds them positionally. The first
+        // bind pushed here therefore collides with $1 (the user id), and
+        // Postgres rejects the statement with `operator does not exist: text =
+        // uuid`. Only reachable now with a calendar filter that survives
+        // `calendar_event_filter_is_impossible`; a grouped view that grows a
+        // real calendar filter needs this rendered at $11+ instead.
         if let Some(filter) = filter_ast.calendar_event_filter.as_deref() {
             builder.push(" AND (");
             super::super::calendar_event::push_filter(&mut builder, filter);
