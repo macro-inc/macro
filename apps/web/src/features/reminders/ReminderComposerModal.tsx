@@ -8,10 +8,15 @@ import {
 import { type EntityData, InlineEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
 import {
+  reminderSoupPatch,
   reminderTarget,
   useCreateReminderMutation,
   useUpdateReminderMutation,
 } from '@queries/reminders/reminders';
+import {
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+} from '@queries/soup/cache';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   Button,
@@ -81,7 +86,21 @@ export function ReminderComposerModal() {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const createReminder = useCreateReminderMutation();
-  const updateReminder = useUpdateReminderMutation();
+  // Soup rows come from the normalized soup cache, not the reminders queries,
+  // so the mutation's own invalidation leaves an edited row reading its old
+  // description and firing time until a reload. Applying the response is not an
+  // optimistic guess — `nextRunAt` is derived server-side from the schedule,
+  // and this is the value it derived, which is why it lands on success rather
+  // than in `onMutate`.
+  const updateReminder = useUpdateReminderMutation({
+    onSuccess: (reminder) =>
+      optimisticUpdateSoupEntity(
+        reminderSoupPatch(
+          reminder,
+          getSoupEntityById(reminder.id)?.frecency_score
+        )
+      ),
+  });
   const keybindings = useListKeyBindings(() => dialogRef());
 
   const entity = () => reminderComposerState.entity;
