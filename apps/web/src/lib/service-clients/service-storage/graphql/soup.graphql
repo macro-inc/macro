@@ -1,15 +1,32 @@
-query Soup(
-	$input: SoupInput!
-	$includeEmailContent: Boolean! = false
-	$offset: Int! = 0
-	$limit: Int! = 20
-) {
+query Soup($input: SoupInput!) {
 	user {
 		id
 		soup(input: $input) {
 			items {
 				...SoupItemFields
-				...EmailThreadPageFields @include(if: $includeEmailContent)
+			}
+			nextCursor
+		}
+	}
+}
+
+query SoupBackfill($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...SoupItemFields
+				... on GraphqlSoupEmailThread {
+					viewerPermission {
+						__typename
+						... on GraphqlAccessLevelPermission {
+							accessLevel
+						}
+					}
+					messages(offset: 0, limit: 20) {
+						...EmailThreadMessageFields
+					}
+				}
 			}
 			nextCursor
 		}

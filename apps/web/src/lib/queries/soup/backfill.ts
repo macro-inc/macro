@@ -1,6 +1,6 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
 import {
-  fetchGraphqlSoup,
+  fetchGraphqlSoupBackfill,
   type GraphqlSoupInitialInput,
   type GraphqlSoupInput,
   graphqlCacheEnabled,
@@ -30,8 +30,6 @@ export type SoupBackfillParams = {
   checkpointId: string;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
-  /** Select the first email message page for normalized-cache hydration. */
-  includeEmailContent?: boolean;
   /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
 };
@@ -62,7 +60,6 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   // Restart completed legacy newest-message checkpoints with the new shape.
   checkpointId: 'email-thread-pages',
-  includeEmailContent: true,
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -331,13 +328,9 @@ export async function runSoupBackfill(
           },
         }
       : { initial: passInput };
-    const page = await fetchGraphqlSoup(input, {
-      signal,
-      // Backfill must stop on a network failure instead of advancing from an
-      // old offline page. TanStack retries from the persisted cursor.
-      allowOfflineFallback: false,
-      ...(params.includeEmailContent ? { includeEmailContent: true } : {}),
-    });
+    // Network-only fetching leaves the persisted cursor unchanged on failure,
+    // so TanStack retries from the same page.
+    const page = await fetchGraphqlSoupBackfill(input, { signal });
 
     const completed = page.next_cursor == null;
     checkpoint = {

@@ -39,6 +39,9 @@ import {
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
   type GroupSoupQueryVariables,
+  SoupBackfillDocument,
+  type SoupBackfillQuery,
+  type SoupBackfillQueryVariables,
   type SoupInitialInput,
   type SoupInput,
   type SoupPropertyFieldsFragment,
@@ -749,8 +752,6 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
 
 export type FetchGraphqlSoupOptions = {
   signal?: AbortSignal;
-  /** Select the first email message page for cache hydration. */
-  includeEmailContent?: boolean;
   /** Defaults to true for normal foreground Soup reads. */
   allowOfflineFallback?: boolean;
 };
@@ -801,13 +802,7 @@ export async function fetchGraphqlSoup(
 ): Promise<SoupPage> {
   const client = getGraphqlSoupClient();
   const useCache = graphqlCacheEnabled();
-  const variables: SoupQueryVariables = {
-    input,
-    includeEmailContent: options.includeEmailContent ?? false,
-    // Keep normalized field arguments identical to the thread query.
-    offset: 0,
-    limit: 20,
-  };
+  const variables: SoupQueryVariables = { input };
 
   // `cache-and-network` writes responses through the normalized cache;
   // `.toPromise()` skips the stale cache emission, so callers keep
@@ -845,6 +840,30 @@ export async function fetchGraphqlSoup(
   }
 
   return mapGraphqlSoupPage(data);
+}
+
+/** Fetches one network-only page for normalized-cache backfills. */
+export async function fetchGraphqlSoupBackfill(
+  input: GraphqlSoupInput,
+  options: Pick<FetchGraphqlSoupOptions, 'signal'> = {}
+): Promise<SoupPage> {
+  const result = await getGraphqlSoupClient()
+    .query<SoupBackfillQuery, SoupBackfillQueryVariables>(
+      SoupBackfillDocument,
+      { input },
+      {
+        requestPolicy: 'network-only',
+        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+      }
+    )
+    .toPromise();
+
+  if (result.error) throw result.error;
+  if (!result.data) {
+    throw new Error('GraphQL Soup backfill query returned no data');
+  }
+
+  return mapGraphqlSoupPage(result.data);
 }
 
 /** Fetch grouped Soup bins through the GraphQL endpoint. */
