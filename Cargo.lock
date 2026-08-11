@@ -6311,6 +6311,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_activity"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-graphql",
+ "chrono",
+ "graphql_common",
+ "macro_user_id",
+ "model-entity",
+ "models_pagination",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_channel"
 version = "0.1.0"
 dependencies = [
