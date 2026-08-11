@@ -364,6 +364,16 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       }}
       eventDidMount={({ el, event }) => {
         eventElements.set(event.id, el);
+        // A re-render (query settling, live refresh) replaces chip elements.
+        // Re-anchor an open details popover to the remounted chip — its old
+        // anchor is a disconnected node the popover can't position against.
+        if (
+          isActive() &&
+          calendarView.eventState.selectedEventId === event.id
+        ) {
+          const selected = data.eventsById().get(event.id);
+          if (selected) calendarView.selectEvent(selected, el);
+        }
         notifyChipMount();
       }}
       eventWillUnmount={({ el, event }) => {
