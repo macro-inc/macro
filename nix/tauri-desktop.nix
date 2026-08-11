@@ -506,6 +506,12 @@
         };
       };
       tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
+      tauriDesktopDmgAppleLinker = pkgs.writeShellScript "tauri-desktop-apple-linker" ''
+        # Apple clang looks up `ld` on PATH. Keep Nix's cctools wrapper from
+        # intercepting the link by putting the native macOS tools first.
+        export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        exec /usr/bin/clang -B/usr/bin "$@"
+      '';
       tauriDesktopDmgConfig = builtins.toJSON (
         lib.recursiveUpdate
           {
@@ -534,8 +540,8 @@
           # Nix's cctools ld crashes with SIGTRAP while linking the large final
           # desktop binary on GitHub's macOS 15 arm64 runners. This derivation
           # is already an impure, unsandboxed native macOS build for signing;
-          # use the runner's Apple linker and SDK for the final Cargo link.
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = "/usr/bin/clang";
+          # use the runner's Apple linker and SDK for Cargo links.
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = tauriDesktopDmgAppleLinker;
           nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
           preBuild = ''
             if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
