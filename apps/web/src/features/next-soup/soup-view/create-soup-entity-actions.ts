@@ -293,8 +293,12 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // A reminder never offers Rename — its name is its description, which the
-    // reminders API owns — so this takes that slot, and the same 'r' key.
+    // Takes Rename's slot, and its 'r' key. The two cannot both appear:
+    // `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
+    // reminder row's `ownerId` is always `''` (both soup mappers set it — a
+    // reminder is private to its owner, so the row carries no owner id) while
+    // `userId()` is a macro id or undefined. Renaming one would fail anyway;
+    // its name is its description, which only the reminders API can change.
     // Single-entity only: the editor asks about one reminder's time.
     if (entities.length === 1 && editReminderAction.canExecute(entities[0])) {
       middleItems.push({

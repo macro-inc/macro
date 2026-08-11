@@ -307,9 +307,12 @@ export const useEntityActionHotkeys = (
   /**
    * Whether 'r' should open the reminder editor rather than rename.
    *
-   * A reminder is never renamable — its name is its description, owned by the
-   * reminders API — so the two are mutually exclusive and can share the key
-   * instead of leaving 'r' dead on a reminder row.
+   * The two are mutually exclusive rather than merely unlikely to overlap:
+   * `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
+   * reminder row's `ownerId` is always `''` while `userId()` is a macro id or
+   * undefined — so rename never claims a reminder, and sharing the key beats
+   * leaving 'r' dead on one. Its name is its description, which only the
+   * reminders API can change.
    */
   const editsReminder = (): boolean => {
     const entities = getEntitiesForAction();
