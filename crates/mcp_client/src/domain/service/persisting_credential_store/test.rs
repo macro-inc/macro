@@ -73,6 +73,7 @@ fn record() -> McpServerRecord {
         server_name: "Linear".to_string(),
         credentials: None,
         enabled: true,
+        headers: std::collections::HashMap::new(),
     }
 }
 

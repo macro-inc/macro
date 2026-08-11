@@ -283,6 +283,7 @@ where
             server_name: pending.server_name,
             credentials: Some(credentials.clone()),
             enabled: true,
+            headers: std::collections::HashMap::new(),
         };
 
         self.server_store

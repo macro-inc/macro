@@ -7,6 +7,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -35,18 +36,66 @@ function hostFromUrl(url: string): string {
   }
 }
 
+/** A single key-value header entry. */
+function HeaderRow(props: {
+  pair: { key: string; value: string };
+  onChange: (pair: { key: string; value: string }) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex items-center gap-2">
+      <input
+        type="text"
+        class="settings-input flex-1"
+        placeholder="Header name"
+        value={props.pair.key}
+        onInput={(e) =>
+          props.onChange({ key: e.currentTarget.value, value: props.pair.value })
+        }
+      />
+      <span class="text-ink-muted text-xs">:</span>
+      <input
+        type="text"
+        class="settings-input flex-1"
+        placeholder="Value"
+        value={props.pair.value}
+        onInput={(e) =>
+          props.onChange({ key: props.pair.key, value: e.currentTarget.value })
+        }
+      />
+      <Button
+        variant="base"
+        size="sm"
+        depth={3}
+        tooltip="Remove header"
+        onClick={props.onRemove}
+      >
+        <XIcon class="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 function AddServerForm(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [name, setName] = createSignal('');
   const [url, setUrl] = createSignal('');
+  const [headers, setHeaders] = createSignal<{ key: string; value: string }[]>(
+    []
+  );
   const addMutation = useAddMcpServerMutation();
   const authMutation = useStartMcpAuthMutation();
 
   const reset = () => {
     setName('');
     setUrl('');
+    setHeaders([]);
+  };
+
+  const addHeader = () => {
+    setHeaders((prev) => [...prev, { key: '', value: '' }]);
   };
 
   const startAuth = (serverName: string, serverUrl: string) => {
@@ -63,13 +112,20 @@ function AddServerForm(props: {
     );
   };
 
+  const headersObject = (): Record<string, string> | undefined => {
+    const entries = headers()
+      .filter((h) => h.key.trim() !== '')
+      .map((h) => [h.key.trim(), h.value] as const);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  };
+
   const handleSubmit = () => {
     const n = name().trim();
     const u = url().trim();
     if (!n || !u) return;
 
     addMutation.mutate(
-      { server_name: n, url: u },
+      { server_name: n, url: u, headers: headersObject() },
       {
         onSuccess: () => {
           startAuth(n, u);
@@ -88,7 +144,7 @@ function AddServerForm(props: {
       open={props.open}
       onOpenChange={(open) => !open && props.onOpenChange(false)}
       position="center"
-      class="w-100"
+      class="w-120"
     >
       <Panel depth={2} class="rounded-xl">
         <Panel.Header class="px-6">
@@ -130,6 +186,37 @@ function AddServerForm(props: {
                 }}
               />
             </label>
+
+            {/* Custom headers section */}
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-ink-muted">Custom Headers</span>
+                <Button
+                  variant="base"
+                  size="sm"
+                  depth={3}
+                  onClick={addHeader}
+                >
+                  <PlusIcon class="size-3" />
+                  Add
+                </Button>
+              </div>
+              <For each={headers()}>
+                {(pair, index) => (
+                  <HeaderRow
+                    pair={pair}
+                    onChange={(updated) =>
+                      setHeaders((prev) =>
+                        prev.map((h, i) => (i === index() ? updated : h))
+                      )
+                    }
+                    onRemove={() =>
+                      setHeaders((prev) => prev.filter((_, i) => i !== index()))
+                    }
+                  />
+                )}
+              </For>
+            </div>
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
@@ -184,6 +271,114 @@ function writeAuthAttempted(url: string, attempted: boolean): void {
   }
 }
 
+function HeadersConfigDialog(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  server: ServerResponse;
+  onSave: (headers: Record<string, string>) => void;
+  saving: boolean;
+}) {
+  const initialHeaders = (): { key: string; value: string }[] => {
+    const h = props.server.headers ?? {};
+    return Object.entries(h).map(([key, value]) => ({ key, value }));
+  };
+  const [pairs, setPairs] = createSignal<
+    { key: string; value: string }[]
+  >(initialHeaders());
+
+  // Reset when server changes
+  createEffect(() => {
+    if (props.open) {
+      setPairs(initialHeaders());
+    }
+  });
+
+  const addHeader = () => {
+    setPairs((prev) => [...prev, { key: '', value: '' }]);
+  };
+
+  const handleSave = () => {
+    const entries = pairs()
+      .filter((h) => h.key.trim() !== '')
+      .map((h) => [h.key.trim(), h.value] as const);
+    props.onSave(Object.fromEntries(entries));
+  };
+
+  return (
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && props.onOpenChange(false)}
+      position="center"
+      class="w-120"
+    >
+      <Panel depth={2} class="rounded-xl">
+        <Panel.Header class="px-6">
+          <span class="text-ink text-sm font-semibold">
+            Configure Headers — {props.server.server_name}
+          </span>
+        </Panel.Header>
+        <Panel.Body class="p-6 flex flex-col gap-5">
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-ink-muted">
+                Custom headers sent with every request to this MCP server.
+              </span>
+              <Button variant="base" size="sm" depth={3} onClick={addHeader}>
+                <PlusIcon class="size-3" />
+                Add
+              </Button>
+            </div>
+            <Show
+              when={pairs().length > 0}
+              fallback={
+                <p class="py-4 text-center text-xs text-ink-muted">
+                  No custom headers configured.
+                </p>
+              }
+            >
+              <For each={pairs()}>
+                {(pair, index) => (
+                  <HeaderRow
+                    pair={pair}
+                    onChange={(updated) =>
+                      setPairs((prev) =>
+                        prev.map((h, i) => (i === index() ? updated : h))
+                      )
+                    }
+                    onRemove={() =>
+                      setPairs((prev) => prev.filter((_, i) => i !== index()))
+                    }
+                  />
+                )}
+              </For>
+            </Show>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              onClick={() => props.onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              disabled={props.saving}
+              onClick={handleSave}
+            >
+              {props.saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </Panel.Body>
+      </Panel>
+    </Dialog>
+  );
+}
+
 function ServerRow(props: { server: ServerResponse }) {
   const updateMutation = useUpdateMcpServerMutation();
   const deleteMutation = useDeleteMcpServerMutation();
@@ -192,6 +387,7 @@ function ServerRow(props: { server: ServerResponse }) {
   const [attempted, setAttempted] = createSignal(
     readAuthAttempted(props.server.url)
   );
+  const [showHeadersDialog, setShowHeadersDialog] = createSignal(false);
 
   // A recorded attempt on a still-disconnected server means the last connect
   // attempt didn't succeed. Clear the flag once the server authenticates.
@@ -252,8 +448,27 @@ function ServerRow(props: { server: ServerResponse }) {
     );
   };
 
+  const handleSaveHeaders = (headers: Record<string, string>) => {
+    updateMutation.mutate(
+      { url: props.server.url, headers },
+      {
+        onSuccess: () => {
+          setShowHeadersDialog(false);
+          toast.success('Headers updated');
+        },
+        onError: () => {
+          toast.failure('Failed to update headers');
+        },
+      }
+    );
+  };
+
   const Icon = (): SvgIcon =>
     QUICK_CONNECT_ICON_MAP.get(props.server.url) ?? (PlugIcon as SvgIcon);
+
+  const hasHeaders = () =>
+    props.server.headers &&
+    Object.keys(props.server.headers).length > 0;
 
   return (
     <IntegrationRow
@@ -306,6 +521,18 @@ function ServerRow(props: { server: ServerResponse }) {
         />
       </Show>
 
+      <Button
+        variant="base"
+        size="sm"
+        depth={3}
+        tooltip="Configure headers"
+        onClick={() => setShowHeadersDialog(true)}
+      >
+        <SlidersHorizontalIcon
+          class={hasHeaders() ? 'size-4 text-accent' : 'size-4'}
+        />
+      </Button>
+
       <Show
         when={!confirmDelete()}
         fallback={
@@ -340,6 +567,14 @@ function ServerRow(props: { server: ServerResponse }) {
           <XIcon class="size-4" />
         </Button>
       </Show>
+
+      <HeadersConfigDialog
+        open={showHeadersDialog()}
+        onOpenChange={setShowHeadersDialog}
+        server={props.server}
+        onSave={handleSaveHeaders}
+        saving={updateMutation.isPending}
+      />
     </IntegrationRow>
   );
 }

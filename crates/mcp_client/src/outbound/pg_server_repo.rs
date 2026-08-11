@@ -8,6 +8,7 @@ use aes_gcm::{
 };
 use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
+use std::collections::HashMap;
 
 const NONCE_LEN: usize = 12;
 
@@ -72,17 +73,21 @@ impl McpServerStore for PgServerRepo {
             .map(|c| self.encrypt(c))
             .transpose()?;
 
+        let headers_json = serde_json::to_value(&record.headers)
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+
         // Never clobber stored credentials with NULL on conflict: re-adding
         // an existing server (e.g. via the Add Server dialog) must not wipe
         // a valid OAuth grant.
         sqlx::query!(
             r#"
-            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled, headers)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, url) DO UPDATE
             SET server_name = EXCLUDED.server_name,
                 credentials = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
                 enabled     = EXCLUDED.enabled,
+                headers     = EXCLUDED.headers,
                 updated_at  = NOW()
             "#,
             record.user_id.as_ref(),
@@ -90,6 +95,7 @@ impl McpServerStore for PgServerRepo {
             record.server_name,
             encrypted.as_deref(),
             record.enabled,
+            &headers_json,
         )
         .execute(&self.pool)
         .await?;
@@ -105,7 +111,7 @@ impl McpServerStore for PgServerRepo {
     ) -> Result<Option<McpServerRecord>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, headers
             FROM mcp_servers
             WHERE user_id = $1 AND url = $2
             "#,
@@ -115,8 +121,12 @@ impl McpServerStore for PgServerRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
-            .transpose()
+        row.map(|r| {
+            self.to_record(
+                r.user_id, r.url, r.server_name, r.credentials, r.enabled, r.headers,
+            )
+        })
+        .transpose()
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -146,7 +156,7 @@ impl McpServerStore for PgServerRepo {
     ) -> Result<Vec<McpServerRecord>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, headers
             FROM mcp_servers
             WHERE user_id = $1
             ORDER BY created_at
@@ -157,7 +167,11 @@ impl McpServerStore for PgServerRepo {
         .await?;
 
         rows.into_iter()
-            .map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
+            .map(|r| {
+                self.to_record(
+                    r.user_id, r.url, r.server_name, r.credentials, r.enabled, r.headers,
+                )
+            })
             .collect()
     }
 }
@@ -171,6 +185,7 @@ impl PgServerRepo {
         server_name: String,
         credentials: Option<Vec<u8>>,
         enabled: bool,
+        headers: Option<serde_json::Value>,
     ) -> Result<McpServerRecord, sqlx::Error> {
         let user_id = MacroUserIdStr::parse_from_str(&user_id)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
@@ -178,12 +193,17 @@ impl PgServerRepo {
 
         let credentials = credentials.map(|c| self.decrypt(&c)).transpose()?;
 
+        let headers: HashMap<String, String> = headers
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+
         Ok(McpServerRecord {
             user_id,
             url,
             server_name,
             credentials,
             enabled,
+            headers,
         })
     }
 }

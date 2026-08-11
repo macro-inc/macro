@@ -140,6 +140,10 @@ pub struct AddServerRequest {
     url: String,
     /// Human-readable name for the server.
     server_name: String,
+    /// Custom request headers to send with every request (key-value pairs).
+    /// For example: `{"Authorization": "Bearer token123"}`.
+    #[serde(default)]
+    headers: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Request body for updating an MCP server.
@@ -153,6 +157,10 @@ pub struct UpdateServerRequest {
     /// Enable or disable the server.
     #[serde(default)]
     enabled: Option<bool>,
+    /// Custom request headers to send with every request (key-value pairs).
+    /// Pass an empty object `{}` to clear all custom headers.
+    #[serde(default)]
+    headers: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Query parameters for deleting an MCP server.
@@ -209,6 +217,8 @@ pub struct ServerResponse {
     enabled: bool,
     /// Whether the server has valid stored credentials.
     authenticated: bool,
+    /// Custom request headers set for this server.
+    headers: std::collections::HashMap<String, String>,
 }
 
 impl ServerResponse {
@@ -218,6 +228,7 @@ impl ServerResponse {
             server_name: record.server_name.clone(),
             enabled: record.enabled,
             authenticated: record.credentials.is_some(),
+            headers: record.headers.clone(),
         }
     }
 }
@@ -329,6 +340,7 @@ where
         server_name: body.server_name,
         credentials: None,
         enabled: true,
+        headers: body.headers.unwrap_or_default(),
     };
 
     state
@@ -382,6 +394,9 @@ where
     }
     if let Some(enabled) = body.enabled {
         record.enabled = enabled;
+    }
+    if let Some(headers) = body.headers {
+        record.headers = headers;
     }
 
     state
