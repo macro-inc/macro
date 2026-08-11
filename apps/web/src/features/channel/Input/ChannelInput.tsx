@@ -11,6 +11,7 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
+import { ENABLE_AI_AGENTS } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -254,10 +255,13 @@ export function ChannelInput(props: ChannelInputProps) {
   // Macro AI and Macro Coder are mentionable in every channel, and any bot
   // added to the channel is mentionable too. All are surfaced through the
   // same `@`-mention typeahead as participants and re-tagged as bot mentions
-  // at send time.
+  // at send time. Macro Coder is flag-gated in both directions: injected only
+  // when the flag is on, and stripped even if it arrived as a channel bot.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
-    if (!base.some((user) => isMacroCoderId(user.id))) {
+    let base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    if (!ENABLE_AI_AGENTS()) {
+      base = base.filter((user) => !isMacroCoderId(user.id));
+    } else if (!base.some((user) => isMacroCoderId(user.id))) {
       base.unshift(macroCoderMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {

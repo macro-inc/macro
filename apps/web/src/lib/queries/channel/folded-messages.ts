@@ -56,9 +56,15 @@ export type FoldedMessageLookup = (
  * It resolves rather than rejects when the log cannot be fetched: a suspended
  * resource that throws would take the whole channel down with it, and
  * placeholders with nothing behind them are much the milder failure.
+ *
+ * While `enabled` is false nothing runs — no fetch, no stream, no fold
+ * worker — and the resource stays unresolved, which reads as `undefined`
+ * without suspending. Flipping it on starts the fetch for the current
+ * channel.
  */
 export function createFoldedMessages(
-  channelId: Accessor<string>
+  channelId: Accessor<string>,
+  enabled: Accessor<boolean>
 ): Resource<FoldedMessageLookup> {
   const queryClient = useQueryClient();
 
@@ -99,7 +105,7 @@ export function createFoldedMessages(
   });
 
   const [folded] = createResource(
-    channelId,
+    () => (enabled() ? channelId() : undefined),
     async (id): Promise<FoldedMessageLookup> => {
       const run = ++generation;
       const superseded = () => closed || generation !== run;
