@@ -34,6 +34,18 @@ fn acp_ready_round_trips_as_a_typed_variant() {
 }
 
 #[test]
+fn disconnected_round_trips_as_a_typed_variant() {
+    assert_eq!(
+        serde_json::to_value(SystemEvent::Disconnected).unwrap(),
+        json!("disconnected")
+    );
+    assert_eq!(
+        serde_json::from_value::<SystemEvent>(json!("disconnected")).unwrap(),
+        SystemEvent::Disconnected
+    );
+}
+
+#[test]
 fn unknown_event_names_round_trip_losslessly() {
     let event = serde_json::from_value::<SystemEvent>(json!("vendor/custom-event")).unwrap();
     assert_eq!(

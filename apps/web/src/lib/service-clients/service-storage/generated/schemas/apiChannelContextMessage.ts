@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiChannelContextMessageAgentSessionMessageId } from './apiChannelContextMessageAgentSessionMessageId';
+import type { ApiChannelContextMessageAgentSessionMessage } from './apiChannelContextMessageAgentSessionMessage';
 import type { ApiChannelContextMessageContent } from './apiChannelContextMessageContent';
 import type { ApiChannelContextMessageDeletedAt } from './apiChannelContextMessageDeletedAt';
 import type { ApiChannelContextMessageEditedAt } from './apiChannelContextMessageEditedAt';
@@ -15,9 +15,7 @@ import type { ApiMessageSender } from './apiMessageSender';
  * A channel message returned by the message-context endpoint.
  */
 export interface ApiChannelContextMessage {
-  /** The agent session turn this placeholder renders, as the composite
-`"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders. */
-  agent_session_message_id?: ApiChannelContextMessageAgentSessionMessageId;
+  agent_session_message?: ApiChannelContextMessageAgentSessionMessage;
   /** Channel id. */
   channel_id: string;
   /** Message content. `None` on agent-turn placeholder messages. */

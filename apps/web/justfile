@@ -176,13 +176,15 @@ build-cache-wasm-profile:
 build-agent-fold-wasm:
     wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
 
-# Dev fast path: build the agent-fold wasm pkg only when it is missing. Unlike
-# ensure-cache-wasm there is no version-drift check yet, so run
-# `just build-agent-fold-wasm` by hand after changing the fold.
+# Dev fast path: build the agent-fold wasm pkg only when it is missing or any
+# fold source is newer than the built artifact. A stale artifact folds with the
+# wrong wire shape, which renders as chips silently stuck on their last event.
 ensure-agent-fold-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -f "{{justfile_directory()}}/src/lib/core/agent-fold/wasm/agent_fold_bg.wasm" ]; then
+    WASM="{{justfile_directory()}}/src/lib/core/agent-fold/wasm/agent_fold_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/agent_fold"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-agent-fold-wasm
     fi
 

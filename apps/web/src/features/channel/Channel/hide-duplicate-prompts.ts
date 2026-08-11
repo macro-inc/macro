@@ -42,7 +42,9 @@
  * already knows a prompt's message when it has one.
  */
 
+import { foldedReference, type MessageId } from '@core/agent-fold/message-id';
 import type { FoldedMessageLookup } from '@queries/channel/folded-messages';
+import type { ApiAgentSessionMessageIdentifier } from '@service-storage/generated/schemas/apiAgentSessionMessageIdentifier';
 
 /**
  * The two fields this reads. Generic over the row type so it can filter the
@@ -50,16 +52,17 @@ import type { FoldedMessageLookup } from '@queries/channel/folded-messages';
  */
 type PromptRow = {
   id: string;
-  agent_session_message_id?: string | null;
+  agent_session_message?: ApiAgentSessionMessageIdentifier | null;
   content?: string | null;
 };
 
 /** The prose of a folded message, as it would read in the channel. */
 function foldedText(
   lookup: FoldedMessageLookup,
-  agentSessionMessageId: string
+  agentSessionId: string,
+  messageId: MessageId
 ): string | undefined {
-  const folded = lookup(agentSessionMessageId);
+  const folded = lookup(agentSessionId, messageId);
   if (!folded || folded.author.kind !== 'user') return undefined;
   return folded.parts
     .map((part) => (part.kind === 'text' ? part.text : ''))
@@ -85,7 +88,7 @@ export function duplicatePromptRowIds<Row extends PromptRow>(
 
   const posted = new Set<string>();
   for (const message of messages) {
-    if (message.agent_session_message_id == null && message.content != null) {
+    if (message.agent_session_message == null && message.content != null) {
       posted.add(message.content);
     }
   }
@@ -93,9 +96,13 @@ export function duplicatePromptRowIds<Row extends PromptRow>(
 
   const hidden = new Set<string>();
   for (const message of messages) {
-    const id = message.agent_session_message_id;
-    if (id == null) continue;
-    const text = foldedText(lookup, id);
+    const reference = foldedReference(message.agent_session_message);
+    if (!reference) continue;
+    const text = foldedText(
+      lookup,
+      reference.agentSessionId,
+      reference.messageId
+    );
     if (text != null && posted.has(text)) hidden.add(message.id);
   }
   if (hidden.size === 0) {
@@ -103,10 +110,15 @@ export function duplicatePromptRowIds<Row extends PromptRow>(
     // text for these rows, or the two strings differ. Both sides are logged
     // because "did not match" and "was never asked" look identical otherwise.
     const prompts = messages
-      .filter((message) => message.agent_session_message_id != null)
-      .map((message) => ({
-        id: message.agent_session_message_id,
-        folded: foldedText(lookup, message.agent_session_message_id as string),
+      .map((message) => foldedReference(message.agent_session_message))
+      .filter((reference) => reference !== undefined)
+      .map((reference) => ({
+        id: reference.messageId,
+        folded: foldedText(
+          lookup,
+          reference.agentSessionId,
+          reference.messageId
+        ),
       }))
       .filter((row) => row.folded !== undefined);
     if (prompts.length > 0) {

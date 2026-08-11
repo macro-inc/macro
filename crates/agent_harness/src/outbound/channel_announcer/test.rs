@@ -4,23 +4,28 @@ use macro_uuid::Uuid;
 use super::*;
 
 #[test]
-fn new_session_response_is_only_a_static_magic_chip() {
+fn chip_carries_the_announcement_identity() {
     let announcement = SessionAnnouncement {
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_channel_id: Uuid::from_u128(1),
         origin_thread_id: Uuid::from_u128(2),
         session_channel_id: Uuid::from_u128(3),
-        prompted_turn_id: Uuid::from_u128(4),
+        prompted_message_id: agent_session::domain::model::MessageId::first(
+            agent_session::domain::model::AuthorKind::User,
+        ),
+        prompted_content: "@claude fix the failing test".to_owned(),
         triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
     };
 
     assert_eq!(
-        template_new_agent_session_response(&announcement),
-        concat!(
-            "<m-magic-chip>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",",
-            "\"channelId\":\"00000000-0000-0000-0000-000000000003\",",
-            "\"promptedTurnId\":\"00000000-0000-0000-0000-000000000004\",",
-            "\"status\":\"booting\"}</m-magic-chip>"
-        )
+        announcement_chip(&announcement),
+        AgentAnnouncementChip {
+            agent_session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
+            channel_id: "00000000-0000-0000-0000-000000000003".to_owned(),
+            prompted_message: agent_session::domain::model::MessageId::first(
+                agent_session::domain::model::AuthorKind::User,
+            ),
+            status: "booting".to_owned(),
+        }
     );
 }

@@ -49,6 +49,8 @@
 //! [`MessageId`](crate::domain::model::MessageId) derived here is persisted
 //! on a comms placeholder row.
 
+use std::borrow::Cow;
+
 use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
@@ -82,11 +84,15 @@ use std::path::PathBuf;
 /// for why.
 #[must_use]
 pub fn fold(log: impl IntoIterator<Item = AgentSessionLog>) -> Vec<FoldedMessage> {
+    fold_machine(log).into_messages()
+}
+
+fn fold_machine(log: impl IntoIterator<Item = AgentSessionLog>) -> FoldMachineImpl {
     let mut machine = FoldMachineImpl::new();
     for entry in log {
         let _ = machine.push(entry);
     }
-    machine.into_messages()
+    machine
 }
 
 /// The incremental fold: push a session's log frames in one at a time and it
@@ -127,6 +133,12 @@ impl FoldMachineImpl {
     pub fn into_messages(self) -> Vec<FoldedMessage> {
         self.state.messages
     }
+
+    /// Turn id the next prompt pushed into this machine will open.
+    #[must_use]
+    pub fn next_turn_id(&self) -> TurnId {
+        TurnId(self.state.turns_opened)
+    }
 }
 
 impl FoldMachine for FoldMachineImpl {
@@ -138,8 +150,8 @@ impl FoldMachine for FoldMachineImpl {
             return IncrementalFoldResult::Unchanged;
         };
         match changed.kind {
-            Change::New => IncrementalFoldResult::NewMessage(message),
-            Change::Updated => IncrementalFoldResult::MessageUpdate(message),
+            Change::New => IncrementalFoldResult::NewMessage(Cow::Borrowed(message)),
+            Change::Updated => IncrementalFoldResult::MessageUpdate(Cow::Borrowed(message)),
         }
     }
 }
@@ -188,6 +200,11 @@ impl<T: LogRepo + Sync> FoldSession for T {
     ) -> Result<Vec<FoldedMessage>, rootcause::Report> {
         let log = self.list_by_session(session).await?;
         Ok(fold(log))
+    }
+
+    async fn next_turn_id(&self, session: AgentSessionId) -> Result<TurnId, rootcause::Report> {
+        let log = self.list_by_session(session).await?;
+        Ok(fold_machine(log).next_turn_id())
     }
 }
 

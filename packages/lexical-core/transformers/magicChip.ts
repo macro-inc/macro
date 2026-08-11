@@ -1,16 +1,14 @@
-import type { TextMatchTransformer } from '@lexical/markdown';
-import type { TextNode } from 'lexical';
+import type { ElementTransformer } from '@lexical/markdown';
+import type { ElementNode, LexicalNode } from 'lexical';
 import {
   $createMagicChipNode,
+  isMagicChipMessage,
   $isMagicChipNode,
   isMagicChipStatus,
   type MagicChipData,
   MagicChipNode,
 } from '../nodes/MagicChipNode';
-import {
-  replaceTextWithUnknownMention,
-  UnknownMentionNode,
-} from './unknownFallback';
+import { replaceElementWithUnknownMention, UnknownMentionNode } from './unknownFallback';
 
 function isMagicChipData(value: unknown): value is MagicChipData {
   if (!value || typeof value !== 'object') return false;
@@ -18,29 +16,28 @@ function isMagicChipData(value: unknown): value is MagicChipData {
   return (
     typeof data.agentSessionId === 'string' &&
     typeof data.channelId === 'string' &&
-    typeof data.promptedTurnId === 'string' &&
+    isMagicChipMessage(data.promptedMessage) &&
     isMagicChipStatus(data.status)
   );
 }
 
 /** Internal markdown transformer for a static Magic Chip. */
-export const I_MAGIC_CHIP: TextMatchTransformer = {
+export const I_MAGIC_CHIP: ElementTransformer = {
   dependencies: [MagicChipNode, UnknownMentionNode],
-  type: 'text-match',
+  type: 'element',
   regExp: /<m-magic-chip>(.*?)<\/m-magic-chip>/,
-  importRegExp: /<m-magic-chip>(.*?)<\/m-magic-chip>/,
-  export: (node) => {
+  export: (node: LexicalNode) => {
     if (!$isMagicChipNode(node)) return null;
     return `<m-magic-chip>${JSON.stringify(node.exportComponentProps())}</m-magic-chip>`;
   },
-  replace: (node: TextNode, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data: unknown = JSON.parse(match[1]);
+      const data: unknown = JSON.parse(match[1] ?? '');
       if (!isMagicChipData(data)) throw new Error('invalid magic chip data');
-      node.replace($createMagicChipNode(data));
+      parent.replace($createMagicChipNode(data));
     } catch (error) {
       console.error('Error in I_MAGIC_CHIP replace:', error);
-      replaceTextWithUnknownMention(node, 'Unknown Magic Chip');
+      replaceElementWithUnknownMention(parent, 'Unknown Magic Chip');
     }
   },
 };

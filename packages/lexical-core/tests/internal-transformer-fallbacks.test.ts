@@ -92,7 +92,7 @@ describe('internal transformer fallbacks', () => {
     ['<m-await>{bad}</m-await>', 'Unknown Await'],
     ['<m-magic-chip>{bad}</m-magic-chip>', 'Unknown Magic Chip'],
     [
-      '<m-magic-chip>{"agentSessionId":"session","channelId":"channel","promptedTurnId":"turn","status":"invalid"}</m-magic-chip>',
+      '<m-magic-chip>{"agentSessionId":"session","channelId":"channel","promptedMessage":{"turn":0,"author":"user"},"status":"invalid"}</m-magic-chip>',
       'Unknown Magic Chip',
     ],
     ['<m-link>{bad}</m-link>', 'Unknown Link'],

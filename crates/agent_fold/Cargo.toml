@@ -17,6 +17,10 @@ cli = ["dep:clap", "dep:tokio"]
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
 test-utils = []
+# OpenAPI schemas for the vocabulary that reaches an HTTP boundary. Off by
+# default: `utoipa` is dead weight for the wasm fold, which serializes but
+# never documents.
+openapi = ["dep:utoipa"]
 
 # Needs an async runtime and an argument parser, which the library does not.
 [[bin]]
@@ -41,6 +45,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 
 # The wasm-bindgen shell in `inbound::wasm`, which only exists on wasm32. Kept
 # target-gated rather than behind a feature so a native `cargo build` never

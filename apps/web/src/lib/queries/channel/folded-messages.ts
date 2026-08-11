@@ -1,6 +1,8 @@
+import type { MessageId } from '@core/agent-fold/message-id';
 import type { FoldedMessage } from '@core/agent-fold/types';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
+import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import { useQueryClient } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -19,7 +21,7 @@ import { channelKeys } from './keys';
 
 /**
  * Look up the folded agent-session message a placeholder channel message
- * renders, by the placeholder's `agent_session_message_id`.
+ * renders, by the turn and author the placeholder names.
  *
  * **Reactive.** The lookup reads a store the live stream writes into, so a
  * caller reading it inside a tracking scope re-runs when the session appends
@@ -27,7 +29,8 @@ import { channelKeys } from './keys';
  * agent turn: no message is refetched, the fold just gets longer.
  */
 export type FoldedMessageLookup = (
-  messageId: string
+  agentSessionId: string,
+  messageId: MessageId
 ) => FoldedMessage | undefined;
 
 /**
@@ -64,7 +67,10 @@ export type FoldedMessageLookup = (
  */
 export function createFoldedMessages(
   channelId: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  options?: {
+    observeEntries?: (entries: AgentSessionLogEntryDto[]) => void;
+  }
 ): Resource<FoldedMessageLookup> {
   const queryClient = useQueryClient();
 
@@ -73,16 +79,21 @@ export function createFoldedMessages(
   // hundreds of times. Consumers read through the lookup below, so the read
   // lands in their own tracking scope and only the rows whose message changed
   // re-render.
-  const [byMessageId, setByMessageId] = createStore<
-    Record<string, FoldedMessage>
+  const [bySessionId, setBySessionId] = createStore<
+    Record<string, Record<number, Partial<Record<string, FoldedMessage>>>>
   >({});
-  const lookup: FoldedMessageLookup = (messageId) => byMessageId[messageId];
+  const lookup: FoldedMessageLookup = (sessionId, { turn, author }) =>
+    bySessionId[sessionId]?.[turn]?.[author];
 
   const remember = (messages: FoldedMessage[]) =>
-    setByMessageId(
+    setBySessionId(
       produce((current) => {
         for (const message of messages) {
-          current[message.agentSessionMessageId] = message;
+          const { agentSessionId, turn } = message;
+          current[agentSessionId] ??= {};
+          const session = current[agentSessionId];
+          session[turn] ??= {};
+          session[turn][message.author.kind] = message;
         }
       })
     );
@@ -111,7 +122,7 @@ export function createFoldedMessages(
       const superseded = () => closed || generation !== run;
 
       stopFollowing();
-      setByMessageId(reconcile({}));
+      setBySessionId(reconcile({}));
 
       // Before the fetch, deliberately: frames that arrive while it is in
       // flight belong after the snapshot it returns, and only a buffered
@@ -130,7 +141,7 @@ export function createFoldedMessages(
             ),
           // The websocket keeps this channel's fold current, so the cached log
           // only matters for a channel reopened after its stream was dropped.
-          staleTime: 30_000,
+          staleTime: 0,
         })
         .catch((error: unknown) => {
           // A channel with no agent session is answered, not an error, so this
@@ -145,6 +156,7 @@ export function createFoldedMessages(
         agentSessionId: log?.agentSessionId ?? '(none - not an agent channel)',
         acpMessages: log?.entries.length ?? 0,
       });
+      if (log) options?.observeEntries?.(log.entries);
 
       // Before following, so the first frame of the first turn already has an
       // agent to attribute its message to.
@@ -176,7 +188,8 @@ export function createFoldedMessages(
           acpMessages: log.entries.length,
           messages: followed.messages.length,
           ids: followed.messages.map(
-            (message) => message.agentSessionMessageId
+            (message) =>
+              `${message.agentSessionId}/${message.turn}/${message.author.kind}`
           ),
         });
       } catch (error) {

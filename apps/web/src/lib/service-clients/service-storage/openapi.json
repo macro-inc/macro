@@ -11786,6 +11786,27 @@
           }
         }
       },
+      "ApiAgentSessionMessageIdentifier": {
+        "type": "object",
+        "description": "Identifies the folded agent-session message a placeholder message renders.\n\nNested rather than three sibling fields, because the three only ever make\nsense together: a message either names a folded message or has a body.",
+        "required": ["agent_session_id", "turn", "author"],
+        "properties": {
+          "agent_session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent session whose folded message this renders."
+          },
+          "author": {
+            "$ref": "#/components/schemas/AuthorKind",
+            "description": "Which side of the turn produced the message."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Turn within that session, assigned in log order from zero."
+          }
+        }
+      },
       "ApiAttachmentChannelReference": {
         "type": "object",
         "description": "A reference to an attachment entity from a channel message.",
@@ -12004,9 +12025,16 @@
           "updated_at"
         ],
         "properties": {
-          "agent_session_message_id": {
-            "type": ["string", "null"],
-            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders."
+          "agent_session_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiAgentSessionMessageIdentifier",
+                "description": "The folded agent-session message this placeholder renders. Absent on\nordinary messages, which carry their own body."
+              }
+            ]
           },
           "channel_id": {
             "type": "string",
@@ -12223,9 +12251,16 @@
           "attachments"
         ],
         "properties": {
-          "agent_session_message_id": {
-            "type": ["string", "null"],
-            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders;\njoin it against the folded messages of the channel's agent session."
+          "agent_session_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiAgentSessionMessageIdentifier",
+                "description": "The folded agent-session message this placeholder renders. Absent on\nordinary messages, which carry their own body."
+              }
+            ]
           },
           "attachments": {
             "type": "array",
@@ -12779,9 +12814,16 @@
           "attachments"
         ],
         "properties": {
-          "agent_session_message_id": {
-            "type": ["string", "null"],
-            "description": "The agent session turn this placeholder renders, as the composite\n`\"{agent_session_id}:{turn}\"`. Set only on agent-turn placeholders."
+          "agent_session_message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiAgentSessionMessageIdentifier",
+                "description": "The folded agent-session message this placeholder renders. Absent on\nordinary messages, which carry their own body."
+              }
+            ]
           },
           "attachments": {
             "type": "array",
@@ -12835,6 +12877,11 @@
         "type": "string",
         "description": "RSVP state for an attendee.",
         "enum": ["needs_action", "accepted", "declined", "tentative"]
+      },
+      "AuthorKind": {
+        "type": "string",
+        "description": "Which side of the conversation produced a message.\n\nThe identity-free discriminant of [`Author`], usable in a key where\n[`Author`] itself carries a payload.\n\nThe wire names a [`MessageId`] is written with and parsed back from are\nthe strum-derived `snake_case` variant names - one source of truth for\nboth directions.",
+        "enum": ["user", "agent"]
       },
       "BTreeMap": {
         "type": "object",

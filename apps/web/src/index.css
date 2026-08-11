@@ -402,6 +402,36 @@ body.tauri-ios {
   }
 }
 
+@keyframes magic-chip-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.magic-chip-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-ink-extra-muted) 40%,
+    var(--color-ink) 50%,
+    var(--color-ink-extra-muted) 60%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: magic-chip-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magic-chip-shimmer {
+    animation: none;
+    background: none;
+    color: var(--color-ink-muted);
+  }
+}
+
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);

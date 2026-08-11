@@ -295,7 +295,7 @@ fn context_message(
         deleted_at: None,
         bot_profile: None,
         triggered_by: None,
-        agent_session_message_id: None,
+        agent_session_message: None,
     }
 }
 
@@ -312,7 +312,7 @@ fn thread_reply(id: Uuid, sender_id: &str, content: &str) -> ThreadReply {
         triggered_by: None,
         reactions: Vec::new(),
         attachments: Vec::new(),
-        agent_session_message_id: None,
+        agent_session_message: None,
     }
 }
 

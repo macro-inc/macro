@@ -6,7 +6,10 @@
 //! through the channel API. The composition root decides which
 //! `ChannelService` implementation (and side-effect stack) this wraps.
 //!
-//! The announcement links the session's dedicated channel with a magic chip.
+//! The announcement quotes the prompting message above the session's magic
+//! chip. The content is composed by the lexical service — the one place that
+//! builds message markdown from real Lexical nodes — so this adapter never
+//! formats markdown itself.
 
 #[cfg(test)]
 mod test;
@@ -17,31 +20,38 @@ use bot_id::BotId;
 use channel_sender::ChannelSender;
 use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use channels::domain::ports::ChannelService;
+use lexical_client::LexicalClient;
+use lexical_client::parse_markdown::AgentAnnouncementChip;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SessionAnnouncement;
 use crate::domain::ports::SessionAnnouncer;
 
-fn template_new_agent_session_response(announcement: &SessionAnnouncement) -> String {
-    format!(
-        concat!(
-            "<m-magic-chip>{{\"agentSessionId\":\"{}\",\"channelId\":\"{}\",",
-            "\"promptedTurnId\":\"{}\",\"status\":\"booting\"}}</m-magic-chip>"
-        ),
-        announcement.session_id, announcement.session_channel_id, announcement.prompted_turn_id,
-    )
+fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChip {
+    AgentAnnouncementChip {
+        agent_session_id: announcement.session_id.to_string(),
+        channel_id: announcement.session_channel_id.to_string(),
+        prompted_message: announcement.prompted_message_id,
+        status: "booting".to_owned(),
+    }
 }
 
 /// Posts session announcements as `bot_id` through a [`ChannelService`].
 pub struct ChannelAnnouncer<Channels> {
     channels: Arc<Channels>,
     bot_id: BotId,
+    lexical: LexicalClient,
 }
 
 impl<Channels> ChannelAnnouncer<Channels> {
-    /// Announce as `bot_id`, posting through `channels`.
-    pub fn new(channels: Arc<Channels>, bot_id: BotId) -> Self {
-        Self { channels, bot_id }
+    /// Announce as `bot_id`, posting through `channels`, with content
+    /// composed by `lexical`.
+    pub fn new(channels: Arc<Channels>, bot_id: BotId, lexical: LexicalClient) -> Self {
+        Self {
+            channels,
+            bot_id,
+            lexical,
+        }
     }
 }
 
@@ -50,7 +60,12 @@ where
     Channels: ChannelService + Send + Sync + 'static,
 {
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
-        let content = template_new_agent_session_response(&announcement);
+        let chip = announcement_chip(&announcement);
+        let content = self
+            .lexical
+            .compose_agent_announcement(&announcement.prompted_content, &chip)
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
 
         self.channels
             .post_message(

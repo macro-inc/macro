@@ -450,13 +450,13 @@ const MagicChip: RenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
   render: (props) => (
-    <span>
+    <div class="max-w-full">
       <MagicChipDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
         theme={props.theme}
       />
-    </span>
+    </div>
   ),
 };
 

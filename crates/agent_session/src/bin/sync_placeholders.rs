@@ -1,7 +1,7 @@
 //! Rebuild the comms placeholder messages of one or more agent sessions.
 //!
 //! Placeholders are derived: a session's channel rows carry no content of
-//! their own, only the composite id of the folded message they render. So
+//! their own, only a reference to the folded message they render. So
 //! they can be dropped and rebuilt from `agent_session_log` at any time,
 //! which is what this does - after a migration that changes how they are
 //! keyed, or any time a channel has drifted from its log.
@@ -10,7 +10,7 @@
 //! the stale rows first is the caller's job, and safe:
 //!
 //! ```sh
-//! psql "$DB" -c "DELETE FROM comms_messages WHERE agent_session_message_id IS NOT NULL"
+//! psql "$DB" -c "DELETE FROM comms_messages WHERE agent_session_message_identifier_id IS NOT NULL"
 //! psql "$DB" -At -c "SELECT id FROM agent_session" \
 //!     | xargs cargo run --release -p agent_session --bin sync_placeholders -- -d "$DB"
 //! ```

@@ -32,7 +32,7 @@ use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{
     Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
     PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
-    ToolUse, composite_message_id,
+    ToolUse,
 };
 use crate::domain::ports::FoldMachine;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -220,10 +220,8 @@ impl LogEntry {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsFoldedMessage {
-    /// The composite id the placeholder comms message for this folded message
-    /// carries in its `agent_session_message_id`. Readers join folded messages
-    /// onto placeholder rows by this, one to one.
-    agent_session_message_id: String,
+    /// Session that scopes this message id.
+    agent_session_id: String,
     /// The turn within the session, assigned in log order from zero.
     turn: u32,
     author: JsAuthor,
@@ -238,7 +236,7 @@ struct JsFoldedMessage {
 impl JsFoldedMessage {
     fn new(session: AgentSessionId, message: FoldedMessage) -> Self {
         Self {
-            agent_session_message_id: composite_message_id(session, message.id()),
+            agent_session_id: session.to_string(),
             turn: message.id.0,
             author: message.author.into(),
             parts: message
@@ -278,7 +276,7 @@ impl JsFoldedMessageChange {
         };
         Some(Self {
             kind,
-            message: JsFoldedMessage::new(session, message.clone()),
+            message: JsFoldedMessage::new(session, message.into_owned()),
         })
     }
 }

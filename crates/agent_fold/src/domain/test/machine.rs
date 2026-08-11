@@ -14,6 +14,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::FoldMachine;
 
+const EMPTY_PROMPT: &str = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p0","method":"session/prompt","params":{"sessionId":"s","prompt":[]}}}"#;
+
 /// A consumer that knows nothing but what the machine told it: it holds a
 /// message list, appends on [`IncrementalFoldResult::NewMessage`] and replaces
 /// by key on [`IncrementalFoldResult::MessageUpdate`].
@@ -27,11 +29,22 @@ struct Consumer {
     reports: Vec<(bool, MessageId)>,
 }
 
+#[test]
+fn an_empty_prompt_still_reserves_its_turn_id() {
+    let mut machine = FoldMachineImpl::new();
+    for entry in parse_log(EMPTY_PROMPT) {
+        let _ = machine.push(entry);
+    }
+
+    assert!(machine.messages().is_empty());
+    assert_eq!(machine.next_turn_id(), TurnId(1));
+}
+
 impl Consumer {
     fn apply(&mut self, result: IncrementalFoldResult<'_>) {
         let (is_new, message) = match result {
-            IncrementalFoldResult::NewMessage(message) => (true, message.clone()),
-            IncrementalFoldResult::MessageUpdate(message) => (false, message.clone()),
+            IncrementalFoldResult::NewMessage(message) => (true, message.into_owned()),
+            IncrementalFoldResult::MessageUpdate(message) => (false, message.into_owned()),
             IncrementalFoldResult::Unchanged => return,
         };
         let id = message.id();
@@ -40,7 +53,7 @@ impl Consumer {
         if is_new {
             assert!(
                 !self.messages.iter().any(|held| held.id() == id),
-                "{id} was reported new twice"
+                "{id:?} was reported new twice"
             );
             self.messages.push(message);
         } else {
@@ -48,7 +61,7 @@ impl Consumer {
                 .messages
                 .iter_mut()
                 .find(|held| held.id() == id)
-                .unwrap_or_else(|| panic!("{id} was updated before it was reported new"));
+                .unwrap_or_else(|| panic!("{id:?} was updated before it was reported new"));
             *held = message;
         }
     }
@@ -123,7 +136,7 @@ fn the_agent_message_is_announced_before_its_turn_ends() {
         if let IncrementalFoldResult::NewMessage(message) = machine.push(entry)
             && message.author == Author::Agent
         {
-            announced_at = Some((index, message.clone()));
+            announced_at = Some((index, message.into_owned()));
         }
     }
 

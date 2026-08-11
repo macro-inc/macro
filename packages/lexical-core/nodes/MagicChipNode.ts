@@ -13,7 +13,7 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 1;
+const VERSION = 3;
 
 export const MAGIC_CHIP_NODE_TYPE = 'magic-chip';
 
@@ -29,11 +29,25 @@ export const MAGIC_CHIP_STATUSES = [
 /** Agent-session state displayed by the static Magic Chip. */
 export type MagicChipStatus = (typeof MAGIC_CHIP_STATUSES)[number];
 
+/** Which side of an agent turn a folded message belongs to. */
+export const MAGIC_CHIP_AUTHORS = ['user', 'agent'] as const;
+
+/** Which side of an agent turn a folded message belongs to. */
+export type MagicChipAuthor = (typeof MAGIC_CHIP_AUTHORS)[number];
+
+/**
+ * The folded agent-session message a chip anchors.
+ */
+export type MagicChipMessage = {
+  turn: number;
+  author: MagicChipAuthor;
+};
+
 /** Persisted identity and status for a static Magic Chip. */
 export type MagicChipData = {
   agentSessionId: string;
   channelId: string;
-  promptedTurnId: string;
+  promptedMessage: MagicChipMessage;
   status: MagicChipStatus;
 };
 
@@ -49,6 +63,23 @@ export type MagicChipDecoratorProps = MagicChipData & {
   theme: EditorThemeClasses;
 };
 
+/** Return whether a value is a supported Magic Chip author. */
+export function isMagicChipAuthor(value: unknown): value is MagicChipAuthor {
+  return (MAGIC_CHIP_AUTHORS as readonly unknown[]).includes(value);
+}
+
+/** Return whether a value identifies a folded message a chip can anchor. */
+export function isMagicChipMessage(value: unknown): value is MagicChipMessage {
+  if (!value || typeof value !== 'object') return false;
+  const message = value as Partial<MagicChipMessage>;
+  return (
+    typeof message.turn === 'number' &&
+    Number.isInteger(message.turn) &&
+    message.turn >= 0 &&
+    isMagicChipAuthor(message.author)
+  );
+}
+
 /** Return whether a value is a supported static Magic Chip status. */
 export function isMagicChipStatus(value: unknown): value is MagicChipStatus {
   return (MAGIC_CHIP_STATUSES as readonly unknown[]).includes(value);
@@ -60,7 +91,7 @@ export class MagicChipNode extends DecoratorNode<
 > {
   __agentSessionId: string;
   __channelId: string;
-  __promptedTurnId: string;
+  __promptedMessage: MagicChipMessage;
   __status: MagicChipStatus;
 
   static getType() {
@@ -71,7 +102,7 @@ export class MagicChipNode extends DecoratorNode<
     return new MagicChipNode(
       node.__agentSessionId,
       node.__channelId,
-      node.__promptedTurnId,
+      node.__promptedMessage,
       node.__status,
       node.__key
     );
@@ -80,19 +111,19 @@ export class MagicChipNode extends DecoratorNode<
   constructor(
     agentSessionId: string,
     channelId: string,
-    promptedTurnId: string,
+    promptedMessage: MagicChipMessage,
     status: MagicChipStatus,
     key?: NodeKey
   ) {
     super(key);
     this.__agentSessionId = agentSessionId;
     this.__channelId = channelId;
-    this.__promptedTurnId = promptedTurnId;
+    this.__promptedMessage = promptedMessage;
     this.__status = status;
   }
 
   isInline(): boolean {
-    return true;
+    return false;
   }
 
   isKeyboardSelectable(): boolean {
@@ -118,13 +149,13 @@ export class MagicChipNode extends DecoratorNode<
     return {
       agentSessionId: this.__agentSessionId,
       channelId: this.__channelId,
-      promptedTurnId: this.__promptedTurnId,
+      promptedMessage: this.__promptedMessage,
       status: this.__status,
     };
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
-    const element = document.createElement('span');
+    const element = document.createElement('div');
     element.setAttribute('data-magic-chip', this.__agentSessionId);
     return element;
   }
@@ -134,7 +165,7 @@ export class MagicChipNode extends DecoratorNode<
   }
 
   exportDOM() {
-    const element = document.createElement('span');
+    const element = document.createElement('div');
     element.setAttribute('data-magic-chip', this.__agentSessionId);
     element.textContent = this.__status;
     return { element };
@@ -167,7 +198,7 @@ export function $createMagicChipNode(data: MagicChipData): MagicChipNode {
     new MagicChipNode(
       data.agentSessionId,
       data.channelId,
-      data.promptedTurnId,
+      data.promptedMessage,
       data.status
     )
   );

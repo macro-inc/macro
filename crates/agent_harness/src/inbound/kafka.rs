@@ -78,6 +78,8 @@ pub fn agent_trigger_to_harness_command(
             Ok((
                 session_id,
                 HarnessCommand::Forward(ForwardMessage {
+                    channel_id: message.channel_id,
+                    thread_id: message.thread_id.unwrap_or(message.message_id),
                     sender: message.sender.as_user().cloned(),
                     content: message.content,
                 }),

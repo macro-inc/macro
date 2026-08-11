@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT identifier.turn, identifier.author\n            FROM comms_messages AS message\n            JOIN agent_session_message_identifier AS identifier\n              ON identifier.id = message.agent_session_message_identifier_id\n            WHERE message.channel_id = $1\n              AND identifier.agent_session_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "turn",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "author",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "0612296d62b09bad1b22dc43b3d43827fcb9ac4286a9effb35fa8058869ec29c"
+}

@@ -18,13 +18,13 @@ use std::collections::VecDeque;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::ports::TransportError;
-use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::domain::error::Result;
 use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::ports::{AgentConnector, AgentSessionLogRepo, AgentSessionRepo};
+use crate::domain::ports::{AgentConnector, AgentSessionLogWriter, AgentSessionRepo};
 
 use super::{CloseReason, Effect, Input, SessionMachine};
 
@@ -63,7 +63,7 @@ pub(crate) struct SessionActor<Connector, Logs> {
 impl<Connector, Logs> SessionActor<Connector, Logs>
 where
     Connector: AgentConnector + Clone,
-    Logs: AgentSessionLogRepo + AgentSessionRepo,
+    Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
     pub(crate) fn new(
         id: AgentSessionId,
@@ -185,6 +185,21 @@ where
                     let _ = token.send(result);
                 }
                 Effect::Stop { reason } => {
+                    self.log(
+                        None,
+                        Message::ToServer(ToServerMessage::Event {
+                            event: SystemEvent::Disconnected,
+                        }),
+                    )
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its disconnect"
+                        );
+                    })
+                    .ok();
                     tracing::info!(id = %self.machine.id(), %reason, "agent session stopped");
                     stepped = Stepped::Stopped;
                 }
@@ -197,7 +212,7 @@ where
     /// Log then send: the log entry is written first so the session's history
     /// never lacks a message its agent received.
     async fn deliver(
-        &self,
+        &mut self,
         from: Option<MacroUserIdStr<'static>>,
         message: ToRuntimeMessage,
     ) -> Result<()> {
@@ -206,16 +221,18 @@ where
         Ok(())
     }
 
-    async fn log(&self, user_id: Option<MacroUserIdStr<'static>>, content: Message) -> Result<()> {
-        AgentSessionLogRepo::create(
-            &self.logs,
-            AgentSessionLog {
+    async fn log(
+        &mut self,
+        user_id: Option<MacroUserIdStr<'static>>,
+        content: Message,
+    ) -> Result<()> {
+        self.logs
+            .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
-            },
-        )
-        .await
+            })
+            .await
     }
 
     async fn persist_acp_session(&self, acp_session_id: SessionId) -> Result<()> {

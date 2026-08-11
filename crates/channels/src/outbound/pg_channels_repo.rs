@@ -7,17 +7,17 @@ use crate::domain::ports::ChannelAttachmentRepo;
 use crate::domain::ports::{ChannelListRepo, ChannelListUserRepo};
 use crate::domain::{
     models::{
-        Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-        AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
-        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelKind, ChannelListItem,
-        ChannelMessage, ChannelMessageFilters, ChannelMessageKind, ChannelMetadata,
-        ChannelParticipant, ChannelPreviewRow, ChannelType, ChannelWithParticipants,
-        CountedReaction, CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel,
-        EntityMention, GetChannelsParams, GetThreadReplyRowsParams, LatestMessage,
-        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
-        TopLevelMessageRow, UserName, fallback_user_name,
+        Activity, ActivityType, AgentSessionMessageIdentifier, AttachmentChannelReference,
+        AttachmentEntityReference, AttachmentGenericReference, BotId, BotSenderProfile,
+        ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelKind,
+        ChannelListItem, ChannelMessage, ChannelMessageFilters, ChannelMessageKind,
+        ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType,
+        ChannelWithParticipants, CountedReaction, CreateChannelRequest, CreateEntityMentionOptions,
+        CreatedChannel, EntityMention, GetChannelsParams, GetThreadReplyRowsParams, LatestMessage,
+        MessageAttachment, MessageId, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        NameLookup, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        RecentChannelMessage, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo,
+        ThreadReply, ThreadReplyRow, TopLevelMessageRow, TurnId, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -42,6 +42,23 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use uuid::Uuid;
+
+/// Assemble the folded message a placeholder row names, from the nullable
+/// columns its join produces. Any column absent means an ordinary message,
+/// which carries its own body and names no folded one.
+fn agent_session_message(
+    agent_session_id: Option<Uuid>,
+    turn: Option<i64>,
+    author: Option<String>,
+) -> Option<AgentSessionMessageIdentifier> {
+    Some(AgentSessionMessageIdentifier {
+        agent_session_id: agent_session_id?,
+        message_id: MessageId {
+            turn: TurnId(u32::try_from(turn?).ok()?),
+            author: author?.parse().ok()?,
+        },
+    })
+}
 
 /// Postgres-backed repository for channels.
 #[derive(Clone)]
@@ -75,7 +92,9 @@ struct TopLevelRow {
     sender_id: String,
     triggered_by_user_id: Option<String>,
     content: Option<String>,
-    agent_session_message_id: Option<String>,
+    agent_session_id: Option<Uuid>,
+    agent_session_turn: Option<i64>,
+    agent_session_author: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -99,7 +118,9 @@ struct ThreadDataRow {
     sender_id: String,
     triggered_by_user_id: Option<String>,
     content: Option<String>,
-    agent_session_message_id: Option<String>,
+    agent_session_id: Option<Uuid>,
+    agent_session_turn: Option<i64>,
+    agent_session_author: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -115,7 +136,9 @@ struct ThreadReplyOnlyRow {
     sender_id: String,
     triggered_by_user_id: Option<String>,
     content: Option<String>,
-    agent_session_message_id: Option<String>,
+    agent_session_id: Option<Uuid>,
+    agent_session_turn: Option<i64>,
+    agent_session_author: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -172,7 +195,9 @@ struct ContextMessageRow {
     sender_id: String,
     triggered_by_user_id: Option<String>,
     content: Option<String>,
-    agent_session_message_id: Option<String>,
+    agent_session_id: Option<Uuid>,
+    agent_session_turn: Option<i64>,
+    agent_session_author: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -190,7 +215,11 @@ impl From<ContextMessageRow> for ChannelContextMessage {
             // Bot profiles are joined in the service layer.
             bot_profile: None,
             content: row.content,
-            agent_session_message_id: row.agent_session_message_id,
+            agent_session_message: agent_session_message(
+                row.agent_session_id,
+                row.agent_session_turn,
+                row.agent_session_author,
+            ),
             created_at: row.created_at,
             updated_at: row.updated_at,
             edited_at: row.edited_at,
@@ -1144,13 +1173,17 @@ fn build_channel_thread_rows_query(
             m.sender_id AS sender_id,
             m.triggered_by_user_id AS triggered_by_user_id,
             m.content AS content,
-            m.agent_session_message_id AS agent_session_message_id,
+            identifier.agent_session_id AS agent_session_id,
+            identifier.turn AS agent_session_turn,
+            identifier.author AS agent_session_author,
             m.created_at AS created_at,
             m.updated_at AS updated_at,
             m.edited_at::timestamptz AS edited_at,
             m.deleted_at::timestamptz AS deleted_at
         FROM comms_messages m
         INNER JOIN user_channels c ON c.id = m.channel_id
+        LEFT JOIN agent_session_message_identifier identifier
+          ON identifier.id = m.agent_session_message_identifier_id
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
@@ -1316,7 +1349,6 @@ impl ChannelListRepo for PgChannelsRepo {
                 m.thread_id,
                 m.sender_id,
                 m.content,
-                m.agent_session_message_id,
                 m.created_at,
                 m.updated_at,
                 m.deleted_at::timestamptz AS deleted_at,
@@ -1341,7 +1373,6 @@ impl ChannelListRepo for PgChannelsRepo {
                 m.thread_id,
                 m.sender_id,
                 m.content,
-                m.agent_session_message_id,
                 m.created_at,
                 m.updated_at,
                 m.deleted_at::timestamptz AS deleted_at,
@@ -1482,7 +1513,11 @@ impl ChannelListRepo for PgChannelsRepo {
                     sender_id: row.try_get("sender_id")?,
                     triggered_by: row.try_get::<Option<String>, _>("triggered_by_user_id")?,
                     content: row.try_get("content")?,
-                    agent_session_message_id: row.try_get("agent_session_message_id")?,
+                    agent_session_message: agent_session_message(
+                        row.try_get::<Option<Uuid>, _>("agent_session_id")?,
+                        row.try_get::<Option<i64>, _>("agent_session_turn")?,
+                        row.try_get::<Option<String>, _>("agent_session_author")?,
+                    ),
                     created_at: row.try_get("created_at")?,
                     updated_at: row.try_get("updated_at")?,
                     edited_at: row.try_get("edited_at")?,
@@ -1549,7 +1584,7 @@ impl ChannelListRepo for PgChannelsRepo {
                                     &reply.sender_id,
                                 ),
                                 content: reply.content.clone(),
-                                agent_session_message_id: reply.agent_session_message_id.clone(),
+                                agent_session_message: reply.agent_session_message.clone(),
                                 created_at: reply.created_at,
                                 updated_at: reply.updated_at,
                                 edited_at: reply.edited_at,
@@ -1570,7 +1605,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     triggered_by: parent.triggered_by.clone(),
                     bot_profile: bot_profile_for_sender(&bot_profiles, &parent.sender_id),
                     content: parent.content,
-                    agent_session_message_id: parent.agent_session_message_id,
+                    agent_session_message: parent.agent_session_message,
                     created_at: parent.created_at,
                     updated_at: parent.updated_at,
                     edited_at: parent.edited_at,
@@ -1738,12 +1773,16 @@ impl ChannelRepo for PgChannelsRepo {
                         m.sender_id,
                         m.triggered_by_user_id,
                         m.content,
-                        m.agent_session_message_id,
+                        identifier.agent_session_id AS "agent_session_id?",
+                        identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
                         m.created_at,
                         m.updated_at,
                         m.edited_at::timestamptz AS "edited_at?",
                         m.deleted_at::timestamptz AS "deleted_at?"
                     FROM comms_messages m
+                    LEFT JOIN agent_session_message_identifier identifier
+                      ON identifier.id = m.agent_session_message_identifier_id
                     WHERE m.channel_id = $1
                       AND m.thread_id IS NULL
                       AND (m.deleted_at IS NULL OR EXISTS (
@@ -1832,12 +1871,16 @@ impl ChannelRepo for PgChannelsRepo {
                         m.sender_id,
                         m.triggered_by_user_id,
                         m.content,
-                        m.agent_session_message_id,
+                        identifier.agent_session_id AS "agent_session_id?",
+                        identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
                         m.created_at,
                         m.updated_at,
                         m.edited_at::timestamptz AS "edited_at?",
                         m.deleted_at::timestamptz AS "deleted_at?"
                     FROM comms_messages m
+                    LEFT JOIN agent_session_message_identifier identifier
+                      ON identifier.id = m.agent_session_message_identifier_id
                     WHERE m.channel_id = $1
                       AND m.thread_id IS NULL
                       AND (m.deleted_at IS NULL OR EXISTS (
@@ -1932,7 +1975,11 @@ impl ChannelRepo for PgChannelsRepo {
                 sender_id: r.sender_id,
                 triggered_by: r.triggered_by_user_id,
                 content: r.content,
-                agent_session_message_id: r.agent_session_message_id,
+                agent_session_message: agent_session_message(
+                    r.agent_session_id,
+                    r.agent_session_turn,
+                    r.agent_session_author,
+                ),
                 created_at: r.created_at,
                 updated_at: r.updated_at,
                 edited_at: r.edited_at,
@@ -1962,7 +2009,10 @@ impl ChannelRepo for PgChannelsRepo {
             SELECT
                 id AS "id!", thread_id AS "thread_id!", sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content, agent_session_message_id,
+                content,
+                agent_session_id AS "agent_session_id?",
+                agent_session_turn AS "agent_session_turn?",
+                agent_session_author AS "agent_session_author?",
                 created_at AS "created_at!", updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?",
                 reply_count AS "reply_count!", latest_reply_at AS "latest_reply_at?"
@@ -1973,7 +2023,9 @@ impl ChannelRepo for PgChannelsRepo {
                     r.sender_id,
                     r.triggered_by_user_id,
                     r.content,
-                    r.agent_session_message_id,
+                    identifier.agent_session_id,
+                    identifier.turn AS agent_session_turn,
+            identifier.author AS agent_session_author,
                     r.created_at,
                     r.updated_at,
                     r.edited_at,
@@ -1984,6 +2036,8 @@ impl ChannelRepo for PgChannelsRepo {
                         ORDER BY r.created_at ASC, r.id ASC
                     ) AS rn
                 FROM comms_messages r
+                LEFT JOIN agent_session_message_identifier identifier
+                  ON identifier.id = r.agent_session_message_identifier_id
                 WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
             ) sub
             WHERE rn <= $2
@@ -2008,7 +2062,11 @@ impl ChannelRepo for PgChannelsRepo {
                 sender_id: r.sender_id,
                 triggered_by: r.triggered_by_user_id,
                 content: r.content,
-                agent_session_message_id: r.agent_session_message_id,
+                agent_session_message: agent_session_message(
+                    r.agent_session_id,
+                    r.agent_session_turn,
+                    r.agent_session_author,
+                ),
                 created_at: r.created_at,
                 updated_at: r.updated_at,
                 edited_at: r.edited_at,
@@ -2024,19 +2082,23 @@ impl ChannelRepo for PgChannelsRepo {
             ThreadReplyOnlyRow,
             r#"
             SELECT
-                id,
-                thread_id AS "thread_id!",
-                sender_id,
-                triggered_by_user_id,
-                content,
-                agent_session_message_id,
-                created_at,
-                updated_at,
-                edited_at::timestamptz AS "edited_at?"
-            FROM comms_messages
-            WHERE thread_id = $1
-              AND deleted_at IS NULL
-            ORDER BY created_at ASC, id ASC
+                message.id,
+                message.thread_id AS "thread_id!",
+                message.sender_id,
+                message.triggered_by_user_id,
+                message.content,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
+                message.created_at,
+                message.updated_at,
+                message.edited_at::timestamptz AS "edited_at?"
+            FROM comms_messages AS message
+            LEFT JOIN agent_session_message_identifier AS identifier
+              ON identifier.id = message.agent_session_message_identifier_id
+            WHERE message.thread_id = $1
+              AND message.deleted_at IS NULL
+            ORDER BY message.created_at ASC, message.id ASC
             "#,
             parent_id,
         )
@@ -2051,7 +2113,11 @@ impl ChannelRepo for PgChannelsRepo {
                 sender_id: r.sender_id,
                 triggered_by: r.triggered_by_user_id,
                 content: r.content,
-                agent_session_message_id: r.agent_session_message_id,
+                agent_session_message: agent_session_message(
+                    r.agent_session_id,
+                    r.agent_session_turn,
+                    r.agent_session_author,
+                ),
                 created_at: r.created_at,
                 updated_at: r.updated_at,
                 edited_at: r.edited_at,
@@ -2255,19 +2321,23 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
-                thread_id,
-                sender_id,
-                triggered_by_user_id,
-                content,
-                agent_session_message_id,
-                created_at,
-                updated_at,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
-            WHERE id = $1 AND channel_id = $2
+                message.id,
+                message.channel_id,
+                message.thread_id,
+                message.sender_id,
+                message.triggered_by_user_id,
+                message.content,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
+                message.created_at,
+                message.updated_at,
+                message.edited_at::timestamptz AS "edited_at?",
+                message.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages AS message
+            LEFT JOIN agent_session_message_identifier AS identifier
+              ON identifier.id = message.agent_session_message_identifier_id
+            WHERE message.id = $1 AND message.channel_id = $2
             "#,
             message_id,
             channel_id,
@@ -2283,21 +2353,25 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
-                thread_id,
-                sender_id,
-                triggered_by_user_id,
-                content,
-                agent_session_message_id,
-                created_at,
-                updated_at,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
-            WHERE channel_id = $1
-              AND (created_at, id) < ($2, $3)
-            ORDER BY created_at DESC, id DESC
+                message.id,
+                message.channel_id,
+                message.thread_id,
+                message.sender_id,
+                message.triggered_by_user_id,
+                message.content,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
+                message.created_at,
+                message.updated_at,
+                message.edited_at::timestamptz AS "edited_at?",
+                message.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages AS message
+            LEFT JOIN agent_session_message_identifier AS identifier
+              ON identifier.id = message.agent_session_message_identifier_id
+            WHERE message.channel_id = $1
+              AND (message.created_at, message.id) < ($2, $3)
+            ORDER BY message.created_at DESC, message.id DESC
             LIMIT $4
             "#,
             channel_id,
@@ -2313,21 +2387,25 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
-                thread_id,
-                sender_id,
-                triggered_by_user_id,
-                content,
-                agent_session_message_id,
-                created_at,
-                updated_at,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
-            WHERE channel_id = $1
-              AND (created_at, id) > ($2, $3)
-            ORDER BY created_at ASC, id ASC
+                message.id,
+                message.channel_id,
+                message.thread_id,
+                message.sender_id,
+                message.triggered_by_user_id,
+                message.content,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
+                message.created_at,
+                message.updated_at,
+                message.edited_at::timestamptz AS "edited_at?",
+                message.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages AS message
+            LEFT JOIN agent_session_message_identifier AS identifier
+              ON identifier.id = message.agent_session_message_identifier_id
+            WHERE message.channel_id = $1
+              AND (message.created_at, message.id) > ($2, $3)
+            ORDER BY message.created_at ASC, message.id ASC
             LIMIT $4
             "#,
             channel_id,
@@ -2509,12 +2587,16 @@ impl ChannelRepo for PgChannelsRepo {
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
-                m.agent_session_message_id,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
                 m.created_at,
                 m.updated_at,
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
             FROM comms_messages m
+            LEFT JOIN agent_session_message_identifier identifier
+              ON identifier.id = m.agent_session_message_identifier_id
             WHERE m.id = COALESCE(
                 (SELECT thread_id FROM comms_messages WHERE id = $1 AND channel_id = $2),
                 $1
@@ -2534,7 +2616,11 @@ impl ChannelRepo for PgChannelsRepo {
             sender_id: r.sender_id,
             triggered_by: r.triggered_by_user_id,
             content: r.content,
-            agent_session_message_id: r.agent_session_message_id,
+            agent_session_message: agent_session_message(
+                r.agent_session_id,
+                r.agent_session_turn,
+                r.agent_session_author,
+            ),
             created_at: r.created_at,
             updated_at: r.updated_at,
             edited_at: r.edited_at,
@@ -2597,12 +2683,16 @@ impl ChannelRepo for PgChannelsRepo {
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
-                m.agent_session_message_id,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
                 m.created_at,
                 m.updated_at,
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
             FROM comms_messages m
+            LEFT JOIN agent_session_message_identifier identifier
+              ON identifier.id = m.agent_session_message_identifier_id
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
               AND (m.deleted_at IS NULL OR EXISTS (
@@ -2629,12 +2719,16 @@ impl ChannelRepo for PgChannelsRepo {
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
-                m.agent_session_message_id,
+                identifier.agent_session_id AS "agent_session_id?",
+                identifier.turn AS "agent_session_turn?",
+                        identifier.author AS "agent_session_author?",
                 m.created_at,
                 m.updated_at,
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
             FROM comms_messages m
+            LEFT JOIN agent_session_message_identifier identifier
+              ON identifier.id = m.agent_session_message_identifier_id
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
               AND (m.deleted_at IS NULL OR EXISTS (
@@ -2661,7 +2755,11 @@ impl ChannelRepo for PgChannelsRepo {
             sender_id: r.sender_id,
             triggered_by: r.triggered_by_user_id,
             content: r.content,
-            agent_session_message_id: r.agent_session_message_id,
+            agent_session_message: agent_session_message(
+                r.agent_session_id,
+                r.agent_session_turn,
+                r.agent_session_author,
+            ),
             created_at: r.created_at,
             updated_at: r.updated_at,
             edited_at: r.edited_at,

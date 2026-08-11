@@ -24,7 +24,7 @@
 //! [`FoldSession`].
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog};
-use crate::domain::model::{FoldedMessage, IncrementalFoldResult};
+use crate::domain::model::{FoldedMessage, IncrementalFoldResult, TurnId};
 use std::collections::VecDeque;
 
 /// Read a session's raw protocol log.
@@ -49,6 +49,12 @@ pub trait FoldSession {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<FoldedMessage>, rootcause::Report>> + Send;
+
+    /// Turn id the next prompt in this session will open.
+    fn next_turn_id(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<TurnId, rootcause::Report>> + Send;
 }
 
 /// Fold a session's log one frame at a time, reporting what each frame
@@ -79,4 +85,10 @@ pub trait FoldedMessageRepo {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<FoldedMessage>, rootcause::Report>> + Send;
+
+    /// Turn id the next prompt in this session will open.
+    fn next_turn_id(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<TurnId, rootcause::Report>> + Send;
 }

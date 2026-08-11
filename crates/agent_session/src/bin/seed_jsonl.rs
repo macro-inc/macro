@@ -5,7 +5,7 @@
 //! can be read back through the ordinary service - useful for putting a real
 //! transcript in front of the UI without running a container.
 //!
-//! Frames go in through [`PlaceholderSyncingLogs`] rather than the log repo,
+//! Frames go in through [`LiveSessionLogWriter`] rather than the log repo,
 //! because appending is not just an insert: a frame that derives a message the
 //! channel has not seen also needs a placeholder comms message. Writing to the
 //! repo directly stores the log but leaves the channel empty, so the session
@@ -37,8 +37,8 @@
 use agent_session::domain::model::{
     AgentSessionId, AgentSessionLog, CreateAgentSessionParams, Message,
 };
-use agent_session::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, NoOpRealtime};
-use agent_session::domain::service::PlaceholderSyncingLogs;
+use agent_session::domain::ports::{AgentSessionLogWriter, AgentSessionRepo, NoOpRealtime};
+use agent_session::domain::service::LiveSessionLogWriter;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use bots::domain::models::BotId;
 use clap::Parser;
@@ -266,12 +266,12 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     // Nothing streams: a recording has no viewers to be live for, and pushing
     // its thousands of frames at a channel would only make the gateway replay
     // a session nobody is watching.
-    let logs = PlaceholderSyncingLogs::new(repo.clone(), repo.clone(), NoOpRealtime);
+    let mut logs = LiveSessionLogWriter::new(repo.clone(), repo.clone(), NoOpRealtime);
 
     let total = log.len();
     let started = Instant::now();
     for (index, entry) in log.into_iter().enumerate() {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .map_err(|source| SeedError::WriteLog {
                 entry: index + 1,

@@ -30,9 +30,8 @@
 //!
 //! `channelId` addresses it — a viewer opened a channel and may not know a
 //! session exists. `agentSessionId` is what the fold keys its messages on, so
-//! it must be passed through unchanged: it is half of the
-//! `"{agent_session_id}:{turn}:{author}"` that joins a folded message to the
-//! placeholder row rendering it.
+//! it must be passed through unchanged and used with the separate session-local
+//! `"{turn}:{author}"` id that joins a folded message to its placeholder row.
 
 use crate::domain::model::{AgentSessionLog, LogAppended, Message};
 use crate::domain::ports::AgentSessionRealtime;

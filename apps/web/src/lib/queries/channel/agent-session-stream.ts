@@ -65,6 +65,11 @@ type ChannelStream = {
   buffered: AgentSessionLogEntryDto[];
   /** The session whose machine is open, once one is. */
   session?: string;
+  /** One shared machine initialization when several chips mount together. */
+  opening?: {
+    sessionId: string;
+    messages: Promise<FoldedMessage[]>;
+  };
   /** The views to hand folded messages to. */
   sinks: Set<FoldedMessageSink>;
   /**
@@ -162,19 +167,30 @@ export async function followAgentSession(args: {
   }
 
   const alreadyOpen = stream.session === sessionId;
-  const messages = alreadyOpen
-    ? await sessionMessages(sessionId)
-    : await openSession(sessionId, fetched);
+  let openedHere = false;
+  let messages: FoldedMessage[];
+  if (alreadyOpen) {
+    messages = await sessionMessages(sessionId);
+  } else if (stream.opening?.sessionId === sessionId) {
+    messages = await stream.opening.messages;
+  } else {
+    openedHere = true;
+    const opening = openSession(sessionId, fetched);
+    stream.opening = { sessionId, messages: opening };
+    try {
+      messages = await opening;
+      stream.session = sessionId;
+    } finally {
+      if (stream.opening?.messages === opening) stream.opening = undefined;
+    }
+  }
 
   // Only now, so a frame arriving during the open above is buffered rather
   // than pushed into a machine that is about to be replaced by it.
   stream.session = sessionId;
   stream.sinks.add(sink);
 
-  const replay = alreadyOpen
-    ? // Somebody else's machine is already past these.
-      []
-    : dropOverlap(fetched, stream.buffered);
+  const replay = openedHere ? dropOverlap(fetched, stream.buffered) : [];
   stream.buffered = [];
   if (replay.length > 0) {
     console.info('[agent-fold] replaying frames buffered during the fetch', {
@@ -225,6 +241,15 @@ export function handleAgentSessionLog(event: AgentSessionLogEvent): void {
     notifyLogSinks(event);
     return;
   }
+  if (event.agentSessionId !== stream.session) {
+    console.warn('[agent-fold] frame does not belong to the open session', {
+      channelId: event.channelId,
+      expectedSessionId: stream.session,
+      receivedSessionId: event.agentSessionId,
+    });
+    notifyLogSinks(event);
+    return;
+  }
   push(event.channelId, stream.session, [entry]);
   // `push` posts to the worker synchronously. Observers that ask for the
   // complete chain now queue behind this frame rather than reading one behind.
@@ -258,7 +283,9 @@ function push(
         frames: entries.length,
         changed: changes.map((change) => ({
           kind: change.kind,
-          id: change.message.agentSessionMessageId,
+          sessionId: change.message.agentSessionId,
+          turn: change.message.turn,
+          author: change.message.author.kind,
         })),
         sinks: stream.sinks.size,
       });
