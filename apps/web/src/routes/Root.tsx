@@ -11,7 +11,6 @@ import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
-import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
@@ -33,7 +32,6 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
-import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -55,15 +53,11 @@ import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import {
   getLoginCookieOptions,
-  hasLoginCookie,
   syncLoginStorage,
   updateCookie,
 } from '@core/util/cookies';
-import { confirmSessionExpired } from '@core/util/fetchWithToken';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
-import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -78,13 +72,11 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import {
-  authKeys,
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
-import { queryClient } from '@queries/client';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
@@ -98,7 +90,6 @@ import {
   Router,
   type RouterProps,
   useLocation,
-  useSearchParams,
 } from '@solidjs/router';
 import {
   applyTheme,
@@ -110,18 +101,20 @@ import { Button } from '@ui';
 import { detect } from 'detect-browser';
 import {
   createEffect,
-  createResource,
   createSignal,
   type JSX,
-  Match,
   on,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
+import {
+  BasePathComponent,
+  OFFLINE_ROUTE,
+  OfflineFallbackRoute,
+} from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -177,146 +170,6 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     window.history.replaceState(args.location.state, '', url);
   }
 };
-
-function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
-  const [retrying, setRetrying] = createSignal(false);
-
-  const handleRetry = async () => {
-    setRetrying(true);
-    await props.onRetry();
-    setRetrying(false);
-  };
-
-  return (
-    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
-      <p class="text-sm">Unable to connect. Please check your network.</p>
-      <Button
-        class="mt-2"
-        disabled={retrying()}
-        onClick={handleRetry}
-        variant="base"
-      >
-        {retrying() ? 'Retrying…' : 'Retry'}
-      </Button>
-    </div>
-  );
-}
-
-const OFFLINE_ROUTE = '/offline';
-
-function getCurrentQueryString() {
-  const params = new URLSearchParams(window.location.search);
-  return params.toString().length > 0 ? `?${params.toString()}` : '';
-}
-
-function shouldShowNativeOfflineFallback(
-  userInfoQuery: ReturnType<typeof useUserInfoQuery>
-) {
-  return (
-    userInfoQuery.isError &&
-    hasLoginCookie() &&
-    isNativeMobilePlatform() &&
-    !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
-  );
-}
-
-function SessionExpiredRedirect() {
-  // The UNAUTHORIZED that got us here can come from a latched refresh failure
-  // without the server ever being consulted, so confirm with a fresh refresh
-  // before destroying local session state. If the session turns out to be
-  // alive, refetch user-info instead and only treat a repeat 401 as real.
-  const [expired] = createResource(async () => {
-    if (!(await confirmSessionExpired())) {
-      await invalidateUserInfo();
-      const stillUnauthorized = thrownResultErrorHasCode(
-        queryClient.getQueryState(authKeys.userInfo.queryKey)?.error,
-        'UNAUTHORIZED'
-      );
-      if (!stillUnauthorized) return false;
-    }
-    await clearLocalAuthSession().catch((error) => {
-      console.error('Failed to clear local auth session', error);
-    });
-    return true;
-  });
-
-  return (
-    <Show when={expired()}>
-      <Navigate href={`/welcome${getCurrentQueryString()}`} />
-    </Show>
-  );
-}
-
-function OfflineFallbackRoute() {
-  const userInfoQuery = useUserInfoQuery();
-
-  // Once the query settles into anything other than a genuine connectivity
-  // failure, bounce to the base path.
-  return (
-    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
-      </Match>
-    </Switch>
-  );
-}
-
-function BasePathComponent() {
-  const [searchParams] = useSearchParams();
-  const userInfoQuery = useUserInfoQuery();
-  const checkoutRefreshPending = useCheckoutCompletionListener();
-
-  onMount(() => {
-    if (searchParams.upgrade === 'true') {
-      sessionStorage.setItem('showUpgradeModal', 'true');
-    }
-  });
-
-  // check session storage for redirect url
-  const redirectUrl = consumePostLoginRedirect();
-  if (redirectUrl) {
-    const relativeUrl = redirectUrl.replace(window.location.origin, '');
-    window.location.href = relativeUrl;
-    return;
-  }
-
-  // Preserve existing query parameters when redirecting
-  const queryString = getCurrentQueryString();
-  const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
-
-  return (
-    <Switch>
-      <Match when={userInfoQuery.isLoading || checkoutRefreshPending()}>
-        {null}
-      </Match>
-      <Match
-        when={
-          hasLoginCookie() &&
-          thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
-        }
-      >
-        <SessionExpiredRedirect />
-      </Match>
-      <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
-      </Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
-      </Match>
-      {/* A paused query (fetch wanted, but the browser thinks it's offline —
-          common during a native cold launch) has isLoading false and no data.
-          It means "unknown", not "unauthenticated": wait for the fetch to
-          resume rather than showing login to a possibly-valid session. */}
-      <Match when={userInfoQuery.fetchStatus === 'paused'}>{null}</Match>
-      <Match
-        when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
-      >
-        <Navigate href={`/welcome${queryString}`} />
-      </Match>
-    </Switch>
-  );
-}
 
 function NotFound() {
   if (isNativeMobilePlatform()) return <Navigate href={DEFAULT_ROUTE} />;
