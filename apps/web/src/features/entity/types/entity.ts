@@ -359,6 +359,7 @@ export type CalendarEventEntity = EntityBase & {
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */
   isReadOnly: boolean;
+  properties?: SoupProperty[];
 };
 
 export type EntityData =

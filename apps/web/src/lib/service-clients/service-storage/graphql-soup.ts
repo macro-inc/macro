@@ -30,6 +30,8 @@ import {
 } from 'graphql-ws';
 import { match } from 'ts-pattern';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
+import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
+import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
@@ -727,13 +729,16 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           tag: 'calendarEvent',
           frecency_score: frecency,
           is_favorited: entity.isFavorited,
+          // GraphQL omits the server-only icalUid/transparency/visibility
+          // fields, so the payload cannot satisfy the full REST data type;
+          // `satisfies` keeps every carried field checked against it.
           data: {
             id: entity.id,
             title: entity.calendarEventTitle,
             status: entity.calendarEventStatus,
-            // Serde's wire shape (camelCase fields), not the generated
-            // snake_case fiction — the entity mapper reads both.
-            time: entity.time,
+            // The GraphQL schema types `time` as a JSON scalar of exactly
+            // the REST wire shape.
+            time: entity.time as SoupCalendarEventTime,
             conferenceUrl: entity.conferenceUrl ?? undefined,
             isReadOnly: entity.isReadOnly,
             ownerId: entity.ownerId,
@@ -741,7 +746,10 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             updatedAt: entity.updatedAt,
             extra: { properties: mapGraphqlProperties(entity.properties) },
             notifications: mapGraphqlNotifications(entity.notifications),
-          },
+          } satisfies Omit<
+            SoupCalendarEventSoupPropertiesField,
+            'icalUid' | 'transparency' | 'visibility'
+          > & { notifications: ReturnType<typeof mapGraphqlNotifications> },
         }) as unknown as SoupApiItem
     )
     .with(

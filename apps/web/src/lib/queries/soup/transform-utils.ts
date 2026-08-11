@@ -43,6 +43,7 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
+  SoupCalendarEventTime,
   SoupPage,
   SoupReminderReference,
 } from '@service-storage/generated/schemas';
@@ -964,6 +965,7 @@ export const mapApiSoupItemToEntity = (
         isReadOnly: item.data.isReadOnly,
         createdAt: item.data.createdAt,
         updatedAt: item.data.updatedAt,
+        properties: item.data.extra.properties,
         frecencyScore: item.frecency_score,
       } satisfies CalendarEventEntity;
     })
@@ -972,34 +974,12 @@ export const mapApiSoupItemToEntity = (
   return withRawNotifications(entity, item);
 };
 
-/**
- * The generated `SoupCalendarEventTime` type declares snake_case fields, but
- * serde emits camelCase on the wire (utoipa ignores `rename_all_fields`).
- * Read both so neither the wire nor a future codegen fix drops the time.
- */
 const toCalendarEventTime = (
-  time: unknown
-): CalendarEventEntityTime | undefined => {
-  if (typeof time !== 'object' || time === null) return undefined;
-  const value = time as Record<string, unknown>;
-  const field = (camel: string, snake: string) => {
-    const read = value[camel] ?? value[snake];
-    return typeof read === 'string' ? read : undefined;
-  };
-  if (value.kind === 'timed') {
-    const startsAt = field('startsAt', 'starts_at');
-    const endsAt = field('endsAt', 'ends_at');
-    return startsAt && endsAt ? { kind: 'timed', startsAt, endsAt } : undefined;
-  }
-  if (value.kind === 'allDay') {
-    const startDate = field('startDate', 'start_date');
-    const endDate = field('endDate', 'end_date');
-    return startDate && endDate
-      ? { kind: 'allDay', startDate, endDate }
-      : undefined;
-  }
-  return undefined;
-};
+  time: SoupCalendarEventTime
+): CalendarEventEntityTime =>
+  time.kind === 'timed'
+    ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
+    : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

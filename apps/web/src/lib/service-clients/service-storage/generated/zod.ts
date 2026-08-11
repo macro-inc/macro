@@ -10108,14 +10108,14 @@ export const getItemsSoupResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -10123,17 +10123,19 @@ export const getItemsSoupResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -13733,14 +13735,14 @@ export const postItemsSoupResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -13748,17 +13750,19 @@ export const postItemsSoupResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -16824,14 +16828,14 @@ export const postItemsSoupAstResponse = zod
                     .union([
                       zod
                         .object({
-                          ends_at: zod.iso
+                          endsAt: zod.iso
                             .datetime({})
                             .describe('Exclusive end.'),
                           kind: zod.enum(['timed']),
-                          starts_at: zod.iso
+                          startsAt: zod.iso
                             .datetime({})
                             .describe('Inclusive start.'),
-                          time_zone: zod
+                          timeZone: zod
                             .string()
                             .nullish()
                             .describe('Original IANA time zone.'),
@@ -16839,17 +16843,19 @@ export const postItemsSoupAstResponse = zod
                         .describe('Absolute timed event.'),
                       zod
                         .object({
-                          end_date: zod.iso
+                          endDate: zod.iso
                             .date()
                             .describe('Exclusive end date.'),
                           kind: zod.enum(['allDay']),
-                          start_date: zod.iso
+                          startDate: zod.iso
                             .date()
                             .describe('Inclusive start date.'),
                         })
                         .describe('All-day event with an exclusive end date.'),
                     ])
-                    .describe('Timed or all-day calendar event span.'),
+                    .describe(
+                      'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                    ),
                   title: zod.string().describe('Display title.'),
                   transparency: zod
                     .string()
@@ -20251,14 +20257,14 @@ export const postItemsSoupAstGroupedResponse = zod
                           .union([
                             zod
                               .object({
-                                ends_at: zod.iso
+                                endsAt: zod.iso
                                   .datetime({})
                                   .describe('Exclusive end.'),
                                 kind: zod.enum(['timed']),
-                                starts_at: zod.iso
+                                startsAt: zod.iso
                                   .datetime({})
                                   .describe('Inclusive start.'),
-                                time_zone: zod
+                                timeZone: zod
                                   .string()
                                   .nullish()
                                   .describe('Original IANA time zone.'),
@@ -20266,11 +20272,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Absolute timed event.'),
                             zod
                               .object({
-                                end_date: zod.iso
+                                endDate: zod.iso
                                   .date()
                                   .describe('Exclusive end date.'),
                                 kind: zod.enum(['allDay']),
-                                start_date: zod.iso
+                                startDate: zod.iso
                                   .date()
                                   .describe('Inclusive start date.'),
                               })
@@ -20278,7 +20284,9 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'All-day event with an exclusive end date.'
                               ),
                           ])
-                          .describe('Timed or all-day calendar event span.'),
+                          .describe(
+                            'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                          ),
                         title: zod.string().describe('Display title.'),
                         transparency: zod
                           .string()
@@ -23346,14 +23354,14 @@ export const postItemsSoupAstGroupedResponse = zod
                           .union([
                             zod
                               .object({
-                                ends_at: zod.iso
+                                endsAt: zod.iso
                                   .datetime({})
                                   .describe('Exclusive end.'),
                                 kind: zod.enum(['timed']),
-                                starts_at: zod.iso
+                                startsAt: zod.iso
                                   .datetime({})
                                   .describe('Inclusive start.'),
-                                time_zone: zod
+                                timeZone: zod
                                   .string()
                                   .nullish()
                                   .describe('Original IANA time zone.'),
@@ -23361,11 +23369,11 @@ export const postItemsSoupAstGroupedResponse = zod
                               .describe('Absolute timed event.'),
                             zod
                               .object({
-                                end_date: zod.iso
+                                endDate: zod.iso
                                   .date()
                                   .describe('Exclusive end date.'),
                                 kind: zod.enum(['allDay']),
-                                start_date: zod.iso
+                                startDate: zod.iso
                                   .date()
                                   .describe('Inclusive start date.'),
                               })
@@ -23373,7 +23381,9 @@ export const postItemsSoupAstGroupedResponse = zod
                                 'All-day event with an exclusive end date.'
                               ),
                           ])
-                          .describe('Timed or all-day calendar event span.'),
+                          .describe(
+                            'Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries.'
+                          ),
                         title: zod.string().describe('Display title.'),
                         transparency: zod
                           .string()
