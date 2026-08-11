@@ -9,6 +9,7 @@ export {
 export { useContacts } from './contactService';
 export {
   getDisplayName,
+  getDisplayNameParts,
   getInitials,
   getInitialsFromName,
   seedMockDisplayNames,

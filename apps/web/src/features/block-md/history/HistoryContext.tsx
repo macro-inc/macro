@@ -1,5 +1,5 @@
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { ThrownResultError } from '@core/util/result';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
@@ -152,15 +152,14 @@ export function HistoryProvider(props: {
     return null;
   });
 
-  // One stable useDisplayName per unique userId — batched into a single fetch.
+  // One stable display-name accessor per unique userId, batched into one fetch.
   const uniqueUserIds = createMemo(() => {
     const peers = loadedPeers();
     return peers ? [...new Set(peers.values())] : [];
   });
   const userEntries = mapArray(uniqueUserIds, (userId) => {
-    const [displayName] = useDisplayName(tryMacroId(userId), {
-      emailFallback: 'local-part',
-    });
+    const displayName = () =>
+      getDisplayName(tryMacroId(userId), { emailFallback: 'local-part' });
     return { userId, displayName, color: userColor(userId) };
   });
   const userById = (userId: string): HistoryUser =>

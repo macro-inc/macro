@@ -11,7 +11,7 @@ vi.mock('@queries/preview', () => ({
 vi.mock('@core/user', () => ({
   tryMacroId: () => undefined,
   macroIdToEmail: () => undefined,
-  useDisplayName: () => [() => undefined],
+  getDisplayName: () => undefined,
 }));
 
 vi.mock('@core/constant/allBlocks', () => ({

@@ -1,7 +1,7 @@
 import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
 import type { EntityType } from '@core/types';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
 import { stringToItemType } from '@service-storage/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
@@ -22,7 +22,7 @@ const RESOLVER_TIMEOUT = 1000;
 export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
   const macroId = tryMacroId(id);
   const resolvedName = await raceTimeout(
-    until(useDisplayName(macroId)[0]),
+    until(() => getDisplayName(macroId)),
     RESOLVER_TIMEOUT
   );
   if (resolvedName) return resolvedName;

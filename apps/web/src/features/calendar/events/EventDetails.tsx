@@ -2,8 +2,8 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import {
   emailToMacroId,
+  getDisplayName,
   getInitialsFromName,
-  useDisplayName,
 } from '@core/user';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
@@ -89,12 +89,11 @@ function resolveCalendarAttendee(
   attendee: CalendarAttendee
 ): ResolvedCalendarAttendee {
   const macroId = emailToMacroId(attendee.email);
-  const [macroDisplayName] = useDisplayName(macroId);
   const iconProps: UserIconProps = macroId
     ? { id: macroId }
     : { email: attendee.email };
   const displayName = () => {
-    const macroName = macroDisplayName().trim();
+    const macroName = getDisplayName(macroId).trim();
     return isUsableDisplayName(macroName, attendee.email)
       ? macroName
       : attendee.email;
@@ -314,10 +313,9 @@ function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
   const macroId = props.organizer.email
     ? emailToMacroId(props.organizer.email)
     : undefined;
-  const [macroDisplayName] = useDisplayName(macroId);
   const displayName = () => {
     const email = props.organizer.email ?? '';
-    const macroName = macroDisplayName().trim();
+    const macroName = getDisplayName(macroId).trim();
     if (isUsableDisplayName(macroName, email)) return macroName;
 
     const providerName = props.organizer.displayName?.trim() ?? '';

@@ -1,6 +1,6 @@
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   type EntityData,
@@ -71,10 +71,11 @@ export function TaskGridLayout(props: LayoutProps) {
   const isShared = () => props.entity.ownerId !== currentId();
 
   // Get owner's first name for the Created By column
-  const ownerNameParts = () =>
-    useDisplayNameParts(tryMacroId(props.entity.ownerId));
   const ownerDisplayName = () =>
-    isShared() ? ownerNameParts().firstName() || 'Unknown' : 'Me';
+    isShared()
+      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
+        'Unknown'
+      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();

@@ -67,7 +67,7 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
 import WideCalendarIcon from '@icon/wide-calendar.svg';
@@ -1087,7 +1087,7 @@ const buildSidebarLinks = (
 };
 
 const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
-  const [inviterName] = useDisplayName(tryMacroId(props.invite.invited_by));
+  const inviterName = () => getDisplayName(tryMacroId(props.invite.invited_by));
   const joinTeamMutation = useJoinTeamMutation();
   const rejectInvitationMutation = useRejectInvitationMutation();
   const mutationPending = () =>

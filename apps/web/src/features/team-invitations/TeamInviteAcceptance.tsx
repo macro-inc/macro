@@ -1,6 +1,6 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -260,7 +260,7 @@ function InviteDetails(props: {
   };
   const isDisabled = () => props.isJoining || props.isDeclining;
 
-  const [invitedBy] = useDisplayName(tryMacroId(props.invitedBy));
+  const invitedBy = () => getDisplayName(tryMacroId(props.invitedBy));
 
   return (
     <div class="flex flex-col items-center gap-6 text-center w-full">
