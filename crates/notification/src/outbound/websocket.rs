@@ -16,14 +16,8 @@ use crate::domain::ports::{NotificationRealtimePublisher, WebSocketSender};
 /// This adapter sends notifications to users via WebSocket connections
 /// through the connection gateway service.
 pub struct WebSocketGatewayAdapter<W> {
-    gateway: W,
-}
-
-impl<W> WebSocketGatewayAdapter<W> {
-    /// Create a new WebSocket gateway adapter.
-    pub fn new(gateway: W) -> Self {
-        Self { gateway }
-    }
+    /// Underlying connection gateway client.
+    pub gateway: W,
 }
 
 /// Trait for WebSocket gateway operations.

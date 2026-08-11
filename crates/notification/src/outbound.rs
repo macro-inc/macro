@@ -6,6 +6,8 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+/// Kafka-backed WebSocket notification delivery.
+pub mod kafka_websocket;
 pub mod last_online_checker;
 pub mod message_receipt_repository;
 pub mod mobile;

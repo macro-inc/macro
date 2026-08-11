@@ -36,6 +36,8 @@ hex = { workspace = true }
 hmac = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../last_online_tracker" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
