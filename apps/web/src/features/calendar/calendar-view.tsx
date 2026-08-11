@@ -4,6 +4,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -40,7 +41,6 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
-import { EventEditorDialog } from './events/EventEditorDialog';
 import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -173,9 +173,9 @@ function CalendarWorkspace() {
   const calendarPager = useCalendarPager();
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
+  const { popoverSplit } = useSplitLayout();
   const initialDate = new Date();
   const today = createLocalToday();
-  const [createEventOpen, setCreateEventOpen] = createSignal(false);
 
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
@@ -254,7 +254,12 @@ function CalendarWorkspace() {
                 size="sm"
                 class="rounded-lg px-2"
                 label="New event"
-                onClick={() => setCreateEventOpen(true)}
+                onClick={() =>
+                  popoverSplit({
+                    type: 'component',
+                    id: 'calendar-event-compose',
+                  })
+                }
               >
                 <PlusIcon class="size-3.5" />
                 New event
@@ -294,10 +299,6 @@ function CalendarWorkspace() {
         timeFormat={() => calendarView.displaySettings.timeFormat}
         onClose={calendarView.closeEventDetails}
       />
-
-      <Show when={createEventOpen()}>
-        <EventEditorDialog open onClose={() => setCreateEventOpen(false)} />
-      </Show>
 
       <main class="calendar-view flex size-full min-h-0">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">

@@ -1,0 +1,519 @@
+import { UserIcon } from '@core/component/UserIcon';
+import { emailToId, recipientEntityMapper } from '@core/user';
+import { Combobox } from '@kobalte/core/combobox';
+import { Popover } from '@kobalte/core/popover';
+import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MapPinIcon from '@phosphor/map-pin.svg';
+import RepeatIcon from '@phosphor/repeat.svg';
+import UsersIcon from '@phosphor/users.svg';
+import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
+import { cn, Layer, Select, Tooltip } from '@ui';
+import * as EmailValidator from 'email-validator';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  Show,
+} from 'solid-js';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
+import {
+  type EventEditorCalendarOption,
+  type EventEditorGuestOption,
+  guestEmail,
+  type SelectedEventEditorGuest,
+} from './EventEditorForm';
+
+const GUEST_NAME_COLLATOR = new Intl.Collator(undefined, {
+  sensitivity: 'base',
+});
+const GUEST_OPTION_HEIGHT_PX = 36;
+const GUEST_OPTION_MAX_VISIBLE_COUNT = 5;
+const PROPERTY_TRIGGER_CLASS =
+  'flex h-7 w-full items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover';
+
+export type EventComposerSelectOption = {
+  value: string;
+  label: string;
+};
+
+type GuestPickerItem =
+  | { kind: 'guest'; guest: SelectedEventEditorGuest }
+  | { kind: 'custom'; email: string };
+
+function guestPickerItemEmail(item: GuestPickerItem) {
+  return item.kind === 'guest' ? guestEmail(item.guest) : item.email;
+}
+
+function guestPickerItemValue(item: GuestPickerItem) {
+  return guestPickerItemEmail(item).toLowerCase();
+}
+
+export interface EventComposerGuestsPillProps {
+  options: Accessor<EventEditorGuestOption[]>;
+  selected: SelectedEventEditorGuest[];
+  onChange: (selected: SelectedEventEditorGuest[]) => void;
+  disabled?: boolean;
+}
+
+/** Compact guest property pill with a searchable, virtualized combobox. */
+export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
+  const inputId = `event-composer-guests-${createUniqueId()}`;
+
+  const [open, setOpen] = createSignal(false);
+  const [search, setSearch] = createSignal('');
+  const [comboboxDisabled, setComboboxDisabled] = createSignal(false);
+  const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>();
+
+  let input: HTMLInputElement | undefined;
+
+  const guestDisplayName = (guest: SelectedEventEditorGuest) =>
+    ('name' in guest.data && guest.data.name) || guest.data.email;
+
+  const propertyLabel = () => {
+    if (props.selected.length === 0) return 'Guests';
+    if (props.selected.length > 1) return `${props.selected.length} guests`;
+    return guestDisplayName(props.selected[0]);
+  };
+
+  const pickerOptions = createMemo(() => {
+    const byEmail = new Map<string, SelectedEventEditorGuest>();
+    for (const guest of props.options()) {
+      byEmail.set(guestEmail(guest).toLowerCase(), guest);
+    }
+    for (const guest of props.selected) {
+      byEmail.set(guestEmail(guest).toLowerCase(), guest);
+    }
+    return [...byEmail.values()].sort((left, right) =>
+      GUEST_NAME_COLLATOR.compare(
+        guestDisplayName(left),
+        guestDisplayName(right)
+      )
+    );
+  });
+
+  const customEmail = () => {
+    const email = search().trim();
+    if (!EmailValidator.validate(email)) return undefined;
+    if (
+      pickerOptions().some(
+        (guest) => guestEmail(guest).toLowerCase() === email.toLowerCase()
+      )
+    ) {
+      return undefined;
+    }
+    return email;
+  };
+
+  const visibleItems = createMemo<GuestPickerItem[]>(() => {
+    const items: GuestPickerItem[] = pickerOptions().map((guest) => ({
+      kind: 'guest',
+      guest,
+    }));
+    const email = customEmail();
+    if (email) items.push({ kind: 'custom', email });
+    return items;
+  });
+
+  const selectedItems = () =>
+    props.selected.map((guest): GuestPickerItem => ({ kind: 'guest', guest }));
+
+  const comboboxOptions = createMemo(() => {
+    const items = new Map<string, GuestPickerItem>();
+    for (const item of selectedItems()) {
+      items.set(guestPickerItemValue(item), item);
+    }
+    for (const item of visibleItems()) {
+      items.set(guestPickerItemValue(item), item);
+    }
+    return [...items.values()];
+  });
+
+  const isSelected = (guest: SelectedEventEditorGuest) =>
+    props.selected.some(
+      (selected) =>
+        guestEmail(selected).toLowerCase() === guestEmail(guest).toLowerCase()
+    );
+
+  const changeSelection = (items: GuestPickerItem[]) => {
+    const guests = new Map<string, SelectedEventEditorGuest>();
+    for (const item of items) {
+      const guest =
+        item.kind === 'guest'
+          ? item.guest
+          : recipientEntityMapper('custom')({
+              id: emailToId(item.email),
+              email: item.email,
+              invalid: false,
+            });
+      guests.set(guestEmail(guest).toLowerCase(), guest);
+    }
+    props.onChange([...guests.values()]);
+    setSearch('');
+    queueMicrotask(() => input?.focus());
+  };
+
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch('');
+  };
+
+  return (
+    <Combobox<GuestPickerItem>
+      multiple
+      virtualized
+      open={open() && !props.disabled}
+      onOpenChange={changeOpen}
+      onInputChange={setSearch}
+      options={comboboxOptions()}
+      value={selectedItems()}
+      onChange={changeSelection}
+      optionValue={guestPickerItemValue}
+      optionLabel={(item) =>
+        item.kind === 'guest' ? guestDisplayName(item.guest) : item.email
+      }
+      optionTextValue={(item) =>
+        item.kind === 'guest'
+          ? `${guestDisplayName(item.guest)} ${guestEmail(item.guest)}`
+          : item.email
+      }
+      placeholder="Add guests..."
+      closeOnSelection={false}
+      allowsEmptyCollection
+      placement="bottom-start"
+      disabled={props.disabled || comboboxDisabled()}
+    >
+      <Combobox.Control<GuestPickerItem> class="inline-flex min-w-0">
+        <Tooltip label="Add guests to this event" placement="bottom">
+          <Combobox.Trigger
+            tabIndex={0}
+            class={PROPERTY_TRIGGER_CLASS}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              setOpen((current) => !current);
+              queueMicrotask(() => input?.focus());
+            }}
+          >
+            <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            <span
+              class={cn(
+                'truncate',
+                props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
+              )}
+            >
+              {propertyLabel()}
+            </span>
+            <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+          </Combobox.Trigger>
+        </Tooltip>
+      </Combobox.Control>
+
+      <Combobox.Portal>
+        <Layer depth={3}>
+          <Combobox.Content
+            class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
+            on:keydown={(event: KeyboardEvent) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            <div class="flex w-full items-center gap-2 border-b border-edge-muted px-2 py-2">
+              <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-muted" />
+              <label for={inputId} class="sr-only">
+                Search for guests
+              </label>
+              <Combobox.Input
+                ref={input}
+                id={inputId}
+                class="w-full bg-transparent text-ink caret-accent outline-none placeholder:text-ink-placeholder"
+                onKeyDown={(event) => {
+                  if (
+                    (event.key === 'a' && event.ctrlKey) ||
+                    (event.key === 'a' && event.metaKey)
+                  ) {
+                    setComboboxDisabled(true);
+                    queueMicrotask(() => setComboboxDisabled(false));
+                  }
+                }}
+                on:keydown={(event: KeyboardEvent) => {
+                  if (event.key === 'Escape' && open()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setOpen(false);
+                    return;
+                  }
+                  if (event.key !== 'Tab' || !open()) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  input?.dispatchEvent(
+                    new KeyboardEvent('keydown', {
+                      bubbles: true,
+                      key: 'Enter',
+                    })
+                  );
+                }}
+              />
+            </div>
+
+            <div class="p-1.5">
+              <Combobox.Listbox<GuestPickerItem>
+                scrollToItem={scrollToItem()}
+                autoFocus="first"
+              >
+                {(items) => {
+                  const nodes = Array.from(items());
+                  const visibleCount = Math.min(
+                    nodes.length,
+                    GUEST_OPTION_MAX_VISIBLE_COUNT
+                  );
+                  const [virtualizer, setVirtualizer] =
+                    createSignal<VirtualizerHandle | null>(null);
+
+                  setScrollToItem(() => (key: string) => {
+                    const index = nodes.findIndex((node) => node.key === key);
+                    if (index >= 0) {
+                      virtualizer()?.scrollToIndex(index, {
+                        align: 'nearest',
+                      });
+                    }
+                  });
+
+                  return (
+                    <Show
+                      when={nodes.length > 0}
+                      fallback={
+                        <p class="py-4 text-center text-sm text-ink-muted">
+                          No users found
+                        </p>
+                      }
+                    >
+                      <VList
+                        data={nodes}
+                        itemSize={GUEST_OPTION_HEIGHT_PX}
+                        style={{
+                          height: `${visibleCount * GUEST_OPTION_HEIGHT_PX}px`,
+                        }}
+                        ref={setVirtualizer}
+                      >
+                        {(node) => {
+                          const item = node.rawValue;
+                          return (
+                            <Combobox.Item
+                              item={node}
+                              class="group flex h-9 w-full min-w-0 cursor-default items-center justify-between gap-1.5 rounded-lg px-2 text-left font-normal text-ink outline-none hover:bg-hover data-highlighted:bg-hover"
+                            >
+                              {item.kind === 'guest' ? (
+                                <>
+                                  <OptionCheckBox
+                                    checked={isSelected(item.guest)}
+                                    multiselect
+                                  />
+                                  <div class="flex min-w-0 flex-1 items-center gap-2">
+                                    <div class="flex size-4 shrink-0 items-center">
+                                      <UserIcon
+                                        id={item.guest.id}
+                                        size="sm"
+                                        isDeleted={false}
+                                        suppressClick
+                                      />
+                                    </div>
+                                    <Combobox.ItemLabel class="min-w-0 max-w-full truncate">
+                                      {guestDisplayName(item.guest)}
+                                      <Show
+                                        when={
+                                          guestDisplayName(item.guest) !==
+                                          guestEmail(item.guest)
+                                        }
+                                      >
+                                        <span class="ml-[0.5em] opacity-50">
+                                          {guestEmail(item.guest)}
+                                        </span>
+                                      </Show>
+                                    </Combobox.ItemLabel>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div class="size-3.5 shrink-0" />
+                                  <div class="flex size-4 shrink-0 items-center">
+                                    <UserIcon
+                                      id={item.email}
+                                      size="sm"
+                                      isDeleted={false}
+                                      suppressClick
+                                    />
+                                  </div>
+                                  <Combobox.ItemLabel class="truncate">
+                                    Add {item.email}
+                                  </Combobox.ItemLabel>
+                                </>
+                              )}
+                            </Combobox.Item>
+                          );
+                        }}
+                      </VList>
+                    </Show>
+                  );
+                }}
+              </Combobox.Listbox>
+            </div>
+          </Combobox.Content>
+        </Layer>
+      </Combobox.Portal>
+    </Combobox>
+  );
+}
+
+export interface EventComposerLocationPillProps {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+/** Compact location property pill with a focused text popover. */
+export function EventComposerLocationPill(
+  props: EventComposerLocationPillProps
+) {
+  const [open, setOpen] = createSignal(false);
+  let input: HTMLInputElement | undefined;
+
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) return;
+    queueMicrotask(() => {
+      input?.focus();
+      input?.select();
+    });
+  };
+
+  return (
+    <Popover
+      open={open() && !props.disabled}
+      onOpenChange={changeOpen}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <Tooltip label="Set the event location" placement="bottom">
+        <Popover.Trigger
+          disabled={props.disabled}
+          class="inline-flex h-7 max-w-56 min-w-0 items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover"
+        >
+          <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <span
+            class={cn(
+              'truncate',
+              props.value !== '' ? 'text-ink' : 'text-ink-extra-muted'
+            )}
+          >
+            {props.value || 'No location'}
+          </span>
+          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Popover.Trigger>
+      </Tooltip>
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation">
+            <Popover.Title class="sr-only">Edit location</Popover.Title>
+            <input
+              ref={input}
+              type="text"
+              value={props.value}
+              onInput={(event) => props.onChange(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                setOpen(false);
+              }}
+              placeholder="Add location"
+              aria-label="Location"
+              autofocus
+              disabled={props.disabled}
+              class="settings-input h-9 w-full"
+            />
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+export interface EventComposerRecurrencePillProps {
+  options: EventComposerSelectOption[];
+  value: EventComposerSelectOption;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+/** Compact recurrence property pill. */
+export function EventComposerRecurrencePill(
+  props: EventComposerRecurrencePillProps
+) {
+  return (
+    <Select<EventComposerSelectOption>
+      options={props.options}
+      value={props.value}
+      onChange={(option) => option && props.onChange(option.value)}
+      optionValue="value"
+      optionTextValue="label"
+      disabled={props.disabled}
+      class="w-fit max-w-48 shrink-0"
+    >
+      <Tooltip label="Set how this event repeats" placement="bottom">
+        <Select.Trigger aria-label="Repeats" class={PROPERTY_TRIGGER_CLASS}>
+          <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Select.Value<EventComposerSelectOption>>
+            {(selectState) => selectState.selectedOption().label}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
+      <Select.Content>
+        <Select.Listbox />
+      </Select.Content>
+    </Select>
+  );
+}
+
+export interface EventComposerCalendarPillProps {
+  options: EventEditorCalendarOption[];
+  value: EventEditorCalendarOption;
+  onChange: (calendarId: string) => void;
+  disabled?: boolean;
+}
+
+/** Compact calendar property pill. */
+export function EventComposerCalendarPill(
+  props: EventComposerCalendarPillProps
+) {
+  return (
+    <Select<EventEditorCalendarOption>
+      options={props.options}
+      value={props.value}
+      onChange={(option) => option && props.onChange(option.id)}
+      optionValue="id"
+      optionTextValue="label"
+      disabled={props.disabled}
+      class="w-40 shrink-0"
+    >
+      <Tooltip label="Choose the calendar for this event" placement="bottom">
+        <Select.Trigger aria-label="Calendar" class={PROPERTY_TRIGGER_CLASS}>
+          <CalendarDotsIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Select.Value<EventEditorCalendarOption>>
+            {(selectState) => selectState.selectedOption().label}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
+      <Select.Content>
+        <Select.Listbox />
+      </Select.Content>
+    </Select>
+  );
+}

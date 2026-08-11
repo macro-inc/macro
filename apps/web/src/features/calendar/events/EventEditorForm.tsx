@@ -129,7 +129,7 @@ export interface EventEditorSubmitValues {
   description: string;
 }
 
-function defaultEditorInitialValues(
+export function defaultEditorInitialValues(
   reference = new Date()
 ): EventEditorInitialValues {
   const { start, end } = defaultEditorTimes(reference);
@@ -188,7 +188,7 @@ export function calendarEventToEditorInitialValues(
   };
 }
 
-function buildEventTime(
+export function buildEventTime(
   state: EventEditorInitialValues
 ): EventTime | undefined {
   if (state.allDay) {
@@ -223,12 +223,13 @@ function parseGuestEmails(value: string) {
   return [...new Set(value.split(/[\s,;]+/).filter((email) => email !== ''))];
 }
 
-type EventEditorGuestKind = 'user' | 'contact';
+export type EventEditorGuestKind = 'user' | 'contact';
 export type EventEditorGuestOption =
   CombinedRecipientItem<EventEditorGuestKind>;
-type SelectedEventEditorGuest = WithCustomUserInput<EventEditorGuestKind>;
+export type SelectedEventEditorGuest =
+  WithCustomUserInput<EventEditorGuestKind>;
 
-function guestEmail(option: SelectedEventEditorGuest) {
+export function guestEmail(option: SelectedEventEditorGuest) {
   return option.data.email;
 }
 
@@ -252,7 +253,7 @@ function initialGuestOptions(
 }
 
 /** Both editor times switch representation when all-day toggles. */
-function convertTimesForAllDay(
+export function convertTimesForAllDay(
   state: EventEditorInitialValues,
   allDay: boolean
 ) {
@@ -274,7 +275,7 @@ function convertTimesForAllDay(
   };
 }
 
-function moveAllDayRange(
+export function moveAllDayRange(
   state: EventEditorInitialValues,
   nextStart: string
 ): EventEditorInitialValues {

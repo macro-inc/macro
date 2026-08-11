@@ -1,3 +1,4 @@
+import { EventComposer } from '@app/features/calendar/events/EventComposer';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
@@ -522,6 +523,10 @@ registerComponent('email-compose', (params) => {
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
+});
+registerComponent('calendar-event-compose', () => {
+  usePageViewTracking('calendar-event-compose');
+  return <EventComposer />;
 });
 registerComponent(
   'import-linear',
