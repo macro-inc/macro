@@ -205,6 +205,16 @@ pub const QUEUES: &[Queue] = &[
             Url,
         )],
     },
+    Queue {
+        // Same EventBridge stand-in as the reminders queue above:
+        // `just poke_calendar_reminder_sweep` (or
+        // `just tick_calendar_reminder_sweeps`) supplies the minutely tick.
+        name: macro_queues::CalendarReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
 ];
 
 /// Every local S3 bucket and the env var that references it.
