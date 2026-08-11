@@ -34,6 +34,7 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import SkillIcon from '@icon/skill.svg';
 import WideAutomation from '@icon/wide-automation.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import WideChannel from '@icon/wide-channel.svg';
@@ -449,7 +450,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Skill',
-    icon: getIconConfig('skill').icon,
+    icon: SkillIcon,
     description: 'Create skill',
     launcherHint: 'Custom agent skill',
     keywords: ['new', 'make', 'add', 'instruction', 'prompt'],
