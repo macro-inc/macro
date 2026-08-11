@@ -88,9 +88,8 @@ export function CompanyListEntity(props: BaseListEntityProps) {
           'bg-accent/8': props.checked,
           'bg-accent/16':
             props.checked && props.highlighted && !isTouchDevice(),
-          'bg-active/60':
-            props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-active/30':
+          'bg-hover': props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-hover/65':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
