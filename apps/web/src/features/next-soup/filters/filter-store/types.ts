@@ -98,6 +98,8 @@ export type ScalarFieldFilters = {
   callStatus?: CallStatus;
   callAttended?: boolean;
   crmCompanyHidden?: boolean;
+  calendarEventSeen?: boolean;
+  calendarEventDone?: boolean;
   // Reminders are off by default in Soup; a view must opt in.
   includeReminders?: boolean;
   reminderCompleted?: boolean;

@@ -722,8 +722,27 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
     )
     .with(
       { __typename: 'GraphqlSoupCalendarEvent' },
-      // Calendar soup rendering lands with the calendar FE; skip for now.
-      () => null
+      (entity) =>
+        ({
+          tag: 'calendarEvent',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            title: entity.calendarEventTitle,
+            status: entity.calendarEventStatus,
+            // Serde's wire shape (camelCase fields), not the generated
+            // snake_case fiction — the entity mapper reads both.
+            time: entity.time,
+            conferenceUrl: entity.conferenceUrl ?? undefined,
+            isReadOnly: entity.isReadOnly,
+            ownerId: entity.ownerId,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            extra: { properties: mapGraphqlProperties(entity.properties) },
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as unknown as SoupApiItem
     )
     .with(
       { __typename: 'GraphqlSoupReminder' },

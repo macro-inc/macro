@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ remindersEnabled: true }));
+const mocks = vi.hoisted(() => ({
+  remindersEnabled: true,
+  calendarUiEnabled: true,
+}));
 
 vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
   ENABLE_NEW_INBOX: () => false,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
   ENABLE_SNIPPETS: () => true,
@@ -11,6 +15,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 
 afterEach(() => {
   mocks.remindersEnabled = true;
+  mocks.calendarUiEnabled = true;
 });
 
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
@@ -60,6 +65,26 @@ describe('inbox view presets', () => {
 
     // No `remf` at all, so an unflagged user never hits the reminders service.
     expect(ast.remf).toBeUndefined();
+  });
+
+  it('opts the signal tab into alarmed calendar events', () => {
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    // Referencing `calf` lifts the nil-id exclusion; only events with a
+    // not-done notification come back.
+    expect(ast.calf).toEqual({ l: { nd: false } });
+  });
+
+  it('keeps calendar events nil-scoped when the calendar flag is off', () => {
+    mocks.calendarUiEnabled = false;
+
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    expect(ast.calf).toEqual({
+      l: { id: '00000000-0000-0000-0000-000000000000' },
+    });
   });
 
   it('leaves every other inbox tab without reminders', () => {

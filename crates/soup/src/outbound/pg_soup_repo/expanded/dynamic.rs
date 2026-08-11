@@ -508,7 +508,11 @@ fn build_notification_exists_clause(
     )
 }
 
-fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    done: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -520,7 +524,11 @@ fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: 
     )
 }
 
-fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    seen: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -1892,14 +1900,16 @@ fn build_grouped_query<'a>(
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
-        // FIXME: `push_filter` uses `push_bind`, whose placeholders come from
-        // the builder's own counter starting at $1 — but this query numbers its
-        // parameters by hand ($1..$10) and binds them positionally. The first
-        // bind pushed here therefore collides with $1 (the user id), and
-        // Postgres rejects the statement with `operator does not exist: text =
-        // uuid`. Only reachable now with a calendar filter that survives
-        // `calendar_event_filter_is_impossible`; a grouped view that grows a
-        // real calendar filter needs this rendered at $11+ instead.
+        // FIXME: `push_filter` uses `push_bind` for most literals, whose
+        // placeholders come from the builder's own counter starting at $1 —
+        // but this query numbers its parameters by hand ($1..$10) and binds
+        // them positionally. The first bind pushed here therefore collides
+        // with $1 (the user id), and Postgres rejects the statement with
+        // `operator does not exist: text = uuid`. The notification literals
+        // (`NotificationDone`/`NotificationSeen`) are deliberately bind-free
+        // and reference $1 as the user id, so the inbox's done filter renders
+        // correctly here; a grouped view that grows any other calendar
+        // literal needs its binds rendered at $11+ instead.
         if let Some(filter) = filter_ast.calendar_event_filter.as_deref() {
             builder.push(" AND (");
             super::super::calendar_event::push_filter(&mut builder, filter);

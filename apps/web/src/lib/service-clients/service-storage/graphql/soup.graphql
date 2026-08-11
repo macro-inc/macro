@@ -276,6 +276,19 @@ fragment SoupItemFields on GraphqlSoupEntity {
 							...SoupPropertyFields
 						}
 					}
+					... on GraphqlSoupCalendarEvent {
+						calendarEventTitle: title
+						calendarEventStatus: status
+						time
+						conferenceUrl
+						isReadOnly
+						ownerId
+						createdAt
+						updatedAt
+						properties {
+							...SoupPropertyFields
+						}
+					}
 }
 
 fragment SoupEntityCoreFields on GraphqlSoupEntity {

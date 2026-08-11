@@ -485,6 +485,10 @@ enum GraphqlCalendarEventLiteral {
     Attendee(String),
     /// Organizer email.
     Organizer(String),
+    /// Notification done state for the requester.
+    NotificationDone(bool),
+    /// Notification seen state for the requester.
+    NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
@@ -505,6 +509,8 @@ impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
             Self::EndsAfter(value) => CalendarEventLiteral::EndsAfter(parse_date(value)?),
             Self::Attendee(email) => CalendarEventLiteral::Attendee(email.to_ascii_lowercase()),
             Self::Organizer(email) => CalendarEventLiteral::Organizer(email.to_ascii_lowercase()),
+            Self::NotificationDone(done) => CalendarEventLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => CalendarEventLiteral::NotificationSeen(seen),
         }))
     }
 }

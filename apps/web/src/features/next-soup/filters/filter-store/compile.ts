@@ -91,6 +91,8 @@ const FIELD_CONFIG: Record<
   documentDone: { target: 'df', field: 'nd' },
   isEmailAttachment: { target: 'df', field: 'iea' },
   calendarEventId: { target: 'calf', field: 'id' },
+  calendarEventSeen: { target: 'calf', field: 'ns' },
+  calendarEventDone: { target: 'calf', field: 'nd' },
   threadId: { target: 'ef', field: 'ThreadId' },
   emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },

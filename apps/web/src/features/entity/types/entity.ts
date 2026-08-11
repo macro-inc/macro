@@ -324,7 +324,9 @@ export type ReminderEntity = EntityBase & {
    * assignable to the preview/open helpers, which only know real targets. */
   referencedEntity?: {
     id: string;
-    type: Exclude<EntityType, 'reminder'>;
+    // Calendar events are excluded alongside reminders: neither has a
+    // previewable block, and the mapper yields `undefined` for both.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
     fileType?: string;
     subType?: string;
   };
@@ -342,6 +344,23 @@ export type ReminderEntity = EntityBase & {
   completedAt?: DateValue | null;
 };
 
+/** Normalized time shape of a calendar event soup row. */
+export type CalendarEventEntityTime =
+  | { kind: 'timed'; startsAt: string; endsAt: string }
+  | { kind: 'allDay'; startDate: string; endDate: string };
+
+export type CalendarEventEntity = EntityBase & {
+  type: 'calendar_event';
+  /** Canonical event status (`confirmed`, `tentative`, `cancelled`). */
+  status: string;
+  /** Master event time. Absent when the wire shape could not be read. */
+  time?: CalendarEventEntityTime;
+  /** Direct join URL when known. */
+  conferenceUrl?: string;
+  /** Whether the canonical source prohibits mutation. */
+  isReadOnly: boolean;
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -357,6 +376,7 @@ export type EntityData =
   | CrmContactEntity
   | AutomationEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -372,6 +392,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'automation',
   'reminder',
+  'calendar_event',
   'foreign',
 ]);
 

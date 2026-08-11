@@ -212,7 +212,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'foreign' ||
       // Marked done by hand like everything else — opening a reminder does not
       // dismiss it. Signal gates on the not-done notification either way.
-      entity.type === 'reminder'
+      entity.type === 'reminder' ||
+      // A calendar event row exists in Signal only through its not-done
+      // reminder notification, so done resolves to those notification ids.
+      entity.type === 'calendar_event'
     ) {
       return true;
     }

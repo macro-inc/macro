@@ -252,6 +252,14 @@ input GraphqlCalendarEventLiteral @oneOf {
 	Organizer email.
 	"""
 	organizer: String
+	"""
+	Notification done state for the requester.
+	"""
+	notificationDone: Boolean
+	"""
+	Notification seen state for the requester.
+	"""
+	notificationSeen: Boolean
 }
 
 """

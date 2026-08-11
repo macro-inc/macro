@@ -79,94 +79,94 @@ export function filterSoupItemByRequestBody(
   item: SoupApiItem,
   body: SoupBody
 ): boolean {
-  return (
-    match(item)
-      .with(
-        { tag: 'document' },
-        ({ data }) =>
-          !isIdFilteredOut(body.document_filters?.document_ids, data.id) &&
-          !isValueFilteredOut(body.document_filters?.owners, data.ownerId) &&
-          !isValueFilteredOut(
-            body.document_filters?.sub_types,
-            data.subType?.type
-          )
-      )
-      .with(
-        { tag: 'chat' },
-        ({ data }) => !isIdFilteredOut(body.chat_filters?.chat_ids, data.id)
-      )
-      .with(
-        { tag: 'channel' },
-        ({ data }) =>
-          !isIdFilteredOut(
-            body.channel_filters?.channel_ids,
-            data.channel.id
-          ) &&
-          !isAnyValueFilteredOut(body.channel_filters?.thread_ids, [
-            data.latest_message?.thread_id,
-            data.latest_non_thread_message?.thread_id,
-          ])
-      )
-      .with(
-        { tag: 'channelThread' },
-        ({ data }) =>
-          !isIdFilteredOut(body.channel_thread_filters?.thread_ids, data.id) &&
-          !isIdFilteredOut(
-            body.channel_thread_filters?.channel_ids,
-            data.channel_id
-          ) &&
-          !isValueFilteredOut(
-            body.channel_thread_filters?.root_sender_ids,
-            data.sender_id
-          )
-      )
-      .with(
-        { tag: 'project' },
-        ({ data }) =>
-          !isIdFilteredOut(body.project_filters?.project_ids, data.id)
-      )
-      .with(
-        { tag: 'emailThread' },
-        ({ data }) =>
-          !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
-      )
-      .with(
-        { tag: 'call' },
-        ({ data }) =>
-          !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
-          !isCallAttendanceFilteredOut(
-            body.call_filters?.status,
-            body.call_filters?.attended,
-            data.status,
-            data.attended
-          )
-      )
-      .with(
-        { tag: 'crmCompany' },
-        ({ data }) =>
-          !isIdFilteredOut(body.crm_company_filters?.company_ids, data.id)
-      )
-      .with(
-        { tag: 'foreignEntity' },
-        ({ data }) =>
-          !isIdFilteredOut(body.foreign_entity_filters?.ids, data.id) &&
-          !isIdFilteredOut(
-            body.foreign_entity_filters?.foreign_entity_ids,
-            data.foreignEntityId
-          ) &&
-          !isValueFilteredOut(
-            body.foreign_entity_filters?.foreign_entity_sources,
-            data.foreignEntitySource
-          )
-      )
-      // Calendar soup rendering lands with the calendar FE; never cache-match.
-      .with({ tag: 'calendarEvent' }, () => false)
-      .with(
-        { tag: 'reminder' },
-        ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
-      )
-      .exhaustive()
-  );
+  return match(item)
+    .with(
+      { tag: 'document' },
+      ({ data }) =>
+        !isIdFilteredOut(body.document_filters?.document_ids, data.id) &&
+        !isValueFilteredOut(body.document_filters?.owners, data.ownerId) &&
+        !isValueFilteredOut(
+          body.document_filters?.sub_types,
+          data.subType?.type
+        )
+    )
+    .with(
+      { tag: 'chat' },
+      ({ data }) => !isIdFilteredOut(body.chat_filters?.chat_ids, data.id)
+    )
+    .with(
+      { tag: 'channel' },
+      ({ data }) =>
+        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id) &&
+        !isAnyValueFilteredOut(body.channel_filters?.thread_ids, [
+          data.latest_message?.thread_id,
+          data.latest_non_thread_message?.thread_id,
+        ])
+    )
+    .with(
+      { tag: 'channelThread' },
+      ({ data }) =>
+        !isIdFilteredOut(body.channel_thread_filters?.thread_ids, data.id) &&
+        !isIdFilteredOut(
+          body.channel_thread_filters?.channel_ids,
+          data.channel_id
+        ) &&
+        !isValueFilteredOut(
+          body.channel_thread_filters?.root_sender_ids,
+          data.sender_id
+        )
+    )
+    .with(
+      { tag: 'project' },
+      ({ data }) => !isIdFilteredOut(body.project_filters?.project_ids, data.id)
+    )
+    .with(
+      { tag: 'emailThread' },
+      ({ data }) =>
+        !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
+    )
+    .with(
+      { tag: 'call' },
+      ({ data }) =>
+        !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
+        !isCallAttendanceFilteredOut(
+          body.call_filters?.status,
+          body.call_filters?.attended,
+          data.status,
+          data.attended
+        )
+    )
+    .with(
+      { tag: 'crmCompany' },
+      ({ data }) =>
+        !isIdFilteredOut(body.crm_company_filters?.company_ids, data.id)
+    )
+    .with(
+      { tag: 'foreignEntity' },
+      ({ data }) =>
+        !isIdFilteredOut(body.foreign_entity_filters?.ids, data.id) &&
+        !isIdFilteredOut(
+          body.foreign_entity_filters?.foreign_entity_ids,
+          data.foreignEntityId
+        ) &&
+        !isValueFilteredOut(
+          body.foreign_entity_filters?.foreign_entity_sources,
+          data.foreignEntitySource
+        )
+    )
+    .with(
+      { tag: 'calendarEvent' },
+      ({ data }) =>
+        !isIdFilteredOut(
+          body.calendar_event_filters?.calendar_event_ids,
+          data.id
+        )
+    )
+    .with(
+      { tag: 'reminder' },
+      ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
+    )
+    .exhaustive();
 }
 
 /**
@@ -204,6 +204,7 @@ function queryIncludeToRequestBody(query: Query): SoupBody {
       ids: include.foreignEntityRecordId,
       foreign_entity_sources: include.foreignEntitySource,
     },
+    calendar_event_filters: { calendar_event_ids: include.calendarEventId },
   };
 }
 

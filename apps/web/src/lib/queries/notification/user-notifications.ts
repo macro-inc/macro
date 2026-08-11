@@ -863,6 +863,7 @@ function notificationEntityTypeToSoupTag(
     .with('email_thread', () => 'emailThread' as const)
     .with('foreign_entity', () => 'foreignEntity' as const)
     .with('reminder', () => 'reminder' as const)
+    .with('calendar_event', () => 'calendarEvent' as const)
     .with(
       P.union(
         'user',
@@ -872,7 +873,6 @@ function notificationEntityTypeToSoupTag(
         'static_file',
         'crm_company',
         'crm_contact',
-        'calendar_event',
         'skill'
       ),
       () => null

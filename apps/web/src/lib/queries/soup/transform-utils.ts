@@ -10,6 +10,8 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  CalendarEventEntity,
+  CalendarEventEntityTime,
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
@@ -58,11 +60,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Calendar soup rendering lands with the calendar FE; skip those items for now.
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'calendarEvent' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -75,6 +73,7 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
@@ -603,7 +602,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'calendarEvent';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -953,9 +952,53 @@ export const mapApiSoupItemToEntity = (
         frecencyScore: item.frecency_score,
       } satisfies ReminderEntity;
     })
+    .with({ tag: 'calendarEvent' }, (item) => {
+      return {
+        type: 'calendar_event',
+        id: item.data.id,
+        name: item.data.title,
+        ownerId: item.data.ownerId,
+        status: item.data.status,
+        time: toCalendarEventTime(item.data.time),
+        conferenceUrl: item.data.conferenceUrl ?? undefined,
+        isReadOnly: item.data.isReadOnly,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        frecencyScore: item.frecency_score,
+      } satisfies CalendarEventEntity;
+    })
     .exhaustive();
 
   return withRawNotifications(entity, item);
+};
+
+/**
+ * The generated `SoupCalendarEventTime` type declares snake_case fields, but
+ * serde emits camelCase on the wire (utoipa ignores `rename_all_fields`).
+ * Read both so neither the wire nor a future codegen fix drops the time.
+ */
+const toCalendarEventTime = (
+  time: unknown
+): CalendarEventEntityTime | undefined => {
+  if (typeof time !== 'object' || time === null) return undefined;
+  const value = time as Record<string, unknown>;
+  const field = (camel: string, snake: string) => {
+    const read = value[camel] ?? value[snake];
+    return typeof read === 'string' ? read : undefined;
+  };
+  if (value.kind === 'timed') {
+    const startsAt = field('startsAt', 'starts_at');
+    const endsAt = field('endsAt', 'ends_at');
+    return startsAt && endsAt ? { kind: 'timed', startsAt, endsAt } : undefined;
+  }
+  if (value.kind === 'allDay') {
+    const startDate = field('startDate', 'start_date');
+    const endDate = field('endDate', 'end_date');
+    return startDate && endDate
+      ? { kind: 'allDay', startDate, endDate }
+      : undefined;
+  }
+  return undefined;
 };
 
 export const isInstructionsMdDoc = (

@@ -6,6 +6,7 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
+  ENABLE_CALENDAR_UI,
   ENABLE_NEW_INBOX,
   ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
@@ -110,6 +111,10 @@ const getInboxSignalFilters = () => {
       // only view that sends it. Behind the flag so an unflagged user never
       // pays for the reminders lookup on every Signal fetch.
       ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
+      // Calendar events with a not-done notification (a fired event alarm).
+      // Referencing `calf` opts the calendar arm into the signal query, which
+      // `defineQueryFilters` otherwise excludes with a nil id filter.
+      ...(ENABLE_CALENDAR_UI() ? { calendarEventDone: false } : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
