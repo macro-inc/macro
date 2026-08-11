@@ -252,16 +252,16 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // Macro AI and Macro Coder are mentionable in every channel, and any bot
-  // added to the channel is mentionable too. All are surfaced through the
-  // same `@`-mention typeahead as participants and re-tagged as bot mentions
-  // at send time. Macro Coder is flag-gated in both directions: injected only
-  // when the flag is on, and stripped even if it arrived as a channel bot.
+  // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
+  // and any bot added to the channel is mentionable too. All are surfaced
+  // through the same `@`-mention typeahead as participants and re-tagged as
+  // bot mentions at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    let base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
-    if (!ENABLE_CHAT_V3_AGENTS()) {
-      base = base.filter((user) => !isMacroCoderId(user.id));
-    } else if (!base.some((user) => isMacroCoderId(user.id))) {
+    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    if (
+      ENABLE_CHAT_V3_AGENTS() &&
+      !base.some((user) => isMacroCoderId(user.id))
+    ) {
       base.unshift(macroCoderMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {
