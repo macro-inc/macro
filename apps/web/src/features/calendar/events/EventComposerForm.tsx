@@ -1,3 +1,4 @@
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, Checkbox, Select } from '@ui';
 import { addMonths, format, parseISO } from 'date-fns';
@@ -9,7 +10,7 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { EventComposerDateTimeField } from './EventComposerDateTimeField';
+import { EventDateTimePill } from './EventDateTimeField';
 import {
   EventComposerCalendarPill,
   EventComposerGuestsPill,
@@ -75,17 +76,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
     SelectedEventEditorGuest[]
   >([]);
 
-  const [openDateTimePill, setOpenDateTimePill] = createSignal<
-    'start' | 'end'
-  >();
-
   const [recurrenceChoice, setRecurrenceChoice] = createSignal('none');
-
-  const changeDateTimePillOpen = (pill: 'start' | 'end', open: boolean) => {
-    setOpenDateTimePill((current) =>
-      open ? pill : current === pill ? undefined : current
-    );
-  };
 
   const startForRecurrence = createMemo(() => {
     const start = state().start;
@@ -209,14 +200,12 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const DateTimeRange = () => (
     <div class="flex min-w-0 flex-col gap-1">
-      <div class="flex min-w-0 flex-wrap items-center gap-2">
-        <div class="flex min-w-0 max-w-full items-center gap-2">
-          <EventComposerDateTimeField
-            label="Start"
+      <div class="flex min-w-0 items-center gap-1">
+        <div class="inline-flex min-w-0 max-w-full items-center gap-1">
+          <EventDateTimePill
+            endpoint="start"
             value={state().start}
             allDay={state().allDay}
-            open={openDateTimePill() === 'start'}
-            onOpenChange={(open) => changeDateTimePillOpen('start', open)}
             onChange={(start) =>
               setState(
                 state().allDay
@@ -225,19 +214,23 @@ export function EventComposerForm(props: EventComposerFormProps) {
               )
             }
             disabled={props.pending}
-            class="min-w-0 shrink-0"
+            invalid={dateRangeError() !== undefined}
+            describedBy={dateRangeError() ? dateRangeErrorId : undefined}
           />
-          <EventComposerDateTimeField
-            label="End"
+          <span
+            aria-label="to"
+            class="flex h-7 shrink-0 items-center px-0.5 text-ink-extra-muted"
+          >
+            <ArrowRightIcon aria-hidden="true" class="size-3" />
+          </span>
+          <EventDateTimePill
+            endpoint="end"
             value={state().end}
             allDay={state().allDay}
-            open={openDateTimePill() === 'end'}
-            onOpenChange={(open) => changeDateTimePillOpen('end', open)}
             onChange={(end) => setState({ ...state(), end })}
             disabled={props.pending}
             invalid={dateRangeError() !== undefined}
             describedBy={dateRangeError() ? dateRangeErrorId : undefined}
-            class="min-w-0 shrink-0"
           />
         </div>
         <Checkbox
@@ -246,7 +239,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
           onChange={(allDay) =>
             setState(convertTimesForAllDay(state(), allDay))
           }
-          class="shrink-0 text-xs text-ink-muted"
+          class="ml-auto shrink-0 pl-3 text-xs text-ink-muted"
         >
           <Checkbox.Control />
           <Checkbox.Label>All day</Checkbox.Label>

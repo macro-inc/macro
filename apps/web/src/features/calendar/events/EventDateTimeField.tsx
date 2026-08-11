@@ -2,11 +2,14 @@ import type { CollectionNode } from '@kobalte/core';
 import { Listbox } from '@kobalte/core/listbox';
 import { Popover } from '@kobalte/core/popover';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
+import CalendarCheckIcon from '@phosphor/calendar-check.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
+import { Tooltip } from '@ui/components/Tooltip';
 import { cn } from '@ui/utils/classname';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createUniqueId } from 'solid-js';
 
 const UNDERLINE_INPUT_CLASS =
   'rounded-none! border-x-0! border-t-0! border-b! px-0! sm:text-xs!';
@@ -124,6 +127,181 @@ function TimeOptionItem(props: CollectionNode<EventTimeOption>) {
   );
 }
 
+interface EventTimeInputProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+function EventTimeInput(props: EventTimeInputProps) {
+  const [open, setOpen] = createSignal(false);
+  let control: HTMLDivElement | undefined;
+  let listbox: HTMLElement | undefined;
+
+  const selectedTime = createMemo(() => [props.value]);
+  const scrollToSelectedTime = () => {
+    requestAnimationFrame(() => {
+      listbox
+        ?.querySelector<HTMLElement>('[data-selected]')
+        ?.scrollIntoView({ block: 'center' });
+    });
+  };
+  const setDropdownOpen = (nextOpen: boolean) => {
+    if (props.disabled) return;
+    setOpen(nextOpen);
+    if (nextOpen) scrollToSelectedTime();
+  };
+  const selectTime = (values: Set<string>) => {
+    const value = values.values().next().value;
+    if (typeof value !== 'string') return;
+    if (value !== props.value) props.onChange(value);
+    setOpen(false);
+  };
+
+  return (
+    <Popover
+      anchorRef={() => control}
+      open={open() && !props.disabled}
+      onOpenChange={setDropdownOpen}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <label for={props.id} class="block text-xxs font-medium text-ink-muted">
+        {props.label}
+      </label>
+      <div ref={control} class="relative mt-1">
+        <input
+          id={props.id}
+          type="time"
+          step={900}
+          value={props.value}
+          disabled={props.disabled}
+          aria-expanded={open()}
+          aria-haspopup="listbox"
+          class="h-7 w-full appearance-none rounded-md border border-edge-muted bg-surface py-1 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent [&::-webkit-calendar-picker-indicator]:hidden"
+          onFocus={() => setDropdownOpen(true)}
+          onClick={() => setDropdownOpen(true)}
+          onInput={(event) => {
+            const value = event.currentTarget.value;
+            if (value && value !== props.value) props.onChange(value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !open()) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+          }}
+        />
+        <button
+          type="button"
+          disabled={props.disabled}
+          aria-label={`Choose ${props.label.toLowerCase()}`}
+          aria-expanded={open()}
+          class="absolute inset-y-0 right-0 flex w-7 items-center justify-center rounded-r-md text-ink-extra-muted hover:bg-hover focus-visible:bg-active"
+          onClick={() => setDropdownOpen(!open())}
+        >
+          <CaretDownIcon class="size-3" />
+        </button>
+      </div>
+
+      <Popover.Portal>
+        <Layer depth={4}>
+          <Popover.Content
+            class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation"
+            style={{
+              'z-index': 'calc(var(--z-index-action-menu) + 1)',
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onInteractOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && control?.contains(target)) {
+                event.preventDefault();
+              }
+            }}
+            on:keydown={(event: KeyboardEvent) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            <Popover.Title class="sr-only">
+              Choose {props.label.toLowerCase()}
+            </Popover.Title>
+            <Listbox<EventTimeOption>
+              ref={(element) => {
+                listbox = element;
+              }}
+              options={EVENT_TIME_OPTIONS}
+              optionValue="value"
+              optionTextValue="label"
+              value={selectedTime()}
+              onChange={selectTime}
+              selectionMode="single"
+              disallowEmptySelection
+              shouldFocusWrap
+              renderItem={(item) => <TimeOptionItem {...item} />}
+            />
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
+export interface EventDateTimePopoverContentProps {
+  label: string;
+  date: string;
+  time?: string;
+  onDateChange: (date: string) => void;
+  onTimeChange?: (time: string) => void;
+  disabled?: boolean;
+}
+
+/** Calendar and optional native time input shared by event date/time popovers. */
+export function EventDateTimePopoverContent(
+  props: EventDateTimePopoverContentProps
+) {
+  const fieldId = createUniqueId();
+  const selectedDate = createMemo(
+    () => parseLocalDate(props.date) ?? new Date()
+  );
+
+  return (
+    <div
+      class={cn(
+        props.time !== undefined && 'grid grid-cols-[minmax(0,1fr)_11rem]'
+      )}
+    >
+      <div class="min-w-0 p-3">
+        <Calendar
+          required
+          value={selectedDate()}
+          onValueChange={(date) => {
+            if (date) props.onDateChange(formatLocalDate(date));
+          }}
+        />
+      </div>
+      {props.time !== undefined && (
+        <div class="min-w-0 border-l border-edge p-3">
+          <EventTimeInput
+            id={`event-${props.label.toLowerCase()}-time-${fieldId}`}
+            label={`${props.label} time`}
+            value={props.time ?? ''}
+            onChange={(time) => props.onTimeChange?.(time)}
+            disabled={props.disabled}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface EventDateFieldProps {
   label: string;
   value: string;
@@ -198,6 +376,121 @@ export function EventDateField(props: EventDateFieldProps) {
   );
 }
 
+export interface EventDateTimePillProps {
+  endpoint: 'start' | 'end';
+  value: string;
+  allDay: boolean;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+}
+
+/** Composer pill trigger backed by the shared event date/time popover content. */
+export function EventDateTimePill(props: EventDateTimePillProps) {
+  const [open, setOpen] = createSignal(false);
+  let pill: HTMLButtonElement | undefined;
+
+  const parts = () => splitLocalDateTime(props.value);
+  const selectedDate = () => parseLocalDate(parts().date);
+  const label = () => (props.endpoint === 'start' ? 'Start' : 'End');
+  const dateLabel = () =>
+    selectedDate()
+      ? dateLabelFormatter.format(selectedDate())
+      : `${label()} date`;
+
+  return (
+    <Popover
+      anchorRef={() => pill}
+      open={open() && !props.disabled}
+      onOpenChange={setOpen}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <Tooltip
+        label={`Set ${label().toLowerCase()} date and time`}
+        placement="bottom"
+        disabled={open()}
+      >
+        <button
+          ref={pill}
+          type="button"
+          disabled={props.disabled}
+          aria-label={`Edit ${label().toLowerCase()} date and time`}
+          aria-expanded={open()}
+          aria-haspopup="dialog"
+          aria-invalid={props.invalid || undefined}
+          aria-describedby={props.describedBy}
+          class={cn(
+            'inline-flex h-7 min-w-0 max-w-full items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 font-normal text-ink transition-colors hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10',
+            open() && 'bg-hover',
+            props.invalid && 'border-failure'
+          )}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !open()) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+          }}
+        >
+          {props.endpoint === 'end' ? (
+            <CalendarCheckIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          ) : (
+            <CalendarBlankIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          )}
+          <span class="text-xs">{dateLabel()}</span>
+          <span aria-hidden="true" class="text-sm text-ink-extra-muted">
+            @
+          </span>
+          <span class="text-xs">
+            {props.allDay ? 'All day' : formatTimeLabel(parts().time)}
+          </span>
+        </button>
+      </Tooltip>
+
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content
+            class={cn(
+              'portal-scope z-action-menu max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation',
+              props.allDay ? 'w-72' : 'w-[31rem]'
+            )}
+            on:keydown={(event: KeyboardEvent) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOpen(false);
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <Popover.Title class="sr-only">
+              Choose {label().toLowerCase()} date and time
+            </Popover.Title>
+            <EventDateTimePopoverContent
+              label={label()}
+              date={parts().date}
+              time={props.allDay ? undefined : parts().time}
+              onDateChange={(date) =>
+                props.onChange(
+                  props.allDay ? date : withLocalDate(props.value, date)
+                )
+              }
+              onTimeChange={(time) =>
+                props.onChange(withLocalTime(props.value, time))
+              }
+              disabled={props.disabled}
+            />
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
+  );
+}
+
 export interface EventDateTimeFieldProps {
   label: string;
   value: string;
@@ -215,7 +508,6 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
   const [dateDraft, setDateDraft] = createSignal<string>();
   const [dateDraftDirty, setDateDraftDirty] = createSignal(false);
   const [timeDraft, setTimeDraft] = createSignal<string>();
-  const [listboxRef, setListboxRef] = createSignal<HTMLElement>();
   const [portalSearchRef, setPortalSearchRef] = createSignal<HTMLDivElement>();
   let anchorRef: HTMLDivElement | undefined;
 
@@ -224,24 +516,15 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
   const selectedDate = () => parseLocalDate(date());
   const dateInputLabel = () =>
     selectedDate() ? dateLabelFormatter.format(selectedDate()) : 'Date';
-  const selectedTimeValues = createMemo(() => [time()]);
   const portalMount = () => {
     if (props.portalScope !== 'local') return undefined;
     return (
       portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
     );
   };
-  const scrollToSelectedTime = () => {
-    queueMicrotask(() => {
-      listboxRef()
-        ?.querySelector<HTMLElement>('[data-selected]')
-        ?.scrollIntoView({ block: 'center' });
-    });
-  };
   const openPopup = () => {
     if (props.disabled) return;
     setOpen(true);
-    scrollToSelectedTime();
   };
   const close = () => {
     setOpen(false);
@@ -268,13 +551,6 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
     const parsed = parseTimeInput(value);
     if (parsed) props.onChange(withLocalTime(props.value, parsed));
   };
-  const selectTime = (values: Set<string>) => {
-    const value = values.values().next().value;
-    if (typeof value !== 'string') return;
-    props.onChange(withLocalTime(props.value, value));
-    close();
-  };
-
   return (
     <Popover
       anchorRef={() => anchorRef}
@@ -358,7 +634,7 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
       <Popover.Portal mount={portalMount()}>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-action-menu w-[24rem] max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
+            class="portal-scope z-action-menu w-[31rem] max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
             onInteractOutside={(event) => {
               const target = event.detail.originalEvent.target;
               if (target instanceof Node && anchorRef?.contains(target)) {
@@ -371,36 +647,21 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
             <Popover.Title class="sr-only">
               Choose {props.label.toLowerCase()} date and time
             </Popover.Title>
-            <div class="grid grid-cols-[minmax(0,1fr)_9rem]">
-              <div class="min-w-0 p-3">
-                <Calendar
-                  required
-                  fixedWeeks
-                  value={selectedDate()}
-                  onValueChange={(next) => {
-                    if (!next) return;
-                    props.onChange(
-                      withLocalDate(props.value, formatLocalDate(next))
-                    );
-                    setDateDraft(undefined);
-                    setDateDraftDirty(false);
-                  }}
-                />
-              </div>
-              <Listbox<EventTimeOption>
-                ref={setListboxRef}
-                options={EVENT_TIME_OPTIONS}
-                optionValue="value"
-                optionTextValue="label"
-                value={selectedTimeValues()}
-                onChange={selectTime}
-                selectionMode="single"
-                disallowEmptySelection
-                shouldFocusWrap
-                renderItem={(item) => <TimeOptionItem {...item} />}
-                class="max-h-64 overflow-y-auto border-l border-edge p-1.5"
-              />
-            </div>
+            <EventDateTimePopoverContent
+              label={props.label}
+              date={date()}
+              time={time()}
+              onDateChange={(nextDate) => {
+                props.onChange(withLocalDate(props.value, nextDate));
+                setDateDraft(undefined);
+                setDateDraftDirty(false);
+              }}
+              onTimeChange={(nextTime) => {
+                props.onChange(withLocalTime(props.value, nextTime));
+                setTimeDraft(undefined);
+              }}
+              disabled={props.disabled}
+            />
           </Popover.Content>
         </Layer>
       </Popover.Portal>
