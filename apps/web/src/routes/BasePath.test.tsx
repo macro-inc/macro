@@ -214,7 +214,7 @@ describe('BasePathComponent', () => {
     const container = renderRoute();
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Unable to verify your session.');
+      expect(container.textContent).toContain('Unable to connect.');
     });
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
@@ -233,9 +233,7 @@ describe('BasePathComponent', () => {
     });
     await flush();
 
-    expect(container.textContent).not.toContain(
-      'Unable to verify your session.'
-    );
+    expect(container.textContent).not.toContain('Unable to connect.');
   });
 
   it('enters the app after session verification succeeds', async () => {
@@ -247,7 +245,7 @@ describe('BasePathComponent', () => {
     const container = renderRoute();
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('Unable to verify your session.');
+      expect(container.textContent).toContain('Unable to connect.');
     });
 
     container.querySelector('button')?.click();
