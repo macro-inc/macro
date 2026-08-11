@@ -216,7 +216,9 @@
 }
 
 .calendar-view .fc .fc-event {
-	transition: box-shadow 120ms ease-out;
+	transition:
+		box-shadow 120ms ease-out,
+		opacity 120ms ease-out;
 }
 
 .calendar-view .fc .fc-event .calendar-event-content {
@@ -277,6 +279,41 @@
 	display: none;
 }
 
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
+	border-style: dashed;
+	background-color: color-mix(
+		in oklch,
+		var(--color-calendar) 2%,
+		var(--color-surface)
+	) !important;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="declined"]) {
+	opacity: 0.5;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="declined"]
+	.calendar-event-title {
+	text-decoration: line-through;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
+	background-color: transparent !important;
+	color: color-mix(
+		in oklch,
+		var(--color-calendar) 65%,
+		var(--color-ink-muted)
+	) !important;
+}
+
 .calendar-view .fc .fc-event:hover {
 	z-index: 4;
 }
@@ -301,6 +338,8 @@
 	background-color: var(--color-accent) !important;
 	color: var(--color-surface) !important;
 	box-shadow: 0 0 0 1px var(--color-accent);
+	border-style: solid;
+	opacity: 1;
 }
 
 .calendar-view

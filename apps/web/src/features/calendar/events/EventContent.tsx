@@ -1,4 +1,5 @@
 import type { EventContentArg } from '@fullcalendar/core';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import {
   formatCompactCalendarTime,
@@ -22,6 +23,8 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
     props.event.allDay || props.renderProps.view.type === 'dayGridMonth';
   const showLocation = () =>
     !props.event.allDay && props.renderProps.view.type === 'timeGridDay';
+  const selfResponseStatus = () =>
+    props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
   const usesSingleLineLayout = () => {
     const duration =
       new Date(props.event.end).getTime() -
@@ -50,28 +53,27 @@ export function CalendarEventContent(props: CalendarEventContentProps) {
 
   return (
     <div
-      class="calendar-event-content w-full min-w-0 overflow-hidden"
-      classList={{
-        'h-full': !isCompact(),
-        'min-h-0': !isCompact(),
-        'calendar-event-content-selected': props.isSelected,
-      }}
+      class={cn(
+        'calendar-event-content w-full min-w-0 overflow-hidden',
+        !isCompact() && 'h-full min-h-0',
+        props.isSelected && 'calendar-event-content-selected'
+      )}
+      data-response-status={selfResponseStatus()}
     >
       <div
-        class="calendar-event-content-layout flex w-full min-h-0 flex-col overflow-hidden"
-        classList={{
-          'h-full': !isCompact(),
-          'calendar-event-content-compact': isCompact(),
-          'calendar-event-content-layout-single-line':
-            isCompact() || usesSingleLineLayout(),
-        }}
+        class={cn(
+          'calendar-event-content-layout flex w-full min-h-0 flex-col overflow-hidden',
+          !isCompact() && 'h-full',
+          isCompact() && 'calendar-event-content-compact',
+          (isCompact() || usesSingleLineLayout()) &&
+            'calendar-event-content-layout-single-line'
+        )}
       >
         <span
-          class="calendar-event-title max-w-full shrink-0 font-semibold leading-tight"
-          classList={{
-            truncate: !props.isNarrow,
-            'whitespace-nowrap': props.isNarrow,
-          }}
+          class={cn(
+            'calendar-event-title max-w-full shrink-0 font-semibold leading-tight',
+            props.isNarrow ? 'whitespace-nowrap' : 'truncate'
+          )}
         >
           {props.event.title}
         </span>

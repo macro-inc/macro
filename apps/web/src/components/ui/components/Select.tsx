@@ -29,7 +29,7 @@ function SelectTrigger(props: SelectTriggerProps) {
   return (
     <KobalteSelect.Trigger
       class={cn(
-        'settings-input flex w-full items-center justify-between gap-2 text-left data-expanded:border-accent',
+        'flex w-full items-center justify-between gap-2 text-left data-expanded:bg-hover',
         local.class
       )}
       {...rest}
