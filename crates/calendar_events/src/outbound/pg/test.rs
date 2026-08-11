@@ -140,6 +140,7 @@ fn timed_upsert(
             organizer_email: Some("organizer@example.com".to_string()),
             organizer_name: Some("Organizer".to_string()),
             conference_url: None,
+            conference_provider: None,
             sequence,
             is_read_only: true,
             attendees: vec![CalendarAttendee {
@@ -2469,6 +2470,7 @@ fn reminder_upsert(
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
@@ -2870,4 +2872,57 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(past, Vec::new());
+}
+
+/// The provider classification has to survive the write and come back on the
+/// read path: it is what tells the product a conference is one Macro may
+/// detach, so losing it in persistence would put a third-party conference at
+/// risk of being destroyed by an edit.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
+    let owner_id = "macro|calendar-conference@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = grant_and_provider_ids(&repo, link_id).await;
+
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "conference@example.com",
+        "Meeting with a Meet",
+        1,
+    );
+    upsert.event.conference_url = Some("https://meet.google.com/abc-defg-hij".to_string());
+    upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
+    repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
+        .await
+        .unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = starts_at + Duration::days(2);
+    let occurrences = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    let (event, _) = occurrences.first().expect("the event is in range");
+    assert_eq!(
+        event.conference_url.as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(
+        event.conference_provider,
+        Some(ConferenceProvider::GoogleMeet)
+    );
 }

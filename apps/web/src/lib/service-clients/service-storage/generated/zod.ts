@@ -982,6 +982,16 @@ export const listOccurrencesResponse = zod
                 .describe(
                   'Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed.'
                 ),
+              conferenceProvider: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum(['google_meet', 'other'])
+                    .describe(
+                      "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten, so a third-party\nconference is not silently destroyed by a Macro edit."
+                    ),
+                ])
+                .optional(),
               conferenceUrl: zod
                 .string()
                 .nullish()
@@ -9842,6 +9852,12 @@ export const getItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -13469,6 +13485,12 @@ export const postItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -16562,6 +16584,12 @@ export const postItemsSoupAstResponse = zod
             .object({
               data: zod
                 .object({
+                  conferenceProvider: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Which conferencing system backs `conference_url`.'
+                    ),
                   conferenceUrl: zod
                     .string()
                     .nullish()
@@ -19981,6 +20009,12 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        conferenceProvider: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Which conferencing system backs `conference_url`.'
+                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()
@@ -23078,6 +23112,12 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
+                        conferenceProvider: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Which conferencing system backs `conference_url`.'
+                          ),
                         conferenceUrl: zod
                           .string()
                           .nullish()

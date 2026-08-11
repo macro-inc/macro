@@ -417,6 +417,10 @@ export function EventDetails(props: {
   const conferenceUrl = createMemo(() =>
     safeConferenceUrl(props.event.conferenceUrl)
   );
+  const conferenceLabel = () =>
+    props.event.conferenceProvider === 'google_meet'
+      ? 'Join Google Meet'
+      : 'Join meeting';
   const organizer = createMemo(() => findOrganizer(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
@@ -472,10 +476,10 @@ export function EventDetails(props: {
                     variant="cta"
                     size="sm"
                     class="h-8 rounded-lg"
-                    label="Join meeting"
+                    label={conferenceLabel()}
                     onClick={() => openExternalUrl(url())}
                   >
-                    Join meeting
+                    {conferenceLabel()}
                     <ArrowSquareOutIcon class="size-3.5" />
                   </Button>
                 </div>

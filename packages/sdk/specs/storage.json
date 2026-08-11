@@ -12892,6 +12892,17 @@
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Which conferencing system backs `conference_url`. `None` whenever no\nconference is attached."
+              }
+            ]
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."
@@ -14626,6 +14637,11 @@
             "$ref": "#/components/schemas/Thread"
           }
         }
+      },
+      "ConferenceProvider": {
+        "type": "string",
+        "description": "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten, so a third-party\nconference is not silently destroyed by a Macro edit.",
+        "enum": ["google_meet", "other"]
       },
       "CopyDocumentQueryParams": {
         "type": "object",
@@ -21891,6 +21907,10 @@
           "extra"
         ],
         "properties": {
+          "conferenceProvider": {
+            "type": ["string", "null"],
+            "description": "Which conferencing system backs `conference_url`."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct conference join URL."

@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::{
     AppliedGoogleGrant, CalendarAttendeeInput, CalendarBackfillJobKey, CalendarCreationTarget,
     CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor,
-    CalendarSyncStatus, EventStatus, EventTransparency, EventVisibility,
+    CalendarSyncStatus, ConferenceChange, EventStatus, EventTransparency, EventVisibility,
     GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
     ProviderCalendar, StoredGoogleCalendar,
 };
@@ -72,6 +72,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
@@ -107,6 +108,7 @@ fn draft() -> CalendarEventDraft {
         visibility: None,
         transparency: None,
         reminders: None,
+        conference: None,
     }
 }
 
@@ -744,6 +746,21 @@ fn empty_patch_is_detected() {
         }
         .is_empty()
     );
+}
+
+/// Attaching or detaching a conference is a complete edit on its own, so a
+/// patch carrying only a conference change must not be rejected as empty.
+#[test]
+fn a_conference_only_patch_is_not_empty() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        assert!(
+            !CalendarEventPatch {
+                conference: Some(change),
+                ..CalendarEventPatch::default()
+            }
+            .is_empty()
+        );
+    }
 }
 
 #[tokio::test]

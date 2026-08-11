@@ -186,6 +186,10 @@ export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       /**
+       * Which conferencing system backs the join URL.
+       */
+      conferenceProvider?: string | null;
+      /**
        * Optional conference join URL.
        */
       conferenceUrl?: string | null;

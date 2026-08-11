@@ -176,6 +176,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: true,
             attendees: vec![CalendarAttendee {

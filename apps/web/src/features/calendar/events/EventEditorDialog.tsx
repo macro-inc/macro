@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
@@ -68,6 +69,24 @@ interface EditorState {
   location: string;
   description: string;
   guests: string;
+  /** Whether the saved event should carry a Macro-managed Google Meet. */
+  googleMeet: boolean;
+}
+
+/** Whether the event carries a Google Meet that Macro may detach. */
+function hasGoogleMeet(event: CalendarEvent) {
+  return event.conferenceProvider === 'google_meet';
+}
+
+/**
+ * Whether a conference is attached that Macro must not rewrite. Offering to
+ * detach a Zoom link would destroy it, and Macro cannot recreate one.
+ */
+function hasForeignConference(event: CalendarEvent | undefined) {
+  return (
+    event?.conferenceUrl !== undefined &&
+    event.conferenceProvider !== 'google_meet'
+  );
 }
 
 function initialEditorState(event: CalendarEvent | undefined): EditorState {
@@ -81,6 +100,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
       location: '',
       description: '',
       guests: '',
+      googleMeet: false,
     };
   }
   if (event.allDay) {
@@ -98,6 +118,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
       location: event.location ?? '',
       description: event.description ?? '',
       guests: '',
+      googleMeet: hasGoogleMeet(event),
     };
   }
   return {
@@ -108,6 +129,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
     location: event.location ?? '',
     description: event.description ?? '',
     guests: '',
+    googleMeet: hasGoogleMeet(event),
   };
 }
 
@@ -349,6 +371,9 @@ export function EventEditorDialog(props: {
     if (event) {
       const recurrenceChanged =
         lines !== undefined && lines.join('\n') !== initialLines.join('\n');
+      // Omitting `conference` leaves the provider's conference untouched, so
+      // an unrelated edit never regenerates or drops a working join link.
+      const conferenceChanged = current.googleMeet !== hasGoogleMeet(event);
       update.mutate({
         eventId: event.eventId,
         patch: {
@@ -358,6 +383,9 @@ export function EventEditorDialog(props: {
           description: current.description,
           ...(recurrenceChanged ? { recurrenceLines: lines } : {}),
           ...(reminders ? { reminders } : {}),
+          ...(conferenceChanged
+            ? { conference: current.googleMeet ? 'google_meet' : 'none' }
+            : {}),
         },
       });
       return;
@@ -371,6 +399,7 @@ export function EventEditorDialog(props: {
       description: current.description === '' ? undefined : current.description,
       attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
       reminders,
+      ...(current.googleMeet ? { conference: 'google_meet' as const } : {}),
     });
   };
 
@@ -648,6 +677,44 @@ export function EventEditorDialog(props: {
                 </span>
               </Show>
             </div>
+          </Show>
+          <Show
+            when={!hasForeignConference(props.event)}
+            fallback={
+              <div class="flex items-center gap-2 text-xs text-ink-muted">
+                <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <span>This event uses another conferencing provider.</span>
+              </div>
+            }
+          >
+            <Show
+              when={state().googleMeet}
+              fallback={
+                <Button
+                  variant="base"
+                  size="sm"
+                  class="w-full justify-center rounded-lg"
+                  label="Add Google Meet video conferencing"
+                  onClick={() => setState({ ...state(), googleMeet: true })}
+                >
+                  <VideoCameraIcon class="size-4 shrink-0" />
+                  <span>Add Google Meet</span>
+                </Button>
+              }
+            >
+              <div class="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 text-xs text-ink">
+                <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <span class="flex-1">Google Meet</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Remove Google Meet"
+                  onClick={() => setState({ ...state(), googleMeet: false })}
+                >
+                  <XIcon />
+                </Button>
+              </div>
+            </Show>
           </Show>
           <input
             type="text"

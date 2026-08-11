@@ -2204,6 +2204,10 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	conferenceUrl: String
 	"""
+	Which conferencing system backs the join URL.
+	"""
+	conferenceProvider: String
+	"""
 	Whether the canonical source is read-only.
 	"""
 	isReadOnly: Boolean!

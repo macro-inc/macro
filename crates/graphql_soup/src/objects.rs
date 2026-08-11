@@ -463,6 +463,11 @@ where
         self.0.conference_url.as_deref()
     }
 
+    /// Which conferencing system backs the join URL.
+    async fn conference_provider(&self) -> Option<&str> {
+        self.0.conference_provider.as_deref()
+    }
+
     /// Whether the canonical source is read-only.
     async fn is_read_only(&self) -> bool {
         self.0.is_read_only

@@ -4463,6 +4463,17 @@
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Which conferencing system backs `conference_url`. `None` whenever no\nconference is attached."
+              }
+            ]
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."
@@ -4594,6 +4605,16 @@
           }
         }
       },
+      "ConferenceChange": {
+        "type": "string",
+        "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
+        "enum": ["google_meet", "none"]
+      },
+      "ConferenceProvider": {
+        "type": "string",
+        "description": "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten, so a third-party\nconference is not silently destroyed by a Macro edit.",
+        "enum": ["google_meet", "other"]
+      },
       "Contact": {
         "type": "object",
         "required": ["id", "link_id"],
@@ -4686,6 +4707,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
+          },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference to attach to the new event; omit to create it without one."
+              }
+            ]
           },
           "description": {
             "type": ["string", "null"],
@@ -6026,6 +6058,17 @@
               "$ref": "#/components/schemas/CalendarAttendeeInputBody"
             },
             "description": "Replacement attendee list."
+          },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference change: `google_meet` attaches a freshly generated Meet,\n`none` detaches the current conference, and omitting it leaves the\nconference untouched."
+              }
+            ]
           },
           "description": {
             "type": ["string", "null"],
