@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   confirmSessionExpired: vi.fn(),
   fetchUserInfo: vi.fn(),
   hasLoginCookie: true,
+  nativeMobile: false,
   navigate: vi.fn(),
 }));
 
@@ -26,7 +27,7 @@ vi.mock('@core/auth/logout', () => ({
 }));
 
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: () => false,
+  isNativeMobilePlatform: () => mocks.nativeMobile,
 }));
 
 vi.mock('@core/util/cookies', () => ({
@@ -124,6 +125,7 @@ function flush() {
 
 beforeEach(() => {
   mocks.hasLoginCookie = true;
+  mocks.nativeMobile = false;
   mocks.navigate.mockReset();
   mocks.fetchUserInfo.mockReset();
   mocks.confirmSessionExpired.mockReset();
@@ -203,5 +205,57 @@ describe('BasePathComponent', () => {
     expect(mocks.clearLocalAuthSession).not.toHaveBeenCalled();
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(container.textContent).toBe('');
+  });
+
+  it('asks native users to verify their session when no local identity is available', async () => {
+    mocks.nativeMobile = true;
+    mocks.fetchUserInfo.mockRejectedValue(SERVER_ERROR());
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Unable to verify your session.');
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('enters the native app with a cached identity when its refresh fails', async () => {
+    mocks.nativeMobile = true;
+    mocks.fetchUserInfo.mockRejectedValue(SERVER_ERROR());
+    queryClient.setQueryData(['auth', 'userInfo'], { authenticated: true });
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(DEFAULT_ROUTE, {
+        replace: true,
+      });
+    });
+    await flush();
+
+    expect(container.textContent).not.toContain(
+      'Unable to verify your session.'
+    );
+  });
+
+  it('enters the app after session verification succeeds', async () => {
+    mocks.nativeMobile = true;
+    mocks.fetchUserInfo
+      .mockRejectedValueOnce(SERVER_ERROR())
+      .mockResolvedValue({ authenticated: true });
+
+    const container = renderRoute();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('Unable to verify your session.');
+    });
+
+    container.querySelector('button')?.click();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(DEFAULT_ROUTE, {
+        replace: true,
+      });
+    });
   });
 });

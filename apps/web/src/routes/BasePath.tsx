@@ -23,31 +23,35 @@ import {
   Switch,
 } from 'solid-js';
 
-export const OFFLINE_ROUTE = '/offline';
-
 function getCurrentQueryString() {
   const params = new URLSearchParams(window.location.search);
   return params.toString().length > 0 ? `?${params.toString()}` : '';
 }
 
-function shouldShowNativeOfflineFallback(
+function shouldShowNativeSessionVerificationFallback(
   userInfoQuery: ReturnType<typeof useUserInfoQuery>
 ) {
   return (
     userInfoQuery.isError &&
+    !userInfoQuery.data?.authenticated &&
     hasLoginCookie() &&
     isNativeMobilePlatform() &&
     !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
   );
 }
 
-function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
+function SessionVerificationFallback(props: {
+  onRetry: () => Promise<unknown>;
+}) {
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
     setRetrying(true);
-    await props.onRetry();
-    setRetrying(false);
+    try {
+      await props.onRetry();
+    } finally {
+      setRetrying(false);
+    }
   };
 
   return (
@@ -92,21 +96,6 @@ function SessionExpiredRedirect() {
   );
 }
 
-export function OfflineFallbackRoute() {
-  const userInfoQuery = useUserInfoQuery();
-
-  // Once the query settles into anything other than a genuine connectivity
-  // failure, bounce to the base path.
-  return (
-    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
-      </Match>
-    </Switch>
-  );
-}
-
 export function BasePathComponent() {
   const [searchParams] = useSearchParams();
   const userInfoQuery = useUserInfoQuery();
@@ -146,8 +135,11 @@ export function BasePathComponent() {
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
       </Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
+      {/* A failed remote check does not make an authenticated cached session
+          unusable: the data branch above enters the local app first. Block only
+          when native has a login marker but no locally verifiable identity. */}
+      <Match when={shouldShowNativeSessionVerificationFallback(userInfoQuery)}>
+        <SessionVerificationFallback onRetry={() => userInfoQuery.refetch()} />
       </Match>
       {/* Backstop: the user-info query sets networkMode 'always', so it never
           pauses on navigator.onLine (which misreports offline during native

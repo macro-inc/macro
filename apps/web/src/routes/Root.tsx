@@ -110,11 +110,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import {
-  BasePathComponent,
-  OFFLINE_ROUTE,
-  OfflineFallbackRoute,
-} from './BasePath';
+import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -334,10 +330,6 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
-  },
-  {
-    path: OFFLINE_ROUTE,
-    component: OfflineFallbackRoute,
   },
   {
     path: '/welcome',
