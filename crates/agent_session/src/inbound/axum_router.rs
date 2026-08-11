@@ -276,6 +276,9 @@ pub struct AgentSessionResponse {
     pub owner_id: String,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel `thread_id` lives in, when the session was spawned from a
+    /// thread.
+    pub thread_channel_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// The bot running the agent.
@@ -302,6 +305,7 @@ impl From<AgentSession> for AgentSessionResponse {
             id: session.id.as_uuid(),
             owner_id: session.owner_id.to_string(),
             thread_id: session.thread_id,
+            thread_channel_id: session.thread_channel_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
             model: session.model,

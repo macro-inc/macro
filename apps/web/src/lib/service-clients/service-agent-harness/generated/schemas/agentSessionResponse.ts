@@ -6,6 +6,7 @@
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
+import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
 import type { SessionStatusDto } from './sessionStatusDto';
 
@@ -35,6 +36,9 @@ export interface AgentSessionResponse {
   repoUrl: string;
   /** The session's status. */
   status: SessionStatusDto;
+  /** The channel `thread_id` lives in, when the session was spawned from a
+thread. */
+  threadChannelId?: AgentSessionResponseThreadChannelId;
   /** The root message of the thread the session was created from, if any. */
   threadId?: AgentSessionResponseThreadId;
 }

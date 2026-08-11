@@ -102,6 +102,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             id: params.id,
             owner_id: params.owner_id,
             thread_id: params.thread_id,
+            // The in-memory repo has no comms rows to derive a channel from.
+            thread_channel_id: None,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
@@ -290,6 +292,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
             .expect("valid macro user id"),
         thread_id: None,
+        thread_channel_id: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),

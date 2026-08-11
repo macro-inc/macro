@@ -445,6 +445,11 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
+          "threadChannelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel `thread_id` lives in, when the session was spawned from a\nthread."
+          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",

@@ -370,6 +370,7 @@ body.tauri-ios {
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
+  --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
 
   /* Z-index scale — the single source of truth for stacking. Classes come
      from these tokens (`--z-index-foo` -> `z-foo`).
@@ -656,6 +657,12 @@ body.tauri-ios {
 @keyframes indeterminate-bar {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
+}
+
+/* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
+@keyframes todo-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%      { transform: scale(0.6); opacity: 0.5; }
 }
 
 /* Big hammer fix for cursor pointer. */

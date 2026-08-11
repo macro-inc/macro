@@ -40,6 +40,7 @@ export interface BlockMethodRegistry {
   task: EmptySpec;
   automation: EmptySpec;
   pr: EmptySpec;
+  agent: EmptySpec;
 }
 
 // Type helper to get the method spec for a block name

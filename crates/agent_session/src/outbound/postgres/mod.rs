@@ -91,6 +91,7 @@ struct AgentSessionRow {
     id: Uuid,
     owner_id: String,
     thread_id: Option<Uuid>,
+    thread_channel_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
     model: String,
@@ -113,6 +114,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             owner_id: MacroUserIdStr::try_from(row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
+            thread_channel_id: row.thread_channel_id,
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
             model: row.model,
@@ -160,7 +162,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             RETURNING
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             "#,
             id.as_uuid(),
             owner_id.as_ref(),
@@ -233,7 +237,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             FROM agent_session
             WHERE id = $1
             "#,
@@ -264,7 +270,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
-                created_at, modified_at
+                created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
             FROM agent_session
             WHERE thread_id = $1 AND bot_id = $2
             ORDER BY created_at DESC

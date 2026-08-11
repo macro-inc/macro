@@ -11,6 +11,7 @@
 import type {
   FoldedMessage,
   FoldedStreamEvent,
+  SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
@@ -42,6 +43,12 @@ export interface FoldStream {
   push: (entry: AgentSessionLogEntryDto) => FoldedStreamEvent[];
   /** Every message folded so far, oldest first. */
   messages: () => FoldedMessage[];
+  /**
+   * The session metadata as it now stands — what the latest
+   * `{kind: "metadata"}` event carried, for a caller that caught up with
+   * {@link extend} and saw no events.
+   */
+  metadata: () => SessionMetadata;
   /** Releases the machine's wasm memory. */
   free: () => void;
 }

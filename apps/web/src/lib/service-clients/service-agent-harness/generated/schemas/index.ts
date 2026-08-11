@@ -25,6 +25,7 @@ export * from './agentSessionLogResponse';
 export * from './agentSessionResponse';
 export * from './agentSessionResponseAcpSessionId';
 export * from './agentSessionResponseOriginatingMessageId';
+export * from './agentSessionResponseThreadChannelId';
 export * from './agentSessionResponseThreadId';
 export * from './agentSetModelAction';
 export * from './botId';

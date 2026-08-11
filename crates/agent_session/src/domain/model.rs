@@ -55,6 +55,10 @@ pub struct AgentSession {
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel `thread_id` lives in, when the session was spawned from a
+    /// thread. Derived from the thread root's message row rather than
+    /// stored — the message's channel is authoritative.
+    pub thread_channel_id: Option<Uuid>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent

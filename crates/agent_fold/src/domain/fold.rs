@@ -53,7 +53,7 @@ use std::borrow::Cow;
 
 use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::meta::{claude_code, command_from_raw_input};
+use crate::domain::meta::{claude_code, command_from_raw_input, file_edit_from_raw_input};
 use crate::domain::model::{
     AnsiText, Author, AvailableCommand, Control, ControlOutcome, FileDiff, FoldEvent,
     FoldedMessage, MessagePart, ModelOption, PermissionOption, PermissionOptionKind,
@@ -1137,7 +1137,7 @@ fn tool_detail(
             exit_code: claude_code::terminal_exit_code(meta),
         },
         ToolKind::Edit => ToolDetail::Edit {
-            diffs: diffs(content),
+            diffs: edit_diffs(content, raw_input),
         },
         ToolKind::Read => ToolDetail::Read {
             paths: location_paths(locations),
@@ -1199,6 +1199,13 @@ fn patch_detail(
                     *existing = found;
                 }
             }
+            // A call that never reports a diff block (Claude Code's `Write`)
+            // may still deliver its raw input on a later update.
+            if existing.is_empty()
+                && let Some(found) = synthesized_edit_diff(raw_input)
+            {
+                *existing = vec![found];
+            }
         }
         ToolDetail::Read { paths } | ToolDetail::Delete { paths } | ToolDetail::Move { paths } => {
             if let Some(found) = locations.map(location_paths)
@@ -1231,6 +1238,28 @@ fn patch_detail(
             }
         }
     }
+}
+
+/// An edit call's diffs: the reported diff blocks, or — for calls that never
+/// report one, like Claude Code's `Write` — a whole-file diff synthesized
+/// from the raw input.
+fn edit_diffs(content: &[ToolCallContent], raw_input: Option<&serde_json::Value>) -> Vec<FileDiff> {
+    let found = diffs(content);
+    if !found.is_empty() {
+        return found;
+    }
+    synthesized_edit_diff(raw_input).into_iter().collect()
+}
+
+/// A whole-file diff from `{filePath, content}` raw input. The prior contents
+/// are not on the wire, so the file reads as new.
+fn synthesized_edit_diff(raw_input: Option<&serde_json::Value>) -> Option<FileDiff> {
+    let (path, content) = file_edit_from_raw_input(raw_input)?;
+    Some(FileDiff {
+        path: path.into(),
+        old_text: None,
+        new_text: content,
+    })
 }
 
 /// The diffs among a tool call's content blocks.
