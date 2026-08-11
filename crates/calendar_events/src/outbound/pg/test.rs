@@ -2643,6 +2643,81 @@ async fn calendar_default_reminders_fan_out_to_use_default_events(pool: PgPool) 
     );
 }
 
+/// One event can hold sources on several calendars of one inbox. Only the
+/// canonical source (highest sequence/updated_at/seen/id) may drive the
+/// firing schedule: a defaults change on a secondary calendar must not
+/// delete the canonical schedule and rebuild it from the secondary's
+/// defaults.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn secondary_calendar_changes_leave_the_canonical_schedule_alone(pool: PgPool) {
+    let owner_id = "macro|reminder-canonical@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, canonical_calendar) = provider_ids(&repo, link_id).await;
+    let secondary = |minutes: &[u32]| ProviderCalendar {
+        provider_calendar_id: "secondary".to_string(),
+        name: "Secondary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("reader".to_string()),
+        is_primary: false,
+        is_selected: true,
+        default_reminders: minutes
+            .iter()
+            .map(|minutes| EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: *minutes,
+            })
+            .collect(),
+    };
+    let secondary_calendar = repo
+        .upsert_calendar_fixture(account_id, secondary(&[]))
+        .await
+        .unwrap();
+
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let mut canonical_source = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, canonical_calendar),
+        "shared",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    canonical_source.event.sequence = 1;
+    let event_id = repo.upsert_event_fixture(canonical_source).await.unwrap();
+
+    let mut secondary_source = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, secondary_calendar),
+        "shared",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    secondary_source.event.sequence = 0;
+    let same_event = repo.upsert_event_fixture(secondary_source).await.unwrap();
+    assert_eq!(same_event, event_id, "both sources attach to one event");
+
+    let canonical_schedule = vec![(
+        starts_at.to_rfc3339(),
+        10,
+        starts_at - Duration::minutes(10),
+    )];
+    assert_eq!(scheduled_firings(&pool, event_id).await, canonical_schedule);
+
+    repo.upsert_calendar_fixture(account_id, secondary(&[30]))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        canonical_schedule,
+        "a secondary calendar's defaults change leaves the canonical schedule alone"
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn cancelled_events_and_occurrences_schedule_no_firings(pool: PgPool) {
     let owner_id = "macro|reminder-cancelled@example.com";
@@ -2701,7 +2776,7 @@ async fn dispatch_repo_sweeps_claims_and_completes(pool: PgPool) {
         .unwrap();
 
     let now = Utc::now();
-    let due = repo.due_reminder_firings(now).await.unwrap();
+    let due = repo.due_reminder_firings(now, None, 100).await.unwrap();
     assert_eq!(due.len(), 1);
     let firing = &due[0];
     assert_eq!(
@@ -2739,7 +2814,9 @@ async fn dispatch_repo_sweeps_claims_and_completes(pool: PgPool) {
 
     repo.complete_reminder_delivery(firing).await.unwrap();
     assert_eq!(
-        repo.due_reminder_firings(Utc::now()).await.unwrap(),
+        repo.due_reminder_firings(Utc::now(), None, 100)
+            .await
+            .unwrap(),
         Vec::new(),
         "a completed delivery stops the firing being due"
     );
@@ -2772,7 +2849,10 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
     }];
     repo.upsert_event_fixture(declined).await.unwrap();
 
-    let due = repo.due_reminder_firings(Utc::now()).await.unwrap();
+    let due = repo
+        .due_reminder_firings(Utc::now(), None, 100)
+        .await
+        .unwrap();
     assert_eq!(due.len(), 1);
     let firing = &due[0];
     let resolved = repo.find_due_reminder(firing).await.unwrap().unwrap();
@@ -2786,7 +2866,7 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
 
     // Firings staler than the sweep grace are silently dropped.
     let past = repo
-        .due_reminder_firings(Utc::now() + Duration::hours(2))
+        .due_reminder_firings(Utc::now() + Duration::hours(2), None, 100)
         .await
         .unwrap();
     assert_eq!(past, Vec::new());

@@ -58,8 +58,24 @@ impl CalendarReminderDispatchRepo for FakeRepo {
     async fn due_reminder_firings(
         &self,
         _now: DateTime<Utc>,
+        after: Option<&CalendarReminderFiring>,
+        limit: i64,
     ) -> Result<Vec<CalendarReminderFiring>, Report> {
-        Ok(self.0.lock().unwrap().scheduled.clone())
+        let key = |firing: &CalendarReminderFiring| {
+            (
+                firing.fire_at,
+                firing.event_id,
+                firing.minutes_before,
+                firing.occurrence_key.clone(),
+            )
+        };
+        let mut scheduled = self.0.lock().unwrap().scheduled.clone();
+        scheduled.sort_by_key(&key);
+        Ok(scheduled
+            .into_iter()
+            .filter(|firing| after.is_none_or(|after| key(firing) > key(after)))
+            .take(usize::try_from(limit).unwrap())
+            .collect())
     }
 
     async fn find_due_reminder(
@@ -169,6 +185,30 @@ async fn sweep_fans_out_one_message_per_due_firing() {
         &published[0].operation,
         CalendarReminderDispatchOperation::Deliver(delivered) if *delivered == firing(1)
     ));
+}
+
+/// A backlog wider than one sweep page drains fully across keyset pages
+/// instead of stopping at the first page or re-reading it forever.
+#[tokio::test]
+async fn sweep_drains_a_backlog_larger_than_one_page() {
+    let count = 501;
+    let repo = FakeRepo::default();
+    repo.0.lock().unwrap().scheduled = (0..count)
+        .map(|n| CalendarReminderFiring {
+            event_id: uuid(u8::try_from(n % 251).unwrap()),
+            occurrence_key: format!("2026-08-10T12:{:02}:00+00:00[{n}]", n % 60),
+            minutes_before: i32::try_from(n).unwrap(),
+            fire_at: instant(),
+        })
+        .collect();
+    let queue = FakeQueue::default();
+    let dispatch = service(repo, FakeNotifier::default(), queue.clone());
+
+    let summary = dispatch.sweep().await.expect("sweep succeeds");
+
+    assert_eq!(summary.dispatched, count);
+    let published = queue.published.lock().unwrap();
+    assert_eq!(published.len(), count);
 }
 
 #[tokio::test]

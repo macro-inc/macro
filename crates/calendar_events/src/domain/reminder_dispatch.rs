@@ -28,6 +28,11 @@ use super::ports::{
 /// releases its own claim.
 const RETRY_AFTER: Duration = Duration::minutes(5);
 
+/// How many due firings one sweep page loads. The sweep drains page by page
+/// so a backlog (dispatcher outage, round-hour spike) costs bounded memory
+/// per iteration instead of one unbounded scan.
+const SWEEP_PAGE: i64 = 500;
+
 /// Delivers due calendar reminders to their event owners.
 #[derive(Debug, Clone)]
 pub struct CalendarReminderDispatchService<R, N, Q> {
@@ -99,22 +104,37 @@ where
 {
     #[tracing::instrument(err, skip(self))]
     async fn sweep(&self) -> Result<CalendarReminderSweepSummary, Report> {
-        let firings = self.repo.due_reminder_firings(Utc::now()).await?;
-        if firings.is_empty() {
-            return Ok(CalendarReminderSweepSummary::default());
+        let now = Utc::now();
+        let mut dispatched = 0;
+        let mut after: Option<CalendarReminderFiring> = None;
+
+        loop {
+            let firings = self
+                .repo
+                .due_reminder_firings(now, after.as_ref(), SWEEP_PAGE)
+                .await?;
+            let Some(last) = firings.last().cloned() else {
+                break;
+            };
+            let page_len = firings.len();
+
+            let messages: Vec<CalendarReminderDispatchMessage> = firings
+                .into_iter()
+                .map(CalendarReminderDispatchMessage::deliver)
+                .collect();
+
+            // One failed publish fails the whole sweep, so the tick is
+            // redelivered and the fan-out repeats. Firings that already went
+            // out lose the claim race the second time, so a repeat costs
+            // messages rather than duplicate notifications.
+            self.queue.publish_batch(&messages).await?;
+            dispatched += page_len;
+
+            if (page_len as i64) < SWEEP_PAGE {
+                break;
+            }
+            after = Some(last);
         }
-
-        let messages: Vec<CalendarReminderDispatchMessage> = firings
-            .into_iter()
-            .map(CalendarReminderDispatchMessage::deliver)
-            .collect();
-
-        // One failed publish fails the whole sweep, so the tick is
-        // redelivered and the fan-out repeats. Firings that already went out
-        // lose the claim race the second time, so a repeat costs messages
-        // rather than duplicate notifications.
-        let dispatched = messages.len();
-        self.queue.publish_batch(&messages).await?;
 
         Ok(CalendarReminderSweepSummary { dispatched })
     }

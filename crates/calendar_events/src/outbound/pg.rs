@@ -1376,6 +1376,9 @@ impl CalendarRepository for PgCalendarRepository {
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
                 default_reminders: serde_json::from_value(row.default_reminders)
+                    .inspect_err(|e| {
+                        tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
+                    })
                     .unwrap_or_default(),
             })
             .collect())
@@ -2454,18 +2457,45 @@ async fn fetch_calendar_reminder_context(
     .map_err(report)?;
     Ok(row.map(|row| CalendarReminderContext {
         time_zone: row.time_zone,
-        default_reminders: serde_json::from_value(row.default_reminders).unwrap_or_default(),
+        // This feeds the firing schedule: a malformed value silently drops
+        // every default reminder on the calendar, so it must leave a trace.
+        default_reminders: serde_json::from_value(row.default_reminders)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %calendar_id, "malformed calendar default_reminders json");
+            })
+            .unwrap_or_default(),
     }))
 }
 
-/// The zone that anchors an all-day occurrence's midnight. Google resolves
-/// all-day reminders against the calendar's zone; anything unparseable falls
-/// back to UTC rather than failing the write.
-fn reminder_time_zone(calendar: Option<&CalendarReminderContext>) -> &str {
-    calendar
-        .and_then(|calendar| calendar.time_zone.as_deref())
-        .filter(|zone| zone.parse::<chrono_tz::Tz>().is_ok())
-        .unwrap_or("UTC")
+/// The zone that anchors an all-day occurrence's midnight, validated against
+/// the server's own tzdata. Google resolves all-day reminders against the
+/// calendar's zone; a zone the server does not know falls back to UTC rather
+/// than failing the write. chrono-tz and Postgres carry independent IANA
+/// copies, so client-side parsing alone cannot guarantee `AT TIME ZONE`
+/// accepts the name.
+async fn anchor_time_zone(
+    tx: &mut Transaction<'_, Postgres>,
+    zone: Option<&str>,
+) -> Result<String, Report> {
+    let Some(zone) = zone.filter(|zone| *zone != "UTC") else {
+        return Ok("UTC".to_owned());
+    };
+    let known = sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name = $1) AS "known!""#,
+        zone,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    if known {
+        Ok(zone.to_owned())
+    } else {
+        tracing::warn!(
+            zone,
+            "calendar time zone unknown to postgres, anchoring all-day reminders at UTC"
+        );
+        Ok("UTC".to_owned())
+    }
 }
 
 /// Rebuild one event's reminder firing schedule from its just-replaced
@@ -2500,7 +2530,11 @@ async fn rebuild_event_reminder_firings(
     if minutes.is_empty() {
         return Ok(());
     }
-    let time_zone = reminder_time_zone(calendar);
+    let time_zone = anchor_time_zone(
+        tx,
+        calendar.and_then(|calendar| calendar.time_zone.as_deref()),
+    )
+    .await?;
     sqlx::query!(
         r#"
         INSERT INTO calendar_event_reminder_firings (
@@ -2533,9 +2567,13 @@ async fn rebuild_event_reminder_firings(
     Ok(())
 }
 
-/// Rebuild the firing schedule for every event sourced from one calendar,
-/// after its default reminders or time zone changed. Set-based because a
-/// defaults change fans out to every `useDefault` event on the calendar.
+/// Rebuild the firing schedule for every event whose canonical source lives
+/// on one calendar, after its default reminders or time zone changed.
+/// Set-based because a defaults change fans out to every `useDefault` event
+/// on the calendar. Both statements rank sources exactly like
+/// `restore_best_source_or_delete` and the read path: an event that also
+/// holds a secondary source on this calendar keeps the schedule its
+/// canonical calendar derived.
 async fn rebuild_calendar_reminder_firings(
     tx: &mut Transaction<'_, Postgres>,
     calendar_id: Uuid,
@@ -2548,15 +2586,24 @@ async fn rebuild_calendar_reminder_firings(
         USING calendar_event_sources source
         WHERE source.event_id = firing.event_id
           AND source.calendar_id = $1
+          AND (
+              SELECT canonical.calendar_id
+              FROM calendar_event_sources canonical
+              WHERE canonical.event_id = firing.event_id
+              ORDER BY
+                  canonical.source_sequence DESC,
+                  canonical.source_updated_at DESC,
+                  canonical.last_seen_at DESC,
+                  canonical.id DESC
+              LIMIT 1
+          ) = $1
         "#,
         calendar_id,
     )
     .execute(&mut **tx)
     .await
     .map_err(report)?;
-    let anchor_zone = time_zone
-        .filter(|zone| zone.parse::<chrono_tz::Tz>().is_ok())
-        .unwrap_or("UTC");
+    let anchor_zone = anchor_time_zone(tx, time_zone).await?;
     sqlx::query!(
         r#"
         INSERT INTO calendar_event_reminder_firings (
@@ -2585,6 +2632,17 @@ async fn rebuild_calendar_reminder_firings(
               AND (reminder.value ->> 'minutes')::int >= 0
         ) offsets
         WHERE source.calendar_id = $1
+          AND (
+              SELECT canonical.calendar_id
+              FROM calendar_event_sources canonical
+              WHERE canonical.event_id = event.id
+              ORDER BY
+                  canonical.source_sequence DESC,
+                  canonical.source_updated_at DESC,
+                  canonical.last_seen_at DESC,
+                  canonical.id DESC
+              LIMIT 1
+          ) = $1
           AND event.status <> 'cancelled'
           AND NOT occurrence.is_cancelled
           AND COALESCE(
@@ -2782,7 +2840,11 @@ fn event_from_join(
         is_read_only: row.is_read_only,
         reminders: EventReminders {
             use_default: row.reminders_use_default,
-            overrides: serde_json::from_value(row.reminder_overrides).unwrap_or_default(),
+            overrides: serde_json::from_value(row.reminder_overrides)
+                .inspect_err(|e| {
+                    tracing::error!(error = ?e, event_id = %row.event_id, "malformed event reminder_overrides json");
+                })
+                .unwrap_or_default(),
         },
         attendees,
         created_at: row.created_at,
@@ -2880,17 +2942,26 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
     async fn due_reminder_firings(
         &self,
         now: DateTime<Utc>,
+        after: Option<&CalendarReminderFiring>,
+        limit: i64,
     ) -> Result<Vec<CalendarReminderFiring>, Report> {
         // Driven by `calendar_event_reminder_firings_due_idx`. A completed
         // delivery claim is what makes a delivered firing stop being due; a
         // held-but-unfinished claim still sweeps, and loses the claim race at
-        // delivery instead.
+        // delivery instead. The keyset resumes past `after` because nothing
+        // marks a swept firing — re-running the window from the top would
+        // return the same rows forever.
         let rows = sqlx::query!(
             r#"
             SELECT firing.event_id, firing.occurrence_key, firing.minutes_before, firing.fire_at
             FROM calendar_event_reminder_firings firing
             WHERE firing.fire_at <= $1
               AND firing.fire_at > $2
+              AND (
+                  $4::timestamptz IS NULL
+                  OR (firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key)
+                     > ($4, $5, $6, $7)
+              )
               AND NOT EXISTS (
                   SELECT 1
                   FROM calendar_event_reminder_deliveries delivery
@@ -2900,10 +2971,16 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
                     AND delivery.fire_at = firing.fire_at
                     AND delivery.sent_at IS NOT NULL
               )
-            ORDER BY firing.fire_at
+            ORDER BY firing.fire_at, firing.event_id, firing.minutes_before, firing.occurrence_key
+            LIMIT $3
             "#,
             now,
             now - REMINDER_SWEEP_GRACE,
+            limit,
+            after.map(|firing| firing.fire_at),
+            after.map(|firing| firing.event_id),
+            after.map(|firing| firing.minutes_before),
+            after.map(|firing| firing.occurrence_key.as_str()),
         )
         .fetch_all(&self.pool)
         .await
@@ -2930,6 +3007,10 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
         // rows, and this then finds nothing rather than alerting at a time
         // that no longer exists. The canonical-source lateral mirrors the
         // read path so a deleted calendar or disabled account stops alerts.
+        // The grace bound is re-applied here because firing rows outlive the
+        // sweep window: a Deliver message that sat in the queue past the
+        // grace must drop, not alert hours late.
+        let stale_before = Utc::now() - REMINDER_SWEEP_GRACE;
         let row = sqlx::query!(
             r#"
             SELECT
@@ -2988,6 +3069,7 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
               AND firing.occurrence_key = $2
               AND firing.minutes_before = $3
               AND firing.fire_at = $4
+              AND firing.fire_at > $5
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
             "#,
@@ -2995,6 +3077,7 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
             &firing.occurrence_key,
             firing.minutes_before,
             firing.fire_at,
+            stale_before,
         )
         .fetch_optional(&self.pool)
         .await

@@ -555,10 +555,15 @@ pub trait CalendarReminderDispatch: Send + Sync + 'static {
 /// Persistence the calendar reminder dispatcher runs on.
 pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
     /// Scheduled firings inside the due window that have no completed
-    /// delivery claim.
+    /// delivery claim, ordered by `(fire_at, event_id, minutes_before,
+    /// occurrence_key)` and capped at `limit` rows. `after` resumes the scan
+    /// past a previous page's last firing, so a sweep drains an arbitrarily
+    /// large backlog in bounded batches.
     fn due_reminder_firings(
         &self,
         now: DateTime<Utc>,
+        after: Option<&CalendarReminderFiring>,
+        limit: i64,
     ) -> impl Future<Output = Result<Vec<CalendarReminderFiring>, Report>> + Send;
 
     /// Re-resolve one swept firing against live state. `None` means the
