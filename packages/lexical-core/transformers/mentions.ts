@@ -41,11 +41,11 @@ export const I_USER_MENTION: TextMatchTransformer = {
       for (const field of ['userId', 'email']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
-      const userMentionNode = new UserMentionNode(
-        data.userId,
-        data.email,
-        data.displayName
-      );
+      const displayName =
+        typeof data.displayName === 'string' ? data.displayName : undefined;
+      const userMentionNode = new UserMentionNode(data.userId, data.email, {
+        displayName,
+      });
       node.replace(userMentionNode);
     } catch (e) {
       console.error('Error in I_USER_MENTION replace:', e);

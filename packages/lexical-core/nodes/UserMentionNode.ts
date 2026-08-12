@@ -30,6 +30,11 @@ export type UserMentionDecoratorProps = UserMentionInfo & {
   theme: EditorThemeClasses;
 };
 
+type UserMentionConstructorOptions = {
+  displayName?: string;
+  mentionUuid?: string;
+};
+
 function getEmailLocalPart(email: string): string {
   return email.split('@')[0] || email;
 }
@@ -58,8 +63,10 @@ export class UserMentionNode extends DecoratorNode<
     return new UserMentionNode(
       node.__userId,
       node.__email,
-      node.__displayName,
-      node.__mentionUuid,
+      {
+        displayName: node.__displayName,
+        mentionUuid: node.__mentionUuid,
+      },
       node.__key
     );
   }
@@ -67,14 +74,34 @@ export class UserMentionNode extends DecoratorNode<
   constructor(
     userId: string,
     email: string,
-    displayName?: string,
     mentionUuid?: string,
+    key?: NodeKey
+  );
+  constructor(
+    userId: string,
+    email: string,
+    options?: UserMentionConstructorOptions,
+    key?: NodeKey
+  );
+  constructor(
+    userId: string,
+    email: string,
+    mentionUuidOrOptions?: string | UserMentionConstructorOptions,
     key?: NodeKey
   ) {
     super(key);
+    const options =
+      typeof mentionUuidOrOptions === 'object'
+        ? mentionUuidOrOptions
+        : undefined;
+    const mentionUuid =
+      typeof mentionUuidOrOptions === 'string'
+        ? mentionUuidOrOptions
+        : options?.mentionUuid;
+
     this.__userId = userId;
     this.__email = email;
-    this.__displayName = displayName || getEmailLocalPart(email);
+    this.__displayName = options?.displayName || getEmailLocalPart(email);
     this.__mentionUuid = mentionUuid;
   }
 
@@ -230,12 +257,10 @@ export function $createUserMentionNode(params: {
   displayName?: string;
   mentionUuid?: string;
 }) {
-  const node = new UserMentionNode(
-    params.userId,
-    params.email,
-    params.displayName,
-    params.mentionUuid
-  );
+  const node = new UserMentionNode(params.userId, params.email, {
+    displayName: params.displayName,
+    mentionUuid: params.mentionUuid,
+  });
   return $applyNodeReplacement(node);
 }
 
