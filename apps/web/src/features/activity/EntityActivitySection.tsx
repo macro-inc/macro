@@ -50,11 +50,13 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
             when={events().length > 0}
             fallback={<SidePanel.EmptyPill label="No activity yet" />}
           >
-            <SidePanel.Card>
-              <For each={events()}>
-                {(event) => <ActivityRow event={event} />}
-              </For>
-            </SidePanel.Card>
+            <div class="text-xs">
+              <SidePanel.Card>
+                <For each={events()}>
+                  {(event) => <ActivityRow event={event} />}
+                </For>
+              </SidePanel.Card>
+            </div>
           </Show>
         </Suspense>
       </SidePanel.Section>
@@ -66,15 +68,15 @@ function ActivityRow(props: { event: ActivityEvent }) {
   const actorId = () => tryMacroId(props.event.actorId);
 
   return (
-    <div class="flex min-w-0 items-center gap-2 px-3 py-2 text-sm">
+    <div class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1">
       <Show when={actorId()}>
         {(id) => <UserIcon id={id()} size="sm" showTooltip={false} />}
       </Show>
-      <span class="flex min-w-0 items-center gap-1.5">
-        <span class="shrink-0 font-medium">
+      <span class="flex min-w-0 items-center gap-1">
+        <span class="shrink-0 font-medium text-ink">
           <ActorName actorId={props.event.actorId} />
         </span>
-        <span class="min-w-0 truncate text-text-secondary">
+        <span class="min-w-0 truncate text-ink-muted">
           <Show
             when={actionAsPropertyChange(props.event.action)}
             fallback={describeAction(props.event.action)}
@@ -83,7 +85,7 @@ function ActivityRow(props: { event: ActivityEvent }) {
           </Show>
         </span>
       </span>
-      <span class="ml-auto shrink-0 text-xs text-text-secondary">
+      <span class="ml-auto shrink-0 text-ink-extra-muted">
         {formatRelativeTimestamp(new Date(props.event.occurredAt), {
           condensed: true,
         })}

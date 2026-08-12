@@ -78,7 +78,7 @@ function PropertyValueDisplay(props: {
         <span class="inline-flex min-w-0 items-center gap-1">
           <For each={entries()}>
             {(entry) => (
-              <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 leading-tight text-ink ring ring-edge-muted/50 ring-inset">
+              <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-ink text-xs leading-tight ring ring-edge-muted/50 ring-inset">
                 <PropertyValueIcon
                   optionId={entry.id}
                   class="size-3 shrink-0"
