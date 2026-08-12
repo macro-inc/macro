@@ -378,7 +378,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: { subType: ['task'] },
         }),
         clientFilters: { and: ['task'] },
-        groupBy: `property:${SYSTEM_PROPERTY_IDS.ASSIGNEES}`,
       }),
     },
   },
