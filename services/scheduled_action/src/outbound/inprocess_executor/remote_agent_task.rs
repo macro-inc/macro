@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use agent::types::{AssistantMessagePart, ChatMessageContent, Role};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use macro_db_client::dcs::create_chat_message::create_chat_message;
 use model::chat::NewChatMessage;
 use notification::domain::service::SqsNotificationIngress;
@@ -45,8 +45,11 @@ pub async fn run_remote_agent_task<Remote: RemoteAgentClient>(
 
     let response = remote_client.run(&task, &request).await?;
 
+    // A 200 with nothing in it is a misconfigured endpoint, not a run that did
+    // nothing: recording it as successful would leave an empty chat with no
+    // explanation. Failing puts the reason on the execution record instead.
     if response.output.trim().is_empty() {
-        return Ok(());
+        bail!("remote agent returned an empty response");
     }
 
     store_assistant_message(db, chat_id, &task, &response.output).await?;
