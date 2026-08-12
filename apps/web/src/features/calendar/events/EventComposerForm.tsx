@@ -3,6 +3,7 @@ import { Button, cn, Layer } from '@ui';
 import { parseISO } from 'date-fns';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -47,12 +48,14 @@ type ComposerSelectOption = {
 
 export interface EventComposerFormProps {
   initialValues?: EventEditorInitialValues;
+  isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   calendarOptions: EventEditorCalendarOption[];
   guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
   pending: boolean;
   class?: string;
+  onCalendarChange?: (calendarId: string, color: string) => void;
   onCancel: () => void;
   onSubmit: (values: EventEditorSubmitValues) => void;
 }
@@ -63,7 +66,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
 
-  const isEdit = () => props.initialValues !== undefined;
+  const isEdit = () => props.isEdit ?? props.initialValues !== undefined;
   const initialValues =
     props.initialValues ?? defaultEditorInitialValues(new Date());
   const initialLines = [...initialValues.recurrenceLines];
@@ -142,6 +145,14 @@ export function EventComposerForm(props: EventComposerFormProps) {
     props.calendarOptions.find(
       (option) => option.id === effectiveCalendarId()
     ) ?? props.calendarOptions[0];
+
+  createEffect(() => {
+    const option = selectedCalendarOption();
+    if (option) props.onCalendarChange?.(option.id, option.color);
+  });
+
+  const changeCalendar = (calendarId: string) =>
+    setState({ ...state(), calendarId });
 
   const changeRecurrenceChoice = (choice: string) => {
     if (choice === 'custom') {
@@ -307,7 +318,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
             <EventComposerCalendarPill
               options={props.calendarOptions}
               value={selectedCalendarOption()}
-              onChange={(calendarId) => setState({ ...state(), calendarId })}
+              onChange={changeCalendar}
               disabled={props.pending}
               readOnly={fieldIsReadOnly('calendar')}
             />

@@ -1,7 +1,8 @@
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import type { DatesSetArg } from '@fullcalendar/core';
+import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -38,6 +39,7 @@ import {
 import { isCalendarRangeSupported } from './calendar-supported-range';
 import { mapCalendarOccurrence } from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
+import { calendarSelectionToEditorInitialValues } from './events/EventEditorForm';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import type { CalendarTimeFormat } from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
@@ -305,7 +307,11 @@ function createCalendarPageData(
 export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
+  const { popoverSplit } = useSplitLayout();
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
+  const [selectionColor, setSelectionColor] = createSignal(
+    'var(--color-accent)'
+  );
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     calendarView.useNarrowDayHeaders() && !isMobile();
@@ -318,6 +324,20 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const [chipMounts, notifyChipMount] = createSignal(undefined, {
     equals: false,
   });
+
+  const handleSelect = (selection: DateSelectArg) => {
+    if (!isActive()) return;
+    popoverSplit({
+      type: 'component',
+      id: 'calendar-event-compose',
+      params: {
+        initialValues: calendarSelectionToEditorInitialValues(selection),
+        onCalendarChange: (_calendarId: string, color: string) =>
+          setSelectionColor(color),
+        onClose: () => selection.view.calendar.unselect(),
+      },
+    });
+  };
 
   const handleDatesSet = ({ end, start }: DatesSetArg) => {
     const nextRange = createCalendarOccurrenceQueryRange(start, end);
@@ -356,6 +376,11 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
       }
       events={data.fullCalendarEvents()}
+      selectable={!isMobile()}
+      unselectAuto={false}
+      selectMirror
+      selectMinDistance={5}
+      select={handleSelect}
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         if (!isActive()) return;
@@ -436,6 +461,16 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       <FullCalendar.EventContent>
         {(renderProps) => {
           const event = data.eventsById().get(renderProps.event.id);
+          if (!event && renderProps.isMirror) {
+            return (
+              <div class="calendar-event-selection-preview flex h-full min-w-0 flex-col overflow-hidden px-1 py-0.5 text-xs leading-tight">
+                <span class="truncate font-semibold">New event</span>
+                <Show when={renderProps.timeText}>
+                  <span class="truncate">{renderProps.timeText}</span>
+                </Show>
+              </div>
+            );
+          }
           if (!event) return null;
 
           return (
@@ -478,6 +513,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         data={data}
         eventElements={eventElements}
         chipMounts={chipMounts}
+        selectionColor={selectionColor()}
       />
     </FullCalendar.Root>
   );
@@ -488,6 +524,7 @@ function CalendarPageHost(props: {
   data: CalendarPageData;
   eventElements: Map<string, HTMLElement>;
   chipMounts: Accessor<undefined>;
+  selectionColor: string;
 }) {
   const calendar = useFullCalendar();
   const pager = useCalendarPager();
@@ -580,6 +617,7 @@ function CalendarPageHost(props: {
       <FullCalendar.Host
         tabIndex={-1}
         ref={setElement}
+        style={{ '--calendar-selection-color': props.selectionColor }}
         class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
       />
       <CalendarScrollIndicators calendarElement={element} />

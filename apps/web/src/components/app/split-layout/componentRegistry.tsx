@@ -1,4 +1,5 @@
 import { EventComposer } from '@app/features/calendar/events/EventComposer';
+import type { EventEditorInitialValues } from '@app/features/calendar/events/EventEditorForm';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { GettingStarted } from '@app/features/getting-started';
@@ -528,7 +529,20 @@ registerComponent('task-compose', (params) => {
 });
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
-  return <EventComposer event={params?.event as CalendarEvent | undefined} />;
+  return (
+    <EventComposer
+      event={params?.event as CalendarEvent | undefined}
+      initialValues={
+        params?.initialValues as EventEditorInitialValues | undefined
+      }
+      onCalendarChange={
+        params?.onCalendarChange as
+          | ((calendarId: string, color: string) => void)
+          | undefined
+      }
+      onClose={params?.onClose as (() => void) | undefined}
+    />
+  );
 });
 registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');

@@ -99,6 +99,7 @@ export interface EventEditorInitialValues {
 export interface EventEditorCalendarOption {
   id: string;
   label: string;
+  color: string;
 }
 
 /** Editable fields that a create/edit owner may disable. */
@@ -143,6 +144,29 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
+  };
+}
+
+/** Converts a FullCalendar-style selected range into create-event values. */
+export function calendarSelectionToEditorInitialValues(selection: {
+  start: Date;
+  end: Date;
+  allDay: boolean;
+}): EventEditorInitialValues {
+  const initialValues = defaultEditorInitialValues(selection.start);
+  if (selection.allDay) {
+    return {
+      ...initialValues,
+      allDay: true,
+      start: format(selection.start, DATE_VALUE),
+      end: format(addDays(selection.end, -1), DATE_VALUE),
+    };
+  }
+
+  return {
+    ...initialValues,
+    start: format(selection.start, DATETIME_VALUE),
+    end: format(selection.end, DATETIME_VALUE),
   };
 }
 

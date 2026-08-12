@@ -12,7 +12,7 @@
 	);
 	--fc-event-border-color: var(--color-calendar);
 	--fc-event-text-color: var(--color-calendar);
-	--fc-highlight-color: var(--color-accent-bg);
+	--fc-highlight-color: transparent;
 	--fc-today-bg-color: transparent;
 	--fc-now-indicator-color: var(--color-accent);
 }
@@ -219,6 +219,46 @@
 	transition:
 		box-shadow 120ms ease-out,
 		opacity 120ms ease-out;
+}
+
+.calendar-view .fc .fc-event-mirror,
+.calendar-view .fc .fc-highlight {
+	border: 1px solid var(--calendar-selection-color, var(--color-accent));
+	border-radius: 0.375rem;
+	background: var(--calendar-selection-color, var(--color-accent));
+	box-shadow: none;
+}
+
+.calendar-view .fc .fc-highlight {
+	inset: 2px;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-highlight {
+	top: 1.5rem;
+	right: 0.375rem;
+	bottom: auto;
+	left: 0.375rem;
+	height: 1rem;
+}
+
+/* Timed selections already render an event mirror; hide its backing fill. */
+.calendar-view .fc .fc-timegrid-col-bg .fc-highlight {
+	inset: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.calendar-view .fc .fc-event-mirror {
+	color: var(--calendar-selection-color, var(--color-accent));
+}
+
+.calendar-view .fc .fc-event-mirror .fc-event-main {
+	color: inherit;
+}
+
+.calendar-view .fc .fc-event-mirror .calendar-event-selection-preview {
+	filter: invert(1) grayscale(1) contrast(100);
 }
 
 .calendar-view .fc .fc-event .calendar-event-content {

@@ -7,6 +7,7 @@ import {
 } from '@queries/calendar/mutations';
 import { type Accessor, createMemo } from 'solid-js';
 import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
+import { DEFAULT_CALENDAR_SOURCE } from './calendar-occurrence-mapper';
 import {
   calendarEventToEditorInitialValues,
   type EventEditorDisabledFields,
@@ -54,6 +55,7 @@ export function useEventEditor(props: UseEventEditorProps) {
         {
           id: event.calendar.id,
           label: event.calendar.name || 'Calendar',
+          color: event.calendar.color,
         },
       ];
     }
@@ -61,6 +63,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     return writableCalendars().map((calendar) => ({
       id: calendar.id,
       label: calendarDisplayLabel(calendar, spansInboxes()),
+      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
     }));
   });
 
