@@ -215,6 +215,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
  *
+ * `includeCalendar` adds the Google Calendar scope to the consent request and
+ * must only be passed from calendar entry points — plain Gmail connects must
+ * not ask for calendar access.
+ *
  * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
  * the Tauri auth plugin (the app never navigates away), and the link is
  * provisioned here directly with the `link_id` from the init response. A
@@ -250,10 +254,11 @@ export function useAddInboxFlow() {
     );
   };
 
-  const startNativeFlow = async () => {
-    const result = await initGmailLink.mutateAsync(
-      'macro://inbox-link-callback'
-    );
+  const startNativeFlow = async (includeCalendar: boolean) => {
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: 'macro://inbox-link-callback',
+      includeCalendar,
+    });
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
         showPaywall(PaywallKey.MULTI_INBOX);
@@ -292,14 +297,18 @@ export function useAddInboxFlow() {
     await completeNativeLink(result.value.link_id, false);
   };
 
-  return async () => {
+  return async (options?: { includeCalendar?: boolean }) => {
+    const includeCalendar = options?.includeCalendar ?? false;
     if (getNativeMobilePlatform() === 'ios') {
-      await startNativeFlow();
+      await startNativeFlow(includeCalendar);
       return;
     }
 
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: callbackUrl,
+      includeCalendar,
+    });
     if (result.isOk()) {
       window.location.href = result.value.authorization_url;
     } else if (isPaymentRequired(result.error)) {

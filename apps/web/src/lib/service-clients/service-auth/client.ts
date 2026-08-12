@@ -554,10 +554,25 @@ export const authServiceClient = {
    * Returns the OAuth authorization URL to redirect the browser to.
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
+   *
+   * Pass `includeCalendar` only from calendar entry points: it adds the Google
+   * Calendar scope to the consent request, and plain Gmail connects must not
+   * ask for calendar access.
    */
-  async initGmailLink(originalUrl?: string) {
-    const url = originalUrl
-      ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
+  async initGmailLink(
+    originalUrl?: string,
+    options?: { includeCalendar?: boolean }
+  ) {
+    const params = new URLSearchParams();
+    if (originalUrl) {
+      params.set('original_url', encodeURIComponent(originalUrl));
+    }
+    if (options?.includeCalendar) {
+      params.set('include_calendar', 'true');
+    }
+    const query = params.toString();
+    const url = query
+      ? `${authHost}/link/gmail?${query}`
       : `${authHost}/link/gmail`;
     return (
       await fetchWithAuth<

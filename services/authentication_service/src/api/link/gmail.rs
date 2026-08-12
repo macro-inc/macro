@@ -80,6 +80,8 @@ pub(crate) struct InitGmailLinkQueryParams {
     /// Once the frontend is update to NOT 2x urlencode this then this should be changed to
     /// `Option<Url>`
     original_url: Option<UrlEncoded<Url>>,
+    #[serde(default)]
+    include_calendar: bool,
 }
 
 /// Initiates a Gmail link for a user
@@ -88,7 +90,8 @@ pub(crate) struct InitGmailLinkQueryParams {
         operation_id = "init_gmail_link",
         path = "/link/gmail",
         params(
-            ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to.")
+            ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to."),
+            ("include_calendar" = Option<bool>, Query, description = "**OPTIONAL**. Also request the Google Calendar scope. Only honored when the deployment allows calendar scope requests; pass it from calendar entry points only, since the extra scope changes the Google consent screen.")
         ),
         responses(
             (status = 200, body=InitGmailLinkResponse),
@@ -106,7 +109,10 @@ pub async fn init_gmail_link_handler(
     ip_context: ClientIp,
     db_permissions: DbPermissionsExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
-    let Query(InitGmailLinkQueryParams { original_url }) = query;
+    let Query(InitGmailLinkQueryParams {
+        original_url,
+        include_calendar,
+    }) = query;
     let authorization = &db_permissions.authorization;
 
     enforce_inbox_paywall(
@@ -128,11 +134,8 @@ pub async fn init_gmail_link_handler(
         return Err(InitGmailLinkError::TooManyInProgressLinks);
     }
 
-    let authorization_scopes = if ctx.calendar_scope_enabled {
-        format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter())
-    } else {
-        GMAIL_SCOPES.to_string()
-    };
+    let authorization_scopes =
+        gmail_authorization_scopes(ctx.calendar_scope_enabled, include_calendar);
     let requested_google_scopes: Vec<String> = authorization_scopes
         .split_ascii_whitespace()
         .map(ToOwned::to_owned)
@@ -171,6 +174,17 @@ pub async fn init_gmail_link_handler(
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+/// The calendar scope must never ride along on plain Gmail connects: it is
+/// requested only when the caller explicitly opts in, and never when the
+/// deployment-level `CALENDAR_SCOPE_ENABLED` kill switch is off.
+fn gmail_authorization_scopes(calendar_scope_enabled: bool, include_calendar: bool) -> String {
+    if calendar_scope_enabled && include_calendar {
+        format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter())
+    } else {
+        GMAIL_SCOPES.to_string()
+    }
 }
 
 fn google_authorization_url(
