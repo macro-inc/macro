@@ -2,12 +2,12 @@
 
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
-    AiResponseMetadata, CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
-    ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
-    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
+    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -758,6 +758,53 @@ impl GraphqlReminderMetadata {
     }
 }
 
+/// GraphQL wrapper for calendar event reminder metadata.
+pub struct GraphqlCalendarEventReminderMetadata(CalendarEventReminderMetadata);
+
+/// Metadata for a due calendar event reminder.
+#[Object]
+impl GraphqlCalendarEventReminderMetadata {
+    /// Calendar event identifier.
+    async fn event_id(&self) -> ID {
+        ID(self.0.event_id.to_string())
+    }
+
+    /// Stable occurrence key of the event instance.
+    async fn occurrence_key(&self) -> &str {
+        &self.0.occurrence_key
+    }
+
+    /// Event display title.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// Timed event start in RFC 3339 format.
+    async fn starts_at(&self) -> Option<String> {
+        self.0.starts_at.map(|timestamp| timestamp.to_rfc3339())
+    }
+
+    /// Timed event end in RFC 3339 format.
+    async fn ends_at(&self) -> Option<String> {
+        self.0.ends_at.map(|timestamp| timestamp.to_rfc3339())
+    }
+
+    /// All-day event start date in ISO 8601 format.
+    async fn start_date(&self) -> Option<String> {
+        self.0.start_date.map(|date| date.to_string())
+    }
+
+    /// IANA time zone used to render the event.
+    async fn time_zone(&self) -> Option<&str> {
+        self.0.time_zone.as_deref()
+    }
+
+    /// Minutes before the event start when the alarm fires.
+    async fn minutes_before(&self) -> i32 {
+        self.0.minutes_before
+    }
+}
+
 /// GraphQL wrapper for AI response metadata.
 pub struct GraphqlAiResponseMetadata(AiResponseMetadata);
 
@@ -1019,6 +1066,8 @@ pub enum GraphqlNotifEvent {
     TaskAssigned(GraphqlTaskAssignedMetadata),
     /// Reminder metadata.
     Reminder(GraphqlReminderMetadata),
+    /// Calendar event reminder metadata.
+    CalendarEventReminder(GraphqlCalendarEventReminderMetadata),
     /// AI response metadata.
     AiResponse(GraphqlAiResponseMetadata),
     /// GitHub pull-request lifecycle metadata.
@@ -1078,6 +1127,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::TaskAssigned(GraphqlTaskAssignedMetadata(metadata))
             }
             NotifEvent::Reminder(metadata) => Self::Reminder(GraphqlReminderMetadata(metadata)),
+            NotifEvent::CalendarEventReminder(metadata) => {
+                Self::CalendarEventReminder(GraphqlCalendarEventReminderMetadata(metadata))
+            }
             NotifEvent::AiResponse(metadata) => {
                 Self::AiResponse(GraphqlAiResponseMetadata(metadata))
             }

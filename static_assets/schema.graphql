@@ -291,6 +291,44 @@ input GraphqlCalendarEventLiteral @oneOf {
 }
 
 """
+Metadata for a due calendar event reminder.
+"""
+type GraphqlCalendarEventReminderMetadata {
+	"""
+	Calendar event identifier.
+	"""
+	eventId: ID!
+	"""
+	Stable occurrence key of the event instance.
+	"""
+	occurrenceKey: String!
+	"""
+	Event display title.
+	"""
+	title: String!
+	"""
+	Timed event start in RFC 3339 format.
+	"""
+	startsAt: String
+	"""
+	Timed event end in RFC 3339 format.
+	"""
+	endsAt: String
+	"""
+	All-day event start date in ISO 8601 format.
+	"""
+	startDate: String
+	"""
+	IANA time zone used to render the event.
+	"""
+	timeZone: String
+	"""
+	Minutes before the event start when the alarm fires.
+	"""
+	minutesBefore: Int!
+}
+
+"""
 The two operands of a recursive `CallFilterExpr` binary expression.
 """
 input GraphqlCallBinaryExpr {
@@ -2464,7 +2502,7 @@ type GraphqlNewEmailMetadata {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
 
 """
 GraphQL channel type used by notification metadata.
