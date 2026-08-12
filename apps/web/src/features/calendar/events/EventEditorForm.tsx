@@ -61,6 +61,9 @@ type EditorSelectOption<Value extends string = string> = {
   label: string;
 };
 
+/** Option displayed by an event editor recurrence selector. */
+export type EventEditorRecurrenceOption = EditorSelectOption;
+
 const REPEAT_FREQUENCY_OPTIONS: EditorSelectOption<
   RecurrenceConfig['frequency']
 >[] = [
@@ -316,6 +319,132 @@ export function moveAllDayRange(
   };
 }
 
+export interface CreateEventEditorStateOptions {
+  initialValues: EventEditorInitialValues;
+  state: Accessor<EventEditorInitialValues>;
+}
+
+/** Shared recurrence and validation state used by both event editor layouts. */
+export function createEventEditorState(options: CreateEventEditorStateOptions) {
+  const initialLines = [...options.initialValues.recurrenceLines];
+  const initialConfig =
+    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
+  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
+
+  const startForRecurrence = createMemo(() => {
+    const start = options.state().start;
+    const parsed = options.state().allDay ? parseISO(start) : new Date(start);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  });
+  const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
+  const initialChoice = () => {
+    if (initialLines.length === 0) return 'none';
+    if (!initialConfig) return 'existing';
+    const initialStart = options.initialValues.allDay
+      ? parseISO(options.initialValues.start)
+      : new Date(options.initialValues.start);
+    const preset = recurrencePresetsFor(initialStart).find((candidate) =>
+      recurrenceConfigsEqual(candidate.config, initialConfig)
+    );
+    return preset?.id ?? 'custom';
+  };
+  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
+  const recurrenceOptions = createMemo<EventEditorRecurrenceOption[]>(() => {
+    const values = [
+      { value: 'none', label: 'Does not repeat' },
+      ...presets().map((preset) => ({
+        value: preset.id,
+        label: preset.label,
+      })),
+    ];
+    if (hasUnrepresentableRule) {
+      values.push({
+        value: 'existing',
+        label: `Custom: ${
+          formatRecurrenceDescription(initialLines) ?? 'existing rule'
+        } (unchanged)`,
+      });
+    }
+    values.push({ value: 'custom', label: 'Custom' });
+    return values;
+  });
+  const selectedRecurrenceOption = () =>
+    recurrenceOptions().find((option) => option.value === recurrenceChoice()) ??
+    recurrenceOptions()[0];
+  const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
+    initialConfig ?? defaultCustomConfig(startForRecurrence())
+  );
+  const changeRecurrenceChoice = (choice: string) => {
+    if (choice === 'custom') {
+      const seed =
+        presets().find((preset) => preset.id === recurrenceChoice())?.config ??
+        initialConfig ??
+        defaultCustomConfig(startForRecurrence());
+      setCustomConfig(seed);
+    }
+    setRecurrenceChoice(choice);
+  };
+  const customValid = createMemo(() => {
+    if (recurrenceChoice() !== 'custom') return true;
+    const config = customConfig();
+    if (!Number.isInteger(config.interval) || config.interval < 1) return false;
+    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
+      return false;
+    }
+    if (config.ends.kind === 'on') return config.ends.date !== '';
+    if (config.ends.kind === 'after') {
+      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
+    }
+    return true;
+  });
+  const recurrenceLines = (): string[] | undefined => {
+    const choice = recurrenceChoice();
+    if (choice === 'existing') return undefined;
+    if (choice === 'none') return [];
+    if (choice === 'custom') {
+      return buildRecurrenceLines(customConfig(), options.state().allDay);
+    }
+    const preset = presets().find((candidate) => candidate.id === choice);
+    return preset
+      ? buildRecurrenceLines(preset.config, options.state().allDay)
+      : undefined;
+  };
+  const dateRangeError = createMemo(() => {
+    const current = options.state();
+    if (!current.start || !current.end) return undefined;
+    if (current.allDay) {
+      return current.end < current.start
+        ? 'End date cannot be before the start date.'
+        : undefined;
+    }
+    const start = new Date(current.start);
+    const end = new Date(current.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return undefined;
+    }
+    return end <= start ? 'End time must be after the start time.' : undefined;
+  });
+  const eventTime = createMemo(() => buildEventTime(options.state()));
+  const canSave = () =>
+    options.state().title.trim() !== '' &&
+    eventTime() !== undefined &&
+    customValid();
+
+  return {
+    startForRecurrence,
+    recurrenceChoice,
+    recurrenceOptions,
+    selectedRecurrenceOption,
+    customConfig,
+    setCustomConfig,
+    changeRecurrenceChoice,
+    recurrenceLines,
+    dateRangeError,
+    eventTime,
+    canSave,
+  };
+}
+
 export interface EventEditorFormProps {
   initialValues?: EventEditorInitialValues;
   disabledFields?: EventEditorDisabledFields;
@@ -338,11 +467,9 @@ export function EventEditorForm(props: EventEditorFormProps) {
   const initialValues =
     props.initialValues ?? defaultEditorInitialValues(new Date());
 
-  const initialLines = [...initialValues.recurrenceLines];
-
   const [state, setState] = createSignal<EventEditorInitialValues>({
     ...initialValues,
-    recurrenceLines: [...initialLines],
+    recurrenceLines: [...initialValues.recurrenceLines],
   });
 
   const [selectedGuests, setSelectedGuests] = createSignal<
@@ -358,71 +485,20 @@ export function EventEditorForm(props: EventEditorFormProps) {
   const effectiveCalendarId = () =>
     state().calendarId ?? props.calendarOptions[0]?.id;
 
-  const initialConfig =
-    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
-
-  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
-
-  const startForRecurrence = createMemo(() => {
-    const start = state().start;
-    const parsed = state().allDay ? parseISO(start) : new Date(start);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  });
-
-  const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
-
-  const initialChoice = () => {
-    if (initialLines.length === 0) return 'none';
-    if (!initialConfig) return 'existing';
-    const initialStart = initialValues.allDay
-      ? parseISO(initialValues.start)
-      : new Date(initialValues.start);
-    const preset = recurrencePresetsFor(initialStart).find((candidate) =>
-      recurrenceConfigsEqual(candidate.config, initialConfig)
-    );
-    return preset?.id ?? 'custom';
-  };
-
-  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
-
-  const recurrenceOptions = createMemo<EditorSelectOption[]>(() => {
-    const options = [
-      { value: 'none', label: 'Does not repeat' },
-      ...presets().map((preset) => ({
-        value: preset.id,
-        label: preset.label,
-      })),
-    ];
-    if (hasUnrepresentableRule) {
-      options.push({
-        value: 'existing',
-        label: `Custom: ${
-          formatRecurrenceDescription(initialLines) ?? 'existing rule'
-        } (unchanged)`,
-      });
-    }
-    options.push({ value: 'custom', label: 'Custom…' });
-    return options;
-  });
-
-  const selectedRecurrenceOption = () =>
-    recurrenceOptions().find((option) => option.value === recurrenceChoice()) ??
-    recurrenceOptions()[0];
-
-  const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
-    initialConfig ?? defaultCustomConfig(startForRecurrence())
-  );
-
-  const changeRecurrenceChoice = (choice: string) => {
-    if (choice === 'custom') {
-      const seed =
-        presets().find((preset) => preset.id === recurrenceChoice())?.config ??
-        initialConfig ??
-        defaultCustomConfig(startForRecurrence());
-      setCustomConfig(seed);
-    }
-    setRecurrenceChoice(choice);
-  };
+  const editorState = createEventEditorState({ initialValues, state });
+  const {
+    startForRecurrence,
+    recurrenceChoice,
+    recurrenceOptions,
+    selectedRecurrenceOption,
+    customConfig,
+    setCustomConfig,
+    changeRecurrenceChoice,
+    recurrenceLines,
+    dateRangeError,
+    eventTime,
+    canSave,
+  } = editorState;
 
   const selectedFrequencyOption = () =>
     REPEAT_FREQUENCY_OPTIONS.find(
@@ -433,46 +509,6 @@ export function EventEditorForm(props: EventEditorFormProps) {
     props.calendarOptions.find(
       (option) => option.id === effectiveCalendarId()
     ) ?? props.calendarOptions[0];
-
-  const customValid = createMemo(() => {
-    if (recurrenceChoice() !== 'custom') return true;
-
-    const config = customConfig();
-
-    if (!Number.isInteger(config.interval) || config.interval < 1) {
-      return false;
-    }
-
-    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
-      return false;
-    }
-
-    if (config.ends.kind === 'on') return config.ends.date !== '';
-
-    if (config.ends.kind === 'after') {
-      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
-    }
-
-    return true;
-  });
-
-  /** `undefined` leaves an unrepresentable stored rule untouched. */
-  const recurrenceLines = (): string[] | undefined => {
-    const choice = recurrenceChoice();
-    if (choice === 'existing') return undefined;
-
-    if (choice === 'none') return [];
-
-    if (choice === 'custom') {
-      return buildRecurrenceLines(customConfig(), state().allDay);
-    }
-
-    const preset = presets().find((candidate) => candidate.id === choice);
-
-    return preset
-      ? buildRecurrenceLines(preset.config, state().allDay)
-      : undefined;
-  };
 
   const toggleWeekday = (code: WeekdayCode) => {
     setCustomConfig((config) => ({
@@ -485,28 +521,6 @@ export function EventEditorForm(props: EventEditorFormProps) {
 
   const setEnds = (ends: RecurrenceConfig['ends']) =>
     setCustomConfig((config) => ({ ...config, ends }));
-
-  const dateRangeError = createMemo(() => {
-    const current = state();
-    if (!current.start || !current.end) return undefined;
-
-    if (current.allDay) {
-      return current.end < current.start
-        ? 'End date cannot be before the start date.'
-        : undefined;
-    }
-
-    const start = new Date(current.start);
-    const end = new Date(current.end);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return undefined;
-    }
-
-    return end <= start ? 'End time must be after the start time.' : undefined;
-  });
-
-  const eventTime = createMemo(() => buildEventTime(state()));
-  const canSave = () => eventTime() !== undefined && customValid();
 
   const submit = () => {
     const time = eventTime();
@@ -747,23 +761,25 @@ export function EventEditorForm(props: EventEditorFormProps) {
                   />
                   Never
                 </label>
-                <label class="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name={recurrenceEndsName}
-                    checked={customConfig().ends.kind === 'on'}
-                    onChange={() =>
-                      setEnds({
-                        kind: 'on',
-                        date: format(
-                          addMonths(startForRecurrence(), 3),
-                          DATE_VALUE
-                        ),
-                      })
-                    }
-                    disabled={inputIsDisabled('recurrence')}
-                  />
-                  On
+                <div class="flex items-center gap-2">
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={recurrenceEndsName}
+                      checked={customConfig().ends.kind === 'on'}
+                      onChange={() =>
+                        setEnds({
+                          kind: 'on',
+                          date: format(
+                            addMonths(startForRecurrence(), 3),
+                            DATE_VALUE
+                          ),
+                        })
+                      }
+                      disabled={inputIsDisabled('recurrence')}
+                    />
+                    On
+                  </label>
                   <Show when={customConfig().ends.kind === 'on'}>
                     <input
                       type="date"
@@ -788,16 +804,18 @@ export function EventEditorForm(props: EventEditorFormProps) {
                       disabled={inputIsDisabled('recurrence')}
                     />
                   </Show>
-                </label>
-                <label class="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name={recurrenceEndsName}
-                    checked={customConfig().ends.kind === 'after'}
-                    onChange={() => setEnds({ kind: 'after', count: 13 })}
-                    disabled={inputIsDisabled('recurrence')}
-                  />
-                  After
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name={recurrenceEndsName}
+                      checked={customConfig().ends.kind === 'after'}
+                      onChange={() => setEnds({ kind: 'after', count: 13 })}
+                      disabled={inputIsDisabled('recurrence')}
+                    />
+                    After
+                  </label>
                   <Show when={customConfig().ends.kind === 'after'}>
                     <input
                       type="number"
@@ -822,9 +840,9 @@ export function EventEditorForm(props: EventEditorFormProps) {
                       class={cn('settings-input w-20', EDITOR_INPUT_CLASS)}
                       disabled={inputIsDisabled('recurrence')}
                     />
-                    occurrences
+                    <span>occurrences</span>
                   </Show>
-                </label>
+                </div>
               </div>
             </div>
           </Show>

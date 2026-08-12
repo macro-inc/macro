@@ -8,32 +8,15 @@ import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
 import {
+  dateLabelFormatter,
   EventTimeInput,
+  formatLocalDate,
+  parseLocalDate,
   splitLocalDateTime,
+  timeLabelFormatter,
   withLocalDate,
   withLocalTime,
 } from './EventDateTimeField';
-
-const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function parseLocalDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return undefined;
-  const date = new Date(year, month - 1, day);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function formatLocalDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
 
 function formatTime(value: string) {
   const [hour, minute] = value.split(':').map(Number);

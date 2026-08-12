@@ -14,7 +14,7 @@ import type {
 import { Select as KobalteSelect } from '@kobalte/core/select';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { type Component, type JSX, splitProps } from 'solid-js';
+import { type Component, createSignal, type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
 import type { SurfaceProps } from './Surface';
@@ -89,7 +89,7 @@ function resolvePortalMount(
 }
 
 function SelectContent(props: SelectContentProps) {
-  let searchRef: HTMLDivElement | undefined;
+  const [searchRef, setSearchRef] = createSignal<HTMLDivElement>();
   const [local, rest] = splitProps(props, [
     'class',
     'children',
@@ -99,9 +99,9 @@ function SelectContent(props: SelectContentProps) {
   ]);
   return (
     <>
-      <div class="hidden" ref={searchRef} />
+      <div class="hidden" ref={setSearchRef} />
       <KobalteSelect.Portal
-        mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
+        mount={resolvePortalMount(searchRef(), local.mount, local.portalScope)}
       >
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content

@@ -31,7 +31,7 @@ export function EventComposer(props: {
       <EventComposerForm
         initialValues={editor.initialValues() ?? props.initialValues}
         isEdit={isEdit()}
-        disabledFields={editor.disabledFields}
+        disabledFields={editor.disabledFields()}
         calendarOptions={editor.calendarOptions()}
         guestOptions={editor.guestOptions}
         showRecurringEditNotice={editor.showRecurringEditNotice()}

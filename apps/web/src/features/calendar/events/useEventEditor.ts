@@ -121,10 +121,13 @@ export function useEventEditor(props: UseEventEditorProps) {
     isEdit() &&
     ((props.event()?.recurrenceLines.length ?? 0) > 0 ||
       props.event()?.recurrenceId !== undefined);
+  const disabledFields = createMemo(() =>
+    isEdit() ? EDIT_DISABLED_FIELDS : undefined
+  );
 
   return {
     initialValues,
-    disabledFields: isEdit() ? EDIT_DISABLED_FIELDS : undefined,
+    disabledFields,
     calendarOptions,
     guestOptions,
     showRecurringEditNotice,

@@ -14,11 +14,11 @@ export interface EventTimeOption {
   label: string;
 }
 
-const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
+export const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
   minute: '2-digit',
 });
-const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
+export const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   month: 'short',
   year: 'numeric',
@@ -50,7 +50,7 @@ export function withLocalDate(value: string, date: string) {
   return `${date}T${splitLocalDateTime(value).time}`;
 }
 
-function parseLocalDate(value: string) {
+export function parseLocalDate(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return undefined;
   const date = new Date(year, month - 1, day);
@@ -65,7 +65,7 @@ function parseLocalDate(value: string) {
   return date;
 }
 
-function formatLocalDate(date: Date) {
+export function formatLocalDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
@@ -443,6 +443,10 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
     const parsed = parseTimeInput(value);
     if (parsed) props.onChange(withLocalTime(props.value, parsed));
   };
+  const commitTimeInput = (value: string) => {
+    updateTimeInput(value);
+    setTimeDraft(undefined);
+  };
   return (
     <Popover
       anchorRef={() => anchorRef}
@@ -515,10 +519,10 @@ export function EventDateTimeField(props: EventDateTimeFieldProps) {
           }}
           onClick={openPopup}
           onInput={(event) => updateTimeInput(event.currentTarget.value)}
-          onBlur={(event) => updateTimeInput(event.currentTarget.value)}
+          onBlur={(event) => commitTimeInput(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
-              updateTimeInput(event.currentTarget.value);
+              commitTimeInput(event.currentTarget.value);
             }
           }}
         />

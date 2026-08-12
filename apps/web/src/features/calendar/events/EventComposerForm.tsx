@@ -1,10 +1,8 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
-import { parseISO } from 'date-fns';
 import {
   type Accessor,
   createEffect,
-  createMemo,
   createSignal,
   createUniqueId,
   Show,
@@ -17,8 +15,8 @@ import {
   EventComposerRecurrencePill,
 } from './EventComposerPropertyPills';
 import {
-  buildEventTime,
   convertTimesForAllDay,
+  createEventEditorState,
   defaultEditorInitialValues,
   type EventEditorCalendarOption,
   type EventEditorDisabledFields,
@@ -30,21 +28,7 @@ import {
   moveAllDayRange,
   type SelectedEventEditorGuest,
 } from './EventEditorForm';
-import {
-  buildRecurrenceLines,
-  defaultCustomConfig,
-  parseRecurrenceConfig,
-  type RecurrenceConfig,
-  recurrenceConfigsEqual,
-  recurrencePresetsFor,
-} from './recurrence-editor';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
-import { formatRecurrenceDescription } from './recurrence-description';
-
-type ComposerSelectOption = {
-  value: string;
-  label: string;
-};
 
 export interface EventComposerFormProps {
   initialValues?: EventEditorInitialValues;
@@ -66,17 +50,12 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
 
-  const isEdit = () => props.isEdit ?? props.initialValues !== undefined;
+  const isEdit = () => props.isEdit ?? false;
   const initialValues =
     props.initialValues ?? defaultEditorInitialValues(new Date());
-  const initialLines = [...initialValues.recurrenceLines];
-  const initialConfig =
-    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
-  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
-
   const [state, setState] = createSignal<EventEditorInitialValues>({
     ...initialValues,
-    recurrenceLines: [...initialLines],
+    recurrenceLines: [...initialValues.recurrenceLines],
   });
 
   const [selectedGuests, setSelectedGuests] = createSignal<
@@ -88,55 +67,19 @@ export function EventComposerForm(props: EventComposerFormProps) {
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     props.pending || fieldIsReadOnly(field);
 
-  const startForRecurrence = createMemo(() => {
-    const start = state().start;
-    const parsed = state().allDay ? parseISO(start) : new Date(start);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  });
-
-  const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
-
-  const initialChoice = () => {
-    if (initialLines.length === 0) return 'none';
-    if (!initialConfig) return 'existing';
-    const initialStart = initialValues.allDay
-      ? parseISO(initialValues.start)
-      : new Date(initialValues.start);
-    const preset = recurrencePresetsFor(initialStart).find((candidate) =>
-      recurrenceConfigsEqual(candidate.config, initialConfig)
-    );
-    return preset?.id ?? 'custom';
-  };
-
-  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
-
-  const recurrenceOptions = createMemo<ComposerSelectOption[]>(() => {
-    const options = [
-      { value: 'none', label: 'Does not repeat' },
-      ...presets().map((preset) => ({
-        value: preset.id,
-        label: preset.label,
-      })),
-    ];
-    if (hasUnrepresentableRule) {
-      options.push({
-        value: 'existing',
-        label: `Custom: ${
-          formatRecurrenceDescription(initialLines) ?? 'existing rule'
-        } (unchanged)`,
-      });
-    }
-    options.push({ value: 'custom', label: 'Custom' });
-    return options;
-  });
-
-  const selectedRecurrenceOption = () =>
-    recurrenceOptions().find((option) => option.value === recurrenceChoice()) ??
-    recurrenceOptions()[0];
-
-  const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
-    initialConfig ?? defaultCustomConfig(startForRecurrence())
-  );
+  const {
+    startForRecurrence,
+    recurrenceChoice,
+    recurrenceOptions,
+    selectedRecurrenceOption,
+    customConfig,
+    setCustomConfig,
+    changeRecurrenceChoice,
+    recurrenceLines,
+    dateRangeError,
+    eventTime,
+    canSave,
+  } = createEventEditorState({ initialValues, state });
 
   const effectiveCalendarId = () =>
     state().calendarId ?? props.calendarOptions[0]?.id;
@@ -153,64 +96,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const changeCalendar = (calendarId: string) =>
     setState({ ...state(), calendarId });
-
-  const changeRecurrenceChoice = (choice: string) => {
-    if (choice === 'custom') {
-      const seed =
-        presets().find((preset) => preset.id === recurrenceChoice())?.config ??
-        initialConfig ??
-        defaultCustomConfig(startForRecurrence());
-      setCustomConfig(seed);
-    }
-    setRecurrenceChoice(choice);
-  };
-
-  const customValid = createMemo(() => {
-    if (recurrenceChoice() !== 'custom') return true;
-    const config = customConfig();
-    if (!Number.isInteger(config.interval) || config.interval < 1) return false;
-    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
-      return false;
-    }
-    if (config.ends.kind === 'on') return config.ends.date !== '';
-    if (config.ends.kind === 'after') {
-      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
-    }
-    return true;
-  });
-
-  const recurrenceLines = (): string[] | undefined => {
-    const choice = recurrenceChoice();
-    if (choice === 'existing') return undefined;
-    if (choice === 'none') return [];
-    if (choice === 'custom') {
-      return buildRecurrenceLines(customConfig(), state().allDay);
-    }
-    const preset = presets().find((candidate) => candidate.id === choice);
-    return preset
-      ? buildRecurrenceLines(preset.config, state().allDay)
-      : undefined;
-  };
-
-  const dateRangeError = createMemo(() => {
-    const current = state();
-    if (!current.start || !current.end) return undefined;
-    if (current.allDay) {
-      return current.end < current.start
-        ? 'End date cannot be before the start date.'
-        : undefined;
-    }
-    const start = new Date(current.start);
-    const end = new Date(current.end);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return undefined;
-    }
-    return end <= start ? 'End time must be after the start time.' : undefined;
-  });
-
-  const eventTime = createMemo(() => buildEventTime(state()));
-  const canSave = () =>
-    state().title.trim() !== '' && eventTime() !== undefined && customValid();
 
   const submit = () => {
     const time = eventTime();

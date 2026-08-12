@@ -233,9 +233,9 @@ export interface CalendarAttendeeListProps {
 
 /** Resolved attendee rows shared by event details and read-only guest views. */
 export function CalendarAttendeeList(props: CalendarAttendeeListProps) {
-  const attendees = props.attendees.map(resolveCalendarAttendee);
   const sortedAttendees = createMemo(() =>
-    attendees
+    props.attendees
+      .map(resolveCalendarAttendee)
       .map((item) => ({ item, name: item.displayName() }))
       .toSorted((first, second) => {
         if (
