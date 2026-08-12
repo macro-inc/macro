@@ -8,7 +8,7 @@ use graphql_email::{
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
-    GraphqlSoupNotification, SoupNotificationEdgeReader, load_entity_notifications,
+    GraphqlNotification, SoupNotificationEdgeReader, load_entity_notifications,
 };
 use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
@@ -53,7 +53,7 @@ where
     AR: EntityPermissionEdgeReader,
 {
     type Property = GraphqlProperty;
-    type Notification = GraphqlSoupNotification;
+    type Notification = GraphqlNotification;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
@@ -126,7 +126,7 @@ where
     async fn notifications(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+    ) -> async_graphql::Result<Vec<GraphqlNotification>> {
         self.resolve_notifications(ctx).await
     }
 

@@ -10,7 +10,7 @@ use notification::domain::{
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::objects::GraphqlSoupNotification;
+use crate::objects::GraphqlNotification;
 
 #[cfg(test)]
 mod test;
@@ -125,7 +125,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: UpdateNotificationsInput,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+    ) -> async_graphql::Result<Vec<GraphqlNotification>> {
         let user_id = require_authenticated_user(ctx)?;
         let notification_ids = input
             .notification_ids
@@ -140,7 +140,7 @@ where
 
         Ok(notifications
             .into_iter()
-            .map(GraphqlSoupNotification::from)
+            .map(GraphqlNotification::from)
             .collect())
     }
 }

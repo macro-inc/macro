@@ -12,15 +12,15 @@ use crate::{
 };
 
 /// GraphQL notification attached to a Soup entity.
-pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
+pub struct GraphqlNotification(UserNotificationRow<serde_json::Value>);
 
-impl From<UserNotificationRow<serde_json::Value>> for GraphqlSoupNotification {
+impl From<UserNotificationRow<serde_json::Value>> for GraphqlNotification {
     fn from(value: UserNotificationRow<serde_json::Value>) -> Self {
         Self(value)
     }
 }
 
-impl GraphqlSoupNotification {
+impl GraphqlNotification {
     /// Converts a recipient-scoped realtime payload into the shared notification GraphQL type.
     pub(crate) fn from_realtime(
         owner_id: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -70,7 +70,7 @@ impl GraphqlSoupNotification {
 
 /// A notification associated with a Soup entity.
 #[Object]
-impl GraphqlSoupNotification {
+impl GraphqlNotification {
     /// The notification identifier.
     async fn id(&self) -> ID {
         ID(self.0.notification_id.to_string())
@@ -152,7 +152,7 @@ impl GraphqlSoupNotification {
 pub async fn load_entity_notifications<'a, R>(
     ctx: &'a Context<'a>,
     entity: model_entity::Entity<'static>,
-) -> async_graphql::Result<Vec<GraphqlSoupNotification>>
+) -> async_graphql::Result<Vec<GraphqlNotification>>
 where
     R: SoupNotificationEdgeReader,
 {
@@ -162,8 +162,5 @@ where
         .await
         .map_err(|err| async_graphql::Error::new(err.to_string()))?
         .unwrap_or_default();
-    Ok(notifications
-        .into_iter()
-        .map(GraphqlSoupNotification)
-        .collect())
+    Ok(notifications.into_iter().map(GraphqlNotification).collect())
 }

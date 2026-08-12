@@ -23,5 +23,5 @@ pub use mutations::{
     NotificationMutationService, UpdateNotificationsInput,
 };
 pub use notification_event::GraphqlNotifEvent;
-pub use objects::{GraphqlSoupNotification, load_entity_notifications};
+pub use objects::{GraphqlNotification, load_entity_notifications};
 pub use subscriptions::{NotificationSubscriptionRoot, subscribe_to_notifications};
