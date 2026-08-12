@@ -90,9 +90,21 @@ fn soup_response_schema_exposes_frontend_fields() {
         "soupUpdates: [SoupPatch!]!",
         "notificationUpdates: GraphqlRealtimeNotification!",
         "type GraphqlRealtimeNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
+            .count(),
+        2,
+        "realtime and Soup notification metadata must both use the typed union"
+    );
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),

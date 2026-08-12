@@ -1,9 +1,12 @@
-use async_graphql::{Context, ID, Json, Object, dataloader::DataLoader};
+use async_graphql::{Context, ID, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
+use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
-use serde_json::Value;
 
-use crate::loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader};
+use crate::{
+    GraphqlNotifEvent,
+    loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader},
+};
 
 /// GraphQL notification attached to a Soup entity.
 pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
@@ -73,8 +76,15 @@ impl GraphqlSoupNotification {
     }
 
     /// Event-specific notification metadata.
-    async fn metadata(&self) -> Json<Value> {
-        Json(self.0.notification_metadata.clone())
+    async fn metadata(&self) -> async_graphql::Result<GraphqlNotifEvent> {
+        let metadata = self
+            .0
+            .clone()
+            .into_tagged()
+            .deserialize_metadata::<NotifEvent>()
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?
+            .notification_metadata;
+        Ok(metadata.into())
     }
 }
 

@@ -3,13 +3,15 @@ mod test;
 
 use std::sync::Arc;
 
-use async_graphql::{Context, ID, Json, Object, Subscription};
+use async_graphql::{Context, ID, Object, Subscription};
 use graphql_common::require_authenticated_user;
 use model_notifications::NotifEvent;
 use notification::domain::{
     models::queue_message::RealtimeNotif, ports::WebSocketNotificationSubscriptionService,
 };
 use tokio_stream::{Stream, StreamExt as _, wrappers::ReceiverStream};
+
+use crate::GraphqlNotifEvent;
 
 /// GraphQL representation of a realtime notification.
 pub struct GraphqlRealtimeNotification(Arc<RealtimeNotif<NotifEvent>>);
@@ -79,8 +81,8 @@ impl GraphqlRealtimeNotification {
     }
 
     /// Event-specific notification metadata.
-    async fn metadata(&self) -> Json<NotifEvent> {
-        Json(self.0.notification_metadata.clone())
+    async fn metadata(&self) -> GraphqlNotifEvent {
+        self.0.notification_metadata.clone().into()
     }
 }
 

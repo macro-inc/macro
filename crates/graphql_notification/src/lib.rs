@@ -7,6 +7,8 @@
 mod loaders;
 /// GraphQL notification mutation adapter.
 mod mutations;
+/// Typed GraphQL notification event output models.
+mod notification_event;
 /// GraphQL notification object and edge resolver.
 mod objects;
 /// GraphQL realtime notification subscription adapter.
@@ -20,6 +22,7 @@ pub use mutations::{
     GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationMutationRoot,
     NotificationMutationService, UpdateNotificationsInput,
 };
+pub use notification_event::GraphqlNotifEvent;
 pub use objects::{GraphqlSoupNotification, load_entity_notifications};
 pub use subscriptions::{
     GraphqlRealtimeNotification, NotificationSubscriptionRoot, subscribe_to_notifications,
