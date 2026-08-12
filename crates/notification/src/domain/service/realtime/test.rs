@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct TestNotification {
     kind: String,
 }
@@ -44,7 +44,7 @@ async fn distributes_notifications_to_every_recipient_subscription() {
             Err(rootcause::report!("transient receive failure")),
             Ok(WebSocketNotificationMetadata {
                 recipients: vec![one.clone(), two.clone()],
-                notification: notification.clone(),
+                notification,
             }),
         ])),
         calls: Arc::clone(&receive_calls),
@@ -68,9 +68,12 @@ async fn distributes_notifications_to_every_recipient_subscription() {
         2 + MAX_RECEIVE_ATTEMPTS,
         "a successful notification resets the receive retry strategy"
     );
-    assert_eq!(one_first.recv().await, Some(notification.clone()));
-    assert_eq!(one_second.recv().await, Some(notification.clone()));
-    assert_eq!(two_receiver.recv().await, Some(notification));
+    let one_first = one_first.recv().await.expect("first subscriber receives");
+    let one_second = one_second.recv().await.expect("second subscriber receives");
+    let two = two_receiver.recv().await.expect("other user receives");
+    assert_eq!(one_first.kind, "channel_mention");
+    assert!(Arc::ptr_eq(&one_first, &one_second));
+    assert!(Arc::ptr_eq(&one_first, &two));
 }
 
 #[tokio::test(start_paused = true)]
@@ -97,9 +100,7 @@ async fn ignores_recipients_without_subscribers() {
     .expect_err("fake consumer eventually stops");
 
     assert_eq!(
-        receiver.recv().await,
-        Some(TestNotification {
-            kind: "test".to_string(),
-        })
+        receiver.recv().await.expect("subscriber receives").kind,
+        "test"
     );
 }

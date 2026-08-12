@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -34,16 +34,16 @@ fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
 pub struct WebSocketNotificationConsumerService<C, T>
 where
     C: WebSocketNotificationConsumer<T>,
-    T: Clone + Send + 'static,
+    T: Send + Sync + 'static,
 {
     consumer: C,
-    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, T>,
+    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, Arc<T>>,
 }
 
 impl<C, T> WebSocketNotificationConsumerService<C, T>
 where
     C: WebSocketNotificationConsumer<T>,
-    T: Clone + Send + 'static,
+    T: Send + Sync + 'static,
 {
     /// Creates a WebSocket notification consumer service backed by `consumer`.
     pub fn new(consumer: C) -> Self {
@@ -58,7 +58,10 @@ where
     /// The returned receiver is closed if its buffer fills, ensuring a slow subscriber cannot
     /// delay the shared consumer or other subscribers.
     #[must_use]
-    pub fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<T> {
+    pub fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<Arc<T>> {
         self.broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
     }
@@ -78,9 +81,13 @@ where
                 .context(format!(
                     "failed to receive WebSocket notification after {MAX_RECEIVE_ATTEMPTS} attempts"
                 ))?;
+            let notification = Arc::new(notification);
 
             for recipient in recipients {
-                match self.broadcasts.publish(&recipient, notification.clone()) {
+                match self
+                    .broadcasts
+                    .publish(&recipient, Arc::clone(&notification))
+                {
                     Ok(subscriber_count) => tracing::trace!(
                         subscriber_count,
                         user_id = %recipient,
@@ -100,9 +107,9 @@ impl<C, T> WebSocketNotificationSubscriptionService<T>
     for WebSocketNotificationConsumerService<C, T>
 where
     C: WebSocketNotificationConsumer<T>,
-    T: Clone + Send + 'static,
+    T: Send + Sync + 'static,
 {
-    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<T> {
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<Arc<T>> {
         WebSocketNotificationConsumerService::subscribe(self, user_id)
     }
 }
