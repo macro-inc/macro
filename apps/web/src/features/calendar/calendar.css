@@ -223,7 +223,7 @@
 
 .calendar-view .fc .fc-event .calendar-event-content {
 	container-type: inline-size;
-	border-radius: 0.25rem;
+	border-radius: inherit;
 	transition: background-color 120ms ease-out;
 }
 
