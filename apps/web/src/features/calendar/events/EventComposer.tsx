@@ -43,7 +43,6 @@ export function EventComposer(props: { event?: CalendarEvent }) {
         calendarOptions={editor.calendarOptions()}
         guestOptions={editor.guestOptions}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
-        attendees={props.event?.attendees}
         pending={editor.pending()}
         onCancel={close}
         onSubmit={editor.save}

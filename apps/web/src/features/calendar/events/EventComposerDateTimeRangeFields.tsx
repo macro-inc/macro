@@ -98,7 +98,7 @@ export function EventComposerDateTimeRangeFields(
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         class={cn(
-          'inline-flex min-h-8 w-fit max-w-full self-start items-center gap-2 rounded-lg bg-transparent px-2 text-left text-xs text-ink transition-colors hover:bg-hover focus-visible:ring focus-visible:ring-accent/10',
+          'group inline-flex min-h-8 w-fit max-w-full self-start items-center gap-2 rounded-lg bg-transparent px-2 text-left text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:text-ink focus-visible:ring focus-visible:ring-accent/10',
           open() && 'bg-hover',
           props.invalid && 'text-failure'
         )}
@@ -107,11 +107,13 @@ export function EventComposerDateTimeRangeFields(
         <CalendarBlankIcon
           class={cn(
             'size-3.5 shrink-0',
-            props.invalid ? 'text-failure' : 'text-ink-extra-muted'
+            props.invalid
+              ? 'text-failure'
+              : 'text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted'
           )}
         />
         <span class="min-w-0 truncate">{rangeLabel()}</span>
-        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted group-hover:text-ink-muted group-focus-visible:text-ink-muted" />
       </button>
 
       <Popover.Portal>

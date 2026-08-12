@@ -9,7 +9,6 @@ import MapPinIcon from '@phosphor/map-pin.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
-import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { cn, Layer, Select, Tooltip } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
@@ -17,10 +16,10 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
+  For,
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CalendarAttendeeList } from './EventDetails';
 import {
   type EventEditorCalendarOption,
   type EventEditorGuestOption,
@@ -34,7 +33,7 @@ const GUEST_NAME_COLLATOR = new Intl.Collator(undefined, {
 const GUEST_OPTION_HEIGHT_PX = 36;
 const GUEST_OPTION_MAX_VISIBLE_COUNT = 5;
 const PROPERTY_TRIGGER_CLASS =
-  'flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight hover:bg-hover focus-visible:bg-active focus-visible:ring-accent/10 data-expanded:bg-hover';
+  'flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
 
 export type EventComposerSelectOption = {
   value: string;
@@ -56,7 +55,6 @@ function guestPickerItemValue(item: GuestPickerItem) {
 export interface EventComposerGuestsPillProps {
   options: Accessor<EventEditorGuestOption[]>;
   selected: SelectedEventEditorGuest[];
-  attendees?: CalendarAttendee[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -98,7 +96,9 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
           <span
             class={cn(
               'min-w-0 truncate',
-              props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
+              props.selected.length > 0
+                ? 'text-current'
+                : 'text-ink-extra-muted'
             )}
           >
             {guestPropertyLabel(props.selected)}
@@ -111,25 +111,36 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
           <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 text-sm shadow-menu menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
             <Show
-              when={(props.attendees?.length ?? 0) > 0}
+              when={props.selected.length > 0}
               fallback={
                 <p class="px-2 py-4 text-center text-sm text-ink-muted">
                   No guests
                 </p>
               }
             >
-              <div class="flex max-h-64 flex-col gap-2 overflow-y-auto px-2">
-                <CalendarAttendeeList
-                  attendees={props.attendees ?? []}
-                  organizerFirst
-                  nameClass="text-xs"
-                  itemClass={(attendee) =>
-                    cn(
-                      'py-2',
-                      attendee.isOrganizer && 'border-b border-edge-muted'
-                    )
-                  }
-                />
+              <div class="flex max-h-64 flex-col overflow-y-auto">
+                <For each={props.selected}>
+                  {(guest) => (
+                    <div class="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-ink">
+                      <UserIcon
+                        id={guest.id}
+                        size="sm"
+                        isDeleted={false}
+                        suppressClick
+                      />
+                      <div class="min-w-0 flex-1 truncate text-sm">
+                        {guestDisplayName(guest)}
+                        <Show
+                          when={guestDisplayName(guest) !== guestEmail(guest)}
+                        >
+                          <span class="ml-[0.5em] text-ink-muted">
+                            {guestEmail(guest)}
+                          </span>
+                        </Show>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </Popover.Content>
@@ -277,7 +288,9 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             <span
               class={cn(
                 'min-w-0 truncate',
-                props.selected.length > 0 ? 'text-ink' : 'text-ink-extra-muted'
+                props.selected.length > 0
+                  ? 'text-current'
+                  : 'text-ink-extra-muted'
               )}
             >
               {propertyLabel()}
@@ -492,7 +505,7 @@ export function EventComposerLocationPill(
           <span
             class={cn(
               'min-w-0 truncate',
-              props.value ? 'text-ink' : 'text-ink-extra-muted'
+              props.value ? 'text-current' : 'text-ink-extra-muted'
             )}
           >
             {props.value || 'Add location'}

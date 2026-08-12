@@ -1,5 +1,4 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
-import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Button, cn, Select } from '@ui';
 import { addMonths, format, parseISO } from 'date-fns';
 import {
@@ -64,7 +63,6 @@ export interface EventComposerFormProps {
   calendarOptions: EventEditorCalendarOption[];
   guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
-  attendees?: CalendarAttendee[];
   pending: boolean;
   class?: string;
   onCancel: () => void;
@@ -353,7 +351,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
             <EventComposerGuestsPill
               options={props.guestOptions}
               selected={selectedGuests()}
-              attendees={props.attendees}
               onChange={setSelectedGuests}
               disabled={props.pending}
               readOnly={fieldIsReadOnly('guests')}
