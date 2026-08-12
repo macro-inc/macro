@@ -6,6 +6,6 @@
  */
 
 /**
- * When the notification was viewed/seen.
+ * When the notification was deleted.
  */
-export type ConnGatewayInnerNotifValueAllOfViewedAt = string | null;
+export type RealtimeNotifTaggedContentValueAllOfDeletedAt = string | null;

@@ -9,7 +9,7 @@ import type { NotificationTypeName } from './notificationTypeName';
 /**
  * A notification metadata value tagged with the notification event type.
  */
-export interface TaggedContentValue {
+export type RealtimeNotifTaggedContentValueAllOfNotificationMetadata = {
   content: unknown;
   tag: NotificationTypeName;
-}
+};

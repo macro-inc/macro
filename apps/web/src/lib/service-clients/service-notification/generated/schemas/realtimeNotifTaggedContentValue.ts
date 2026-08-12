@@ -4,12 +4,11 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ConnGatewayInnerNotifValueAllOf } from './connGatewayInnerNotifValueAllOf';
 import type { Entity } from './entity';
+import type { RealtimeNotifTaggedContentValueAllOf } from './realtimeNotifTaggedContentValueAllOf';
 
 /**
  * the value of the inner payload inside [ConnGatewayNotification]
  */
-export type ConnGatewayInnerNotifValue = Entity &
-  ConnGatewayInnerNotifValueAllOf;
+export type RealtimeNotifTaggedContentValue = Entity &
+  RealtimeNotifTaggedContentValueAllOf;
