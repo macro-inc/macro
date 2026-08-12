@@ -49,6 +49,7 @@ import {
   CLOSE_INLINE_SEARCH_COMMAND,
   createDraggableBlockStore,
   createDragInsertStore,
+  createProgressStatsStore,
   createWordcountStatsStore,
   DefaultShortcuts,
   diffPlugin,
@@ -63,6 +64,7 @@ import {
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
+  progressPlugin,
   selectionDataPlugin,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -963,6 +965,12 @@ export function MarkdownEditor(props: {
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
   );
   setMdStore('wordcountStats', wordcountStats);
+
+  const [progressStats, setProgressStats] = createProgressStatsStore();
+  plugins.use(
+    progressPlugin({ setStore: setProgressStats, debounceTime: 200 })
+  );
+  setMdStore('progressStats', progressStats);
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>

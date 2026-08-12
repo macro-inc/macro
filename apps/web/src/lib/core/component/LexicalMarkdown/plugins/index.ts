@@ -32,6 +32,7 @@ export * from './normalize-triple-click';
 export * from './pinned-properties';
 export * from './pluginManager';
 export * from './popup';
+export * from './progress';
 // export * from './rewrite'; this has been sunset (for now)
 export * from './selection-data';
 export * from './shared';

@@ -12,6 +12,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   $getPinnedProperties,
@@ -517,6 +518,11 @@ function StatsSectionContent() {
             <SidePanel.Row label="Characters">
               <Wordcount.Characters />
             </SidePanel.Row>
+            <Show when={md.progressStats?.total}>
+              <SidePanel.Row label="Progress">
+                <ProgressMeter stats={md.progressStats!} />
+              </SidePanel.Row>
+            </Show>
           </SidePanel.Grid>
         </Wordcount.Root>
       )}
