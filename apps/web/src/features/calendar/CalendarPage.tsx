@@ -388,6 +388,13 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         if (selectedEvent) calendarView.selectEvent(selectedEvent, el);
       }}
       eventDidMount={({ el, event }) => {
+        const calendarEvent = data.eventsById().get(event.id);
+        if (calendarEvent) {
+          el.style.setProperty(
+            '--event-calendar-color',
+            calendarEvent.calendar.color
+          );
+        }
         eventElements.set(event.id, el);
         // A re-render (query settling, live refresh) replaces chip elements.
         // Re-anchor an open details popover to the remounted chip — its old

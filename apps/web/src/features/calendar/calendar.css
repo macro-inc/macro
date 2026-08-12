@@ -216,6 +216,22 @@
 }
 
 .calendar-view .fc .fc-event {
+	--fc-event-bg-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 5%,
+		var(--color-surface)
+	);
+	--fc-event-border-color: var(
+		--event-calendar-color,
+		var(--color-calendar)
+	);
+	--fc-event-text-color: var(
+		--event-calendar-color,
+		var(--color-calendar)
+	);
+	border-color: var(--fc-event-border-color);
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
 	transition:
 		box-shadow 120ms ease-out,
 		opacity 120ms ease-out;
@@ -322,12 +338,12 @@
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
-	border-style: dashed;
-	background-color: color-mix(
+	--fc-event-bg-color: color-mix(
 		in oklch,
-		var(--color-calendar) 2%,
+		var(--event-calendar-color, var(--color-calendar)) 2%,
 		var(--color-surface)
-	) !important;
+	);
+	border-style: dashed;
 }
 
 .calendar-view
@@ -346,12 +362,12 @@
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
-	background-color: transparent !important;
-	color: color-mix(
+	--fc-event-bg-color: transparent;
+	--fc-event-text-color: color-mix(
 		in oklch,
-		var(--color-calendar) 65%,
+		var(--event-calendar-color, var(--color-calendar)) 65%,
 		var(--color-ink-muted)
-	) !important;
+	);
 }
 
 .calendar-view .fc .fc-event:hover {
@@ -374,9 +390,9 @@
 
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
 	z-index: 3;
-	border-color: var(--color-accent) !important;
-	background-color: var(--color-accent) !important;
-	color: var(--color-surface) !important;
+	--fc-event-border-color: var(--color-accent);
+	--fc-event-bg-color: var(--color-accent);
+	--fc-event-text-color: var(--color-surface);
 	box-shadow: 0 0 0 1px var(--color-accent);
 	border-style: solid;
 	opacity: 1;
