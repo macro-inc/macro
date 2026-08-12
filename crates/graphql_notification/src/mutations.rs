@@ -138,9 +138,16 @@ where
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
 
-        Ok(notifications
+        notifications
             .into_iter()
-            .map(GraphqlNotification::from)
-            .collect())
+            .map(GraphqlNotification::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    "failed to deserialize notification metadata"
+                );
+                async_graphql::Error::new("notification metadata is unavailable")
+            })
     }
 }

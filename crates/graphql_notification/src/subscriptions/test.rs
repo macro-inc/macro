@@ -74,7 +74,7 @@ async fn notification_updates_streams_realtime_notifications() {
     );
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
-            "subscription { notificationUpdates { id eventType entityType entityId typedMetadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } }",
+            "subscription { notificationUpdates { id eventType entityType entityId metadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } }",
         )
         .data(user_id),
     ));
@@ -116,19 +116,16 @@ async fn notification_updates_streams_realtime_notifications() {
     assert_eq!(data["notificationUpdates"]["entityType"], "DOCUMENT");
     assert_eq!(data["notificationUpdates"]["entityId"], "task-1");
     assert_eq!(
-        data["notificationUpdates"]["typedMetadata"]["__typename"],
+        data["notificationUpdates"]["metadata"]["__typename"],
         "GraphqlTaskAssignedMetadata"
     );
+    assert_eq!(data["notificationUpdates"]["metadata"]["taskId"], "task-1");
     assert_eq!(
-        data["notificationUpdates"]["typedMetadata"]["taskId"],
-        "task-1"
-    );
-    assert_eq!(
-        data["notificationUpdates"]["typedMetadata"]["taskName"],
+        data["notificationUpdates"]["metadata"]["taskName"],
         "Test task"
     );
     assert_eq!(
-        data["notificationUpdates"]["typedMetadata"]["assignedBy"],
+        data["notificationUpdates"]["metadata"]["assignedBy"],
         "macro|assigner@example.com"
     );
 }

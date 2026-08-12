@@ -40,7 +40,7 @@ function createOptimisticUpdateNotificationsData({
   const updateNotifications: OptimisticNotificationPatch[] =
     notificationIds.map((id) => {
       const identity = {
-        __typename: 'GraphqlSoupNotification' as const,
+        __typename: 'GraphqlNotification' as const,
         id,
       };
       switch (operation) {

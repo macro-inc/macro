@@ -12,14 +12,14 @@ use notification::domain::{
 };
 use tokio_stream::Stream;
 
-use crate::GraphqlSoupNotification;
+use crate::GraphqlNotification;
 
 /// Subscribe to realtime notifications addressed to the authenticated user.
 pub fn subscribe_to_notifications<S>(
     service: &S,
     ctx: &Context<'_>,
 ) -> async_graphql::Result<
-    impl Stream<Item = async_graphql::Result<GraphqlSoupNotification>> + Send + 'static,
+    impl Stream<Item = async_graphql::Result<GraphqlNotification>> + Send + 'static,
 >
 where
     S: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
@@ -30,7 +30,7 @@ where
     Ok(async_stream::stream! {
         while let Some(notification) = subscription.recv().await {
             let notification = Arc::unwrap_or_clone(notification);
-            yield Ok(GraphqlSoupNotification::from_realtime(user_id.clone(), notification));
+            yield Ok(GraphqlNotification::from_realtime(user_id.clone(), notification));
         }
 
         match subscription.exit_reason().await {
@@ -72,7 +72,7 @@ where
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<GraphqlSoupNotification>> + 'static,
+        impl Stream<Item = async_graphql::Result<GraphqlNotification>> + 'static,
     > {
         subscribe_to_notifications(&self.service, ctx)
     }

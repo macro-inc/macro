@@ -74,7 +74,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
-        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "input MarkEmailThreadSeenInput {",
@@ -88,10 +88,9 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_UNDONE",
         "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
-        "notificationUpdates: GraphqlSoupNotification!",
-        "type GraphqlSoupNotification {",
-        "metadata: JSON! @deprecated(reason: \"Use typedMetadata with union inline fragments\")",
-        "typedMetadata: GraphqlNotifEvent",
+        "notificationUpdates: GraphqlNotification!",
+        "type GraphqlNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
@@ -101,12 +100,13 @@ fn soup_response_schema_exposes_frontend_fields() {
     );
     assert_eq!(
         sdl.lines()
-            .filter(|line| line.trim() == "typedMetadata: GraphqlNotifEvent")
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
             .count(),
         1,
-        "stored and realtime notifications must share one nullable typed metadata field"
+        "stored and realtime notifications must share one typed metadata field"
     );
     assert!(!sdl.contains("GraphqlRealtimeNotification"));
+    assert!(!sdl.contains("GraphqlSoupNotification"));
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),

@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use async_graphql::{EmptySubscription, Object, Schema};
 use chrono::Utc;
 use model_entity::EntityType;
+use model_notifications::{ChannelMessageSendMetadata, ChannelType, CommonChannelMetadata};
 use notification::domain::models::request::NotificationStatus;
-use serde_json::json;
 
 use super::*;
 
@@ -52,7 +52,19 @@ impl NotificationMutationService for CapturingNotificationService {
                 viewed_at: Some(now),
                 updated_at: now,
                 deleted_at: None,
-                notification_metadata: json!({ "messageId": "message-1" }),
+                notification_metadata: serde_json::to_value(ChannelMessageSendMetadata {
+                    sender: None,
+                    sender_display_name: None,
+                    message_content: "Test message".to_string(),
+                    message_id: "message-1".to_string(),
+                    has_attachments: false,
+                    common: CommonChannelMetadata {
+                        channel_type: ChannelType::Public,
+                        channel_name: "Test channel".to_string(),
+                    },
+                    sender_profile_picture_url: None,
+                })
+                .unwrap(),
                 sender_id: None,
             })
             .collect())
@@ -92,7 +104,7 @@ async fn update_notifications_maps_operation_and_returns_normalized_rows_in_orde
 
     let response = schema
         .execute(format!(
-            r#"mutation {{ updateNotifications(input: {{ notificationIds: ["{second}", "{first}"], operation: MARK_SEEN }}) {{ __typename id seen viewedAt }} }}"#
+            r#"mutation {{ updateNotifications(input: {{ notificationIds: ["{second}", "{first}"], operation: MARK_SEEN }}) {{ __typename id seen viewedAt metadata {{ __typename }} }} }}"#
         ))
         .await;
 
@@ -100,7 +112,11 @@ async fn update_notifications_maps_operation_and_returns_normalized_rows_in_orde
     let data = response.data.into_json().unwrap();
     assert_eq!(
         data["updateNotifications"][0]["__typename"],
-        "GraphqlSoupNotification"
+        "GraphqlNotification"
+    );
+    assert_eq!(
+        data["updateNotifications"][0]["metadata"]["__typename"],
+        "GraphqlChannelMessageSendMetadata"
     );
     assert_eq!(data["updateNotifications"][0]["id"], second.to_string());
     assert_eq!(data["updateNotifications"][1]["id"], first.to_string());

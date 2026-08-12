@@ -17,6 +17,8 @@ import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
+import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
+import type { NotificationDocumentSubType } from '@service-notification/generated/schemas/notificationDocumentSubType';
 import {
   type AnyVariables,
   type Client,
@@ -378,13 +380,380 @@ function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
 
+function toNotificationDocumentSubType(
+  subType: string | null
+): NotificationDocumentSubType | null {
+  return subType
+    ? ({ type: subType.toLowerCase() } as NotificationDocumentSubType)
+    : null;
+}
+
+function mapGraphqlNotificationMetadata(
+  metadata: SoupNotificationFieldsFragment['metadata']
+): NotifEvent {
+  switch (metadata.__typename) {
+    case 'GraphqlChannelMentionMetadata':
+      return {
+        tag: 'channel_mention',
+        content: {
+          messageId: metadata.channelMentionMessageId,
+          messageContent: metadata.channelMentionMessageContent,
+          hasAttachments: metadata.channelMentionHasAttachments,
+          threadId: metadata.channelMentionThreadId,
+          senderDisplayName: metadata.channelMentionSenderDisplayName,
+          channelType: metadata.channelMentionChannelType.toLowerCase(),
+          channelName: metadata.channelMentionChannelName,
+          senderProfilePictureUrl:
+            metadata.channelMentionSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlDocumentMentionMetadata':
+      return {
+        tag: 'document_mention',
+        content: {
+          documentName: metadata.documentMentionDocumentName,
+          owner: metadata.documentMentionOwner,
+          fileType: metadata.documentMentionFileType,
+          subType: toNotificationDocumentSubType(
+            metadata.documentMentionSubType
+          ),
+          messageId: metadata.documentMentionMessageId,
+          messageContent: metadata.documentMentionMessageContent,
+          hasAttachments: metadata.documentMentionHasAttachments,
+          threadId: metadata.documentMentionThreadId,
+          senderDisplayName: metadata.documentMentionSenderDisplayName,
+          channelType: metadata.documentMentionChannelType.toLowerCase(),
+          channelName: metadata.documentMentionChannelName,
+          senderProfilePictureUrl:
+            metadata.documentMentionSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlMentionedInDocumentCommentMetadata':
+      return {
+        tag: 'mentioned_in_document_comment',
+        content: {
+          documentName: metadata.mentionedInDocumentCommentDocumentName,
+          owner: metadata.mentionedInDocumentCommentOwner,
+          fileType: metadata.mentionedInDocumentCommentFileType,
+          subType: toNotificationDocumentSubType(
+            metadata.mentionedInDocumentCommentSubType
+          ),
+          mentionId: metadata.mentionedInDocumentCommentMentionId,
+          commentId: metadata.mentionedInDocumentCommentCommentId,
+          threadId: metadata.mentionedInDocumentCommentThreadId,
+          text: metadata.mentionedInDocumentCommentText,
+          senderProfilePictureUrl:
+            metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlRepliedToDocumentCommentThreadMetadata':
+      return {
+        tag: 'replied_to_document_comment_thread',
+        content: {
+          documentName: metadata.repliedToDocumentCommentThreadDocumentName,
+          owner: metadata.repliedToDocumentCommentThreadOwner,
+          fileType: metadata.repliedToDocumentCommentThreadFileType,
+          subType: toNotificationDocumentSubType(
+            metadata.repliedToDocumentCommentThreadSubType
+          ),
+          commentId: metadata.repliedToDocumentCommentThreadCommentId,
+          threadId: metadata.repliedToDocumentCommentThreadThreadId,
+          text: metadata.repliedToDocumentCommentThreadText,
+          senderProfilePictureUrl:
+            metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlCommentedOnDocumentMetadata':
+      return {
+        tag: 'commented_on_document',
+        content: {
+          documentName: metadata.commentedOnDocumentDocumentName,
+          owner: metadata.commentedOnDocumentOwner,
+          fileType: metadata.commentedOnDocumentFileType,
+          subType: toNotificationDocumentSubType(
+            metadata.commentedOnDocumentSubType
+          ),
+          commentId: metadata.commentedOnDocumentCommentId,
+          threadId: metadata.commentedOnDocumentThreadId,
+          text: metadata.commentedOnDocumentText,
+          senderProfilePictureUrl:
+            metadata.commentedOnDocumentSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlChannelInviteMetadata':
+      return {
+        tag: 'channel_invite',
+        content: {
+          invitedBy: metadata.channelInviteInvitedBy,
+          channelName: metadata.channelInviteChannelName,
+          messageContent: metadata.channelInviteMessageContent,
+          senderProfilePictureUrl:
+            metadata.channelInviteSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlChannelMessageSendMetadata':
+      return {
+        tag: 'channel_message_send',
+        content: {
+          sender: metadata.channelMessageSendSender,
+          senderDisplayName: metadata.channelMessageSendSenderDisplayName,
+          messageContent: metadata.channelMessageSendMessageContent,
+          messageId: metadata.channelMessageSendMessageId,
+          hasAttachments: metadata.channelMessageSendHasAttachments,
+          channelType: metadata.channelMessageSendChannelType.toLowerCase(),
+          channelName: metadata.channelMessageSendChannelName,
+          senderProfilePictureUrl:
+            metadata.channelMessageSendSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlChannelReplyMetadata':
+      return {
+        tag: 'channel_message_reply',
+        content: {
+          threadId: metadata.channelReplyThreadId,
+          messageId: metadata.channelReplyMessageId,
+          userId: metadata.channelReplyUserId,
+          senderDisplayName: metadata.channelReplySenderDisplayName,
+          messageContent: metadata.channelReplyMessageContent,
+          hasAttachments: metadata.channelReplyHasAttachments,
+          threadParentSenderId: metadata.channelReplyThreadParentSenderId,
+          channelType: metadata.channelReplyChannelType.toLowerCase(),
+          channelName: metadata.channelReplyChannelName,
+          senderProfilePictureUrl: metadata.channelReplySenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlCallStartedMetadata':
+      return {
+        tag: 'call_started',
+        content: {
+          channel_name: metadata.callStartedChannelName,
+          sender_profile_picture_url:
+            metadata.callStartedSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlNewEmailMetadata':
+      return {
+        tag: 'new_email',
+        content: {
+          sender: metadata.newEmailSender,
+          toEmail: metadata.newEmailToEmail,
+          threadId: metadata.newEmailThreadId,
+          subject: metadata.newEmailSubject,
+          snippet: metadata.newEmailSnippet,
+        },
+      } as NotifEvent;
+    case 'GraphqlInboxReauthRequiredMetadata':
+      return {
+        tag: 'inbox_reauth_required',
+        content: {
+          emailAddress: metadata.inboxReauthRequiredEmailAddress,
+        },
+      } as NotifEvent;
+    case 'GraphqlInviteToTeamMetadata':
+      return {
+        tag: 'invite_to_team',
+        content: {
+          teamName: metadata.inviteToTeamTeamName,
+          teamId: metadata.inviteToTeamTeamId,
+          teamInviteId: metadata.inviteToTeamTeamInviteId,
+          invitedBy: metadata.inviteToTeamInvitedBy,
+          role: metadata.inviteToTeamRole,
+          senderProfilePictureUrl: metadata.inviteToTeamSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlTaskAssignedMetadata':
+      return {
+        tag: 'task_assigned',
+        content: {
+          taskId: metadata.taskAssignedTaskId,
+          taskName: metadata.taskAssignedTaskName,
+          subType: toNotificationDocumentSubType(metadata.taskAssignedSubType),
+          assignedBy: metadata.taskAssignedAssignedBy,
+          senderProfilePictureUrl: metadata.taskAssignedSenderProfilePictureUrl,
+        },
+      } as NotifEvent;
+    case 'GraphqlReminderMetadata':
+      return {
+        tag: 'reminder',
+        content: {
+          reminderId: metadata.reminderReminderId,
+          description: metadata.reminderDescription,
+        },
+      } as NotifEvent;
+    case 'GraphqlCalendarEventReminderMetadata':
+      return {
+        tag: 'calendar_event_reminder',
+        content: {
+          eventId: metadata.calendarEventReminderEventId,
+          occurrenceKey: metadata.calendarEventReminderOccurrenceKey,
+          title: metadata.calendarEventReminderTitle,
+          startsAt: metadata.calendarEventReminderStartsAt,
+          endsAt: metadata.calendarEventReminderEndsAt,
+          startDate: metadata.calendarEventReminderStartDate,
+          timeZone: metadata.calendarEventReminderTimeZone,
+          minutesBefore: metadata.calendarEventReminderMinutesBefore,
+        },
+      } as NotifEvent;
+    case 'GraphqlAiResponseMetadata':
+      return {
+        tag: 'ai_response',
+        content: {
+          summary: metadata.aiResponseSummary,
+          messageId: metadata.aiResponseMessageId,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubPrStatusChangedMetadata':
+      return {
+        tag: 'github_pr_status_changed',
+        content: {
+          foreignEntityId: metadata.githubPrStatusChangedForeignEntityId,
+          githubKey: metadata.githubPrStatusChangedGithubKey,
+          owner: metadata.githubPrStatusChangedOwner,
+          repo: metadata.githubPrStatusChangedRepo,
+          number: Number(metadata.githubPrStatusChangedNumber),
+          url: metadata.githubPrStatusChangedUrl,
+          displayName: metadata.githubPrStatusChangedDisplayName,
+          title: metadata.githubPrStatusChangedTitle,
+          senderGithubLogin: metadata.githubPrStatusChangedSenderGithubLogin,
+          senderGithubUserId: metadata.githubPrStatusChangedSenderGithubUserId,
+          senderGithubAvatarUrl:
+            metadata.githubPrStatusChangedSenderGithubAvatarUrl,
+          status: metadata.githubPrStatusChangedStatus?.toLowerCase(),
+          action: metadata.githubPrStatusChangedAction?.toLowerCase(),
+          previousStatus:
+            metadata.githubPrStatusChangedPreviousStatus?.toLowerCase(),
+          headBranch: metadata.githubPrStatusChangedHeadBranch,
+          baseBranch: metadata.githubPrStatusChangedBaseBranch,
+          mergedAt: metadata.githubPrStatusChangedMergedAt,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubPrCheckRunMetadata':
+      return {
+        tag: 'github_pr_check_run',
+        content: {
+          foreignEntityId: metadata.githubPrCheckRunForeignEntityId,
+          githubKey: metadata.githubPrCheckRunGithubKey,
+          owner: metadata.githubPrCheckRunOwner,
+          repo: metadata.githubPrCheckRunRepo,
+          number: Number(metadata.githubPrCheckRunNumber),
+          url: metadata.githubPrCheckRunUrl,
+          displayName: metadata.githubPrCheckRunDisplayName,
+          title: metadata.githubPrCheckRunTitle,
+          senderGithubLogin: metadata.githubPrCheckRunSenderGithubLogin,
+          senderGithubUserId: metadata.githubPrCheckRunSenderGithubUserId,
+          senderGithubAvatarUrl: metadata.githubPrCheckRunSenderGithubAvatarUrl,
+          checkRunGithubId: Number(metadata.githubPrCheckRunCheckRunGithubId),
+          checkName: metadata.githubPrCheckRunCheckName,
+          checkStatus: metadata.githubPrCheckRunCheckStatus,
+          conclusion: metadata.githubPrCheckRunConclusion,
+          state: metadata.githubPrCheckRunState?.toLowerCase(),
+          checkUrl: metadata.githubPrCheckRunCheckUrl,
+          completedAt: metadata.githubPrCheckRunCompletedAt,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubReviewRequestedMetadata':
+      return {
+        tag: 'github_review_requested',
+        content: {
+          foreignEntityId: metadata.githubReviewRequestedForeignEntityId,
+          githubKey: metadata.githubReviewRequestedGithubKey,
+          owner: metadata.githubReviewRequestedOwner,
+          repo: metadata.githubReviewRequestedRepo,
+          number: Number(metadata.githubReviewRequestedNumber),
+          url: metadata.githubReviewRequestedUrl,
+          displayName: metadata.githubReviewRequestedDisplayName,
+          title: metadata.githubReviewRequestedTitle,
+          senderGithubLogin: metadata.githubReviewRequestedSenderGithubLogin,
+          senderGithubUserId: metadata.githubReviewRequestedSenderGithubUserId,
+          senderGithubAvatarUrl:
+            metadata.githubReviewRequestedSenderGithubAvatarUrl,
+          requestedReviewerGithubLogin:
+            metadata.githubReviewRequestedRequestedReviewerGithubLogin,
+          requestedReviewerGithubUserId:
+            metadata.githubReviewRequestedRequestedReviewerGithubUserId,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubPrCommentMetadata':
+      return {
+        tag: 'github_pr_comment',
+        content: {
+          foreignEntityId: metadata.githubPrCommentForeignEntityId,
+          githubKey: metadata.githubPrCommentGithubKey,
+          owner: metadata.githubPrCommentOwner,
+          repo: metadata.githubPrCommentRepo,
+          number: Number(metadata.githubPrCommentNumber),
+          url: metadata.githubPrCommentUrl,
+          displayName: metadata.githubPrCommentDisplayName,
+          title: metadata.githubPrCommentTitle,
+          senderGithubLogin: metadata.githubPrCommentSenderGithubLogin,
+          senderGithubUserId: metadata.githubPrCommentSenderGithubUserId,
+          senderGithubAvatarUrl: metadata.githubPrCommentSenderGithubAvatarUrl,
+          commentKind: metadata.githubPrCommentCommentKind?.toLowerCase(),
+          commentGithubId:
+            metadata.githubPrCommentCommentGithubId == null
+              ? null
+              : Number(metadata.githubPrCommentCommentGithubId),
+          commentUrl: metadata.githubPrCommentCommentUrl,
+          commentSnippet: metadata.githubPrCommentCommentSnippet,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubPrMentionMetadata':
+      return {
+        tag: 'github_pr_mention',
+        content: {
+          foreignEntityId: metadata.githubPrMentionForeignEntityId,
+          githubKey: metadata.githubPrMentionGithubKey,
+          owner: metadata.githubPrMentionOwner,
+          repo: metadata.githubPrMentionRepo,
+          number: Number(metadata.githubPrMentionNumber),
+          url: metadata.githubPrMentionUrl,
+          displayName: metadata.githubPrMentionDisplayName,
+          title: metadata.githubPrMentionTitle,
+          senderGithubLogin: metadata.githubPrMentionSenderGithubLogin,
+          senderGithubUserId: metadata.githubPrMentionSenderGithubUserId,
+          senderGithubAvatarUrl: metadata.githubPrMentionSenderGithubAvatarUrl,
+          location: metadata.githubPrMentionLocation?.toLowerCase(),
+          commentGithubId:
+            metadata.githubPrMentionCommentGithubId == null
+              ? null
+              : Number(metadata.githubPrMentionCommentGithubId),
+          commentUrl: metadata.githubPrMentionCommentUrl,
+          textSnippet: metadata.githubPrMentionTextSnippet,
+        },
+      } as NotifEvent;
+    case 'GraphqlGithubPrReviewMetadata':
+      return {
+        tag: 'github_pr_review',
+        content: {
+          foreignEntityId: metadata.githubPrReviewForeignEntityId,
+          githubKey: metadata.githubPrReviewGithubKey,
+          owner: metadata.githubPrReviewOwner,
+          repo: metadata.githubPrReviewRepo,
+          number: Number(metadata.githubPrReviewNumber),
+          url: metadata.githubPrReviewUrl,
+          displayName: metadata.githubPrReviewDisplayName,
+          title: metadata.githubPrReviewTitle,
+          senderGithubLogin: metadata.githubPrReviewSenderGithubLogin,
+          senderGithubUserId: metadata.githubPrReviewSenderGithubUserId,
+          senderGithubAvatarUrl: metadata.githubPrReviewSenderGithubAvatarUrl,
+          reviewGithubId:
+            metadata.githubPrReviewReviewGithubId == null
+              ? null
+              : Number(metadata.githubPrReviewReviewGithubId),
+          reviewUrl: metadata.githubPrReviewReviewUrl,
+          state: metadata.githubPrReviewState?.toLowerCase(),
+          reviewSnippet: metadata.githubPrReviewReviewSnippet,
+        },
+      } as NotifEvent;
+  }
+}
+
 /**
  * Rebuilds the REST notification shape from the flat GraphQL fields. The
- * server stores the event tag apart from the metadata JSON and only REST
- * re-joins them (`UserNotificationRow::into_tagged`); GraphQL ships them
- * flat, so the adjacently-tagged `notification_metadata` union must be
- * reassembled here. Consumers pattern-match on `notification_metadata.tag`
- * and treat an untagged channel notification as read — every GraphQL
+ * server stores the event tag apart from the metadata and only REST re-joins
+ * them (`UserNotificationRow::into_tagged`); GraphQL exposes a typed union, so
+ * its variants are mapped to the REST adjacently-tagged metadata union here.
+ * Consumers pattern-match on `notification_metadata.tag`; every GraphQL
  * notification must go through this mapper.
  */
 export function mapGraphqlNotification(
@@ -393,10 +762,7 @@ export function mapGraphqlNotification(
   return {
     id: record.id,
     notification_event_type: record.eventType,
-    notification_metadata: {
-      tag: record.eventType,
-      content: record.metadata,
-    } as ApiUserNotification['notification_metadata'],
+    notification_metadata: mapGraphqlNotificationMetadata(record.metadata),
     entity_id: record.entityId,
     entity_type:
       record.entityType.toLowerCase() as ApiUserNotification['entity_type'],

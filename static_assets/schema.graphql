@@ -77,7 +77,7 @@ type CompleteMutationRoot {
 	"""
 	Update authenticated user-owned notifications and return authoritative rows.
 	"""
-	updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!
+	updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!
 	"""
 	Mark an accessible email thread as seen and return its authoritative cache record.
 	"""
@@ -99,7 +99,7 @@ type CompleteSubscriptionRoot {
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
-	notificationUpdates: GraphqlSoupNotification!
+	notificationUpdates: GraphqlNotification!
 }
 
 """
@@ -2505,6 +2505,60 @@ Typed GraphQL union containing every supported notification event payload.
 union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
 
 """
+A notification associated with a Soup entity.
+"""
+type GraphqlNotification {
+	"""
+	The notification identifier.
+	"""
+	id: ID!
+	"""
+	The event that produced the notification.
+	"""
+	eventType: String!
+	"""
+	The type of the associated entity.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	The identifier of the associated entity.
+	"""
+	entityId: String!
+	"""
+	Whether the notification has been sent.
+	"""
+	sent: Boolean!
+	"""
+	Whether notification processing is complete.
+	"""
+	done: Boolean!
+	"""
+	Whether the recipient has seen the notification.
+	"""
+	seen: Boolean!
+	"""
+	The notification creation time in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The time the notification was viewed, in RFC 3339 format.
+	"""
+	viewedAt: String
+	"""
+	The notification's last update time in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	The identifier of the user who triggered the notification.
+	"""
+	senderId: String
+	"""
+	Typed event-specific notification metadata.
+	"""
+	metadata: GraphqlNotifEvent!
+}
+
+"""
 GraphQL channel type used by notification metadata.
 """
 enum GraphqlNotificationChannelType {
@@ -3263,7 +3317,7 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3361,7 +3415,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3481,7 +3535,7 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3551,7 +3605,7 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3693,7 +3747,7 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3771,7 +3825,7 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -3849,7 +3903,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4343,7 +4397,7 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4401,7 +4455,7 @@ interface GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the current viewer.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the current viewer has favorited this entity.
 	"""
@@ -4521,7 +4575,7 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4534,64 +4588,6 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
-}
-
-"""
-A notification associated with a Soup entity.
-"""
-type GraphqlSoupNotification {
-	"""
-	The notification identifier.
-	"""
-	id: ID!
-	"""
-	The event that produced the notification.
-	"""
-	eventType: String!
-	"""
-	The type of the associated entity.
-	"""
-	entityType: GraphqlSoupEntityType!
-	"""
-	The identifier of the associated entity.
-	"""
-	entityId: String!
-	"""
-	Whether the notification has been sent.
-	"""
-	sent: Boolean!
-	"""
-	Whether notification processing is complete.
-	"""
-	done: Boolean!
-	"""
-	Whether the recipient has seen the notification.
-	"""
-	seen: Boolean!
-	"""
-	The notification creation time in RFC 3339 format.
-	"""
-	createdAt: String!
-	"""
-	The time the notification was viewed, in RFC 3339 format.
-	"""
-	viewedAt: String
-	"""
-	The notification's last update time in RFC 3339 format.
-	"""
-	updatedAt: String!
-	"""
-	The identifier of the user who triggered the notification.
-	"""
-	senderId: String
-	"""
-	Raw event-specific notification metadata.
-	"""
-	metadata: JSON! @deprecated(reason: "Use typedMetadata with union inline fragments")
-	"""
-	Typed event-specific notification metadata.
-	"""
-	typedMetadata: GraphqlNotifEvent
 }
 
 """
@@ -4649,7 +4645,7 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -4742,7 +4738,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	"""
 	Notifications associated with this entity for the authenticated user.
 	"""
-	notifications: [GraphqlSoupNotification!]!
+	notifications: [GraphqlNotification!]!
 	"""
 	Whether the authenticated viewer has favorited this entity.
 	"""
@@ -5203,10 +5199,6 @@ input UpdateNotificationsInput {
 	operation: NotificationUpdateOperation!
 }
 
-"""
-Marks an element of a GraphQL schema as no longer supported.
-"""
-directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
 """
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """
