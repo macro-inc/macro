@@ -251,6 +251,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
     <Combobox<GuestPickerItem>
       multiple
       virtualized
+      autoFocus="first"
       open={open() && !props.disabled}
       onOpenChange={changeOpen}
       onInputChange={setSearch}
@@ -356,7 +357,6 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             <div class="p-1.5">
               <Combobox.Listbox<GuestPickerItem>
                 scrollToItem={scrollToItem()}
-                autoFocus="first"
               >
                 {(items) => {
                   const nodes = Array.from(items());
