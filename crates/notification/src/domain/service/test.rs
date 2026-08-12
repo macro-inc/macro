@@ -1415,7 +1415,7 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
     }
 }
 
-fn create_mock_notif<T: Notification>(meta: T) -> RealtimeNotif<T> {
+fn create_mock_notif<T: Notification>(meta: T) -> RealtimeNotif<TaggedContent<T>> {
     RealtimeNotif {
         notification_id: Uuid::nil(),
         notification_event_type: "testing".to_string(),

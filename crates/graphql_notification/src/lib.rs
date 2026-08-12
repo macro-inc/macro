@@ -9,6 +9,8 @@ mod loaders;
 mod mutations;
 /// GraphQL notification object and edge resolver.
 mod objects;
+/// GraphQL realtime notification subscription adapter.
+mod subscriptions;
 
 pub use loaders::{
     EntityNotificationsLoader, NoOpSoupNotificationEdgeReader, SoupNotificationEdgeReader,
@@ -19,3 +21,6 @@ pub use mutations::{
     NotificationMutationService, UpdateNotificationsInput,
 };
 pub use objects::{GraphqlSoupNotification, load_entity_notifications};
+pub use subscriptions::{
+    GraphqlRealtimeNotification, NotificationSubscriptionRoot, subscribe_to_notifications,
+};

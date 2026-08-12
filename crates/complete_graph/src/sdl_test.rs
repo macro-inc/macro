@@ -86,8 +86,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_SEEN",
         "MARK_DONE",
         "MARK_UNDONE",
-        "type SoupSubscriptionRoot {",
+        "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlRealtimeNotification!",
+        "type GraphqlRealtimeNotification {",
     ] {
         assert_sdl_line(&sdl, expected);
     }

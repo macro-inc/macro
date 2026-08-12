@@ -756,6 +756,7 @@ struct TestHarness {
     schema: SoupSchema<
         CountingSoupService,
         NoOpSoupRealtimeSubscriptionService,
+        NoopWebSocketNotificationSubscriptionService,
         CountingEmailService,
         CountingEntityAccessService,
         FakeAuthorizationService,
@@ -909,6 +910,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let schema: SoupSchema<
         CountingSoupService,
         TestRealtimeSubscriptionService,
+        NoopWebSocketNotificationSubscriptionService,
         NoOpEmailService,
         NoOpEntityAccessService,
         SchemaOnlyAuthorizationService,
@@ -922,7 +924,11 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoOpSoupEmailContentEdgeReader,
         NoOpEntityFavoriteEdgeReader,
         NoOpEntityPermissionEdgeReader,
-    > = build_schema_with_services(soup_service, realtime);
+    > = build_schema_with_services(
+        soup_service,
+        realtime,
+        NoopWebSocketNotificationSubscriptionService,
+    );
     let request = async_graphql::Request::new(
         "subscription { soupUpdates { __typename ... on SoupUpdated { item { id } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )

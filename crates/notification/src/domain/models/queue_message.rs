@@ -136,7 +136,7 @@ pub struct RealtimeNotif<T> {
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
-    pub notification_metadata: TaggedContent<T>,
+    pub notification_metadata: T,
     /// The user who triggered the notification.
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
@@ -148,14 +148,14 @@ pub struct RealtimeNotif<T> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ConnGatewayNotificationPayload(pub RealtimeNotif<serde_json::Value>);
+pub struct ConnGatewayNotificationPayload(pub RealtimeNotif<TaggedContent<serde_json::Value>>);
 
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct ConnGatewayNotification<'a, T> {
     /// The notification payload to send.
-    pub(crate) notif: RealtimeNotif<T>,
+    pub(crate) notif: RealtimeNotif<TaggedContent<T>>,
     /// The recipients to deliver to.
     pub(crate) recipients: Vec<MacroUserIdStr<'a>>,
 }

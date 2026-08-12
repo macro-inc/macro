@@ -957,7 +957,7 @@ async fn main() -> anyhow::Result<()> {
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
-            NotificationTopicConsumer::<RealtimeNotif<serde_json::Value>>::from_env(
+            NotificationTopicConsumer::<RealtimeNotif<model_notifications::NotifEvent>>::from_env(
                 config.kafka_brokers.as_ref(),
             )
             .map_err(|error| {
@@ -1206,6 +1206,7 @@ async fn main() -> anyhow::Result<()> {
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,
+            websocket_notification_consumer_service,
         ),
         graphql_notification_reader,
         graphql_entity_mutation_service,

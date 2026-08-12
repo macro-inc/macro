@@ -32,6 +32,8 @@ macro_authorization = { path = "../macro_authorization", features = [
 ] }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+notification = { path = "../notification" }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = [
   "ports",
