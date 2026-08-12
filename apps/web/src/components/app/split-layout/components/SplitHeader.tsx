@@ -18,6 +18,8 @@ import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -308,6 +310,8 @@ function SplitHeaderContextMenu(props: ParentProps) {
     () => panel.handle.content().type === 'component'
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
+  const canSwapWith = (direction: 'left' | 'right') =>
+    layout.manager.canSwapSplit(panel.handle.id, direction);
 
   const newSplitContent = () => ({
     type: 'component' as const,
@@ -385,6 +389,19 @@ function SplitHeaderContextMenu(props: ParentProps) {
             text="Duplicate split"
             disabled={!layout.manager.canAppendSplit() || !canDuplicateSplit()}
             onClick={() => insertSplitBeside('right', duplicateContent())}
+          />
+          <MenuSeparator />
+          <MenuItem
+            icon={ArrowLeft}
+            text="Swap split left"
+            disabled={!canSwapWith('left')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
+          />
+          <MenuItem
+            icon={ArrowRight}
+            text="Swap split right"
+            disabled={!canSwapWith('right')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
           />
           <MenuSeparator />
           <MenuItem

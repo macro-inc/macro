@@ -51,6 +51,58 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  describe('swapSplit', () => {
+    it('swaps adjacent splits and delegates the panel reorder to Resize', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'calendar' },
+        ]);
+        const [first, second] = manager.splits();
+        const swap = vi.fn();
+        manager.setResizeContext({
+          canFit: () => true,
+          swap,
+        } as unknown as ResizeZoneCtx);
+
+        manager.swapSplit(second!.id, 'left');
+
+        expect(manager.splits().map((split) => split.id)).toEqual([
+          second!.id,
+          first!.id,
+        ]);
+        expect(swap).toHaveBeenCalledWith(second!.id, first!.id);
+
+        dispose();
+      });
+    });
+
+    it('swaps a preview pair as a unit', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'calendar' },
+        ]);
+        const controllerId = manager.splits()[0]!.id;
+        manager.engagePreviewMode(controllerId);
+        const viewerId = manager.viewerOf(controllerId)!;
+        const calendarId = manager.splits()[2]!.id;
+
+        manager.swapSplit(viewerId, 'right');
+
+        expect(manager.splits().map((split) => split.id)).toEqual([
+          calendarId,
+          controllerId,
+          viewerId,
+        ]);
+        expect(manager.canSwapSplit(viewerId, 'right')).toBe(false);
+        expect(manager.canSwapSplit(viewerId, 'left')).toBe(true);
+
+        dispose();
+      });
+    });
+  });
+
   describe('reconciler', () => {
     it('should reconcile between current state and url changes', () => {
       createRoot((dispose) => {
