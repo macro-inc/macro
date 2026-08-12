@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (\n            $1, $2, $3, $4,\n            jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($5::text))\n        )\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET\n            values = CASE\n                WHEN entity_properties.values ->> 'type' = 'SelectOption'\n                     AND entity_properties.values -> 'value' @> jsonb_build_array($5::text)\n                    THEN entity_properties.values\n                WHEN entity_properties.values ->> 'type' = 'SelectOption'\n                    THEN jsonb_set(\n                            entity_properties.values,\n                            '{value}',\n                            (entity_properties.values -> 'value') || jsonb_build_array($5::text)\n                        )\n                ELSE jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($5::text))\n            END,\n            updated_at = NOW()\n        RETURNING\n            id,\n            entity_id,\n            entity_type as \"entity_type: EntityType\",\n            property_definition_id,\n            values as \"value: serde_json::Value\",\n            created_at,\n            updated_at\n        ",
+  "query": "\n        WITH previous AS (\n            SELECT values FROM entity_properties\n            WHERE entity_id = $2 AND entity_type = $3 AND property_definition_id = $4\n        )\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES ($1, $2, $3, $4, $5)\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET\n            values = EXCLUDED.values,\n            updated_at = NOW()\n        RETURNING\n            id,\n            entity_id,\n            entity_type as \"entity_type: EntityType\",\n            property_definition_id,\n            values as \"value: serde_json::Value\",\n            (SELECT values FROM previous) as \"previous: serde_json::Value\",\n            created_at,\n            updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -48,11 +48,16 @@
       },
       {
         "ordinal": 5,
+        "name": "previous: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -81,7 +86,7 @@
           }
         },
         "Uuid",
-        "Text"
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -90,9 +95,10 @@
       false,
       false,
       true,
+      null,
       false,
       false
     ]
   },
-  "hash": "bee9a8c6f98a24b798c0a60184002169fde0953aa9371dc56a9481e4b8526110"
+  "hash": "339ed96279e420f9f18f5152d5c64b8c77fe7dae968c4ddf29e3acbedc6afae6"
 }

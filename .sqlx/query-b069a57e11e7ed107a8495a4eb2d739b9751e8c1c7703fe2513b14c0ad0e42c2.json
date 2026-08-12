@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES ($1, $2, $3, $4, $5)\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET\n            values = EXCLUDED.values,\n            updated_at = NOW()\n        RETURNING\n            id,\n            entity_id,\n            entity_type as \"entity_type: EntityType\",\n            property_definition_id,\n            created_at,\n            updated_at\n        ",
+  "query": "\n                UPDATE entity_properties\n                SET values = $4, updated_at = NOW()\n                WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3\n                RETURNING\n                    id,\n                    entity_id,\n                    entity_type as \"entity_type: EntityType\",\n                    property_definition_id,\n                    values as \"value: serde_json::Value\",\n                    NULL as \"previous: serde_json::Value\",\n                    created_at,\n                    updated_at\n                ",
   "describe": {
     "columns": [
       {
@@ -43,18 +43,27 @@
       },
       {
         "ordinal": 4,
+        "name": "value: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "previous: serde_json::Value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text",
         {
           "Custom": {
@@ -84,9 +93,11 @@
       false,
       false,
       false,
+      true,
+      null,
       false,
       false
     ]
   },
-  "hash": "986f4ee0a4640ce34411c18ca60bf1194b616eac28e7258b1dc16b892d21afc0"
+  "hash": "b069a57e11e7ed107a8495a4eb2d739b9751e8c1c7703fe2513b14c0ad0e42c2"
 }
