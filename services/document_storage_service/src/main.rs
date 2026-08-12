@@ -94,7 +94,7 @@ use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::{
-    models::queue_message::ConnGatewayInnerNotif,
+    models::queue_message::RealtimeNotif,
     service::{
         NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
         WebSocketNotificationConsumerService,
@@ -957,7 +957,7 @@ async fn main() -> anyhow::Result<()> {
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
-            NotificationTopicConsumer::<ConnGatewayInnerNotif<serde_json::Value>>::from_env(
+            NotificationTopicConsumer::<RealtimeNotif<serde_json::Value>>::from_env(
                 config.kafka_brokers.as_ref(),
             )
             .map_err(|error| {
