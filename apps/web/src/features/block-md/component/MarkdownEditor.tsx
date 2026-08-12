@@ -967,9 +967,7 @@ export function MarkdownEditor(props: {
   setMdStore('wordcountStats', wordcountStats);
 
   const [progressStats, setProgressStats] = createProgressStatsStore();
-  plugins.use(
-    progressPlugin({ setStore: setProgressStats, debounceTime: 200 })
-  );
+  plugins.use(progressPlugin({ setStore: setProgressStats }));
   setMdStore('progressStats', progressStats);
 
   return (

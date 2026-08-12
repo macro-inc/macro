@@ -1,5 +1,4 @@
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   $getRoot,
   $isElementNode,
@@ -62,7 +61,6 @@ export function $getProgressStats(): ProgressStats {
 
 type ProgressPluginProps = {
   setStore: SetStoreFunction<ProgressStats>;
-  debounceTime: number;
 };
 
 function registerProgressPlugin(
@@ -75,8 +73,7 @@ function registerProgressPlugin(
     props.setStore('total', stats.total);
   };
 
-  const debouncedCountProgress = debounce(countProgress, props.debounceTime);
-  return editor.registerUpdateListener(debouncedCountProgress);
+  return editor.registerUpdateListener(countProgress);
 }
 
 export function progressPlugin(props: ProgressPluginProps) {

@@ -94,8 +94,12 @@ export function InlineTaskProperties() {
             entityId={blockId}
             entityType={entityType}
           />
-          <Show when={blockName === 'task' && md.progressStats?.total}>
-            <ProgressChip stats={md.progressStats!} />
+          <Show when={blockName === 'task' && md.progressStats}>
+            {(progressStats) => (
+              <Show when={progressStats().total > 0}>
+                <ProgressChip stats={progressStats()} />
+              </Show>
+            )}
           </Show>
           <Modals />
         </PropertiesProvider>

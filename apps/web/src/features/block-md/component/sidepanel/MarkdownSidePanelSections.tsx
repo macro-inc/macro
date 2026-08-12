@@ -518,10 +518,14 @@ function StatsSectionContent() {
             <SidePanel.Row label="Characters">
               <Wordcount.Characters />
             </SidePanel.Row>
-            <Show when={md.progressStats?.total}>
-              <SidePanel.Row label="Progress">
-                <ProgressMeter stats={md.progressStats!} />
-              </SidePanel.Row>
+            <Show when={md.progressStats}>
+              {(progressStats) => (
+                <Show when={progressStats().total > 0}>
+                  <SidePanel.Row label="Progress">
+                    <ProgressMeter stats={progressStats()} />
+                  </SidePanel.Row>
+                </Show>
+              )}
             </Show>
           </SidePanel.Grid>
         </Wordcount.Root>
