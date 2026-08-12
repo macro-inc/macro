@@ -101,6 +101,7 @@ pub fn route_agent_trigger(
             ChannelEventMetadata {
                 bot_id,
                 session_id,
+                kind: _,
                 message,
             },
         )) => {

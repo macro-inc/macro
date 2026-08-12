@@ -1,5 +1,6 @@
 use super::*;
 
+use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession, SessionStatus};
 use agent_session::domain::ports::MockAgentSessionRepo;
 use channel_sender::ChannelSender;
@@ -63,6 +64,47 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     }
 }
 
+/// A session rooted at the test message's thread.
+fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
+    AgentSession {
+        thread_id: Some(Uuid::from_u128(3)),
+        originating_message_id: Some(Uuid::from_u128(3)),
+        ..session(id, bot_id)
+    }
+}
+
+fn service(
+    sessions: MockAgentSessionRepo,
+    bots: MockAgentBotLookup,
+    replies: MockReplyDetector,
+    judge: MockImplicitTriggerJudge,
+) -> AgentTriggerService<
+    MockAgentSessionRepo,
+    MockAgentBotLookup,
+    MockReplyDetector,
+    MockImplicitTriggerJudge,
+> {
+    AgentTriggerService::new(sessions, bots, replies, judge)
+}
+
+/// Mocks for tests whose message never reaches the implicit path; any call is
+/// a test failure.
+fn no_implicit() -> (MockReplyDetector, MockImplicitTriggerJudge) {
+    (MockReplyDetector::new(), MockImplicitTriggerJudge::new())
+}
+
+fn existing_channel_metadata(
+    events: &[AgentSessionMacroEvent],
+) -> &crate::domain::broker_events::ChannelEventMetadata {
+    assert_eq!(events.len(), 1);
+    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
+        &events[0].event().event
+    else {
+        panic!("expected a channel event");
+    };
+    metadata
+}
+
 #[tokio::test]
 async fn forwards_a_mentioned_thread_reply_to_its_session() {
     let posted = message(vec![mention_of(BotId::TEST_A)]);
@@ -87,15 +129,11 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
         .return_once(|_| Box::pin(async { Ok(true) }));
-    let service = AgentTriggerService::new(sessions, bots);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, bots, replies, judge);
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
-    assert_eq!(events.len(), 1);
-    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
-        &events[0].event().event
-    else {
-        panic!("expected a channel event");
-    };
+    let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.bot_id, BotId::TEST_A);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
 }
@@ -105,13 +143,9 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
 #[tokio::test]
 async fn a_thread_reply_without_a_mention_does_not_forward() {
     let posted = message(vec![]);
-    let mut sessions = MockAgentSessionRepo::new();
-    sessions
-        .expect_find_for_channel()
-        .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
-    let bots = MockAgentBotLookup::new();
-    let service = AgentTriggerService::new(sessions, bots);
+    let sessions = implicit_sessions(vec![]);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, MockAgentBotLookup::new(), replies, judge);
 
     assert!(
         service
@@ -136,7 +170,8 @@ async fn evaluates_every_mentioned_agent_bot() {
     bots.expect_has_agent()
         .times(2)
         .returning(|_| Box::pin(async { Ok(true) }));
-    let service = AgentTriggerService::new(sessions, bots);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, bots, replies, judge);
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 2);
@@ -170,7 +205,8 @@ async fn evaluates_a_repeated_bot_mention_once() {
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
         .return_once(|_| Box::pin(async { Ok(true) }));
-    let service = AgentTriggerService::new(sessions, bots);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, bots, replies, judge);
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 1);
@@ -195,7 +231,8 @@ async fn ignores_a_mentioned_bot_without_an_agent() {
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
         .return_once(|_| Box::pin(async { Ok(false) }));
-    let service = AgentTriggerService::new(sessions, bots);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, bots, replies, judge);
 
     assert!(
         service
@@ -226,14 +263,213 @@ async fn deduplicates_a_session_found_for_multiple_mentions() {
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
         .return_once(|_| Box::pin(async { Ok(true) }));
-    let service = AgentTriggerService::new(sessions, bots);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, bots, replies, judge);
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
-    assert_eq!(events.len(), 1);
-    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
-        &events[0].event().event
-    else {
-        panic!("expected a channel event");
-    };
+    let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
+}
+
+/// Session repo mocks for the implicit path: no session owns the message's
+/// channel, and its thread carries the given sessions.
+fn implicit_sessions(found: Vec<AgentSession>) -> MockAgentSessionRepo {
+    let mut sessions = MockAgentSessionRepo::new();
+    sessions
+        .expect_find_for_channel()
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+    sessions
+        .expect_find_all_for_thread()
+        .with(mockall::predicate::eq(Uuid::from_u128(3)))
+        .once()
+        .return_once(move |_| Box::pin(async move { Ok(found) }));
+    sessions
+}
+
+fn agent_bots() -> MockAgentBotLookup {
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_has_agent()
+        .returning(|_| Box::pin(async { Ok(true) }));
+    bots
+}
+
+fn detector(result: Result<bool>) -> MockReplyDetector {
+    let mut replies = MockReplyDetector::new();
+    replies
+        .expect_is_quote_reply()
+        .once()
+        .return_once(move |_| Box::pin(async move { result }));
+    replies
+}
+
+fn judge_saying(result: Result<bool>) -> MockImplicitTriggerJudge {
+    let mut judge = MockImplicitTriggerJudge::new();
+    judge
+        .expect_is_addressed_to_agent()
+        .once()
+        .return_once(move |_| Box::pin(async move { result }));
+    judge
+}
+
+#[tokio::test]
+async fn a_quote_reply_in_a_session_thread_triggers_without_a_mention() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        detector(Ok(true)),
+        MockImplicitTriggerJudge::new(),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    let metadata = existing_channel_metadata(&events);
+    assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
+    assert_eq!(metadata.bot_id, BotId::TEST_A);
+    assert_eq!(metadata.kind, ChannelKind::QuoteReply);
+}
+
+#[tokio::test]
+async fn a_message_the_judge_reads_as_addressed_triggers_as_inferred() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        detector(Ok(false)),
+        judge_saying(Ok(true)),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    let metadata = existing_channel_metadata(&events);
+    assert_eq!(metadata.kind, ChannelKind::Inferred);
+}
+
+#[tokio::test]
+async fn a_message_addressed_to_nobody_yields_nothing() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        detector(Ok(false)),
+        judge_saying(Ok(false)),
+    );
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_thread_without_sessions_never_consults_the_judge() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![]);
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, MockAgentBotLookup::new(), replies, judge);
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_bot_sender_never_triggers_implicitly() {
+    let mut posted = message(vec![]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+    let mut sessions = MockAgentSessionRepo::new();
+    sessions
+        .expect_find_for_channel()
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+    let (replies, judge) = no_implicit();
+    let service = service(sessions, MockAgentBotLookup::new(), replies, judge);
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn implicit_triggering_skips_sessions_of_agentless_bots() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![
+        thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
+        thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
+    ]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_has_agent()
+        .with(mockall::predicate::eq(BotId::TEST_A))
+        .once()
+        .return_once(|_| Box::pin(async { Ok(false) }));
+    bots.expect_has_agent()
+        .with(mockall::predicate::eq(BotId::TEST_B))
+        .once()
+        .return_once(|_| Box::pin(async { Ok(true) }));
+    let service = service(
+        sessions,
+        bots,
+        detector(Ok(true)),
+        MockImplicitTriggerJudge::new(),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    let metadata = existing_channel_metadata(&events);
+    assert_eq!(metadata.session_id, AgentSessionId::TEST_B);
+    assert_eq!(metadata.bot_id, BotId::TEST_B);
+}
+
+#[tokio::test]
+async fn a_failing_detector_falls_through_to_the_judge() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        detector(Err(AgentSessionError::Unknown(anyhow::anyhow!(
+            "lexical service unavailable"
+        )))),
+        judge_saying(Ok(true)),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    assert_eq!(
+        existing_channel_metadata(&events).kind,
+        ChannelKind::Inferred
+    );
+}
+
+#[tokio::test]
+async fn a_failing_judge_yields_nothing_instead_of_an_error() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        detector(Ok(false)),
+        judge_saying(Err(AgentSessionError::Unknown(anyhow::anyhow!(
+            "model unavailable"
+        )))),
+    );
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
 }

@@ -155,6 +155,16 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ChannelSession>> + Send;
 
+    /// Every session rooted at this thread, newest first, regardless of bot.
+    ///
+    /// [`find_for_channel`](Self::find_for_channel) answers for one known bot;
+    /// this answers when no bot was named - a message in the thread may still
+    /// be meant for whichever agent lives there.
+    fn find_all_for_thread(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// The agent behind a session, for rendering the messages it sent.
     ///
     /// A bot that has been deleted still has messages in the channel, so this

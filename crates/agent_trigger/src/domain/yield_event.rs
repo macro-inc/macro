@@ -7,7 +7,8 @@ use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
+    NewAgentSessionEvent,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
@@ -36,6 +37,12 @@ pub enum NoEventReason {
     /// Another bot-specific lookup already yielded this existing session.
     DuplicateSession {
         /// Session already evaluated for this message.
+        session_id: AgentSessionId,
+    },
+    /// The message sat in a session's thread without a mention, and neither
+    /// quote-reply detection nor the model judged it addressed to the agent.
+    NotAddressedToAgent {
+        /// Session whose thread carried the message.
         session_id: AgentSessionId,
     },
 }
@@ -141,6 +148,7 @@ fn yield_channel_event(
             AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
                 bot_id: session_bot,
                 session_id: session.id,
+                kind: ChannelKind::MentionThread,
                 message: posted.clone(),
             }),
         ),
