@@ -1,42 +1,48 @@
 """Generate the star-history SVG (light + dark) for the Macro README."""
 from datetime import date
 
-# Star counts reverse-engineered from the star-history.com chart,
-# anchored to the known value of 713 on 2026-07-28.
+# Cumulative star counts from the GitHub stargazers API (starred_at timestamps),
+# sampled through 2026-08-12 16:14 UTC, where the total was 1421.
 SERIES = [
     (date(2025, 11, 18), 0),
-    (date(2025, 12, 1), 3),
-    (date(2025, 12, 6), 9),
-    (date(2025, 12, 11), 18),
-    (date(2025, 12, 16), 24),
-    (date(2025, 12, 24), 27),
-    (date(2026, 1, 1), 29),
-    (date(2026, 1, 16), 31),
-    (date(2026, 2, 1), 33),
-    (date(2026, 2, 16), 35),
-    (date(2026, 3, 1), 37),
-    (date(2026, 3, 16), 39),
-    (date(2026, 4, 1), 42),
-    (date(2026, 4, 9), 55),
-    (date(2026, 4, 16), 72),
-    (date(2026, 4, 23), 98),
-    (date(2026, 5, 1), 130),
-    (date(2026, 5, 10), 141),
-    (date(2026, 5, 20), 158),
-    (date(2026, 6, 1), 205),
-    (date(2026, 6, 10), 235),
-    (date(2026, 6, 20), 272),
-    (date(2026, 7, 1), 330),
-    (date(2026, 7, 10), 415),
-    (date(2026, 7, 17), 520),
-    (date(2026, 7, 28), 713),
+    (date(2025, 11, 28), 5),
+    (date(2025, 12, 5), 17),
+    (date(2025, 12, 12), 21),
+    (date(2025, 12, 26), 24),
+    (date(2026, 1, 9), 28),
+    (date(2026, 1, 23), 34),
+    (date(2026, 2, 6), 37),
+    (date(2026, 2, 20), 38),
+    (date(2026, 3, 6), 38),
+    (date(2026, 3, 13), 54),
+    (date(2026, 3, 27), 59),
+    (date(2026, 4, 10), 81),
+    (date(2026, 4, 17), 92),
+    (date(2026, 4, 24), 108),
+    (date(2026, 5, 1), 133),
+    (date(2026, 5, 8), 156),
+    (date(2026, 5, 15), 168),
+    (date(2026, 5, 29), 183),
+    (date(2026, 6, 5), 213),
+    (date(2026, 6, 12), 242),
+    (date(2026, 6, 19), 262),
+    (date(2026, 6, 26), 286),
+    (date(2026, 7, 3), 337),
+    (date(2026, 7, 10), 422),
+    (date(2026, 7, 17), 526),
+    (date(2026, 7, 24), 594),
+    (date(2026, 7, 31), 689),
+    (date(2026, 8, 7), 765),
+    (date(2026, 8, 10), 899),
+    (date(2026, 8, 11), 1063),
+    (date(2026, 8, 12), 1421),
 ]
 
 W, H = 1100, 560
 L, R, T, B = 76, 52, 112, 62           # plot padding
 PX0, PX1 = L, W - R
 PY0, PY1 = T, H - B
-YMAX = 750
+YMAX = 1500
 LATEST = SERIES[-1][1]
 ORANGE = "#f26a1b"
 
@@ -87,7 +93,7 @@ def star(cx, cy, r):
 
 MONTHS = [(date(2025, 12, 1), "Dec"), (date(2026, 1, 1), "Jan"), (date(2026, 2, 1), "Feb"),
           (date(2026, 3, 1), "Mar"), (date(2026, 4, 1), "Apr"), (date(2026, 5, 1), "May"),
-          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul")]
+          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul"), (date(2026, 8, 1), "Aug")]
 
 FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 
@@ -127,7 +133,7 @@ def build(name, c):
       f'font-weight="600" fill="{c["btn_fg"]}">Star this repo</text>')
 
     # gridlines + y labels
-    for v in range(0, YMAX + 1, 100):
+    for v in range(0, YMAX + 1, 250):
         y = sy(v)
         a(f'<line x1="{PX0}" y1="{y:.1f}" x2="{PX1}" y2="{y:.1f}" stroke="{c["grid"]}" '
           f'stroke-width="1"/>')
