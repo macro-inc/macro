@@ -6,6 +6,43 @@ import {
   formatOptionValue,
 } from '@property/utils/formatting';
 
+/** One resolved select option of a stored property value. */
+export type SelectOptionEntry = {
+  id: string;
+  label: string;
+  color: string | null;
+};
+
+/**
+ * Resolves a stored SelectOption value into its options (label + tag color),
+ * for rendering with the property system's option pills. Returns undefined
+ * for non-select values or when no option resolves, so callers fall back to
+ * the plain text label path.
+ */
+export function selectOptionEntries(
+  raw: unknown,
+  definition: PropertyDefinitionDomain | undefined
+): SelectOptionEntry[] | undefined {
+  const tagged = asTaggedValue(raw);
+  if (
+    !tagged ||
+    tagged.type !== 'SelectOption' ||
+    !Array.isArray(tagged.value)
+  ) {
+    return undefined;
+  }
+  const entries = tagged.value
+    .filter((id): id is string => typeof id === 'string')
+    .flatMap((id) => {
+      const option = definition?.options?.find((o) => o.id === id);
+      if (!option) return [];
+      return [
+        { id, label: formatOptionValue(option), color: option.color ?? null },
+      ];
+    });
+  return entries.length > 0 ? entries : undefined;
+}
+
 /**
  * The stored property payload: models_properties' tagged PropertyValue
  * (`{"type": "SelectOption", "value": ["uuid"]}` …). Arrives as untyped

@@ -1,7 +1,6 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId } from '@core/user';
-import { DisplayName } from '@entity/components/DisplayName';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import {
   type ActivityEvent,
@@ -9,6 +8,7 @@ import {
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, Suspense } from 'solid-js';
+import { ActorName } from './actor-name';
 import { actionAsPropertyChange, describeAction } from './describe-action';
 import { PropertyChangeText } from './property-change';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
@@ -70,15 +70,11 @@ function ActivityRow(props: { event: ActivityEvent }) {
       <Show when={actorId()}>
         {(id) => <UserIcon id={id()} size="sm" showTooltip={false} />}
       </Show>
-      <span class="min-w-0 truncate">
-        <Show when={actorId()} fallback={<span>Automation</span>}>
-          {(id) => (
-            <span class="font-medium">
-              <DisplayName id={id()} format="firstName" />
-            </span>
-          )}
-        </Show>{' '}
-        <span class="text-text-secondary">
+      <span class="flex min-w-0 items-center gap-1.5">
+        <span class="shrink-0 font-medium">
+          <ActorName actorId={props.event.actorId} />
+        </span>
+        <span class="min-w-0 truncate text-text-secondary">
           <Show
             when={actionAsPropertyChange(props.event.action)}
             fallback={describeAction(props.event.action)}
