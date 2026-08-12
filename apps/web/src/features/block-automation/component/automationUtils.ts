@@ -303,21 +303,19 @@ export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
 ): UpdateScheduledAction {
-  // This editor only builds Agent tasks. Writing one over an action of another
-  // kind would both convert the action and drop that kind's task payload (a
-  // RemoteAgent's endpoint_url, for one), so refuse rather than corrupt it.
-  if (previous.kind !== 'Agent') {
-    throw new Error(
-      `cannot edit a ${previous.kind} automation with the agent editor`
-    );
-  }
-
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
     schedule: buildCron(draft),
+    // Preserve the stored kind and, for kinds this editor cannot build, the
+    // stored task: an update is a full overwrite, so writing an Agent-shaped
+    // task over a RemoteAgent action would drop its endpoint_url. Name,
+    // schedule and enabled still apply to every kind.
     kind: previous.kind,
     timezone: previous.timezone || getDefaultTimezone(),
-    task: buildAgentTask(draft) as unknown as UpdateScheduledAction['task'],
+    task:
+      previous.kind === 'Agent'
+        ? (buildAgentTask(draft) as unknown as UpdateScheduledAction['task'])
+        : previous.task,
     enabled: draft.enabled,
   };
 }

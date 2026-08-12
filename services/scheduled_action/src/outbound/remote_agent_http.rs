@@ -10,6 +10,13 @@
 //! `pub(super)` and therefore not reachable from this service. If a third
 //! caller appears, that validator is worth promoting into a shared crate rather
 //! than copied again.
+//!
+//! Known residual risk, shared with the webhook path it mirrors: the host is
+//! resolved for validation and then resolved again by the request itself, so a
+//! DNS record that changes between the two can still point the request at a
+//! blocked address. Closing that means pinning the request to the address that
+//! was validated; it is deliberately left as-is here so both paths keep the
+//! same behaviour and can be fixed together.
 
 #[cfg(test)]
 mod test;
