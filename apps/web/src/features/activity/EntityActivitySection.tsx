@@ -1,6 +1,4 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId } from '@core/user';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import {
   type ActivityEvent,
@@ -64,18 +62,13 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
 }
 
 function ActivityRow(props: { event: ActivityEvent }) {
-  const actorId = () => tryMacroId(props.event.actorId);
-
   return (
     <div class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1">
-      <Show when={actorId()}>
-        {(id) => <UserIcon id={id()} size="sm" showTooltip={false} />}
-      </Show>
-      <span class="flex min-w-0 items-center gap-1">
-        <span class="shrink-0 font-medium text-ink">
+      <span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-0.5">
+        <span class="font-medium text-ink">
           <ActorName actorId={props.event.actorId} />
         </span>
-        <span class="min-w-0 truncate text-ink-muted">
+        <span class="min-w-0 text-ink-muted">
           <ActionPhrase event={props.event} />
         </span>
       </span>
