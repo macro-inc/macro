@@ -11,16 +11,15 @@ use std::{marker::PhantomData, time::Duration};
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{
-    Event, EventBrokerError, KafkaConsumerAdapter, MacroEvent, MacroEventCollection,
-    MacroEventConsumerService, MessageParts, Topic, TopicEvent,
+    EventBrokerError, KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService,
 };
 use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::domain::{
     models::websocket_notification_event::{
-        NotificationMacroEvent, NotificationTopicEvent, WebSocketNotificationMetadata,
+        JsonNotificationMacroEvent, WebSocketNotificationMetadata,
     },
     ports::WebSocketNotificationConsumer,
 };
@@ -28,70 +27,11 @@ use crate::domain::{
 /// Maximum time to wait for notification topic metadata during partition assignment.
 const TOPIC_METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Typed event collection for a notification payload decoded as `T`.
-struct DeclaredMacroEvent<T>(NotificationMacroEvent<T>);
+type IndependentKafkaConsumer = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>;
+type NotificationEventConsumer =
+    MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
-impl<T> MacroEventCollection for DeclaredMacroEvent<T>
-where
-    T: Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-    fn decode<M: MessageParts>(message: &M) -> Result<Self, EventBrokerError> {
-        let expected_topic = <<NotificationTopicEvent<T> as TopicEvent>::Topic as Topic>::TOPIC_STR;
-        if message.topic() != expected_topic {
-            return Err(EventBrokerError::UnknownTopic(message.topic().to_owned()));
-        }
-
-        let key = message.key().ok_or(EventBrokerError::MissingMessageKey)?;
-        let payload = message
-            .payload()
-            .ok_or(EventBrokerError::MissingMessagePayload)?;
-        let event = NotificationMacroEvent::<T>::decode(key, payload)?;
-        let expected = NotificationTopicEvent::<T>::SCHEMA_VERSION;
-        let actual = event.event().schema_version;
-        if actual != expected {
-            return Err(EventBrokerError::UnsupportedSchemaVersion {
-                topic: expected_topic,
-                expected,
-                actual,
-            });
-        }
-
-        Ok(Self(event))
-    }
-
-    fn topics() -> &'static [&'static str] {
-        &[<<NotificationTopicEvent<T> as TopicEvent>::Topic as Topic>::TOPIC_STR]
-    }
-}
-
-type IndependentKafkaConsumer<T> = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent<T>>;
-type NotificationEventConsumer<T> =
-    MacroEventConsumerService<DeclaredMacroEvent<T>, IndependentKafkaConsumer<T>>;
-
-#[derive(Deserialize, Serialize)]
-struct SchemaVersionPayload {}
-
-impl TopicEvent for SchemaVersionPayload {
-    type Topic = <NotificationTopicEvent<()> as TopicEvent>::Topic;
-
-    const SCHEMA_VERSION: u8 = NotificationTopicEvent::<()>::SCHEMA_VERSION;
-}
-
-fn validate_notification_schema(message: &impl MessageParts) -> Result<(), EventBrokerError> {
-    let payload = message
-        .payload()
-        .ok_or(EventBrokerError::MissingMessagePayload)?;
-    let actual = Event::<SchemaVersionPayload>::decode(payload)?.schema_version;
-    let expected = SchemaVersionPayload::SCHEMA_VERSION;
-    if actual != expected {
-        return Err(EventBrokerError::UnsupportedSchemaVersion {
-            topic: <<SchemaVersionPayload as TopicEvent>::Topic as Topic>::TOPIC_STR,
-            expected,
-            actual,
-        });
-    }
-    Ok(())
-}
+macro_event_broker::declare_topics!(DeclaredMacroEvent: JsonNotificationMacroEvent);
 
 /// Independent consumer of WebSocket notification delivery requests decoded as `T`.
 ///
@@ -102,7 +42,7 @@ pub struct NotificationTopicConsumer<T>
 where
     T: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    consumer: NotificationEventConsumer<T>,
+    consumer: NotificationEventConsumer,
     payload: PhantomData<fn() -> T>,
 }
 
@@ -115,15 +55,12 @@ where
     pub fn from_env(brokers: &str) -> Result<Self, Report> {
         let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
             .context("failed to create independent WebSocket notification consumer")?;
-        let consumer = IndependentKafkaConsumer::<T>::new(
-            consumer,
-            InitialOffset::Latest,
-            TOPIC_METADATA_TIMEOUT,
-        )
-        .context("failed to assign WebSocket notification topic partitions")?;
+        let consumer =
+            IndependentKafkaConsumer::new(consumer, InitialOffset::Latest, TOPIC_METADATA_TIMEOUT)
+                .context("failed to assign WebSocket notification topic partitions")?;
 
         tracing::info!(
-            topics = ?DeclaredMacroEvent::<T>::topics(),
+            topics = ?DeclaredMacroEvent::topics(),
             "independent WebSocket notification consumer listening"
         );
 
@@ -144,14 +81,14 @@ where
                 .recv()
                 .await
                 .context("failed to receive WebSocket notification event")?;
-            let kafka_message = message.inner();
-            match validate_notification_schema(kafka_message) {
-                Ok(()) => {}
+            let event = match message.decode_payload() {
+                Ok(event) => event,
                 Err(EventBrokerError::UnsupportedSchemaVersion {
                     topic,
                     expected,
                     actual,
                 }) => {
+                    let kafka_message = message.inner();
                     tracing::warn!(
                         topic,
                         expected,
@@ -164,15 +101,25 @@ where
                 }
                 Err(error) => {
                     return Err(Report::new(error)
-                        .context("failed to decode WebSocket notification event envelope")
+                        .context("failed to decode WebSocket notification event")
                         .into_dynamic());
                 }
-            }
+            };
 
-            let event = message
-                .decode_payload()
-                .context("failed to decode WebSocket notification event")?;
-            return Ok(event.0.into_message());
+            return match event {
+                DeclaredMacroEvent::JsonNotificationMacroEvent(event) => {
+                    let WebSocketNotificationMetadata {
+                        recipients,
+                        notification,
+                    } = event.into_message();
+                    let notification = serde_json::from_value(notification)
+                        .context("failed to decode WebSocket notification payload")?;
+                    Ok(WebSocketNotificationMetadata {
+                        recipients,
+                        notification,
+                    })
+                }
+            };
         }
     }
 }

@@ -11,15 +11,13 @@ use std::time::Duration;
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{
-    Event, EventBrokerError, KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService,
-    MessageParts, Topic, TopicEvent,
+    EventBrokerError, KafkaConsumerAdapter, MacroEventCollection, MacroEventConsumerService,
 };
 use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
-use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    models::{SoupMacroEvent, SoupRealtimeMessage, SoupTopicEvent},
+    models::{SoupMacroEvent, SoupRealtimeMessage},
     ports::SoupRealtimeConsumer,
 };
 
@@ -30,31 +28,6 @@ type IndependentKafkaConsumer = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEve
 type SoupEventConsumer = MacroEventConsumerService<DeclaredMacroEvent, IndependentKafkaConsumer>;
 
 macro_event_broker::declare_topics!(DeclaredMacroEvent: SoupMacroEvent);
-
-#[derive(Deserialize, Serialize)]
-struct SchemaVersionPayload {}
-
-impl TopicEvent for SchemaVersionPayload {
-    type Topic = <SoupTopicEvent as TopicEvent>::Topic;
-
-    const SCHEMA_VERSION: u8 = SoupTopicEvent::SCHEMA_VERSION;
-}
-
-fn validate_soup_schema(message: &impl MessageParts) -> Result<(), EventBrokerError> {
-    let payload = message
-        .payload()
-        .ok_or(EventBrokerError::MissingMessagePayload)?;
-    let actual = Event::<SchemaVersionPayload>::decode(payload)?.schema_version;
-    let expected = SoupTopicEvent::SCHEMA_VERSION;
-    if actual != expected {
-        return Err(EventBrokerError::UnsupportedSchemaVersion {
-            topic: <<SoupTopicEvent as TopicEvent>::Topic as Topic>::TOPIC_STR,
-            expected,
-            actual,
-        });
-    }
-    Ok(())
-}
 
 /// Independent consumer of recipient-targeted Soup messages.
 ///
@@ -98,14 +71,14 @@ impl SoupTopicConsumer {
                 .recv()
                 .await
                 .context("failed to receive realtime Soup event")?;
-            let kafka_message = message.inner();
-            match validate_soup_schema(kafka_message) {
-                Ok(()) => {}
+            let event = match message.decode_payload() {
+                Ok(event) => event,
                 Err(EventBrokerError::UnsupportedSchemaVersion {
                     topic,
                     expected,
                     actual,
                 }) => {
+                    let kafka_message = message.inner();
                     tracing::warn!(
                         topic,
                         expected,
@@ -118,14 +91,11 @@ impl SoupTopicConsumer {
                 }
                 Err(error) => {
                     return Err(Report::new(error)
-                        .context("failed to decode realtime Soup event envelope")
+                        .context("failed to decode realtime Soup event")
                         .into_dynamic());
                 }
-            }
+            };
 
-            let event = message
-                .decode_payload()
-                .context("failed to decode realtime Soup event")?;
             return match event {
                 DeclaredMacroEvent::SoupMacroEvent(event) => Ok(event.into_message()),
             };

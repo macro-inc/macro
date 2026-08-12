@@ -1,12 +1,8 @@
-use macro_event_broker::{EventBrokerError, MacroEventCollection as _, MessageParts};
-use serde::{Deserialize, Serialize};
+use macro_event_broker::{
+    EventBrokerError, MacroEventCollection as _, MessageParts, MessageWrapper,
+};
 
-use super::{DeclaredMacroEvent, validate_notification_schema};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestNotification {
-    kind: String,
-}
+use super::DeclaredMacroEvent;
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -28,26 +24,26 @@ impl MessageParts for TestMessage {
 
 #[test]
 fn assigns_only_the_typed_notifications_topic() {
-    assert_eq!(
-        DeclaredMacroEvent::<TestNotification>::topics(),
-        ["macro.notifications"]
-    );
+    assert_eq!(DeclaredMacroEvent::topics(), ["macro.notifications"]);
 }
 
 #[test]
-fn classifies_unsupported_schema_versions_before_decoding_payload_metadata() {
-    let message = TestMessage {
+fn declared_topic_decoder_rejects_unsupported_schema_versions() {
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         payload: serde_json::to_vec(&serde_json::json!({
             "event_id": "00000000-0000-0000-0000-000000000001",
             "schema_version": 2,
             "event_type": "notification.websocket_delivery_requested",
-            "metadata": {}
+            "metadata": {
+                "recipients": [],
+                "notification": {}
+            }
         }))
         .expect("serializable event"),
-    };
+    });
 
     assert!(matches!(
-        validate_notification_schema(&message),
+        message.decode_payload(),
         Err(EventBrokerError::UnsupportedSchemaVersion {
             expected: 1,
             actual: 2,
