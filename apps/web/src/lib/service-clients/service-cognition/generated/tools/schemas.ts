@@ -1987,28 +1987,6 @@ export const ListNotifications = z.object({
       z.null(),
     ])
     .optional(),
-  includeTypes: z
-    .union([
-      z.array(
-        z.enum([
-          'email',
-          'message',
-          'channel',
-          'document',
-          'project',
-          'chat',
-          'call',
-          'task',
-          'github',
-          'reminder',
-          'calendar',
-        ])
-      ),
-      z.null(),
-    ])
-    .optional(),
-  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
-  seen: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const ListNotificationsResponse = z.object({
