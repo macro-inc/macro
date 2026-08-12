@@ -1,6 +1,6 @@
 //! Postgres implementation of the agent session and agent session log
-//! repositories, the fold's log source, and the channel audience a streamed
-//! frame is addressed to.
+//! repositories, the fold's log source, and the audience a streamed frame is
+//! addressed to.
 
 #[cfg(test)]
 mod test;
@@ -11,7 +11,7 @@ use crate::domain::model::{
     Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
-use crate::outbound::connection_gateway_realtime::ChannelAudience;
+use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
@@ -85,7 +85,7 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
 
 struct AgentSessionRow {
     id: Uuid,
-    channel_id: Uuid,
+    initiator_user_id: String,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
@@ -106,7 +106,8 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         let status = parse_status(&row.status, row.status_event_name)?;
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
-            channel_id: row.channel_id,
+            initiator_user_id: MacroUserIdStr::try_from(row.initiator_user_id)
+                .context("agent session has an unparseable initiator")?,
             thread_id: row.thread_id,
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
@@ -125,7 +126,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
             id,
-            owner_id,
+            initiator_user_id,
             bot_id,
             thread_id,
             originating_message_id,
@@ -133,52 +134,24 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             harness,
             repo_url,
         } = params;
-        let new_channel_id = macro_uuid::generate_uuid_v7();
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .context("begin agent session create")?;
 
-        sqlx::query!(
-            r#"
-            INSERT INTO comms_channels (id, name, channel_type, owner_id, kind)
-            VALUES ($1, NULL, 'private', $2, 'agent')
-            "#,
-            new_channel_id,
-            owner_id.as_ref(),
-        )
-        .execute(&mut *transaction)
-        .await
-        .context("failed to create agent channel")?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO comms_channel_participants (channel_id, role, user_id)
-            VALUES ($1, 'owner', $2)
-            "#,
-            new_channel_id,
-            owner_id.as_ref(),
-        )
-        .execute(&mut *transaction)
-        .await
-        .context("failed to create agent channel owner")?;
-
+        // A session is one row: nothing else is created alongside it.
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             INSERT INTO agent_session (
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name
+                id, initiator_user_id, thread_id, originating_message_id, bot_id, model,
+                harness, repo_url, acp_session_id, status, status_event_name
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
+                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, acp_session_id, status, status_event_name,
+                created_at, modified_at
             "#,
             id.as_uuid(),
-            new_channel_id,
+            initiator_user_id.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -189,14 +162,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             status,
             status_event_name,
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&self.pool)
         .await
         .context("failed to create agent session")?;
-
-        transaction
-            .commit()
-            .await
-            .context("commit agent session create")?;
 
         Ok(row.try_into()?)
     }
@@ -206,8 +174,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name, created_at, modified_at
+                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, acp_session_id, status, status_event_name,
+                created_at, modified_at
             FROM agent_session
             WHERE id = $1
             "#,
@@ -223,76 +192,40 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 
     async fn find_for_channel(
         &self,
-        channel_id: Uuid,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
     ) -> Result<ChannelSession> {
-        let bot_id = bot_id.map(BotId::as_uuid);
-        let rows = sqlx::query_as!(
+        // Both are required to match: a session is only reachable from the
+        // thread it was created from, by the bot that runs it. NULL params
+        // match nothing rather than everything.
+        let (Some(thread_id), Some(bot_id)) = (thread_id, bot_id) else {
+            return Ok(ChannelSession::None);
+        };
+        let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
-                session.id, session.channel_id, session.thread_id,
-                session.originating_message_id, session.bot_id,
-                session.model, session.harness, session.repo_url, session.acp_session_id,
-                session.status, session.status_event_name, session.created_at, session.modified_at
-            FROM agent_session session
-            WHERE
-                session.channel_id = $1 -- it is the dedicated agent channel
-                OR (
-                    -- otherwise, if it's in a thread and literally mentions the bot
-                    session.thread_id = $2
-                    AND session.bot_id = $3
-                )
-                -- we collect both!
-            ORDER BY (session.channel_id = $1) DESC, session.created_at DESC
-            LIMIT 3
+                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, acp_session_id, status, status_event_name,
+                created_at, modified_at
+            FROM agent_session
+            WHERE thread_id = $1 AND bot_id = $2
+            ORDER BY created_at DESC
+            LIMIT 1
             "#,
-            channel_id,
             thread_id,
-            bot_id,
+            bot_id.as_uuid(),
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .context("failed to find agent session for channel context")?;
 
-        let sessions = rows
-            .into_iter()
-            .map(AgentSession::try_from)
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let matches_subthread = |session: &AgentSession| {
-            thread_id.is_some()
-                && bot_id.is_some()
-                && session.thread_id == thread_id
-                && Some(session.bot_id.as_uuid()) == bot_id
-        };
-
-        Ok(match sessions.as_slice() {
-            [] => ChannelSession::None,
-            [session] if session.channel_id == channel_id => {
-                ChannelSession::InDedicatedChannel(session.clone())
-            }
-            [session] if matches_subthread(session) => {
-                ChannelSession::CreatedFromThread(session.clone())
-            }
-            [dedicated_channel_agent_session, subthread_agent_session]
-                if dedicated_channel_agent_session.channel_id == channel_id
-                    && matches_subthread(subthread_agent_session) =>
-            {
-                ChannelSession::ThreadInDedicatedChannel {
-                    dedicated_channel_agent_session: dedicated_channel_agent_session.clone(),
-                    subthread_agent_session: subthread_agent_session.clone(),
-                }
-            }
-            _ => {
-                return Err(
-                    anyhow::anyhow!("agent sessions violated channel lookup invariants").into(),
-                );
-            }
+        Ok(match row {
+            Some(row) => ChannelSession::CreatedFromThread(row.try_into()?),
+            None => ChannelSession::None,
         })
     }
 
-    #[tracing::instrument(err, skip(self))]
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         // Delegated to the bots hex rather than a bespoke query: this is
         // exactly bot id -> bot, and `get_bot` already excludes deleted bots -
@@ -368,16 +301,22 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
+        // Deletes the session itself. This used to delete the session's
+        // channel and let `ON DELETE CASCADE` carry the session away with it,
+        // which stopped working the moment a session could have no channel.
+        //
+        // A session old enough to own one leaves it behind: it holds the
+        // history that channel renders, and is not this operation's to destroy.
         sqlx::query!(
             r#"
-            DELETE FROM comms_channels
-            WHERE id = (SELECT channel_id FROM agent_session WHERE id = $1)
+            DELETE FROM agent_session
+            WHERE id = $1
             "#,
             id.as_uuid(),
         )
         .execute(&self.pool)
         .await
-        .context("failed to delete agent session channel")?;
+        .context("failed to delete agent session")?;
 
         Ok(())
     }
@@ -511,23 +450,27 @@ impl agent_fold::domain::ports::LogRepo for PgAgentSessionRepo {
 /// A participant who has left keeps their row, with `left_at` set - so the
 /// filter is what stops a former member being sent a session they can no
 /// longer open.
-impl ChannelAudience for PgAgentSessionRepo {
-    async fn participants(
+impl SessionAudience for PgAgentSessionRepo {
+    async fn viewers(
         &self,
-        channel_id: Uuid,
+        agent_session_id: AgentSessionId,
     ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        let participants = sqlx::query_scalar!(
+        // The initiator, which is who the dedicated channel's participant
+        // list used to resolve to: `create` only ever wrote the one owner
+        // row. Widens to a real grant lookup when sessions grow shared
+        // access.
+        let viewers = sqlx::query_scalar!(
             r#"
-            SELECT user_id AS "user_id: MacroUserIdStr"
-            FROM comms_channel_participants
-            WHERE channel_id = $1 AND left_at IS NULL
+            SELECT initiator_user_id AS "initiator_user_id: MacroUserIdStr"
+            FROM agent_session
+            WHERE id = $1
             "#,
-            channel_id,
+            agent_session_id.as_uuid(),
         )
         .fetch_all(&self.pool)
         .await
         .map_err(|error| rootcause::report!(error))?;
 
-        Ok(participants)
+        Ok(viewers)
     }
 }

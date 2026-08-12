@@ -27,7 +27,7 @@ impl<T> AgentConnector for T where
 /// and a repo whose futures are not `Send` cannot be used there.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionRepo: Send + Sync + 'static {
-    /// Atomically persist a new agent session with its dedicated channel and owner participant.
+    /// Persist a new agent session.
     fn create(
         &self,
         params: CreateAgentSessionParams,
@@ -38,25 +38,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Find the session associated with an incoming channel context.
     ///
-    /// ```text
-    /// find_for_channel(channel_id, thread_id, bot_id)
-    ///     |
-    ///     +-- one session owns channel_id and another matches thread_id + bot_id
-    ///     |       -> ThreadInDedicatedChannel { both sessions }
-    ///     |
-    ///     +-- session.channel_id == channel_id
-    ///     |       -> InDedicatedChannel
-    ///     |
-    ///     +-- thread_id and bot_id are Some
-    ///     |   and the session matches both
-    ///     |       -> CreatedFromThread
-    ///     |
-    ///     +-- otherwise
-    ///             -> None
-    /// ```
+    /// Matches only when `thread_id` and `bot_id` are both given and a session
+    /// was created from that thread by that bot -> `CreatedFromThread`;
+    /// otherwise `None`. There is nothing else to match: a session does not
+    /// own a channel, and messages sent directly to a session arrive through
+    /// their own topic rather than as channel events.
     fn find_for_channel(
         &self,
-        channel_id: Uuid,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ChannelSession>> + Send;
@@ -105,7 +93,7 @@ pub trait AgentSessionLogWriter: Send + 'static {
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Pushing a live session's frames to whoever is watching its channel.
+/// Pushing a live session's frames to whoever is watching it.
 ///
 /// Separate from the durable log: that is what a reader arriving late fetches
 /// and folds, while this tells a client already looking at the session what
@@ -115,7 +103,7 @@ pub trait AgentSessionLogWriter: Send + 'static {
 /// they reload, and the log it was derived from is already durable - so an
 /// implementation may drop, and callers must not fail an append over it.
 pub trait AgentSessionRealtime {
-    /// Publish one appended frame to the channel's viewers.
+    /// Publish one appended frame to the session's viewers.
     fn publish(
         &self,
         event: LogAppended,

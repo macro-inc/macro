@@ -30,7 +30,7 @@ use crate::domain::ports::SessionAnnouncer;
 fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChip {
     AgentAnnouncementChip {
         agent_session_id: announcement.session_id.to_string(),
-        channel_id: announcement.session_channel_id.to_string(),
+        channel_id: None,
         prompted_message: announcement.prompted_message_id,
         status: "booting".to_owned(),
     }

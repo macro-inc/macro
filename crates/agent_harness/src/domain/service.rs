@@ -197,8 +197,7 @@ where
         let OpenSession { bot_id, origin } = command;
         let repo_url = self.defaults.repo_url.clone();
 
-        let session = self
-            .sessions
+        self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
                 initiator_user_id: origin.sender.clone(),
@@ -216,7 +215,6 @@ where
                 session_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
-                session_channel_id: session.channel_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: origin.content.clone(),
                 triggered_by: origin.sender.clone(),
@@ -295,10 +293,9 @@ where
 
     /// Who, if anyone, should be told that this landed.
     ///
-    /// Only prompts are announced, and only when they arrived from somewhere
-    /// other than the session's own channel - a prompt posted into the
-    /// dedicated channel is already visible where it would be announced. That
-    /// comparison is the one reason this reads the session.
+    /// Only prompts are announced, and only when the caller named an origin
+    /// to answer back into. A session has no channel of its own, so an origin
+    /// is never redundant.
     async fn announcement(
         &self,
         session_id: AgentSessionId,
@@ -312,16 +309,10 @@ where
             return Ok(None);
         };
 
-        let session = self.sessions.get_session(session_id).await?;
-        if origin.channel_id == session.channel_id {
-            return Ok(None);
-        }
-
         Ok(Some(SessionAnnouncement {
             session_id,
             origin_channel_id: origin.channel_id,
             origin_thread_id: origin.thread_id,
-            session_channel_id: session.channel_id,
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),

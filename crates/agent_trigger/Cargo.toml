@@ -12,6 +12,7 @@ chrono = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
+channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -22,6 +23,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
-channel_sender = { path = "../channel_sender" }
 mockall = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

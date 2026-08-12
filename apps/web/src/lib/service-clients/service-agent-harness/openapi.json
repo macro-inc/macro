@@ -13,7 +13,7 @@
     "/agent-sessions/{session_id}": {
       "delete": {
         "tags": ["agent-sessions"],
-        "summary": "Delete an agent session, its dedicated channel, and its live resources.",
+        "summary": "Delete an agent session and its live resources.",
         "operationId": "delete_agent_session",
         "parameters": [
           {

@@ -30,8 +30,7 @@ pub enum SessionStatus {
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who started the session. Also becomes the owner of the
-    /// dedicated agent channel.
+    /// User who started the session.
     pub initiator_user_id: MacroUserIdStr<'static>,
     /// Bot running the agent.
     pub bot_id: BotId,
@@ -52,8 +51,6 @@ pub struct CreateAgentSessionParams {
 pub struct AgentSession {
     /// id of the agent session
     pub id: AgentSessionId,
-    /// The dedicated channel created for this session.
-    pub channel_id: Uuid,
     /// The user who started the session. Immutable for the session's life.
     pub initiator_user_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
@@ -90,17 +87,15 @@ pub struct SessionBot {
 
 /// One frame appended to a live session's log, for anyone watching.
 ///
-/// The streaming counterpart of [`ChannelSessionLog`]: that is the whole log
+/// The streaming counterpart of [`SessionLog`]: that is the whole log
 /// for a reader arriving late, this is one frame for a reader already here.
 /// Both carry the same entry shape, so a client folds them the same way -
 /// catching up on the log and then following it is one fold, not two.
 ///
-/// Addressed by channel rather than by session because that is what a viewer
-/// has: they opened a channel, and may not know a session exists.
+/// Addressed by session: it is the only thing a frame belongs to now that a
+/// session does not own a channel.
 #[derive(Debug, Clone)]
 pub struct LogAppended {
-    /// The channel whose viewers should see this.
-    pub channel_id: Uuid,
     /// The session the entry belongs to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
@@ -124,51 +119,38 @@ pub struct StoredAgentSessionLog {
     pub entry: AgentSessionLog,
 }
 
-/// A session's raw protocol log, looked up by its dedicated channel.
+/// A session's raw protocol log.
 ///
 /// Served rather than the messages it derives: the reader folds it. The web
 /// client runs the same fold compiled to WASM, so a streamed session and a
 /// reloaded one are rendered by one implementation rather than two that have
 /// to be kept agreeing.
 #[derive(Debug, Clone)]
-pub struct ChannelSessionLog {
-    /// The session the entries belong to.
-    pub agent_session_id: AgentSessionId,
+pub struct SessionLog {
     /// The agent whose messages the log derives.
     ///
     /// Sent because a reader has to render those messages and cannot work out
     /// who sent them: the sender of an agent message is this session's bot,
-    /// and nothing else a client fetches names it. Asking the channel's bots
-    /// is the wrong question - those are bots explicitly added to a channel,
-    /// which a session's agent need not be.
+    /// and nothing else names it.
     pub bot: SessionBot,
     /// Every logged frame, oldest first. Folding depends on this order.
     pub entries: Vec<StoredAgentSessionLog>,
 }
 
 /// How an incoming channel context relates to an agent session.
+///
+/// Only the originating thread can match: sessions no longer own a dedicated
+/// channel, so there is no channel that is itself a session. Messages sent
+/// directly to a session arrive through their own topic, not as channel
+/// events, and never pass through this lookup.
 #[derive(Debug, Clone)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "the dedicated-channel variants are removed once sessions stop owning channels"
+    reason = "one data variant against None; boxing would only move the size"
 )]
 pub enum ChannelSession {
     /// No session matched the channel context.
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
-    /// The message arrived in the session's dedicated agent channel.
-    InDedicatedChannel(AgentSession),
-    /// A bot was addressed from a thread inside a dedicated agent channel.
-    ///
-    /// This means that:
-    /// - You are in a dedicated agent channel
-    /// - The message is in a thread
-    /// - The bot is mentioned in the thread
-    ThreadInDedicatedChannel {
-        /// Session that owns the dedicated channel.
-        dedicated_channel_agent_session: AgentSession,
-        /// Session associated with the addressed bot and thread.
-        subthread_agent_session: AgentSession,
-    },
 }

@@ -82,78 +82,6 @@
         "deprecated": true
       }
     },
-    "/agent-sessions/channel/{channel_id}/log": {
-      "get": {
-        "tags": ["agent-sessions"],
-        "summary": "The raw protocol log of the agent session behind a channel.",
-        "description": "Served unfolded for a client that runs the fold itself.\n\nAnswers for any channel, not only an agent one: a channel with no session\ngets an empty log rather than a `404`. Clients call this on every channel\nload, because knowing whether a channel is an agent channel first would\ncost them a lookup they do not otherwise make.\n\nThe whole log, with no paging: the fold is a left fold over the frames from\nthe beginning, so a reader that skipped any of them would derive different\nturn numbering.",
-        "operationId": "get_agent_channel_log",
-        "parameters": [
-          {
-            "name": "channel_id",
-            "in": "path",
-            "description": "ID of the session's dedicated channel",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentChannelLogResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -219,7 +147,7 @@
       "get": {
         "tags": ["agent-sessions"],
         "summary": "The raw protocol log of one agent session.",
-        "description": "Keyed by the session rather than by the channel that renders it, for a\ncaller that already knows which session it wants. Served unfolded, and\nwhole: the fold is a left fold over the frames from the beginning, so a\nreader that skipped any of them would derive different turn numbering.\n\nAn unknown session yields an empty log rather than a `404` - a session with\nno frames and a session that never existed answer the same question the\nsame way.",
+        "description": "Served unfolded, and whole: the fold is a left fold over the frames from\nthe beginning, so a reader that skipped any of them would derive different\nturn numbering.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
         "operationId": "get_agent_session_log",
         "parameters": [
           {
@@ -11358,36 +11286,6 @@
           }
         }
       },
-      "AgentChannelLogResponse": {
-        "type": "object",
-        "description": "Response body for a channel's raw agent-session log.\n\nThe frames themselves: this endpoint does not fold, its readers do.",
-        "required": ["entries"],
-        "properties": {
-          "agentSessionId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The session the entries belong to, absent when no agent session owns\nthe channel.\n\nAbsent rather than a `404`, because every channel asks. A client has\nno cheap way to know whether a channel is an agent channel before it\nlooks: the channel record it would have to consult is only ever\nfetched as part of a list, which can predate the channel. So \"no\nsession here\" is an ordinary answer to an ordinary question, not a\nfailure."
-          },
-          "bot": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SessionBot",
-                "description": "The agent whose messages the log derives, absent for the same reason\nthe session id is.\n\nHere because a client renders those messages and cannot otherwise work\nout who sent them: the sender of an agent message is this session's\nbot, and no other response a channel fetches names it. Asking for the\nchannel's bots is the wrong question - those are bots explicitly added\nto a channel, which a session's agent need not be."
-              }
-            ]
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentSessionLogEntryDto"
-            },
-            "description": "Every logged frame, oldest first. Folding depends on this order. Empty\nwhen there is no session."
-          }
-        }
-      },
       "AgentSessionLogEntryDto": {
         "allOf": [
           {
@@ -11415,8 +11313,12 @@
       "AgentSessionLogResponse": {
         "type": "object",
         "description": "Response body for one session's raw protocol log.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about a frame has somewhere to go later without\nbreaking every client.",
-        "required": ["entries"],
+        "required": ["bot", "entries"],
         "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/SessionBot",
+            "description": "The agent whose messages the log derives.\n\nHere because a client renders those messages and cannot otherwise work\nout who sent them: the sender of an agent message is this session's\nbot, and nothing else names it."
+          },
           "entries": {
             "type": "array",
             "items": {
@@ -11431,7 +11333,7 @@
         "description": "Response body describing an agent session.",
         "required": [
           "id",
-          "channelId",
+          "initiatorUserId",
           "botId",
           "model",
           "harness",
@@ -11450,11 +11352,6 @@
             "format": "uuid",
             "description": "The bot running the agent."
           },
-          "channelId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The session's dedicated channel."
-          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -11468,6 +11365,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The session id."
+          },
+          "initiatorUserId": {
+            "type": "string",
+            "description": "The user who started the session."
           },
           "model": {
             "type": "string",

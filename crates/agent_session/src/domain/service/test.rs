@@ -21,8 +21,7 @@ struct Fixture {
 fn fixture() -> Fixture {
     let repo = InMemoryAgentSessionRepo::new();
     let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(session, channel));
+    repo.insert_session(test_agent_session(session));
 
     Fixture {
         // Nothing here is about streaming, so there are no viewers to publish
@@ -100,7 +99,7 @@ async fn appending_persists_the_event() {
 async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     let repo = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
+    repo.insert_session(test_agent_session(test_session()));
     let mut logs = connection(repo.clone());
 
     let log = parse_log_as(test_session(), TURN);
@@ -131,7 +130,7 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
 async fn a_connections_frames_are_published_to_its_channel() {
     let repo = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
+    repo.insert_session(test_agent_session(test_session()));
     let realtime = RecordingRealtime::new();
     let mut logs = streaming_connection(repo.clone(), realtime.clone());
 
@@ -147,8 +146,8 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert!(
         published
             .iter()
-            .all(|event| event.channel_id == channel && event.agent_session_id == test_session()),
-        "every event names the session's channel and the session"
+            .all(|event| event.agent_session_id == test_session()),
+        "every event names the session"
     );
     // Compared as the JSON they are published as: the client folds these
     // bytes with the same code it folds the fetched log with.
@@ -170,10 +169,8 @@ async fn a_connections_frames_are_published_to_its_channel() {
 
 /// Streaming costs the connection one session lookup, not one per frame.
 ///
-/// A frame names only its session and streaming addresses a channel, so the
-/// obvious implementation reads the session every time - and most frames are
-/// stream chunks that otherwise cost nothing but the log insert. The writer
-/// reads it once and remembers the channel instead.
+/// Most frames are stream chunks that otherwise cost nothing but the log
+/// insert, so the audience lookup must not be per frame.
 #[tokio::test]
 async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
     /// Replay the fixture through a connection publishing to `realtime`, and
@@ -183,7 +180,7 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
         Rt: AgentSessionRealtime + Send + Sync + 'static,
     {
         let repo = InMemoryAgentSessionRepo::new();
-        repo.insert_session(test_agent_session(test_session(), Uuid::from_u128(0xc4a2)));
+        repo.insert_session(test_agent_session(test_session()));
         let mut logs = streaming_connection(repo.clone(), realtime);
 
         let log = parse_log_as(test_session(), TURN);
@@ -213,7 +210,7 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
 async fn a_failed_publish_does_not_fail_the_append() {
     let repo = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
+    repo.insert_session(test_agent_session(test_session()));
     let mut logs = streaming_connection(repo.clone(), RecordingRealtime::down());
 
     let log = parse_log_as(test_session(), TURN);
@@ -230,13 +227,12 @@ async fn a_failed_publish_does_not_fail_the_append() {
     assert_eq!(stored.len(), frames, "every frame is still durable");
 }
 
-/// `channel_log` resolves a dedicated channel to its session and hands back
-/// the log unfolded, in order.
+/// `session_log` hands back the log unfolded, in order, with the agent that
+/// wrote it.
 #[tokio::test]
-async fn channel_log_returns_the_sessions_frames_in_order() {
+async fn session_log_returns_the_sessions_frames_in_order() {
     let store = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    store.insert_session(test_agent_session(test_session(), channel));
+    store.insert_session(test_agent_session(test_session()));
     let recorded = parse_log_as(test_session(), TURN);
     store.extend_log(recorded.clone());
 
@@ -247,17 +243,16 @@ async fn channel_log_returns_the_sessions_frames_in_order() {
     );
 
     let log = service
-        .channel_log(channel)
+        .session_log(test_session())
         .await
-        .expect("lookup succeeds")
-        .expect("the channel belongs to a session");
+        .expect("lookup succeeds");
 
-    assert_eq!(log.agent_session_id, test_session());
     assert_eq!(
         log.entries.len(),
         recorded.len(),
         "every frame is served, none folded away"
     );
+    assert!(!log.bot.name.is_empty(), "the response names the agent");
 
     // The order is the contract: folding is a left fold from the first frame,
     // so a reordered log derives different turn numbering.
@@ -269,17 +264,13 @@ async fn channel_log_returns_the_sessions_frames_in_order() {
     );
 }
 
-/// A channel no session owns yields `None`, not an error - same as the folded
-/// endpoint.
+/// A session that never existed is an error: the response has to name the
+/// session's agent, and there is none to name.
 #[tokio::test]
-async fn channel_log_without_a_session_is_none() {
+async fn session_log_of_an_unknown_session_errors() {
     let fx = fixture();
 
-    let log = fx
-        .service
-        .channel_log(Uuid::from_u128(0xffff))
-        .await
-        .expect("lookup succeeds");
+    let log = fx.service.session_log(AgentSessionId::TEST_A).await;
 
-    assert!(log.is_none());
+    assert!(log.is_err());
 }

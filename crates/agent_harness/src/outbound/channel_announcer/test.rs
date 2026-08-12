@@ -9,7 +9,6 @@ fn chip_carries_the_announcement_identity() {
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         origin_channel_id: Uuid::from_u128(1),
         origin_thread_id: Uuid::from_u128(2),
-        session_channel_id: Uuid::from_u128(3),
         prompted_message_id: agent_session::domain::model::MessageId::first(
             agent_session::domain::model::AuthorKind::User,
         ),
@@ -21,7 +20,7 @@ fn chip_carries_the_announcement_identity() {
         announcement_chip(&announcement),
         AgentAnnouncementChip {
             agent_session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
-            channel_id: "00000000-0000-0000-0000-000000000003".to_owned(),
+            channel_id: None,
             prompted_message: agent_session::domain::model::MessageId::first(
                 agent_session::domain::model::AuthorKind::User,
             ),

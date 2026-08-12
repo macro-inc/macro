@@ -39,8 +39,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession, ChannelSessionLog,
-    CreateAgentSessionParams, LogAppended, MessageId, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, CreateAgentSessionParams,
+    LogAppended, MessageId, SessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -103,27 +103,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<MessageId>> + Send;
 
-    /// The raw protocol log of one session, oldest first.
-    ///
-    /// Keyed by the session itself, so a caller that already knows which
-    /// session it wants does not have to go through the channel that renders
-    /// it. Served unfolded for the same reason [`Self::channel_log`] is.
-    fn session_log(
-        &self,
-        id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
-
-    /// The raw protocol log of the agent session behind a channel, or `None`
-    /// when no session owns the channel.
+    /// The raw protocol log of one session, oldest first, with the agent
+    /// whose messages it derives.
     ///
     /// Served unfolded because nothing here folds for a reader any more: the
     /// web client runs the same fold compiled to WASM, so a streamed session
     /// and a reloaded one are rendered by one implementation rather than two
-    /// that have to be kept agreeing. See [`ChannelSessionLog`].
-    fn channel_log(
-        &self,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ChannelSessionLog>>> + Send;
+    /// that have to be kept agreeing. See [`SessionLog`].
+    fn session_log(&self, id: AgentSessionId) -> impl Future<Output = Result<SessionLog>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -222,28 +209,6 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             }
         }
     }
-
-    /// The session a channel renders, or `None` when no session owns it.
-    ///
-    /// A channel load carries no thread or bot context, so only the
-    /// dedicated-channel relation can match; thread-scoped sessions are
-    /// rendered by their own dedicated channels.
-    async fn session_for_channel(&self, channel_id: Uuid) -> Result<Option<AgentSession>>
-    where
-        R: AgentSessionRepo,
-    {
-        Ok(
-            match self.repo.find_for_channel(channel_id, None, None).await? {
-                ChannelSession::None => None,
-                ChannelSession::InDedicatedChannel(session)
-                | ChannelSession::CreatedFromThread(session) => Some(session),
-                ChannelSession::ThreadInDedicatedChannel {
-                    dedicated_channel_agent_session,
-                    ..
-                } => Some(dedicated_channel_agent_session),
-            },
-        )
-    }
 }
 
 impl<R, Folds, Rt> AgentSessionService for AgentSessionServiceImpl<R, Folds, Rt>
@@ -309,22 +274,13 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn session_log(&self, id: AgentSessionId) -> Result<Vec<StoredAgentSessionLog>> {
-        AgentSessionLogRepo::list_by_session(&self.repo, id).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn channel_log(&self, channel_id: Uuid) -> Result<Option<ChannelSessionLog>> {
-        let Some(session) = self.session_for_channel(channel_id).await? else {
-            return Ok(None);
-        };
-
-        let entries = AgentSessionLogRepo::list_by_session(&self.repo, session.id).await?;
-        Ok(Some(ChannelSessionLog {
-            agent_session_id: session.id,
+    async fn session_log(&self, id: AgentSessionId) -> Result<SessionLog> {
+        let session = self.repo.get(id).await?;
+        let entries = AgentSessionLogRepo::list_by_session(&self.repo, id).await?;
+        Ok(SessionLog {
             bot: self.repo.session_bot(session.bot_id).await?,
             entries,
-        }))
+        })
     }
 }
 
@@ -345,12 +301,11 @@ pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
     fold: Option<FoldMachineImpl>,
-    channel_id: Option<Uuid>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
     /// A log writer that streams each frame it writes to whoever is watching
-    /// the session's channel.
+    /// the session.
     ///
     /// The fold starts empty and catches itself up on whatever is already
     /// stored when the first frame arrives, so this is cheap to build and
@@ -360,7 +315,6 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             repo,
             realtime,
             fold: None,
-            channel_id: None,
         }
     }
 }
@@ -431,13 +385,10 @@ where
 
     async fn find_for_channel(
         &self,
-        channel_id: Uuid,
         thread_id: Option<Uuid>,
         bot_id: Option<bots::domain::models::BotId>,
-    ) -> Result<ChannelSession> {
-        self.repo
-            .find_for_channel(channel_id, thread_id, bot_id)
-            .await
+    ) -> Result<super::model::ChannelSession> {
+        self.repo.find_for_channel(thread_id, bot_id).await
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
@@ -462,38 +413,18 @@ where
     R: AgentSessionRepo + AgentSessionLogRepo,
     Rt: AgentSessionRealtime,
 {
-    /// Push the frame just appended out to the session's channel.
+    /// Push the frame just appended out to whoever is watching the session.
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,
         entry: AgentSessionLog,
     ) -> std::result::Result<(), rootcause::Report> {
-        let channel_id = self.channel_id(agent_session_id).await?;
         self.realtime
             .publish(LogAppended {
-                channel_id,
                 agent_session_id,
                 entry,
             })
             .await
-    }
-
-    /// The channel `session_id` renders into, read once per writer and
-    /// remembered for this actor-owned writer.
-    async fn channel_id(
-        &mut self,
-        session_id: AgentSessionId,
-    ) -> std::result::Result<Uuid, rootcause::Report> {
-        if let Some(channel_id) = self.channel_id {
-            return Ok(channel_id);
-        }
-        let session = self
-            .repo
-            .get(session_id)
-            .await
-            .map_err(|error| rootcause::report!(error))?;
-        self.channel_id = Some(session.channel_id);
-        Ok(session.channel_id)
     }
 
     /// Walk this connection's fold through the session's stored log, so it

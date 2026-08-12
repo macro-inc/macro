@@ -98,11 +98,8 @@ impl FromIterator<AgentSessionLog> for InMemoryAgentSessionRepo {
 impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
-        // The real repo creates a dedicated channel owned by
-        // `params.initiator_user_id`; in memory the channel is just a fresh id.
         let session = AgentSession {
             id: params.id,
-            channel_id: macro_uuid::generate_uuid_v7(),
             initiator_user_id: params.initiator_user_id,
             thread_id: params.thread_id,
             originating_message_id: params.originating_message_id,
@@ -133,7 +130,6 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn find_for_channel(
         &self,
-        channel_id: Uuid,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
     ) -> Result<ChannelSession> {
@@ -141,30 +137,15 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .sessions
             .lock()
             .expect("in-memory session store is not poisoned");
-        let matches_subthread = |session: &AgentSession| {
+        let matched = sessions.values().find(|session| {
             thread_id.is_some()
                 && bot_id.is_some()
                 && session.thread_id == thread_id
                 && Some(session.bot_id) == bot_id
-        };
-        let dedicated = sessions
-            .values()
-            .find(|session| session.channel_id == channel_id)
-            .cloned();
-        let subthread = sessions
-            .values()
-            .find(|session| session.channel_id != channel_id && matches_subthread(session))
-            .cloned();
-        Ok(match (dedicated, subthread) {
-            (Some(dedicated_channel_agent_session), Some(subthread_agent_session)) => {
-                ChannelSession::ThreadInDedicatedChannel {
-                    dedicated_channel_agent_session,
-                    subthread_agent_session,
-                }
-            }
-            (Some(session), None) => ChannelSession::InDedicatedChannel(session),
-            (None, Some(session)) => ChannelSession::CreatedFromThread(session),
-            (None, None) => ChannelSession::None,
+        });
+        Ok(match matched {
+            Some(session) => ChannelSession::CreatedFromThread(session.clone()),
+            None => ChannelSession::None,
         })
     }
 
@@ -273,14 +254,13 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
     }
 }
 
-/// A session fixture with the given id and channel; every other field is a
-/// plausible constant.
+/// A session fixture with the given id; every other field is a plausible
+/// constant.
 #[must_use]
-pub fn test_agent_session(id: AgentSessionId, channel_id: Uuid) -> AgentSession {
+pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
         id,
-        channel_id,
         initiator_user_id: macro_user_id::user_id::MacroUserIdStr::try_from_email(
             "initiator@example.com",
         )

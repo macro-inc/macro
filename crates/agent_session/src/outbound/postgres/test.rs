@@ -10,7 +10,50 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
+/// The fixed initiator every [`new_session`] fixture uses.
+const INITIATOR: &str = "macro|agent-session-initiator@example.com";
+
+/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
+/// `agent_session.initiator_user_id`'s foreign key.
+async fn insert_user(pool: &PgPool, user_id: &str) {
+    let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
+    // The no-op update makes the existing row's id come back when the user
+    // was already seeded by an earlier call.
+    let macro_user_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
+        RETURNING id
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        email,
+        email,
+        format!("stripe_{email}"),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("insert macro_user");
+    sqlx::query!(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+        user_id,
+        email,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .expect("insert User");
+}
+
 async fn create_test_bot(pool: &PgPool) -> BotId {
+    // Every session fixture is initiated by the same user, and
+    // `agent_session.initiator_user_id` references `"User"(id)` - so seed the
+    // row here, where every session-creating test already passes through.
+    insert_user(pool, INITIATOR).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
         .create_owned_bot(
@@ -38,7 +81,7 @@ fn new_session(
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         id: AgentSessionId::new(),
-        owner_id: user_id("macro|agent-session-channel-owner@example.com"),
+        initiator_user_id: user_id(INITIATOR),
         bot_id,
         thread_id,
         originating_message_id,
@@ -126,7 +169,6 @@ async fn create_and_get_round_trips(pool: PgPool) {
     let id = params.id;
 
     let created = create_session(&repo, params).await;
-    let channel_id = created.channel_id;
 
     let session = repo.get(id).await.expect("get agent session");
     assert_eq!(created.id, id);
@@ -134,39 +176,21 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
     assert_eq!(session.bot_id, bot_id);
-    assert_eq!(session.channel_id, channel_id);
+    assert_eq!(
+        session.initiator_user_id.to_string(),
+        "macro|agent-session-initiator@example.com"
+    );
     assert_eq!(session.thread_id, None);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 
-    let channel = sqlx::query!(
-        "SELECT kind, owner_id FROM comms_channels WHERE id = $1",
-        channel_id,
+    // A session stands alone: no channel is minted for it.
+    let agent_channels = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM comms_channels WHERE kind = 'agent'"#
     )
     .fetch_one(&pool)
     .await
-    .expect("get agent channel");
-    assert_eq!(channel.kind, "agent");
-    assert_eq!(
-        channel.owner_id,
-        "macro|agent-session-channel-owner@example.com"
-    );
-    let owner = sqlx::query!(
-        r#"
-        SELECT user_id, role::text AS "role!", left_at
-        FROM comms_channel_participants
-        WHERE channel_id = $1
-        "#,
-        channel_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("get agent channel owner participant");
-    assert_eq!(
-        owner.user_id,
-        "macro|agent-session-channel-owner@example.com"
-    );
-    assert_eq!(owner.role, "owner");
-    assert_eq!(owner.left_at, None);
+    .expect("count agent channels");
+    assert_eq!(agent_channels, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -203,20 +227,11 @@ async fn delete_removes_session(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
-    let channel_id = session.channel_id;
     let id = session.id;
 
     repo.delete(id).await.expect("delete agent session");
 
     assert!(repo.get(id).await.is_err());
-    let channel_exists = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS \"exists!\"",
-        channel_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("check deleted agent channel");
-    assert!(!channel_exists);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -287,85 +302,49 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_channel_distinguishes_dedicated_channel_and_originating_thread(pool: PgPool) {
+async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
-    let (originating_channel, thread, originating_message) =
+    let (_originating_channel, thread, originating_message) =
         insert_originating_thread_fixture(&pool).await;
 
-    let dedicated = new_session(bot_a, None, None);
-    let session_a = create_session(&repo, dedicated).await;
-    let dedicated_channel = session_a.channel_id;
-
-    let originating = new_session(bot_b, Some(thread), Some(originating_message));
-    let session_b = create_session(&repo, originating).await;
-
+    let session = create_session(
+        &repo,
+        new_session(bot_b, Some(thread), Some(originating_message)),
+    )
+    .await;
+    // A session from some other context must not shadow the lookup.
     create_session(&repo, new_session(bot_a, None, None)).await;
 
-    let found_dedicated = repo
-        .find_for_channel(dedicated_channel, None, None)
-        .await
-        .expect("find session by dedicated channel");
-    let ChannelSession::InDedicatedChannel(session) = found_dedicated else {
-        panic!("expected the dedicated-channel session, got {found_dedicated:?}");
-    };
-    assert_eq!(session.id, session_a.id);
-
-    let same_session_in_both_roles = repo
-        .find_for_channel(session_b.channel_id, Some(thread), Some(bot_b))
-        .await
-        .expect("look up an originating session by its own dedicated channel");
-    let ChannelSession::InDedicatedChannel(session) = same_session_in_both_roles else {
-        panic!("expected one dedicated-channel session, got {same_session_in_both_roles:?}");
-    };
-    assert_eq!(session.id, session_b.id);
-
-    let found_originating = repo
-        .find_for_channel(originating_channel, Some(thread), Some(bot_b))
+    let found = repo
+        .find_for_channel(Some(thread), Some(bot_b))
         .await
         .expect("find bot B's session by originating thread");
-    let ChannelSession::CreatedFromThread(session) = found_originating else {
-        panic!("expected the originating-thread session, got {found_originating:?}");
+    let ChannelSession::CreatedFromThread(matched) = found else {
+        panic!("expected the originating-thread session, got {found:?}");
     };
-    assert_eq!(session.id, session_b.id);
-    assert_eq!(session.originating_message_id, Some(originating_message));
-
-    let found_with_unrelated_channel = repo
-        .find_for_channel(macro_uuid::generate_uuid_v7(), Some(thread), Some(bot_b))
-        .await
-        .expect("find originating session without channel validation");
-    assert!(matches!(
-        found_with_unrelated_channel,
-        ChannelSession::CreatedFromThread(_)
-    ));
+    assert_eq!(matched.id, session.id);
+    assert_eq!(matched.originating_message_id, Some(originating_message));
 
     let wrong_bot = repo
-        .find_for_channel(originating_channel, Some(thread), Some(bot_a))
+        .find_for_channel(Some(thread), Some(bot_a))
         .await
         .expect("look up the wrong bot");
     assert!(matches!(wrong_bot, ChannelSession::None));
 
-    let nested_session = repo
-        .find_for_channel(dedicated_channel, Some(thread), Some(bot_b))
+    let wrong_thread = repo
+        .find_for_channel(Some(macro_uuid::generate_uuid_v7()), Some(bot_b))
         .await
-        .expect("look up a thread in a dedicated channel");
-    let ChannelSession::ThreadInDedicatedChannel {
-        dedicated_channel_agent_session,
-        subthread_agent_session,
-    } = nested_session
-    else {
-        panic!("expected both dedicated and subthread sessions, got {nested_session:?}");
-    };
-    assert_eq!(dedicated_channel_agent_session.id, session_a.id);
-    assert_eq!(subthread_agent_session.id, session_b.id);
+        .expect("look up an unrelated thread");
+    assert!(matches!(wrong_thread, ChannelSession::None));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
-    let (channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
+    let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
     create_session(
         &repo,
         new_session(bot, Some(thread), Some(originating_message)),
@@ -373,66 +352,16 @@ async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: Pg
     .await;
 
     let without_bot = repo
-        .find_for_channel(channel, Some(thread), None)
+        .find_for_channel(Some(thread), None)
         .await
         .expect("look up without a bot");
     assert!(matches!(without_bot, ChannelSession::None));
 
     let without_thread = repo
-        .find_for_channel(channel, None, Some(bot))
+        .find_for_channel(None, Some(bot))
         .await
         .expect("look up without a thread");
     assert!(matches!(without_thread, ChannelSession::None));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_rolls_back_channel_when_session_insert_fails(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot = create_test_bot(&pool).await;
-    let channel_count_before = sqlx::query_scalar!(
-        "SELECT COUNT(*) AS \"count!\" FROM comms_channels WHERE kind = 'agent'"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count agent channels before failed create");
-    let params = new_session(
-        bot,
-        Some(macro_uuid::generate_uuid_v7()),
-        Some(macro_uuid::generate_uuid_v7()),
-    );
-
-    let result = AgentSessionRepo::create(&repo, params).await;
-    assert!(result.is_err());
-
-    let channel_count_after = sqlx::query_scalar!(
-        "SELECT COUNT(*) AS \"count!\" FROM comms_channels WHERE kind = 'agent'"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count agent channels after failed create");
-    assert_eq!(channel_count_after, channel_count_before);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_belongs_to_only_one_session(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot = create_test_bot(&pool).await;
-    create_session(&repo, new_session(bot, None, None)).await;
-
-    let duplicate = sqlx::raw_sql(
-        r#"
-        INSERT INTO agent_session (
-            id, channel_id, bot_id, model, harness, repo_url, status
-        )
-        SELECT gen_random_uuid(), channel_id, bot_id, model, harness, repo_url, status
-        FROM agent_session
-        LIMIT 1
-        "#,
-    )
-    .execute(&pool)
-    .await;
-
-    assert!(duplicate.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -445,13 +374,6 @@ async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
         new_session(bot, Some(thread), Some(originating_message)),
     )
     .await;
-    let channel_count_before = sqlx::query_scalar!(
-        "SELECT COUNT(*) AS \"count!\" FROM comms_channels WHERE kind = 'agent'"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count agent channels before duplicate create");
-
     let duplicate = AgentSessionRepo::create(
         &repo,
         new_session(bot, Some(thread), Some(originating_message)),
@@ -459,63 +381,37 @@ async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
     .await;
 
     assert!(duplicate.is_err());
-    let channel_count_after = sqlx::query_scalar!(
-        "SELECT COUNT(*) AS \"count!\" FROM comms_channels WHERE kind = 'agent'"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count agent channels after duplicate create");
-    assert_eq!(channel_count_after, channel_count_before);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_audience_is_the_participants_who_have_not_left(pool: PgPool) {
+async fn a_sessions_audience_is_its_initiator(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
 
-    let watcher = "macro|agent-session-watcher@example.com";
-    let departed = "macro|agent-session-departed@example.com";
-    sqlx::query!(
-        r#"
-        INSERT INTO comms_channel_participants (channel_id, role, user_id, left_at)
-        VALUES ($1, 'member', $2, NULL), ($1, 'member', $3, now())
-        "#,
-        session.channel_id,
-        watcher,
-        departed,
-    )
-    .execute(&pool)
-    .await
-    .expect("add channel participants");
-
-    let mut audience = repo
-        .participants(session.channel_id)
+    let audience = repo
+        .viewers(session.id)
         .await
-        .expect("read the channel audience")
+        .expect("read the session audience")
         .into_iter()
         .map(|user| user.to_string())
         .collect::<Vec<_>>();
-    audience.sort();
 
     assert_eq!(
         audience,
-        vec![
-            "macro|agent-session-channel-owner@example.com".to_string(),
-            watcher.to_string(),
-        ],
-        "the owner and the watcher are streamed to; the one who left is not"
+        vec!["macro|agent-session-initiator@example.com".to_string()],
+        "frames stream to whoever started the session"
     );
 }
 
-/// A channel nobody is in resolves to nobody, rather than failing - the
+/// A session nobody can watch resolves to nobody, rather than failing - the
 /// publisher's own early return is what turns that into no gateway call.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_empty_channel_has_no_audience(pool: PgPool) {
+async fn an_unknown_session_has_no_audience(pool: PgPool) {
     let audience = PgAgentSessionRepo::new(pool)
-        .participants(macro_uuid::generate_uuid_v7())
+        .viewers(AgentSessionId::new())
         .await
-        .expect("read the channel audience");
+        .expect("read the session audience");
 
     assert!(audience.is_empty());
 }

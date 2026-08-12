@@ -130,27 +130,18 @@ export function createFoldedMessages(
       // frame can be told apart from one the snapshot already contains.
       beginAgentSessionStream(id);
 
-      const log = await queryClient
-        .fetchQuery({
-          queryKey: channelKeys.foldedMessages(id).queryKey,
-          queryFn: async () =>
-            await throwOnErr(
-              async () =>
-                await storageServiceClient.getAgentChannelLog({
-                  channel_id: id,
-                })
-            ),
-          // The websocket keeps this channel's fold current, so the cached log
-          // only matters for a channel reopened after its stream was dropped.
-          staleTime: 0,
-        })
-        .catch((error: unknown) => {
-          // A channel with no agent session is answered, not an error, so this
-          // really is a fault - a warning and an empty channel rather than a
-          // throw that would take the channel down.
-          console.warn('[agent-fold] log could not be fetched', error);
-          return undefined;
-        });
+      // The channel-keyed log endpoint is gone: a session no longer owns a
+      // channel, so there is nothing to resolve this channel through. The
+      // session-keyed replacement is GET /agent-sessions/{id}/log, which this
+      // view cannot call until it learns session ids some other way - the
+      // agent view is dark until the frontend catches up with that change.
+      const log = undefined as
+        | {
+            agentSessionId?: string | null;
+            bot?: Parameters<typeof rememberSessionBot>[1];
+            entries: AgentSessionLogEntryDto[];
+          }
+        | undefined;
 
       console.info('[agent-fold] log fetched', {
         channelId: id,

@@ -7,7 +7,7 @@
 import type { ControlRequest } from './schemas';
 
 /**
- * @summary Delete an agent session, its dedicated channel, and its live resources.
+ * @summary Delete an agent session and its live resources.
  */
 export type deleteAgentSessionResponse200 = {
   data: void;

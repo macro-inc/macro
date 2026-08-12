@@ -56,32 +56,6 @@ export type AddPinRequest = {
 };
 
 /**
- * Response body for a channel's raw agent-session log.
- *
- * The frames themselves: this endpoint does not fold, its readers do.
- */
-export type AgentChannelLogResponse = {
-    /**
-     * The session the entries belong to, absent when no agent session owns
-     * the channel.
-     *
-     * Absent rather than a `404`, because every channel asks. A client has
-     * no cheap way to know whether a channel is an agent channel before it
-     * looks: the channel record it would have to consult is only ever
-     * fetched as part of a list, which can predate the channel. So "no
-     * session here" is an ordinary answer to an ordinary question, not a
-     * failure.
-     */
-    agentSessionId?: string | null;
-    bot?: null | SessionBot;
-    /**
-     * Every logged frame, oldest first. Folding depends on this order. Empty
-     * when there is no session.
-     */
-    entries: Array<AgentSessionLogEntryDto>;
-};
-
-/**
  * One entry of a session's protocol log.
  *
  * Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
@@ -124,6 +98,14 @@ export type AgentSessionLogEntryDto = LogFrameDto & {
  */
 export type AgentSessionLogResponse = {
     /**
+     * The agent whose messages the log derives.
+     *
+     * Here because a client renders those messages and cannot otherwise work
+     * out who sent them: the sender of an agent message is this session's
+     * bot, and nothing else names it.
+     */
+    bot: SessionBot;
+    /**
      * Every logged frame, oldest first. Folding depends on this order.
      */
     entries: Array<AgentSessionLogEntryDto>;
@@ -142,10 +124,6 @@ export type AgentSessionResponse = {
      */
     botId: string;
     /**
-     * The session's dedicated channel.
-     */
-    channelId: string;
-    /**
      * When the session was created.
      */
     createdAt: string;
@@ -157,6 +135,10 @@ export type AgentSessionResponse = {
      * The session id.
      */
     id: string;
+    /**
+     * The user who started the session.
+     */
+    initiatorUserId: string;
     /**
      * Model slug.
      */
@@ -8512,33 +8494,6 @@ export type GetRecentActivityHandlerResponses = {
 };
 
 export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
-
-export type GetAgentChannelLogData = {
-    body?: never;
-    path: {
-        /**
-         * ID of the session's dedicated channel
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/agent-sessions/channel/{channel_id}/log';
-};
-
-export type GetAgentChannelLogErrors = {
-    401: string;
-    403: string;
-    404: string;
-    500: string;
-};
-
-export type GetAgentChannelLogError = GetAgentChannelLogErrors[keyof GetAgentChannelLogErrors];
-
-export type GetAgentChannelLogResponses = {
-    200: AgentChannelLogResponse;
-};
-
-export type GetAgentChannelLogResponse = GetAgentChannelLogResponses[keyof GetAgentChannelLogResponses];
 
 export type GetAgentSessionData = {
     body?: never;

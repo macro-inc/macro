@@ -31,8 +31,7 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, ChannelSessionLog, Message, SessionBot, SessionStatus,
-    StoredAgentSessionLog,
+    AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent, ControlEventKind};
 use crate::domain::service::AgentSessionService;
@@ -120,10 +119,6 @@ where
         .route(
             "/{session_id}/log",
             get(get_agent_session_log_handler::<T, Auth>),
-        )
-        .route(
-            "/channel/{channel_id}/log",
-            get(get_agent_channel_log_handler::<T, Auth>),
         )
         .with_state(state)
 }
@@ -234,8 +229,8 @@ pub struct ControlRequest {
 pub struct AgentSessionResponse {
     /// The session id.
     pub id: Uuid,
-    /// The session's dedicated channel.
-    pub channel_id: Uuid,
+    /// The user who started the session.
+    pub initiator_user_id: String,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
@@ -262,7 +257,7 @@ impl From<AgentSession> for AgentSessionResponse {
     fn from(session: AgentSession) -> Self {
         Self {
             id: session.id.as_uuid(),
-            channel_id: session.channel_id,
+            initiator_user_id: session.initiator_user_id.to_string(),
             thread_id: session.thread_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
@@ -370,7 +365,7 @@ pub async fn control_agent_session_handler<
         (status = 500, body = String),
     )
 )]
-/// Delete an agent session, its dedicated channel, and its live resources.
+/// Delete an agent session and its live resources.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), session_id = %session_id),
@@ -390,59 +385,6 @@ pub async fn delete_agent_session_handler<
         .await?;
 
     Ok(StatusCode::OK)
-}
-
-/// Response body for a channel's raw agent-session log.
-///
-/// The frames themselves: this endpoint does not fold, its readers do.
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentChannelLogResponse {
-    /// The session the entries belong to, absent when no agent session owns
-    /// the channel.
-    ///
-    /// Absent rather than a `404`, because every channel asks. A client has
-    /// no cheap way to know whether a channel is an agent channel before it
-    /// looks: the channel record it would have to consult is only ever
-    /// fetched as part of a list, which can predate the channel. So "no
-    /// session here" is an ordinary answer to an ordinary question, not a
-    /// failure.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_session_id: Option<Uuid>,
-    /// The agent whose messages the log derives, absent for the same reason
-    /// the session id is.
-    ///
-    /// Here because a client renders those messages and cannot otherwise work
-    /// out who sent them: the sender of an agent message is this session's
-    /// bot, and no other response a channel fetches names it. Asking for the
-    /// channel's bots is the wrong question - those are bots explicitly added
-    /// to a channel, which a session's agent need not be.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bot: Option<SessionBot>,
-    /// Every logged frame, oldest first. Folding depends on this order. Empty
-    /// when there is no session.
-    pub entries: Vec<AgentSessionLogEntryDto>,
-}
-
-impl AgentChannelLogResponse {
-    /// The answer for a channel no agent session owns.
-    fn none() -> Self {
-        Self {
-            agent_session_id: None,
-            bot: None,
-            entries: Vec::new(),
-        }
-    }
-}
-
-impl From<ChannelSessionLog> for AgentChannelLogResponse {
-    fn from(log: ChannelSessionLog) -> Self {
-        Self {
-            agent_session_id: Some(log.agent_session_id.as_uuid()),
-            bot: Some(log.bot),
-            entries: log.entries.into_iter().map(Into::into).collect(),
-        }
-    }
 }
 
 /// One entry of a session's protocol log.
@@ -529,6 +471,12 @@ impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionLogResponse {
+    /// The agent whose messages the log derives.
+    ///
+    /// Here because a client renders those messages and cannot otherwise work
+    /// out who sent them: the sender of an agent message is this session's
+    /// bot, and nothing else names it.
+    pub bot: SessionBot,
     /// Every logged frame, oldest first. Folding depends on this order.
     pub entries: Vec<AgentSessionLogEntryDto>,
 }
@@ -548,14 +496,12 @@ pub struct AgentSessionLogResponse {
 )]
 /// The raw protocol log of one agent session.
 ///
-/// Keyed by the session rather than by the channel that renders it, for a
-/// caller that already knows which session it wants. Served unfolded, and
-/// whole: the fold is a left fold over the frames from the beginning, so a
-/// reader that skipped any of them would derive different turn numbering.
+/// Served unfolded, and whole: the fold is a left fold over the frames from
+/// the beginning, so a reader that skipped any of them would derive different
+/// turn numbering.
 ///
-/// An unknown session yields an empty log rather than a `404` - a session with
-/// no frames and a session that never existed answer the same question the
-/// same way.
+/// An unknown session is an error: the response has to name the session's
+/// agent, and a session that never existed has none to name.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), session_id = %session_id),
@@ -569,58 +515,13 @@ pub async fn get_agent_session_log_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionLogResponse>, AgentSessionApiError> {
-    let entries = state
+    let log = state
         .service
         .session_log(AgentSessionId::new_from_uuid(session_id))
         .await?;
 
     Ok(Json(AgentSessionLogResponse {
-        entries: entries.into_iter().map(Into::into).collect(),
+        bot: log.bot,
+        entries: log.entries.into_iter().map(Into::into).collect(),
     }))
-}
-
-#[utoipa::path(
-    get,
-    path = "/agent-sessions/channel/{channel_id}/log",
-    tag = "agent-sessions",
-    operation_id = "get_agent_channel_log",
-    params(("channel_id" = Uuid, Path, description = "ID of the session's dedicated channel")),
-    responses(
-        (status = 200, body = AgentChannelLogResponse),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 404, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// The raw protocol log of the agent session behind a channel.
-///
-/// Served unfolded for a client that runs the fold itself.
-///
-/// Answers for any channel, not only an agent one: a channel with no session
-/// gets an empty log rather than a `404`. Clients call this on every channel
-/// load, because knowing whether a channel is an agent channel first would
-/// cost them a lookup they do not otherwise make.
-///
-/// The whole log, with no paging: the fold is a left fold over the frames from
-/// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering.
-#[tracing::instrument(
-    skip(state, caller),
-    fields(actor = %caller.acting_entity(), channel_id = %channel_id),
-    err(Debug)
-)]
-pub async fn get_agent_channel_log_handler<
-    T: AgentSessionService,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
-    Path(channel_id): Path<Uuid>,
-) -> Result<Json<AgentChannelLogResponse>, AgentSessionApiError> {
-    let log = state.service.channel_log(channel_id).await?;
-
-    Ok(Json(
-        log.map_or_else(AgentChannelLogResponse::none, Into::into),
-    ))
 }

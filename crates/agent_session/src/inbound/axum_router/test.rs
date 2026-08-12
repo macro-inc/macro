@@ -1,13 +1,13 @@
 //! The wire contract of the raw-log endpoint.
 //!
-//! `/channel/{id}/log` exists so a client can run the fold itself, which only
-//! works if what the endpoint emits deserializes back into the vocabulary the
-//! fold consumes. These tests are that round trip: serialize the response,
+//! `/agent-sessions/{id}/log` exists so a client can run the fold itself,
+//! which only works if what the endpoint emits deserializes back into the
+//! vocabulary the fold consumes. These tests are that round trip: serialize the response,
 //! decode it the way a client would, and check the fold reaches the same place
 //! it would have on the server.
 
 use super::*;
-use crate::domain::model::{AgentSessionLog, SessionBot, StoredAgentSessionLog};
+use crate::domain::model::{AgentSessionLog, SessionBot, SessionLog, StoredAgentSessionLog};
 use agent_fold::domain::fold::fold;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 use bots::domain::models::BotId;
@@ -29,15 +29,18 @@ fn stored(entry: AgentSessionLog) -> StoredAgentSessionLog {
 }
 
 fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<AgentSessionLogEntryDto> {
-    let response = AgentChannelLogResponse::from(ChannelSessionLog {
-        agent_session_id: test_session(),
+    let log = SessionLog {
         bot: SessionBot {
             id: BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xb07)),
             name: "Test Agent".to_owned(),
             avatar_url: None,
         },
         entries: entries.into_iter().map(stored).collect(),
-    });
+    };
+    let response = AgentSessionLogResponse {
+        bot: log.bot,
+        entries: log.entries.into_iter().map(Into::into).collect(),
+    };
     let json = serde_json::to_string(&response).expect("the response serializes");
 
     #[derive(Deserialize)]

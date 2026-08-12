@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { AgentSessionLogEntryDto } from './agentSessionLogEntryDto';
+import type { SessionBot } from './sessionBot';
 
 /**
  * Response body for one session's raw protocol log.
@@ -14,6 +16,12 @@ response rather than about a frame has somewhere to go later without
 breaking every client.
  */
 export interface AgentSessionLogResponse {
+  /** The agent whose messages the log derives.
+
+Here because a client renders those messages and cannot otherwise work
+out who sent them: the sender of an agent message is this session's
+bot, and nothing else names it. */
+  bot: SessionBot;
   /** Every logged frame, oldest first. Folding depends on this order. */
   entries: AgentSessionLogEntryDto[];
 }

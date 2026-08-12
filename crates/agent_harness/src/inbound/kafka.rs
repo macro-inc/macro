@@ -82,13 +82,27 @@ pub fn agent_trigger_to_harness_command(
                 HarnessCommand::Deliver(DeliverAction::prompt(
                     message.content,
                     message.sender.as_user().cloned(),
-                    // Always offered: only the harness knows whether this
-                    // channel is the session's own, which is what decides
-                    // whether an announcement would be redundant.
                     Some(AnnounceOrigin {
                         channel_id: message.channel_id,
                         thread_id: message.thread_id.unwrap_or(message.message_id),
                     }),
+                )),
+            ))
+        }
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::AgentSessionMessage(
+            message,
+        )) => {
+            if message.bot_id != our_bot {
+                return Err(Skipped::ForeignBot);
+            }
+            Ok((
+                message.agent_session_id,
+                // No origin: the sender addressed the session itself, so
+                // there is nowhere else to answer back into.
+                HarnessCommand::Deliver(DeliverAction::prompt(
+                    message.content,
+                    message.sender.as_user().cloned(),
+                    None,
                 )),
             ))
         }

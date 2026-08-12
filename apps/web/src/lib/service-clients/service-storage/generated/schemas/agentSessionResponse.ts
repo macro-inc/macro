@@ -17,8 +17,6 @@ export interface AgentSessionResponse {
   acpSessionId?: AgentSessionResponseAcpSessionId;
   /** The bot running the agent. */
   botId: string;
-  /** The session's dedicated channel. */
-  channelId: string;
   /** When the session was created. */
   createdAt: string;
   /** Harness slug. */

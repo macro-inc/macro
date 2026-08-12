@@ -199,15 +199,13 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    // The row exists, carries the origin, and was announced with its real
-    // dedicated channel id.
+    // The row exists, carries the origin, and was announced into it.
     let session = repo.get(id).await.expect("the session row exists");
     assert_eq!(session.acp_session_id.as_deref(), Some("acp-test"));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
-    assert_eq!(announced[0].session_channel_id, session.channel_id);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
     assert_eq!(announced[0].triggered_by, origin.sender);
@@ -302,29 +300,6 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     );
     assert_eq!(announced[1].origin_channel_id, Uuid::from_u128(0xf0));
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
-
-    let session = repo.get(id).await.expect("the session exists");
-    service
-        .execute(
-            id,
-            HarnessCommand::Deliver(DeliverAction::prompt(
-                "continue in the agent channel",
-                Some(sender()),
-                Some(AnnounceOrigin {
-                    channel_id: session.channel_id,
-                    thread_id: Uuid::from_u128(0xf2),
-                }),
-            )),
-        )
-        .await
-        .expect("forward in the dedicated channel should succeed");
-
-    assert_eq!(prompts(&container.agent()).len(), 3);
-    assert_eq!(
-        announcer.announced().len(),
-        2,
-        "dedicated-channel prompts must not post an announcement reply"
-    );
 }
 
 #[tokio::test]

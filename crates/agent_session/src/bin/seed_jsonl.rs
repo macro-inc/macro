@@ -281,7 +281,6 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     }
 
     println!("session:  {}", session.id);
-    println!("channel:  {}", session.channel_id);
     println!("entries:  {total}");
     Ok(())
 }

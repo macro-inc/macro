@@ -111,8 +111,6 @@ pub struct SessionAnnouncement {
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
-    /// Dedicated channel created for the agent session.
-    pub session_channel_id: Uuid,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message_id: MessageId,
     /// Text of the prompting message, quoted back in the announcement.
