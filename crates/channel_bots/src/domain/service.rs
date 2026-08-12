@@ -11,8 +11,9 @@ use channels::domain::models::{
 use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
-use super::models::BotEvent;
+use super::models::{BotEvent, BotTrigger};
 use super::ports::AgentResponder;
+use super::sender_label;
 
 /// How many channel messages to include around the trigger.
 ///
@@ -23,38 +24,23 @@ const CONTEXT_MESSAGES_AFTER: i64 = 4;
 
 /// Inline marker appended to the sender label of the triggering message so the
 /// model can tell it apart from surrounding context.
-const TRIGGER_MARKER: &str = " [this message mentioned you]";
+const MENTION_TRIGGER_MARKER: &str = " [this message mentioned you]";
+const INFERRED_TRIGGER_MARKER: &str = " [respond to this message]";
 
-const THREAD_INSTRUCTION: &str = "This is the thread you were mentioned in (oldest to newest). \
-Interpret the mention in the context of this thread: words like \"this\" or \"it\" in the \
-mention refer to this thread unless the mention says otherwise.";
+const MENTION_THREAD_INSTRUCTION: &str = "This is the thread you were mentioned in (oldest to \
+newest). Interpret the mention in the context of this thread: words like \"this\" or \"it\" in \
+the mention refer to this thread unless the mention says otherwise.";
+
+const INFERRED_THREAD_INSTRUCTION: &str = "This is the thread the message was posted in (oldest \
+to newest). Interpret the message in the context of this thread: words like \"this\" or \"it\" \
+refer to this thread unless the message says otherwise.";
 
 const CHANNEL_BACKGROUND_INSTRUCTION: &str = "Other recent messages in the same channel, outside \
 the thread above (oldest to newest). Background only — do not treat these as the subject of the \
-mention.";
+triggering message.";
 
 const CHANNEL_CONTEXT_INSTRUCTION: &str = "Recent messages in the channel around the mention \
 (oldest to newest).";
-
-/// Human-readable label for a message sender storage id.
-fn sender_label(sender_id: &str) -> String {
-    if let Ok(bot) = bot_id::BotIdStr::parse_from_str(sender_id) {
-        return if bot.bot_id() == bot_id::MACRO_AI_BOT_ID {
-            bot_id::MACRO_AI_NAME.to_string()
-        } else {
-            "Bot".to_string()
-        };
-    }
-    // User ids look like `macro|<email>`; show the email's local part.
-    sender_id
-        .rsplit('|')
-        .next()
-        .unwrap_or(sender_id)
-        .split('@')
-        .next()
-        .unwrap_or(sender_id)
-        .to_string()
-}
 
 /// A single message rendered into the prompt.
 struct PromptLine {
@@ -75,13 +61,19 @@ fn trigger_line(event: &BotEvent) -> PromptLine {
 
 /// Write a tagged context block: an instruction line followed by one message
 /// per line, labeled by sender. Skipped entirely when there are no messages.
-fn append_block(prompt: &mut String, tag: &str, instruction: &str, lines: &[PromptLine]) {
+fn append_block(
+    prompt: &mut String,
+    tag: &str,
+    instruction: &str,
+    trigger_marker: &str,
+    lines: &[PromptLine],
+) {
     if lines.is_empty() {
         return;
     }
     let _ = write!(prompt, "\n<{tag}>\n{instruction}\n\n");
     for line in lines {
-        let marker = if line.is_trigger { TRIGGER_MARKER } else { "" };
+        let marker = if line.is_trigger { trigger_marker } else { "" };
         let _ = writeln!(prompt, "{}{marker}: {}", line.sender, line.content);
     }
     let _ = writeln!(prompt, "</{tag}>");
@@ -195,12 +187,24 @@ where
 
         let mut prompt = String::new();
         if let Some(parent_id) = event.message.thread_id {
-            let _ = writeln!(
-                prompt,
-                "{mentioner} mentioned you (@macro) in a channel thread."
-            );
+            let (intro, thread_instruction, marker) = match event.trigger {
+                BotTrigger::Mention => (
+                    format!("{mentioner} mentioned you (@macro) in a channel thread."),
+                    MENTION_THREAD_INSTRUCTION,
+                    MENTION_TRIGGER_MARKER,
+                ),
+                BotTrigger::Inferred => (
+                    format!(
+                        "{mentioner} replied in a channel thread you are part of. They did not \
+                         @-mention you, but their message appears to be addressed to you."
+                    ),
+                    INFERRED_THREAD_INSTRUCTION,
+                    INFERRED_TRIGGER_MARKER,
+                ),
+            };
+            let _ = writeln!(prompt, "{intro}");
             let (thread, thread_ids) = self.thread_lines(event, parent_id).await;
-            append_block(&mut prompt, "thread", THREAD_INSTRUCTION, &thread);
+            append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
 
             let background: Vec<PromptLine> = nearby
                 .iter()
@@ -220,6 +224,7 @@ where
                 &mut prompt,
                 "channel_background",
                 CHANNEL_BACKGROUND_INSTRUCTION,
+                marker,
                 &background,
             );
         } else {
@@ -242,6 +247,7 @@ where
                 &mut prompt,
                 "channel_context",
                 CHANNEL_CONTEXT_INSTRUCTION,
+                MENTION_TRIGGER_MARKER,
                 &lines,
             );
         }

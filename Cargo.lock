@@ -2780,6 +2780,8 @@ dependencies = [
  "macro_user_id",
  "models_pagination",
  "prompt",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",

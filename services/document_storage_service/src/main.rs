@@ -924,6 +924,14 @@ async fn main() -> anyhow::Result<()> {
             macro_agent_tool_context,
             macro_agent_tools,
         )),
+        Arc::new(
+            channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
+                channels_service.clone(),
+                Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
+                    ai_usage::pg_recorder(db.clone()),
+                )),
+            ),
+        ),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
