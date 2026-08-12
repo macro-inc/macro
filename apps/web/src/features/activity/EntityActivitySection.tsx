@@ -1,6 +1,4 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId } from '@core/user';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import {
   type ActivityEvent,
@@ -8,9 +6,8 @@ import {
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, Suspense } from 'solid-js';
+import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
-import { actionAsPropertyChange, describeAction } from './describe-action';
-import { PropertyChangeText } from './property-change';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
 
 export interface EntityActivitySectionProps {
@@ -50,12 +47,9 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
             when={events().length > 0}
             fallback={<SidePanel.EmptyPill label="No activity yet" />}
           >
-            <div class="text-xs">
-              <SidePanel.Card>
-                <For each={events()}>
-                  {(event) => <ActivityRow event={event} />}
-                </For>
-              </SidePanel.Card>
+            <div class="relative px-1 text-xs">
+              <div class="absolute inset-y-2 left-[7px] w-px bg-edge-muted" />
+              <For each={events()}>{(event) => <RailRow event={event} />}</For>
             </div>
           </Show>
         </Suspense>
@@ -64,26 +58,16 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
   );
 }
 
-function ActivityRow(props: { event: ActivityEvent }) {
-  const actorId = () => tryMacroId(props.event.actorId);
-
+/** History rail: dots on a connected line, like an issue timeline. */
+function RailRow(props: { event: ActivityEvent }) {
   return (
-    <div class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1">
-      <Show when={actorId()}>
-        {(id) => <UserIcon id={id()} size="sm" showTooltip={false} />}
-      </Show>
-      <span class="flex min-w-0 items-center gap-1">
-        <span class="shrink-0 font-medium text-ink">
-          <ActorName actorId={props.event.actorId} />
-        </span>
-        <span class="min-w-0 truncate text-ink-muted">
-          <Show
-            when={actionAsPropertyChange(props.event.action)}
-            fallback={describeAction(props.event.action)}
-          >
-            {(change) => <PropertyChangeText action={change()} />}
-          </Show>
-        </span>
+    <div class="relative flex min-h-6 min-w-0 items-center gap-1 py-0.5 pl-4">
+      <span class="absolute left-[5px] size-[5px] rounded-full bg-ink-extra-muted" />
+      <span class="shrink-0 font-medium text-ink">
+        <ActorName actorId={props.event.actorId} />
+      </span>
+      <span class="min-w-0 truncate text-ink-muted">
+        <ActionPhrase event={props.event} />
       </span>
       <span class="ml-auto shrink-0 text-ink-extra-muted">
         {formatRelativeTimestamp(new Date(props.event.occurredAt), {
