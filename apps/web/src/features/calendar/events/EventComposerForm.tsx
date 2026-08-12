@@ -10,8 +10,7 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { EventDateTimeRangePill } from './EventDateTimeField';
+import { EventComposerDateTimeRangeFields } from './EventComposerDateTimeRangeFields';
 import {
   EventComposerCalendarPill,
   EventComposerGuestsPill,
@@ -66,7 +65,6 @@ export interface EventComposerFormProps {
   guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
   attendees?: CalendarAttendee[];
-  calendarPillMount?: HTMLDivElement;
   pending: boolean;
   class?: string;
   onCancel: () => void;
@@ -232,7 +230,8 @@ export function EventComposerForm(props: EventComposerFormProps) {
   });
 
   const eventTime = createMemo(() => buildEventTime(state()));
-  const canSave = () => eventTime() !== undefined && customValid();
+  const canSave = () =>
+    state().title.trim() !== '' && eventTime() !== undefined && customValid();
 
   const submit = () => {
     const time = eventTime();
@@ -249,32 +248,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
     });
   };
 
-  const DateTimeRange = () => (
-    <EventDateTimeRangePill
-      start={state().start}
-      end={state().end}
-      allDay={state().allDay}
-      onStartChange={(start) =>
-        setState(
-          state().allDay
-            ? moveAllDayRange(state(), start)
-            : { ...state(), start }
-        )
-      }
-      onEndChange={(end) => setState({ ...state(), end })}
-      onAllDayChange={(allDay) =>
-        setState(convertTimesForAllDay(state(), allDay))
-      }
-      disabled={
-        fieldIsDisabled('start') ||
-        fieldIsDisabled('end') ||
-        fieldIsDisabled('allDay')
-      }
-      invalid={dateRangeError() !== undefined}
-      describedBy={dateRangeError() ? dateRangeErrorId : undefined}
-    />
-  );
-
   return (
     <form
       class={cn(
@@ -286,9 +259,83 @@ export function EventComposerForm(props: EventComposerFormProps) {
         submit();
       }}
     >
-      <Show when={props.calendarPillMount}>
-        {(mount) => (
-          <Portal mount={mount()}>
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto scrollbar-hidden">
+        <div class="flex min-w-0 flex-col gap-6 text-sm text-ink-muted">
+          <div class="flex min-w-0 flex-col gap-1">
+            <div class="flex min-w-0 flex-col gap-0">
+              <EventComposerDateTimeRangeFields
+                start={state().start}
+                end={state().end}
+                allDay={state().allDay}
+                onStartChange={(start) =>
+                  setState(
+                    state().allDay
+                      ? moveAllDayRange(state(), start)
+                      : { ...state(), start }
+                  )
+                }
+                onEndChange={(end) => setState({ ...state(), end })}
+                onAllDayChange={(allDay) =>
+                  setState(convertTimesForAllDay(state(), allDay))
+                }
+                startDisabled={fieldIsDisabled('start')}
+                endDisabled={fieldIsDisabled('end')}
+                allDayDisabled={fieldIsDisabled('allDay')}
+                invalid={dateRangeError() !== undefined}
+                describedBy={dateRangeError() ? dateRangeErrorId : undefined}
+              />
+              <Show when={dateRangeError()}>
+                {(error) => (
+                  <p
+                    id={dateRangeErrorId}
+                    role="alert"
+                    class="px-2 text-xs text-failure"
+                  >
+                    {error()}
+                  </p>
+                )}
+              </Show>
+            </div>
+
+            <input
+              type="text"
+              value={state().title}
+              onInput={(event) =>
+                setState({ ...state(), title: event.currentTarget.value })
+              }
+              placeholder="New event"
+              aria-label="Title"
+              autofocus={!isEdit()}
+              disabled={fieldIsDisabled('title')}
+              class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
+            />
+
+            <div class="h-12">
+              <textarea
+                value={state().description}
+                onInput={(event) =>
+                  setState({
+                    ...state(),
+                    description: event.currentTarget.value.replaceAll(
+                      /[\r\n]+/g,
+                      ' '
+                    ),
+                  })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.preventDefault();
+                }}
+                placeholder="Add description..."
+                aria-label="Description"
+                rows={1}
+                wrap="off"
+                disabled={fieldIsDisabled('description')}
+                class="h-full w-full resize-none overflow-x-auto bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
+              />
+            </div>
+          </div>
+
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <EventComposerCalendarPill
               options={props.calendarOptions}
               value={selectedCalendarOption()}
@@ -296,55 +343,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
               disabled={props.pending}
               readOnly={fieldIsReadOnly('calendar')}
             />
-          </Portal>
-        )}
-      </Show>
-
-      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto scrollbar-hidden">
-        <div class="flex flex-col gap-6">
-          <div class="flex flex-col gap-1">
-            <div class="px-2">
-              <input
-                type="text"
-                value={state().title}
-                onInput={(event) =>
-                  setState({ ...state(), title: event.currentTarget.value })
-                }
-                placeholder="New event"
-                aria-label="Title"
-                autofocus={!isEdit()}
-                disabled={fieldIsDisabled('title')}
-                class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
-              />
-            </div>
-
-            <input
-              type="text"
-              value={state().description}
-              onInput={(event) =>
-                setState({ ...state(), description: event.currentTarget.value })
-              }
-              placeholder="Add description..."
-              aria-label="Description"
-              disabled={fieldIsDisabled('description')}
-              class="h-9 w-full bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
-            />
-          </div>
-
-          <Show when={dateRangeError()}>
-            {(error) => (
-              <p
-                id={dateRangeErrorId}
-                role="alert"
-                class="px-2 text-xs text-failure"
-              >
-                {error()}
-              </p>
-            )}
-          </Show>
-
-          <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
-            <DateTimeRange />
             <EventComposerRecurrencePill
               options={recurrenceOptions()}
               value={selectedRecurrenceOption()}

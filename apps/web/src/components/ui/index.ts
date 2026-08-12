@@ -15,13 +15,10 @@ export type {
   CalendarMonthMenuProps,
   CalendarMonthSelectorProps,
   CalendarProps,
-  CalendarRangeProps,
-  CalendarRangeValue,
 } from './components/Calendar';
 export {
   Calendar,
   CalendarMonthMenu,
-  CalendarRange,
   formatCalendarMonth,
 } from './components/Calendar';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';

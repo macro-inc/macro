@@ -60,6 +60,7 @@ export interface EventComposerGuestsPillProps {
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  hideIcon?: boolean;
 }
 
 function guestDisplayName(guest: SelectedEventEditorGuest) {
@@ -91,7 +92,9 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
           aria-readonly="true"
           class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
         >
-          <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Show when={!props.hideIcon}>
+            <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          </Show>
           <span
             class={cn(
               'min-w-0 truncate',
@@ -268,7 +271,9 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
               queueMicrotask(() => input?.focus());
             }}
           >
-            <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            <Show when={!props.hideIcon}>
+              <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+            </Show>
             <span
               class={cn(
                 'min-w-0 truncate',
@@ -456,6 +461,7 @@ export interface EventComposerLocationPillProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  hideIcon?: boolean;
 }
 
 /** Compact editable location property pill. */
@@ -480,7 +486,9 @@ export function EventComposerLocationPill(
           aria-label="Location"
           class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
         >
-          <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Show when={!props.hideIcon}>
+            <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          </Show>
           <span
             class={cn(
               'min-w-0 truncate',
@@ -525,6 +533,7 @@ export interface EventComposerRecurrencePillProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  hideIcon?: boolean;
 }
 
 /** Compact recurrence property pill. */
@@ -549,7 +558,9 @@ export function EventComposerRecurrencePill(
           aria-readonly={props.readOnly || undefined}
           class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
         >
-          <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <Show when={!props.hideIcon}>
+            <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          </Show>
           <Select.Value<EventComposerSelectOption>>
             {(selectState) => selectState.selectedOption().label}
           </Select.Value>
