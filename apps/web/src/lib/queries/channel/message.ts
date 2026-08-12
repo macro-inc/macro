@@ -432,7 +432,6 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
-      console.debug('[debug] channel send markdown', vars.message.content);
       // Use optimisticId as nonce - allows server to echo it back for correlation
       return await throwOnErr(
         async () =>
