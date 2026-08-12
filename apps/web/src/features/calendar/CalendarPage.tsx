@@ -7,6 +7,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -37,7 +38,10 @@ import {
   pendingCalendarFocus,
 } from './calendar-focus-intent';
 import { isCalendarRangeSupported } from './calendar-supported-range';
-import { mapCalendarOccurrence } from './events/calendar-occurrence-mapper';
+import {
+  DEFAULT_CALENDAR_SOURCE,
+  mapCalendarOccurrence,
+} from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
 import { calendarSelectionToEditorInitialValues } from './events/EventEditorForm';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
@@ -308,10 +312,16 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const { popoverSplit } = useSplitLayout();
-  const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
-  const [selectionColor, setSelectionColor] = createSignal(
-    'var(--color-accent)'
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const firstWritableCalendar = createMemo(() =>
+    calendarsQuery.data?.find((calendar) => calendar.isWritable)
   );
+  const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
+  const [selectionColor, setSelectionColor] = createSignal<string>();
+  const effectiveSelectionColor = () =>
+    selectionColor() ??
+    firstWritableCalendar()?.color ??
+    DEFAULT_CALENDAR_SOURCE.color;
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     calendarView.useNarrowDayHeaders() && !isMobile();
@@ -327,14 +337,22 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
 
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
+    const calendar = firstWritableCalendar();
+    setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     popoverSplit({
       type: 'component',
       id: 'calendar-event-compose',
       params: {
-        initialValues: calendarSelectionToEditorInitialValues(selection),
+        initialValues: {
+          ...calendarSelectionToEditorInitialValues(selection),
+          ...(calendar ? { calendarId: calendar.id } : {}),
+        },
         onCalendarChange: (_calendarId: string, color: string) =>
           setSelectionColor(color),
-        onClose: () => selection.view.calendar.unselect(),
+        onClose: () => {
+          selection.view.calendar.unselect();
+          setSelectionColor(undefined);
+        },
       },
     });
   };
@@ -520,7 +538,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         data={data}
         eventElements={eventElements}
         chipMounts={chipMounts}
-        selectionColor={selectionColor()}
+        selectionColor={effectiveSelectionColor()}
       />
     </FullCalendar.Root>
   );
