@@ -2,7 +2,7 @@ import type { GroupHeaderProps } from '@app/features/next-soup/create-soup-state
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { type MacroId, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, type MacroId, tryMacroId } from '@core/user';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
@@ -14,9 +14,8 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId, {
-    emailFallback: 'local-part',
-  });
+  const assigneeName = () =>
+    getDisplayName(props.assigneeId, { emailFallback: 'local-part' });
   return (
     <>
       <UserIcon

@@ -2,9 +2,14 @@ use super::*;
 use crate::local::Mode;
 use crate::local::instance::{Instance, Port};
 
+/// The merged env a `--no-doppler` stack sees: boot stubs below, the
+/// authoritative local env on top (mirrors `env_layer::resolve`).
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    LocalEnv::for_instance(Mode::Local, &instance, true).to_env()
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let mut env = local.boot_stub_env();
+    env.extend(local.to_env());
+    env
 }
 
 /// Every key a local service relies on must be present — this is the test that
@@ -31,12 +36,110 @@ fn emits_required_keys() {
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
         "JWT_SECRET_KEY",
+        // Boot-blocking stubs — service config loaders require these even in a
+        // no-doppler stack (see `BootStubEnv`).
+        "REDIS_HOST",
+        "MACRO_DB_URL",
+        "INTERNAL_API_KEY",
+        "AUTHENTICATION_SERVICE_SECRET_KEY",
+        "OPENSEARCH_USERNAME",
+        "OPENSEARCH_PASSWORD",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET_KEY",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "GITHUB_IDP_ID",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PRICE_ID",
+        "STRIPE_WEBHOOK_SECRET_KEY",
+        "MACRO_API_TOKEN_ISSUER",
+        "MACRO_API_TOKEN_PUBLIC_KEY",
+        "MACRO_API_TOKEN_PRIVATE_SECRET_KEY",
+        "MACRO_API_TOKEN_EXPIRY_SECONDS",
+        "GMAIL_GCP_QUEUE",
+        "APOLLO_API_KEY",
+        "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
+        "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
+        "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        "APPLE_BUNDLE_ID",
+        "SNS_APNS_PLATFORM_ARN",
+        "SNS_FCM_PLATFORM_ARN",
+        "MCP_CREDENTIALS_KEY_SECRET_NAME",
+        "ANTHROPIC_API_KEY",
+        "SLACK_MCP_CLIENT_ID",
+        "SLACK_MCP_CLIENT_SECRET",
+        "GITHUB_SYNC_APP_URL",
+        "GITHUB_SYNC_APP_CLIENT_ID",
+        "GITHUB_SYNC_APP_CLIENT_SECRET",
+        "GITHUB_INSTALLATION_STATE_SECRET",
+        "GITHUB_WEBHOOK_SECRET_KEY",
+        "GITHUB_SYNC_APP_PEM_SECRET_KEY",
+        "LIVEKIT_SERVER_URL",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
+        "OPENAI_API_KEY",
+        "COHERE_API_KEY",
+        "CAL_WEBHOOK_SECRET_KEY",
+        "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
+        "META_PIXEL_ID",
+        "META_ACCESS_TOKEN",
     ] {
         assert!(
             env.contains_key(key),
             "missing required local env key: {key}"
         );
     }
+}
+
+/// Boot stubs are a fallback layer BELOW Doppler; `to_env` is authoritative
+/// ABOVE Doppler. A key present in both would make its precedence ambiguous —
+/// whichever map wrote last would silently win.
+#[test]
+fn boot_stubs_do_not_overlap_authoritative_env() {
+    let instance = Instance::derive(None, None).expect("default instance derives");
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let authoritative = local.to_env();
+    for key in local.boot_stub_env().keys() {
+        assert!(
+            !authoritative.contains_key(key),
+            "{key} is in both boot_stub_env and to_env"
+        );
+    }
+}
+
+/// The boot stubs must be local-only values: the same in-network endpoints the
+/// rest of the env uses, dummy creds, and never a real secret or deployed URL.
+#[test]
+fn boot_stubs_are_local_only() {
+    let env = local_env();
+    assert_eq!(
+        env.get("REDIS_HOST").map(String::as_str),
+        Some("redis://redis:6379")
+    );
+    assert_eq!(
+        env.get("MACRO_DB_URL").map(String::as_str),
+        Some("postgres://user:password@postgres:5432/macrodb")
+    );
+    // INTERNAL_API_KEY must agree with the internal-auth key other services
+    // validate against, or every internal call 401s.
+    assert_eq!(
+        env.get("INTERNAL_API_KEY"),
+        env.get("INTERNAL_API_SECRET_KEY"),
+        "INTERNAL_API_KEY must match INTERNAL_API_SECRET_KEY"
+    );
+    assert_eq!(
+        env.get("AUTHENTICATION_SERVICE_SECRET_KEY"),
+        env.get("INTERNAL_API_SECRET_KEY"),
+        "AUTHENTICATION_SERVICE_SECRET_KEY must match INTERNAL_API_SECRET_KEY"
+    );
+    assert_eq!(
+        env.get("OPENSEARCH_USERNAME").map(String::as_str),
+        Some("macrouser")
+    );
 }
 
 /// Local must never point at real dev/prod infrastructure: endpoints are docker

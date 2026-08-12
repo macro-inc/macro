@@ -6,6 +6,11 @@ version = "0.1.0"
 
 [features]
 default = []
+# The reminder dispatch queue worker. Transport-agnostic: it drives the
+# domain through the dispatch ports.
+dispatch = ["dep:tokio", "dep:tokio-util"]
+# The worker plus the SQS adapter that backs it.
+dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch"]
 google = ["dep:reqwest", "dep:urlencoding"]
 inbound = [
   "dep:axum",
@@ -13,17 +18,24 @@ inbound = [
   "dep:models_pagination",
   "schema",
 ]
+# The notification-service reminder notifier.
+notify = ["dep:macro_user_id", "dep:model-entity", "dep:model_notifications", "dep:notification"]
 postgres = ["dep:sqlx", "dep:tokio"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
 models_pagination = { path = "../models_pagination", optional = true }
+notification = { path = "../notification", optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
@@ -31,6 +43,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }

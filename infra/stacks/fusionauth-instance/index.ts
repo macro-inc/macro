@@ -488,3 +488,55 @@ new FusionAuthIdpOpenIdConnect(
     protect: stack !== 'local',
   }
 );
+
+// -- Microsoft
+if (config.get('microsoft-idp-secret-key')) {
+  const { client_id, client_secret, tenant_id } = aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: config.require('microsoft-idp-secret-key'),
+    })
+    .apply(
+      (secret) =>
+        JSON.parse(secret.secretString) as {
+          client_id: string;
+          client_secret: string;
+          tenant_id: string;
+        }
+    );
+
+  if (!client_id || !client_secret || !tenant_id) {
+    throw new Error(
+      'incorrectly configured microsoft idp secret. expected {client_id:"", client_secret:"", tenant_id:""'
+    );
+  }
+
+  new FusionAuthIdpOpenIdConnect(
+    'microsoft-idp',
+    {
+      enabled: true,
+      name: 'microsoft',
+      oauth2ClientId: client_id,
+      oauth2ClientSecret: client_secret,
+      oauth2ClientAuthenticationMethod: 'client_secret_basic',
+      oauth2Issuer: pulumi.interpolate`https://login.microsoftonline.com/${tenant_id}/v2.0`,
+      buttonText: 'Microsoft',
+      oauth2Scope:
+        'openid email offline_access profile Mail.ReadWrite Mail.Send',
+      oauth2UniqueIdClaim: 'sub',
+      linkingStrategy: 'LinkByEmail',
+      debug: stack !== 'prod',
+      applicationConfigurations: [
+        {
+          applicationId: pulumi.interpolate`${macroApplication.oauthConfiguration.clientId}`,
+          enabled: true,
+          createRegistration: true,
+        },
+      ],
+    },
+    {
+      dependsOn: macroApplication,
+      provider: fusionAuthProvider,
+      protect: stack !== 'local',
+    }
+  );
+}

@@ -89,5 +89,6 @@ export {
   addCtrlJKMenuNavigation,
   ctrlJKMenuNavigation,
   handleCtrlJKMenuNavigation,
+  highlightFirstMenuItemOnOpen,
   wrapIndex,
 } from './utils/menuKeyboardNavigation';

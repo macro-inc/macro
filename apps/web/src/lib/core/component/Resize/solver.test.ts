@@ -3,6 +3,59 @@ import { describe, expect, it } from 'vitest';
 import { createResizeSolver } from './solver';
 
 describe('createResizeSolver', () => {
+  describe('swap', () => {
+    it('reorders registered panels without changing their sizing intent', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size: () => 1000,
+          panels: [],
+        }),
+      }));
+
+      solver.addPanel({ id: 'A', minSize: 0 });
+      solver.addPanel({ id: 'B', minSize: 0 });
+      await Promise.resolve();
+      solver.moveHandle(0, 200);
+      expect(solver.solve().sizes.get('A')).toBe(700);
+      expect(solver.solve().sizes.get('B')).toBe(300);
+
+      solver.swap('A', 'B');
+
+      expect(solver.order()).toEqual(['B', 'A']);
+      expect(solver.solve().sizes.get('A')).toBe(700);
+      expect(solver.solve().sizes.get('B')).toBe(300);
+
+      dispose();
+    });
+
+    it('moves all contiguous members of a share group together', async () => {
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size: () => 1000,
+          panels: [],
+        }),
+      }));
+
+      solver.addPanel({ id: 'A', minSize: 0 });
+      solver.addPanel({ id: 'B', minSize: 0, shareGroup: 'pair' });
+      solver.addPanel({ id: 'C', minSize: 0, shareGroup: 'pair' });
+      solver.addPanel({ id: 'D', minSize: 0 });
+      await Promise.resolve();
+
+      solver.swap('B', 'D');
+
+      expect(solver.order()).toEqual(['A', 'D', 'B', 'C']);
+
+      dispose();
+    });
+  });
+
   describe('addPanel', () => {
     it('should insert a panel at index 0 when index=0 is passed', () => {
       createRoot((dispose) => {

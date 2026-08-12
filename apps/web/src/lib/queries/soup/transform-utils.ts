@@ -10,6 +10,8 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  CalendarEventEntity,
+  CalendarEventEntityTime,
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
@@ -41,6 +43,7 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
+  SoupCalendarEventTime,
   SoupPage,
   SoupReminderReference,
 } from '@service-storage/generated/schemas';
@@ -58,11 +61,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Calendar soup rendering lands with the calendar FE; skip those items for now.
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'calendarEvent' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -75,6 +74,7 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
@@ -387,7 +387,9 @@ export const useSearchResponseItemMapper = () => {
                 ? { type: 'task' }
                 : result.sub_type === 'snippet'
                   ? { type: 'snippet' }
-                  : null,
+                  : result.sub_type === 'skill'
+                    ? { type: 'skill' }
+                    : null,
             id: result.document_id,
             name: formatDisplayName(
               result.name || blockNameToDefaultFile(result.file_type),
@@ -601,7 +603,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'calendarEvent';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -951,10 +953,33 @@ export const mapApiSoupItemToEntity = (
         frecencyScore: item.frecency_score,
       } satisfies ReminderEntity;
     })
+    .with({ tag: 'calendarEvent' }, (item) => {
+      return {
+        type: 'calendar_event',
+        id: item.data.id,
+        name: item.data.title,
+        ownerId: item.data.ownerId,
+        status: item.data.status,
+        time: toCalendarEventTime(item.data.time),
+        conferenceUrl: item.data.conferenceUrl ?? undefined,
+        isReadOnly: item.data.isReadOnly,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        properties: item.data.extra.properties,
+        frecencyScore: item.frecency_score,
+      } satisfies CalendarEventEntity;
+    })
     .exhaustive();
 
   return withRawNotifications(entity, item);
 };
+
+const toCalendarEventTime = (
+  time: SoupCalendarEventTime
+): CalendarEventEntityTime =>
+  time.kind === 'timed'
+    ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
+    : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

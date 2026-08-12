@@ -7,8 +7,8 @@ use crate::domain::models::email_notification_digest::ports::DigestBatch;
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatcher};
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, EmailCreateBundle,
-    NotificationChannel, QueueMessage, RawQueueMessage,
+    ConnGatewayNotification, EmailContent, EmailCreateBundle, NotificationChannel, QueueMessage,
+    RawQueueMessage, RealtimeNotif,
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
@@ -1415,8 +1415,8 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
     }
 }
 
-fn create_mock_notif<T: Notification>(meta: T) -> ConnGatewayInnerNotif<T> {
-    ConnGatewayInnerNotif {
+fn create_mock_notif<T: Notification>(meta: T) -> RealtimeNotif<TaggedContent<T>> {
+    RealtimeNotif {
         notification_id: Uuid::nil(),
         notification_event_type: "testing".to_string(),
         entity: EntityType::Document.with_entity_str("testing"),

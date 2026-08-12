@@ -33,9 +33,8 @@ vi.mock('@core/signal/profilePicture', () => ({
 
 vi.mock('@core/user', () => ({
   tryMacroId: (identity: string) => identity,
-  useDisplayName: (identity: string) => [
-    () => mocks.displayNames.get(identity) ?? identity,
-  ],
+  getDisplayName: (identity: string) =>
+    mocks.displayNames.get(identity) ?? identity,
 }));
 
 vi.mock('@ui', () => ({

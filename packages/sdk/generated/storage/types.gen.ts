@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 };
 
 /**
@@ -984,6 +984,8 @@ export type BasicDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type BomPart = {
@@ -1207,6 +1209,7 @@ export type CalendarEvent = {
      * projections stored before calendars were attributed.
      */
     calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
     /**
      * Direct join URL when known.
      */
@@ -1251,6 +1254,12 @@ export type CalendarEvent = {
      * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
      */
     recurrenceLines: Array<string>;
+    /**
+     * Per-user reminder configuration. Skipped when it is the provider
+     * default so projections stored before reminders were modeled still
+     * compare equal.
+     */
+    reminders?: EventReminders;
     /**
      * Provider/iCalendar sequence number.
      */
@@ -2424,6 +2433,22 @@ export type CommentThread = {
 };
 
 /**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
  * Query parameters for the copy document endpoint.
  */
 export type CopyDocumentQueryParams = {
@@ -2850,11 +2875,41 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * When and how often the reminder fires.
      */
     schedule: ReminderSchedule;
+};
+
+/**
+ * Request body for creating a skill — a markdown document containing
+ * instructions that AI reads and follows when the skill is referenced in an
+ * AI input.
+ */
+export type CreateSkillRequest = {
+    /**
+     * Markdown source text. Defaults to an empty skill document.
+     */
+    markdown?: string | null;
+    /**
+     * Optional project ID to associate the skill with.
+     */
+    projectId?: string | null;
+    /**
+     * The name of the skill.
+     */
+    skillName: string;
+};
+
+/**
+ * Response for creating a skill.
+ */
+export type CreateSkillResponse = {
+    /**
+     * The document ID of the created skill.
+     */
+    documentId: string;
 };
 
 /**
@@ -3810,6 +3865,8 @@ export type DocumentPreviewDataSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -3922,7 +3979,7 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -4387,6 +4444,38 @@ export type ErrorResponse = {
 };
 
 /**
+ * One reminder: how it alerts and how many minutes before the event start
+ * (before midnight in the calendar's zone for all-day events) it fires.
+ */
+export type EventReminderOverride = {
+    /**
+     * Provider method, stored verbatim; only `popup` fires Macro
+     * notifications.
+     */
+    method: string;
+    /**
+     * Minutes before the event start.
+     */
+    minutes: number;
+};
+
+/**
+ * Per-user reminder configuration for an event, mirroring Google's model:
+ * either the calendar's default reminders apply, or the explicit overrides
+ * replace them entirely.
+ */
+export type EventReminders = {
+    /**
+     * Explicit reminders replacing the defaults when `use_default` is off.
+     */
+    overrides?: Array<EventReminderOverride>;
+    /**
+     * Whether the calendar's default reminders apply.
+     */
+    useDefault: boolean;
+};
+
+/**
  * Canonical event status.
  */
 export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
@@ -4491,7 +4580,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4513,7 +4602,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 };
 
 /**
@@ -6106,7 +6195,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * Reminder id.
      */
@@ -6532,37 +6621,45 @@ export type SoupAttachment = {
 
 /**
  * Timed or all-day calendar event span.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores — the generated OpenAPI schema would otherwise
+ * claim snake_case fields the wire never carries.
  */
 export type SoupCalendarEventTime = {
     /**
      * Exclusive end.
      */
-    ends_at: string;
+    endsAt: string;
     kind: 'timed';
     /**
      * Inclusive start.
      */
-    starts_at: string;
+    startsAt: string;
     /**
      * Original IANA time zone.
      */
-    time_zone?: string | null;
+    timeZone?: string | null;
 } | {
     /**
      * Exclusive end date.
      */
-    end_date: string;
+    endDate: string;
     kind: 'allDay';
     /**
      * Inclusive start date.
      */
-    start_date: string;
+    startDate: string;
 };
 
 /**
  * A canonical calendar event entity in Soup.
  */
 export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Which conferencing system backs `conference_url`.
+     */
+    conferenceProvider?: string | null;
     /**
      * Direct conference join URL.
      */
@@ -6974,6 +7071,8 @@ export type SoupDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 /**
@@ -7456,7 +7555,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -7629,6 +7728,22 @@ export type SuccessResponse = {
 export type SyncServiceVersionId = {
     counter: number;
     peer: string;
+};
+
+/**
+ * A built-in system skill: static, code-defined AI instructions surfaced
+ * through the same tools as user-authored skill documents, but with no
+ * document behind them.
+ */
+export type SystemSkillSummary = {
+    /**
+     * The well-known id the skill is referenced by in mentions and AI tools.
+     */
+    id: string;
+    /**
+     * The name of the skill.
+     */
+    name: string;
 };
 
 /**
@@ -10333,6 +10448,35 @@ export type CreateMarkdownHandlerResponses = {
 
 export type CreateMarkdownHandlerResponse = CreateMarkdownHandlerResponses[keyof CreateMarkdownHandlerResponses];
 
+export type CreateSkillHandlerData = {
+    body: CreateSkillRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_skill';
+};
+
+export type CreateSkillHandlerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSkillHandlerError = CreateSkillHandlerErrors[keyof CreateSkillHandlerErrors];
+
+export type CreateSkillHandlerResponses = {
+    /**
+     * Response for creating a skill.
+     */
+    200: {
+        /**
+         * The document ID of the created skill.
+         */
+        documentId: string;
+    };
+};
+
+export type CreateSkillHandlerResponse = CreateSkillHandlerResponses[keyof CreateSkillHandlerResponses];
+
 export type CreateSnippetHandlerData = {
     body: CreateSnippetRequest;
     path?: never;
@@ -10588,6 +10732,33 @@ export type HandlerResponses = {
 };
 
 export type HandlerResponse = HandlerResponses[keyof HandlerResponses];
+
+export type GetSystemSkillsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/documents/system_skills';
+};
+
+export type GetSystemSkillsHandlerErrors = {
+    401: ErrorResponse;
+};
+
+export type GetSystemSkillsHandlerError = GetSystemSkillsHandlerErrors[keyof GetSystemSkillsHandlerErrors];
+
+export type GetSystemSkillsHandlerResponses = {
+    /**
+     * Response listing the built-in system skills.
+     */
+    200: {
+        /**
+         * Every system skill, in display order.
+         */
+        skills: Array<SystemSkillSummary>;
+    };
+};
+
+export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
 export type DeleteDocumentData = {
     body?: never;
@@ -11251,7 +11422,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
         /**
          * The id of the favorited entity.
          */
@@ -12077,7 +12248,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

@@ -1422,7 +1422,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
       },
       "EmailFilters": {
         "type": "object",

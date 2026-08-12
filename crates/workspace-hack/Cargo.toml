@@ -64,7 +64,7 @@ hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
-hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["client", "http1", "http2", "server"] }
+hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
@@ -191,7 +191,7 @@ hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
-hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["client", "http1", "http2", "server"] }
+hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }

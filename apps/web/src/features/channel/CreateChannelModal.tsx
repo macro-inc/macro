@@ -7,8 +7,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
+  getDisplayName,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
@@ -33,7 +33,7 @@ const CHANNEL_TYPE_TABS = [
 type CreatableChannelType = 'private' | 'team';
 
 function TeamMemberListItem(props: { member: TeamMember; isLast: boolean }) {
-  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
 
   return (
     <div

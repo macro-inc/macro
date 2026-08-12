@@ -35,6 +35,10 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
         ),
       throwOnError: false,
       staleTime: USER_INFO_STALE_TIME,
+      // Never pause on navigator.onLine — it reports false during native cold
+      // launches (e.g. woken by a notification tap) while the network is fine,
+      // and a paused auth check renders as "unauthenticated" at the base path.
+      networkMode: 'always',
       enabled,
     };
   });
@@ -74,6 +78,7 @@ export async function prefetchUserInfo() {
           await throwOnErr(
             async () => await authServiceClient.getLegacyUserPermissions()
           ),
+        networkMode: 'always',
       })
   );
 }
@@ -86,6 +91,7 @@ async function _fetchUserInfo() {
       await throwOnErr(
         async () => await authServiceClient.getLegacyUserPermissions()
       ),
+    networkMode: 'always',
   });
 }
 

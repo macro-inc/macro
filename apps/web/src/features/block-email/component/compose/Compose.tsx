@@ -39,9 +39,9 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   type ContactInfo,
   emailToId,
+  getDisplayName,
   recipientEntityMapper,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -703,7 +703,7 @@ export function EmailCompose(props: EmailComposeProps) {
       let recipientName = recipients[0].data.email;
 
       if (recipients[0].kind === 'user') {
-        recipientName = useDisplayName(tryMacroId(recipients[0].data.id))[0]();
+        recipientName = getDisplayName(tryMacroId(recipients[0].data.id));
       }
 
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
@@ -713,7 +713,7 @@ export function EmailCompose(props: EmailComposeProps) {
       .slice(0, 2)
       .map((r) => {
         if (r.kind === 'user') {
-          return useDisplayName(tryMacroId(r.data.id))[0]();
+          return getDisplayName(tryMacroId(r.data.id));
         }
         return r.data.email || 'Unknown';
       })

@@ -15,6 +15,7 @@ import type {
   ReminderEntity,
 } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
+import SkillIcon from '@icon/skill.svg';
 import WideAutomation from '@icon/wide-automation.svg';
 import WideBook from '@icon/wide-book.svg';
 import WideCalendar from '@icon/wide-calendar.svg';
@@ -284,10 +285,16 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-snippet/20',
     prettyName: 'Snippet',
   },
+  skill: {
+    icon: SkillIcon,
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
+    prettyName: 'Skill',
+  },
   automation: {
     icon: WideAutomation,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
@@ -370,6 +377,7 @@ const WIDE_ICONS: Record<
   pr: GithubIcon,
   task: WideTask,
   snippet: WideSnippet,
+  skill: SkillIcon,
   automation: WideAutomation,
   crm_company: AnimatedCompanyIcon,
   company: AnimatedCompanyIcon,

@@ -1,7 +1,17 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_GRAPHQL_SOUP,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { catchToResult, throwOnErr } from '@core/util/result';
+import {
+  catchToResult,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -11,12 +21,20 @@ import type {
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
+  EmailThreadPageDocument,
+  type EmailThreadPageQuery,
+  type EmailThreadPageQueryVariables,
+} from '@service-storage/graphql/generated/graphql';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
+import {
   type InfiniteData,
-  type SolidInfiniteQueryOptions,
-  type UseInfiniteQueryResult,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
+import type { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -24,30 +42,13 @@ import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { mapGraphqlEmailThreadPage } from './graphql/mapper';
+import { createGraphqlEmailThreadQuery } from './graphql/thread';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
-type ThreadQueryOptions = SolidInfiniteQueryOptions<
-  Thread,
-  Error,
-  any,
-  ReturnType<typeof emailKeys.threadMessages>['queryKey'],
-  number
->;
-
-type UseThreadQueryOptions = Omit<
-  ThreadQueryOptions,
-  | 'queryFn'
-  | 'queryKey'
-  | 'initialData'
-  | 'getNextPageParam'
-  | 'initialPageParam'
->;
-
-/**
- * Shared infinite query options for thread fetching.
- */
+/** Shared REST infinite-query options for thread fetching. */
 export function threadQueryOptions(threadId: string) {
   return {
     queryKey: emailKeys.threadMessages(threadId).queryKey,
@@ -89,30 +90,67 @@ function flattenThreadPages(
 }
 
 /**
- * Imperatively fetch a thread (for use outside of components).
- * Returns cached data if fresh, otherwise fetches from server.
- *
- * TODO: Most of the time we have the updated_at timestamp of an email before we fetch it.
- * Would be nice to accept that as a parameter and only fetch if it's stale.
+ * Imperatively fetch a thread through GraphQL and merge it into the normalized
+ * cache. Network failures fall back to a complete cached first page.
  */
 export async function fetchAndCacheThread(
   threadId: string
 ): ReturnType<typeof emailClient.getThread> {
-  let data: InfiniteData<Thread, number> | undefined;
+  if (!ENABLE_GRAPHQL_SOUP()) {
+    const result = await catchToResult(() =>
+      queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
+    );
+    if (result.isErr()) return err(result.error as any);
 
-  const result = await catchToResult(
-    async () =>
-      await queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
-  );
-
-  if (result.isErr()) {
-    return err(result.error as any);
+    const thread = flattenThreadPages(result.value);
+    if (!thread) {
+      return err([{ code: 'NOT_FOUND', message: 'Email thread not found' }]);
+    }
+    return ok({ thread });
   }
 
-  data = result.value;
+  const result = await catchToResult(async () => {
+    const client = getGraphqlSoupClient();
+    const variables: EmailThreadPageQueryVariables = {
+      threadId,
+      offset: 0,
+      limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+    };
+    let queryResult = await client
+      .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+        EmailThreadPageDocument,
+        variables,
+        { requestPolicy: 'cache-and-network' }
+      )
+      .toPromise();
 
-  const thread = flattenThreadPages(data);
-  return ok({ thread: thread! });
+    if (queryResult.error?.networkError && graphqlCacheEnabled()) {
+      const cached = await client
+        .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+          EmailThreadPageDocument,
+          variables,
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (cached.data) queryResult = cached;
+    }
+
+    if (queryResult.error) {
+      throw mapGraphqlThreadError(queryResult.error);
+    }
+
+    const thread = queryResult.data?.user.emailThread;
+    if (!thread) {
+      throw new ThrownResultError([
+        { code: 'NOT_FOUND', message: 'Email thread not found' },
+      ]);
+    }
+
+    return mapGraphqlEmailThreadPage(thread);
+  });
+
+  if (result.isErr()) return err(result.error as any);
+  return ok({ thread: result.value });
 }
 
 /**
@@ -137,41 +175,159 @@ export async function threadCanBeMarkedNotDone(
   return result.value.thread.latest_inbound_message_ts != null;
 }
 
-type ThreadQueryData = {
+export type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;
 };
 
-/**
- * Query hook for fetching a thread with paginated messages.
- */
-export function useThreadQuery(
-  threadId: Accessor<string>
-): UseInfiniteQueryResult<ThreadQueryData, Error>;
-export function useThreadQuery<Options extends UseThreadQueryOptions>(
-  threadId: Accessor<string>,
-  options: Accessor<Options>
-): UseInfiniteQueryResult<
-  Extract<Options, { select: unknown }> extends never
-    ? ThreadQueryData
-    : ReturnType<NonNullable<Options['select']>>,
-  Error
->;
-export function useThreadQuery<Options extends UseThreadQueryOptions>(
-  threadId: Accessor<string>,
-  options?: Accessor<Options>
-): UseInfiniteQueryResult<ThreadQueryData, Error> {
-  return useInfiniteQuery(() => ({
-    ...threadQueryOptions(threadId()),
-    select: (data: InfiniteData<Thread, number>): ThreadQueryData => {
-      const lastPage = data.pages.at(-1)!;
-      return {
-        thread: flattenThreadPages(data)!,
-        hasMore: lastPage.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
-      };
-    },
-    ...(options?.() ?? {}),
+export type ThreadQueryTransport = 'rest' | 'graphql';
+
+export type ThreadQueryResult<TData> = {
+  readonly data: TData | undefined;
+  readonly error: Error | null;
+  readonly isLoading: boolean;
+  readonly isFetching: boolean;
+  readonly isFetchingNextPage: boolean;
+  readonly isError: boolean;
+  readonly isSuccess: boolean;
+  readonly isEnabled: boolean;
+  readonly hasNextPage: boolean;
+  readonly transport: ThreadQueryTransport;
+  fetchNextPage(): Promise<void>;
+  refetch(): Promise<void>;
+};
+
+type ThreadQuerySelector<TData> = (data: InfiniteData<Thread, number>) => TData;
+
+type UseThreadQueryOptions<TData> = {
+  enabled?: boolean;
+  select?: ThreadQuerySelector<TData>;
+};
+
+function selectThreadQueryData(
+  data: InfiniteData<Thread, number>
+): ThreadQueryData {
+  const lastPage = data.pages.at(-1)!;
+  return {
+    thread: flattenThreadPages(data)!,
+    hasMore: lastPage.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
+  };
+}
+
+function mapGraphqlThreadError(
+  error: CombinedError | null
+): ThrownResultError | null {
+  if (!error) return null;
+
+  const resultErrors = error.graphQLErrors.map((graphqlError) => ({
+    ...graphqlError.extensions,
+    code:
+      typeof graphqlError.extensions?.code === 'string'
+        ? graphqlError.extensions.code
+        : 'UNKNOWN',
+    message: graphqlError.message,
   }));
+  return new ThrownResultError(
+    resultErrors.length > 0
+      ? resultErrors
+      : [
+          {
+            code: 'UNKNOWN',
+            message: error.networkError?.message ?? error.message,
+          },
+        ]
+  );
+}
+
+/**
+ * Transport-neutral live query for a thread and its paginated messages.
+ * GraphQL uses urql-solid while the rollout flag is enabled; REST remains the
+ * fallback and continues to own the legacy TanStack cache.
+ */
+export function useThreadQuery<TData>(
+  threadId: Accessor<string>,
+  options: Accessor<
+    UseThreadQueryOptions<TData> & { select: ThreadQuerySelector<TData> }
+  >
+): ThreadQueryResult<TData>;
+export function useThreadQuery(
+  threadId: Accessor<string>,
+  options?: Accessor<UseThreadQueryOptions<ThreadQueryData>>
+): ThreadQueryResult<ThreadQueryData>;
+export function useThreadQuery<TData = ThreadQueryData>(
+  threadId: Accessor<string>,
+  options?: Accessor<UseThreadQueryOptions<TData>>
+): ThreadQueryResult<TData> {
+  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+  const queryEnabled = () => options?.().enabled !== false;
+  const usesGraphql = () => graphqlSoupFlag().enabled;
+  const select = () =>
+    options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
+
+  const graphqlQuery = createGraphqlEmailThreadQuery<TData>(threadId, () => ({
+    enabled: queryEnabled() && usesGraphql(),
+    select: select(),
+  }));
+  const restQuery = useInfiniteQuery(() => ({
+    ...threadQueryOptions(threadId()),
+    ...options?.(),
+    select: select(),
+    enabled: queryEnabled() && !usesGraphql() && threadId().length > 0,
+  }));
+
+  return {
+    get data() {
+      return usesGraphql()
+        ? graphqlQuery.data
+        : (restQuery.data as TData | undefined);
+    },
+    get error() {
+      return usesGraphql()
+        ? mapGraphqlThreadError(graphqlQuery.error)
+        : ((restQuery.error as Error | null) ?? null);
+    },
+    get isLoading() {
+      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+    },
+    get isFetching() {
+      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+    },
+    get isFetchingNextPage() {
+      return usesGraphql()
+        ? graphqlQuery.isFetchingNextPage
+        : restQuery.isFetchingNextPage;
+    },
+    get isError() {
+      return usesGraphql() ? graphqlQuery.isError : restQuery.isError;
+    },
+    get isSuccess() {
+      return usesGraphql() ? graphqlQuery.isSuccess : restQuery.isSuccess;
+    },
+    get isEnabled() {
+      return usesGraphql() ? graphqlQuery.isEnabled : restQuery.isEnabled;
+    },
+    get hasNextPage() {
+      return usesGraphql()
+        ? graphqlQuery.hasNextPage
+        : (restQuery.hasNextPage ?? false);
+    },
+    get transport() {
+      return usesGraphql() ? 'graphql' : 'rest';
+    },
+    async fetchNextPage() {
+      if (usesGraphql()) await graphqlQuery.fetchNextPage();
+      else await restQuery.fetchNextPage();
+    },
+    async refetch() {
+      if (usesGraphql()) {
+        await graphqlQuery.refetch({ requestPolicy: 'network-only' });
+      } else {
+        await restQuery.refetch();
+      }
+    },
+  };
 }
 
 type MarkThreadAsSeenParams = {

@@ -18,6 +18,8 @@ import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -72,6 +74,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   // A reminder has no block of its own — it is opened through the entity it
   // references, which the caller navigates to instead.
   if (data.type === 'reminder') return undefined;
+
+  // A calendar event opens the calendar component split, not a block.
+  if (data.type === 'calendar_event')
+    return { type: 'component', id: 'calendar' };
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
@@ -255,7 +261,7 @@ function SoupNavigationButtons() {
   });
 
   const navigate = (offset: number) => {
-    const next = soup.navigate.by(offset);
+    const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
     void openEntityInSplitFromUnifiedList(next.row.original, {
@@ -304,6 +310,8 @@ function SplitHeaderContextMenu(props: ParentProps) {
     () => panel.handle.content().type === 'component'
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
+  const canSwapWith = (direction: 'left' | 'right') =>
+    layout.manager.canSwapSplit(panel.handle.id, direction);
 
   const newSplitContent = () => ({
     type: 'component' as const,
@@ -362,7 +370,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
         {props.children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent width="md">
+        <ContextMenuContent class="w-60">
           <MenuItem
             icon={SplitIcon}
             iconClass="rotate-180"
@@ -384,7 +392,21 @@ function SplitHeaderContextMenu(props: ParentProps) {
           />
           <MenuSeparator />
           <MenuItem
+            icon={ArrowLeft}
+            text="Swap split left"
+            disabled={!canSwapWith('left')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
+          />
+          <MenuItem
+            icon={ArrowRight}
+            text="Swap split right"
+            disabled={!canSwapWith('right')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
+          />
+          <MenuSeparator />
+          <MenuItem
             icon={panel.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
+            hotkeyToken={TOKENS.window.spotlight.toggle}
             text={
               panel.handle.isSpotLight() ? 'Minimize split' : 'Spotlight split'
             }
@@ -544,10 +566,15 @@ export function SplitHeader(props: {
             </HeaderIsland>
           </Show>
 
+          {/* On mobile nothing clips this region (islands float over the
+              panel), so the max-content element is capped at the sensor's
+              width to let shrinkable islands truncate long titles instead of
+              painting off-screen. */}
           <PriorityCollapseOverflowSensor
             controller={props.collapseController}
+            truncateAsLastResort
             class="relative min-w-0 h-full shrink overflow-hidden mobile:overflow-visible"
-            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2"
+            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2 mobile:max-w-full"
             contentRef={(element) => {
               panel.layoutRefs.headerLeft = element;
             }}

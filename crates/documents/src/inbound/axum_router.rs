@@ -11,6 +11,8 @@
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
 //! - `POST /create_snippet` — create and initialize a snippet document
+//! - `POST /create_skill` — create and initialize a skill document
+//! - `GET /system_skills` — list the built-in system skills
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -21,6 +23,8 @@ pub mod copy_document;
 pub mod create_document;
 #[cfg(feature = "document_create")]
 pub mod create_markdown;
+#[cfg(feature = "document_create")]
+pub mod create_skill;
 #[cfg(feature = "document_create")]
 pub mod create_snippet;
 pub mod create_task;
@@ -35,6 +39,7 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod system_skills;
 pub mod task_duplicates;
 pub mod team_share;
 
@@ -59,6 +64,8 @@ use task_dedup::PgTaskDedupService;
 #[cfg(feature = "document_create")]
 use self::create_markdown::create_markdown_handler;
 #[cfg(feature = "document_create")]
+use self::create_skill::create_skill_handler;
+#[cfg(feature = "document_create")]
 use self::create_snippet::create_snippet_handler;
 use self::{
     copy_document::copy_document_handler,
@@ -74,6 +81,7 @@ use self::{
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
     put_snapshot::put_snapshot_handler,
+    system_skills::get_system_skills_handler,
     task_duplicates::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
         get_task_duplicates_handler, task_similarity_search_handler,
@@ -289,6 +297,10 @@ where
         .route(
             "/similarity_search",
             axum::routing::post(task_similarity_search_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/system_skills",
+            axum::routing::get(get_system_skills_handler::<Auth>),
         );
 
     #[cfg(feature = "document_create")]
@@ -300,6 +312,10 @@ where
         .route(
             "/create_snippet",
             axum::routing::post(create_snippet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/create_skill",
+            axum::routing::post(create_skill_handler::<T, Svc, Auth>),
         );
 
     router.with_state(state)

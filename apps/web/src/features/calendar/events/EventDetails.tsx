@@ -2,13 +2,14 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import {
   emailToMacroId,
+  getDisplayName,
   getInitialsFromName,
-  useDisplayName,
 } from '@core/user';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GlobeIcon from '@phosphor/globe.svg';
@@ -19,6 +20,7 @@ import PersonIcon from '@phosphor/user.svg';
 import UsersIcon from '@phosphor/users.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Avatar, Button, cn } from '@ui';
@@ -35,6 +37,11 @@ import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
 } from '../time-format';
+import {
+  formatReminderOffset,
+  REMINDER_METHOD_POPUP,
+  resolveReminderOverrides,
+} from './event-reminders';
 import { formatRecurrenceDescription } from './recurrence-description';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
 
@@ -89,12 +96,11 @@ function resolveCalendarAttendee(
   attendee: CalendarAttendee
 ): ResolvedCalendarAttendee {
   const macroId = emailToMacroId(attendee.email);
-  const [macroDisplayName] = useDisplayName(macroId);
   const iconProps: UserIconProps = macroId
     ? { id: macroId }
     : { email: attendee.email };
   const displayName = () => {
-    const macroName = macroDisplayName().trim();
+    const macroName = getDisplayName(macroId).trim();
     return isUsableDisplayName(macroName, attendee.email)
       ? macroName
       : attendee.email;
@@ -339,14 +345,49 @@ function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
     : undefined;
 }
 
+/**
+ * The reminders the event resolves to, one line each: its own overrides when
+ * it departed from the calendar defaults, the calendar defaults otherwise.
+ * Nothing renders while the calendar (and so its defaults) is unknown.
+ */
+function EventRemindersItem(props: { event: CalendarEvent }) {
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const reminders = createMemo(() => {
+    const calendar = calendarsQuery.data?.find(
+      (candidate) => candidate.id === props.event.calendarId
+    );
+    return resolveReminderOverrides(
+      props.event.reminders,
+      calendar?.defaultReminders
+    ).toSorted((a, b) => a.minutes - b.minutes);
+  });
+
+  return (
+    <Show when={reminders().length > 0}>
+      <div class="contents">
+        <BellSimpleIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+        <div class="flex select-text flex-col gap-0.5">
+          <For each={reminders()}>
+            {(reminder) => (
+              <span>
+                {formatReminderOffset(reminder.minutes)}
+                {reminder.method === REMINDER_METHOD_POPUP ? '' : ' (email)'}
+              </span>
+            )}
+          </For>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
 function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
   const macroId = props.organizer.email
     ? emailToMacroId(props.organizer.email)
     : undefined;
-  const [macroDisplayName] = useDisplayName(macroId);
   const displayName = () => {
     const email = props.organizer.email ?? '';
-    const macroName = macroDisplayName().trim();
+    const macroName = getDisplayName(macroId).trim();
     if (isUsableDisplayName(macroName, email)) return macroName;
 
     const providerName = props.organizer.displayName?.trim() ?? '';
@@ -405,6 +446,10 @@ export function EventDetails(props: {
   const conferenceUrl = createMemo(() =>
     safeConferenceUrl(props.event.conferenceUrl)
   );
+  const conferenceLabel = () =>
+    props.event.conferenceProvider === 'google_meet'
+      ? 'Join Google Meet'
+      : 'Join meeting';
   const organizer = createMemo(() => findOrganizer(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
@@ -457,10 +502,10 @@ export function EventDetails(props: {
               variant="cta"
               size="sm"
               class="h-8 rounded-lg [&_svg]:size-3.5!"
-              label="Join meeting"
+              label={conferenceLabel()}
               onClick={() => openExternalUrl(url())}
             >
-              Join meeting
+              {conferenceLabel()}
               <ArrowSquareOutIcon />
             </Button>
           </div>
@@ -494,6 +539,8 @@ export function EventDetails(props: {
           </div>
         )}
       </Show>
+
+      <EventRemindersItem event={props.event} />
 
       <Show when={organizer()}>
         {(eventOrganizer) => (

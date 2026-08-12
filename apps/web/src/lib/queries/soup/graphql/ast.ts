@@ -208,6 +208,10 @@ function mapCalendarEventLiteral(
   switch (field) {
     case 'id':
       return { id: mapString(value, 'id') };
+    case 'nd':
+      return { notificationDone: mapBoolean(value, 'notificationDone') };
+    case 'ns':
+      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
     default:
       unsupported(`calendar event literal ${field}`);
   }

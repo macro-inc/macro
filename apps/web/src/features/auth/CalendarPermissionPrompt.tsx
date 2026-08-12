@@ -46,7 +46,7 @@ export function CalendarPermissionPrompt() {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
             dismiss();
-            startAddInbox();
+            startAddInbox({ includeCalendar: true });
           },
         },
       ],

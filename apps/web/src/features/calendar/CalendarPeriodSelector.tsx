@@ -1,10 +1,11 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { Dropdown, Calendar as MiniCalendar } from '@ui';
+import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarPager } from './CalendarPagerContext';
@@ -12,10 +13,26 @@ import { useCalendarView } from './CalendarViewContext';
 import type { CalendarPeriodView } from './events/types';
 
 const CALENDAR_VIEWS = [
-  { value: 'dayGridMonth', label: 'Month' },
-  { value: 'timeGridWeek', label: 'Week' },
-  { value: 'timeGridDay', label: 'Day' },
-] satisfies Array<{ value: CalendarPeriodView; label: string }>;
+  {
+    value: 'dayGridMonth',
+    label: 'Month',
+    hotkeyToken: TOKENS.calendar.view.month,
+  },
+  {
+    value: 'timeGridWeek',
+    label: 'Week',
+    hotkeyToken: TOKENS.calendar.view.week,
+  },
+  {
+    value: 'timeGridDay',
+    label: 'Day',
+    hotkeyToken: TOKENS.calendar.view.day,
+  },
+] satisfies Array<{
+  value: CalendarPeriodView;
+  label: string;
+  hotkeyToken: HotkeyToken;
+}>;
 
 const DRAWER_ROW_CLASS =
   "relative flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:after:absolute not-last:after:inset-x-2 not-last:after:bottom-0 not-last:after:h-px not-last:after:bg-edge-muted not-last:after:content-['']";
@@ -155,6 +172,8 @@ export function CalendarPeriodSelector() {
                   <Dropdown.ItemIndicator>
                     <CheckIcon class="size-3.5 text-accent" />
                   </Dropdown.ItemIndicator>
+
+                  <Hotkey token={view.hotkeyToken} theme="subtle" />
                 </Dropdown.RadioItem>
               )}
             </For>

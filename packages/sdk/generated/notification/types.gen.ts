@@ -68,6 +68,47 @@ export type BulkGetByEventItemIdsRequest = {
 };
 
 /**
+ * A calendar event alarm came due. Like [`ReminderMetadata`], these are
+ * self-notifications: `sender_id` must stay `None` or the only recipient is
+ * filtered out. Everything the alert renders rides in here so the
+ * dispatcher never has to resolve the event again at display time.
+ */
+export type CalendarEventReminderMetadata = {
+    /**
+     * Instance end, for timed events.
+     */
+    endsAt?: string | null;
+    /**
+     * The calendar event entity the alarm belongs to.
+     */
+    eventId: string;
+    /**
+     * Minutes before the start the alarm was configured to fire.
+     */
+    minutesBefore: number;
+    /**
+     * Stable occurrence key of the instance that is starting.
+     */
+    occurrenceKey: string;
+    /**
+     * Instance start date, for all-day events.
+     */
+    startDate?: string | null;
+    /**
+     * Instance start, for timed events.
+     */
+    startsAt?: string | null;
+    /**
+     * IANA zone for rendering local clock times, when known.
+     */
+    timeZone?: string | null;
+    /**
+     * Event display title at dispatch time.
+     */
+    title: string;
+};
+
+/**
  * Metadata for a notification that a call has started in a channel.
  *
  * Mirrors the producer-side `CallStartedNotification` in the `call` crate:
@@ -224,56 +265,12 @@ export type CommonChannelMetadata = {
 };
 
 /**
- * the value of the inner payload inside [ConnGatewayNotification]
- */
-export type ConnGatewayInnerNotifValue = Entity & {
-    /**
-     * When the notification was created.
-     */
-    created_at: string;
-    /**
-     * When the notification was deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
-    /**
-     * The notification event type string (e.g. "channel_mention").
-     * TODO make this a new type
-     */
-    notification_event_type: string;
-    /**
-     * The notification ID.
-     */
-    notification_id: string;
-    /**
-     * Deserialized notification metadata.
-     */
-    notification_metadata: TaggedContentValue;
-    sender_id?: null | MacroUserIdStr;
-    /**
-     * Whether the notification has been sent.
-     */
-    sent: boolean;
-    /**
-     * When the notification was last updated.
-     */
-    updated_at: string;
-    /**
-     * When the notification was viewed/seen.
-     */
-    viewed_at?: string | null;
-};
-
-/**
- * Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+ * Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.
  *
  * Used for OpenAPI schema generation — serializes identically to
- * `ConnGatewayInnerNotif<serde_json::Value>`.
+ * `RealtimeNotif<serde_json::Value>`.
  */
-export type ConnGatewayNotificationPayload = ConnGatewayInnerNotifValue;
+export type ConnGatewayNotificationPayload = RealtimeNotifTaggedContentValue;
 
 export type CreateNotification = Entity & {
     /**
@@ -350,7 +347,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 
 /**
  * A plain old json error response for use with axum.
@@ -823,6 +820,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A calendar event alarm came due.
+     */
+    content: CalendarEventReminderMetadata;
+    tag: 'calendar_event_reminder';
+} | {
+    /**
      * An AI assistant responded to a chat.
      */
     content: AiResponseMetadata;
@@ -886,6 +889,8 @@ export type NotificationDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type NotificationServiceApiVersion = 'v1';
@@ -905,6 +910,53 @@ export type PushNotificationData = {
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * the value of the inner payload inside [ConnGatewayNotification]
+ */
+export type RealtimeNotifTaggedContentValue = Entity & {
+    /**
+     * When the notification was created.
+     */
+    created_at: string;
+    /**
+     * When the notification was deleted.
+     */
+    deleted_at?: string | null;
+    /**
+     * Whether the notification is marked as done.
+     */
+    done: boolean;
+    /**
+     * The notification event type string (e.g. "channel_mention").
+     * TODO make this a new type
+     */
+    notification_event_type: string;
+    /**
+     * The notification ID.
+     */
+    notification_id: string;
+    /**
+     * A notification metadata value tagged with the notification event type.
+     */
+    notification_metadata: {
+        content: unknown;
+        tag: NotificationTypeName;
+    };
+    sender_id?: null | MacroUserIdStr;
+    /**
+     * Whether the notification has been sent.
+     */
+    sent: boolean;
+    /**
+     * When the notification was last updated.
+     */
+    updated_at: string;
+    /**
+     * When the notification was viewed/seen.
+     */
+    viewed_at?: string | null;
 };
 
 /**
@@ -960,14 +1012,6 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * the thread id
      */
     threadId: number;
-};
-
-/**
- * A notification metadata value tagged with the notification event type.
- */
-export type TaggedContentValue = {
-    content: unknown;
-    tag: NotificationTypeName;
 };
 
 /**

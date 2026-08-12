@@ -17,7 +17,10 @@ import type {
 } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_CALENDAR_UI,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -77,8 +80,9 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
-import { isAfter } from 'date-fns';
+import { isAfter, parseISO } from 'date-fns';
 import { match } from 'ts-pattern';
+import { requestCalendarFocus } from '../calendar/calendar-focus-intent';
 import { withPreviewSourceEntityId } from './preview-history';
 
 const mergeSearchEntities = <T extends EntityData>(
@@ -607,6 +611,28 @@ export const openEntityInSplitFromUnifiedList = async (
   // A standalone reminder points at nothing, so there is nothing to open.
   if (entity.type === 'reminder' && !entity.referencedEntity) return;
 
+  // A calendar event opens the calendar split focused on the alarmed
+  // occurrence — the same deep link its notification uses.
+  if (entity.type === 'calendar_event') {
+    if (!ENABLE_CALENDAR_UI()) return;
+    requestCalendarFocusForEntity(entity);
+    const existing = splitManager.getSplitByContent('component', 'calendar');
+    if (existing) {
+      existing.activate();
+    } else {
+      splitManager.openWithSplit(
+        { type: 'component', id: 'calendar' },
+        {
+          activate: true,
+          referredFrom: null,
+          preferNewSplit: openInNewSplit,
+          handle: splitHandle,
+        }
+      );
+    }
+    return;
+  }
+
   const content = getEntitySplitContent(entity);
 
   if (
@@ -704,10 +730,48 @@ export function markReminderSeenOnOpen(
   entity: EntityData,
   notificationSource: NotificationSource
 ) {
-  if (entity.type !== 'reminder') return;
+  // Calendar events share the reminder situation: they open the calendar
+  // component split, which has no block to clear the notification either.
+  if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
   void markNotificationsForEntityAsRead(notificationSource, {
     type: entity.type,
     id: entity.id,
+  });
+}
+
+/**
+ * File the calendar deep-link focus for an alarmed event row. The row is the
+ * master event; the alarmed occurrence and its start ride on the driving
+ * notification's metadata. Without one, the master's own start still pages
+ * the calendar to the right date.
+ */
+function requestCalendarFocusForEntity(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+) {
+  const notifications = isWithNotification(entity)
+    ? (entity.notifications?.() ?? [])
+    : [];
+  const metadata = notifications
+    .map((notification) => notification.notification_metadata)
+    .find((candidate) => candidate?.tag === 'calendar_event_reminder');
+  const content =
+    metadata?.tag === 'calendar_event_reminder' ? metadata.content : undefined;
+  const start =
+    content?.startsAt ??
+    (entity.time?.kind === 'timed' ? entity.time.startsAt : undefined);
+  const startDate =
+    content?.startDate ??
+    (entity.time?.kind === 'allDay' ? entity.time.startDate : undefined);
+  const date = start
+    ? new Date(start)
+    : startDate
+      ? parseISO(startDate)
+      : undefined;
+  if (!date || !Number.isFinite(date.getTime())) return;
+  requestCalendarFocus({
+    eventId: entity.id,
+    occurrenceKey: content?.occurrenceKey ?? '',
+    date,
   });
 }
 
@@ -732,39 +796,46 @@ export function reminderSplitTarget(entity: ReminderEntity) {
 
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
-  return match(entity)
-    .with({ type: 'document' }, (entity) => {
-      const { id, fileType, subType } = entity;
-      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
+  return (
+    match(entity)
+      .with({ type: 'document' }, (entity) => {
+        const { id, fileType, subType } = entity;
+        const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
-      return { type: blockName, id };
-    })
-    .with({ type: 'channel_message' }, (entity) => {
-      return { type: 'channel' as const, id: entity.channelId };
-    })
-    .with({ type: 'channel_thread' }, (entity) => {
-      return { type: 'channel' as const, id: entity.channelId };
-    })
-    .with({ type: 'foreign' }, (entity) => {
-      return { type: 'unknown' as const, id: entity.id };
-    })
-    .with({ type: 'crm_company' }, (entity) => {
-      return { type: 'company' as const, id: entity.id };
-    })
-    .with({ type: 'crm_contact' }, (entity) => {
-      return { type: 'contact' as const, id: entity.id };
-    })
-    .with({ type: 'reminder' }, (entity) => {
-      return (
-        reminderSplitTarget(entity) ?? {
-          type: 'unknown' as const,
-          id: entity.id,
-        }
-      );
-    })
-    .otherwise((entity) => {
-      return { type: entity.type, id: entity.id };
-    });
+        return { type: blockName, id };
+      })
+      .with({ type: 'channel_message' }, (entity) => {
+        return { type: 'channel' as const, id: entity.channelId };
+      })
+      .with({ type: 'channel_thread' }, (entity) => {
+        return { type: 'channel' as const, id: entity.channelId };
+      })
+      .with({ type: 'foreign' }, (entity) => {
+        return { type: 'unknown' as const, id: entity.id };
+      })
+      .with({ type: 'crm_company' }, (entity) => {
+        return { type: 'company' as const, id: entity.id };
+      })
+      .with({ type: 'crm_contact' }, (entity) => {
+        return { type: 'contact' as const, id: entity.id };
+      })
+      .with({ type: 'reminder' }, (entity) => {
+        return (
+          reminderSplitTarget(entity) ?? {
+            type: 'unknown' as const,
+            id: entity.id,
+          }
+        );
+      })
+      // Calendar events open the calendar component split; the open path
+      // branches before reaching here, so this only serves duplicate checks.
+      .with({ type: 'calendar_event' }, () => {
+        return { type: 'component' as const, id: 'calendar' };
+      })
+      .otherwise((entity) => {
+        return { type: entity.type, id: entity.id };
+      })
+  );
 }
 
 /**

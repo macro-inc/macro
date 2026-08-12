@@ -73,6 +73,7 @@ search_service_client = { path = "../search_service_client" }
 serde.workspace = true
 serde_json.workspace = true
 projects = { path = "../projects", default-features = false, features = ["ai_tools", "outbound", "service"] }
+skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }

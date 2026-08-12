@@ -203,18 +203,19 @@ interface SoupViewContextProviderProps extends SoupViewInitializeOptions {
   initialEnabled?: boolean;
 }
 
-type PersistedViewQueryFilters =
-  | QueryState
-  | Partial<Record<string, QueryState>>;
 type PersistedQueryFilters = Partial<
-  Record<ListView, PersistedViewQueryFilters>
+  Record<ListView, Partial<Record<string, QueryState>>>
 >;
+
+const SOUP_VIEW_PERSISTENCE_VERSION = 2;
+const soupViewPersistenceKey = (name: string) =>
+  `${name}-v${SOUP_VIEW_PERSISTENCE_VERSION}`;
 
 // Shared by every split so one provider cannot overwrite another provider's
 // saved views with a stale local copy of the persisted map.
 const [persistedQueryFilters, setPersistedQueryFilters] = makePersisted(
   createSignal<PersistedQueryFilters>({}),
-  { name: 'soup-view-query-filters' }
+  { name: soupViewPersistenceKey('soup-view-query-filters') }
 );
 
 const [persistedPredicates, setPersistedPredicates] = makePersisted(
@@ -223,30 +224,18 @@ const [persistedPredicates, setPersistedPredicates] = makePersisted(
       Record<ListView, Partial<Record<string, SetPredicatesInput<string>>>>
     >
   >({}),
-  { name: 'soup-view-predicates' }
+  { name: soupViewPersistenceKey('soup-view-predicates') }
 );
 
 const [persistedActiveTabs, setPersistedActiveTabs] = makePersisted(
   createSignal<Partial<Record<ListView, string>>>({}),
-  { name: 'soup-view-active-tabs' }
+  { name: soupViewPersistenceKey('soup-view-active-tabs') }
 );
-
-const isQueryState = (value: unknown): value is QueryState =>
-  typeof value === 'object' &&
-  value !== null &&
-  'include' in value &&
-  'exclude' in value;
 
 const persistedQueryFor = (
   view: ListView,
   tabId: string
-): QueryState | undefined => {
-  const saved = persistedQueryFilters()[view];
-  if (!saved) return;
-
-  // Migrate the previous per-view shape by using it as the first restored tab.
-  return isQueryState(saved) ? saved : saved[tabId];
-};
+): QueryState | undefined => persistedQueryFilters()[view]?.[tabId];
 
 /** Resolve a remembered tab id against the view's current tabs.
  *
@@ -398,19 +387,13 @@ export const SoupViewContextProvider: FlowComponent<
 
     const tabId = activeTab() ?? VIEW_TAB_PRESETS[view].default;
     const snapshot = structuredClone(unwrap(store.state)) as QueryState;
-    setPersistedQueryFilters((current) => {
-      const savedForView = current[view];
-      const filtersByTab =
-        savedForView && !isQueryState(savedForView) ? savedForView : {};
-
-      return {
-        ...current,
-        [view]: {
-          ...filtersByTab,
-          [tabId]: snapshot,
-        },
-      };
-    });
+    setPersistedQueryFilters((current) => ({
+      ...current,
+      [view]: {
+        ...current[view],
+        [tabId]: snapshot,
+      },
+    }));
   };
 
   const queryFilters: QueryStore = {
@@ -475,21 +458,21 @@ export const SoupViewContextProvider: FlowComponent<
     useEntryState<string[]>('soup.assigneeFilter', { default: [] }),
     {
       enabled: filterPersistenceEnabled,
-      name: 'soup-view-assignee-filter',
+      name: soupViewPersistenceKey('soup-view-assignee-filter'),
     }
   );
   const [ownerFilter, setOwnerFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.ownerFilter', { default: [] }),
     {
       enabled: filterPersistenceEnabled,
-      name: 'soup-view-owner-filter',
+      name: soupViewPersistenceKey('soup-view-owner-filter'),
     }
   );
   const [stageFilter, setStageFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.stageFilter', { default: [] }),
     {
       enabled: filterPersistenceEnabled,
-      name: 'soup-view-stage-filter',
+      name: soupViewPersistenceKey('soup-view-stage-filter'),
     }
   );
   const [inboxFilter, setInboxFilter] = makeFlaggedPersisted(
@@ -498,7 +481,7 @@ export const SoupViewContextProvider: FlowComponent<
     }),
     {
       enabled: filterPersistenceEnabled,
-      name: 'soup-view-inbox-filter',
+      name: soupViewPersistenceKey('soup-view-inbox-filter'),
     }
   );
 
@@ -616,7 +599,7 @@ export const SoupViewContextProvider: FlowComponent<
     useEntryState<ReadFilter>('soup.readFilter', { default: 'unread' }),
     {
       enabled: filterPersistenceEnabled,
-      name: 'soup-view-read-filter',
+      name: soupViewPersistenceKey('soup-view-read-filter'),
     }
   );
 
@@ -941,8 +924,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
-
-    if (item.tag === 'calendarEvent') return false;
 
     return soup.predicates.test(
       mapApiSoupItemToEntity(item) as SoupEntity,

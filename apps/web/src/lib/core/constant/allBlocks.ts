@@ -235,7 +235,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 }
 
 export type ItemLike = {
-  type: ItemType | 'call' | 'crm_company' | 'reminder';
+  type: ItemType | 'call' | 'crm_company' | 'reminder' | 'calendar_event';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;

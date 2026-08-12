@@ -1,9 +1,15 @@
 use async_graphql::{Context, ID, Json, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
+use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
-use serde_json::Value;
 
-use crate::loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader};
+#[cfg(test)]
+mod test;
+
+use crate::{
+    GraphqlNotifEvent,
+    loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader},
+};
 
 /// GraphQL notification attached to a Soup entity.
 pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
@@ -11,6 +17,54 @@ pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
 impl From<UserNotificationRow<serde_json::Value>> for GraphqlSoupNotification {
     fn from(value: UserNotificationRow<serde_json::Value>) -> Self {
         Self(value)
+    }
+}
+
+impl GraphqlSoupNotification {
+    /// Converts a recipient-scoped realtime payload into the shared notification GraphQL type.
+    pub(crate) fn from_realtime(
+        owner_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        value: notification::domain::models::queue_message::RealtimeNotif<NotifEvent>,
+    ) -> Self {
+        let notification::domain::models::queue_message::RealtimeNotif {
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = value;
+        let mut tagged = serde_json::to_value(notification_metadata).unwrap_or_else(|error| {
+            tracing::error!(
+                error = ?error,
+                "failed to serialize realtime notification metadata"
+            );
+            serde_json::Value::Null
+        });
+        let notification_metadata = tagged
+            .get_mut("content")
+            .map(serde_json::Value::take)
+            .unwrap_or(serde_json::Value::Null);
+
+        Self(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        })
     }
 }
 
@@ -72,9 +126,24 @@ impl GraphqlSoupNotification {
         self.0.sender_id.as_ref().map(|sender| sender.to_string())
     }
 
-    /// Event-specific notification metadata.
-    async fn metadata(&self) -> Json<Value> {
-        Json(self.0.notification_metadata.clone())
+    /// Raw event-specific notification metadata.
+    #[graphql(deprecation = "Use typedMetadata with union inline fragments")]
+    async fn metadata(&self) -> Json<&serde_json::Value> {
+        Json(&self.0.notification_metadata)
+    }
+
+    /// Typed event-specific notification metadata.
+    async fn typed_metadata(&self) -> async_graphql::Result<Option<GraphqlNotifEvent>> {
+        self.0
+            .deserialize_metadata_ref::<NotifEvent>()
+            .map(|metadata| Some(metadata.into()))
+            .map_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    "failed to deserialize notification metadata"
+                );
+                async_graphql::Error::new("notification metadata is unavailable")
+            })
     }
 }
 

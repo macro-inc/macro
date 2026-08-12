@@ -86,11 +86,27 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_SEEN",
         "MARK_DONE",
         "MARK_UNDONE",
-        "type SoupSubscriptionRoot {",
+        "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlSoupNotification!",
+        "type GraphqlSoupNotification {",
+        "metadata: JSON! @deprecated(reason: \"Use typedMetadata with union inline fragments\")",
+        "typedMetadata: GraphqlNotifEvent",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "typedMetadata: GraphqlNotifEvent")
+            .count(),
+        1,
+        "stored and realtime notifications must share one nullable typed metadata field"
+    );
+    assert!(!sdl.contains("GraphqlRealtimeNotification"));
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),

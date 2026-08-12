@@ -67,7 +67,7 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
 import WideCalendarIcon from '@icon/wide-calendar.svg';
@@ -877,7 +877,11 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64 shadow-menu">
+      {/*
+        The menu is shrink-to-fit, so without a cap a long name or email
+        stretches it instead of engaging the `truncate` below.
+      */}
+      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu">
         <Dropdown.Group class="p-1.5 gap-0">
           <div class="flex items-center gap-3 px-1 py-1">
             <Show
@@ -1087,7 +1091,7 @@ const buildSidebarLinks = (
 };
 
 const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
-  const [inviterName] = useDisplayName(tryMacroId(props.invite.invited_by));
+  const inviterName = () => getDisplayName(tryMacroId(props.invite.invited_by));
   const joinTeamMutation = useJoinTeamMutation();
   const rejectInvitationMutation = useRejectInvitationMutation();
   const mutationPending = () =>

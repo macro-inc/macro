@@ -319,6 +319,12 @@ export type SplitManager = {
   /** Remove a split by its split id */
   removeSplit: (id: SplitId) => void;
 
+  /** Swap a split with its immediate neighbor in the requested direction. */
+  swapSplit: (id: SplitId, direction: 'left' | 'right') => void;
+
+  /** Whether a split group has a neighbor in the requested direction. */
+  canSwapSplit: (id: SplitId, direction: 'left' | 'right') => boolean;
+
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
@@ -1270,6 +1276,68 @@ export function createSplitLayout(
     });
   }
 
+  function splitGroupBounds(
+    id: SplitId
+  ): readonly [number, number] | undefined {
+    const index = splitIndexById(id);
+    if (index < 0) return undefined;
+
+    const viewerId = state.previewPairs[id]?.viewerId;
+    if (viewerId && state.splits[index + 1]?.id === viewerId) {
+      return [index, index + 1];
+    }
+
+    const controllerIndex = state.splits.findIndex(
+      (split) => state.previewPairs[split.id]?.viewerId === id
+    );
+    if (controllerIndex >= 0 && controllerIndex + 1 === index) {
+      return [controllerIndex, index];
+    }
+
+    return [index, index];
+  }
+
+  function canSwapSplit(id: SplitId, direction: 'left' | 'right') {
+    const bounds = splitGroupBounds(id);
+    if (!bounds) return false;
+
+    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
+    return targetIndex >= 0 && targetIndex < state.splits.length;
+  }
+
+  function swapSplit(id: SplitId, direction: 'left' | 'right') {
+    const bounds = splitGroupBounds(id);
+    if (!bounds) return;
+
+    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
+    if (targetIndex < 0 || targetIndex >= state.splits.length) return;
+
+    const target = state.splits[targetIndex];
+    if (!target) return;
+    const targetBounds = splitGroupBounds(target.id);
+    if (!targetBounds) return;
+
+    const [sourceStart, sourceEnd] = bounds;
+    const [targetStart, targetEnd] = targetBounds;
+    const [leftStart, leftEnd, rightStart, rightEnd] =
+      sourceStart < targetStart
+        ? [sourceStart, sourceEnd, targetStart, targetEnd]
+        : [targetStart, targetEnd, sourceStart, sourceEnd];
+
+    batch(() => {
+      resizeContext()?.swap(id, target.id);
+      setState('splits', (splits) => {
+        return [
+          ...splits.slice(0, leftStart),
+          ...splits.slice(rightStart, rightEnd + 1),
+          ...splits.slice(leftEnd + 1, rightStart),
+          ...splits.slice(leftStart, leftEnd + 1),
+          ...splits.slice(rightEnd + 1),
+        ];
+      });
+    });
+  }
+
   /**
    * An unclaimed placeholder split sitting immediately right of the
    * controller that engage adopts as the viewer instead of creating a
@@ -2019,6 +2087,8 @@ export function createSplitLayout(
     getSplit,
     openWithSplit,
     removeSplit,
+    swapSplit,
+    canSwapSplit,
     createNewSplit,
     getUrlSegments,
     getUrl,

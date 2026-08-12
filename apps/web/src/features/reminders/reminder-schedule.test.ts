@@ -10,6 +10,10 @@ import {
   REMINDER_DESCRIPTION_MAX_LENGTH,
   reminderDefaultOptions,
   reminderDescriptionFor,
+  reminderDescriptionForReference,
+  reminderEditOptions,
+  reminderEditPatch,
+  resolveEditedDescription,
   resolveReminderDescription,
 } from './reminder-schedule';
 
@@ -340,6 +344,239 @@ describe('formatReminderWhen', () => {
     const date = new Date(now - 60 * 1000);
     expect(formatReminderWhen(date, now)).toBe(
       date.toLocaleString(undefined, timeOnly)
+    );
+  });
+});
+
+describe('reminderEditOptions', () => {
+  // A Wednesday afternoon, so every default entry is still ahead of "now".
+  const wednesdayAfternoon = new Date(2026, 6, 29, 16, 37, 52, 400);
+  const current = new Date(2026, 7, 3, 9, 0, 0, 0);
+
+  it('leads with keeping the current time, then the defaults', () => {
+    expect(
+      reminderEditOptions(current, wednesdayAfternoon).map((o) => o.displayText)
+    ).toEqual([
+      'Keep current time',
+      'In 1 hour',
+      'In 2 hours',
+      'Tomorrow',
+      'End of week',
+      'In 1 week',
+    ]);
+  });
+
+  it('keeps the exact instant the reminder already has', () => {
+    const [keep] = reminderEditOptions(current, wednesdayAfternoon);
+
+    expect(keep.date.getTime()).toBe(current.getTime());
+  });
+
+  // Both would submit the same instant, so offering them separately would read
+  // as two different choices with one outcome.
+  it('drops a default that lands on the current time', () => {
+    const tomorrowMorning = new Date(2026, 6, 30, 9, 0, 0, 0);
+    const options = reminderEditOptions(tomorrowMorning, wednesdayAfternoon);
+
+    expect(options.map((o) => o.displayText)).not.toContain('Tomorrow');
+    expect(options[0].displayText).toBe('Keep current time');
+  });
+
+  // An overdue reminder still has to be renamable, and keeping its time sends
+  // no schedule at all — so the future filter must not remove the keep option.
+  it('offers keeping a time that has already passed', () => {
+    const overdue = new Date(2026, 6, 20, 9, 0, 0, 0);
+    const [keep] = reminderEditOptions(overdue, wednesdayAfternoon);
+
+    expect(keep.displayText).toBe('Keep current time');
+    expect(keep.date.getTime()).toBe(overdue.getTime());
+  });
+});
+
+describe('reminderEditPatch', () => {
+  const remindAt = new Date('2026-08-09T09:00:00.000Z');
+  const original = {
+    description: 'Chase the contract',
+    remindAt,
+    completed: false,
+  };
+
+  // An empty patch is rejected by the API as having no fields to update, so
+  // "nothing changed" has to be distinguishable from "patch these fields".
+  it('returns undefined when neither answer moved', () => {
+    expect(
+      reminderEditPatch(original, {
+        description: 'Chase the contract',
+        remindAt: new Date(remindAt),
+      })
+    ).toBeUndefined();
+  });
+
+  it('sends only the description when the time is kept', () => {
+    expect(
+      reminderEditPatch(original, {
+        description: 'Chase the signed contract',
+        remindAt: new Date(remindAt),
+      })
+    ).toEqual({ description: 'Chase the signed contract' });
+  });
+
+  it('sends only the schedule when the description is kept', () => {
+    const next = new Date('2026-08-10T09:00:00.000Z');
+
+    expect(
+      reminderEditPatch(original, {
+        description: 'Chase the contract',
+        remindAt: next,
+      })
+    ).toEqual({ schedule: { type: 'once', remindAt: next.toISOString() } });
+  });
+
+  it('sends both when both moved', () => {
+    const next = new Date('2026-08-10T09:00:00.000Z');
+
+    expect(
+      reminderEditPatch(original, { description: 'Follow up', remindAt: next })
+    ).toEqual({
+      description: 'Follow up',
+      schedule: { type: 'once', remindAt: next.toISOString() },
+    });
+  });
+
+  it('trims the description before comparing it', () => {
+    expect(
+      reminderEditPatch(original, {
+        description: '  Chase the contract  ',
+        remindAt: new Date(remindAt),
+      })
+    ).toBeUndefined();
+  });
+
+  // The editor blocks a blank description at the step before this, but a blank
+  // must never be sent — the API rejects it, and it is a deletion, not an edit.
+  it('ignores a blank description', () => {
+    expect(
+      reminderEditPatch(original, {
+        description: '   ',
+        remindAt: new Date(remindAt),
+      })
+    ).toBeUndefined();
+  });
+
+  it('caps an over-long description at the API limit', () => {
+    const patch = reminderEditPatch(original, {
+      description: 'a'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 50),
+      remindAt: new Date(remindAt),
+    });
+
+    expect(patch?.description).toHaveLength(REMINDER_DESCRIPTION_MAX_LENGTH);
+  });
+
+  // The dispatcher skips completed reminders, so a new time on one that was
+  // marked done would silently never arrive unless the flag comes off with it.
+  it('clears the done flag when a completed reminder is rescheduled', () => {
+    const next = new Date('2026-08-10T09:00:00.000Z');
+
+    expect(
+      reminderEditPatch(
+        { ...original, completed: true },
+        { description: 'Chase the contract', remindAt: next }
+      )
+    ).toEqual({
+      schedule: { type: 'once', remindAt: next.toISOString() },
+      completed: false,
+    });
+  });
+
+  // Renaming a done reminder is not a request for it to fire again.
+  it('leaves the done flag alone when only the description changes', () => {
+    expect(
+      reminderEditPatch(
+        { ...original, completed: true },
+        { description: 'Follow up', remindAt: new Date(remindAt) }
+      )
+    ).toEqual({ description: 'Follow up' });
+  });
+});
+
+describe('reminderDescriptionForReference', () => {
+  it('uses the resolved reference name', () => {
+    expect(reminderDescriptionForReference('Q3 Contract', 'document')).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  it('trims the reference name', () => {
+    expect(reminderDescriptionForReference('  Q3 Contract  ', 'document')).toBe(
+      'Q3 Contract'
+    );
+  });
+
+  // Same fallbacks as reminderDescriptionFor, so blanking an edit lands on the
+  // name creating the reminder would have chosen.
+  it('names an unnamed reference the way lists label it', () => {
+    expect(reminderDescriptionForReference('', 'email')).toBe('(No Subject)');
+    expect(reminderDescriptionForReference('   ', 'document')).toBe('Untitled');
+    expect(reminderDescriptionForReference(undefined, 'crm_company')).toBe(
+      'Unknown Company'
+    );
+    expect(reminderDescriptionForReference(undefined, 'crm_contact')).toBe(
+      'Unknown Contact'
+    );
+  });
+
+  it('truncates an over-long reference name instead of failing', () => {
+    const long = 'x'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 50);
+
+    expect(reminderDescriptionForReference(long, 'document')).toHaveLength(
+      REMINDER_DESCRIPTION_MAX_LENGTH
+    );
+  });
+});
+
+describe('resolveEditedDescription', () => {
+  it('uses what was typed', () => {
+    expect(
+      resolveEditedDescription('Follow up', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Follow up');
+  });
+
+  it('trims what was typed', () => {
+    expect(
+      resolveEditedDescription('  Follow up  ', 'Chase the contract')
+    ).toBe('Follow up');
+  });
+
+  // Blanking the field means the same thing it means when creating: name this
+  // after whatever it is about.
+  it('falls back to the reference name when left blank', () => {
+    expect(
+      resolveEditedDescription('', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Q3 Contract');
+  });
+
+  it('treats a whitespace-only description as blank', () => {
+    expect(
+      resolveEditedDescription('   ', 'Chase the contract', 'Q3 Contract')
+    ).toBe('Q3 Contract');
+  });
+
+  // A standalone reminder has nothing to name itself after, and a reference
+  // whose name did not resolve must not rename it to a placeholder.
+  it('keeps the current description when there is nothing to fall back to', () => {
+    expect(resolveEditedDescription('', 'Chase the contract')).toBe(
+      'Chase the contract'
+    );
+    expect(
+      resolveEditedDescription('  ', 'Chase the contract', undefined)
+    ).toBe('Chase the contract');
+  });
+
+  it('caps an over-long typed description at the API limit', () => {
+    const long = 'y'.repeat(REMINDER_DESCRIPTION_MAX_LENGTH + 50);
+
+    expect(resolveEditedDescription(long, 'Chase the contract')).toHaveLength(
+      REMINDER_DESCRIPTION_MAX_LENGTH
     );
   });
 });

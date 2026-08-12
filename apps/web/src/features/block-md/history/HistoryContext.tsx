@@ -1,12 +1,11 @@
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { ThrownResultError } from '@core/util/result';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
   buildWhoMap,
   diffStates,
-  serializedEditorStateToMarkdown,
 } from '@macro-inc/lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
@@ -152,15 +151,14 @@ export function HistoryProvider(props: {
     return null;
   });
 
-  // One stable useDisplayName per unique userId — batched into a single fetch.
+  // One stable display-name accessor per unique userId, batched into one fetch.
   const uniqueUserIds = createMemo(() => {
     const peers = loadedPeers();
     return peers ? [...new Set(peers.values())] : [];
   });
   const userEntries = mapArray(uniqueUserIds, (userId) => {
-    const [displayName] = useDisplayName(tryMacroId(userId), {
-      emailFallback: 'local-part',
-    });
+    const displayName = () =>
+      getDisplayName(tryMacroId(userId), { emailFallback: 'local-part' });
     return { userId, displayName, color: userColor(userId) };
   });
   const userById = (userId: string): HistoryUser =>
@@ -192,19 +190,22 @@ export function HistoryProvider(props: {
       }
     }
 
-    const index = historyIndex();
-    if (!index) return sessionize(events);
-    return sessionize(events).filter((s) => {
-      const before = index.checkoutAt(s.startMs - 1);
-      const after = index.checkoutAt(s.endMs);
-      // Can't compute both states (edge frontiers) — keep rather than hide.
-      if (!before || !after) return true;
-      return (
-        // HACK: basically, some deltas are not visually different, and that's confusing
-        serializedEditorStateToMarkdown(before) !==
-        serializedEditorStateToMarkdown(after)
-      );
-    });
+    return sessionize(events);
+    // TODO (seamus/wolf): this is expensive. on 55 bones test doc each
+    // each inter of the filter loop took avg 6 seconds.
+    // const index = historyIndex();
+    // if (!index) return sessionize(events);
+    // return sessionize(events).filter((s) => {
+    //   const before = index.checkoutAt(s.startMs - 1);
+    //   const after = index.checkoutAt(s.endMs);
+    //   // Can't compute both states (edge frontiers) — keep rather than hide.
+    //   if (!before || !after) return true;
+    //   return (
+    //     // HACK: basically, some deltas are not visually different, and that's confusing
+    //     serializedEditorStateToMarkdown(before) !==
+    //     serializedEditorStateToMarkdown(after)
+    //   );
+    // });
   });
 
   const checkoutAt = (ms: number): SerializedEditorState | null =>

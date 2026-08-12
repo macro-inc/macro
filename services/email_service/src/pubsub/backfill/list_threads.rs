@@ -1,6 +1,6 @@
+use super::email_api_error::map_email_api_error;
 use super::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use models_email::email::service::backfill::{
     BackfillJob, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload, JobScopedPayload,
 };
@@ -8,7 +8,6 @@ use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::email::service::thread::ListThreadsPayload;
 use models_email::gmail::labels::SystemLabelID;
-use models_email::gmail::operations::GmailApiOperation;
 use std::cmp::min;
 
 // the max size allowed by the gmail api
@@ -34,13 +33,12 @@ const SENT_CONTACT_SEED_LIMIT: u32 = 200;
 /// most-recent-to-least sweep.
 pub async fn list_threads(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
 ) -> Result<(), ProcessingError> {
     if scope.payload.priority_pass {
-        return list_priority_threads(ctx, access_token, scope, link, job).await;
+        return list_priority_threads(ctx, scope, link, job).await;
     }
 
     let p = &scope.payload;
@@ -52,34 +50,17 @@ pub async fn list_threads(
         total_threads - threads_retrieved_count,
     );
 
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::ThreadsList,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
     // get batch of thread ids
-    let thread_list = match ctx
-        .gmail_client
+    let thread_list = ctx
+        .email_api
         .list_threads(
-            access_token,
+            link.id,
             num_threads_to_list as u32,
             p.next_page_token.as_deref(),
             &[],
         )
         .await
-    {
-        Ok(list) => list,
-        Err(e) => {
-            // Construct the structured Retryable error and return immediately.
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to list threads from Gmail API"),
-            }));
-        }
-    };
+        .map_err(|error| map_email_api_error(error, "Failed to list provider threads"))?;
 
     // pass along token if it exists for fetching next batch of thread_ids
     let next_page_token = thread_list.next_page_token.clone();
@@ -107,6 +88,7 @@ pub async fn list_threads(
                 job_id: scope.job_id,
                 payload: BackfillThreadPayload {
                     thread_provider_id: thread.provider_id.clone(),
+                    refresh_existing: p.refresh_existing,
                 },
             }),
         };
@@ -131,6 +113,7 @@ pub async fn list_threads(
                 payload: ListThreadsPayload {
                     next_page_token,
                     priority_pass: false,
+                    refresh_existing: p.refresh_existing,
                 },
             }),
         };
@@ -170,7 +153,6 @@ pub async fn list_threads(
 /// batch math and must stay equal to the real mailbox count).
 async fn list_priority_threads(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
@@ -180,35 +162,20 @@ async fn list_priority_threads(
     let num_threads_to_list = min(PRIORITY_PASS_THREAD_LIMIT as i32, job.total_threads);
 
     if num_threads_to_list > 0 {
-        check_gmail_rate_limit(CheckGmailRateLimitArgs {
-            redis_client: &ctx.redis_client,
-            link_id: link.id,
-            gmail_operation: GmailApiOperation::ThreadsList,
-            retryable: true,
-            is_backfill: true,
-        })
-        .await?;
-
         // CATEGORY_PERSONAL is Gmail's "important to a human" bucket; seeding
         // these first means a brand-new user sees signal immediately.
-        let thread_list = match ctx
-            .gmail_client
+        let thread_list = ctx
+            .email_api
             .list_threads(
-                access_token,
+                link.id,
                 num_threads_to_list as u32,
                 None,
                 &[SystemLabelID::CategoryPersonal.as_str()],
             )
             .await
-        {
-            Ok(list) => list,
-            Err(e) => {
-                return Err(ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::GmailApiFailed,
-                    source: e.context("Failed to list priority threads from Gmail API"),
-                }));
-            }
-        };
+            .map_err(|error| {
+                map_email_api_error(error, "Failed to list priority provider threads")
+            })?;
 
         let threads = thread_list.threads;
 
@@ -238,6 +205,7 @@ async fn list_priority_threads(
                     job_id: scope.job_id,
                     payload: BackfillThreadPayload {
                         thread_provider_id: thread.provider_id.clone(),
+                        refresh_existing: false,
                     },
                 }),
             };
@@ -262,7 +230,7 @@ async fn list_priority_threads(
     // the priority-pass total_threads bump, so it must never return a retryable
     // error (that would re-run the pass and double-bump the counter).
     #[cfg(feature = "contacts_sync")]
-    enqueue_sent_contact_seeds(ctx, access_token, scope, link).await;
+    enqueue_sent_contact_seeds(ctx, scope, link).await;
 
     // Hand off to the normal most-recent-to-least sweep from the beginning. This
     // runs regardless of how many priority threads were found.
@@ -273,6 +241,7 @@ async fn list_priority_threads(
             payload: ListThreadsPayload {
                 next_page_token: None,
                 priority_pass: false,
+                refresh_existing: scope.payload.refresh_existing,
             },
         }),
     };
@@ -303,29 +272,15 @@ async fn list_priority_threads(
 #[cfg(feature = "contacts_sync")]
 async fn enqueue_sent_contact_seeds(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
 ) {
     use models_email::email::service::backfill::SeedSentContactPayload;
 
-    if let Err(e) = check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::MessagesList,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await
-    {
-        tracing::warn!(error = ?e, link_id = %link.id, "Skipping sent-contact seed: gmail rate limited");
-        return;
-    }
-
     let message_ids = match ctx
-        .gmail_client
+        .email_api
         .list_messages(
-            access_token,
+            link.id,
             SENT_CONTACT_SEED_LIMIT,
             &[SystemLabelID::Sent.as_str()],
         )
@@ -333,7 +288,7 @@ async fn enqueue_sent_contact_seeds(
     {
         Ok(ids) => ids,
         Err(e) => {
-            tracing::error!(error = ?e, link_id = %link.id, "Skipping sent-contact seed: failed to list sent messages");
+            tracing::error!(error = ?e, link_id = %link.id, "Skipping sent-contact seed: failed to list provider sent messages");
             return;
         }
     };

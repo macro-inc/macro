@@ -64,6 +64,10 @@ import type {
   QueryRevalidationWire,
 } from '../protocol';
 import {
+  compileEntityResolvers,
+  type EntityResolverConfig,
+} from './entity-resolvers';
+import {
   normalizedEntityKey,
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -283,6 +287,8 @@ function queuedMutationResult(
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Schema-typed singular entity relations derived from field arguments. */
+  entityResolvers?: EntityResolverConfig;
   /** Called when a cache read/write fails (diagnostics; flow already degraded to network). */
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
@@ -306,6 +312,7 @@ export function normalizedCacheExchange(
   host: CacheHost,
   options: NormalizedCacheExchangeOptions = {}
 ): Exchange {
+  const entityResolvers = compileEntityResolvers(options.entityResolvers);
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
@@ -513,6 +520,7 @@ export function normalizedCacheExchange(
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
+            entityResolvers,
             priority:
               op.context[AFFECTED_READ_CONTEXT_KEY] === true
                 ? 'user-visible'
@@ -691,6 +699,7 @@ export function normalizedCacheExchange(
               query: queryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
+              entityResolvers,
             };
             await host.writeQuery({
               ...args,

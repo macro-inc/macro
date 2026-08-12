@@ -54,6 +54,9 @@ const EMAIL_LINK_ID_HEADER = 'X-Email-Link-Id';
 /** How much of a recurring series a calendar deletion removes. */
 export type CalendarDeletionScope = 'all' | 'this_event' | 'this_and_following';
 
+/** How much of a recurring series a calendar RSVP answers for. */
+export type CalendarRsvpScope = 'all' | 'this_event';
+
 function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
   return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
 }

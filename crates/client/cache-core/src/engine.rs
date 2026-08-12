@@ -3,10 +3,12 @@
 //! Tauri) expose over RPC.
 
 use crate::denormalize::{
-    DenormalizeError, ReadOutcome, RecordSource, denormalize, denormalize_record,
+    DenormalizeError, ReadOutcome, RecordSource, denormalize_record,
+    denormalize_with_entity_resolvers,
 };
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError, OperationKind};
+use crate::entity_resolver::{EntityResolver, EntityResolverError, EntityResolverLookup};
 use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
@@ -41,6 +43,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Normalize(#[from] NormalizeError),
     #[error(transparent)]
     Denormalize(#[from] DenormalizeError),
+    #[error(transparent)]
+    EntityResolver(#[from] EntityResolverError),
     #[error(transparent)]
     LinkPatch(#[from] LinkPatchError),
     #[error(transparent)]
@@ -362,6 +366,21 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
     ) -> Result<ReadResult, EngineError<S::Error>> {
+        self.read_query_with_entity_resolvers(op_id, query, operation_name, variables, &[])
+            .await
+    }
+
+    /// Attempts to answer a query while applying validated read-only entity
+    /// relations. Resolver descriptors are request policy and never persisted.
+    pub async fn read_query_with_entity_resolvers(
+        &mut self,
+        op_id: Option<OpId>,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        entity_resolvers: &[EntityResolver],
+    ) -> Result<ReadResult, EngineError<S::Error>> {
+        let entity_resolvers = EntityResolverLookup::compile(entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
@@ -401,7 +420,13 @@ impl<S: Storage> Engine<S> {
                 fetched: &fetched_base,
                 composed: &composed,
             };
-            match denormalize(op, variables, &source, &mut deps)? {
+            match denormalize_with_entity_resolvers(
+                op,
+                variables,
+                &source,
+                &mut deps,
+                &entity_resolvers,
+            )? {
                 ReadOutcome::Complete(data) => break ReadResult::Hit { data },
                 ReadOutcome::Miss { .. } => break ReadResult::Miss,
                 ReadOutcome::NeedRecords(missing) => {

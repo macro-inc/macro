@@ -15,6 +15,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
+import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import {
   CRM_VIEW_URL_PARAM,
@@ -528,6 +529,10 @@ registerComponent('task-compose', (params) => {
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   return <EventComposer event={params?.event as CalendarEvent | undefined} />;
+});
+registerComponent('skill-compose', (params) => {
+  usePageViewTracking('skill-compose');
+  return <ComposeSkill {...params} />;
 });
 registerComponent(
   'import-linear',

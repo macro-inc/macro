@@ -6,6 +6,8 @@ use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::fanout_websocket::FanoutWebSocketSender;
+use ::notification::outbound::kafka_websocket::KafkaWebSocketSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
@@ -19,6 +21,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
+use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
@@ -155,15 +158,18 @@ pub async fn main() -> anyhow::Result<()> {
         fcm_platform_arn: config.sns_fcm_platform_arn.as_ref().to_string(),
         apns_voip_platform_arn: config.sns_apns_voip_platform_arn().to_string(),
     };
-    let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-        config.internal_api_key.as_ref().to_string(),
-        connection_gateway_url.clone(),
-    ));
-    let notification_events_realtime_adapter =
-        WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+    let reader_realtime_adapter = WebSocketGatewayAdapter {
+        gateway: ConnectionGatewayClient::new(
             config.internal_api_key.as_ref().to_string(),
             connection_gateway_url.clone(),
-        ));
+        ),
+    };
+    let notification_events_realtime_adapter = WebSocketGatewayAdapter {
+        gateway: ConnectionGatewayClient::new(
+            config.internal_api_key.as_ref().to_string(),
+            connection_gateway_url.clone(),
+        ),
+    };
     let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
     let mut notification_events_listener = NotificationEventsListener::new(
         notification_events_receiver,
@@ -192,10 +198,19 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-        config.internal_api_key.as_ref().to_string(),
-        connection_gateway_url,
-    ));
+    let websocket_adapter = FanoutWebSocketSender::new(
+        WebSocketGatewayAdapter {
+            gateway: ConnectionGatewayClient::new(
+                config.internal_api_key.as_ref().to_string(),
+                connection_gateway_url,
+            ),
+        },
+        KafkaWebSocketSender::new(MacroEventBrokerService::new(
+            KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+                .context("failed to create Kafka WebSocket notification publisher")?,
+            GlobalSpawner,
+        )),
+    );
 
     let mobile_adapter = MobilePushAdapter {
         push_service: aws_sdk_sns::Client::new(&aws_config),

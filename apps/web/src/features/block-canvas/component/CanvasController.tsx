@@ -872,6 +872,8 @@ export function CanvasController(props: ParentProps) {
     if (entityType === 'crm_contact') return;
     // Nor are reminders — they have no canvas representation.
     if (entityType === 'reminder') return;
+    // Nor are calendar events.
+    if (entityType === 'calendar_event') return;
 
     // Track document mention and get UUID
     let mentionUuid: string | undefined;

@@ -3,7 +3,7 @@ import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelName } from '@core/context/channels';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
@@ -85,7 +85,7 @@ export function usePropertyEntityDisplay(
   const userNameWrapper = () => {
     const eType = entityType();
     if (eType === 'USER') {
-      return useDisplayName(tryMacroId(entityId()))[0];
+      return () => getDisplayName(tryMacroId(entityId()));
     }
   };
   const userName = createMemo(() => userNameWrapper()?.() ?? '');

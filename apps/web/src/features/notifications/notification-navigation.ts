@@ -15,6 +15,7 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import {
+  ENABLE_CALENDAR_UI,
   ENABLE_REMINDERS,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -22,8 +23,10 @@ import type { EntityType, NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { getReminderById } from '@queries/reminders/reminders';
+import { parseISO } from 'date-fns';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { requestCalendarFocus } from '../calendar/calendar-focus-intent';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
 import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
@@ -385,6 +388,36 @@ function getSupportedHandler(
         if (!blockName) return;
 
         openSplitIfNotOpen(lm, blockName, entityId, {
+          newSplit,
+          sourceHandle,
+        });
+      };
+    })
+    .with('calendar_event_reminder', () => {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'calendar_event_reminder') return null;
+
+      return async (lm: SplitManager, newSplit: boolean = false) => {
+        // A reminder delivered before the flag closed still has a live
+        // notification; opening it must not reach a surface the user is no
+        // longer meant to have.
+        if (!ENABLE_CALENDAR_UI()) return;
+        const content = meta.content;
+        // parseISO keeps an all-day date local; `new Date('YYYY-MM-DD')`
+        // would read it as UTC midnight and land a day early west of it.
+        const start = content.startsAt
+          ? new Date(content.startsAt)
+          : content.startDate
+            ? parseISO(content.startDate)
+            : undefined;
+        if (start) {
+          requestCalendarFocus({
+            eventId: content.eventId,
+            occurrenceKey: content.occurrenceKey,
+            date: start,
+          });
+        }
+        openSplitIfNotOpen(lm, 'component', 'calendar', {
           newSplit,
           sourceHandle,
         });

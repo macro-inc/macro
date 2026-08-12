@@ -25,9 +25,12 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, EventTime, EventTransparency, EventVisibility, VisibleCalendar,
+        CalendarEventPatch, ConferenceChange, EventReminders, EventTime, EventTransparency,
+        EventVisibility, VisibleCalendar,
     },
-    ports::{CalendarDeletionScope, CalendarMutationError, CalendarMutationService},
+    ports::{
+        CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
+    },
 };
 
 /// Router state for authenticated calendar mutations.
@@ -133,6 +136,10 @@ pub struct CreateCalendarEventRequest {
     pub visibility: Option<EventVisibility>,
     /// Availability behavior.
     pub transparency: Option<EventTransparency>,
+    /// Reminder configuration; omit to keep the calendar defaults.
+    pub reminders: Option<EventReminders>,
+    /// Conference to attach to the new event; omit to create it without one.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// Request body patching an event; omitted fields are left untouched.
@@ -155,6 +162,15 @@ pub struct UpdateCalendarEventRequest {
     pub visibility: Option<EventVisibility>,
     /// Replacement transparency.
     pub transparency: Option<EventTransparency>,
+    /// Replacement reminder configuration.
+    pub reminders: Option<EventReminders>,
+    /// Conference change: `google_meet` attaches a freshly generated Meet,
+    /// `none` detaches the current conference, and omitting it leaves the
+    /// conference untouched.
+    ///
+    /// A third-party conference is replaced or detached like any other, since
+    /// the request is explicit. Omit the field to leave it alone.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// How much of a recurring series a deletion removes.
@@ -182,12 +198,34 @@ pub struct DeleteCalendarEventQuery {
     pub recurrence_id: Option<String>,
 }
 
+/// How much of a recurring series an RSVP applies to.
+///
+/// Unlike deletion there is no this-and-following variant: the provider
+/// cannot express a forward-scoped response, so offering one would be a
+/// promise sync could not keep.
+#[derive(Clone, Copy, Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarRsvpScopeParam {
+    /// The entire series.
+    All,
+    /// One occurrence.
+    ThisEvent,
+}
+
 /// Request body setting the requester's RSVP on an event.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RsvpCalendarEventRequest {
     /// The response to record for the connected account.
     pub response: AttendeeResponseStatus,
+    /// How much of a recurring series the response covers. Omit to let
+    /// `recurrenceId` decide: the identified occurrence alone when one is
+    /// supplied, otherwise the whole series. An explicit `this_event` scope
+    /// requires `recurrenceId`, so a scoped request is never silently
+    /// widened to the series.
+    pub scope: Option<CalendarRsvpScopeParam>,
+    /// Original-start key of the occurrence the response targets.
+    pub recurrence_id: Option<String>,
 }
 
 /// Machine-readable failure category for calendar mutations.
@@ -335,6 +373,8 @@ where
         recurrence_lines: request.recurrence_lines,
         visibility: request.visibility,
         transparency: request.transparency,
+        reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service
@@ -422,6 +462,8 @@ where
         recurrence_lines: request.recurrence_lines,
         visibility: request.visibility,
         transparency: request.transparency,
+        reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service
@@ -517,12 +559,25 @@ where
     S: CalendarMutationService,
     Auth: MacroAuthorizationService,
 {
+    let scope = match (request.scope, request.recurrence_id) {
+        (Some(CalendarRsvpScopeParam::All), _) | (None, None) => CalendarRsvpScope::All,
+        (Some(CalendarRsvpScopeParam::ThisEvent), Some(recurrence_id))
+        | (None, Some(recurrence_id)) => CalendarRsvpScope::ThisEvent { recurrence_id },
+        (Some(CalendarRsvpScopeParam::ThisEvent), None) => {
+            return Err(CalendarMutationApiError {
+                code: CalendarMutationErrorCode::InvalidInput,
+                message: "a this-event response requires recurrenceId".to_string(),
+                status: StatusCode::BAD_REQUEST,
+            });
+        }
+    };
     let event = state
         .service
         .respond_to_event(
             user.authorization.user.macro_user_id.as_ref(),
             event_id,
             request.response,
+            scope,
         )
         .await?;
     Ok(Json(event))

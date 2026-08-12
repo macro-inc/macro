@@ -11,9 +11,11 @@ use super::models::{
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
     CalendarEventPatch, CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-    CalendarOccurrenceCursor, CalendarSyncStatus, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
-    GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
-    OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
+    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus, DueCalendarReminder,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
+    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -161,13 +163,18 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
     /// longer exists at the provider surfaces as [`GoogleRsvpOutcome::Gone`];
     /// absence of a self attendee surfaces as
     /// [`GoogleRsvpOutcome::NotAttendee`].
+    ///
+    /// `scope` selects what the response covers: the master for
+    /// [`CalendarRsvpScope::All`], one exception instance for
+    /// [`CalendarRsvpScope::ThisEvent`].
     fn rsvp_event(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
-        provider_event_id: &str,
+        master_provider_event_id: &str,
         self_email: &str,
         response: AttendeeResponseStatus,
+        scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
 }
 
@@ -184,6 +191,25 @@ pub enum CalendarDeletionScope {
     /// The identified occurrence and everything after it.
     ThisAndFollowing {
         /// Stable original-start key of the first removed occurrence.
+        recurrence_id: String,
+    },
+}
+
+/// How much of a recurring series an RSVP applies to.
+///
+/// There is deliberately no this-and-following variant. The provider's Event
+/// resource addresses an exception by `originalStartTime` — exactly one
+/// instance — with no range field, so a forward response is inexpressible as
+/// a provider write and could only be emulated by enumerating instances,
+/// which an unbounded series never finishes. Both variants here are one
+/// exact provider call that Google remains authoritative for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarRsvpScope {
+    /// The entire series, recorded on the master.
+    All,
+    /// One occurrence, identified by its original start key.
+    ThisEvent {
+        /// Stable original-start key of the occurrence.
         recurrence_id: String,
     },
 }
@@ -386,12 +412,14 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         scope: CalendarDeletionScope,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 
-    /// Set the requester's inbox RSVP on an event and persist the echo.
+    /// Set the requester's inbox RSVP on an event — the whole series, one
+    /// occurrence, or an occurrence onward — and persist the echo.
     fn respond_to_event(
         &self,
         requester_id: &str,
         event_id: Uuid,
         response: AttendeeResponseStatus,
+        scope: CalendarRsvpScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
 }
 
@@ -510,4 +538,94 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+}
+
+/// Dispatch use cases driven by the calendar reminder queue worker.
+pub trait CalendarReminderDispatch: Send + Sync + 'static {
+    /// Find due firings and fan one delivery message out per firing.
+    fn sweep(&self) -> impl Future<Output = Result<CalendarReminderSweepSummary, Report>> + Send;
+
+    /// Deliver one firing: revalidate, claim, notify, complete.
+    fn deliver(
+        &self,
+        firing: CalendarReminderFiring,
+    ) -> impl Future<Output = Result<CalendarReminderDeliveryOutcome, Report>> + Send;
+}
+
+/// Persistence the calendar reminder dispatcher runs on.
+pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
+    /// Scheduled firings inside the due window that have no completed
+    /// delivery claim, ordered by `(fire_at, event_id, minutes_before,
+    /// occurrence_key)` and capped at `limit` rows. `after` resumes the scan
+    /// past a previous page's last firing, so a sweep drains an arbitrarily
+    /// large backlog in bounded batches.
+    fn due_reminder_firings(
+        &self,
+        now: DateTime<Utc>,
+        after: Option<&CalendarReminderFiring>,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<CalendarReminderFiring>, Report>> + Send;
+
+    /// Re-resolve one swept firing against live state. `None` means the
+    /// schedule moved on — the event changed, was cancelled, or its account
+    /// went away — and the stale message must not deliver.
+    fn find_due_reminder(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<Option<DueCalendarReminder>, Report>> + Send;
+
+    /// Claim the firing for delivery. The insert is the claim; a claim made
+    /// before `retry_before` and never completed is taken over.
+    fn claim_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+        retry_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// Hand an unfinished claim back so redelivery retries immediately.
+    fn release_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Mark the claimed firing delivered.
+    fn complete_reminder_delivery(
+        &self,
+        firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Notification egress for due calendar reminders.
+pub trait CalendarReminderNotifier: Send + Sync + 'static {
+    /// Send the reminder notification to the event owner.
+    fn notify(&self, due: &DueCalendarReminder) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// A raw message received from the dispatch queue.
+#[derive(Clone, Debug)]
+pub struct RawCalendarDispatchMessage {
+    /// Serialized [`CalendarReminderDispatchMessage`] body.
+    pub body: String,
+    /// Transport handle used to acknowledge the message.
+    pub receipt_handle: String,
+}
+
+/// Transport carrying calendar reminder dispatch messages.
+pub trait CalendarReminderDispatchQueue: Send + Sync + 'static {
+    /// Publish fan-out messages, one per due firing.
+    fn publish_batch(
+        &self,
+        messages: &[CalendarReminderDispatchMessage],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Long-poll the queue for work.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawCalendarDispatchMessage>, Report>> + Send;
+
+    /// Acknowledge one handled message.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }

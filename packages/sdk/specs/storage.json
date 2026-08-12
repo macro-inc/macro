@@ -5586,6 +5586,73 @@
         }
       }
     },
+    "/documents/create_skill": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "operationId": "create_skill_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a skill.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created skill."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_snippet": {
       "post": {
         "tags": ["document"],
@@ -6176,6 +6243,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/system_skills": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "operationId": "get_system_skills_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response listing the built-in system skills.",
+                  "required": ["skills"],
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemSkillSummary"
+                      },
+                      "description": "Every system skill, in display order."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7822,7 +7929,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -9635,7 +9743,8 @@
                 "static_file",
                 "crm_company",
                 "crm_contact",
-                "reminder"
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -11015,7 +11124,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -12453,6 +12563,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -12771,6 +12892,17 @@
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Which conferencing system backs `conference_url`. `None` whenever no\nconference is attached."
+              }
+            ]
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."
@@ -12819,6 +12951,10 @@
               "type": "string"
             },
             "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Per-user reminder configuration. Skipped when it is the provider\ndefault so projections stored before reminders were modeled still\ncompare equal."
           },
           "sequence": {
             "type": "integer",
@@ -14502,6 +14638,11 @@
           }
         }
       },
+      "ConferenceProvider": {
+        "type": "string",
+        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
+        "enum": ["google_meet", "other"]
+      },
       "CopyDocumentQueryParams": {
         "type": "object",
         "description": "Query parameters for the copy document endpoint.",
@@ -15093,7 +15234,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -15102,6 +15244,37 @@
           "schedule": {
             "$ref": "#/components/schemas/ReminderSchedule",
             "description": "When and how often the reminder fires."
+          }
+        }
+      },
+      "CreateSkillRequest": {
+        "type": "object",
+        "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "required": ["skillName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty skill document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the skill with."
+          },
+          "skillName": {
+            "type": "string",
+            "description": "The name of the skill."
+          }
+        }
+      },
+      "CreateSkillResponse": {
+        "type": "object",
+        "description": "Response for creating a skill.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created skill."
           }
         }
       },
@@ -16542,6 +16715,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -16689,7 +16873,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -17479,6 +17663,41 @@
           }
         }
       },
+      "EventReminderOverride": {
+        "type": "object",
+        "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
+        "required": ["method", "minutes"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "Provider method, stored verbatim; only `popup` fires Macro\nnotifications."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes before the event start.",
+            "minimum": 0
+          }
+        }
+      },
+      "EventReminders": {
+        "type": "object",
+        "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
+        "required": ["useDefault"],
+        "properties": {
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Explicit reminders replacing the defaults when `use_default` is off."
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Whether the calendar's default reminders apply."
+          }
+        }
+      },
       "EventStatus": {
         "type": "string",
         "description": "Canonical event status.",
@@ -17627,7 +17846,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17673,7 +17893,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -20991,7 +21212,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -21621,9 +21843,9 @@
           {
             "type": "object",
             "description": "Absolute timed event.",
-            "required": ["starts_at", "ends_at", "kind"],
+            "required": ["startsAt", "endsAt", "kind"],
             "properties": {
-              "ends_at": {
+              "endsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Exclusive end."
@@ -21632,12 +21854,12 @@
                 "type": "string",
                 "enum": ["timed"]
               },
-              "starts_at": {
+              "startsAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "Inclusive start."
               },
-              "time_zone": {
+              "timeZone": {
                 "type": ["string", "null"],
                 "description": "Original IANA time zone."
               }
@@ -21646,9 +21868,9 @@
           {
             "type": "object",
             "description": "All-day event with an exclusive end date.",
-            "required": ["start_date", "end_date", "kind"],
+            "required": ["startDate", "endDate", "kind"],
             "properties": {
-              "end_date": {
+              "endDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Exclusive end date."
@@ -21657,7 +21879,7 @@
                 "type": "string",
                 "enum": ["allDay"]
               },
-              "start_date": {
+              "startDate": {
                 "type": "string",
                 "format": "date",
                 "description": "Inclusive start date."
@@ -21665,7 +21887,7 @@
             }
           }
         ],
-        "description": "Timed or all-day calendar event span."
+        "description": "Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries."
       },
       "SoupCalendarEvent_SoupPropertiesField": {
         "type": "object",
@@ -21685,6 +21907,10 @@
           "extra"
         ],
         "properties": {
+          "conferenceProvider": {
+            "type": ["string", "null"],
+            "description": "Which conferencing system backs `conference_url`."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct conference join URL."
@@ -22242,6 +22468,17 @@
               "type": {
                 "type": "string",
                 "enum": ["snippet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
               }
             }
           }
@@ -22992,7 +23229,8 @@
                   "static_file",
                   "crm_company",
                   "crm_contact",
-                  "reminder"
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -23257,6 +23495,22 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "SystemSkillSummary": {
+        "type": "object",
+        "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The well-known id the skill is referenced by in mentions and AI tools."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the skill."
           }
         }
       },

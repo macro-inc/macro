@@ -30,6 +30,11 @@ import {
   useCalendarPager,
 } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
+import {
+  calendarFocusTargetId,
+  clearCalendarFocus,
+  pendingCalendarFocus,
+} from './calendar-focus-intent';
 import { isCalendarRangeSupported } from './calendar-supported-range';
 import { mapCalendarOccurrence } from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
@@ -306,6 +311,14 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
     calendarView.useNarrowDayHeaders() && !isMobile();
   const data = createCalendarPageData(range, isActive);
 
+  // Rendered chip elements by view-model id, so a deep link can anchor the
+  // details popover to the real chip. The signal bumps on every mount
+  // because FullCalendar renders chips outside Solid's reactive graph.
+  const eventElements = new Map<string, HTMLElement>();
+  const [chipMounts, notifyChipMount] = createSignal(undefined, {
+    equals: false,
+  });
+
   const handleDatesSet = ({ end, start }: DatesSetArg) => {
     const nextRange = createCalendarOccurrenceQueryRange(start, end);
     const currentRange = range();
@@ -348,6 +361,25 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         if (!isActive()) return;
         const selectedEvent = data.eventsById().get(event.id);
         if (selectedEvent) calendarView.selectEvent(selectedEvent, el);
+      }}
+      eventDidMount={({ el, event }) => {
+        eventElements.set(event.id, el);
+        // A re-render (query settling, live refresh) replaces chip elements.
+        // Re-anchor an open details popover to the remounted chip — its old
+        // anchor is a disconnected node the popover can't position against.
+        if (
+          isActive() &&
+          calendarView.eventState.selectedEventId === event.id
+        ) {
+          const selected = data.eventsById().get(event.id);
+          if (selected) calendarView.selectEvent(selected, el);
+        }
+        notifyChipMount();
+      }}
+      eventWillUnmount={({ el, event }) => {
+        if (eventElements.get(event.id) === el) {
+          eventElements.delete(event.id);
+        }
       }}
       datesSet={handleDatesSet}
       dayHeaderFormat={{
@@ -441,7 +473,12 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         }}
       </FullCalendar.NowIndicatorContent>
 
-      <CalendarPageHost id={props.id} data={data} />
+      <CalendarPageHost
+        id={props.id}
+        data={data}
+        eventElements={eventElements}
+        chipMounts={chipMounts}
+      />
     </FullCalendar.Root>
   );
 }
@@ -449,12 +486,41 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
 function CalendarPageHost(props: {
   id: CalendarPageId;
   data: CalendarPageData;
+  eventElements: Map<string, HTMLElement>;
+  chipMounts: Accessor<undefined>;
 }) {
   const calendar = useFullCalendar();
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const [element, setElement] = createSignal<HTMLDivElement>();
   const isActive = () => pager.isActive(props.id);
+
+  // Deep-link consumption: a pending focus request (set by notification
+  // navigation, possibly before this split even mounted) pages the active
+  // calendar to the occurrence and opens its details once its chip renders.
+  let navigatedFor: number | undefined;
+  createEffect(() => {
+    props.chipMounts();
+    const intent = pendingCalendarFocus();
+    if (!intent || !isActive()) return;
+    const dateInfo = calendar.dateInfo();
+    if (!dateInfo) return;
+    if (intent.date < dateInfo.start || intent.date >= dateInfo.end) {
+      // Navigate once per request; the effect re-runs as the destination
+      // page's chips mount, and by then the date is inside the view.
+      if (navigatedFor !== intent.requestedAt) {
+        navigatedFor = intent.requestedAt;
+        pager.navigateToDate(intent.date);
+      }
+      return;
+    }
+    const targetId = calendarFocusTargetId(intent);
+    const event = props.data.eventsById().get(targetId);
+    const chip = props.eventElements.get(targetId);
+    if (!event || !chip?.isConnected) return;
+    clearCalendarFocus();
+    calendarView.selectEvent(event, chip);
+  });
 
   useCalendarTimeGridHoverIndicator(() => (isActive() ? element() : undefined));
 

@@ -1,7 +1,5 @@
-use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::process;
-use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
+use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
     CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
 };
@@ -33,12 +31,12 @@ use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
-use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
-use models_email::service::message::{Message, is_spam_or_trash};
+use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_email::service::thread::Thread;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
@@ -87,44 +85,29 @@ pub async fn upsert_message(
     link: &link::Link,
     payload: &UpsertMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let gmail_access_token = process::fetch_pubsub_gmail_token(ctx, link).await?;
-
-    // we have to fetch the message to get its provider thread id
-    check_gmail_rate_limit_inbox_sync(
-        ctx,
-        link.id,
-        GmailApiOperation::MessagesGet,
-        InboxSyncOperation::UpsertMessage(payload.clone()),
-    )
-    .await?;
-
-    let message_resource = match ctx
-        .gmail_client
-        .get_message(&gmail_access_token, &payload.provider_message_id)
-        .await
-        .map_err(|e| {
-            // retryable because we don't return an error if message doesn't exist, so this means
-            // it had to be some sort of internal gmail api error
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get message from gmail api".to_string()),
-            })
-        })? {
-        Some(msg) => msg,
-        None => {
+    let provider_message = ctx
+        .email_api
+        .get_message(link.id, &payload.provider_message_id)
+        .await;
+    let fetched = match provider_message {
+        Ok(Some(fetched)) => fetched,
+        Ok(None) => {
             tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
                 "Message not found in gmail when attempting to upsert");
             return Ok(());
         }
+        Err(error) => {
+            return Err(handle_operation_error(
+                ctx,
+                link.id,
+                InboxSyncOperation::UpsertMessage(payload.clone()),
+                error,
+            )
+            .await);
+        }
     };
+    let mut message = fetched.message;
 
-    // Map Gmail resource to service model (IDs are generated in the parse function)
-    let mut message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiFailed,
-            source: e.context("Failed to map message resource to service".to_string()),
-        })
-    })?;
     let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it
@@ -241,20 +224,11 @@ pub async fn upsert_message(
                 })
             })?;
     } else {
-        fetch_and_insert_thread(
-            ctx,
-            payload,
-            &gmail_access_token,
-            link.id,
-            &provider_thread_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch and insert thread".to_string()),
-            })
-        })?;
+        // Propagated verbatim: fetch_and_insert_thread already routed provider
+        // errors through handle_operation_error (retry queue vs redelivery),
+        // and re-wrapping would double-process rate limits and mislabel
+        // permanent failures as retryable.
+        fetch_and_insert_thread(ctx, payload, link.id, &provider_thread_id).await?;
     }
 
     let (message_db_id, thread_db_id) =
@@ -326,14 +300,7 @@ pub async fn upsert_message(
         publish_email_event(&ctx.macro_event_broker, &event);
     }
 
-    handle_attachment_upload(
-        ctx,
-        &gmail_access_token,
-        link,
-        payload,
-        &message.attachments,
-    )
-    .await?;
+    handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
 
     handle_contacts_sync(
         ctx,
@@ -376,10 +343,9 @@ pub async fn upsert_message(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, gmail_access_token, attachments), err)]
+#[tracing::instrument(skip(ctx, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
-    gmail_access_token: &str,
     link: &link::Link,
     payload: &UpsertMessagePayload,
     attachments: &[Attachment],
@@ -478,12 +444,10 @@ async fn handle_attachment_upload(
 
             let ctx_upload = UploadAttachmentContext {
                 db: &ctx.db,
-                redis_client: &ctx.redis_client,
-                gmail_client: &ctx.gmail_client,
+                email_api: &ctx.email_api,
                 dss_client: &ctx.dss_client,
                 sfs_client: &ctx.sfs_client,
                 system_properties_service: &ctx.system_properties_service,
-                access_token: gmail_access_token,
                 link,
             };
 
@@ -572,46 +536,30 @@ async fn handle_contacts_sync(
 }
 
 /// Process and insert email threads by handling attachments and images
-#[tracing::instrument(skip(ctx, gmail_access_token))]
+#[tracing::instrument(skip(ctx))]
 async fn fetch_and_insert_thread(
     ctx: &PubSubContext,
     payload: &UpsertMessagePayload,
-    gmail_access_token: &str,
     link_id: Uuid,
     provider_thread_id: &str,
-) -> anyhow::Result<()> {
-    // fetch threads
-    check_gmail_rate_limit_inbox_sync(
-        ctx,
+) -> result::Result<(), ProcessingError> {
+    let messages = match ctx.email_api.get_thread(link_id, provider_thread_id).await {
+        Ok(messages) => messages,
+        Err(error) => {
+            return Err(handle_operation_error(
+                ctx,
+                link_id,
+                InboxSyncOperation::UpsertMessage(payload.clone()),
+                error,
+            )
+            .await);
+        }
+    };
+    let mut threads = vec![thread_from_normalized_messages(
         link_id,
-        GmailApiOperation::ThreadsGet,
-        InboxSyncOperation::UpsertMessage(payload.clone()),
-    )
-    .await
-    .map_err(anyhow::Error::from)?;
-
-    let thread_resource = ctx
-        .gmail_client
-        .get_thread(gmail_access_token, provider_thread_id)
-        .await
-        .map_err(|e| {
-            // retryable because a failure here is likely a transient Gmail API error,
-            // matching the get_message error handling above
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get thread from gmail api".to_string()),
-            })
-        })?;
-
-    // Map Gmail resources to service models (IDs are generated in the parse functions)
-    let mut threads = map_thread_resources_to_service(vec![thread_resource], link_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::anyhow!("Failed to map thread resources: {}", e),
-            })
-        })?;
+        provider_thread_id,
+        messages,
+    )];
 
     // process threads
     process_threads_pre_insert(&mut threads).await;
@@ -629,6 +577,51 @@ async fn fetch_and_insert_thread(
     }
 
     Ok(())
+}
+
+fn thread_from_normalized_messages(
+    link_id: Uuid,
+    provider_thread_id: &str,
+    mut messages: Vec<Message>,
+) -> Thread {
+    messages.sort_by_key(|message| message.internal_date_ts);
+    let inbox_visible = messages.iter().any(|message| {
+        message.labels.iter().any(|label| {
+            label.provider_label_id == models_email::service::label::system_labels::INBOX
+        })
+    });
+    let is_read = messages.iter().all(|message| message.is_read);
+    let latest_inbound_message_ts = messages
+        .iter()
+        .rfind(|message| is_inbound(message))
+        .and_then(|message| message.internal_date_ts);
+    let latest_outbound_message_ts = messages
+        .iter()
+        .rfind(|message| is_outbound(message))
+        .and_then(|message| message.internal_date_ts);
+    let latest_non_spam_message_ts = messages
+        .iter()
+        .rfind(|message| !is_spam_or_trash(message))
+        .and_then(|message| message.internal_date_ts);
+    let thread_db_id = Uuid::now_v7();
+    for message in &mut messages {
+        message.thread_db_id = thread_db_id;
+    }
+    let now = chrono::Utc::now();
+
+    Thread {
+        db_id: thread_db_id,
+        provider_id: Some(provider_thread_id.to_string()),
+        link_id,
+        inbox_visible,
+        is_read,
+        latest_inbound_message_ts,
+        latest_outbound_message_ts,
+        latest_non_spam_message_ts,
+        created_at: now,
+        updated_at: now,
+        messages,
+    }
 }
 
 /// Process and insert message

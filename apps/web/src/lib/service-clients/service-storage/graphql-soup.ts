@@ -11,14 +11,19 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
   createWorkerCacheHost,
+  entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import {
+  type AnyVariables,
   type Client,
   createClient,
+  type DocumentInput,
   fetchExchange,
+  type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
 import { print } from 'graphql';
@@ -28,6 +33,8 @@ import {
 } from 'graphql-ws';
 import { match } from 'ts-pattern';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
+import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
+import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
@@ -40,10 +47,9 @@ import {
   type GroupSoupQueryVariables,
   type SoupInitialInput,
   type SoupInput,
+  type SoupNotificationFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
-  SoupDocument as SoupQueryDocument,
-  type SoupQueryVariables,
 } from './graphql/generated/graphql';
 import {
   createGraphqlSoupWebSocketUrlResolver,
@@ -167,6 +173,14 @@ export function getGraphqlSoupClient(): Client {
         url: `${dssHost}/items/soup/graphql`,
         exchanges: [
           normalizedCacheExchange(host, {
+            entityResolvers: {
+              GraphqlUser: {
+                emailThread: entityFromArgument('GraphqlSoupEmailThread', [
+                  'input',
+                  'threadId',
+                ]),
+              },
+            },
             // Session identity witness: the viewer id present on every soup
             // response. A response for a different user silently wipes and
             // rebinds the cache (see @graphql-cache/scope).
@@ -258,10 +272,6 @@ type GraphqlSoupChannelMessage = NonNullable<
     { __typename: 'GraphqlSoupChannel' }
   >['latestMessage']
 >;
-type GraphqlSoupNotification = Extract<
-  GraphqlSoupEntity,
-  { __typename: 'GraphqlSoupDocument' }
->['notifications'][number];
 
 function mapGraphqlPropertyValue(
   value: GraphqlPropertyValue | null | undefined
@@ -342,6 +352,9 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
     .with({ __typename: 'GraphqlSnippetSubType' }, () => ({
       type: 'snippet' as const,
     }))
+    .with({ __typename: 'GraphqlSkillSubType' }, () => ({
+      type: 'skill' as const,
+    }))
     .exhaustive();
 }
 
@@ -365,30 +378,41 @@ function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
 
-function mapGraphqlNotificationEntityType(
-  entityType: GraphqlSoupNotification['entityType']
-) {
-  return entityType.toLowerCase();
+/**
+ * Rebuilds the REST notification shape from the flat GraphQL fields. The
+ * server stores the event tag apart from the metadata JSON and only REST
+ * re-joins them (`UserNotificationRow::into_tagged`); GraphQL ships them
+ * flat, so the adjacently-tagged `notification_metadata` union must be
+ * reassembled here. Consumers pattern-match on `notification_metadata.tag`
+ * and treat an untagged channel notification as read — every GraphQL
+ * notification must go through this mapper.
+ */
+export function mapGraphqlNotification(
+  record: SoupNotificationFieldsFragment
+): Omit<ApiUserNotification, 'owner_id'> {
+  return {
+    id: record.id,
+    notification_event_type: record.eventType,
+    notification_metadata: {
+      tag: record.eventType,
+      content: record.metadata,
+    } as ApiUserNotification['notification_metadata'],
+    entity_id: record.entityId,
+    entity_type:
+      record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
+    sent: record.sent,
+    done: record.done,
+    created_at: record.createdAt,
+    viewed_at: record.viewedAt ?? undefined,
+    updated_at: record.updatedAt,
+    sender_id: record.senderId ?? undefined,
+  };
 }
 
-function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
-  return notifications.map((notification) => ({
-    id: notification.id,
-    notification_event_type: notification.eventType,
-    notification_metadata: {
-      tag: notification.eventType,
-      content: notification.metadata,
-    },
-    entity_id: notification.entityId,
-    entity_type: mapGraphqlNotificationEntityType(notification.entityType),
-    sent: notification.sent,
-    done: notification.done,
-    seen: notification.seen,
-    created_at: notification.createdAt,
-    viewed_at: notification.viewedAt ?? undefined,
-    updated_at: notification.updatedAt,
-    sender_id: notification.senderId ?? undefined,
-  }));
+function mapGraphqlNotifications(
+  notifications: SoupNotificationFieldsFragment[]
+) {
+  return notifications.map(mapGraphqlNotification);
 }
 
 /**
@@ -698,8 +722,33 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
     )
     .with(
       { __typename: 'GraphqlSoupCalendarEvent' },
-      // Calendar soup rendering lands with the calendar FE; skip for now.
-      () => null
+      (entity) =>
+        ({
+          tag: 'calendarEvent',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          // GraphQL omits the server-only icalUid/transparency/visibility
+          // fields, so the payload cannot satisfy the full REST data type;
+          // `satisfies` keeps every carried field checked against it.
+          data: {
+            id: entity.id,
+            title: entity.calendarEventTitle,
+            status: entity.calendarEventStatus,
+            // The GraphQL schema types `time` as a JSON scalar of exactly
+            // the REST wire shape.
+            time: entity.time as SoupCalendarEventTime,
+            conferenceUrl: entity.conferenceUrl ?? undefined,
+            isReadOnly: entity.isReadOnly,
+            ownerId: entity.ownerId,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            extra: { properties: mapGraphqlProperties(entity.properties) },
+            notifications: mapGraphqlNotifications(entity.notifications),
+          } satisfies Omit<
+            SoupCalendarEventSoupPropertiesField,
+            'icalUid' | 'transparency' | 'visibility'
+          > & { notifications: ReturnType<typeof mapGraphqlNotifications> },
+        }) as unknown as SoupApiItem
     )
     .with(
       { __typename: 'GraphqlSoupReminder' },
@@ -739,6 +788,17 @@ export type FetchGraphqlSoupOptions = {
   signal?: AbortSignal;
   /** Defaults to true for normal foreground Soup reads. */
   allowOfflineFallback?: boolean;
+  /** Overrides cache selection for callers such as durable backfills. */
+  requestPolicy?: RequestPolicy;
+};
+
+type GraphqlSoupPageData = {
+  user: {
+    soup: {
+      items: GraphqlSoupItem[];
+      nextCursor: string | null;
+    };
+  };
 };
 
 /**
@@ -746,7 +806,7 @@ export type FetchGraphqlSoupOptions = {
  * the existing soup pipeline (both the imperative fetch below and the
  * reactive urql subscriptions).
  */
-export function mapGraphqlSoupPage(data: SoupQuery): SoupPage {
+export function mapGraphqlSoupPage(data: GraphqlSoupPageData): SoupPage {
   return {
     items: data.user.soup.items
       .map(mapGraphqlSoupItem)
@@ -781,26 +841,24 @@ export function mapGraphqlGroupedSoupPage(
   return { items, groups };
 }
 
-export async function fetchGraphqlSoup(
-  input: GraphqlSoupInput,
+/** Executes any Soup-shaped query and maps its result to the shared page type. */
+export async function fetchGraphqlSoup<
+  Data extends GraphqlSoupPageData,
+  Variables extends AnyVariables,
+>(
+  document: DocumentInput<Data, Variables>,
+  variables: Variables,
   options: FetchGraphqlSoupOptions = {}
 ): Promise<SoupPage> {
   const client = getGraphqlSoupClient();
   const useCache = graphqlCacheEnabled();
-
-  // `cache-and-network` writes responses through the normalized cache;
-  // `.toPromise()` skips the stale cache emission, so callers keep
-  // network-fresh semantics. Reactive urql consumers will see the
-  // stale-then-fresh stream once components migrate.
+  const requestPolicy =
+    options.requestPolicy ?? (useCache ? 'cache-and-network' : undefined);
   const result = await client
-    .query<SoupQuery, SoupQueryVariables>(
-      SoupQueryDocument,
-      { input },
-      {
-        ...(useCache ? { requestPolicy: 'cache-and-network' as const } : {}),
-        ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
-      }
-    )
+    .query<Data, Variables>(document, variables, {
+      ...(requestPolicy ? { requestPolicy } : {}),
+      ...(options.signal ? { fetchOptions: { signal: options.signal } } : {}),
+    })
     .toPromise();
 
   if (result.error) {
@@ -811,25 +869,20 @@ export async function fetchGraphqlSoup(
       result.error.networkError
     ) {
       const cached = await client
-        .query<SoupQuery, SoupQueryVariables>(
-          SoupQueryDocument,
-          { input },
-          { requestPolicy: 'cache-only' }
-        )
+        .query<Data, Variables>(document, variables, {
+          requestPolicy: 'cache-only',
+        })
         .toPromise();
-      if (cached.data) {
-        return mapGraphqlSoupPage(cached.data);
-      }
+      if (cached.data) return mapGraphqlSoupPage(cached.data);
     }
     throw result.error;
   }
 
-  const data = result.data;
-  if (!data) {
+  if (!result.data) {
     throw new Error('GraphQL Soup query returned no data');
   }
 
-  return mapGraphqlSoupPage(data);
+  return mapGraphqlSoupPage(result.data);
 }
 
 /** Fetch grouped Soup bins through the GraphQL endpoint. */

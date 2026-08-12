@@ -444,6 +444,14 @@ export function runCommand(
   let commandScopeActivated = false;
   let stopPropagation = false;
 
+  // Key-rollover keyups re-match commands for the keys still held (e.g. the
+  // Enter that saved a message edit), so only keydown events — or programmatic
+  // calls without an event — may run keydown handlers or activate scopes.
+  // keyUpHandlers run through hotkeysAwaitingKeyUp, not here.
+  if (e?.type === 'keyup') {
+    return { commandCaptured, commandScopeActivated, stopPropagation };
+  }
+
   if (!command.condition || command.condition()) {
     if (command.activateCommandScopeId) {
       const commandScope = hotkeyScopeTree.get(command.activateCommandScopeId);

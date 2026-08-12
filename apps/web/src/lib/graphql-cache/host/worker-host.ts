@@ -186,6 +186,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         priority: args.priority,
+        entityResolvers: args.entityResolvers,
       })) as ReadResult;
     },
 

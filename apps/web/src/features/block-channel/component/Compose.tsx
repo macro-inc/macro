@@ -24,8 +24,8 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
+  getDisplayName,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
@@ -69,10 +69,9 @@ export function ChannelCompose() {
     return undefined;
   });
 
-  const dmUserName = createMemo<() => string | undefined>(() => {
+  const dmUserName = createMemo(() => {
     const id = dmUserId();
-    if (!id) return () => undefined;
-    return useDisplayName(tryMacroId(id))[0];
+    return id ? getDisplayName(tryMacroId(id)) : undefined;
   });
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
@@ -82,14 +81,14 @@ export function ChannelCompose() {
     if (recipients.length === 0) {
       return 'Draft message';
     } else if (recipients.length === 1) {
-      const dmName = dmUserName()();
+      const dmName = dmUserName();
       return dmName ? `DM with ${dmName}` : 'Draft message';
     } else {
       const names = recipients
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(tryMacroId(r.data.id))[0]();
+            return getDisplayName(tryMacroId(r.data.id));
           }
           return r.data.email || 'Unknown';
         })

@@ -2,7 +2,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
@@ -146,7 +146,7 @@ function LocalParticipantTile(props: {
 function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
   const [profilePicUrl] = useProfilePictureUrl(macroId());
 
   const cameraTrack = () => {
@@ -203,7 +203,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
 function ScreenShareTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
   const screenTrack = () => {
     callCtx.trackVersion();
     return props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)

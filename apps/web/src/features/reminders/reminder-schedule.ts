@@ -4,6 +4,7 @@ import {
 } from '@core/util/dateSearch/useDateSearch';
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
+import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
 import { addDays, addHours, addWeeks, endOfWeek } from 'date-fns';
 
 /**
@@ -114,6 +115,61 @@ export function reminderDefaultOptions(now: Date): DateOption[] {
   );
 }
 
+/**
+ * What the picker offers when editing a reminder that already has a time.
+ *
+ * "Keep current time" leads, so a rename costs one Enter rather than forcing a
+ * date to be re-picked. It is the only option exempt from the future filter: an
+ * overdue reminder still has to be renamable, and keeping its time sends no
+ * schedule at all — see {@link reminderEditPatch}.
+ *
+ * Presets landing on the current time are dropped, or the same instant would be
+ * offered twice under two labels.
+ */
+export function reminderEditOptions(current: Date, now: Date): DateOption[] {
+  const keep: DateOption = {
+    id: 'keep',
+    displayText: 'Keep current time',
+    secondaryText: formatDateWithContext(current, now, true),
+    date: current,
+    type: 'preset',
+  };
+  const rest = reminderDefaultOptions(now).filter(
+    (option) => option.date.getTime() !== current.getTime()
+  );
+  return [keep, ...rest];
+}
+
+/**
+ * The patch that turns `original` into `next`, or undefined when they match.
+ *
+ * Only changed fields are sent: the API rejects a patch with no fields, and an
+ * unchanged schedule must be omitted rather than re-sent, since re-sending the
+ * time of a reminder that has already fired would be rejected as being in the
+ * past. Omitting it is also what lets an overdue reminder be renamed at all.
+ */
+export function reminderEditPatch(
+  original: { description: string; remindAt: Date; completed: boolean },
+  next: { description: string; remindAt: Date }
+): UpdateReminderRequest | undefined {
+  const patch: UpdateReminderRequest = {};
+
+  const description = clampDescription(next.description);
+  if (description && description !== original.description) {
+    patch.description = description;
+  }
+  if (next.remindAt.getTime() !== original.remindAt.getTime()) {
+    patch.schedule = onceSchedule(next.remindAt);
+    // Giving a reminder that was marked done a new time is a request for it to
+    // fire again, and the dispatcher skips completed reminders — so without
+    // clearing the flag the time the user just picked would silently never
+    // arrive. A description-only edit leaves it alone.
+    if (original.completed) patch.completed = false;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
 /** What an entity with no usable name is called, matching how lists render it. */
 function untitledName(type: EntityData['type']): string {
   switch (type) {
@@ -171,6 +227,39 @@ export function resolveReminderDescription(
   entity: EntityData
 ): string {
   return clampDescription(input) || reminderDescriptionFor(entity);
+}
+
+/**
+ * The same entity-derived description, from a resolved name rather than a whole
+ * entity.
+ *
+ * An edited reminder only knows its reference as a type and an id — the name
+ * lives in the preview cache — so it cannot go through
+ * {@link reminderDescriptionFor}. The fallbacks are the same, so blanking the
+ * field lands on the name creating it would have chosen.
+ */
+export function reminderDescriptionForReference(
+  name: string | undefined,
+  type: EntityData['type']
+): string {
+  return clampDescription(name?.trim() || untitledName(type));
+}
+
+/**
+ * What to store when an edited reminder's description is left blank.
+ *
+ * Blanking the field means the same thing it means when creating: name this
+ * after whatever it is about. `fallback` is that name, already derived — absent
+ * for a standalone reminder, or one whose reference could not be resolved. With
+ * nothing to derive from, the reminder keeps what it says: renaming it to
+ * "Untitled" because a lookup missed would be worse than leaving it alone.
+ */
+export function resolveEditedDescription(
+  input: string,
+  current: string,
+  fallback?: string
+): string {
+  return clampDescription(input) || fallback || current;
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

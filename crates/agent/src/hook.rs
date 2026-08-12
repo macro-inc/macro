@@ -171,7 +171,10 @@ where
                 reason: CANCELLED_REASON.into(),
             };
         }
-        let json = serde_json::from_str(args).unwrap_or(serde_json::Value::Null);
+        let json = serde_json::from_str(args)
+            .ok()
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
         let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
         let mcp = (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {

@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::{
     AppliedGoogleGrant, CalendarAttendeeInput, CalendarBackfillJobKey, CalendarCreationTarget,
     CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor,
-    CalendarSyncStatus, EventStatus, EventTransparency, EventVisibility,
+    CalendarSyncStatus, ConferenceChange, EventStatus, EventTransparency, EventVisibility,
     GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
     ProviderCalendar, StoredGoogleCalendar,
 };
@@ -72,9 +72,11 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
+            reminders: EventReminders::default(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
@@ -105,6 +107,8 @@ fn draft() -> CalendarEventDraft {
         recurrence_lines: Vec::new(),
         visibility: None,
         transparency: None,
+        reminders: None,
+        conference: None,
     }
 }
 
@@ -371,14 +375,19 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         &self,
         _access_token: &str,
         target: &GoogleCalendarTarget,
-        provider_event_id: &str,
+        master_provider_event_id: &str,
         _self_email: &str,
         _response: AttendeeResponseStatus,
+        scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
+        let scope = match scope {
+            CalendarRsvpScope::All => "all".to_string(),
+            CalendarRsvpScope::ThisEvent { recurrence_id } => format!("this:{recurrence_id}"),
+        };
         self.calls
             .lock()
             .unwrap()
-            .push(format!("rsvp:{provider_event_id}"));
+            .push(format!("rsvp:{master_provider_event_id}:{scope}"));
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -641,7 +650,8 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
             .respond_to_event(
                 "macro|user",
                 Uuid::now_v7(),
-                AttendeeResponseStatus::Accepted
+                AttendeeResponseStatus::Accepted,
+                CalendarRsvpScope::All,
             )
             .await,
         Err(CalendarMutationError::NotAttendee)
@@ -652,19 +662,26 @@ async fn rsvp_surfaces_attendance_and_persists_the_echo() {
         ..FakeRepo::default()
     };
     let upserts = repo.upserts.clone();
-    service(
-        repo,
-        FakeProvider::new(FakeProviderBehavior::Echo),
-        FakeTokens::ok(),
-    )
-    .respond_to_event(
-        "macro|user",
-        Uuid::now_v7(),
-        AttendeeResponseStatus::Declined,
-    )
-    .await
-    .unwrap();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    service(repo, provider, FakeTokens::ok())
+        .respond_to_event(
+            "macro|user",
+            Uuid::now_v7(),
+            AttendeeResponseStatus::Declined,
+            CalendarRsvpScope::ThisEvent {
+                recurrence_id: "2026-08-14T22:00:00+00:00".to_string(),
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(upserts.lock().unwrap().len(), 1);
+    // The scope reaches the provider intact: an occurrence-scoped response
+    // must not silently widen to the series.
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        ["rsvp:master-id:this:2026-08-14T22:00:00+00:00"]
+    );
 }
 
 #[tokio::test]
@@ -729,6 +746,21 @@ fn empty_patch_is_detected() {
         }
         .is_empty()
     );
+}
+
+/// Attaching or detaching a conference is a complete edit on its own, so a
+/// patch carrying only a conference change must not be rejected as empty.
+#[test]
+fn a_conference_only_patch_is_not_empty() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        assert!(
+            !CalendarEventPatch {
+                conference: Some(change),
+                ..CalendarEventPatch::default()
+            }
+            .is_empty()
+        );
+    }
 }
 
 #[tokio::test]
@@ -802,4 +834,33 @@ async fn truncation_that_empties_the_series_retires_the_local_source() {
 
     assert!(upserts.lock().unwrap().is_empty());
     assert_eq!(removed.lock().unwrap().len(), 1);
+}
+
+/// A third-party conference is replaced or detached like any other once the
+/// request is explicit: the caller asked, and deleting the event outright —
+/// which Macro already allows — destroys strictly more. What protects such a
+/// conference is that omitting the field leaves it untouched, covered below.
+#[tokio::test]
+async fn conference_changes_reach_the_provider_for_any_conference() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        let repo = FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            ..FakeRepo::default()
+        };
+        let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+        let calls = provider.calls.clone();
+        let result = service(repo, provider, FakeTokens::ok())
+            .update_event(
+                "macro|user",
+                Uuid::now_v7(),
+                CalendarEventPatch {
+                    conference: Some(change),
+                    ..CalendarEventPatch::default()
+                },
+            )
+            .await;
+
+        assert!(result.is_ok(), "{change:?} failed: {result:?}");
+        assert_eq!(calls.lock().unwrap().as_slice(), ["update:master-id"]);
+    }
 }

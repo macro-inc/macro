@@ -1,100 +1,54 @@
-use crate::GmailClient;
-use anyhow::Context;
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
 use models_email::gmail::WatchRequest;
-use models_email::gmail::error::GmailError;
 use models_email::gmail::history::WatchResponse;
 
-/// Registers a user for Gmail push notifications to the specified Pub/Sub topic
+/// Registers a user for Gmail push notifications.
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn register_watch(
     client: &GmailClient,
     access_token: &str,
-) -> Result<WatchResponse, GmailError> {
-    let url = format!("{}/users/me/watch", client.base_url);
-
-    let http_client = client.inner.clone();
-
-    // Prepare the request body with the topic name
-    let request_body = WatchRequest {
+) -> Result<WatchResponse, GmailApiHttpError> {
+    let request = WatchRequest {
         topic_name: client.subscription_topic.clone(),
     };
-
-    let response = http_client
-        .post(&url)
+    let response = client
+        .inner
+        .post(format!("{}/users/me/watch", client.base_url))
         .bearer_auth(access_token)
-        .json(&request_body)
+        .json(&request)
         .send()
         .await
-        .map_err(|e| GmailError::HttpRequest(e.to_string()))?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    // Check specifically for 401 Unauthorized
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        tracing::warn!("Gmail API returned 401 Unauthorized - access token might be expired");
-        return Err(GmailError::Unauthorized);
-    }
-
-    // Handle other error status codes
     if !response.status().is_success() {
-        let status = response.status();
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body".to_string());
-
-        // Gmail permits only one active push channel per mailbox; a watch left over from a
-        // prior registration makes a fresh watch fail with a 400 carrying this message. Map
-        // it to a typed Conflict so callers can stop the stale watch and retry rather than
-        // matching the response body themselves.
-        if status == reqwest::StatusCode::BAD_REQUEST
-            && error_body.contains("push notification client allowed")
-        {
-            return Err(GmailError::Conflict(error_body));
-        }
-
-        // An access token minted from a grant without the Gmail scope is rejected
-        // with a 403. Typed so callers can treat it as a missing grant, matching
-        // the 403 mapping elsewhere in this client.
-        if status == reqwest::StatusCode::FORBIDDEN {
-            return Err(GmailError::Forbidden);
-        }
-
-        return Err(GmailError::ApiError(format!(
-            "({}): {}",
-            status, error_body
-        )));
+        return Err(unsuccessful_response(response).await);
     }
 
-    let watch_response = response
-        .json::<WatchResponse>()
-        .await
-        .map_err(|e| GmailError::BodyReadError(e.to_string()))?;
-
-    Ok(watch_response)
+    decode_json_response(response).await
 }
 
-/// Stops push notifications for a user's Gmail inbox
+/// Stops push notifications for a user's Gmail inbox.
 #[tracing::instrument(skip(client, access_token), err)]
-pub(crate) async fn stop_watch(client: &GmailClient, access_token: &str) -> anyhow::Result<()> {
-    let url = format!("{}/users/me/stop", client.base_url);
-
-    let http_client = client.inner.clone();
-
-    let response = http_client
-        .post(&url)
+pub(crate) async fn stop_watch(
+    client: &GmailClient,
+    access_token: &str,
+) -> Result<(), GmailApiHttpError> {
+    let response = client
+        .inner
+        .post(format!("{}/users/me/stop", client.base_url))
         .header("Content-Length", "0")
         .bearer_auth(access_token)
         .send()
         .await
-        .context("Failed to send request to Gmail API (stop watch)")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!("Gmail API error {} (stop watch): {}", status, error_body);
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

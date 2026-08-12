@@ -19,6 +19,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
+  makeEditReminderAction,
   makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
@@ -126,6 +127,7 @@ export function createSoupEntityActions(): {
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
   const createReminderAction = makeCreateReminderAction();
+  const editReminderAction = makeEditReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -288,6 +290,22 @@ export function createSoupEntityActions(): {
         label: 'Rename',
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    }
+
+    // Takes Rename's slot, and its 'r' key. The two cannot both appear:
+    // `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
+    // reminder row's `ownerId` is always `''` (both soup mappers set it — a
+    // reminder is private to its owner, so the row carries no owner id) while
+    // `userId()` is a macro id or undefined. Renaming one would fail anyway;
+    // its name is its description, which only the reminders API can change.
+    // Single-entity only: the editor asks about one reminder's time.
+    if (entities.length === 1 && editReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'edit-reminder',
+        label: 'Edit reminder',
+        hotkeyToken: TOKENS.entity.action.rename,
+        onClick: handle(editReminderAction.executeWithSoup),
       });
     }
 

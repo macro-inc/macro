@@ -374,7 +374,7 @@ export class Sdk extends HeyApiClient {
      * against the auth service and records the result on each link. A grant that died
      * while the caller was inactive is detected here within minutes instead of waiting on
      * the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
-     * the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+     * the one-time reauth fan-out) are handled by the email service token source.
      *
      * Probes run in the background and the response returns immediately to stay off the
      * load path; each persisted flag is picked up by the next links read. Probes are

@@ -566,13 +566,13 @@ export function CommandMenuInner(props: {
         <Show
           when={isInCommandScope()}
           fallback={
-            <span class="pl-2 text-accent">
+            <span class="flex size-5 shrink-0 items-center justify-center text-accent">
               <Macro class="size-3" />
             </span>
           }
         >
           <button
-            class="pl-2 text-ink-muted hover:text-ink transition-colors"
+            class="flex size-5 shrink-0 items-center justify-center text-ink-muted hover:text-ink transition-colors"
             onClick={handleBack}
             title="Back (Esc)"
           >

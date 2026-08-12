@@ -20,6 +20,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationFilterType, string> = {
   task: 'tasks',
   github: 'GitHub',
   reminder: 'reminders',
+  calendar: 'calendar events',
 };
 
 const formatList = (items: string[]) => {

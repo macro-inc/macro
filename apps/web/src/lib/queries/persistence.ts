@@ -24,7 +24,8 @@ export function createPersistenceKey(
 
 export type PersistScope = Readonly<{
   store: PerQueryPersistence;
-  maxAge: ParsedDuration;
+  /** Omit to retain same-buster entries regardless of their age. */
+  maxAge?: ParsedDuration;
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
   shouldRestore?: (queryKey: QueryKey) => boolean;
@@ -45,17 +46,20 @@ type QueryClientLike = {
 };
 
 /**
- * Validates a persisted entry against the current cache-buster and max age.
+ * Validates a persisted entry against the current cache-buster and optional
+ * max age.
  * Returns 'valid' if the entry can be restored, or a reason string
  * explaining why it should be discarded.
  */
 function validatePersistedEntry(
   entry: PersistedQueryEntry,
   buster: string,
-  maxAgeMs: number
+  maxAgeMs?: number
 ): 'valid' | 'buster_mismatch' | 'expired' {
   if (entry.buster !== buster) return 'buster_mismatch';
-  if (Date.now() - entry.dataUpdatedAt > maxAgeMs) return 'expired';
+  if (maxAgeMs !== undefined && Date.now() - entry.dataUpdatedAt > maxAgeMs) {
+    return 'expired';
+  }
   return 'valid';
 }
 
@@ -84,7 +88,9 @@ async function handleRestore(
 
   if (!entry) return;
 
-  const maxAgeMs = parsedDurationToMilliseconds(scope.maxAge);
+  const maxAgeMs = scope.maxAge
+    ? parsedDurationToMilliseconds(scope.maxAge)
+    : undefined;
   if (validatePersistedEntry(entry, scope.buster, maxAgeMs) !== 'valid') {
     scope.store.remove(query.queryHash);
     return;

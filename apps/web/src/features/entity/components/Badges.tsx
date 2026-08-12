@@ -1,5 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
@@ -32,14 +32,7 @@ export function SharedBadge(props: { ownerId: string }) {
 
 export function SharedBadgeSmall(props: { ownerId: string }) {
   const id = () => tryMacroId(props.ownerId);
-  const name = () => {
-    const currentId = id();
-    if (currentId) {
-      let [name] = useDisplayName(currentId);
-      return name;
-    }
-    return () => undefined;
-  };
+  const name = () => getDisplayName(id()) || undefined;
 
   return (
     <HoverCard
@@ -51,7 +44,7 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
             suppressClick
             showTooltip={false}
           />
-          <span>{name()()} shared this with you</span>
+          <span>{name()} shared this with you</span>
         </div>
       }
     >
@@ -64,14 +57,7 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
 
 export function CreatedByBadgeSmall(props: { ownerId: string }) {
   const id = () => tryMacroId(props.ownerId);
-  const name = () => {
-    const currentId = id();
-    if (currentId) {
-      let [name] = useDisplayName(currentId);
-      return name;
-    }
-    return () => undefined;
-  };
+  const name = () => getDisplayName(id()) || undefined;
 
   return (
     <HoverCard
@@ -83,7 +69,7 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
             suppressClick
             showTooltip={false}
           />
-          <span>Created by {name()()}</span>
+          <span>Created by {name()}</span>
         </div>
       }
     >

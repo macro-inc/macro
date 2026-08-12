@@ -212,7 +212,49 @@ type UpdateReminderCallbacks = MutationCallbacks<
   UpdateReminderArgs
 >;
 
-/** Modify a reminder's description, schedule, or enabled flag. */
+/**
+ * The Soup-cache patch that brings a row in line with `reminder`.
+ *
+ * Only the shape lives here — applying it does not. Soup's cache module reaches
+ * back into `queryClient`, so importing it from `lib/queries` closes an
+ * initialization cycle; every soup write in the app is made from `features/`
+ * for that reason. See `ReminderComposerModal`, which performs this one.
+ *
+ * `existingFrecencyScore` is the row's current score, or undefined when it is
+ * not in the cache.
+ */
+export function reminderSoupPatch(
+  reminder: Reminder,
+  existingFrecencyScore: number | undefined
+) {
+  return {
+    tag: 'reminder' as const,
+    data: {
+      id: reminder.id,
+      description: reminder.description,
+      schedule: reminder.schedule,
+      // Drives both the row's "next run" and which tab it belongs to: Active
+      // and Scheduled split on whether this has passed.
+      nextRunAt: reminder.nextRunAt,
+      enabled: reminder.enabled,
+      // Explicitly null rather than omitted. The cache merges field by field,
+      // so leaving the key out would keep a stale `completedAt` — and a
+      // rescheduled reminder that cleared it would stay filed under Done.
+      completedAt: reminder.completedAt ?? null,
+      updatedAt: reminder.updatedAt,
+    },
+    frecency_score: existingFrecencyScore ?? 0,
+  };
+}
+
+/**
+ * Modify a reminder's description, schedule, or enabled flag.
+ *
+ * Invalidating these queries is not enough to refresh a Soup row — Soup serves
+ * rows from its own normalized cache. Callers that render into Soup should pass
+ * an `onSuccess` that applies {@link reminderSoupPatch}, or the edit will not
+ * show until a reload.
+ */
 export function useUpdateReminderMutation(callbacks?: UpdateReminderCallbacks) {
   return useMutation(() => ({
     mutationFn: async ({ id, patch }: UpdateReminderArgs) =>

@@ -150,10 +150,10 @@ export type ChatEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
-/** Named sub types - 'task' and 'snippet' */
-export type NamedSubType = 'task' | 'snippet';
+/** Named sub types - 'task', 'snippet' and 'skill' */
+export type NamedSubType = 'task' | 'snippet' | 'skill';
 
-/** SubType for documents - tasks and snippets */
+/** SubType for documents - tasks, snippets and skills */
 export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
@@ -178,6 +178,13 @@ export type SnippetEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
   subType: { type: 'snippet' };
+  projectId?: string;
+};
+
+export type SkillEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType: { type: 'skill' };
   projectId?: string;
 };
 
@@ -317,7 +324,9 @@ export type ReminderEntity = EntityBase & {
    * assignable to the preview/open helpers, which only know real targets. */
   referencedEntity?: {
     id: string;
-    type: Exclude<EntityType, 'reminder'>;
+    // Calendar events are excluded alongside reminders: neither has a
+    // previewable block, and the mapper yields `undefined` for both.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
     fileType?: string;
     subType?: string;
   };
@@ -335,6 +344,24 @@ export type ReminderEntity = EntityBase & {
   completedAt?: DateValue | null;
 };
 
+/** Normalized time shape of a calendar event soup row. */
+export type CalendarEventEntityTime =
+  | { kind: 'timed'; startsAt: string; endsAt: string }
+  | { kind: 'allDay'; startDate: string; endDate: string };
+
+export type CalendarEventEntity = EntityBase & {
+  type: 'calendar_event';
+  /** Canonical event status (`confirmed`, `tentative`, `cancelled`). */
+  status: string;
+  /** Master event time. Absent when the wire shape could not be read. */
+  time?: CalendarEventEntityTime;
+  /** Direct join URL when known. */
+  conferenceUrl?: string;
+  /** Whether the canonical source prohibits mutation. */
+  isReadOnly: boolean;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -350,6 +377,7 @@ export type EntityData =
   | CrmContactEntity
   | AutomationEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -365,6 +393,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'automation',
   'reminder',
+  'calendar_event',
   'foreign',
 ]);
 
@@ -395,6 +424,14 @@ export const isSnippetEntity = (
     entity.type === 'document' &&
     entity.fileType === 'md' &&
     entity.subType?.type === 'snippet'
+  );
+};
+
+export const isSkillEntity = (entity: EntityData): entity is SkillEntity => {
+  return (
+    entity.type === 'document' &&
+    entity.fileType === 'md' &&
+    entity.subType?.type === 'skill'
   );
 };
 
@@ -501,13 +538,14 @@ const _isPureDocumentEntity = (
   return (
     entity.type === 'document' &&
     entity.subType?.type !== 'task' &&
-    entity.subType?.type !== 'snippet'
+    entity.subType?.type !== 'snippet' &&
+    entity.subType?.type !== 'skill'
   );
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | 'task' | 'snippet';
+export type ExpandedEntityType = EntityType | 'task' | 'snippet' | 'skill';
 
 export type EntityWithProperties<T extends EntityData> = T & {
   properties?: SoupProperty[];

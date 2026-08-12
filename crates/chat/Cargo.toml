@@ -22,6 +22,7 @@ outbound = ["dep:entity_access_db_utils", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = []
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 # Domain (always included)
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }

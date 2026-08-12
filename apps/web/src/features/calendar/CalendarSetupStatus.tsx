@@ -79,7 +79,7 @@ export function CalendarSetupStatus() {
               variant="active"
               size="sm"
               label={setupMessage().action}
-              onClick={() => void startAddInbox()}
+              onClick={() => void startAddInbox({ includeCalendar: true })}
             >
               {setupMessage().action}
             </Button>
@@ -99,7 +99,7 @@ export function CalendarSetupStatus() {
               variant="active"
               size="sm"
               label={setupMessage().action}
-              onClick={() => void startAddInbox()}
+              onClick={() => void startAddInbox({ includeCalendar: true })}
             >
               {setupMessage().action}
             </Button>

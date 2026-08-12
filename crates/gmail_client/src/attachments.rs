@@ -1,53 +1,48 @@
-use crate::GmailClient;
-use anyhow::{Context, anyhow};
 use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
 use models_email::gmail::AttachmentGetResponse;
 
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
+
 #[tracing::instrument(skip(client, access_token), err)]
-pub async fn get_attachment_data(
+pub(crate) async fn get_attachment_data(
     client: &GmailClient,
     access_token: &str,
     message_id: &str,
     attachment_id: &str,
-) -> anyhow::Result<Vec<u8>> {
-    let url = format!(
-        "{}/users/me/messages/{}/attachments/{}",
-        client.base_url, message_id, attachment_id
-    );
-
-    let http_client = client.inner.clone();
-
-    let response = http_client
-        .get(&url)
+) -> Result<Vec<u8>, GmailApiHttpError> {
+    let response = client
+        .inner
+        .get(format!(
+            "{}/users/me/messages/{message_id}/attachments/{attachment_id}",
+            client.base_url
+        ))
         .bearer_auth(access_token)
         .send()
         .await
-        .context("Failed to send request to Gmail API (get attachment)")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let status = response.status();
-    let body_text = response
-        .text()
-        .await
-        .context("Failed to get response body")?;
-    if !status.is_success() {
-        anyhow::bail!(
-            "Gmail API returned an error status: {} (get attachment): {}",
-            status,
-            body_text
-        );
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
-    let attachment_response: AttachmentGetResponse = serde_json::from_str(&body_text)
-        .context("Failed to parse JSON response from Gmail API (get attachment)")?;
+    let attachment: AttachmentGetResponse = decode_json_response(response).await?;
+    let data = attachment.data.ok_or_else(|| {
+        GmailApiHttpError::InvalidResponse(
+            "attachment response did not contain a data field".to_string(),
+        )
+    })?;
 
-    let base64_data = attachment_response
-        .data
-        .ok_or_else(|| anyhow!("Gmail API response for attachment did not contain data field"))?;
-
-    let decoded_bytes = URL_SAFE
-        .decode(base64_data)
-        .map_err(|e| anyhow!("Failed to decode base64 body data: {}", e))?;
-
-    Ok(decoded_bytes)
+    URL_SAFE
+        .decode(&data)
+        .or_else(|_| URL_SAFE_NO_PAD.decode(&data))
+        .map_err(|error| {
+            GmailApiHttpError::InvalidResponse(format!(
+                "attachment data was not valid base64url: {error}"
+            ))
+        })
 }
+
+#[cfg(test)]
+mod test;

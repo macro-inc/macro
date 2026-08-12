@@ -27,6 +27,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'running', label: 'Running' },
     { value: 'shared', label: 'Shared' },
     { value: 'automations', label: 'Automations' },
+    { value: 'skills', label: 'Skills' },
   ],
   mail: [
     { value: 'important', label: 'Signal' },
@@ -45,8 +46,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'all', label: 'All' },
   ],
   tasks: [
-    { value: 'assigned-to-me', label: 'Assigned' },
-    { value: 'created-by-me', label: 'Created' },
+    { value: 'my-tasks', label: 'My tasks' },
     { value: 'all', label: 'All' },
   ],
   channels: [

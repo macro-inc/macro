@@ -4,12 +4,18 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { AttendeeResponseStatus } from './attendeeResponseStatus';
+import type { RsvpCalendarEventRequestRecurrenceId } from './rsvpCalendarEventRequestRecurrenceId';
+import type { RsvpCalendarEventRequestScope } from './rsvpCalendarEventRequestScope';
 
 /**
  * Request body setting the requester's RSVP on an event.
  */
 export interface RsvpCalendarEventRequest {
+  /** Original-start key of the occurrence the response targets. */
+  recurrenceId?: RsvpCalendarEventRequestRecurrenceId;
   /** The response to record for the connected account. */
   response: AttendeeResponseStatus;
+  scope?: RsvpCalendarEventRequestScope;
 }

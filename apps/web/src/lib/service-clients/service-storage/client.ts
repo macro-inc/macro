@@ -69,6 +69,8 @@ import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMa
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
 import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
+import type { CreateSkillHandler200 } from './generated/schemas/createSkillHandler200';
+import type { CreateSkillRequest } from './generated/schemas/createSkillRequest';
 import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
 import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequest';
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
@@ -112,6 +114,7 @@ import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreateP
 import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
+import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
@@ -1357,6 +1360,43 @@ export const storageServiceClient = {
 
     const response = result.value;
     return ok(response);
+  },
+
+  /**
+   * Creates a skill and initializes its sync-service content on the backend.
+   * Skills are markdown documents containing instructions that AI reads and
+   * follows when the skill is referenced in an AI input.
+   */
+  async createSkill(request: CreateSkillRequest) {
+    const result = await dssFetch<CreateSkillHandler200>(
+      `/documents/create_skill`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!result.isOk()) {
+      const errors = result.error;
+      if (errors[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return err(result.error);
+    }
+
+    const response = result.value;
+    return ok(response);
+  },
+
+  /**
+   * Lists the built-in system skills. System skills are static, code-defined
+   * AI instructions with well-known ids; they surface like skill documents
+   * but have no document behind them and must not be opened as documents.
+   */
+  async getSystemSkills() {
+    return dssFetch<GetSystemSkillsHandler200>(`/documents/system_skills`, {
+      method: 'GET',
+    });
   },
 
   async getSnippetRaw(args: {

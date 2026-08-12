@@ -12,13 +12,14 @@ use uuid::Uuid;
 use super::{
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, EventTime, OccurrenceRange,
+        CalendarEventPatch, CalendarEventUpsert, EventReminders, EventTime, OccurrenceRange,
+        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
-        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarTokenError,
-        GoogleCalendarMutationProvider, GoogleProviderError, GoogleProviderErrorKind,
-        GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
+        CalendarMutationError, CalendarMutationService, CalendarRepository, CalendarRsvpScope,
+        CalendarTokenError, GoogleCalendarMutationProvider, GoogleProviderError,
+        GoogleProviderErrorKind, GoogleRsvpOutcome, GoogleSeriesMutationOutcome,
     },
 };
 
@@ -105,6 +106,9 @@ where
     ) -> Result<CalendarEvent, CalendarMutationError> {
         validate_time(&draft.time)?;
         validate_attendee_emails(draft.attendees.iter().map(|attendee| &attendee.email))?;
+        if let Some(reminders) = &draft.reminders {
+            validate_reminders(reminders)?;
+        }
         let target = self
             .repository
             .get_creation_target(requester_id, email_link_id, calendar_id)
@@ -144,6 +148,9 @@ where
         }
         if let Some(attendees) = &patch.attendees {
             validate_attendee_emails(attendees.iter().map(|attendee| &attendee.email))?;
+        }
+        if let Some(reminders) = &patch.reminders {
+            validate_reminders(reminders)?;
         }
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
@@ -239,6 +246,7 @@ where
         requester_id: &str,
         event_id: Uuid,
         response: AttendeeResponseStatus,
+        scope: CalendarRsvpScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
@@ -253,6 +261,7 @@ where
                 target.master_provider_event_id(),
                 &target.token_identity.email_address,
                 response,
+                &scope,
             )
             .await
             .map_err(provider_error)?;
@@ -310,6 +319,36 @@ fn validate_time(time: &EventTime) -> Result<(), CalendarMutationError> {
         return Err(CalendarMutationError::InvalidInput(
             "event end must be after its start".to_string(),
         ));
+    }
+    Ok(())
+}
+
+/// Enforce Google's own reminder limits so the provider never rejects a
+/// write we already accepted: at most five overrides, offsets within four
+/// weeks, and only methods Google understands.
+fn validate_reminders(reminders: &EventReminders) -> Result<(), CalendarMutationError> {
+    if reminders.use_default && !reminders.overrides.is_empty() {
+        return Err(CalendarMutationError::InvalidInput(
+            "reminder overrides require useDefault to be off".to_string(),
+        ));
+    }
+    if reminders.overrides.len() > REMINDER_OVERRIDES_MAX {
+        return Err(CalendarMutationError::InvalidInput(format!(
+            "an event allows at most {REMINDER_OVERRIDES_MAX} reminders"
+        )));
+    }
+    for reminder in &reminders.overrides {
+        if reminder.method != REMINDER_METHOD_POPUP && reminder.method != REMINDER_METHOD_EMAIL {
+            return Err(CalendarMutationError::InvalidInput(format!(
+                "unsupported reminder method: {:?}",
+                reminder.method
+            )));
+        }
+        if reminder.minutes > REMINDER_MINUTES_MAX {
+            return Err(CalendarMutationError::InvalidInput(format!(
+                "a reminder can fire at most {REMINDER_MINUTES_MAX} minutes before the event"
+            )));
+        }
     }
     Ok(())
 }

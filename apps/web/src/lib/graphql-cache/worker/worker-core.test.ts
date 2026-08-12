@@ -338,6 +338,91 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it('does not coalesce reads with different entity resolver semantics', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(
+      async (
+        opId: string | undefined,
+        _query?: string,
+        _operationName?: string,
+        _variables?: Record<string, unknown>,
+        _entityResolvers?: readonly unknown[]
+      ) => {
+        if (opId === 'client:blocker') {
+          markBlockerStarted();
+          await blocker;
+        }
+        return { kind: 'miss' as const };
+      }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const firstResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupEmailThread',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
+    const secondResolvers = [
+      {
+        parentType: 'GraphqlUser',
+        fieldName: 'emailThread',
+        targetType: 'GraphqlSoupDocument',
+        argumentPath: ['input', 'threadId'],
+      },
+    ];
+    const first = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'client:entity',
+      query: 'query Entity { entity }',
+      entityResolvers: firstResolvers,
+    });
+    const second = core.handleRequest(port, {
+      id: 4,
+      kind: 'read',
+      opId: 'client:entity',
+      query: 'query Entity { entity }',
+      entityResolvers: secondResolvers,
+    });
+
+    releaseBlocker();
+    await Promise.all([running, first, second]);
+    const entityCalls = readQuery.mock.calls.filter(
+      ([opId]) => opId === 'client:entity'
+    );
+    expect(entityCalls).toHaveLength(2);
+    expect(entityCalls.map((call) => call[4])).toEqual([
+      firstResolvers,
+      secondResolvers,
+    ]);
+  });
+
   it('does not reorder or coalesce reads across operation teardown', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;

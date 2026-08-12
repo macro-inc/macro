@@ -4,7 +4,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import ClockIcon from '@phosphor/clock.svg';
 import {
@@ -113,7 +113,7 @@ function PropertiesSectionContent(props: { record: Accessor<CallRecord> }) {
 }
 
 function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
   return (
     <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />

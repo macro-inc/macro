@@ -29,7 +29,7 @@
         "@fullcalendar/daygrid": "^6.1.21",
         "@fullcalendar/interaction": "^6.1.21",
         "@fullcalendar/timegrid": "^6.1.21",
-        "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef",
+        "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#6ddd6600e20436388f169e936b610fe93944b7b0",
         "@kobalte/core": "^0.13.11",
         "@leeoniya/ufuzzy": "^1.0.19",
         "@lexical/history": "0.45.0",
@@ -943,7 +943,7 @@
 
     "@img/sharp-win32-x64": ["@img/sharp-win32-x64@0.34.5", "", { "os": "win32", "cpu": "x64" }, "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw=="],
 
-    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:macro-inc/tauri-plugins#26537c8", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "macro-inc-tauri-plugins-26537c8", "sha512-6p5xQAkS6Uw6J8Uh0vlj6MjKZXWps5E1Gu0hciBFq1E2BfPBZAgdeeafKnR3diNb4SXWK0JML49nAr+o5PhwKw=="],
+    "@inkibra/tauri-plugins": ["@inkibra/tauri-plugins@github:macro-inc/tauri-plugins#6ddd660", { "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }, "macro-inc-tauri-plugins-6ddd660", "sha512-7+0ebEOYqedkOY67Clwu65Np3qJ3aJc/H/NjNxmjgA/7HIu0C+DSoKAArG7HTdTVpdcAtHyhrqsJujdEAyJf6Q=="],
 
     "@inquirer/ansi": ["@inquirer/ansi@2.0.7", "", {}, "sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q=="],
 

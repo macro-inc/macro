@@ -1,3 +1,5 @@
+import type { EntityResolverWire } from './exchange/entity-resolvers';
+
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
  * RPC from the design doc, apps/web/docs/graphql-normalized-cache-plan.md §4).
@@ -184,6 +186,8 @@ export type CacheRequest = { id: number } & (
       variables?: Record<string, unknown>;
       /** May overtake unrelated observational reads, never ordering barriers. */
       priority?: CacheReadPriority;
+      /** Per-read synthetic entity relations. */
+      entityResolvers?: readonly EntityResolverWire[];
     }
   | {
       kind: 'write';

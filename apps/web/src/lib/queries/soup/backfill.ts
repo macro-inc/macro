@@ -1,7 +1,14 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
+import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
+  SoupBackfillDocument,
+  SoupDocument,
+} from '@service-storage/graphql/generated/graphql';
+import {
+  type FetchGraphqlSoupOptions,
   fetchGraphqlSoup,
   type GraphqlSoupInitialInput,
+  type GraphqlSoupInput,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { useQueries, useQueryClient } from '@tanstack/solid-query';
@@ -15,18 +22,31 @@ import {
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 4;
+const BACKFILL_VERSION = 5;
 const PAGE_LIMIT = 250;
-// The email-content DataLoader rejects operations with more than 20 threads.
-const EMAIL_CONTENT_PAGE_LIMIT = 20;
+// Five threads × twenty messages reaches the backend's 100-message cap.
+const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
+type SoupBackfillFetchPage = (
+  input: GraphqlSoupInput,
+  options?: FetchGraphqlSoupOptions
+) => Promise<SoupPage>;
+
+const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
+  fetchGraphqlSoup(SoupDocument, { input }, options);
+
+const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
+  fetchGraphqlSoup(SoupBackfillDocument, { input }, options);
+
 export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */
   checkpointId: string;
+  /** Optional network fetcher; defaults to the standard Soup operation. */
+  fetchPage?: SoupBackfillFetchPage;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
@@ -53,11 +73,13 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 };
 
 /**
- * Backfills email threads and their newest content message while excluding
- * every other entity variant with an impossible id filter.
+ * Backfills email threads and the first message page used by the thread view
+ * while excluding every other entity variant with an impossible id filter.
  */
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'email-content',
+  // Restart completed legacy newest-message checkpoints with the new shape.
+  checkpointId: 'email-thread-pages',
+  fetchPage: fetchEmailContentPage,
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -317,23 +339,24 @@ export async function runSoupBackfill(
   const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
 
   while (!signal.aborted) {
-    const page = await fetchGraphqlSoup(
-      checkpoint.nextCursor
-        ? {
-            continuation: {
-              cursor: checkpoint.nextCursor,
-              expand: passInput.expand,
-              emailView: passInput.emailView,
-            },
-          }
-        : { initial: passInput },
-      {
-        signal,
-        // Backfill must stop on a network failure instead of advancing from
-        // an old offline page. TanStack retries from the persisted cursor.
-        allowOfflineFallback: false,
-      }
-    );
+    const input: GraphqlSoupInput = checkpoint.nextCursor
+      ? {
+          continuation: {
+            cursor: checkpoint.nextCursor,
+            expand: passInput.expand,
+            emailView: passInput.emailView,
+          },
+        }
+      : { initial: passInput };
+    // Network-only fetching leaves the persisted cursor unchanged on failure,
+    // so TanStack retries from the same page. Only the email lane overrides the
+    // standard content-free Soup operation.
+    const fetchPage = params.fetchPage ?? fetchSoupPage;
+    const page = await fetchPage(input, {
+      signal,
+      allowOfflineFallback: false,
+      requestPolicy: 'network-only',
+    });
 
     const completed = page.next_cursor == null;
     checkpoint = {

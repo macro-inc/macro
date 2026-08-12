@@ -40,6 +40,7 @@ ports = ["dep:tokio"]
 service = ["dep:entity_access_management", "ports"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }

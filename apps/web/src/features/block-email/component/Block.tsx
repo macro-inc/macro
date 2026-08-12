@@ -1,6 +1,7 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { buildEntityData } from '@entity';
 import { EmailDebouncedReadMarker } from '@notifications';
@@ -12,6 +13,7 @@ import { EmailView } from './Email';
 
 export default function BlockEmail() {
   const blockData = blockDataSignal.get;
+  const blockId = useBlockId();
 
   // Email threads are absent from quick access, so the entity the block-level
   // commands act on has to come from here. Built off the block's loaded data
@@ -35,7 +37,7 @@ export default function BlockEmail() {
   // marking it seen so scanning/previewing doesn't clear unread state.
   const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
-  const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
+  const threadId = () => blockId;
 
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),

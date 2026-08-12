@@ -144,6 +144,12 @@ pub struct Config {
     #[macro_config_default(20)]
     pub document_limit: u64,
 
+    /// Master switch for calendar event reminder dispatch. When `false`
+    /// (the default) the worker drains its queue without delivering, so
+    /// synced reminder schedules produce no notifications until enabled.
+    #[macro_config_default(false)]
+    pub calendar_reminder_dispatch_enabled: bool,
+
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_expiry_seconds: u64,

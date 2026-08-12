@@ -257,6 +257,10 @@ fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_t
                 .iter()
                 .any(|t| t == "reminder")
                 .then_some("n.event_item_type = 'reminder'"),
+            include_types
+                .iter()
+                .any(|t| t == "calendar")
+                .then_some("n.event_item_type = 'calendar_event'"),
         ]
         .into_iter()
         .flatten()
@@ -306,6 +310,12 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
         builder.push(")) OR ");
 
         builder.push("(n.event_item_type = 'reminder' AND 'reminder:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push(
+            "(n.event_item_type = 'calendar_event' AND 'calendar:' || n.event_item_id = ANY(",
+        );
         builder.push_bind(entity_tokens);
         builder.push(")) OR ");
 
@@ -369,6 +379,7 @@ fn notification_ref_matches_row(
                 && notification_event_type_is_github(notification_event_type)
         }
         NotificationItemType::Reminder => event_item_type == "reminder",
+        NotificationItemType::Calendar => event_item_type == "calendar_event",
         NotificationItemType::Message => false,
     }
 }

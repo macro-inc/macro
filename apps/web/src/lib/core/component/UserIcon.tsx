@@ -5,11 +5,11 @@ import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
+  getDisplayName,
+  getDisplayNameParts,
   getInitials,
   macroIdToEmail,
   tryMacroId,
-  useDisplayName,
-  useDisplayNameParts,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
@@ -60,9 +60,10 @@ function ProfileImage(props: {
     return props.email || 'User';
   });
 
-  const { firstName, lastName } = useDisplayNameParts(macroId());
-
-  const initials = () => getInitials(firstName(), lastName(), email());
+  const initials = () => {
+    const { firstName, lastName } = getDisplayNameParts(macroId());
+    return getInitials(firstName, lastName, email());
+  };
 
   if (!ENABLE_PROFILE_PICTURES) {
     return (
@@ -139,7 +140,7 @@ export function UserIcon(props: UserIconProps) {
     props.id ? tryMacroId(props.id) : undefined
   );
 
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
 
   const email = createMemo(() => {
     const id = macroId();

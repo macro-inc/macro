@@ -11,7 +11,6 @@ import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
-import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
@@ -33,7 +32,6 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
-import { clearLocalAuthSession } from '@core/auth/logout';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -55,14 +53,11 @@ import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import {
   getLoginCookieOptions,
-  hasLoginCookie,
   syncLoginStorage,
   updateCookie,
 } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
-import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -95,7 +90,6 @@ import {
   Router,
   type RouterProps,
   useLocation,
-  useSearchParams,
 } from '@solidjs/router';
 import {
   applyTheme,
@@ -109,15 +103,14 @@ import {
   createEffect,
   createSignal,
   type JSX,
-  Match,
   on,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
+import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -173,121 +166,6 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     window.history.replaceState(args.location.state, '', url);
   }
 };
-
-function OfflineFallback(props: { onRetry: () => Promise<unknown> }) {
-  const [retrying, setRetrying] = createSignal(false);
-
-  const handleRetry = async () => {
-    setRetrying(true);
-    await props.onRetry();
-    setRetrying(false);
-  };
-
-  return (
-    <div class="flex flex-col items-center justify-center gap-4 size-full text-ink-muted">
-      <p class="text-sm">Unable to connect. Please check your network.</p>
-      <Button
-        class="mt-2"
-        disabled={retrying()}
-        onClick={handleRetry}
-        variant="base"
-      >
-        {retrying() ? 'Retrying…' : 'Retry'}
-      </Button>
-    </div>
-  );
-}
-
-const OFFLINE_ROUTE = '/offline';
-
-function getCurrentQueryString() {
-  const params = new URLSearchParams(window.location.search);
-  return params.toString().length > 0 ? `?${params.toString()}` : '';
-}
-
-function shouldShowNativeOfflineFallback(
-  userInfoQuery: ReturnType<typeof useUserInfoQuery>
-) {
-  return (
-    userInfoQuery.isError &&
-    hasLoginCookie() &&
-    isNativeMobilePlatform() &&
-    !thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
-  );
-}
-
-function SessionExpiredRedirect() {
-  void clearLocalAuthSession().catch((error) => {
-    console.error('Failed to clear local auth session', error);
-  });
-  return <Navigate href={`/welcome${getCurrentQueryString()}`} />;
-}
-
-function OfflineFallbackRoute() {
-  const userInfoQuery = useUserInfoQuery();
-
-  // Once the query settles into anything other than a genuine connectivity
-  // failure, bounce to the base path.
-  return (
-    <Switch fallback={<Navigate href={`/${getCurrentQueryString()}`} />}>
-      <Match when={userInfoQuery.isLoading}>{null}</Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <OfflineFallback onRetry={() => userInfoQuery.refetch()} />
-      </Match>
-    </Switch>
-  );
-}
-
-function BasePathComponent() {
-  const [searchParams] = useSearchParams();
-  const userInfoQuery = useUserInfoQuery();
-  const checkoutRefreshPending = useCheckoutCompletionListener();
-
-  onMount(() => {
-    if (searchParams.upgrade === 'true') {
-      sessionStorage.setItem('showUpgradeModal', 'true');
-    }
-  });
-
-  // check session storage for redirect url
-  const redirectUrl = consumePostLoginRedirect();
-  if (redirectUrl) {
-    const relativeUrl = redirectUrl.replace(window.location.origin, '');
-    window.location.href = relativeUrl;
-    return;
-  }
-
-  // Preserve existing query parameters when redirecting
-  const queryString = getCurrentQueryString();
-  const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
-
-  return (
-    <Switch>
-      <Match when={userInfoQuery.isLoading || checkoutRefreshPending()}>
-        {null}
-      </Match>
-      <Match
-        when={
-          hasLoginCookie() &&
-          thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
-        }
-      >
-        <SessionExpiredRedirect />
-      </Match>
-      <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
-      </Match>
-      <Match when={shouldShowNativeOfflineFallback(userInfoQuery)}>
-        <Navigate href={`${OFFLINE_ROUTE}${queryString}`} />
-      </Match>
-      <Match
-        when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
-      >
-        <Navigate href={`/welcome${queryString}`} />
-      </Match>
-    </Switch>
-  );
-}
 
 function NotFound() {
   if (isNativeMobilePlatform()) return <Navigate href={DEFAULT_ROUTE} />;
@@ -452,10 +330,6 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => <Login />,
-  },
-  {
-    path: OFFLINE_ROUTE,
-    component: OfflineFallbackRoute,
   },
   {
     path: '/welcome',

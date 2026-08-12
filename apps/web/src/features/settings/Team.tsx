@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -308,7 +308,7 @@ function MemberRow(props: {
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
 }) {
-  const [displayName] = useDisplayName(tryMacroId(props.member.user_id));
+  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
     const id = tryMacroId(props.member.user_id);
@@ -383,7 +383,7 @@ function MemberRow(props: {
 }
 
 function MemberName(props: { memberId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.memberId));
+  const displayName = () => getDisplayName(tryMacroId(props.memberId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
@@ -454,7 +454,7 @@ function InviteRow(props: {
 }
 
 function InviterName(props: { inviterId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.inviterId));
+  const displayName = () => getDisplayName(tryMacroId(props.inviterId));
   return <span class="font-medium">{displayName()}</span>;
 }
 
@@ -916,7 +916,7 @@ function TeamManagement(props: {
   // disposes it when the member leaves the list.
   const memberSearchIndex = mapArray(members, (member) => {
     const macroId = tryMacroId(member.user_id);
-    const [displayName] = useDisplayName(macroId);
+    const displayName = () => getDisplayName(macroId);
     const email = macroId ? macroIdToEmail(macroId) : '';
     // Memoized so the lowercased search string is built once (and only rebuilt
     // when the name resolves), not re-allocated for every member on each scan.

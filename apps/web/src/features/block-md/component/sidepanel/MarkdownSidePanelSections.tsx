@@ -12,6 +12,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   $getPinnedProperties,
@@ -27,7 +28,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -399,7 +400,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
   return (
     <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
@@ -517,6 +518,15 @@ function StatsSectionContent() {
             <SidePanel.Row label="Characters">
               <Wordcount.Characters />
             </SidePanel.Row>
+            <Show when={md.progressStats}>
+              {(progressStats) => (
+                <Show when={progressStats().total > 0}>
+                  <SidePanel.Row label="Progress">
+                    <ProgressMeter stats={progressStats()} />
+                  </SidePanel.Row>
+                </Show>
+              )}
+            </Show>
           </SidePanel.Grid>
         </Wordcount.Root>
       )}

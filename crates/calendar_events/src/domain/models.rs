@@ -195,6 +195,51 @@ impl EventTransparency {
     }
 }
 
+/// The conferencing system backing an event's join URL.
+///
+/// Macro generates only Google Meet conferences, so this distinguishes one it
+/// created from a third party's — Zoom and friends arriving as `addOn`
+/// conference data, or a legacy classic Hangout. Clients use it to label the
+/// conference and to tell whether the Meet toggle reflects a Macro-managed
+/// conference.
+///
+/// It does not gate mutation. An explicit request replaces or detaches any
+/// conference, third-party included, exactly as deleting the event would;
+/// what protects a conference is that omitting the field leaves it untouched,
+/// so an unrelated edit never disturbs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceProvider {
+    /// Google Meet.
+    GoogleMeet,
+    /// A third-party or legacy conference Macro leaves untouched.
+    Other,
+}
+
+impl ConferenceProvider {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GoogleMeet => "google_meet",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// A requested change to an event's conferencing. Omitting the field leaves
+/// the existing conference untouched; only these values change it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceChange {
+    /// Generate a new Google Meet conference and attach it.
+    GoogleMeet,
+    /// Detach whatever conference is currently attached.
+    #[serde(rename = "none")]
+    Removed,
+}
+
 /// An attendee on a calendar event.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -244,6 +289,83 @@ impl AttendeeResponseStatus {
     }
 }
 
+/// Reminder method that fires a Macro notification. Google's other method,
+/// `email`, is delivered by Google itself and is only stored for round-trip
+/// fidelity.
+pub const REMINDER_METHOD_POPUP: &str = "popup";
+
+/// Reminder method Google delivers itself as an email.
+pub const REMINDER_METHOD_EMAIL: &str = "email";
+
+/// Google caps reminder offsets at four weeks before the event.
+pub const REMINDER_MINUTES_MAX: u32 = 40_320;
+
+/// Google caps an event at five reminder overrides.
+pub const REMINDER_OVERRIDES_MAX: usize = 5;
+
+/// One reminder: how it alerts and how many minutes before the event start
+/// (before midnight in the calendar's zone for all-day events) it fires.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EventReminderOverride {
+    /// Provider method, stored verbatim; only `popup` fires Macro
+    /// notifications.
+    pub method: String,
+    /// Minutes before the event start.
+    pub minutes: u32,
+}
+
+/// Per-user reminder configuration for an event, mirroring Google's model:
+/// either the calendar's default reminders apply, or the explicit overrides
+/// replace them entirely.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EventReminders {
+    /// Whether the calendar's default reminders apply.
+    pub use_default: bool,
+    /// Explicit reminders replacing the defaults when `use_default` is off.
+    #[serde(default)]
+    pub overrides: Vec<EventReminderOverride>,
+}
+
+impl Default for EventReminders {
+    fn default() -> Self {
+        Self {
+            use_default: true,
+            overrides: Vec::new(),
+        }
+    }
+}
+
+impl EventReminders {
+    /// Whether this is the provider default configuration. Kept out of
+    /// serialized projections so projections stored before reminders were
+    /// modeled still compare equal to fresh ones.
+    pub fn is_default(&self) -> bool {
+        self.use_default && self.overrides.is_empty()
+    }
+
+    /// Resolve the deduplicated, sorted popup offsets that fire Macro
+    /// notifications, applying the calendar defaults when configured.
+    pub fn popup_minutes(&self, calendar_defaults: &[EventReminderOverride]) -> Vec<u32> {
+        let overrides = if self.use_default {
+            calendar_defaults
+        } else {
+            &self.overrides
+        };
+        let mut minutes: Vec<u32> = overrides
+            .iter()
+            .filter(|reminder| reminder.method == REMINDER_METHOD_POPUP)
+            .map(|reminder| reminder.minutes)
+            .collect();
+        minutes.sort_unstable();
+        minutes.dedup();
+        minutes
+    }
+}
+
 /// A stable, first-class Macro calendar event entity.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -281,12 +403,21 @@ pub struct CalendarEvent {
     pub organizer_name: Option<String>,
     /// Direct join URL when known.
     pub conference_url: Option<String>,
+    /// Which conferencing system backs `conference_url`. `None` whenever no
+    /// conference is attached.
+    #[serde(default)]
+    pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
     /// Whether the current user can edit the canonical source.
     pub is_read_only: bool,
     /// Attendees, keyed by email during persistence.
     pub attendees: Vec<CalendarAttendee>,
+    /// Per-user reminder configuration. Skipped when it is the provider
+    /// default so projections stored before reminders were modeled still
+    /// compare equal.
+    #[serde(default, skip_serializing_if = "EventReminders::is_default")]
+    pub reminders: EventReminders,
     /// Entity creation time.
     pub created_at: DateTime<Utc>,
     /// Entity update time.
@@ -311,6 +442,12 @@ pub struct CalendarEventOverride {
     pub location: Option<String>,
     /// Optional replacement status.
     pub status: Option<EventStatus>,
+    /// Replacement attendee list for this occurrence alone. `None` inherits
+    /// the series attendees. Google carries the complete list on every
+    /// exception it returns, so a single instance-scoped RSVP — including the
+    /// auto-decline an out-of-office event performs — arrives here rather than
+    /// on the master.
+    pub attendees: Option<Vec<CalendarAttendee>>,
 }
 
 /// A start-only value used to identify an overridden occurrence.
@@ -569,6 +706,10 @@ pub struct CalendarEventDraft {
     pub visibility: Option<EventVisibility>,
     /// Availability behavior.
     pub transparency: Option<EventTransparency>,
+    /// Reminder configuration; `None` keeps the provider default.
+    pub reminders: Option<EventReminders>,
+    /// Conference to attach on creation. `None` creates the event without one.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// User-supplied changes to an existing provider event. `None` fields are
@@ -591,6 +732,10 @@ pub struct CalendarEventPatch {
     pub visibility: Option<EventVisibility>,
     /// Replacement transparency.
     pub transparency: Option<EventTransparency>,
+    /// Replacement reminder configuration.
+    pub reminders: Option<EventReminders>,
+    /// Conference change to apply; `None` leaves the conference untouched.
+    pub conference: Option<ConferenceChange>,
 }
 
 impl CalendarEventPatch {
@@ -678,6 +823,8 @@ pub struct VisibleCalendar {
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     pub is_writable: bool,
+    /// Default reminders applied to events that keep `useDefault`.
+    pub default_reminders: Vec<EventReminderOverride>,
 }
 
 /// The writable calendar a new user-created event lands in.
@@ -881,6 +1028,89 @@ pub enum RefreshCalendarEvent {
     },
 }
 
+/// Identity of one scheduled reminder firing: an occurrence, an offset, and
+/// the resolved instant. The instant is part of the identity so a moved event
+/// is a different firing that alerts again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarReminderFiring {
+    /// Owning event entity.
+    pub event_id: Uuid,
+    /// Stable occurrence key within the event.
+    pub occurrence_key: String,
+    /// Minutes before the occurrence start.
+    pub minutes_before: i32,
+    /// Resolved alert instant.
+    pub fire_at: DateTime<Utc>,
+}
+
+/// A firing joined with everything its notification needs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DueCalendarReminder {
+    /// The scheduled firing.
+    pub firing: CalendarReminderFiring,
+    /// Macro user the alert belongs to.
+    pub owner_id: String,
+    /// Event display title.
+    pub title: String,
+    /// The occurrence's time.
+    pub time: EventTime,
+    /// Zone for rendering local clock times: the event's, else its calendar's.
+    pub display_time_zone: Option<String>,
+    /// Whether the owner declined this occurrence; declined events alert
+    /// nobody, matching Google's default.
+    pub declined: bool,
+}
+
+/// One calendar reminder dispatch queue message.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarReminderDispatchMessage {
+    /// What the receiving worker must do.
+    pub operation: CalendarReminderDispatchOperation,
+}
+
+impl CalendarReminderDispatchMessage {
+    /// Build the fan-out message for one due firing.
+    pub fn deliver(firing: CalendarReminderFiring) -> Self {
+        Self {
+            operation: CalendarReminderDispatchOperation::Deliver(firing),
+        }
+    }
+}
+
+/// The two kinds of work on the calendar reminder dispatch queue: the
+/// minutely EventBridge tick, and one firing that a tick fanned out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CalendarReminderDispatchOperation {
+    /// Find due firings and fan them out.
+    Sweep,
+    /// Deliver a single firing.
+    Deliver(CalendarReminderFiring),
+}
+
+/// What one sweep dispatched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CalendarReminderSweepSummary {
+    /// Firings fanned out for delivery.
+    pub dispatched: usize,
+}
+
+/// Terminal result of handling one firing delivery.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarReminderDeliveryOutcome {
+    /// The notification went out.
+    Delivered,
+    /// Another worker holds or completed the claim.
+    AlreadyClaimed,
+    /// The firing no longer exists as swept — the event moved, was
+    /// cancelled, or its account went away.
+    Gone,
+    /// The owner declined the occurrence, so nothing alerts.
+    SkippedDeclined,
+}
+
 /// Kind of idempotent historical work triggered by a Google grant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalendarBackfillKind {
@@ -994,4 +1224,6 @@ pub struct ProviderCalendar {
     pub is_primary: bool,
     /// Whether Macro should display/sync it by default.
     pub is_selected: bool,
+    /// Default reminders applied to events that keep `useDefault`.
+    pub default_reminders: Vec<EventReminderOverride>,
 }

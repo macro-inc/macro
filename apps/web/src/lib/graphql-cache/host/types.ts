@@ -5,6 +5,7 @@
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
+import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
@@ -30,6 +31,8 @@ export interface CacheReadArgs {
   variables?: Record<string, unknown>;
   /** Prioritizes a pushed, user-visible refresh over incidental reads. */
   priority?: CacheReadPriority;
+  /** Read-only synthetic entity relations compiled by the exchange. */
+  entityResolvers?: readonly EntityResolverWire[];
 }
 
 export interface InspectQueryArgs {

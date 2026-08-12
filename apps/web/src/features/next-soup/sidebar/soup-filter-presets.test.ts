@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ remindersEnabled: true }));
+const mocks = vi.hoisted(() => ({
+  remindersEnabled: true,
+  calendarUiEnabled: true,
+}));
 
 vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
   ENABLE_NEW_INBOX: () => false,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
   ENABLE_SNIPPETS: () => true,
@@ -11,8 +15,10 @@ vi.mock('@core/constant/featureFlags', () => ({
 
 afterEach(() => {
   mocks.remindersEnabled = true;
+  mocks.calendarUiEnabled = true;
 });
 
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
@@ -24,6 +30,33 @@ describe('mail view presets', () => {
     for (const tab of mailTabs) {
       expect(getViewPreset('mail', tab)?.groupBy).toBe('date');
     }
+  });
+});
+
+describe('task view presets', () => {
+  const context = { userId: 'user-1', isTeamAdmin: false };
+
+  it('uses one My tasks tab for tasks owned by or assigned to the user', () => {
+    const preset = getViewPreset('tasks', 'my-tasks', context);
+
+    expect(VIEW_TAB_PRESETS.tasks.default).toBe('my-tasks');
+    expect(Object.keys(VIEW_TAB_PRESETS.tasks.tabs)).toEqual([
+      'my-tasks',
+      'all',
+    ]);
+    expect(preset?.clientFilters).toEqual({
+      and: ['task', 'my-tasks'],
+      or: ['task-not-started', 'task-in-progress', 'task-in-review'],
+    });
+    expect(preset?.groupBy).toBe(`property:${SYSTEM_PROPERTY_IDS.PRIORITY}`);
+    expect(compileToAst(queryStateFrom(preset?.filters ?? {})).df).toEqual({
+      '&': [
+        { l: { dst: 'task' } },
+        {
+          '|': [{ l: { o: 'user-1' } }, { l: { imp: true } }],
+        },
+      ],
+    });
   });
 });
 
@@ -60,6 +93,26 @@ describe('inbox view presets', () => {
 
     // No `remf` at all, so an unflagged user never hits the reminders service.
     expect(ast.remf).toBeUndefined();
+  });
+
+  it('opts the signal tab into alarmed calendar events', () => {
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    // Referencing `calf` lifts the nil-id exclusion; only events with a
+    // not-done notification come back.
+    expect(ast.calf).toEqual({ l: { nd: false } });
+  });
+
+  it('keeps calendar events nil-scoped when the calendar flag is off', () => {
+    mocks.calendarUiEnabled = false;
+
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    expect(ast.calf).toEqual({
+      l: { id: '00000000-0000-0000-0000-000000000000' },
+    });
   });
 
   it('leaves every other inbox tab without reminders', () => {

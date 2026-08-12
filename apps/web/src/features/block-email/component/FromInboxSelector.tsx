@@ -1,6 +1,6 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { emailToMacroId, useDisplayName } from '@core/user';
+import { emailToMacroId, getDisplayName } from '@core/user';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
 import { cn, Dropdown } from '@ui';
@@ -14,7 +14,7 @@ type FromInbox = {
 
 /** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
-  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
+  const name = () => getDisplayName(emailToMacroId(props.inbox.email_address));
   return (
     <>
       <UserIcon
@@ -34,7 +34,7 @@ function FromInboxOption(props: { inbox: FromInbox }) {
 }
 
 function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
-  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
+  const name = () => getDisplayName(emailToMacroId(props.inbox.email_address));
   const label = () => name() || props.inbox.email_address;
 
   return (

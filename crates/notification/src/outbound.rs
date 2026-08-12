@@ -6,9 +6,15 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+/// WebSocket notification fanout across multiple delivery adapters.
+pub mod fanout_websocket;
+/// Kafka-backed WebSocket notification delivery.
+pub mod kafka_websocket;
 pub mod last_online_checker;
 pub mod message_receipt_repository;
 pub mod mobile;
+/// Independent Kafka consumer for WebSocket notification delivery requests.
+pub mod notification_consumer;
 /// Postgres LISTEN adapter for notification database events.
 pub mod notification_events;
 pub mod push_notification_checker;

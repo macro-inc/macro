@@ -13,7 +13,7 @@ import {
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { plural } from '@core/util/string';
 import {
   DraftBadge,
@@ -25,12 +25,14 @@ import {
 } from '@entity';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
+import { formatCalendarReminderTime } from '@notifications';
 import FilesIcon from '@phosphor/files.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
+import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
 import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -256,6 +258,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('call_started', () => () => <PhoneIcon class="size-4" />)
     .with('reminder', () => () => <BellSimpleIcon class="size-4" />)
+    .with('calendar_event_reminder', () => () => (
+      <CalendarBlankIcon class="size-4" />
+    ))
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',
@@ -394,7 +399,10 @@ const createSenderDisplayName = (
     return id ? tryMacroId(id) : undefined;
   };
 
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => {
+    const id = macroId();
+    return id ? getDisplayName(id) : undefined;
+  };
 
   const botName = () => {
     const id = senderId();
@@ -1440,6 +1448,43 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 }
 
 /**
+ * A calendar event row exists because its alarm fired: the event title leads,
+ * and the body is the occurrence's local time — the same copy as the
+ * notification that surfaced it.
+ */
+export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
+  const timePreview = () => {
+    const meta = props.item.notification?.notification_metadata;
+    if (meta?.tag === 'calendar_event_reminder') {
+      return formatCalendarReminderTime(meta.content);
+    }
+    const entity = props.item.entity;
+    if (entity.type !== 'calendar_event' || !entity.time) return undefined;
+    return formatCalendarReminderTime(
+      entity.time.kind === 'timed'
+        ? { startsAt: entity.time.startsAt, endsAt: entity.time.endsAt }
+        : { startDate: entity.time.startDate }
+    );
+  };
+
+  return (
+    <BaseCard
+      entityId={props.item.entity.id}
+      selected={props.selected}
+      highlighted={props.highlighted}
+      onClick={props.onClick}
+      unread={props.item.unread}
+      timestamp={props.item.timestamp}
+      leading={
+        <InboxCard.Icon fallback={<CalendarBlankIcon class="size-4" />} />
+      }
+      title={props.item.entity.name || '(No title)'}
+      preview={timePreview()}
+    />
+  );
+}
+
+/**
  * A reminder is self-set, so there is no sender and no action to describe.
  *
  * With something to point at, the description leads and the chip below says
@@ -1638,6 +1683,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'reminder'}>
         <ReminderCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'calendar_event'}>
+        <CalendarEventCardLayout {...props} />
       </Match>
       <Match when={true}>
         <GenericCardLayout {...props} />

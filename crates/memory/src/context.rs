@@ -225,8 +225,11 @@ pub async fn build_tool_service_context(
     );
 
 
+    let skill_tool_context =
+        ai_tools::build_skill_tool_context(search_client.clone(), soup_service.clone());
+
     Ok(ToolServiceContext {
-        search_service_client: search_client,
+        search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
@@ -243,6 +246,7 @@ pub async fn build_tool_service_context(
         ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
+        skill_tool_context,
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder: ai_usage::pg_recorder(pool.clone()),

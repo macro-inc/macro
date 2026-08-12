@@ -64,5 +64,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'reminder' }, () => {
       throw new Error('reminders are not openable as attachments');
     })
+    .with({ type: 'calendar_event' }, () => {
+      throw new Error('calendar events are not openable as attachments');
+    })
     .exhaustive();
 }

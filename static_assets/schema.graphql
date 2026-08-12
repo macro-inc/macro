@@ -89,6 +89,20 @@ type CompleteMutationRoot {
 }
 
 """
+Root subscription object combining realtime Soup and notification adapters.
+"""
+type CompleteSubscriptionRoot {
+	"""
+	Subscribe to realtime Soup updates for the authenticated user.
+	"""
+	soupUpdates: [SoupPatch!]!
+	"""
+	Subscribe to realtime notifications for the authenticated user.
+	"""
+	notificationUpdates: GraphqlSoupNotification!
+}
+
+"""
 One entity duplication in a batch.
 """
 input DuplicateEntityInput {
@@ -162,6 +176,20 @@ type GraphqlAccessLevelPermission {
 	Effective access level held by the viewer.
 	"""
 	accessLevel: GraphqlEntityAccessLevel!
+}
+
+"""
+Metadata for an AI response.
+"""
+type GraphqlAiResponseMetadata {
+	"""
+	AI response summary.
+	"""
+	summary: String!
+	"""
+	Response message identifier.
+	"""
+	messageId: String!
 }
 
 """
@@ -252,6 +280,52 @@ input GraphqlCalendarEventLiteral @oneOf {
 	Organizer email.
 	"""
 	organizer: String
+	"""
+	Notification done state for the requester.
+	"""
+	notificationDone: Boolean
+	"""
+	Notification seen state for the requester.
+	"""
+	notificationSeen: Boolean
+}
+
+"""
+Metadata for a due calendar event reminder.
+"""
+type GraphqlCalendarEventReminderMetadata {
+	"""
+	Calendar event identifier.
+	"""
+	eventId: ID!
+	"""
+	Stable occurrence key of the event instance.
+	"""
+	occurrenceKey: String!
+	"""
+	Event display title.
+	"""
+	title: String!
+	"""
+	Timed event start in RFC 3339 format.
+	"""
+	startsAt: String
+	"""
+	Timed event end in RFC 3339 format.
+	"""
+	endsAt: String
+	"""
+	All-day event start date in ISO 8601 format.
+	"""
+	startDate: String
+	"""
+	IANA time zone used to render the event.
+	"""
+	timeZone: String
+	"""
+	Minutes before the event start when the alarm fires.
+	"""
+	minutesBefore: Int!
 }
 
 """
@@ -314,6 +388,20 @@ input GraphqlCallLiteral @oneOf {
 	The attended option.
 	"""
 	attended: Boolean
+}
+
+"""
+Metadata for a started call.
+"""
+type GraphqlCallStartedMetadata {
+	"""
+	Channel name.
+	"""
+	channelName: String
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -405,6 +493,28 @@ input GraphqlChannelExpr @oneOf {
 }
 
 """
+Metadata for a channel invitation.
+"""
+type GraphqlChannelInviteMetadata {
+	"""
+	Inviting user identifier.
+	"""
+	invitedBy: String!
+	"""
+	Channel name.
+	"""
+	channelName: String!
+	"""
+	Message content associated with the invitation.
+	"""
+	messageContent: String
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 GraphQL input representing the channel literal.
 """
 input GraphqlChannelLiteral @oneOf {
@@ -457,6 +567,82 @@ input GraphqlChannelLiteral @oneOf {
 }
 
 """
+Metadata for a channel mention notification.
+"""
+type GraphqlChannelMentionMetadata {
+	"""
+	Mentioning message identifier.
+	"""
+	messageId: String!
+	"""
+	Mentioning message content.
+	"""
+	messageContent: String!
+	"""
+	Whether the message has attachments.
+	"""
+	hasAttachments: Boolean!
+	"""
+	Thread identifier, when the mention is in a thread.
+	"""
+	threadId: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
+Metadata for a newly sent channel message.
+"""
+type GraphqlChannelMessageSendMetadata {
+	"""
+	Sending user identifier.
+	"""
+	sender: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
+	"""
+	Message content.
+	"""
+	messageContent: String!
+	"""
+	Message identifier.
+	"""
+	messageId: String!
+	"""
+	Whether the message has attachments.
+	"""
+	hasAttachments: Boolean!
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 Channel role resolved for the current viewer.
 """
 enum GraphqlChannelParticipantRole {
@@ -472,6 +658,52 @@ enum GraphqlChannelParticipantRole {
 	Channel member.
 	"""
 	MEMBER
+}
+
+"""
+Metadata for a reply to a channel thread.
+"""
+type GraphqlChannelReplyMetadata {
+	"""
+	Thread identifier.
+	"""
+	threadId: String!
+	"""
+	Reply message identifier.
+	"""
+	messageId: String!
+	"""
+	Replying user identifier.
+	"""
+	userId: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
+	"""
+	Reply content.
+	"""
+	messageContent: String!
+	"""
+	Whether the reply has attachments.
+	"""
+	hasAttachments: Boolean!
+	"""
+	Root-message sender identifier.
+	"""
+	threadParentSenderId: String
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -679,6 +911,44 @@ enum GraphqlChatRole {
 }
 
 """
+Metadata for a comment on a document.
+"""
+type GraphqlCommentedOnDocumentMetadata {
+	"""
+	Document name.
+	"""
+	documentName: String!
+	"""
+	Document owner identifier.
+	"""
+	owner: String!
+	"""
+	Document file type.
+	"""
+	fileType: String
+	"""
+	Document subtype.
+	"""
+	subType: GraphqlNotificationDocumentSubType
+	"""
+	Comment identifier.
+	"""
+	commentId: Int!
+	"""
+	Comment thread identifier.
+	"""
+	threadId: Int!
+	"""
+	Comment text.
+	"""
+	text: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 The two operands of a recursive `CrmCompanyFilterExpr` binary expression.
 """
 input GraphqlCrmCompanyBinaryExpr {
@@ -869,6 +1139,60 @@ input GraphqlDocumentLiteral @oneOf {
 }
 
 """
+Metadata for a document mention notification.
+"""
+type GraphqlDocumentMentionMetadata {
+	"""
+	Mentioned document name.
+	"""
+	documentName: String!
+	"""
+	Document owner identifier.
+	"""
+	owner: String!
+	"""
+	Document file type.
+	"""
+	fileType: String
+	"""
+	Document subtype.
+	"""
+	subType: GraphqlNotificationDocumentSubType
+	"""
+	Mentioning message identifier.
+	"""
+	messageId: String!
+	"""
+	Mentioning message content.
+	"""
+	messageContent: String!
+	"""
+	Whether the message has attachments.
+	"""
+	hasAttachments: Boolean!
+	"""
+	Thread identifier, when the mention is in a thread.
+	"""
+	threadId: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 GraphQL input representing the document sub type.
 """
 enum GraphqlDocumentSubType {
@@ -880,6 +1204,10 @@ enum GraphqlDocumentSubType {
 	The snippet option.
 	"""
 	SNIPPET
+	"""
+	The skill option.
+	"""
+	SKILL
 }
 
 """
@@ -1405,6 +1733,10 @@ enum GraphqlEntityType {
 	Reminder entity.
 	"""
 	REMINDER
+	"""
+	AI skill entity (skill document or built-in system skill).
+	"""
+	SKILL
 }
 
 """
@@ -1474,6 +1806,518 @@ input GraphqlForeignEntityLiteral @oneOf {
 }
 
 """
+Metadata for a completed GitHub pull-request check run.
+"""
+type GraphqlGithubPrCheckRunMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Check-run GitHub identifier.
+	"""
+	checkRunGithubId: ID!
+	"""
+	Check name.
+	"""
+	checkName: String!
+	"""
+	Raw check status.
+	"""
+	checkStatus: String!
+	"""
+	Raw check conclusion.
+	"""
+	conclusion: String!
+	"""
+	Normalized check state.
+	"""
+	state: GraphqlGithubPrCheckRunState!
+	"""
+	Public check URL.
+	"""
+	checkUrl: String!
+	"""
+	Completion timestamp in RFC 3339 format.
+	"""
+	completedAt: String!
+}
+
+"""
+GraphQL GitHub check-run state.
+"""
+enum GraphqlGithubPrCheckRunState {
+	"""
+	Check completed successfully.
+	"""
+	COMPLETED
+	"""
+	Check completed with a failure-like result.
+	"""
+	FAILED
+}
+
+"""
+GraphQL GitHub pull-request comment kind.
+"""
+enum GraphqlGithubPrCommentKind {
+	"""
+	Top-level issue comment.
+	"""
+	ISSUE
+	"""
+	Inline review comment.
+	"""
+	REVIEW_COMMENT
+}
+
+"""
+Metadata for a GitHub pull-request comment.
+"""
+type GraphqlGithubPrCommentMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Comment kind.
+	"""
+	commentKind: GraphqlGithubPrCommentKind!
+	"""
+	Comment GitHub identifier.
+	"""
+	commentGithubId: ID
+	"""
+	Public comment URL.
+	"""
+	commentUrl: String
+	"""
+	Truncated comment body.
+	"""
+	commentSnippet: String!
+}
+
+"""
+GraphQL GitHub pull-request action.
+"""
+enum GraphqlGithubPrEventAction {
+	"""
+	Pull request opened.
+	"""
+	OPENED
+	"""
+	Pull request reopened.
+	"""
+	REOPENED
+	"""
+	Pull request closed.
+	"""
+	CLOSED
+}
+
+"""
+GraphQL GitHub pull-request lifecycle status.
+"""
+enum GraphqlGithubPrEventStatus {
+	"""
+	Open pull request.
+	"""
+	OPEN
+	"""
+	Closed pull request.
+	"""
+	CLOSED
+	"""
+	Merged pull request.
+	"""
+	MERGED
+}
+
+"""
+GraphQL location of a GitHub pull-request mention.
+"""
+enum GraphqlGithubPrMentionLocation {
+	"""
+	Pull-request body.
+	"""
+	PR_BODY
+	"""
+	Top-level comment.
+	"""
+	COMMENT
+	"""
+	Review summary.
+	"""
+	REVIEW
+	"""
+	Inline review comment.
+	"""
+	REVIEW_COMMENT
+}
+
+"""
+Metadata for a GitHub pull-request mention.
+"""
+type GraphqlGithubPrMentionMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Mention location.
+	"""
+	location: GraphqlGithubPrMentionLocation!
+	"""
+	Comment or review GitHub identifier.
+	"""
+	commentGithubId: ID
+	"""
+	Public URL for the mentioning text.
+	"""
+	commentUrl: String
+	"""
+	Truncated mentioning text.
+	"""
+	textSnippet: String!
+}
+
+"""
+Metadata for a GitHub pull-request review.
+"""
+type GraphqlGithubPrReviewMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Review GitHub identifier.
+	"""
+	reviewGithubId: ID
+	"""
+	Public review URL.
+	"""
+	reviewUrl: String
+	"""
+	Review state.
+	"""
+	state: GraphqlGithubPrReviewState!
+	"""
+	Truncated review body.
+	"""
+	reviewSnippet: String
+}
+
+"""
+GraphQL state of a GitHub pull-request review.
+"""
+enum GraphqlGithubPrReviewState {
+	"""
+	Review approved the pull request.
+	"""
+	APPROVED
+	"""
+	Review requested changes.
+	"""
+	CHANGES_REQUESTED
+	"""
+	Review left comments without an approval decision.
+	"""
+	COMMENTED
+}
+
+"""
+Metadata for a GitHub pull-request lifecycle change.
+"""
+type GraphqlGithubPrStatusChangedMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Current pull-request status.
+	"""
+	status: GraphqlGithubPrEventStatus!
+	"""
+	Triggering webhook action.
+	"""
+	action: GraphqlGithubPrEventAction!
+	"""
+	Previous pull-request status.
+	"""
+	previousStatus: GraphqlGithubPrEventStatus
+	"""
+	Head branch.
+	"""
+	headBranch: String
+	"""
+	Base branch.
+	"""
+	baseBranch: String
+	"""
+	Merge timestamp in RFC 3339 format.
+	"""
+	mergedAt: String
+}
+
+"""
+Metadata for a GitHub pull-request review request.
+"""
+type GraphqlGithubReviewRequestedMetadata {
+	"""
+	Internal foreign-entity identifier.
+	"""
+	foreignEntityId: ID!
+	"""
+	External GitHub key.
+	"""
+	githubKey: String!
+	"""
+	Repository owner or organization.
+	"""
+	owner: String!
+	"""
+	Repository name.
+	"""
+	repo: String!
+	"""
+	Pull-request number.
+	"""
+	number: String!
+	"""
+	Public pull-request URL.
+	"""
+	url: String!
+	"""
+	Compact pull-request display label.
+	"""
+	displayName: String!
+	"""
+	Pull-request title.
+	"""
+	title: String!
+	"""
+	Sender GitHub login.
+	"""
+	senderGithubLogin: String
+	"""
+	Sender GitHub user identifier.
+	"""
+	senderGithubUserId: String
+	"""
+	Sender GitHub avatar URL.
+	"""
+	senderGithubAvatarUrl: String
+	"""
+	Requested reviewer GitHub login.
+	"""
+	requestedReviewerGithubLogin: String
+	"""
+	Requested reviewer GitHub user identifier.
+	"""
+	requestedReviewerGithubUserId: String
+}
+
+"""
 Grouping modes supported by grouped Soup.
 """
 enum GraphqlGroupByField {
@@ -1514,6 +2358,46 @@ input GraphqlGroupByInput {
 }
 
 """
+Metadata for an inbox that requires reauthentication.
+"""
+type GraphqlInboxReauthRequiredMetadata {
+	"""
+	Inbox email address.
+	"""
+	emailAddress: String!
+}
+
+"""
+Metadata for a team invitation.
+"""
+type GraphqlInviteToTeamMetadata {
+	"""
+	Team name.
+	"""
+	teamName: String!
+	"""
+	Team identifier.
+	"""
+	teamId: ID!
+	"""
+	Team invitation identifier.
+	"""
+	teamInviteId: ID!
+	"""
+	Inviting user identifier.
+	"""
+	invitedBy: String!
+	"""
+	Invited role.
+	"""
+	role: String
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 A link property value.
 """
 type GraphqlLinkPropertyValue {
@@ -1521,6 +2405,48 @@ type GraphqlLinkPropertyValue {
 	The stored URLs.
 	"""
 	urls: [String!]!
+}
+
+"""
+Metadata for a mention in a document comment.
+"""
+type GraphqlMentionedInDocumentCommentMetadata {
+	"""
+	Document name.
+	"""
+	documentName: String!
+	"""
+	Document owner identifier.
+	"""
+	owner: String!
+	"""
+	Document file type.
+	"""
+	fileType: String
+	"""
+	Document subtype.
+	"""
+	subType: GraphqlNotificationDocumentSubType
+	"""
+	Mention identifier.
+	"""
+	mentionId: String!
+	"""
+	Comment identifier.
+	"""
+	commentId: Int!
+	"""
+	Comment thread identifier.
+	"""
+	threadId: Int!
+	"""
+	Comment text.
+	"""
+	text: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -1545,6 +2471,77 @@ type GraphqlMutationSuccess {
 	Ordered normalized-cache effects produced by the mutation.
 	"""
 	effects: [SoupPatch!]!
+}
+
+"""
+Metadata for a newly received email.
+"""
+type GraphqlNewEmailMetadata {
+	"""
+	Sender email address.
+	"""
+	sender: String
+	"""
+	Recipient email address.
+	"""
+	toEmail: String!
+	"""
+	Email thread identifier.
+	"""
+	threadId: String!
+	"""
+	Email subject.
+	"""
+	subject: String!
+	"""
+	Email snippet.
+	"""
+	snippet: String!
+}
+
+"""
+Typed GraphQL union containing every supported notification event payload.
+"""
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
+
+"""
+GraphQL channel type used by notification metadata.
+"""
+enum GraphqlNotificationChannelType {
+	"""
+	Public channel.
+	"""
+	PUBLIC
+	"""
+	Private channel.
+	"""
+	PRIVATE
+	"""
+	Direct-message channel.
+	"""
+	DIRECT_MESSAGE
+	"""
+	Team channel.
+	"""
+	TEAM
+}
+
+"""
+GraphQL document subtype used by notification metadata.
+"""
+enum GraphqlNotificationDocumentSubType {
+	"""
+	Task document.
+	"""
+	TASK
+	"""
+	Snippet document.
+	"""
+	SNIPPET
+	"""
+	Skill document.
+	"""
+	SKILL
 }
 
 """
@@ -1956,6 +2953,20 @@ input GraphqlReminderLiteral @oneOf {
 }
 
 """
+Metadata for a due reminder.
+"""
+type GraphqlReminderMetadata {
+	"""
+	Reminder identifier.
+	"""
+	reminderId: ID!
+	"""
+	Reminder description.
+	"""
+	description: String!
+}
+
+"""
 How often a reminder fires.
 """
 enum GraphqlReminderScheduleType {
@@ -1967,6 +2978,44 @@ enum GraphqlReminderScheduleType {
 	Fires repeatedly, on `cron` evaluated in `timezone`.
 	"""
 	RECURRING
+}
+
+"""
+Metadata for a reply to a document comment thread.
+"""
+type GraphqlRepliedToDocumentCommentThreadMetadata {
+	"""
+	Document name.
+	"""
+	documentName: String!
+	"""
+	Document owner identifier.
+	"""
+	owner: String!
+	"""
+	Document file type.
+	"""
+	fileType: String
+	"""
+	Document subtype.
+	"""
+	subType: GraphqlNotificationDocumentSubType
+	"""
+	Comment identifier.
+	"""
+	commentId: Int!
+	"""
+	Comment thread identifier.
+	"""
+	threadId: Int!
+	"""
+	Reply text.
+	"""
+	text: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -2084,6 +3133,16 @@ enum GraphqlSimpleSortMethod {
 }
 
 """
+represents the skill subtype fields
+"""
+type GraphqlSkillSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 represents the snippet subtype fields
 """
 type GraphqlSnippetSubType {
@@ -2177,6 +3236,10 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	Direct conference join URL.
 	"""
 	conferenceUrl: String
+	"""
+	Which conferencing system backs the join URL.
+	"""
+	conferenceProvider: String
 	"""
 	Whether the canonical source is read-only.
 	"""
@@ -2804,7 +3867,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
 
 """
 GraphQL representation of the soup email attachment.
@@ -3522,9 +4585,13 @@ type GraphqlSoupNotification {
 	"""
 	senderId: String
 	"""
-	Event-specific notification metadata.
+	Raw event-specific notification metadata.
 	"""
-	metadata: JSON!
+	metadata: JSON! @deprecated(reason: "Use typedMetadata with union inline fragments")
+	"""
+	Typed event-specific notification metadata.
+	"""
+	typedMetadata: GraphqlNotifEvent
 }
 
 """
@@ -3724,6 +4791,32 @@ type GraphqlStringPropertyValue {
 	The stored string.
 	"""
 	value: String!
+}
+
+"""
+Metadata for a task assignment.
+"""
+type GraphqlTaskAssignedMetadata {
+	"""
+	Task identifier.
+	"""
+	taskId: String!
+	"""
+	Task name.
+	"""
+	taskName: String
+	"""
+	Task document subtype.
+	"""
+	subType: GraphqlNotificationDocumentSubType
+	"""
+	Assigning user identifier.
+	"""
+	assignedBy: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -4055,16 +5148,6 @@ type SoupQueryRoot {
 }
 
 """
-Root entry point for realtime Soup subscriptions.
-"""
-type SoupSubscriptionRoot {
-	"""
-	Subscribe to realtime Soup updates for the authenticated user.
-	"""
-	soupUpdates: [SoupPatch!]!
-}
-
-"""
 GraphQL representation of a created or updated Soup entity.
 """
 type SoupUpdated {
@@ -4121,6 +5204,10 @@ input UpdateNotificationsInput {
 }
 
 """
+Marks an element of a GraphQL schema as no longer supported.
+"""
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
+"""
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
@@ -4135,6 +5222,6 @@ directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: SoupQueryRoot
 	mutation: CompleteMutationRoot
-	subscription: SoupSubscriptionRoot
+	subscription: CompleteSubscriptionRoot
 }
 
