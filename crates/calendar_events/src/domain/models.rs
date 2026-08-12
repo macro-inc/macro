@@ -199,8 +199,9 @@ impl EventTransparency {
 ///
 /// Only Google Meet is attachable and detachable by Macro. Everything else —
 /// Zoom and friends arriving as `addOn` conference data, or a legacy classic
-/// Hangout — is surfaced for joining but never rewritten, so a third-party
-/// conference is not silently destroyed by a Macro edit.
+/// Hangout — is surfaced for joining but never rewritten: mutation policy
+/// refuses any conference change on such an event, because Macro could not
+/// recreate what the change would destroy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -757,6 +758,10 @@ pub struct CalendarEventMutationTarget {
     pub event_id: Uuid,
     /// Whether the canonical source prohibits mutation.
     pub is_read_only: bool,
+    /// Conferencing system currently attached, so mutation policy can refuse
+    /// to rewrite a conference Macro does not manage. Reflects the local
+    /// projection, which push notifications keep current.
+    pub conference_provider: Option<ConferenceProvider>,
     /// Google event identifier of the best-ranked provider source.
     pub provider_event_id: String,
     /// Recurring master identifier when the stored source is an instance.

@@ -698,7 +698,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'foreign_conference' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -724,8 +724,9 @@ export type ConferenceChange = 'google_meet' | 'none';
  *
  * Only Google Meet is attachable and detachable by Macro. Everything else —
  * Zoom and friends arriving as `addOn` conference data, or a legacy classic
- * Hangout — is surfaced for joining but never rewritten, so a third-party
- * conference is not silently destroyed by a Macro edit.
+ * Hangout — is surfaced for joining but never rewritten: mutation policy
+ * refuses any conference change on such an event, because Macro could not
+ * recreate what the change would destroy.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
 
@@ -1709,7 +1710,7 @@ export type UpdateCalendarEventErrors = {
      */
     404: CalendarMutationApiError;
     /**
-     * The provider rejected the update
+     * The provider rejected the update, or the event's conference belongs to another provider
      */
     409: CalendarMutationApiError;
     /**

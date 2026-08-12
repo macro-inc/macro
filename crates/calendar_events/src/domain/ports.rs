@@ -438,6 +438,11 @@ pub enum CalendarMutationError {
     /// The connected account is not an attendee of the event.
     #[error("the connected account is not an attendee of this event")]
     NotAttendee,
+    /// The event's conference belongs to another provider, which Macro does
+    /// not manage. Attaching or detaching would destroy a conference Macro
+    /// cannot recreate, so the change is refused.
+    #[error("this event's conference belongs to another provider")]
+    ForeignConference,
     /// The supplied fields were invalid.
     #[error("invalid calendar mutation: {0}")]
     InvalidInput(String),

@@ -269,7 +269,7 @@
             }
           },
           "409": {
-            "description": "The provider rejected the update",
+            "description": "The provider rejected the update, or the event's conference belongs to another provider",
             "content": {
               "application/json": {
                 "schema": {
@@ -4583,6 +4583,7 @@
           "read_only",
           "no_writable_calendar",
           "not_attendee",
+          "foreign_conference",
           "invalid_input",
           "reauth_required",
           "provider_rejected",
@@ -4612,7 +4613,7 @@
       },
       "ConferenceProvider": {
         "type": "string",
-        "description": "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten, so a third-party\nconference is not silently destroyed by a Macro edit.",
+        "description": "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten: mutation policy\nrefuses any conference change on such an event, because Macro could not\nrecreate what the change would destroy.",
         "enum": ["google_meet", "other"]
       },
       "Contact": {
@@ -6066,7 +6067,7 @@
               },
               {
                 "$ref": "#/components/schemas/ConferenceChange",
-                "description": "Conference change: `google_meet` attaches a freshly generated Meet,\n`none` detaches the current conference, and omitting it leaves the\nconference untouched."
+                "description": "Conference change: `google_meet` attaches a freshly generated Meet,\n`none` detaches the current conference, and omitting it leaves the\nconference untouched.\n\nRejected with `foreign_conference` when the event's current conference\nbelongs to another provider (a Zoom-style `addOn` conference, or a\nlegacy Hangout). Macro cannot recreate those, so it will neither\nreplace nor detach them."
               }
             ]
           },

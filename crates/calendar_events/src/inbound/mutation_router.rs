@@ -167,6 +167,11 @@ pub struct UpdateCalendarEventRequest {
     /// Conference change: `google_meet` attaches a freshly generated Meet,
     /// `none` detaches the current conference, and omitting it leaves the
     /// conference untouched.
+    ///
+    /// Rejected with `foreign_conference` when the event's current conference
+    /// belongs to another provider (a Zoom-style `addOn` conference, or a
+    /// legacy Hangout). Macro cannot recreate those, so it will neither
+    /// replace nor detach them.
     pub conference: Option<ConferenceChange>,
 }
 
@@ -237,6 +242,8 @@ pub enum CalendarMutationErrorCode {
     NoWritableCalendar,
     /// The connected account is not an attendee of the event.
     NotAttendee,
+    /// The event's conference belongs to a provider Macro does not manage.
+    ForeignConference,
     /// The request was invalid.
     InvalidInput,
     /// The calendar grant must be re-consented.
@@ -295,6 +302,12 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
                 StatusCode::CONFLICT,
                 CalendarMutationErrorCode::NotAttendee,
                 "the connected account is not an attendee of this event".to_string(),
+            ),
+            CalendarMutationError::ForeignConference => (
+                StatusCode::CONFLICT,
+                CalendarMutationErrorCode::ForeignConference,
+                "this event's conference belongs to another provider and cannot be changed"
+                    .to_string(),
             ),
             CalendarMutationError::InvalidInput(message) => (
                 StatusCode::BAD_REQUEST,
@@ -434,7 +447,7 @@ where
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
         (status = 404, description = "Event not found", body = CalendarMutationApiError),
-        (status = 409, description = "The provider rejected the update", body = CalendarMutationApiError),
+        (status = 409, description = "The provider rejected the update, or the event's conference belongs to another provider", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
     )
 )]

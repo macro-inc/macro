@@ -19,8 +19,17 @@ fn token_identity() -> CalendarLinkTokenIdentity {
 
 fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
     CalendarEventMutationTarget {
+        conference_provider: None,
+        ..conferenced_target(is_read_only)
+    }
+}
+
+/// A mutation target whose event already carries the supplied conference.
+fn conferenced_target(is_read_only: bool) -> CalendarEventMutationTarget {
+    CalendarEventMutationTarget {
         event_id: Uuid::now_v7(),
         is_read_only,
+        conference_provider: Some(ConferenceProvider::Other),
         provider_event_id: "instance-id".to_string(),
         provider_recurring_event_id: Some("master-id".to_string()),
         owner_id: "macro|self@example.com".to_string(),
@@ -834,4 +843,119 @@ async fn truncation_that_empties_the_series_retires_the_local_source() {
 
     assert!(upserts.lock().unwrap().is_empty());
     assert_eq!(removed.lock().unwrap().len(), 1);
+}
+
+/// A Zoom-style conference reaches Macro as `addOn` conference data and
+/// cannot be regenerated, so neither attaching a Meet over it nor detaching
+/// it may reach the provider — `conferenceData: null` would destroy the only
+/// join link the attendees have. Enforced here rather than in the client,
+/// because direct API callers bypass the editor entirely.
+#[tokio::test]
+async fn conference_changes_on_a_third_party_conference_are_refused() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        let repo = FakeRepo {
+            mutation_target: Some(conferenced_target(false)),
+            ..FakeRepo::default()
+        };
+        let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+        let calls = provider.calls.clone();
+        let result = service(repo, provider, FakeTokens::ok())
+            .update_event(
+                "macro|user",
+                Uuid::now_v7(),
+                CalendarEventPatch {
+                    conference: Some(change),
+                    ..CalendarEventPatch::default()
+                },
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(CalendarMutationError::ForeignConference)),
+            "{change:?} on a third-party conference must be refused, got {result:?}"
+        );
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "{change:?} must not reach the provider at all"
+        );
+    }
+}
+
+/// The refusal is scoped to the conference itself: unrelated edits to an
+/// event carrying a third-party conference still go through, because omitting
+/// `conference` leaves the provider's conference untouched.
+#[tokio::test]
+async fn unrelated_edits_are_allowed_on_a_third_party_conference() {
+    let repo = FakeRepo {
+        mutation_target: Some(conferenced_target(false)),
+        ..FakeRepo::default()
+    };
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let result = service(repo, provider, FakeTokens::ok())
+        .update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            CalendarEventPatch {
+                title: Some("Renamed".to_string()),
+                ..CalendarEventPatch::default()
+            },
+        )
+        .await;
+
+    assert!(result.is_ok(), "got {result:?}");
+    assert_eq!(calls.lock().unwrap().as_slice(), ["update:master-id"]);
+}
+
+/// A Meet Macro created is one it may replace or detach.
+#[tokio::test]
+async fn conference_changes_on_a_macro_managed_meet_are_allowed() {
+    let repo = FakeRepo {
+        mutation_target: Some(CalendarEventMutationTarget {
+            conference_provider: Some(ConferenceProvider::GoogleMeet),
+            ..conferenced_target(false)
+        }),
+        ..FakeRepo::default()
+    };
+    let result = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            conference: Some(ConferenceChange::Removed),
+            ..CalendarEventPatch::default()
+        },
+    )
+    .await;
+
+    assert!(result.is_ok(), "got {result:?}");
+}
+
+/// An event with no conference at all can have one attached.
+#[tokio::test]
+async fn attaching_a_meet_to_an_event_without_a_conference_is_allowed() {
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let result = service(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            conference: Some(ConferenceChange::GoogleMeet),
+            ..CalendarEventPatch::default()
+        },
+    )
+    .await;
+
+    assert!(result.is_ok(), "got {result:?}");
 }

@@ -988,7 +988,7 @@ export const listOccurrencesResponse = zod
                   zod
                     .enum(['google_meet', 'other'])
                     .describe(
-                      "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten, so a third-party\nconference is not silently destroyed by a Macro edit."
+                      "The conferencing system backing an event's join URL.\n\nOnly Google Meet is attachable and detachable by Macro. Everything else —\nZoom and friends arriving as `addOn` conference data, or a legacy classic\nHangout — is surfaced for joining but never rewritten: mutation policy\nrefuses any conference change on such an event, because Macro could not\nrecreate what the change would destroy."
                     ),
                 ])
                 .optional(),
