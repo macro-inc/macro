@@ -29,18 +29,21 @@ fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
         .take(MAX_RECEIVE_ATTEMPTS - 1)
 }
 
-/// Service for distributing received WebSocket notifications to user-scoped subscribers.
-pub struct WebSocketNotificationConsumerService<C>
+/// Service for distributing received WebSocket notifications decoded as `T` to user-scoped
+/// subscribers.
+pub struct WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer,
+    C: WebSocketNotificationConsumer<T>,
+    T: Clone + Send + 'static,
 {
     consumer: C,
-    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, serde_json::Value>,
+    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, T>,
 }
 
-impl<C> WebSocketNotificationConsumerService<C>
+impl<C, T> WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer,
+    C: WebSocketNotificationConsumer<T>,
+    T: Clone + Send + 'static,
 {
     /// Creates a WebSocket notification consumer service backed by `consumer`.
     pub fn new(consumer: C) -> Self {
@@ -55,10 +58,7 @@ where
     /// The returned receiver is closed if its buffer fills, ensuring a slow subscriber cannot
     /// delay the shared consumer or other subscribers.
     #[must_use]
-    pub fn subscribe(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+    pub fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<T> {
         self.broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
     }
@@ -96,14 +96,13 @@ where
     }
 }
 
-impl<C> WebSocketNotificationSubscriptionService for WebSocketNotificationConsumerService<C>
+impl<C, T> WebSocketNotificationSubscriptionService<T>
+    for WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer,
+    C: WebSocketNotificationConsumer<T>,
+    T: Clone + Send + 'static,
 {
-    fn subscribe(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<T> {
         WebSocketNotificationConsumerService::subscribe(self, user_id)
     }
 }

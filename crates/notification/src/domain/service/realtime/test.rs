@@ -2,15 +2,22 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use serde::{Deserialize, Serialize};
+
 use super::*;
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct TestNotification {
+    kind: String,
+}
+
 struct FakeConsumer {
-    messages: Mutex<VecDeque<Result<WebSocketNotificationMetadata<serde_json::Value>, Report>>>,
+    messages: Mutex<VecDeque<Result<WebSocketNotificationMetadata<TestNotification>, Report>>>,
     calls: Arc<AtomicUsize>,
 }
 
-impl WebSocketNotificationConsumer for FakeConsumer {
-    async fn recv(&self) -> Result<WebSocketNotificationMetadata<serde_json::Value>, Report> {
+impl WebSocketNotificationConsumer<TestNotification> for FakeConsumer {
+    async fn recv(&self) -> Result<WebSocketNotificationMetadata<TestNotification>, Report> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.messages
             .lock()
@@ -28,7 +35,9 @@ fn user(local: &str) -> MacroUserIdStr<'static> {
 async fn distributes_notifications_to_every_recipient_subscription() {
     let one = user("one");
     let two = user("two");
-    let notification = serde_json::json!({ "kind": "channel_mention" });
+    let notification = TestNotification {
+        kind: "channel_mention".to_string(),
+    };
     let receive_calls = Arc::new(AtomicUsize::new(0));
     let consumer = FakeConsumer {
         messages: Mutex::new(VecDeque::from([
@@ -70,7 +79,9 @@ async fn ignores_recipients_without_subscribers() {
     let consumer = FakeConsumer {
         messages: Mutex::new(VecDeque::from([Ok(WebSocketNotificationMetadata {
             recipients: vec![user("unsubscribed"), subscribed.clone()],
-            notification: serde_json::json!({ "kind": "test" }),
+            notification: TestNotification {
+                kind: "test".to_string(),
+            },
         })])),
         calls: Arc::new(AtomicUsize::new(0)),
     };
@@ -87,6 +98,8 @@ async fn ignores_recipients_without_subscribers() {
 
     assert_eq!(
         receiver.recv().await,
-        Some(serde_json::json!({ "kind": "test" }))
+        Some(TestNotification {
+            kind: "test".to_string(),
+        })
     );
 }

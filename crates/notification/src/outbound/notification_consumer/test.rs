@@ -1,6 +1,12 @@
 use macro_event_broker::{EventBrokerError, MacroEventCollection as _, MessageParts};
+use serde::{Deserialize, Serialize};
 
 use super::{DeclaredMacroEvent, validate_notification_schema};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TestNotification {
+    kind: String,
+}
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -22,7 +28,10 @@ impl MessageParts for TestMessage {
 
 #[test]
 fn assigns_only_the_typed_notifications_topic() {
-    assert_eq!(DeclaredMacroEvent::topics(), ["macro.notifications"]);
+    assert_eq!(
+        DeclaredMacroEvent::<TestNotification>::topics(),
+        ["macro.notifications"]
+    );
 }
 
 #[test]
