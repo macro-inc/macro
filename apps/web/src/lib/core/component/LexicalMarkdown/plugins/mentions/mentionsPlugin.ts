@@ -107,6 +107,10 @@ export const UPDATE_DOCUMENT_NAME_COMMAND: LexicalCommand<
   Record<string, string>
 > = createCommand('UPDATE_DOCUMENT_NAME_COMMAND');
 
+export const UPDATE_USER_DISPLAY_NAME_COMMAND: LexicalCommand<
+  Record<string, string>
+> = createCommand('UPDATE_USER_DISPLAY_NAME_COMMAND');
+
 export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
   createCommand('INSERT_USER_MENTION_COMMAND');
 
@@ -675,6 +679,46 @@ function registerMentionsPlugin(
             // they don't get recorded into the undo stack. This was breaking the predictability
             // of undo with document mentions. This hacks around that by using the an undocumented
             // "historic" tag from the LexicalHistoryPlugin.
+            tag: [
+              HISTORIC_TAG,
+              SKIP_DOM_SELECTION_TAG,
+              SKIP_SCROLL_INTO_VIEW_TAG,
+            ],
+            discrete: true,
+          }
+        );
+
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      UPDATE_USER_DISPLAY_NAME_COMMAND,
+      (payload) => {
+        editor.update(
+          () => {
+            const nodesToUpdate: UserMentionNode[] = [];
+            $traverseNodes($getRoot(), (node) => {
+              const newName =
+                node instanceof UserMentionNode
+                  ? payload[node.getUserId()]
+                  : undefined;
+              if (
+                node instanceof UserMentionNode &&
+                newName &&
+                node.getDisplayName() !== newName
+              ) {
+                nodesToUpdate.push(node);
+              }
+            });
+
+            nodesToUpdate.forEach((node) => {
+              const newName = payload[node.getUserId()];
+              if (newName) node.setDisplayName(newName);
+            });
+          },
+          {
             tag: [
               HISTORIC_TAG,
               SKIP_DOM_SELECTION_TAG,

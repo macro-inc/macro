@@ -2,11 +2,20 @@ export function parseUserMentions(text: string): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {
     try {
       const data = JSON.parse(json);
-      return data.email || '';
+      return userMentionDisplayText(data);
     } catch {
       return '';
     }
   });
+}
+
+function userMentionDisplayText(data: {
+  displayName?: string;
+  email?: string;
+}) {
+  if (data.displayName) return data.displayName;
+  if (data.email) return data.email.split('@')[0] || data.email;
+  return '';
 }
 
 export function parseContactMentions(text: string): string {
@@ -315,7 +324,7 @@ export function markdownToEmbeddingText(markdown: string): string {
     'm-katex-equation',
     (data) => data.equation || ''
   );
-  text = replaceJsonTag(text, 'm-user-mention', (data) => data.email || '');
+  text = replaceJsonTag(text, 'm-user-mention', userMentionDisplayText);
   text = replaceJsonTag(
     text,
     'm-contact-mention',
