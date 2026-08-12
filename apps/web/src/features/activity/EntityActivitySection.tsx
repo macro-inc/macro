@@ -9,7 +9,8 @@ import {
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, Suspense } from 'solid-js';
-import { describeAction } from './describe-action';
+import { actionAsPropertyChange, describeAction } from './describe-action';
+import { PropertyChangeText } from './property-change';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
 
 export interface EntityActivitySectionProps {
@@ -78,7 +79,12 @@ function ActivityRow(props: { event: ActivityEvent }) {
           )}
         </Show>{' '}
         <span class="text-text-secondary">
-          {describeAction(props.event.action)}
+          <Show
+            when={actionAsPropertyChange(props.event.action)}
+            fallback={describeAction(props.event.action)}
+          >
+            {(change) => <PropertyChangeText action={change()} />}
+          </Show>
         </span>
       </span>
       <span class="ml-auto shrink-0 text-xs text-text-secondary">

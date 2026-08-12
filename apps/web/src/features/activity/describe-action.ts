@@ -3,6 +3,20 @@ import type { ActivityEvent } from '@queries/activity/graphql/entity';
 type ActivityAction = ActivityEvent['action'];
 
 /**
+ * Narrows an action to its property-change member, for rows that render
+ * the richer "changed X from A to B" phrase instead of [`describeAction`].
+ */
+export function actionAsPropertyChange(
+  action: ActivityAction
+):
+  | Extract<ActivityAction, { __typename: 'GraphqlActivityPropertyChanged' }>
+  | undefined {
+  return action.__typename === 'GraphqlActivityPropertyChanged'
+    ? action
+    : undefined;
+}
+
+/**
  * Short verb phrase for one activity action, phrased to follow an actor
  * name: "Sarah <created this>". Unknown actions (rows written by a newer
  * deployment) fall back to their humanized raw tag rather than hiding the
