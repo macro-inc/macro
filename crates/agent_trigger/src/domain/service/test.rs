@@ -46,6 +46,8 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
         id,
         channel_id: Uuid::from_u128(1),
+        initiator_user_id: MacroUserIdStr::try_from_email("initiator@example.com")
+            .expect("valid macro user id"),
         thread_id: None,
         originating_message_id: None,
         bot_id,

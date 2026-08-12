@@ -141,7 +141,7 @@ async fn disconnected_session(
         repo,
         CreateAgentSessionParams {
             id,
-            owner_id: origin.sender,
+            initiator_user_id: origin.sender,
             bot_id,
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),

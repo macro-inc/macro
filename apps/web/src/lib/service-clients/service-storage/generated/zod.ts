@@ -268,6 +268,7 @@ export const getAgentSessionResponse = zod
     createdAt: zod.iso.datetime({}).describe('When the session was created.'),
     harness: zod.string().describe('Harness slug.'),
     id: zod.uuid().describe('The session id.'),
+    initiatorUserId: zod.string().describe('The user who started the session.'),
     model: zod.string().describe('Model slug.'),
     modifiedAt: zod.iso
       .datetime({})
@@ -335,6 +336,7 @@ export const updateAgentSessionBody = zod
         'When the session was created. Immutable; echo the value returned by\nthe get endpoint.'
       ),
     harness: zod.string().describe('Harness slug.'),
+    initiatorUserId: zod.string(),
     model: zod.string().describe('Model slug.'),
     originatingMessageId: zod
       .uuid()

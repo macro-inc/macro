@@ -90,11 +90,12 @@ impl FromIterator<AgentSessionLog> for InMemoryAgentSessionRepo {
 impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
-        // The real repo creates a dedicated channel owned by `params.owner_id`;
-        // in memory the channel is just a fresh id.
+        // The real repo creates a dedicated channel owned by
+        // `params.initiator_user_id`; in memory the channel is just a fresh id.
         let session = AgentSession {
             id: params.id,
             channel_id: macro_uuid::generate_uuid_v7(),
+            initiator_user_id: params.initiator_user_id,
             thread_id: params.thread_id,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
@@ -264,6 +265,10 @@ pub fn test_agent_session(id: AgentSessionId, channel_id: Uuid) -> AgentSession 
     AgentSession {
         id,
         channel_id,
+        initiator_user_id: macro_user_id::user_id::MacroUserIdStr::try_from_email(
+            "initiator@example.com",
+        )
+        .expect("valid macro user id"),
         thread_id: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),

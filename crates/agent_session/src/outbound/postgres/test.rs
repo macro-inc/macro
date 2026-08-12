@@ -11,7 +11,50 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
+/// The fixed initiator every [`new_session`] fixture uses.
+const INITIATOR: &str = "macro|agent-session-channel-owner@example.com";
+
+/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
+/// `agent_session.initiator_user_id`'s foreign key.
+async fn insert_user(pool: &PgPool, user_id: &str) {
+    let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
+    // The no-op update makes the existing row's id come back when the user
+    // was already seeded by an earlier call.
+    let macro_user_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
+        RETURNING id
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        email,
+        email,
+        format!("stripe_{email}"),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("insert macro_user");
+    sqlx::query!(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+        user_id,
+        email,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await
+    .expect("insert User");
+}
+
 async fn create_test_bot(pool: &PgPool) -> BotId {
+    // Every session fixture is initiated by the same user, and
+    // `agent_session.initiator_user_id` references `"User"(id)` - so seed the
+    // row here, where every session-creating test already passes through.
+    insert_user(pool, INITIATOR).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
         .create_owned_bot(
@@ -39,7 +82,7 @@ fn new_session(
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         id: AgentSessionId::new(),
-        owner_id: user_id("macro|agent-session-channel-owner@example.com"),
+        initiator_user_id: user_id(INITIATOR),
         bot_id,
         thread_id,
         originating_message_id,
@@ -118,6 +161,8 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(session.channel_id, channel_id);
     assert_eq!(session.thread_id, None);
+    assert_eq!(session.initiator_user_id.as_ref(), INITIATOR);
+    assert_eq!(created.initiator_user_id.as_ref(), INITIATOR);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 
     let channel = sqlx::query!(
@@ -222,6 +267,28 @@ async fn update_persists_event_status(pool: PgPool) {
         .expect("disconnect agent session");
     let disconnected = repo.get(id).await.expect("get disconnected session");
     assert!(matches!(disconnected.status, SessionStatus::Disconnected));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_does_not_change_the_initiator(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    let mut session = repo.get(id).await.expect("get agent session");
+    assert_eq!(session.initiator_user_id.as_ref(), INITIATOR);
+
+    // A full-replace update carrying a different initiator must not rewrite
+    // who started the session.
+    session.initiator_user_id = user_id("macro|agent-session-impostor@example.com");
+    session.model = "another-model".to_string();
+    repo.update(session).await.expect("update agent session");
+
+    let updated = repo.get(id).await.expect("get updated agent session");
+    assert_eq!(updated.model, "another-model");
+    assert_eq!(updated.initiator_user_id.as_ref(), INITIATOR);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -476,9 +543,10 @@ async fn channel_belongs_to_only_one_session(pool: PgPool) {
     let duplicate = sqlx::raw_sql(
         r#"
         INSERT INTO agent_session (
-            id, channel_id, bot_id, model, harness, repo_url, status
+            id, channel_id, initiator_user_id, bot_id, model, harness, repo_url, status
         )
-        SELECT gen_random_uuid(), channel_id, bot_id, model, harness, repo_url, status
+        SELECT gen_random_uuid(), channel_id, initiator_user_id, bot_id, model, harness,
+               repo_url, status
         FROM agent_session
         LIMIT 1
         "#,

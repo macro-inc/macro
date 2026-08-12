@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SessionStatusDto } from './sessionStatusDto';
 import type { UpdateAgentSessionRequestAcpSessionId } from './updateAgentSessionRequestAcpSessionId';
 import type { UpdateAgentSessionRequestOriginatingMessageId } from './updateAgentSessionRequestOriginatingMessageId';
@@ -29,6 +30,10 @@ the get endpoint. */
   createdAt: string;
   /** Harness slug. */
   harness: string;
+  /** The user who started the session. Immutable; echo the value returned
+by the get endpoint. The repo omits it from the update, so a changed
+value here is ignored rather than applied. */
+  initiatorUserId: MacroUserIdStr;
   /** Model slug. */
   model: string;
   /** The exact message that invoked the bot, if any. */

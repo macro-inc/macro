@@ -33,8 +33,9 @@ pub enum SessionStatus {
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who owns the dedicated agent channel.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// User who started the session. Also becomes the owner of the
+    /// dedicated agent channel.
+    pub initiator_user_id: MacroUserIdStr<'static>,
     /// Bot running the agent.
     pub bot_id: BotId,
     /// Root message identifying the originating thread, if any.
@@ -56,6 +57,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// The dedicated channel created for this session.
     pub channel_id: Uuid,
+    /// The user who started the session. Immutable for the session's life.
+    pub initiator_user_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that originally invoked the bot, if any.
@@ -132,6 +135,10 @@ pub struct ChannelSessionLog {
 
 /// How an incoming channel context relates to an agent session.
 #[derive(Debug, Clone)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "the dedicated-channel variants are removed once sessions stop owning channels"
+)]
 pub enum ChannelSession {
     /// No session matched the channel context.
     None,

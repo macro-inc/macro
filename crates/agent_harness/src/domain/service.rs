@@ -142,7 +142,7 @@ where
             .sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
-                owner_id: origin.sender.clone(),
+                initiator_user_id: origin.sender.clone(),
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),

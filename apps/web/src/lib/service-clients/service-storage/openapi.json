@@ -11464,6 +11464,7 @@
         "required": [
           "id",
           "channelId",
+          "initiatorUserId",
           "botId",
           "model",
           "harness",
@@ -11500,6 +11501,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The session id."
+          },
+          "initiatorUserId": {
+            "type": "string",
+            "description": "The user who started the session."
           },
           "model": {
             "type": "string",
@@ -24218,6 +24223,7 @@
         "description": "Request body for replacing an agent session. This is full-resource `PUT`\nsemantics: fetch the session, modify it, and send the whole thing back.\n`channelId` and `createdAt` are immutable; echo the values returned by the\nget endpoint.",
         "required": [
           "channelId",
+          "initiatorUserId",
           "botId",
           "model",
           "harness",
@@ -24248,6 +24254,10 @@
           "harness": {
             "type": "string",
             "description": "Harness slug."
+          },
+          "initiatorUserId": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The user who started the session. Immutable; echo the value returned\nby the get endpoint. The repo omits it from the update, so a changed\nvalue here is ignored rather than applied."
           },
           "model": {
             "type": "string",

@@ -25,6 +25,8 @@ export interface AgentSessionResponse {
   harness: string;
   /** The session id. */
   id: string;
+  /** The user who started the session. */
+  initiatorUserId: string;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */

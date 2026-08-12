@@ -87,6 +87,7 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
 struct AgentSessionRow {
     id: Uuid,
     channel_id: Uuid,
+    initiator_user_id: MacroUserIdStr<'static>,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
@@ -108,6 +109,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             channel_id: row.channel_id,
+            initiator_user_id: row.initiator_user_id,
             thread_id: row.thread_id,
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
@@ -126,7 +128,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
             id,
-            owner_id,
+            initiator_user_id,
             bot_id,
             thread_id,
             originating_message_id,
@@ -147,7 +149,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             VALUES ($1, NULL, 'private', $2, 'agent')
             "#,
             new_channel_id,
-            owner_id.as_ref(),
+            initiator_user_id.as_ref(),
         )
         .execute(&mut *transaction)
         .await
@@ -159,7 +161,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             VALUES ($1, 'owner', $2)
             "#,
             new_channel_id,
-            owner_id.as_ref(),
+            initiator_user_id.as_ref(),
         )
         .execute(&mut *transaction)
         .await
@@ -170,16 +172,18 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             INSERT INTO agent_session (
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
-                repo_url, acp_session_id, status, status_event_name
+                id, channel_id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, acp_session_id, status, status_event_name
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
+                id, channel_id, initiator_user_id AS "initiator_user_id: MacroUserIdStr",
+                thread_id, originating_message_id, bot_id, model, harness,
                 repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             "#,
             id.as_uuid(),
             new_channel_id,
+            initiator_user_id.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -207,7 +211,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, channel_id, thread_id, originating_message_id, bot_id, model, harness,
+                id, channel_id, initiator_user_id AS "initiator_user_id: MacroUserIdStr",
+                thread_id, originating_message_id, bot_id, model, harness,
                 repo_url, acp_session_id, status, status_event_name, created_at, modified_at
             FROM agent_session
             WHERE id = $1
@@ -233,7 +238,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                session.id, session.channel_id, session.thread_id,
+                session.id, session.channel_id,
+                session.initiator_user_id AS "initiator_user_id: MacroUserIdStr",
+                session.thread_id,
                 session.originating_message_id, session.bot_id,
                 session.model, session.harness, session.repo_url, session.acp_session_id,
                 session.status, session.status_event_name, session.created_at, session.modified_at
@@ -323,6 +330,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 
     async fn update(&self, session: AgentSession) -> Result<()> {
         let (status, status_event_name) = status_columns(&session.status);
+        // `channel_id` and `initiator_user_id` are deliberately absent:
+        // both are immutable for the session's life, and a full-replace PUT
+        // must not be able to rewrite who started the session.
         let result = sqlx::query!(
             r#"
             UPDATE agent_session

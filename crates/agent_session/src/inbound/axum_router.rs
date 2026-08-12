@@ -25,6 +25,7 @@ use chrono::{DateTime, Utc};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -162,6 +163,10 @@ pub struct UpdateAgentSessionRequest {
     /// The session's dedicated channel. Immutable; echo the value returned
     /// by the get endpoint.
     pub channel_id: Uuid,
+    /// The user who started the session. Immutable; echo the value returned
+    /// by the get endpoint. The repo omits it from the update, so a changed
+    /// value here is ignored rather than applied.
+    pub initiator_user_id: MacroUserIdStr<'static>,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
@@ -191,6 +196,8 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// The session's dedicated channel.
     pub channel_id: Uuid,
+    /// The user who started the session.
+    pub initiator_user_id: String,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
@@ -218,6 +225,7 @@ impl From<AgentSession> for AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             channel_id: session.channel_id,
+            initiator_user_id: session.initiator_user_id.to_string(),
             thread_id: session.thread_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
@@ -298,6 +306,7 @@ pub async fn update_agent_session_handler<
         .update_session(AgentSession {
             id: AgentSessionId::new_from_uuid(session_id),
             channel_id: req.channel_id,
+            initiator_user_id: req.initiator_user_id,
             thread_id: req.thread_id,
             originating_message_id: req.originating_message_id,
             bot_id: BotId::new_from_uuid(req.bot_id),

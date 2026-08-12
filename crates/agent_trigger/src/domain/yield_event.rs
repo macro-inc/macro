@@ -41,6 +41,10 @@ pub enum NoEventReason {
 
 /// Result of evaluating one message for one bot and session context.
 #[derive(Debug)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "the event carries an AgentSession; revisit once sessions stop owning channels"
+)]
 pub enum AgentSessionEventDecision {
     /// Publish this event.
     Event(AgentSessionMacroEvent),
@@ -204,6 +208,8 @@ mod tests {
         AgentSession {
             id,
             channel_id: Uuid::from_u128(3),
+            initiator_user_id: MacroUserIdStr::try_from_email("initiator@example.com")
+                .expect("valid macro user id"),
             thread_id: Some(Uuid::from_u128(2)),
             originating_message_id: Some(Uuid::from_u128(2)),
             bot_id: BotId::TEST_A,
