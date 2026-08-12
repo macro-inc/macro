@@ -51,7 +51,11 @@ impl<'de> Deserialize<'de> for Schedule {
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum ActionKind {
+    /// Executed by Macro's own agent loop against a Macro model.
     Agent,
+    /// Executed by an agent running outside Macro, reached over HTTPS. Macro
+    /// remains the scheduler, the system of record and the UI.
+    RemoteAgent,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -59,6 +63,56 @@ pub struct AgentTask {
     pub model: String,
     pub prompt: String,
     pub user_prompt: String,
+}
+
+/// Label attributed to run messages when a [`RemoteAgentTask`] does not name
+/// the agent. Stored on the chat message in place of a Macro model name.
+pub const DEFAULT_REMOTE_AGENT_LABEL: &str = "remote-agent";
+
+/// Task for an agent executing outside Macro, stored in the untyped `task`
+/// column of a [`ScheduledAction`] whose kind is [`ActionKind::RemoteAgent`].
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct RemoteAgentTask {
+    /// HTTPS endpoint invoked on each run.
+    pub endpoint_url: String,
+    /// Opaque prompt forwarded to the remote agent.
+    pub user_prompt: String,
+    /// Optional label shown in place of a model name.
+    #[serde(default)]
+    pub agent_label: Option<String>,
+}
+
+impl RemoteAgentTask {
+    /// Label to attribute this task's chat messages to.
+    pub fn label(&self) -> &str {
+        match self.agent_label.as_deref() {
+            Some(label) if !label.trim().is_empty() => label,
+            _ => DEFAULT_REMOTE_AGENT_LABEL,
+        }
+    }
+}
+
+/// Payload POSTed to a remote agent endpoint on each run. The remote agent is
+/// given the identifiers of the run so it can correlate its own logs; it is not
+/// expected to write to Macro itself.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct RemoteAgentRunRequest {
+    /// Scheduled action being run.
+    #[schema(value_type = String, format = Uuid)]
+    pub action_id: Uuid,
+    /// Chat the run transcript is written to.
+    pub chat_id: String,
+    /// Name of the scheduled action, as shown in the UI.
+    pub action_name: String,
+    /// Prompt configured on the action.
+    pub user_prompt: String,
+}
+
+/// Response a remote agent endpoint is expected to return.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct RemoteAgentRunResponse {
+    /// Text written back into the run chat as the assistant reply.
+    pub output: String,
 }
 
 /// Client-supplied payload for creating a scheduled action. The server fills

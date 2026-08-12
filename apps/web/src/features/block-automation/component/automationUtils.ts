@@ -255,9 +255,11 @@ export function createEmptyDraft(): ScheduleDraft {
   };
 }
 
-function getAgentTask(schedule: ScheduledAction): AgentTask {
-  // Backend stores task as a JSON object; for kind === "Agent" it is shaped
-  // like AgentTask. Cast through unknown to satisfy the open-ended type.
+function getAgentTask(schedule: ScheduledAction): AgentTask | null {
+  // Backend stores task as a JSON object and `kind` is its discriminant: only
+  // kind === "Agent" is shaped like AgentTask. Other kinds (RemoteAgent) carry
+  // a different payload, so the cast is only sound behind this check.
+  if (schedule.kind !== 'Agent') return null;
   return schedule.task as unknown as AgentTask;
 }
 
@@ -268,12 +270,12 @@ export function draftFromSchedule(schedule: ScheduledAction): ScheduleDraft {
   return {
     id: schedule.id ?? undefined,
     name: schedule.name,
-    prompt: task.user_prompt ?? '',
+    prompt: task?.user_prompt ?? '',
     frequency: parsed.frequency,
     time: parsed.time,
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
-    model: (task.model as Model) ?? undefined,
+    model: (task?.model as Model) ?? undefined,
     enabled: schedule.enabled,
   };
 }
@@ -301,10 +303,19 @@ export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
 ): UpdateScheduledAction {
+  // This editor only builds Agent tasks. Writing one over an action of another
+  // kind would both convert the action and drop that kind's task payload (a
+  // RemoteAgent's endpoint_url, for one), so refuse rather than corrupt it.
+  if (previous.kind !== 'Agent') {
+    throw new Error(
+      `cannot edit a ${previous.kind} automation with the agent editor`
+    );
+  }
+
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
     schedule: buildCron(draft),
-    kind: 'Agent',
+    kind: previous.kind,
     timezone: previous.timezone || getDefaultTimezone(),
     task: buildAgentTask(draft) as unknown as UpdateScheduledAction['task'],
     enabled: draft.enabled,

@@ -12969,6 +12969,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "notification",
+ "reqwest",
  "secretsmanager_client",
  "serde",
  "serde_json",

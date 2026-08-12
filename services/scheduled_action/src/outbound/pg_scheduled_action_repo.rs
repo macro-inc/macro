@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
@@ -27,9 +30,13 @@ fn parse_timezone(s: &str) -> Result<Tz> {
     Tz::from_str(s).map_err(|e| anyhow::anyhow!("invalid timezone: {e}"))
 }
 
+/// Map the `kind` TEXT column to the domain enum. Kept in lockstep with
+/// [`kind_to_str`]: a variant missing here turns every row of that kind into a
+/// read error, since `kind` is plain TEXT rather than a Postgres enum.
 fn parse_kind(s: &str) -> Result<ActionKind> {
     match s {
         "Agent" => Ok(ActionKind::Agent),
+        "RemoteAgent" => Ok(ActionKind::RemoteAgent),
         other => bail!("unknown action kind: {other}"),
     }
 }
@@ -37,6 +44,7 @@ fn parse_kind(s: &str) -> Result<ActionKind> {
 fn kind_to_str(kind: &ActionKind) -> &'static str {
     match kind {
         ActionKind::Agent => "Agent",
+        ActionKind::RemoteAgent => "RemoteAgent",
     }
 }
 

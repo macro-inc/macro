@@ -1,5 +1,6 @@
 mod agent_task;
 mod notify;
+mod remote_agent_task;
 
 use std::sync::Arc;
 
@@ -16,24 +17,32 @@ use crate::domain::models::{
     ScheduledAction, ScheduledActionUpdate,
 };
 use crate::domain::ports::{
-    ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo,
+    RemoteAgentClient, ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo,
 };
 
-pub struct InProcessExecutor<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate> {
+pub struct InProcessExecutor<
+    Rpo: ScheduledActionRepo,
+    Live: ScheduledActionLiveUpdate,
+    Remote: RemoteAgentClient,
+> {
     repo: Arc<Rpo>,
     db: PgPool,
     tool_context: ToolServiceContext,
     notification_ingress: Arc<SqsNotificationIngress<SqsQueue>>,
     live_updates: Arc<Live>,
+    remote_agent_client: Arc<Remote>,
 }
 
-impl<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate> InProcessExecutor<Rpo, Live> {
+impl<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate, Remote: RemoteAgentClient>
+    InProcessExecutor<Rpo, Live, Remote>
+{
     pub fn new(
         repo: Arc<Rpo>,
         db: PgPool,
         tool_context: ToolServiceContext,
         notification_ingress: Arc<SqsNotificationIngress<SqsQueue>>,
         live_updates: Arc<Live>,
+        remote_agent_client: Arc<Remote>,
     ) -> Self {
         Self {
             repo,
@@ -41,6 +50,7 @@ impl<Rpo: ScheduledActionRepo, Live: ScheduledActionLiveUpdate> InProcessExecuto
             tool_context,
             notification_ingress,
             live_updates,
+            remote_agent_client,
         }
     }
 }
@@ -57,10 +67,11 @@ fn try_claim(action: &ScheduledAction) -> Result<()> {
     Ok(())
 }
 
-impl<Rpo, Live> ScheduledActionExecutor for InProcessExecutor<Rpo, Live>
+impl<Rpo, Live, Remote> ScheduledActionExecutor for InProcessExecutor<Rpo, Live, Remote>
 where
     Rpo: ScheduledActionRepo + Send + Sync + 'static,
     Live: ScheduledActionLiveUpdate,
+    Remote: RemoteAgentClient,
 {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
         try_claim(&action)?;
@@ -70,8 +81,12 @@ where
 
         // Create the chat up front so the caller gets a chat_id synchronously
         // and the eventual execution record can link back to it.
+        // Both kinds write their run transcript to a chat, so the UI (which
+        // navigates by chat_id) is identical for a remote agent.
         let chat_id = match action.kind {
-            ActionKind::Agent => agent_task::create_run_chat(&self.db, &action).await?,
+            ActionKind::Agent | ActionKind::RemoteAgent => {
+                agent_task::create_run_chat(&self.db, &action).await?
+            }
         };
 
         self.live_updates
@@ -92,11 +107,19 @@ where
         let tool_context = self.tool_context.clone();
         let notification_ingress = Arc::clone(&self.notification_ingress);
         let live_updates = Arc::clone(&self.live_updates);
+        let remote_agent_client = Arc::clone(&self.remote_agent_client);
         let start_time = Utc::now();
         let record_resource_id = chat_id.clone();
         tokio::spawn(async move {
-            let result =
-                run_job(&db, &tool_context, &notification_ingress, &action, &chat_id).await;
+            let result = run_job(
+                &db,
+                &tool_context,
+                &notification_ingress,
+                remote_agent_client.as_ref(),
+                &action,
+                &chat_id,
+            )
+            .await;
             let end_time = Utc::now();
             let is_success = result.is_ok();
 
@@ -154,10 +177,11 @@ where
     }
 }
 
-async fn run_job(
+async fn run_job<Remote: RemoteAgentClient>(
     db: &PgPool,
     tool_context: &ToolServiceContext,
     notification_ingress: &Arc<SqsNotificationIngress<SqsQueue>>,
+    remote_agent_client: &Remote,
     action: &ScheduledAction,
     chat_id: &str,
 ) -> Result<()> {
@@ -165,6 +189,17 @@ async fn run_job(
         ActionKind::Agent => {
             agent_task::run_agent_task(db, tool_context, notification_ingress, action, chat_id)
                 .await?;
+            Ok(())
+        }
+        ActionKind::RemoteAgent => {
+            remote_agent_task::run_remote_agent_task(
+                db,
+                remote_agent_client,
+                notification_ingress,
+                action,
+                chat_id,
+            )
+            .await?;
             Ok(())
         }
     }

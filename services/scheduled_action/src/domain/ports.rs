@@ -1,6 +1,6 @@
 use super::models::{
-    ActionExecutionRecord, DispatchEvent, InProgressExecution, ScheduledAction,
-    ScheduledActionUpdate,
+    ActionExecutionRecord, DispatchEvent, InProgressExecution, RemoteAgentRunRequest,
+    RemoteAgentRunResponse, RemoteAgentTask, ScheduledAction, ScheduledActionUpdate,
 };
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -110,4 +110,15 @@ pub trait ScheduledActionExecutor {
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
     fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
+}
+
+/// Invokes an agent that runs outside Macro. Implementations own transport
+/// concerns — endpoint validation, timeouts, redirect policy and any future
+/// request signing — so the executor stays transport-agnostic.
+pub trait RemoteAgentClient: Send + Sync + 'static {
+    fn run(
+        &self,
+        task: &RemoteAgentTask,
+        request: &RemoteAgentRunRequest,
+    ) -> impl Future<Output = Result<RemoteAgentRunResponse>> + Send;
 }

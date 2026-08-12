@@ -11,7 +11,8 @@ use crate::inbound::axum_router::{
 
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, AgentTask, CreateScheduledAction, InProgressExecution,
-    Schedule, ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    RemoteAgentRunRequest, RemoteAgentRunResponse, RemoteAgentTask, Schedule, ScheduledAction,
+    ScheduledActionUpdate, UpdateScheduledAction,
 };
 use model::response::EmptyResponse;
 
@@ -39,6 +40,9 @@ use model::response::EmptyResponse;
             Schedule,
             ActionKind,
             AgentTask,
+            RemoteAgentTask,
+            RemoteAgentRunRequest,
+            RemoteAgentRunResponse,
             InProgressExecution,
             ActionExecutionRecord,
             ScheduledActionUpdate,

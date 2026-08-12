@@ -26,6 +26,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
+use scheduled_action::outbound::remote_agent_http::ReqwestRemoteAgentClient;
 use scheduled_action::swagger::ApiDoc;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -76,6 +77,10 @@ async fn main() -> Result<()> {
 
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
 
+    let remote_agent_client = Arc::new(
+        ReqwestRemoteAgentClient::new().context("failed to build remote agent http client")?,
+    );
+
     // The dispatcher consumes its executor, so build a second executor for the
     // service to use when handling execute-now requests. Both executors share
     // the underlying repo/pool/tool-context via cheap Arc/PgPool clones.
@@ -85,6 +90,7 @@ async fn main() -> Result<()> {
         tool_context.clone(),
         Arc::clone(&notification_ingress),
         Arc::clone(&live_updates),
+        Arc::clone(&remote_agent_client),
     );
     let service_executor = Arc::new(InProcessExecutor::new(
         Arc::clone(&repo),
@@ -92,6 +98,7 @@ async fn main() -> Result<()> {
         tool_context,
         notification_ingress,
         live_updates,
+        remote_agent_client,
     ));
 
     let dispatcher_cancellation_token = CancellationToken::new();
