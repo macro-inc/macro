@@ -6,7 +6,6 @@ import {
   buildDiffState,
   buildWhoMap,
   diffStates,
-  serializedEditorStateToMarkdown,
 } from '@macro-inc/lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
