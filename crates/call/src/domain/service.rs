@@ -1860,6 +1860,9 @@ fn recording_key_parent_and_file_name(recording_key: &str) -> Option<(&str, &str
 
 fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> {
     let (parent, file_name) = recording_key_parent_and_file_name(recording_key)?;
+    if !file_name.ends_with(".mp4") {
+        return None;
+    }
     let recording_stem = file_name.strip_suffix(".mp4").unwrap_or(file_name);
 
     Some(format!("calls/{parent}/{recording_stem}/PREVIEW.jpg"))

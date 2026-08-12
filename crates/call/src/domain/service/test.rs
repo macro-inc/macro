@@ -2224,6 +2224,11 @@ fn derive_preview_key_from_recording_key_returns_none_without_parent() {
 }
 
 #[test]
+fn derive_preview_key_from_recording_key_returns_none_for_non_mp4_recording() {
+    assert!(derive_preview_key_from_recording_key("abc-123/recording.mov").is_none());
+}
+
+#[test]
 fn derive_preview_keys_from_recording_key_includes_new_and_legacy_mp4_paths() {
     assert_eq!(
         derive_preview_keys_from_recording_key("abc-123/recording.mp4"),
