@@ -415,3 +415,110 @@ async fn an_unknown_session_has_no_audience(pool: PgPool) {
 
     assert!(audience.is_empty());
 }
+
+/// The grants a session is born with: the initiator owns it, and the channel
+/// the bot was mentioned in can steer it. Both are written in the same
+/// transaction as the session, so a session can never exist unreachable.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_grants_the_initiator_and_the_originating_channel(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (origin_channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+
+    let params = new_session(bot_id, Some(thread_id), Some(originating_message_id));
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    let mut grants = sqlx::query!(
+        r#"
+        SELECT source_id, source_type::text AS "source_type!", access_level::text AS "access_level!"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'agent_session'
+        ORDER BY source_id
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the session's grants")
+    .into_iter()
+    .map(|row| (row.source_id, row.source_type, row.access_level))
+    .collect::<Vec<_>>();
+    grants.sort();
+
+    let mut expected = vec![
+        (
+            INITIATOR.to_string(),
+            "user".to_string(),
+            "owner".to_string(),
+        ),
+        (
+            origin_channel_id.to_string(),
+            "channel".to_string(),
+            "edit".to_string(),
+        ),
+    ];
+    expected.sort();
+
+    assert_eq!(grants, expected);
+}
+
+/// A session created without a mention has no channel to inherit an audience
+/// from, so it is the initiator's alone.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_without_a_mention_grants_only_the_initiator(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+
+    let params = new_session(bot_id, None, None);
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    let grants = sqlx::query!(
+        r#"
+        SELECT source_id, access_level::text AS "access_level!"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'agent_session'
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the session's grants");
+
+    assert_eq!(grants.len(), 1);
+    assert_eq!(grants[0].source_id, INITIATOR);
+    assert_eq!(grants[0].access_level, "owner");
+}
+
+/// `entity_access.entity_id` carries no foreign key, so deleting a session
+/// has to take its grants with it or they accumulate forever.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_removes_the_session_grants(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (_, thread_id, originating_message_id) = insert_originating_thread_fixture(&pool).await;
+
+    let params = new_session(bot_id, Some(thread_id), Some(originating_message_id));
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("delete agent session");
+
+    let remaining = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'agent_session'
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count the session's grants");
+
+    assert_eq!(remaining, 0);
+}

@@ -874,6 +874,7 @@ async fn main() -> anyhow::Result<()> {
                 agent_session_repo,
             ),
         ),
+        entity_access_service.clone(),
         authorization_state.clone(),
     );
 

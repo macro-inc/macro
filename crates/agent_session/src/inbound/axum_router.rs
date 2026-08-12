@@ -1,11 +1,13 @@
 //! Axum router and HTTP handlers exposing the agent session service.
 //!
-//! Every route authenticates its caller with
-//! [`MacroAuthorizationExtractor`] under the [`UserOrBot`] policy: directly
-//! authenticated users and bots are admitted, everything else is rejected at
-//! the edge. Handlers only map transport DTOs to domain types and call the
-//! [`AgentSessionService`]; they make no authorization or business
-//! decisions.
+//! Every route authenticates its caller and then authorizes them with
+//! [`AgentSessionAccessLevelExtractor`], checked before the handler body
+//! runs: viewing a session or its log needs `View`, controlling or deleting
+//! one needs `Owner`. Permission comes from the session's own `entity_access`
+//! rows - the initiator as owner, the mention's channel as editor - never
+//! from any channel the session was once rendered in. Handlers only map
+//! transport DTOs to domain types and call the [`AgentSessionService`]; they
+//! make no authorization or business decisions of their own.
 
 #[cfg(test)]
 mod test;
@@ -22,6 +24,9 @@ use axum::{
 };
 use chrono::DateTime;
 use chrono::Utc;
+use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
 };
@@ -38,67 +43,99 @@ use crate::domain::service::AgentSessionService;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
-pub struct AgentSessionRouterState<T, Auth> {
+pub struct AgentSessionRouterState<T, Access, Auth> {
     service: Arc<T>,
+    entity_access: Arc<Access>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<T, Auth> AgentSessionRouterState<T, Auth> {
-    /// Create router state from a service and authorization state.
-    pub fn new(service: T, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+impl<T, Access, Auth> AgentSessionRouterState<T, Access, Auth> {
+    /// Create router state from a service, the entity access service its
+    /// permission extractors resolve grants through, and authorization state.
+    pub fn new(
+        service: T,
+        entity_access: Arc<Access>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             service: Arc::new(service),
+            entity_access,
             authorization_state,
         }
     }
 }
 
 // Manual Clone impl so T doesn't need to be Clone (it's behind Arc).
-impl<T, Auth> Clone for AgentSessionRouterState<T, Auth> {
+impl<T, Access, Auth> Clone for AgentSessionRouterState<T, Access, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
+            entity_access: Arc::clone(&self.entity_access),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<T, Auth> FromRef<AgentSessionRouterState<T, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &AgentSessionRouterState<T, Auth>) -> Self {
+impl<T, Access, Auth> FromRef<AgentSessionRouterState<T, Access, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &AgentSessionRouterState<T, Access, Auth>) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+impl<T, Access, Auth> FromRef<AgentSessionRouterState<T, Access, Auth>> for Arc<Access> {
+    fn from_ref(state: &AgentSessionRouterState<T, Access, Auth>) -> Self {
+        Arc::clone(&state.entity_access)
     }
 }
 
 /// Shared state for the control routes: the recipient holding the session's
 /// live resources, plus the authorization state the extractors run against.
-pub struct AgentSessionControlState<R, Auth> {
+pub struct AgentSessionControlState<R, Access, Auth> {
     recipient: Arc<R>,
+    entity_access: Arc<Access>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<R, Auth> AgentSessionControlState<R, Auth> {
-    /// Create control state from a recipient and authorization state.
-    pub fn new(recipient: Arc<R>, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+impl<R, Access, Auth> AgentSessionControlState<R, Access, Auth> {
+    /// Create control state from a recipient, the entity access service its
+    /// permission extractors resolve grants through, and authorization state.
+    pub fn new(
+        recipient: Arc<R>,
+        entity_access: Arc<Access>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             recipient,
+            entity_access,
             authorization_state,
         }
     }
 }
 
 // Manual Clone impl so R doesn't need to be Clone (it's behind Arc).
-impl<R, Auth> Clone for AgentSessionControlState<R, Auth> {
+impl<R, Access, Auth> Clone for AgentSessionControlState<R, Access, Auth> {
     fn clone(&self) -> Self {
         Self {
             recipient: Arc::clone(&self.recipient),
+            entity_access: Arc::clone(&self.entity_access),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<R, Auth> FromRef<AgentSessionControlState<R, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &AgentSessionControlState<R, Auth>) -> Self {
+impl<R, Access, Auth> FromRef<AgentSessionControlState<R, Access, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &AgentSessionControlState<R, Access, Auth>) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+impl<R, Access, Auth> FromRef<AgentSessionControlState<R, Access, Auth>> for Arc<Access> {
+    fn from_ref(state: &AgentSessionControlState<R, Access, Auth>) -> Self {
+        Arc::clone(&state.entity_access)
     }
 }
 
@@ -108,17 +145,23 @@ impl<R, Auth> FromRef<AgentSessionControlState<R, Auth>> for MacroAuthorizationS
 /// Separate from [`agent_session_control_router`] because these routes only
 /// read the database and so can be served by any process, while the control
 /// routes have to run where the session's actor lives.
-pub fn agent_session_read_router<T, Auth, S>(state: AgentSessionRouterState<T, Auth>) -> Router<S>
+pub fn agent_session_read_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
 where
     T: AgentSessionService,
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
-        .route("/{session_id}", get(get_agent_session_handler::<T, Auth>))
+        .route(
+            "/{session_id}",
+            get(get_agent_session_handler::<T, Access, Auth>),
+        )
         .route(
             "/{session_id}/log",
-            get(get_agent_session_log_handler::<T, Auth>),
+            get(get_agent_session_log_handler::<T, Access, Auth>),
         )
         .with_state(state)
 }
@@ -128,22 +171,23 @@ where
 ///
 /// Only mountable in the process that owns the sessions: every route here
 /// reaches a live transport, which is in-memory state.
-pub fn agent_session_control_router<R, Auth, S>(
-    state: AgentSessionControlState<R, Auth>,
+pub fn agent_session_control_router<R, Access, Auth, S>(
+    state: AgentSessionControlState<R, Access, Auth>,
 ) -> Router<S>
 where
     R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
         .route(
             "/{session_id}",
-            delete(delete_agent_session_handler::<R, Auth>),
+            delete(delete_agent_session_handler::<R, Access, Auth>),
         )
         .route(
             "/{session_id}/control",
-            post(control_agent_session_handler::<R, Auth>),
+            post(control_agent_session_handler::<R, Access, Auth>),
         )
         .with_state(state)
 }
@@ -286,14 +330,14 @@ impl From<AgentSession> for AgentSessionResponse {
     )
 )]
 /// Get an agent session by id.
-#[tracing::instrument(
-    skip(state, caller),
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
-    err(Debug)
-)]
-pub async fn get_agent_session_handler<T: AgentSessionService, Auth: MacroAuthorizationService>(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+pub async fn get_agent_session_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionResponse>, AgentSessionApiError> {
     let session = state
@@ -320,15 +364,17 @@ pub async fn get_agent_session_handler<T: AgentSessionService, Auth: MacroAuthor
 )]
 /// Perform a control operation on a live agent session.
 #[tracing::instrument(
-    skip(state, caller, req),
+    skip_all,
     fields(actor = %caller.acting_entity(), session_id = %session_id),
     err(Debug)
 )]
 pub async fn control_agent_session_handler<
     R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<AgentSessionControlState<R, Auth>>,
+    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<ControlRequest>,
@@ -366,17 +412,14 @@ pub async fn control_agent_session_handler<
     )
 )]
 /// Delete an agent session and its live resources.
-#[tracing::instrument(
-    skip(state, caller),
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
-    err(Debug)
-)]
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
 pub async fn delete_agent_session_handler<
     R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<AgentSessionControlState<R, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AgentSessionApiError> {
     state
@@ -502,17 +545,14 @@ pub struct AgentSessionLogResponse {
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.
-#[tracing::instrument(
-    skip(state, caller),
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
-    err(Debug)
-)]
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
 pub async fn get_agent_session_log_handler<
     T: AgentSessionService,
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionLogResponse>, AgentSessionApiError> {
     let log = state

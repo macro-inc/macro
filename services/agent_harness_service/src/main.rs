@@ -191,8 +191,14 @@ async fn main() -> anyhow::Result<()> {
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
     );
+    let entity_access = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
+    );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
+        entity_access,
         MacroAuthorizationState::new(Arc::new(authorization_service)),
     );
     let http_port = config.port;

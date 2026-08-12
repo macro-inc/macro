@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level::text\n        FROM entity_access\n        WHERE entity_id = $1\n        AND entity_type = 'agent_session'\n        AND source_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8508261617da7b0612b0d5f4a214b923ce0f4aa30f988a82c7d0736979b2acf1"
+}

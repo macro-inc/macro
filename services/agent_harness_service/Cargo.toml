@@ -22,6 +22,7 @@ bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 database_env_vars = { path = "../../crates/database_env_vars" }
+entity_access = { path = "../../crates/entity_access" }
 contacts = { path = "../../crates/contacts" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }

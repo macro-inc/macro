@@ -19,6 +19,10 @@ use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
+use entity_access_db_utils::{
+    AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
+    insert_entity_access_row,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
@@ -135,7 +139,15 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             repo_url,
         } = params;
 
-        // A session is one row: nothing else is created alongside it.
+        // The session row and its access grants land together: a crash between
+        // the two would leave a session nobody - not even its initiator -
+        // could open.
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session create")?;
+
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         let row = sqlx::query_as!(
             AgentSessionRow,
@@ -162,9 +174,54 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             status,
             status_event_name,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to create agent session")?;
+
+        insert_entity_access_row(
+            &mut transaction,
+            &id.as_uuid(),
+            EntityType::AgentSession,
+            initiator_user_id.as_ref(),
+            EntityAccessSourceType::User,
+            AccessLevel::Owner,
+        )
+        .await
+        .context("failed to grant the initiator access to the agent session")?;
+
+        // The channel the bot was mentioned in can steer the session: the
+        // invocation was public there, so that audience is. Read from the
+        // mention rather than taken as a parameter, so a caller cannot claim
+        // a channel the mention did not happen in. A directly created
+        // session has no mention, and so no inherited audience.
+        let origin_channel_id = match originating_message_id {
+            Some(message_id) => sqlx::query_scalar!(
+                "SELECT channel_id FROM comms_messages WHERE id = $1",
+                message_id,
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("failed to read the originating message's channel")?,
+            None => None,
+        };
+
+        if let Some(channel_id) = origin_channel_id {
+            insert_entity_access_row(
+                &mut transaction,
+                &id.as_uuid(),
+                EntityType::AgentSession,
+                &channel_id.to_string(),
+                EntityAccessSourceType::Channel,
+                AccessLevel::Edit,
+            )
+            .await
+            .context("failed to grant the originating channel access to the agent session")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit agent session create")?;
 
         Ok(row.try_into()?)
     }
@@ -301,12 +358,22 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
-        // Deletes the session itself. This used to delete the session's
-        // channel and let `ON DELETE CASCADE` carry the session away with it,
-        // which stopped working the moment a session could have no channel.
-        //
-        // A session old enough to own one leaves it behind: it holds the
-        // history that channel renders, and is not this operation's to destroy.
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session delete")?;
+
+        // `entity_access.entity_id` is polymorphic and so cannot carry a
+        // foreign key: nothing reaps these rows when the session goes, and
+        // they would accumulate forever.
+        delete_entity_access_rows(&mut transaction, &id.as_uuid(), EntityType::AgentSession)
+            .await
+            .context("failed to delete agent session entity access rows")?;
+
+        // A session old enough to have owned a dedicated channel leaves it
+        // behind: it holds the history that channel renders, and is not this
+        // operation's to destroy.
         sqlx::query!(
             r#"
             DELETE FROM agent_session
@@ -314,9 +381,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             "#,
             id.as_uuid(),
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        transaction
+            .commit()
+            .await
+            .context("commit agent session delete")?;
 
         Ok(())
     }

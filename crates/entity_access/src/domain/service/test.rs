@@ -283,6 +283,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.call_access.lock().await)
     }
 
+    async fn get_agent_session_access(
+        &self,
+        _agent_session_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(None)
+    }
+
     async fn get_reminder_access(
         &self,
         _reminder_id: &str,

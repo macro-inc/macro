@@ -466,7 +466,7 @@ pub(crate) type DssWebhookState =
 /// Type alias for the agent session router state: the domain service backed
 /// by the Postgres repo, which serves the session and log ports, and answers
 /// turn queries by folding the log on read. A live session's frames also go
-/// out over the connection gateway, addressed at the channel's participants -
+/// out over the connection gateway, addressed at the session's viewers -
 /// which the same repo answers.
 pub(crate) type DssAgentSessionState = AgentSessionRouterState<
     AgentSessionServiceImpl<
@@ -474,6 +474,7 @@ pub(crate) type DssAgentSessionState = AgentSessionRouterState<
         FoldedMessageService<PgAgentSessionRepo>,
         ConnectionGatewayAgentSessionRealtime<PgAgentSessionRepo>,
     >,
+    EntityAccessService,
     AuthorizationService,
 >;
 
