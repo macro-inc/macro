@@ -641,3 +641,14 @@ export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
 export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
   getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
   (DEV_MODE_ENV ? true : undefined);
+
+// The "Activity" section in the entity side panel: the entity's recent
+// activity timeline from the GraphQL activity log (who did what, when).
+// Purely additive — when off, the section never mounts and no activity
+// query is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ENTITY_ACTIVITY_SECTION.
+export const ENABLE_ENTITY_ACTIVITY_SECTION_FLAG =
+  'enable-entity-activity-section';
+export const ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ENTITY_ACTIVITY_SECTION') ??
+  (DEV_MODE_ENV ? true : undefined);
