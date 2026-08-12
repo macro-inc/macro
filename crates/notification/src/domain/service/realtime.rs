@@ -1,0 +1,109 @@
+//! WebSocket notification consumer orchestration.
+
+#[cfg(test)]
+mod test;
+
+use std::{num::NonZeroUsize, time::Duration};
+
+use broadcast::{BroadcastManager, GlobalSpawner};
+use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
+
+use crate::domain::{
+    models::websocket_notification_event::WebSocketNotificationMetadata,
+    ports::{WebSocketNotificationConsumer, WebSocketNotificationSubscriptionService},
+};
+
+/// Number of messages retained by each user-keyed broadcast channel.
+const BROADCAST_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(64).unwrap();
+/// Number of messages buffered for each individual subscriber.
+const SUBSCRIBER_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(16).unwrap();
+/// Total receive attempts before the consumer returns for supervision.
+const MAX_RECEIVE_ATTEMPTS: usize = 5;
+
+/// Retries after one, two, four, and eight seconds.
+fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take(MAX_RECEIVE_ATTEMPTS - 1)
+}
+
+/// Service for distributing received WebSocket notifications to user-scoped subscribers.
+pub struct WebSocketNotificationConsumerService<C>
+where
+    C: WebSocketNotificationConsumer,
+{
+    consumer: C,
+    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, serde_json::Value>,
+}
+
+impl<C> WebSocketNotificationConsumerService<C>
+where
+    C: WebSocketNotificationConsumer,
+{
+    /// Creates a WebSocket notification consumer service backed by `consumer`.
+    pub fn new(consumer: C) -> Self {
+        Self {
+            consumer,
+            broadcasts: BroadcastManager::new(GlobalSpawner, BROADCAST_BUFFER_CAPACITY),
+        }
+    }
+
+    /// Subscribes to WebSocket notifications addressed to `user_id`.
+    ///
+    /// The returned receiver is closed if its buffer fills, ensuring a slow subscriber cannot
+    /// delay the shared consumer or other subscribers.
+    #[must_use]
+    pub fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+        self.broadcasts
+            .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
+    }
+
+    /// Receives notifications and distributes them to subscribers until reception fails.
+    ///
+    /// Callers should run this future in a supervised task. Notifications for users without active
+    /// subscribers are intentionally dropped.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn run(&self) -> Result<(), Report> {
+        loop {
+            let WebSocketNotificationMetadata {
+                recipients,
+                notification,
+            } = Retry::start(receive_retry_strategy(), || self.consumer.recv())
+                .await
+                .context(format!(
+                    "failed to receive WebSocket notification after {MAX_RECEIVE_ATTEMPTS} attempts"
+                ))?;
+
+            for recipient in recipients {
+                match self.broadcasts.publish(&recipient, notification.clone()) {
+                    Ok(subscriber_count) => tracing::trace!(
+                        subscriber_count,
+                        user_id = %recipient,
+                        "distributed WebSocket notification"
+                    ),
+                    Err(_) => tracing::trace!(
+                        user_id = %recipient,
+                        "dropping WebSocket notification without subscribers"
+                    ),
+                }
+            }
+        }
+    }
+}
+
+impl<C> WebSocketNotificationSubscriptionService for WebSocketNotificationConsumerService<C>
+where
+    C: WebSocketNotificationConsumer,
+{
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+        WebSocketNotificationConsumerService::subscribe(self, user_id)
+    }
+}

@@ -55,6 +55,13 @@ impl<T: Serialize + DeserializeOwned + Send + Sync> NotificationMacroEvent<T> {
             event,
         }
     }
+
+    /// Returns the WebSocket delivery request carried by this event.
+    pub fn into_message(self) -> WebSocketNotificationMetadata<T> {
+        match self.event.event {
+            NotificationTopicEvent::WebSocketDeliveryRequested(metadata) => metadata,
+        }
+    }
 }
 
 impl<T: Serialize + DeserializeOwned + Send + Sync> MacroEvent for NotificationMacroEvent<T> {
@@ -72,3 +79,6 @@ impl<T: Serialize + DeserializeOwned + Send + Sync> MacroEvent for NotificationM
         Self::with_event(key, event)
     }
 }
+
+/// WebSocket notification event decoded with an arbitrary JSON payload.
+pub type JsonNotificationMacroEvent = NotificationMacroEvent<serde_json::Value>;

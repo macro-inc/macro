@@ -301,6 +301,56 @@ pub trait WebSocketSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
+/// Receives WebSocket notification delivery requests.
+pub trait WebSocketNotificationConsumer: Send + Sync + 'static {
+    /// Waits for and returns the next WebSocket notification delivery request.
+    fn recv(
+        &self,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::models::websocket_notification_event::WebSocketNotificationMetadata<
+                serde_json::Value,
+            >,
+            Report,
+        >,
+    > + Send;
+}
+
+/// Provides user-scoped subscriptions to received WebSocket notifications.
+pub trait WebSocketNotificationSubscriptionService: Send + Sync + 'static {
+    /// Subscribes to WebSocket notifications addressed to `user_id`.
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<serde_json::Value>;
+}
+
+impl<S> WebSocketNotificationSubscriptionService for std::sync::Arc<S>
+where
+    S: WebSocketNotificationSubscriptionService,
+{
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+        self.as_ref().subscribe(user_id)
+    }
+}
+
+/// No-op WebSocket notification subscription service for schema-only consumers.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoopWebSocketNotificationSubscriptionService;
+
+impl WebSocketNotificationSubscriptionService for NoopWebSocketNotificationSubscriptionService {
+    fn subscribe(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> tokio::sync::mpsc::Receiver<serde_json::Value> {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        receiver
+    }
+}
+
 use crate::domain::models::queue_message::EmailContent;
 
 /// Port for email delivery.
