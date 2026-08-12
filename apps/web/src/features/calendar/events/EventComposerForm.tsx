@@ -1,12 +1,11 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Button, cn, Select } from '@ui';
-import { addMonths, format, parseISO } from 'date-fns';
+import { Button, cn, Layer } from '@ui';
+import { parseISO } from 'date-fns';
 import {
   type Accessor,
   createMemo,
   createSignal,
   createUniqueId,
-  For,
   Show,
 } from 'solid-js';
 import { EventComposerDateTimeRangeFields } from './EventComposerDateTimeRangeFields';
@@ -37,25 +36,14 @@ import {
   type RecurrenceConfig,
   recurrenceConfigsEqual,
   recurrencePresetsFor,
-  WEEKDAY_CODES,
-  type WeekdayCode,
 } from './recurrence-editor';
+import { RecurrenceBuilder } from './RecurrenceBuilder';
 import { formatRecurrenceDescription } from './recurrence-description';
 
-const DATE_VALUE = 'yyyy-MM-dd';
-type ComposerSelectOption<Value extends string = string> = {
-  value: Value;
+type ComposerSelectOption = {
+  value: string;
   label: string;
 };
-
-const REPEAT_FREQUENCY_OPTIONS: ComposerSelectOption<
-  RecurrenceConfig['frequency']
->[] = [
-  { value: 'DAILY', label: 'day' },
-  { value: 'WEEKLY', label: 'week' },
-  { value: 'MONTHLY', label: 'month' },
-  { value: 'YEARLY', label: 'year' },
-];
 
 export interface EventComposerFormProps {
   initialValues?: EventEditorInitialValues;
@@ -73,7 +61,6 @@ export interface EventComposerFormProps {
 export function EventComposerForm(props: EventComposerFormProps) {
   const formId = createUniqueId();
 
-  const recurrenceEndsName = `event-composer-recurrence-ends-${formId}`;
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
 
   const isEdit = () => props.initialValues !== undefined;
@@ -148,11 +135,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
     initialConfig ?? defaultCustomConfig(startForRecurrence())
   );
 
-  const selectedFrequencyOption = () =>
-    REPEAT_FREQUENCY_OPTIONS.find(
-      (option) => option.value === customConfig().frequency
-    ) ?? REPEAT_FREQUENCY_OPTIONS[0];
-
   const effectiveCalendarId = () =>
     state().calendarId ?? props.calendarOptions[0]?.id;
 
@@ -171,18 +153,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
     }
     setRecurrenceChoice(choice);
   };
-
-  const toggleWeekday = (code: WeekdayCode) => {
-    setCustomConfig((config) => ({
-      ...config,
-      byDay: config.byDay.includes(code)
-        ? config.byDay.filter((day) => day !== code)
-        : [...config.byDay, code],
-    }));
-  };
-
-  const setEnds = (ends: RecurrenceConfig['ends']) =>
-    setCustomConfig((config) => ({ ...config, ends }));
 
   const customValid = createMemo(() => {
     if (recurrenceChoice() !== 'custom') return true;
@@ -364,160 +334,20 @@ export function EventComposerForm(props: EventComposerFormProps) {
         </div>
 
         <Show when={recurrenceChoice() === 'custom'}>
-          <div class="flex flex-col gap-2.5 rounded-lg border border-edge-muted p-3 text-xs text-ink-muted">
-            <div class="flex flex-wrap items-center gap-2">
-              <span>Repeat every</span>
-              <input
-                type="number"
-                min="1"
-                value={customConfig().interval}
-                onInput={(event) =>
-                  setCustomConfig((config) => ({
-                    ...config,
-                    interval: event.currentTarget.valueAsNumber,
-                  }))
-                }
-                aria-label="Repeat interval"
-                class="settings-input h-7 w-16"
+          <Layer depth={3}>
+            <div class="rounded-xl bg-surface p-4 text-ink">
+              <RecurrenceBuilder
+                value={customConfig()}
+                start={startForRecurrence()}
+                allDay={state().allDay}
                 disabled={fieldIsDisabled('recurrence')}
+                onChange={({
+                  recurrenceDescription: _recurrenceDescription,
+                  ...config
+                }) => setCustomConfig(config)}
               />
-              <Select<ComposerSelectOption<RecurrenceConfig['frequency']>>
-                options={REPEAT_FREQUENCY_OPTIONS}
-                value={selectedFrequencyOption()}
-                onChange={(option) =>
-                  option &&
-                  setCustomConfig((config) => ({
-                    ...config,
-                    frequency: option.value,
-                  }))
-                }
-                optionValue="value"
-                optionTextValue="label"
-                disabled={fieldIsDisabled('recurrence')}
-              >
-                <Select.Trigger
-                  aria-label="Repeat unit"
-                  class="settings-input h-7 w-28"
-                >
-                  <Select.Value<
-                    ComposerSelectOption<RecurrenceConfig['frequency']>
-                  >>
-                    {(selectState) => selectState.selectedOption().label}
-                  </Select.Value>
-                  <Select.Icon />
-                </Select.Trigger>
-                <Select.Content>
-                  <Select.Listbox />
-                </Select.Content>
-              </Select>
             </div>
-
-            <Show when={customConfig().frequency === 'WEEKLY'}>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span class="mr-1">Repeat on</span>
-                <For each={WEEKDAY_CODES}>
-                  {(code) => (
-                    <Button
-                      type="button"
-                      variant={
-                        customConfig().byDay.includes(code) ? 'active' : 'ghost'
-                      }
-                      size="icon-sm"
-                      class="rounded-full text-xxs"
-                      aria-label={code}
-                      aria-pressed={customConfig().byDay.includes(code)}
-                      disabled={fieldIsDisabled('recurrence')}
-                      onClick={() => toggleWeekday(code)}
-                    >
-                      {code[0]}
-                    </Button>
-                  )}
-                </For>
-              </div>
-            </Show>
-
-            <div class="flex flex-col gap-1.5">
-              <span>Ends</span>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={recurrenceEndsName}
-                  checked={customConfig().ends.kind === 'never'}
-                  onChange={() => setEnds({ kind: 'never' })}
-                  disabled={fieldIsDisabled('recurrence')}
-                />
-                Never
-              </label>
-              <label class="flex flex-wrap items-center gap-2">
-                <input
-                  type="radio"
-                  name={recurrenceEndsName}
-                  checked={customConfig().ends.kind === 'on'}
-                  onChange={() =>
-                    setEnds({
-                      kind: 'on',
-                      date: format(
-                        addMonths(startForRecurrence(), 3),
-                        DATE_VALUE
-                      ),
-                    })
-                  }
-                  disabled={fieldIsDisabled('recurrence')}
-                />
-                On
-                <Show when={customConfig().ends.kind === 'on'}>
-                  <input
-                    type="date"
-                    value={
-                      customConfig().ends.kind === 'on'
-                        ? customConfig().ends.date
-                        : ''
-                    }
-                    onInput={(event) =>
-                      setEnds({
-                        kind: 'on',
-                        date: event.currentTarget.value,
-                      })
-                    }
-                    aria-label="Ends on date"
-                    class="settings-input h-7"
-                    disabled={fieldIsDisabled('recurrence')}
-                  />
-                </Show>
-              </label>
-              <label class="flex flex-wrap items-center gap-2">
-                <input
-                  type="radio"
-                  name={recurrenceEndsName}
-                  checked={customConfig().ends.kind === 'after'}
-                  onChange={() => setEnds({ kind: 'after', count: 13 })}
-                  disabled={fieldIsDisabled('recurrence')}
-                />
-                After
-                <Show when={customConfig().ends.kind === 'after'}>
-                  <input
-                    type="number"
-                    min="1"
-                    value={
-                      customConfig().ends.kind === 'after'
-                        ? customConfig().ends.count
-                        : 13
-                    }
-                    onInput={(event) =>
-                      setEnds({
-                        kind: 'after',
-                        count: event.currentTarget.valueAsNumber,
-                      })
-                    }
-                    aria-label="Ends after occurrences"
-                    class="settings-input h-7 w-20"
-                    disabled={fieldIsDisabled('recurrence')}
-                  />
-                  occurrences
-                </Show>
-              </label>
-            </div>
-          </div>
+          </Layer>
         </Show>
       </div>
 
