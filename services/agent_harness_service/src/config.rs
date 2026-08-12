@@ -60,6 +60,9 @@ pub struct Config {
     pub harness_repo_url: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
+    /// Port the control routes are served on.
+    #[macro_config_default(8101)]
+    pub port: u16,
 }
 
 impl Config {

@@ -869,7 +869,6 @@ async fn main() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             agent_session_repo.clone(),
             FoldedMessageService::new(agent_session_repo.clone()),
-            agent_session_repo.clone(),
             ConnectionGatewayAgentSessionRealtime::new(
                 conn_gateway_client.clone(),
                 agent_session_repo,

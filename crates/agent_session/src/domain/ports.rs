@@ -1,12 +1,15 @@
 use agent_client_protocol::schema::v1::SessionId;
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use serde::Deserialize;
+use utoipa::ToSchema;
 
 use super::error::Result;
 use super::model::*;
-use std::collections::HashSet;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -65,8 +68,9 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// stop rendering because its agent was removed.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
-    /// Update an existing agent session.
-    fn update(&self, session: AgentSession) -> impl Future<Output = Result<()>> + Send;
+    /// Persist a session's model without replacing other session fields.
+    fn set_model(&self, id: AgentSessionId, model: &str)
+    -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the agent-assigned ACP session id without replacing other session fields.
     fn set_acp_session_id(
@@ -85,10 +89,14 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     fn create(&self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 
     /// List all log entries for a session, in chronological order.
+    ///
+    /// Entries come back stamped with when the log recorded them: the frame
+    /// itself carries no time, and a reader ordering or merging a session's
+    /// messages has nothing else to order them by.
     fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<AgentSessionLog>>> + Send;
+    ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
 }
 
 /// Sequential live log writer owned by one session actor.
@@ -97,55 +105,11 @@ pub trait AgentSessionLogWriter: Send + 'static {
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Writing agent-message placeholder rows into comms.
-///
-/// A placeholder is a comms message with no stored body that references an
-/// agent-session message identifier. The identifier stores the session and
-/// its session-local `"{turn}:{author}"` message id.
-///
-/// One placeholder per folded message, not per turn: a turn's prompt and its
-/// reply have different authors, so collapsing them onto one row would leave
-/// the prompt with no sender of its own.
-pub trait Comms {
-    /// The messages of this session that already have a placeholder row in
-    /// its channel.
-    ///
-    /// Only the rebuild path needs this - see
-    /// [`AgentSessionService::sync_placeholders`](crate::domain::service::AgentSessionService::sync_placeholders),
-    /// which has to notice placeholders that were deleted or never written. A
-    /// live connection does not ask, because
-    /// [`Comms::create_message_placeholder`] is idempotent.
-    fn messages_with_placeholders(
-        &self,
-        session: &AgentSession,
-    ) -> impl Future<Output = Result<HashSet<MessageId>, rootcause::Report>> + Send;
-
-    /// Write a bodyless placeholder row to the session's channel, referencing
-    /// the given message key.
-    ///
-    /// `author` sets the row's sender: the agent's messages are sent by the
-    /// session's bot, a user's by that user.
-    ///
-    /// **Must be idempotent.** Writing a message that already has a row is a
-    /// success that changes nothing, not an error - a reconnecting session
-    /// re-derives its whole log and re-offers every placeholder in it, and
-    /// nothing upstream filters those out. In Postgres the identifier table's
-    /// unique session/message constraint and the placeholder's unique foreign
-    /// key enforce this; an implementation without them has to do it itself.
-    fn create_message_placeholder(
-        &self,
-        session: &AgentSession,
-        id: MessageId,
-        author: &Author,
-    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-}
-
 /// Pushing a live session's frames to whoever is watching its channel.
 ///
-/// Separate from [`Comms`] because it answers a different question. `Comms`
-/// writes the durable rows a channel is rebuilt from; this tells a client that
-/// is already looking at the channel what just happened, so it can fold the
-/// frame and redraw without refetching.
+/// Separate from the durable log: that is what a reader arriving late fetches
+/// and folds, while this tells a client already looking at the session what
+/// just happened, so it can fold the frame and redraw without refetching.
 ///
 /// Best-effort by contract. A dropped frame costs a viewer some liveness until
 /// they reload, and the log it was derived from is already durable - so an
@@ -171,4 +135,71 @@ impl AgentSessionRealtime for NoOpRealtime {
     async fn publish(&self, _event: LogAppended) -> Result<(), rootcause::Report> {
         Ok(())
     }
+}
+
+/// A control operation a caller may ask for on a live session.
+///
+/// The transport vocabulary for [`AgentAction`], which it converts into: it
+/// names the operations a caller is allowed to ask for, in the shape a request
+/// body spells them, and nothing else.
+///
+/// Not `#[non_exhaustive]`, unlike [`AgentAction`]: a new control operation
+/// should fail to compile everywhere that has to decide what it means.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ControlEventKind {
+    /// Give the agent something to work on.
+    Prompt {
+        /// What to tell the agent.
+        content: String,
+    },
+    /// Switch the model the agent runs on.
+    ChangeModel {
+        /// The model slug to switch to.
+        model: String,
+    },
+    /// Interrupt whatever the agent is doing.
+    Stop,
+}
+
+impl From<ControlEventKind> for AgentAction {
+    fn from(kind: ControlEventKind) -> Self {
+        match kind {
+            ControlEventKind::Prompt { content } => Self::prompt(content),
+            ControlEventKind::ChangeModel { model } => Self::set_model(model),
+            ControlEventKind::Stop => Self::Stop,
+        }
+    }
+}
+
+/// One control operation, and who is responsible for it.
+#[derive(Debug, Clone)]
+pub struct ControlEvent {
+    /// What was asked for.
+    pub kind: ControlEventKind,
+    /// The user responsible, absent when a bot acted on nobody's behalf.
+    ///
+    /// `None` means "no user is responsible", not "unknown" - a bot's own
+    /// actions are attributed to the bot, which this field does not carry.
+    pub actor: Option<MacroUserIdStr<'static>>,
+}
+
+/// Whoever holds a session's live resources, told when the durable session
+/// changes in a way those resources have to follow.
+///
+/// In-process today: a session's actor and its container live in one address
+/// space, so only the process that opened the session can act on this. The
+/// port exists so that coupling is named rather than assumed, and so the
+/// control routes can be mounted against it without knowing what a harness is.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
+    /// The session is going away: release its live resources and delete it.
+    fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// A control operation the live connection has to be told about.
+    fn control_event(
+        &self,
+        id: AgentSessionId,
+        event: ControlEvent,
+    ) -> impl Future<Output = Result<()>> + Send;
 }

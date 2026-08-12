@@ -18,23 +18,23 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{delete, get, post},
 };
-use bots::domain::models::BotId;
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
+use chrono::Utc;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSessionLog, Message, SessionBot,
-    SessionStatus,
+    AgentSession, AgentSessionId, ChannelSessionLog, Message, SessionBot, SessionStatus,
+    StoredAgentSessionLog,
 };
+use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent, ControlEventKind};
 use crate::domain::service::AgentSessionService;
 
 /// Shared state for the agent session router: the agent session service plus
@@ -70,24 +70,85 @@ impl<T, Auth> FromRef<AgentSessionRouterState<T, Auth>> for MacroAuthorizationSt
     }
 }
 
-/// Build the agent session router. Mount it under the path prefix the
-/// composition root chooses, e.g. `/agent-sessions`.
-pub fn agent_session_router<T, Auth, S>(state: AgentSessionRouterState<T, Auth>) -> Router<S>
+/// Shared state for the control routes: the recipient holding the session's
+/// live resources, plus the authorization state the extractors run against.
+pub struct AgentSessionControlState<R, Auth> {
+    recipient: Arc<R>,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<R, Auth> AgentSessionControlState<R, Auth> {
+    /// Create control state from a recipient and authorization state.
+    pub fn new(recipient: Arc<R>, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+        Self {
+            recipient,
+            authorization_state,
+        }
+    }
+}
+
+// Manual Clone impl so R doesn't need to be Clone (it's behind Arc).
+impl<R, Auth> Clone for AgentSessionControlState<R, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            recipient: Arc::clone(&self.recipient),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<R, Auth> FromRef<AgentSessionControlState<R, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &AgentSessionControlState<R, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+/// Build the read-only agent session router. Mount it under the path prefix
+/// the composition root chooses, e.g. `/agent-sessions`.
+///
+/// Separate from [`agent_session_control_router`] because these routes only
+/// read the database and so can be served by any process, while the control
+/// routes have to run where the session's actor lives.
+pub fn agent_session_read_router<T, Auth, S>(state: AgentSessionRouterState<T, Auth>) -> Router<S>
 where
     T: AgentSessionService,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
+        .route("/{session_id}", get(get_agent_session_handler::<T, Auth>))
         .route(
-            "/{session_id}",
-            get(get_agent_session_handler::<T, Auth>)
-                .put(update_agent_session_handler::<T, Auth>)
-                .delete(delete_agent_session_handler::<T, Auth>),
+            "/{session_id}/log",
+            get(get_agent_session_log_handler::<T, Auth>),
         )
         .route(
             "/channel/{channel_id}/log",
             get(get_agent_channel_log_handler::<T, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Build the agent session control router, mounted under the same prefix as
+/// [`agent_session_read_router`].
+///
+/// Only mountable in the process that owns the sessions: every route here
+/// reaches a live transport, which is in-memory state.
+pub fn agent_session_control_router<R, Auth, S>(
+    state: AgentSessionControlState<R, Auth>,
+) -> Router<S>
+where
+    R: AgentSessionNotificationRecipient,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/{session_id}",
+            delete(delete_agent_session_handler::<R, Auth>),
+        )
+        .route(
+            "/{session_id}/control",
+            post(control_agent_session_handler::<R, Auth>),
         )
         .with_state(state)
 }
@@ -153,39 +214,18 @@ impl From<SessionStatusDto> for SessionStatus {
     }
 }
 
-/// Request body for replacing an agent session. This is full-resource `PUT`
-/// semantics: fetch the session, modify it, and send the whole thing back.
-/// `channelId` and `createdAt` are immutable; echo the values returned by the
-/// get endpoint.
+/// Request body for a control operation on a live session.
+///
+/// A wrapper around the operation rather than the bare enum so that fields
+/// which are about the request rather than the operation have somewhere to go.
+/// The acting user is deliberately not one of them: it comes from the caller's
+/// credentials, so that a caller cannot attribute an operation to someone else.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateAgentSessionRequest {
-    /// The session's dedicated channel. Immutable; echo the value returned
-    /// by the get endpoint.
-    pub channel_id: Uuid,
-    /// The user who started the session. Immutable; echo the value returned
-    /// by the get endpoint. The repo omits it from the update, so a changed
-    /// value here is ignored rather than applied.
-    pub initiator_user_id: MacroUserIdStr<'static>,
-    /// The root message of the thread the session was created from, if any.
-    pub thread_id: Option<Uuid>,
-    /// The exact message that invoked the bot, if any.
-    pub originating_message_id: Option<Uuid>,
-    /// The bot running the agent.
-    pub bot_id: Uuid,
-    /// Model slug.
-    pub model: String,
-    /// Harness slug.
-    pub harness: String,
-    /// The repository the session works with.
-    pub repo_url: String,
-    /// The ACP session id, if one exists.
-    pub acp_session_id: Option<String>,
-    /// The session's status.
-    pub status: SessionStatusDto,
-    /// When the session was created. Immutable; echo the value returned by
-    /// the get endpoint.
-    pub created_at: DateTime<Utc>,
+pub struct ControlRequest {
+    /// The operation to perform.
+    #[serde(flatten)]
+    pub kind: ControlEventKind,
 }
 
 /// Response body describing an agent session.
@@ -196,8 +236,6 @@ pub struct AgentSessionResponse {
     pub id: Uuid,
     /// The session's dedicated channel.
     pub channel_id: Uuid,
-    /// The user who started the session.
-    pub initiator_user_id: String,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
@@ -225,7 +263,6 @@ impl From<AgentSession> for AgentSessionResponse {
         Self {
             id: session.id.as_uuid(),
             channel_id: session.channel_id,
-            initiator_user_id: session.initiator_user_id.to_string(),
             thread_id: session.thread_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
@@ -273,12 +310,12 @@ pub async fn get_agent_session_handler<T: AgentSessionService, Auth: MacroAuthor
 }
 
 #[utoipa::path(
-    put,
-    path = "/agent-sessions/{session_id}",
+    post,
+    path = "/agent-sessions/{session_id}/control",
     tag = "agent-sessions",
-    operation_id = "update_agent_session",
+    operation_id = "control_agent_session",
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
-    request_body = UpdateAgentSessionRequest,
+    request_body = ControlRequest,
     responses(
         (status = 200),
         (status = 401, body = String),
@@ -286,38 +323,35 @@ pub async fn get_agent_session_handler<T: AgentSessionService, Auth: MacroAuthor
         (status = 500, body = String),
     )
 )]
-/// Replace an agent session.
+/// Perform a control operation on a live agent session.
 #[tracing::instrument(
     skip(state, caller, req),
     fields(actor = %caller.acting_entity(), session_id = %session_id),
     err(Debug)
 )]
-pub async fn update_agent_session_handler<
-    T: AgentSessionService,
+pub async fn control_agent_session_handler<
+    R: AgentSessionNotificationRecipient,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
+    State(state): State<AgentSessionControlState<R, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(session_id): Path<Uuid>,
-    Json(req): Json<UpdateAgentSessionRequest>,
+    Json(req): Json<ControlRequest>,
 ) -> Result<StatusCode, AgentSessionApiError> {
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+
     state
-        .service
-        .update_session(AgentSession {
-            id: AgentSessionId::new_from_uuid(session_id),
-            channel_id: req.channel_id,
-            initiator_user_id: req.initiator_user_id,
-            thread_id: req.thread_id,
-            originating_message_id: req.originating_message_id,
-            bot_id: BotId::new_from_uuid(req.bot_id),
-            model: req.model,
-            harness: req.harness,
-            repo_url: req.repo_url,
-            acp_session_id: req.acp_session_id,
-            status: req.status.into(),
-            created_at: req.created_at,
-            modified_at: Utc::now(),
-        })
+        .recipient
+        .control_event(
+            AgentSessionId::new_from_uuid(session_id),
+            ControlEvent {
+                kind: req.kind,
+                actor,
+            },
+        )
         .await?;
 
     Ok(StatusCode::OK)
@@ -336,23 +370,23 @@ pub async fn update_agent_session_handler<
         (status = 500, body = String),
     )
 )]
-/// Delete an agent session and its dedicated channel.
+/// Delete an agent session, its dedicated channel, and its live resources.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), session_id = %session_id),
     err(Debug)
 )]
 pub async fn delete_agent_session_handler<
-    T: AgentSessionService,
+    R: AgentSessionNotificationRecipient,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<AgentSessionRouterState<T, Auth>>,
+    State(state): State<AgentSessionControlState<R, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AgentSessionApiError> {
     state
-        .service
-        .delete_session(AgentSessionId::new_from_uuid(session_id))
+        .recipient
+        .session_deleted(AgentSessionId::new_from_uuid(session_id))
         .await?;
 
     Ok(StatusCode::OK)
@@ -426,6 +460,14 @@ impl From<ChannelSessionLog> for AgentChannelLogResponse {
 /// decodes its own response type.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionLogEntryDto {
+    /// When the log recorded the frame.
+    ///
+    /// The frame itself carries no time, so this comes from the log row. It is
+    /// what a reader has to order these against anything else it is showing
+    /// beside them - the fold derives an order among the messages of one
+    /// session and nothing more.
+    #[serde(rename = "createdAt")]
+    pub created_at: DateTime<Utc>,
     /// The user whose action produced the frame, absent when no user did.
     ///
     /// Only prompts carry one, and only when the frame was attributed at the
@@ -469,13 +511,72 @@ pub enum LogDirectionDto {
     ToRuntime,
 }
 
-impl From<AgentSessionLog> for AgentSessionLogEntryDto {
-    fn from(entry: AgentSessionLog) -> Self {
+impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
+    fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
-            user_id: entry.user_id.map(|user| user.to_string()),
-            message: entry.content,
+            created_at: stored.created_at,
+            user_id: stored.entry.user_id.map(|user| user.to_string()),
+            message: stored.entry.content,
         }
     }
+}
+
+/// Response body for one session's raw protocol log.
+///
+/// A wrapper rather than a bare array so that anything which is about the
+/// response rather than about a frame has somewhere to go later without
+/// breaking every client.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionLogResponse {
+    /// Every logged frame, oldest first. Folding depends on this order.
+    pub entries: Vec<AgentSessionLogEntryDto>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/log",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_log",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionLogResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The raw protocol log of one agent session.
+///
+/// Keyed by the session rather than by the channel that renders it, for a
+/// caller that already knows which session it wants. Served unfolded, and
+/// whole: the fold is a left fold over the frames from the beginning, so a
+/// reader that skipped any of them would derive different turn numbering.
+///
+/// An unknown session yields an empty log rather than a `404` - a session with
+/// no frames and a session that never existed answer the same question the
+/// same way.
+#[tracing::instrument(
+    skip(state, caller),
+    fields(actor = %caller.acting_entity(), session_id = %session_id),
+    err(Debug)
+)]
+pub async fn get_agent_session_log_handler<
+    T: AgentSessionService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionLogResponse>, AgentSessionApiError> {
+    let entries = state
+        .service
+        .session_log(AgentSessionId::new_from_uuid(session_id))
+        .await?;
+
+    Ok(Json(AgentSessionLogResponse {
+        entries: entries.into_iter().map(Into::into).collect(),
+    }))
 }
 
 #[utoipa::path(
@@ -503,8 +604,7 @@ impl From<AgentSessionLog> for AgentSessionLogEntryDto {
 ///
 /// The whole log, with no paging: the fold is a left fold over the frames from
 /// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering - and turn numbering is what joins these to the channel's
-/// placeholder rows.
+/// turn numbering.
 #[tracing::instrument(
     skip(state, caller),
     fields(actor = %caller.acting_entity(), channel_id = %channel_id),

@@ -12,7 +12,9 @@ use agent_trigger::domain::broker_events::{
 };
 use bot_id::BotId;
 
-use crate::domain::model::{ForwardMessage, HarnessCommand, MentionOrigin, OpenSession};
+use crate::domain::model::{
+    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
+};
 
 #[cfg(test)]
 mod test;
@@ -77,12 +79,17 @@ pub fn agent_trigger_to_harness_command(
             }
             Ok((
                 session_id,
-                HarnessCommand::Forward(ForwardMessage {
-                    channel_id: message.channel_id,
-                    thread_id: message.thread_id.unwrap_or(message.message_id),
-                    sender: message.sender.as_user().cloned(),
-                    content: message.content,
-                }),
+                HarnessCommand::Deliver(DeliverAction::prompt(
+                    message.content,
+                    message.sender.as_user().cloned(),
+                    // Always offered: only the harness knows whether this
+                    // channel is the session's own, which is what decides
+                    // whether an announcement would be redundant.
+                    Some(AnnounceOrigin {
+                        channel_id: message.channel_id,
+                        thread_id: message.thread_id.unwrap_or(message.message_id),
+                    }),
+                )),
             ))
         }
         _ => Err(Skipped::Unrecognized),

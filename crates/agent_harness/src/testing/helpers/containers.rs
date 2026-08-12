@@ -161,6 +161,7 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for ContainerMock {
 pub struct MockContainerManager {
     containers: Arc<Mutex<HashMap<AgentSessionId, ContainerMock>>>,
     resumes: Arc<AtomicUsize>,
+    teardowns: Arc<AtomicUsize>,
 }
 
 impl MockContainerManager {
@@ -194,6 +195,12 @@ impl MockContainerManager {
         self.resumes.load(Ordering::Relaxed)
     }
 
+    /// How many sandboxes have been destroyed.
+    #[must_use]
+    pub fn torn_down(&self) -> usize {
+        self.teardowns.load(Ordering::Relaxed)
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<AgentSessionId, ContainerMock>> {
         self.containers
             .lock()
@@ -221,5 +228,11 @@ impl ContainerManager for MockContainerManager {
         let container = ContainerMock::default();
         containers.insert(session, container.clone());
         Ok(container)
+    }
+
+    async fn teardown(&self, session: AgentSessionId) -> Result<(), HarnessError> {
+        self.teardowns.fetch_add(1, Ordering::Relaxed);
+        self.lock().remove(&session);
+        Ok(())
     }
 }

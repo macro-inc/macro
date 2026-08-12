@@ -9,9 +9,6 @@ use macro_uuid::Uuid;
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
 // Re-exported here because this is where callers expect session types.
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
-// Folded messages are derived, but a `MessageId` is also what a comms
-// placeholder's identifier persists to say which message it renders - see
-// PgAgentSessionRepo's `Comms` impl.
 pub use agent_fold::domain::model::{
     Author, AuthorKind, IncrementalFoldResult, MessageId, OwnedIncrementalFoldResult, TurnId,
 };
@@ -111,6 +108,22 @@ pub struct LogAppended {
     pub entry: AgentSessionLog,
 }
 
+/// One entry of a session's log as it was stored, with the time the log
+/// recorded it.
+///
+/// [`AgentSessionLog`] is the frame a writer hands in, and a frame carries no
+/// time of its own - `created_at` only exists once the row does. It is kept
+/// beside the frame rather than folded into it so the fold's vocabulary stays
+/// exactly what a client can replay, while a reader that has to order or merge
+/// a session's messages against anything else still has something to order by.
+#[derive(Debug, Clone)]
+pub struct StoredAgentSessionLog {
+    /// When the entry was appended to the log.
+    pub created_at: DateTime<Utc>,
+    /// The frame, exactly as the log stored it.
+    pub entry: AgentSessionLog,
+}
+
 /// A session's raw protocol log, looked up by its dedicated channel.
 ///
 /// Served rather than the messages it derives: the reader folds it. The web
@@ -130,7 +143,7 @@ pub struct ChannelSessionLog {
     /// which a session's agent need not be.
     pub bot: SessionBot,
     /// Every logged frame, oldest first. Folding depends on this order.
-    pub entries: Vec<AgentSessionLog>,
+    pub entries: Vec<StoredAgentSessionLog>,
 }
 
 /// How an incoming channel context relates to an agent session.

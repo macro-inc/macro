@@ -104,6 +104,14 @@ impl<Token> SessionMachine<Token> {
         action: AgentAction,
         token: Token,
     ) -> Vec<Effect<Token>> {
+        let mut effects = Vec::new();
+
+        // A superseding action - a stop - means the queued actions must not
+        // reach the agent at all, rather than being sent and then cancelled.
+        if action.supersedes_queued() {
+            self.drop_pending(&mut effects);
+        }
+
         let session_id = match &self.phase {
             SessionPhase::Booting
             | SessionPhase::Initializing { .. }
@@ -113,14 +121,15 @@ impl<Token> SessionMachine<Token> {
                     action,
                     token,
                 });
-                return Vec::new();
+                return effects;
             }
             SessionPhase::Live { session_id } => session_id.clone(),
             SessionPhase::Dead => {
-                return vec![Effect::Complete {
+                effects.push(Effect::Complete {
                     token,
                     result: Err(AgentSessionError::Disconnected(self.id)),
-                }];
+                });
+                return effects;
             }
         };
 
@@ -132,7 +141,6 @@ impl<Token> SessionMachine<Token> {
             action,
             token,
         });
-        let mut effects = Vec::new();
         self.flush(&session_id, &mut effects);
         effects
     }
@@ -450,6 +458,21 @@ impl<Token> SessionMachine<Token> {
                     result: Err(error.into()),
                 }),
             }
+        }
+    }
+
+    /// Drop every queued action without sending it, resolving each caller.
+    ///
+    /// `Ok` rather than an error: the action was accepted and then superseded
+    /// by a later one, which is not a failure of the caller's request. It also
+    /// matters upstream - the harness treats `Disconnected` as "reattach and
+    /// resend", which would resurrect the very prompt a stop just dropped.
+    fn drop_pending(&mut self, effects: &mut Vec<Effect<Token>>) {
+        while let Some(queued) = self.pending.pop_front() {
+            effects.push(Effect::Complete {
+                token: queued.token,
+                result: Ok(()),
+            });
         }
     }
 

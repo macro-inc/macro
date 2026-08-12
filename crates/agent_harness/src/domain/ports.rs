@@ -34,4 +34,11 @@ pub trait ContainerManager: Send + Sync + 'static {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
+
+    /// Destroy a session's container for good.
+    ///
+    /// Unlike the idle reaper, which stops a sandbox so it can be resumed,
+    /// this is the end of the session: nothing will reattach. A session with
+    /// no container is already in the state this asks for, so it succeeds.
+    fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }

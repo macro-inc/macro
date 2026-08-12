@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::model::AuthorKind;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -11,50 +10,7 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
-/// The fixed initiator every [`new_session`] fixture uses.
-const INITIATOR: &str = "macro|agent-session-channel-owner@example.com";
-
-/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
-/// `agent_session.initiator_user_id`'s foreign key.
-async fn insert_user(pool: &PgPool, user_id: &str) {
-    let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
-    // The no-op update makes the existing row's id come back when the user
-    // was already seeded by an earlier call.
-    let macro_user_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO macro_user (id, username, email, stripe_customer_id)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
-        RETURNING id
-        "#,
-        macro_uuid::generate_uuid_v7(),
-        email,
-        email,
-        format!("stripe_{email}"),
-    )
-    .fetch_one(pool)
-    .await
-    .expect("insert macro_user");
-    sqlx::query!(
-        r#"
-        INSERT INTO "User" (id, email, macro_user_id)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (id) DO NOTHING
-        "#,
-        user_id,
-        email,
-        macro_user_id,
-    )
-    .execute(pool)
-    .await
-    .expect("insert User");
-}
-
 async fn create_test_bot(pool: &PgPool) -> BotId {
-    // Every session fixture is initiated by the same user, and
-    // `agent_session.initiator_user_id` references `"User"(id)` - so seed the
-    // row here, where every session-creating test already passes through.
-    insert_user(pool, INITIATOR).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
         .create_owned_bot(
@@ -82,7 +38,7 @@ fn new_session(
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         id: AgentSessionId::new(),
-        initiator_user_id: user_id(INITIATOR),
+        owner_id: user_id("macro|agent-session-channel-owner@example.com"),
         bot_id,
         thread_id,
         originating_message_id,
@@ -99,6 +55,25 @@ async fn create_session(
     AgentSessionRepo::create(repo, params)
         .await
         .expect("create agent session")
+}
+
+/// Drive a session's status the way production does: append a system event to
+/// the log and let [`AgentSessionLogRepo::create`] project it onto the session.
+async fn append_system_event(
+    repo: &PgAgentSessionRepo,
+    agent_session_id: AgentSessionId,
+    event: SystemEvent,
+) {
+    AgentSessionLogRepo::create(
+        repo,
+        AgentSessionLog {
+            agent_session_id,
+            user_id: None,
+            content: Message::ToServer(ToServerMessage::Event { event }),
+        },
+    )
+    .await
+    .expect("append system event log entry");
 }
 
 async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
@@ -161,8 +136,6 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(session.channel_id, channel_id);
     assert_eq!(session.thread_id, None);
-    assert_eq!(session.initiator_user_id.as_ref(), INITIATOR);
-    assert_eq!(created.initiator_user_id.as_ref(), INITIATOR);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 
     let channel = sqlx::query!(
@@ -197,110 +170,13 @@ async fn create_and_get_round_trips(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn placeholders_share_one_unique_identifier(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot_id = create_test_bot(&pool).await;
-    let session = create_session(&repo, new_session(bot_id, None, None)).await;
-    let message_id = MessageId::first(AuthorKind::Agent);
-    let author = Author::Agent;
-
-    let (first, second) = tokio::join!(
-        Comms::create_message_placeholder(&repo, &session, message_id, &author),
-        Comms::create_message_placeholder(&repo, &session, message_id, &author),
-    );
-    first.expect("create placeholder");
-    second.expect("concurrent placeholder creation");
-
-    let rows = sqlx::query!(
-        r#"
-        SELECT
-            identifier.id AS "id!",
-            identifier.agent_session_id,
-            identifier.turn,
-            identifier.author,
-            message.agent_session_message_identifier_id AS "identifier_id!"
-        FROM comms_messages AS message
-        JOIN agent_session_message_identifier AS identifier
-          ON identifier.id = message.agent_session_message_identifier_id
-        WHERE identifier.agent_session_id = $1
-          AND identifier.turn = $2
-          AND identifier.author = $3
-        "#,
-        session.id.as_uuid(),
-        i64::from(message_id.turn.0),
-        message_id.author.as_str(),
-    )
-    .fetch_all(&pool)
-    .await
-    .expect("read placeholder identifier");
-
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, rows[0].identifier_id);
-    assert_eq!(rows[0].agent_session_id, session.id.as_uuid());
-    assert_eq!(rows[0].turn, i64::from(message_id.turn.0));
-    assert_eq!(rows[0].author, message_id.author.as_str());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn update_persists_event_status(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot_id = create_test_bot(&pool).await;
-    let id = create_session(&repo, new_session(bot_id, None, None))
-        .await
-        .id;
-
-    let mut session = repo.get(id).await.expect("get agent session");
-    session.status = SessionStatus::Event(SystemEvent::AcpReady);
-    session.acp_session_id = Some("acp-session-1".to_string());
-    repo.update(session).await.expect("update agent session");
-
-    let mut updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.acp_session_id.as_deref(), Some("acp-session-1"));
-    assert!(matches!(
-        updated.status,
-        SessionStatus::Event(SystemEvent::AcpReady)
-    ));
-
-    updated.status = SessionStatus::Disconnected;
-    repo.update(updated)
-        .await
-        .expect("disconnect agent session");
-    let disconnected = repo.get(id).await.expect("get disconnected session");
-    assert!(matches!(disconnected.status, SessionStatus::Disconnected));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn update_does_not_change_the_initiator(pool: PgPool) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot_id = create_test_bot(&pool).await;
-    let id = create_session(&repo, new_session(bot_id, None, None))
-        .await
-        .id;
-
-    let mut session = repo.get(id).await.expect("get agent session");
-    assert_eq!(session.initiator_user_id.as_ref(), INITIATOR);
-
-    // A full-replace update carrying a different initiator must not rewrite
-    // who started the session.
-    session.initiator_user_id = user_id("macro|agent-session-impostor@example.com");
-    session.model = "another-model".to_string();
-    repo.update(session).await.expect("update agent session");
-
-    let updated = repo.get(id).await.expect("get updated agent session");
-    assert_eq!(updated.model, "another-model");
-    assert_eq!(updated.initiator_user_id.as_ref(), INITIATOR);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
         .id;
-    let mut session = repo.get(id).await.expect("get agent session");
-    session.status = SessionStatus::Event(SystemEvent::AcpReady);
-    repo.update(session).await.expect("update agent session");
+    append_system_event(&repo, id, SystemEvent::AcpReady).await;
 
     repo.set_acp_session_id(id, SessionId::from("acp-session-1"))
         .await
@@ -392,19 +268,22 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
         .expect("list agent session log entries");
 
     assert_eq!(logs.len(), 2);
-    assert_eq!(logs[0].agent_session_id, session_id);
-    assert_eq!(logs[0].user_id, Some(user));
+    assert_eq!(logs[0].entry.agent_session_id, session_id);
+    assert_eq!(logs[0].entry.user_id, Some(user));
     assert!(matches!(
-        logs[0].content,
+        logs[0].entry.content,
         Message::ToServer(ToServerMessage::Event {
             event: SystemEvent::AcpReady
         })
     ));
-    assert_eq!(logs[1].user_id, None);
+    assert_eq!(logs[1].entry.user_id, None);
     assert!(matches!(
-        logs[1].content,
+        logs[1].entry.content,
         Message::ToRuntime(ToRuntimeMessage::Acp(_))
     ));
+    // The stored order is `created_at ASC`, and the timestamp is on the wire
+    // now, so it has to actually come back in that order.
+    assert!(logs[0].created_at <= logs[1].created_at);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -543,10 +422,9 @@ async fn channel_belongs_to_only_one_session(pool: PgPool) {
     let duplicate = sqlx::raw_sql(
         r#"
         INSERT INTO agent_session (
-            id, channel_id, initiator_user_id, bot_id, model, harness, repo_url, status
+            id, channel_id, bot_id, model, harness, repo_url, status
         )
-        SELECT gen_random_uuid(), channel_id, initiator_user_id, bot_id, model, harness,
-               repo_url, status
+        SELECT gen_random_uuid(), channel_id, bot_id, model, harness, repo_url, status
         FROM agent_session
         LIMIT 1
         "#,

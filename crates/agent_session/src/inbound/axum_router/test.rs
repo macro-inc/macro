@@ -7,7 +7,7 @@
 //! it would have on the server.
 
 use super::*;
-use crate::domain::model::{AgentSessionLog, SessionBot};
+use crate::domain::model::{AgentSessionLog, SessionBot, StoredAgentSessionLog};
 use agent_fold::domain::fold::fold;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 use bots::domain::models::BotId;
@@ -19,6 +19,15 @@ use serde::Deserialize;
 /// already builds the response from. If its shape ever stops round-tripping
 /// through its own `Serialize`/`Deserialize`, that is exactly the drift this
 /// test exists to catch.
+/// A frame as the log would have stored it. The time is fixed rather than
+/// `now()` so a serialized entry is byte-stable.
+fn stored(entry: AgentSessionLog) -> StoredAgentSessionLog {
+    StoredAgentSessionLog {
+        created_at: DateTime::from_timestamp(1_700_000_000, 0).expect("a valid timestamp"),
+        entry,
+    }
+}
+
 fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<AgentSessionLogEntryDto> {
     let response = AgentChannelLogResponse::from(ChannelSessionLog {
         agent_session_id: test_session(),
@@ -27,7 +36,7 @@ fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<AgentSessionLogEntryDto> {
             name: "Test Agent".to_owned(),
             avatar_url: None,
         },
-        entries,
+        entries: entries.into_iter().map(stored).collect(),
     });
     let json = serde_json::to_string(&response).expect("the response serializes");
 
@@ -43,8 +52,8 @@ fn round_trip(entries: Vec<AgentSessionLog>) -> Vec<AgentSessionLogEntryDto> {
 /// endpoint folds to exactly what the same log folds to on the server.
 ///
 /// This is what lets the fold move to the client without the two disagreeing -
-/// and they must not, because a channel's placeholder rows are keyed on turn
-/// numbering that both sides have to derive identically.
+/// and they must not, because both sides derive the same turn numbering from
+/// the same frames.
 #[test]
 fn a_decoded_log_folds_to_what_the_server_folds() {
     let recorded = parse_log_as(test_session(), TURN);
@@ -79,7 +88,7 @@ fn unattributed_frames_omit_the_user_id_key() {
         .expect("the fixture has unattributed frames");
 
     let value: serde_json::Value =
-        serde_json::to_value(AgentSessionLogEntryDto::from(unattributed.clone()))
+        serde_json::to_value(AgentSessionLogEntryDto::from(stored(unattributed.clone())))
             .expect("the entry serializes");
     assert!(
         value.get("userId").is_none(),
@@ -88,8 +97,9 @@ fn unattributed_frames_omit_the_user_id_key() {
 }
 
 /// The frame is flattened in rather than nested: an entry is the recording's
-/// own `{direction, content}` shape with the attribution alongside, so the
-/// same parser reads a stored recording and an endpoint response.
+/// own `{direction, content}` shape with the attribution and the log's own
+/// timestamp alongside, so the same parser reads a stored recording and an
+/// endpoint response.
 #[test]
 fn an_entry_is_a_recording_line_plus_attribution() {
     let recorded = parse_log_as(test_session(), TURN);
@@ -99,13 +109,13 @@ fn an_entry_is_a_recording_line_plus_attribution() {
         .expect("the fixture attributes its prompt");
 
     let value: serde_json::Value =
-        serde_json::to_value(AgentSessionLogEntryDto::from(prompt.clone()))
+        serde_json::to_value(AgentSessionLogEntryDto::from(stored(prompt.clone())))
             .expect("the entry serializes");
 
     let object = value.as_object().expect("an entry is a JSON object");
     assert_eq!(
         object.keys().map(String::as_str).collect::<Vec<_>>(),
-        vec!["userId", "direction", "content"],
+        vec!["createdAt", "userId", "direction", "content"],
         "no envelope around the frame"
     );
     assert_eq!(

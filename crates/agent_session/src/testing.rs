@@ -6,15 +6,15 @@
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
-    CreateAgentSessionParams, LogAppended, MessageId, SessionBot, SessionStatus,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
+    LogAppended, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, Comms};
+use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
 use macro_uuid::Uuid;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryAgentSessionRepo {
     sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
-    logs: Arc<Mutex<HashMap<AgentSessionId, Vec<AgentSessionLog>>>>,
+    logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
 }
@@ -68,13 +68,21 @@ impl InMemoryAgentSessionRepo {
     }
 
     /// Seed log entries, in the order they should be read back.
+    ///
+    /// Each is stamped as it lands, the way the real table's `created_at`
+    /// default does.
     pub fn extend_log(&self, entries: impl IntoIterator<Item = AgentSessionLog>) {
         let mut logs = self
             .logs
             .lock()
             .expect("in-memory log store is not poisoned");
         for entry in entries {
-            logs.entry(entry.agent_session_id).or_default().push(entry);
+            logs.entry(entry.agent_session_id)
+                .or_default()
+                .push(StoredAgentSessionLog {
+                    created_at: chrono::Utc::now(),
+                    entry,
+                });
         }
     }
 }
@@ -168,8 +176,16 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         })
     }
 
-    async fn update(&self, session: AgentSession) -> Result<()> {
-        self.insert_session(session);
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.model = model.to_owned();
+        session.modified_at = chrono::Utc::now();
         Ok(())
     }
 
@@ -229,7 +245,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
-    ) -> Result<Vec<AgentSessionLog>> {
+    ) -> Result<Vec<StoredAgentSessionLog>> {
         self.log_reads.fetch_add(1, Ordering::Relaxed);
         Ok(self
             .logs
@@ -253,7 +269,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
         let log = AgentSessionLogRepo::list_by_session(self, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
-        Ok(log.into())
+        Ok(log.into_iter().map(|stored| stored.entry).collect())
     }
 }
 
@@ -279,50 +295,6 @@ pub fn test_agent_session(id: AgentSessionId, channel_id: Uuid) -> AgentSession 
         status: SessionStatus::NoMessages,
         created_at: now,
         modified_at: now,
-    }
-}
-
-/// An in-memory [`Comms`] that records the placeholder messages written
-/// through it.
-///
-/// Behaves like the real identifier table, including its unique session and
-/// message key: writing a message that already has a row is accepted and
-/// changes nothing, the way `ON CONFLICT DO NOTHING` does. That matters
-/// because a live connection relies on it - see
-/// [`Comms::create_message_placeholder`] - so a store that appended blindly
-/// would report duplicates the real one cannot produce.
-///
-/// Cheap to clone - clones share one store.
-#[derive(Debug, Clone, Default)]
-pub struct RecordingComms {
-    /// `(channel_id, message)` pairs, in write order, one per message.
-    messages: Arc<Mutex<Vec<(Uuid, MessageId)>>>,
-    /// Every write offered, including the ones the unique index absorbed.
-    offered: Arc<AtomicUsize>,
-}
-
-impl RecordingComms {
-    /// An empty store.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The placeholder rows the channel holds, as `(channel_id, message)` in
-    /// the order they first landed.
-    #[must_use]
-    pub fn created(&self) -> Vec<(Uuid, MessageId)> {
-        self.messages
-            .lock()
-            .expect("in-memory comms store is not poisoned")
-            .clone()
-    }
-
-    /// How many placeholder writes were offered, counting the redundant ones
-    /// a reconnecting session re-derives and the index throws away.
-    #[must_use]
-    pub fn offered(&self) -> usize {
-        self.offered.load(Ordering::Relaxed)
     }
 }
 
@@ -375,41 +347,6 @@ impl AgentSessionRealtime for RecordingRealtime {
             .lock()
             .expect("in-memory realtime store is not poisoned")
             .push(event);
-        Ok(())
-    }
-}
-
-impl Comms for RecordingComms {
-    async fn messages_with_placeholders(
-        &self,
-        session: &AgentSession,
-    ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
-        Ok(self
-            .messages
-            .lock()
-            .expect("in-memory comms store is not poisoned")
-            .iter()
-            .filter(|(channel, _)| *channel == session.channel_id)
-            .map(|(_, id)| *id)
-            .collect())
-    }
-
-    async fn create_message_placeholder(
-        &self,
-        session: &AgentSession,
-        id: MessageId,
-        _author: &Author,
-    ) -> std::result::Result<(), rootcause::Report> {
-        self.offered.fetch_add(1, Ordering::Relaxed);
-        let mut messages = self
-            .messages
-            .lock()
-            .expect("in-memory comms store is not poisoned");
-        // The unique index, in memory: a message that already has a row is
-        // left alone rather than written twice.
-        if !messages.iter().any(|(_, held)| *held == id) {
-            messages.push((session.channel_id, id));
-        }
         Ok(())
     }
 }

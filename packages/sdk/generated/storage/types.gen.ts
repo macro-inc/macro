@@ -56,6 +56,80 @@ export type AddPinRequest = {
 };
 
 /**
+ * Response body for a channel's raw agent-session log.
+ *
+ * The frames themselves: this endpoint does not fold, its readers do.
+ */
+export type AgentChannelLogResponse = {
+    /**
+     * The session the entries belong to, absent when no agent session owns
+     * the channel.
+     *
+     * Absent rather than a `404`, because every channel asks. A client has
+     * no cheap way to know whether a channel is an agent channel before it
+     * looks: the channel record it would have to consult is only ever
+     * fetched as part of a list, which can predate the channel. So "no
+     * session here" is an ordinary answer to an ordinary question, not a
+     * failure.
+     */
+    agentSessionId?: string | null;
+    bot?: null | SessionBot;
+    /**
+     * Every logged frame, oldest first. Folding depends on this order. Empty
+     * when there is no session.
+     */
+    entries: Array<AgentSessionLogEntryDto>;
+};
+
+/**
+ * One entry of a session's protocol log.
+ *
+ * Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
+ * frame's own two fields, flattened in beside the attribution, which is the
+ * same shape a recorded session's JSONL carries. A reader can deserialize the
+ * `direction`/`content` pair straight back into the fold's own log type
+ * rather than through a transport vocabulary of its own.
+ *
+ * `agentSessionId` is not repeated per entry: every entry in a response
+ * belongs to the session named once at the top.
+ *
+ * `Deserialize` is for the wire-contract tests only - nothing server-side
+ * decodes its own response type.
+ */
+export type AgentSessionLogEntryDto = LogFrameDto & {
+    /**
+     * When the log recorded the frame.
+     *
+     * The frame itself carries no time, so this comes from the log row. It is
+     * what a reader has to order these against anything else it is showing
+     * beside them - the fold derives an order among the messages of one
+     * session and nothing more.
+     */
+    createdAt: string;
+    /**
+     * The user whose action produced the frame, absent when no user did.
+     *
+     * Only prompts carry one, and only when the frame was attributed at the
+     * time - a replayed or recorded session's are anonymous.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Response body for one session's raw protocol log.
+ *
+ * A wrapper rather than a bare array so that anything which is about the
+ * response rather than about a frame has somewhere to go later without
+ * breaking every client.
+ */
+export type AgentSessionLogResponse = {
+    /**
+     * Every logged frame, oldest first. Folding depends on this order.
+     */
+    entries: Array<AgentSessionLogEntryDto>;
+};
+
+/**
  * Response body describing an agent session.
  */
 export type AgentSessionResponse = {
@@ -202,6 +276,27 @@ export type ApiActivity = {
 };
 
 /**
+ * Identifies the folded agent-session message a placeholder message renders.
+ *
+ * Nested rather than three sibling fields, because the three only ever make
+ * sense together: a message either names a folded message or has a body.
+ */
+export type ApiAgentSessionMessageIdentifier = {
+    /**
+     * Agent session whose folded message this renders.
+     */
+    agent_session_id: string;
+    /**
+     * Which side of the turn produced the message.
+     */
+    author: AuthorKind;
+    /**
+     * Turn within that session, assigned in log order from zero.
+     */
+    turn: number;
+};
+
+/**
  * A reference to an attachment entity from a channel message.
  */
 export type ApiAttachmentChannelReference = {
@@ -218,9 +313,10 @@ export type ApiAttachmentChannelReference = {
      */
     channel_name?: string | null;
     /**
-     * Full message content (might be used for preview/snippet).
+     * Full message content (might be used for preview/snippet). `None` on
+     * agent-turn placeholder messages.
      */
-    message_content: string;
+    message_content?: string | null;
     /**
      * When the message itself was created.
      */
@@ -338,14 +434,15 @@ export type ApiChannelAttachmentsPage = {
  * A channel message returned by the message-context endpoint.
  */
 export type ApiChannelContextMessage = {
+    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Channel id.
      */
     channel_id: string;
     /**
-     * Message content.
+     * Message content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * When the message was created.
      */
@@ -410,13 +507,18 @@ export type ApiChannelDetail = {
 };
 
 /**
+ * Channel kind in API responses.
+ */
+export type ApiChannelKind = 'normal' | 'agent';
+
+/**
  * Channel message in API responses.
  */
 export type ApiChannelListMessage = {
     /**
-     * Message content.
+     * Message content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * Creation timestamp.
      */
@@ -496,6 +598,7 @@ export type ApiChannelListType = 'public' | 'private' | 'direct_message' | 'team
  * A top-level channel message with thread info.
  */
 export type ApiChannelMessage = {
+    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Attachments on this message.
      */
@@ -505,9 +608,10 @@ export type ApiChannelMessage = {
      */
     channel_id: string;
     /**
-     * Message content.
+     * Message content. `None` on agent-turn placeholder messages, whose body
+     * is folded from the agent session log and joined in by the client.
      */
-    content: string;
+    content?: string | null;
     /**
      * When the message was created.
      */
@@ -623,6 +727,11 @@ export type ApiChannelWithLatest = {
      * Whether the requesting user is an active participant of the channel.
      */
     is_participant: boolean;
+    /**
+     * Channel kind: `normal`, or `agent` for an agent session's dedicated
+     * channel whose agent messages are folded placeholders.
+     */
+    kind: ApiChannelKind;
     latest_message?: null | ApiChannelListMessage;
     latest_non_thread_message?: null | ApiChannelListMessage;
     /**
@@ -917,14 +1026,15 @@ export type ApiThreadInfo = {
  * A thread reply shown in preview.
  */
 export type ApiThreadReply = {
+    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Attachments on this reply.
      */
     attachments: Array<ApiMessageAttachment>;
     /**
-     * Reply content.
+     * Reply content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * When the reply was created.
      */
@@ -959,6 +1069,18 @@ export type ApiThreadReply = {
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
+/**
+ * Which side of the conversation produced a message.
+ *
+ * The identity-free discriminant of [`Author`], usable in a key where
+ * [`Author`] itself carries a payload.
+ *
+ * The wire names a [`MessageId`] is written with and parsed back from are
+ * the strum-derived `snake_case` variant names - one source of truth for
+ * both directions.
+ */
+export type AuthorKind = 'user' | 'agent';
 
 export type BTreeMap = {
     [key: string]: string;
@@ -1902,9 +2024,9 @@ export type ChannelMentionedMetadata = {
  */
 export type ChannelMessage = {
     /**
-     * Message content.
+     * Message content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * Creation timestamp.
      */
@@ -5512,6 +5634,34 @@ export type LocationResponseV3 = {
     type: 'syncServiceContent';
 };
 
+/**
+ * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
+ */
+export type LogDirectionDto = 'to_server' | 'to_runtime';
+
+/**
+ * The two fields [`AgentSessionLogEntryDto`] flattens in.
+ *
+ * Schema only. Nothing constructs one: the entry serializes through
+ * [`Message`], and this exists so the generated clients see `direction` and
+ * `content` as named fields instead of an open map. A hand-built copy could
+ * drift from the fold's wire format, and the point of the endpoint is that it
+ * cannot - so this describes that format without being able to produce it.
+ */
+export type LogFrameDto = {
+    /**
+     * The protocol envelope, verbatim. Opaque here: it is Agent Runtime
+     * Protocol, whose shape belongs to the fold rather than this endpoint.
+     */
+    content: {
+        [key: string]: unknown;
+    };
+    /**
+     * Which way the frame travelled.
+     */
+    direction: LogDirectionDto;
+};
+
 export type MacroUserIdStr = string;
 
 export type Mentions = {
@@ -6439,6 +6589,24 @@ export type SaveDocumentResponseData = {
 };
 
 /**
+ * The agent behind a session, as much of it as rendering a message needs.
+ */
+export type SessionBot = {
+    /**
+     * Avatar, when it has one.
+     */
+    avatarUrl?: string | null;
+    /**
+     * The bot's id. A message it sent has `"bot|{id}"` as its sender.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+/**
  * Transport representation of a session's status, mirroring
  * [`SessionStatus`].
  */
@@ -6903,9 +7071,9 @@ export type SoupChannelThread = {
      */
     channel_id: string;
     /**
-     * Message content.
+     * Message content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * Creation timestamp.
      */
@@ -7722,9 +7890,9 @@ export type SoupThreadReply = {
      */
     attachments: Array<SoupMessageAttachment>;
     /**
-     * Reply content.
+     * Reply content. `None` on agent-turn placeholder messages.
      */
-    content: string;
+    content?: string | null;
     /**
      * Creation timestamp.
      */
@@ -7936,57 +8104,6 @@ export type TypingAction = 'start' | 'stop';
 export type UnthreadedPdfUuidRequest = {
     attachmentType: 'highlight';
     uuid: string;
-};
-
-/**
- * Request body for replacing an agent session. This is full-resource `PUT`
- * semantics: fetch the session, modify it, and send the whole thing back.
- * `channelId` and `createdAt` are immutable; echo the values returned by the
- * get endpoint.
- */
-export type UpdateAgentSessionRequest = {
-    /**
-     * The ACP session id, if one exists.
-     */
-    acpSessionId?: string | null;
-    /**
-     * The bot running the agent.
-     */
-    botId: string;
-    /**
-     * The session's dedicated channel. Immutable; echo the value returned
-     * by the get endpoint.
-     */
-    channelId: string;
-    /**
-     * When the session was created. Immutable; echo the value returned by
-     * the get endpoint.
-     */
-    createdAt: string;
-    /**
-     * Harness slug.
-     */
-    harness: string;
-    /**
-     * Model slug.
-     */
-    model: string;
-    /**
-     * The exact message that invoked the bot, if any.
-     */
-    originatingMessageId?: string | null;
-    /**
-     * The repository the session works with.
-     */
-    repoUrl: string;
-    /**
-     * The session's status.
-     */
-    status: SessionStatusDto;
-    /**
-     * The root message of the thread the session was created from, if any.
-     */
-    threadId?: string | null;
 };
 
 export type UpdateChannelSharePermission = {
@@ -8396,29 +8513,32 @@ export type GetRecentActivityHandlerResponses = {
 
 export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
-export type DeleteAgentSessionData = {
+export type GetAgentChannelLogData = {
     body?: never;
     path: {
         /**
-         * ID of the agent session
+         * ID of the session's dedicated channel
          */
-        session_id: string;
+        channel_id: string;
     };
     query?: never;
-    url: '/agent-sessions/{session_id}';
+    url: '/agent-sessions/channel/{channel_id}/log';
 };
 
-export type DeleteAgentSessionErrors = {
+export type GetAgentChannelLogErrors = {
     401: string;
     403: string;
+    404: string;
     500: string;
 };
 
-export type DeleteAgentSessionError = DeleteAgentSessionErrors[keyof DeleteAgentSessionErrors];
+export type GetAgentChannelLogError = GetAgentChannelLogErrors[keyof GetAgentChannelLogErrors];
 
-export type DeleteAgentSessionResponses = {
-    200: unknown;
+export type GetAgentChannelLogResponses = {
+    200: AgentChannelLogResponse;
 };
+
+export type GetAgentChannelLogResponse = GetAgentChannelLogResponses[keyof GetAgentChannelLogResponses];
 
 export type GetAgentSessionData = {
     body?: never;
@@ -8446,8 +8566,8 @@ export type GetAgentSessionResponses = {
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
 
-export type UpdateAgentSessionData = {
-    body: UpdateAgentSessionRequest;
+export type GetAgentSessionLogData = {
+    body?: never;
     path: {
         /**
          * ID of the agent session
@@ -8455,20 +8575,22 @@ export type UpdateAgentSessionData = {
         session_id: string;
     };
     query?: never;
-    url: '/agent-sessions/{session_id}';
+    url: '/agent-sessions/{session_id}/log';
 };
 
-export type UpdateAgentSessionErrors = {
+export type GetAgentSessionLogErrors = {
     401: string;
     403: string;
     500: string;
 };
 
-export type UpdateAgentSessionError = UpdateAgentSessionErrors[keyof UpdateAgentSessionErrors];
+export type GetAgentSessionLogError = GetAgentSessionLogErrors[keyof GetAgentSessionLogErrors];
 
-export type UpdateAgentSessionResponses = {
-    200: unknown;
+export type GetAgentSessionLogResponses = {
+    200: AgentSessionLogResponse;
 };
+
+export type GetAgentSessionLogResponse = GetAgentSessionLogResponses[keyof GetAgentSessionLogResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;

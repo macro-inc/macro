@@ -1,3 +1,4 @@
+import { rememberDebugSessionId } from '@channel/Channel/agent-session-debug-store';
 import type { MessageId } from '@core/agent-fold/message-id';
 import { throwOnErr } from '@core/util/result';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
@@ -161,6 +162,7 @@ export function createFoldedMessages(
       // Before following, so the first frame of the first turn already has an
       // agent to attribute its message to.
       rememberSessionBot(id, log?.bot);
+      rememberDebugSessionId(id, log?.agentSessionId);
 
       // No session id means no agent session owns this channel - the ordinary
       // answer for most channels, and nothing to fold or follow.

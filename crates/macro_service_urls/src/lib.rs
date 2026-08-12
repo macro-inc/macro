@@ -562,6 +562,13 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Agent harness service API URL. Serves the agent-session control
+        /// routes, which run in the process that owns the live sessions.
+        pub AgentHarnessServiceUrl {
+            local: "http://localhost:8101",
+            dev: "https://agent-harness-dev.macro.com",
+            prod: "https://agent-harness.macro.com",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",

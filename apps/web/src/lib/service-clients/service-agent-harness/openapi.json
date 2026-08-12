@@ -1,0 +1,197 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "agent_harness_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/agent-sessions/{session_id}": {
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "Delete an agent session, its dedicated channel, and its live resources.",
+        "operationId": "delete_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/control": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Perform a control operation on a live agent session.",
+        "operationId": "control_agent_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ControlEventKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Give the agent something to work on.",
+            "required": ["content", "kind"],
+            "properties": {
+              "content": {
+                "type": "string",
+                "description": "What to tell the agent."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["prompt"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Switch the model the agent runs on.",
+            "required": ["model", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["change_model"]
+              },
+              "model": {
+                "type": "string",
+                "description": "The model slug to switch to."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Interrupt whatever the agent is doing.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["stop"]
+              }
+            }
+          }
+        ],
+        "description": "A control operation a caller may ask for on a live session.\n\nThe transport vocabulary for [`AgentAction`], which it converts into: it\nnames the operations a caller is allowed to ask for, in the shape a request\nbody spells them, and nothing else.\n\nNot `#[non_exhaustive]`, unlike [`AgentAction`]: a new control operation\nshould fail to compile everywhere that has to decide what it means."
+      },
+      "ControlRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ControlEventKind",
+            "description": "The operation to perform."
+          }
+        ],
+        "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "agent-sessions",
+      "description": "Live agent session control"
+    }
+  ]
+}

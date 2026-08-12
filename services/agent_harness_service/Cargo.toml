@@ -8,6 +8,10 @@ version = "0.1.0"
 name = "agent_harness_service"
 path = "src/main.rs"
 
+[[bin]]
+name = "agent_harness_service_openapi"
+path = "src/openapi.rs"
+
 [dependencies]
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
@@ -28,7 +32,20 @@ notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
+axum = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = [
+  "axum",
+  "outbound",
+  "postgres",
+] }
+macro_cors = { path = "../../crates/macro_cors" }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
 macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }

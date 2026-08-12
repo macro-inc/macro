@@ -108,6 +108,7 @@ import {
 } from './create-target-message-controller';
 import { duplicatePromptRowIds } from './hide-duplicate-prompts';
 import { buildChannelMessageListMeta } from './message-list-meta';
+import { AgentSessionDebugControls } from './AgentSessionDebugControls';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { createStickyScrollEffect } from './sticky-scroll';
 import {
@@ -859,6 +860,7 @@ export function Channel(props: ChannelProps) {
                       </Show>
                     </div>
                   </Show>
+                  <AgentSessionDebugControls channelId={props.channelId} />
                   <DebugSuspense name="Channel.active-call">
                     <ActiveCallMessage channelId={props.channelId} />
                   </DebugSuspense>

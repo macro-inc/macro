@@ -219,8 +219,7 @@ use utoipa::OpenApi;
 
         // agent sessions
         agent_session::inbound::axum_router::get_agent_session_handler,
-        agent_session::inbound::axum_router::update_agent_session_handler,
-        agent_session::inbound::axum_router::delete_agent_session_handler,
+        agent_session::inbound::axum_router::get_agent_session_log_handler,
         agent_session::inbound::axum_router::get_agent_channel_log_handler,
 
         // channel list (comms hex)
@@ -512,10 +511,10 @@ use utoipa::OpenApi;
             ApiAttachmentGenericReference,
             ChannelMessageFilters,
             channels::domain::models::ChannelType,
-            agent_session::inbound::axum_router::UpdateAgentSessionRequest,
             agent_session::inbound::axum_router::AgentSessionResponse,
             agent_session::inbound::axum_router::SessionStatusDto,
             agent_session::inbound::axum_router::AgentChannelLogResponse,
+            agent_session::inbound::axum_router::AgentSessionLogResponse,
             agent_session::inbound::axum_router::AgentSessionLogEntryDto,
             agent_session::domain::model::SessionBot,
             agent_session::inbound::axum_router::LogFrameDto,

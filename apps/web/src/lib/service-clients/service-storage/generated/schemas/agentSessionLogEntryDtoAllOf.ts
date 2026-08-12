@@ -7,6 +7,13 @@
 import type { AgentSessionLogEntryDtoAllOfUserId } from './agentSessionLogEntryDtoAllOfUserId';
 
 export type AgentSessionLogEntryDtoAllOf = {
+  /** When the log recorded the frame.
+
+The frame itself carries no time, so this comes from the log row. It is
+what a reader has to order these against anything else it is showing
+beside them - the fold derives an order among the messages of one
+session and nothing more. */
+  createdAt: string;
   /** The user whose action produced the frame, absent when no user did.
 
 Only prompts carry one, and only when the frame was attributed at the

@@ -92,6 +92,9 @@
       "@service-storage/*": [
         "./src/lib/service-clients/service-storage/*"
       ],
+      "@service-agent-harness/*": [
+        "./src/lib/service-clients/service-agent-harness/*"
+      ],
       "@service-search/*": [
         "./src/lib/service-clients/service-search/*"
       ],
