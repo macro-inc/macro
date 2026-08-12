@@ -12,8 +12,11 @@
  * same messages twice.
  */
 
+import type {
+  FoldedMessage,
+  FoldedMessageChange,
+} from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
-import type { FoldedMessage, FoldedMessageChange } from './types';
 
 /**
  * Open (or reopen) a session's machine and seed it with a fetched log.

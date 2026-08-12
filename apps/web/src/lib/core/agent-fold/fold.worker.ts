@@ -15,8 +15,8 @@
  * a `push` concurrently would fold frames out of order.
  */
 
+import type { FoldedMessageChange } from '@service-agent-fold/generated/types';
 import type { FoldRequest, FoldResponse } from './protocol';
-import type { FoldedMessageChange } from './types';
 import { type FoldStream, loadAgentFoldWasm } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;

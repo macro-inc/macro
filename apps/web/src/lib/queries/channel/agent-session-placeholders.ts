@@ -17,7 +17,7 @@
  */
 
 import { foldedReference, type MessageId } from '@core/agent-fold/message-id';
-import type { FoldedMessage } from '@core/agent-fold/types';
+import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import type { ApiChannelMessage } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import type { SessionBot } from '@service-storage/generated/schemas/sessionBot';

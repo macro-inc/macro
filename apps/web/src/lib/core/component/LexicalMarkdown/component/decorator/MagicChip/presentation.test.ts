@@ -1,4 +1,4 @@
-import type { FoldedMessage } from '@core/agent-fold/types';
+import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import { deriveMagicChipPresentation } from './presentation';
 
@@ -7,6 +7,7 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   turn: 0,
   author: { kind: 'agent' },
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],
+  stop: null,
   ...overrides,
 });
 
@@ -46,7 +47,12 @@ describe('deriveMagicChipPresentation', () => {
             id: 'running',
             label: 'Terminal',
             status: 'running',
-            detail: { kind: 'terminal', command: 'cargo test' },
+            detail: {
+              kind: 'terminal',
+              command: 'cargo test',
+              output: null,
+              exitCode: null,
+            },
           },
           {
             kind: 'tool_use',
@@ -95,7 +101,12 @@ describe('deriveMagicChipPresentation', () => {
             id: 'running',
             label: 'Terminal',
             status: 'running',
-            detail: { kind: 'terminal', command: 'cargo test' },
+            detail: {
+              kind: 'terminal',
+              command: 'cargo test',
+              output: null,
+              exitCode: null,
+            },
           },
         ],
       }),

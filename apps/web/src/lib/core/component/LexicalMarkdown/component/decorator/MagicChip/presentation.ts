@@ -1,5 +1,8 @@
-import type { FoldedMessage, FoldedMessagePart } from '@core/agent-fold/types';
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
+import type {
+  FoldedMessage,
+  FoldedMessagePart,
+} from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
 
 export type MagicChipActivity = {
@@ -62,7 +65,17 @@ function toolActivity(
       detail: detail.paths.at(-1) ?? part.label,
       busy,
     }))
-    .with({ kind: 'other' }, () => ({
+    .with(
+      { kind: 'delete' },
+      { kind: 'move' },
+      { kind: 'search' },
+      (detail) => ({
+        label: failed ? `${part.label} failed` : part.label,
+        detail: detail.paths.at(-1) ?? part.label,
+        busy,
+      })
+    )
+    .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, () => ({
       label: failed ? `${part.label} failed` : part.label,
       busy,
     }))

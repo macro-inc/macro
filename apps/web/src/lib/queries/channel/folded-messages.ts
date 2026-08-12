@@ -1,6 +1,6 @@
 import type { MessageId } from '@core/agent-fold/message-id';
-import type { FoldedMessage } from '@core/agent-fold/types';
 import { throwOnErr } from '@core/util/result';
+import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { storageServiceClient } from '@service-storage/client';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import { useQueryClient } from '@tanstack/solid-query';

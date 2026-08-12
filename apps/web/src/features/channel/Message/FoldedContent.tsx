@@ -1,8 +1,3 @@
-import type {
-  FoldedMessage,
-  FoldedMessagePart,
-  ToolDetail,
-} from '@core/agent-fold/types';
 import { Tool } from '@core/component/AI/component/tool/Tool';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -12,26 +7,46 @@ import PencilSimple from '@phosphor/pencil-simple.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Terminal from '@phosphor/terminal.svg';
 import Wrench from '@phosphor/wrench.svg';
+import type {
+  FoldedMessage,
+  FoldedMessagePart,
+  ToolDetail,
+} from '@service-agent-fold/generated/types';
 import { For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 
-/** Icon and one-line detail for a tool call, keyed off what the tool did. */
+/**
+ * Icon and one-line detail for a tool call, keyed off what the tool did.
+ *
+ * `delete`/`move`/`search` share `read`'s path-list summary; `fetch`/`think`
+ * share `other`'s bare-icon treatment pending dedicated rendering — see the
+ * agent_fold ACP-tool-kind coverage work.
+ */
 function toolPresentation(detail: ToolDetail) {
-  switch (detail.kind) {
-    case 'terminal':
-      return { icon: Terminal, summary: detail.command ?? undefined };
-    case 'edit':
-      return {
-        icon: PencilSimple,
-        summary: detail.diffs.map((diff) => diff.path).join(', ') || undefined,
-      };
-    case 'read':
-      return {
+  return match(detail)
+    .with({ kind: 'terminal' }, (detail) => ({
+      icon: Terminal,
+      summary: detail.command ?? undefined,
+    }))
+    .with({ kind: 'edit' }, (detail) => ({
+      icon: PencilSimple,
+      summary: detail.diffs.map((diff) => diff.path).join(', ') || undefined,
+    }))
+    .with(
+      { kind: 'read' },
+      { kind: 'delete' },
+      { kind: 'move' },
+      { kind: 'search' },
+      (detail) => ({
         icon: FileText,
         summary: detail.paths.join(', ') || undefined,
-      };
-    case 'other':
-      return { icon: Wrench, summary: undefined };
-  }
+      })
+    )
+    .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, () => ({
+      icon: Wrench,
+      summary: undefined,
+    }))
+    .exhaustive();
 }
 
 /** What the user chose on a permission request, as a trailing label. */
@@ -64,23 +79,20 @@ function Thought(props: { text: string }) {
 }
 
 // Folded parts are plain immutable query data — a new array arrives on each
-// refetch — so rendering them non-reactively in a switch is safe.
+// refetch — so rendering them non-reactively in a match is safe.
 function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
-  const part = props.part;
-  switch (part.kind) {
-    case 'text':
-      return (
-        <div class="whitespace-pre-wrap wrap-break-word max-w-full text-sm">
-          <StaticMarkdown
-            markdown={part.text}
-            theme={channelTheme}
-            target="internal"
-          />
-        </div>
-      );
-    case 'thought':
-      return <Thought text={part.text} />;
-    case 'tool_use': {
+  return match(props.part)
+    .with({ kind: 'text' }, (part) => (
+      <div class="whitespace-pre-wrap wrap-break-word max-w-full text-sm">
+        <StaticMarkdown
+          markdown={part.text}
+          theme={channelTheme}
+          target="internal"
+        />
+      </div>
+    ))
+    .with({ kind: 'thought' }, (part) => <Thought text={part.text} />)
+    .with({ kind: 'tool_use' }, (part) => {
       const { icon: Icon, summary } = toolPresentation(part.detail);
       const failed = part.status === 'failed';
       return (
@@ -103,8 +115,8 @@ function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
           </Tool.Row>
         </Tool.Root>
       );
-    }
-    case 'permission': {
+    })
+    .with({ kind: 'permission' }, (part) => {
       const outcome = permissionOutcomeLabel(part);
       return (
         <Tool.Root>
@@ -118,8 +130,8 @@ function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
           </Tool.Row>
         </Tool.Root>
       );
-    }
-  }
+    })
+    .exhaustive();
 }
 
 /**

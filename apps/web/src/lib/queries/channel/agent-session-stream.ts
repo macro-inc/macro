@@ -47,7 +47,7 @@ import {
   type AgentSessionLogEvent,
   entryOf,
 } from '@core/agent-fold/stream-protocol';
-import type { FoldedMessage } from '@core/agent-fold/types';
+import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import { ensureAgentSessionPlaceholder } from './agent-session-placeholders';
 

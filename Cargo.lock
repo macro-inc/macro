@@ -167,6 +167,9 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -14305,6 +14308,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38f9a30cbcbb7011f1da7d73483983bf838af123883e45f2b36ed76328df9c50"
 dependencies = [
  "rustc_version",
+ "serde_json",
  "specta-macros",
 ]
 

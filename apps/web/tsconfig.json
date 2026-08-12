@@ -128,6 +128,9 @@
       "@service-properties/*": [
         "./src/lib/service-clients/service-properties/*"
       ],
+      "@service-agent-fold/*": [
+        "./src/lib/service-clients/service-agent-fold/*"
+      ],
       "@block-chat/*": [
         "./src/features/block-chat/*"
       ],

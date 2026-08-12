@@ -9,14 +9,10 @@
 //! content}` per frame - so a caller passes bytes through rather than
 //! translating them, and catching up and following are the same code.
 //!
-//! # Why the types are written out again
-//!
-//! [`crate::domain::model`] is not serializable, on purpose: it is the fold's
-//! own vocabulary and owes nothing to any transport. So this module declares
-//! the shape JavaScript sees, the same way the HTTP handler used to before the
-//! fold moved to the client. The pairing to keep honest is with
-//! `apps/web/src/lib/core/agent-fold/types.ts`, which is hand-written against
-//! these - enums tagged with `kind`, fields camelCase.
+//! The shape JavaScript actually sees lives in [`crate::inbound::wire`], not
+//! here - this module is only the wasm-bindgen glue that carries values of
+//! those types across the boundary. See that module's docs for why they are
+//! kept apart.
 //!
 //! # Why catching up is not a loop of pushes
 //!
@@ -29,14 +25,11 @@
 
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::{
-    Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
-    PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
-    ToolUse,
-};
+use crate::domain::model::FoldedMessage as ModelFoldedMessage;
 use crate::domain::ports::FoldMachine;
+use crate::inbound::wire::{FoldedMessage, FoldedMessageChange};
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
 /// Fold one session's log into the messages a channel renders.
@@ -123,7 +116,7 @@ impl FoldStream {
             .map_err(|error| JsValue::from_str(&format!("log entry is not readable: {error}")))?;
 
         let result = self.machine.push(entry.into_log(self.session));
-        let Some(change) = JsFoldedMessageChange::new(self.session, result) else {
+        let Some(change) = FoldedMessageChange::new(self.session, result) else {
             return Ok(JsValue::NULL);
         };
 
@@ -142,12 +135,12 @@ impl FoldStream {
     ///
     /// Returns a JS string describing what could not be encoded.
     pub fn messages(&self) -> Result<JsValue, JsValue> {
-        let messages: Vec<JsFoldedMessage> = self
+        let messages: Vec<FoldedMessage> = self
             .machine
             .messages()
             .iter()
             .cloned()
-            .map(|message| JsFoldedMessage::new(self.session, message))
+            .map(|message| FoldedMessage::new(self.session, message))
             .collect();
 
         serde_wasm_bindgen::to_value(&messages).map_err(|error| {
@@ -178,11 +171,11 @@ fn parse_log(session: AgentSessionId, entries: JsValue) -> Result<Vec<AgentSessi
 /// Encode folded messages for the browser.
 fn encode_messages(
     session: AgentSessionId,
-    messages: Vec<FoldedMessage>,
+    messages: Vec<ModelFoldedMessage>,
 ) -> Result<JsValue, JsValue> {
-    let messages: Vec<JsFoldedMessage> = messages
+    let messages: Vec<FoldedMessage> = messages
         .into_iter()
-        .map(|message| JsFoldedMessage::new(session, message))
+        .map(|message| FoldedMessage::new(session, message))
         .collect();
 
     serde_wasm_bindgen::to_value(&messages)
@@ -212,375 +205,6 @@ impl LogEntry {
                 .user_id
                 .and_then(|id| MacroUserIdStr::try_from(id).ok()),
             content: self.message,
-        }
-    }
-}
-
-/// One renderable message, mirroring [`FoldedMessage`].
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsFoldedMessage {
-    /// Session that scopes this message id.
-    agent_session_id: String,
-    /// The turn within the session, assigned in log order from zero.
-    turn: u32,
-    author: JsAuthor,
-    /// Ordered renderable content. Never empty.
-    parts: Vec<JsMessagePart>,
-    /// How the turn ended, on the agent message that closed it. Absent while
-    /// the turn is in flight, or when the session died without a response.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stop: Option<JsStopReason>,
-}
-
-impl JsFoldedMessage {
-    fn new(session: AgentSessionId, message: FoldedMessage) -> Self {
-        Self {
-            agent_session_id: session.to_string(),
-            turn: message.id.0,
-            author: message.author.into(),
-            parts: message
-                .parts
-                .into_inner()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            stop: message.stop.map(Into::into),
-        }
-    }
-}
-
-/// What one pushed frame changed, mirroring [`IncrementalFoldResult`].
-///
-/// The message is carried whole rather than as a delta, so a reader applies
-/// either kind the same way - replace whatever it holds under this
-/// `agentSessionMessageId`. `kind` is what tells it whether a row for that id
-/// exists yet: a session streaming into a channel has no placeholder message
-/// for a turn until the fold first derives it, and `new` is the one moment
-/// the client can create one.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsFoldedMessageChange {
-    /// `"new"` the first time a message is reported, `"update"` after.
-    kind: &'static str,
-    message: JsFoldedMessage,
-}
-
-impl JsFoldedMessageChange {
-    /// `None` for [`IncrementalFoldResult::Unchanged`] - nothing to report.
-    fn new(session: AgentSessionId, result: IncrementalFoldResult<'_>) -> Option<Self> {
-        let (kind, message) = match result {
-            IncrementalFoldResult::NewMessage(message) => ("new", message),
-            IncrementalFoldResult::MessageUpdate(message) => ("update", message),
-            IncrementalFoldResult::Unchanged => return None,
-        };
-        Some(Self {
-            kind,
-            message: JsFoldedMessage::new(session, message.into_owned()),
-        })
-    }
-}
-
-/// Who produced a message, mirroring [`Author`].
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JsAuthor {
-    /// A person, via `session/prompt`.
-    User {
-        /// Absent when the prompt was not attributed to anyone.
-        #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
-        user_id: Option<String>,
-    },
-    /// The agent.
-    Agent,
-}
-
-impl From<Author> for JsAuthor {
-    fn from(author: Author) -> Self {
-        match author {
-            Author::User(user_id) => Self::User {
-                user_id: user_id.map(|id| id.to_string()),
-            },
-            Author::Agent => Self::Agent,
-        }
-    }
-}
-
-/// A unit of renderable content, mirroring [`MessagePart`].
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JsMessagePart {
-    /// Prose from the user or the agent.
-    Text {
-        /// The prose.
-        text: String,
-    },
-    /// The agent's reasoning, which a reader may want to hide by default.
-    Thought {
-        /// The reasoning.
-        text: String,
-    },
-    /// A tool the agent invoked.
-    ToolUse {
-        /// The ACP `toolCallId`.
-        id: String,
-        /// What to show as the tool's name.
-        label: String,
-        status: JsToolStatus,
-        detail: JsToolDetail,
-    },
-    /// The agent asking to proceed with a tool call.
-    Permission {
-        /// The `toolCallId` permission was requested for.
-        #[serde(rename = "toolCall")]
-        tool_call: String,
-        /// The choices offered, in the order ACP listed them.
-        options: Vec<JsPermissionOption>,
-        /// What the user chose. Absent while the request is outstanding, or
-        /// when it resolved into something the wire does not model - see
-        /// [`permission_outcome`].
-        #[serde(skip_serializing_if = "Option::is_none")]
-        outcome: Option<JsPermissionOutcome>,
-    },
-}
-
-impl From<MessagePart> for JsMessagePart {
-    fn from(part: MessagePart) -> Self {
-        match part {
-            MessagePart::Text(text) => Self::Text { text },
-            MessagePart::Thought(text) => Self::Thought { text },
-            MessagePart::ToolUse(ToolUse {
-                id,
-                label,
-                status,
-                detail,
-            }) => Self::ToolUse {
-                id: id.0,
-                label,
-                status: status.into(),
-                detail: detail.into(),
-            },
-            MessagePart::Permission(Permission {
-                tool_call,
-                options,
-                outcome,
-            }) => Self::Permission {
-                tool_call: tool_call.0,
-                options: options.into_iter().map(Into::into).collect(),
-                outcome: permission_outcome(outcome),
-            },
-        }
-    }
-}
-
-/// How far a tool call progressed, mirroring [`ToolStatus`].
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-enum JsToolStatus {
-    Pending,
-    Running,
-    Completed,
-    Failed,
-}
-
-impl From<ToolStatus> for JsToolStatus {
-    fn from(status: ToolStatus) -> Self {
-        match status {
-            ToolStatus::Pending => Self::Pending,
-            ToolStatus::Running => Self::Running,
-            ToolStatus::Completed => Self::Completed,
-            ToolStatus::Failed => Self::Failed,
-        }
-    }
-}
-
-/// What a tool call actually did, mirroring [`ToolDetail`].
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JsToolDetail {
-    /// A shell command.
-    Terminal {
-        /// The command line, when the harness reported one.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        command: Option<String>,
-        /// Captured output, ANSI escape sequences left in place.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        output: Option<String>,
-        /// Process exit code, when the harness reported one.
-        #[serde(rename = "exitCode", skip_serializing_if = "Option::is_none")]
-        exit_code: Option<i32>,
-    },
-    /// One or more file modifications.
-    Edit {
-        /// The diffs ACP reported for this call.
-        diffs: Vec<JsFileDiff>,
-    },
-    /// A file read.
-    Read {
-        /// Paths this call touched.
-        paths: Vec<String>,
-    },
-    /// Anything else, including tools the fold has no special rendering for.
-    Other {
-        /// ACP's tool kind, as its wire string.
-        #[serde(rename = "acpKind")]
-        acp_kind: String,
-        /// The tool's input, when reported.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        input: Option<serde_json::Value>,
-    },
-}
-
-impl From<ToolDetail> for JsToolDetail {
-    fn from(detail: ToolDetail) -> Self {
-        match detail {
-            ToolDetail::Terminal {
-                command,
-                output,
-                exit_code,
-            } => Self::Terminal {
-                command,
-                // The escapes survive the fold; turning them into something a
-                // reader can see is the reader's business, not this crate's.
-                output: output.map(|output| output.0),
-                exit_code,
-            },
-            ToolDetail::Edit { diffs } => Self::Edit {
-                diffs: diffs.into_iter().map(Into::into).collect(),
-            },
-            ToolDetail::Read { paths } => Self::Read {
-                paths: paths
-                    .into_iter()
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .collect(),
-            },
-            ToolDetail::Other { kind, input } => Self::Other {
-                acp_kind: kind,
-                input,
-            },
-        }
-    }
-}
-
-/// A file modification a tool reported, mirroring [`FileDiff`].
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsFileDiff {
-    /// The file that changed.
-    path: String,
-    /// Prior contents, absent when the file is new.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    old_text: Option<String>,
-    /// New contents.
-    new_text: String,
-}
-
-impl From<FileDiff> for JsFileDiff {
-    fn from(diff: FileDiff) -> Self {
-        Self {
-            path: diff.path.to_string_lossy().into_owned(),
-            old_text: diff.old_text,
-            new_text: diff.new_text,
-        }
-    }
-}
-
-/// One choice offered for a permission request, mirroring
-/// [`PermissionOption`].
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsPermissionOption {
-    /// The id to report back when this option is chosen.
-    id: String,
-    /// Label to show.
-    name: String,
-    /// ACP's option kind, as its wire string.
-    kind: String,
-}
-
-impl From<PermissionOption> for JsPermissionOption {
-    fn from(option: PermissionOption) -> Self {
-        Self {
-            id: option.id,
-            name: option.name,
-            kind: permission_option_kind_wire(option.kind).to_owned(),
-        }
-    }
-}
-
-/// [`PermissionOption::kind`]'s wire string, the vocabulary
-/// `apps/web/src/lib/core/agent-fold/types.ts`'s `PermissionOption.kind` is
-/// hand-written against.
-fn permission_option_kind_wire(kind: PermissionOptionKind) -> &'static str {
-    match kind {
-        PermissionOptionKind::AllowOnce => "allow_once",
-        PermissionOptionKind::AllowAlways => "allow_always",
-        PermissionOptionKind::RejectOnce => "reject_once",
-        PermissionOptionKind::RejectAlways => "reject_always",
-    }
-}
-
-/// How a permission request resolved, mirroring [`PermissionOutcome`].
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JsPermissionOutcome {
-    /// An option was chosen.
-    Selected {
-        /// The chosen option's id.
-        #[serde(rename = "optionId")]
-        option_id: String,
-    },
-    /// The request was cancelled without a choice.
-    Cancelled,
-}
-
-/// [`PermissionOutcome`] as the wire sees it: whether an option was chosen,
-/// collapsing every way it was not into absence.
-///
-/// The wire does not yet distinguish *why* nothing was chosen -
-/// [`PermissionOutcome::Pending`], [`PermissionOutcome::Errored`] and
-/// [`PermissionOutcome::Unrecognized`] all read as "no outcome" to a reader
-/// today. That is a real loss (an errored or unrecognized request will not
-/// resolve further, unlike a pending one), but widening the wire to say so is
-/// a frontend change of its own, not implied by giving the fold's own state
-/// machine a name for each case.
-fn permission_outcome(outcome: PermissionOutcome) -> Option<JsPermissionOutcome> {
-    match outcome {
-        PermissionOutcome::Selected { option_id } => {
-            Some(JsPermissionOutcome::Selected { option_id })
-        }
-        PermissionOutcome::Cancelled => Some(JsPermissionOutcome::Cancelled),
-        PermissionOutcome::Pending
-        | PermissionOutcome::Errored
-        | PermissionOutcome::Unrecognized => None,
-    }
-}
-
-/// Why a turn stopped, mirroring [`StopReason`].
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JsStopReason {
-    EndTurn,
-    MaxTokens,
-    MaxTurnRequests,
-    Refusal,
-    Cancelled,
-    /// A stop reason this fold does not model, as its wire string.
-    Other {
-        /// The wire string.
-        reason: String,
-    },
-}
-
-impl From<StopReason> for JsStopReason {
-    fn from(stop: StopReason) -> Self {
-        match stop {
-            StopReason::EndTurn => Self::EndTurn,
-            StopReason::MaxTokens => Self::MaxTokens,
-            StopReason::MaxTurnRequests => Self::MaxTurnRequests,
-            StopReason::Refusal => Self::Refusal,
-            StopReason::Cancelled => Self::Cancelled,
-            StopReason::Other(reason) => Self::Other { reason },
         }
     }
 }

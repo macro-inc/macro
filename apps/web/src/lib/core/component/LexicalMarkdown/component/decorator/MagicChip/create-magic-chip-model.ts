@@ -1,11 +1,11 @@
 import { type MessageId, withAuthor } from '@core/agent-fold/message-id';
-import type { FoldedMessage } from '@core/agent-fold/types';
 import type { MagicChipDecoratorProps } from '@macro-inc/lexical-core';
 import { subscribeAgentSessionLog } from '@queries/channel/agent-session-stream';
 import {
   createFoldedMessages,
   type FoldedMessageLookup,
 } from '@queries/channel/folded-messages';
+import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import {

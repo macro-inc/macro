@@ -149,6 +149,62 @@ fn folds_an_interrupted_turn() {
     );
 }
 
+/// Every ACP tool kind this fold has a bespoke rendering for, plus a call
+/// with no kind at all - which ACP defaults to `other`, same as a kind this
+/// fold does not model.
+#[test]
+fn folds_every_official_tool_kind() {
+    fn tool_call(id: &str, kind_and_fields: &str) -> String {
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s","update":{{"sessionUpdate":"tool_call","toolCallId":"{id}","title":"{id}","status":"completed",{kind_and_fields}}}}}}}}}"#
+        )
+    }
+
+    let log = parse_log(&[
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#.to_owned(),
+        tool_call(
+            "del",
+            r#""kind":"delete","locations":[{"path":"/repo/dead.rs"}]"#,
+        ),
+        tool_call(
+            "mv",
+            r#""kind":"move","locations":[{"path":"/repo/from.rs"},{"path":"/repo/to.rs"}]"#,
+        ),
+        tool_call(
+            "search",
+            r#""kind":"search","locations":[{"path":"/repo/a.rs"}],"content":[{"type":"content","content":{"type":"text","text":"1 match"}}]"#,
+        ),
+        tool_call(
+            "fetch",
+            r#""kind":"fetch","content":[{"type":"content","content":{"type":"text","text":"page body"}}]"#,
+        ),
+        tool_call(
+            "think",
+            r#""kind":"think","content":[{"type":"content","content":{"type":"text","text":"reasoning aloud"}}]"#,
+        ),
+        tool_call(
+            "mystery",
+            r#""content":[{"type":"content","content":{"type":"text","text":"how should this work?"}}],"rawInput":{"foo":"bar"}"#,
+        ),
+    ].join("\n"));
+
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(
+        warnings,
+        vec![],
+        "every official kind folds without a warning"
+    );
+
+    let agent = &messages[1];
+    assert_eq!(
+        agent.parts.len(),
+        6,
+        "one part per tool call: {:#?}",
+        agent.parts
+    );
+    insta::assert_debug_snapshot!(agent.parts);
+}
+
 /// A patch for a tool call that was never opened is logged, not fatal.
 #[test]
 fn reports_a_patch_before_open() {

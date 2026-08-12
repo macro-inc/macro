@@ -61,9 +61,10 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, Meta, PromptRequest, RequestId, RequestPermissionOutcome,
+    Content, ContentBlock, Meta, PromptRequest, RequestId, RequestPermissionOutcome,
     RequestPermissionRequest, RequestPermissionResponse, Response, SessionNotification,
-    SessionUpdate, ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolKind,
+    SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation, ToolCallStatus, ToolCallUpdate,
+    ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
@@ -489,6 +490,7 @@ impl FoldState {
                 call.kind,
                 call.raw_input.as_ref(),
                 &call.content,
+                &call.locations,
                 call.meta.as_ref(),
             ),
         };
@@ -552,6 +554,7 @@ impl FoldState {
             &mut tool.detail,
             fields.raw_input.as_ref(),
             fields.content.as_deref(),
+            fields.locations.as_deref(),
             update.meta.as_ref(),
         );
 
@@ -766,6 +769,7 @@ fn tool_detail(
     kind: ToolKind,
     raw_input: Option<&serde_json::Value>,
     content: &[ToolCallContent],
+    locations: &[ToolCallLocation],
     meta: Option<&Meta>,
 ) -> ToolDetail {
     match kind {
@@ -778,10 +782,27 @@ fn tool_detail(
             diffs: diffs(content),
         },
         ToolKind::Read => ToolDetail::Read {
-            paths: read_paths(raw_input),
+            paths: location_paths(locations),
+        },
+        ToolKind::Delete => ToolDetail::Delete {
+            paths: location_paths(locations),
+        },
+        ToolKind::Move => ToolDetail::Move {
+            paths: location_paths(locations),
+        },
+        ToolKind::Search => ToolDetail::Search {
+            paths: location_paths(locations),
+            output: generic_output(content),
+        },
+        ToolKind::Fetch => ToolDetail::Fetch {
+            output: generic_output(content),
+        },
+        ToolKind::Think => ToolDetail::Think {
+            output: generic_output(content),
         },
         other => ToolDetail::Other {
             kind: tool_kind_name(other).to_owned(),
+            output: generic_output(content),
             input: raw_input.cloned(),
         },
     }
@@ -793,6 +814,7 @@ fn patch_detail(
     detail: &mut ToolDetail,
     raw_input: Option<&serde_json::Value>,
     content: Option<&[ToolCallContent]>,
+    locations: Option<&[ToolCallLocation]>,
     meta: Option<&Meta>,
 ) {
     match detail {
@@ -820,15 +842,34 @@ fn patch_detail(
                 }
             }
         }
-        ToolDetail::Read { paths } => {
-            let found = read_paths(raw_input);
-            if !found.is_empty() {
+        ToolDetail::Read { paths } | ToolDetail::Delete { paths } | ToolDetail::Move { paths } => {
+            if let Some(found) = locations.map(location_paths)
+                && !found.is_empty()
+            {
                 *paths = found;
             }
         }
-        ToolDetail::Other { input, .. } => {
+        ToolDetail::Search { paths, output } => {
+            if let Some(found) = locations.map(location_paths)
+                && !found.is_empty()
+            {
+                *paths = found;
+            }
+            if let Some(found) = content.and_then(generic_output) {
+                *output = Some(found);
+            }
+        }
+        ToolDetail::Fetch { output } | ToolDetail::Think { output } => {
+            if let Some(found) = content.and_then(generic_output) {
+                *output = Some(found);
+            }
+        }
+        ToolDetail::Other { input, output, .. } => {
             if let Some(found) = raw_input {
                 *input = Some(found.clone());
+            }
+            if let Some(found) = content.and_then(generic_output) {
+                *output = Some(found);
             }
         }
     }
@@ -849,13 +890,37 @@ fn diffs(content: &[ToolCallContent]) -> Vec<FileDiff> {
         .collect()
 }
 
-/// The paths a read tool was pointed at.
-fn read_paths(raw_input: Option<&serde_json::Value>) -> Vec<PathBuf> {
-    raw_input
-        .and_then(|input| input.get("file_path"))
-        .and_then(|path| path.as_str())
-        .map(|path| vec![PathBuf::from(path)])
-        .unwrap_or_default()
+/// The paths among a tool call's reported locations.
+///
+/// The one source this fold trusts for "what path did this call touch" -
+/// `locations` is ACP's own field, meant for exactly this, unlike `rawInput`,
+/// whose keys are a harness's own convention with no fixed shape to read.
+fn location_paths(locations: &[ToolCallLocation]) -> Vec<PathBuf> {
+    locations
+        .iter()
+        .map(|location| location.path.clone())
+        .collect()
+}
+
+/// The text among a tool call's content blocks - e.g. search matches or a
+/// fetched page's text - joined in order.
+///
+/// `None` when none of the blocks carry text, same as an empty result: there
+/// is nothing useful to distinguish "reported nothing" from "reported an
+/// empty string."
+fn generic_output(content: &[ToolCallContent]) -> Option<String> {
+    let text = content
+        .iter()
+        .filter_map(|block| match block {
+            ToolCallContent::Content(Content {
+                content: block_content,
+                ..
+            }) => content_block_text(block_content.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    (!text.is_empty()).then_some(text)
 }
 
 fn permission_option_kind(

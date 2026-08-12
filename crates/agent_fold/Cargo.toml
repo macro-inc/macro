@@ -10,9 +10,12 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["cli"]
-# The `fold_jsonl` viewer and what only it needs. Off by default for wasm:
-# `tokio` pulls in `mio`, which does not build for wasm32, and the library
-# itself uses neither - the fold is sync and the ports are plain futures.
+# The `fold_jsonl` viewer and the `export_types` codegen binary - native
+# developer tooling, neither of which the wasm build needs. `fold_jsonl` needs
+# `tokio`, which pulls in `mio`, which does not build for wasm32;
+# `export_types` needs `std::fs` to write its output, which is pointless on a
+# target with no filesystem. The library itself uses neither - the fold is
+# sync, the ports are plain futures, and the browser only wants the schema.
 cli = ["dep:clap", "dep:tokio"]
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
@@ -25,6 +28,11 @@ openapi = ["dep:utoipa"]
 # Needs an async runtime and an argument parser, which the library does not.
 [[bin]]
 name = "fold_jsonl"
+required-features = ["cli"]
+
+# Needs a filesystem to write to, which the library does not.
+[[bin]]
+name = "export_types"
 required-features = ["cli"]
 
 [dependencies]
@@ -41,6 +49,9 @@ non_empty = { path = "../non_empty" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+specta = { workspace = true, features = ["serde_json"] }
+specta-serde = { workspace = true }
+specta-typescript = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }

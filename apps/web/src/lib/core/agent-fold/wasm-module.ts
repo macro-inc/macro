@@ -8,8 +8,11 @@
  * src/lib/core/agent-fold/wasm/ (gitignored).
  */
 
+import type {
+  FoldedMessage,
+  FoldedMessageChange,
+} from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
-import type { FoldedMessage, FoldedMessageChange } from './types';
 
 /**
  * One live session's fold, held open between frames.

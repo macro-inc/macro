@@ -251,13 +251,33 @@ fn render_tool(tool: &ToolUse) -> String {
                 );
             }
         }
-        ToolDetail::Read { paths } => {
+        ToolDetail::Read { paths } | ToolDetail::Delete { paths } | ToolDetail::Move { paths } => {
             for path in paths {
                 let _ = writeln!(out, "{}", indent(&path.display().to_string()));
             }
         }
-        ToolDetail::Other { kind, input } => {
+        ToolDetail::Search { paths, output } => {
+            for path in paths {
+                let _ = writeln!(out, "{}", indent(&path.display().to_string()));
+            }
+            if let Some(output) = output {
+                let _ = writeln!(out, "{}", indent(output.trim_end()));
+            }
+        }
+        ToolDetail::Fetch { output } | ToolDetail::Think { output } => {
+            if let Some(output) = output {
+                let _ = writeln!(out, "{}", indent(output.trim_end()));
+            }
+        }
+        ToolDetail::Other {
+            kind,
+            output,
+            input,
+        } => {
             let _ = writeln!(out, "{}", indent(&format!("kind: {kind}")));
+            if let Some(output) = output {
+                let _ = writeln!(out, "{}", indent(output.trim_end()));
+            }
             if let Some(input) = input {
                 let json =
                     serde_json::to_string_pretty(input).unwrap_or_else(|_| input.to_string());

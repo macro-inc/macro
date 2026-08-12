@@ -214,6 +214,16 @@ ensure-agent-fold-wasm:
         just --justfile "{{justfile()}}" build-agent-fold-wasm
     fi
 
+# Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
+# from agent_fold's Rust wire types with specta. Run after changing anything
+# under crates/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
+# commas, not this project's style, so biome reformats it in place - without
+# that, every regeneration would be a diff-format mismatch even with no real
+# change.
+gen-agent-fold-types:
+    cargo run -p agent_fold --bin export_types
+    bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
+
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
 # dev machines). See tooling/xtask/crates/xtask_cache_wasm/src/main.rs.

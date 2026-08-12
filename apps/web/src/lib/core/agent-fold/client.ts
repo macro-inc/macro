@@ -6,9 +6,12 @@
  * channel, and the live sessions' machines all live in one place.
  */
 
+import type {
+  FoldedMessage,
+  FoldedMessageChange,
+} from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
 import type { FoldRequest, FoldResponse } from './protocol';
-import type { FoldedMessage, FoldedMessageChange } from './types';
 
 interface Pending {
   resolve: (response: Extract<FoldResponse, { ok: true }>) => void;
