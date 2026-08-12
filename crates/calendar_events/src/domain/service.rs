@@ -10,12 +10,13 @@ use super::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
         CalendarOccurrenceCursor, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleScopeSet, OccurrenceRange,
+        GoogleScopeSet, OccurrenceRange, WatchChannelStopSummary,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
+        CalendarAccessTokenProvider, CalendarBackfillRepository, CalendarEventWrite,
+        CalendarOccurrenceService, CalendarRepository, GoogleCalendarProvider,
+        GoogleCalendarSyncRepository, GoogleEventSyncContext, GoogleProviderError,
+        GoogleProviderErrorKind, GoogleWatchChannelStopper, WatchChannelTeardownRepository,
     },
 };
 
@@ -607,6 +608,92 @@ where
 
         Ok(())
     }
+}
+
+/// Best-effort stop of every open push notification channel.
+///
+/// Local stacks run this at shutdown so Google stops delivering to a
+/// subscription that no longer has a consumer; deployments never need it
+/// because their channels are renewed for as long as the deployment lives.
+/// Tokens are minted once per link identity, and every failure is logged and
+/// skipped: a channel left behind keeps its bookkeeping and simply lapses at
+/// its natural expiry.
+pub async fn stop_all_watch_channels<R, G, T>(
+    repository: &R,
+    provider: &G,
+    tokens: &T,
+) -> Result<WatchChannelStopSummary, Report>
+where
+    R: WatchChannelTeardownRepository,
+    G: GoogleWatchChannelStopper,
+    T: CalendarAccessTokenProvider,
+{
+    let channels = repository.list_active_watch_channels().await?;
+    let mut summary = WatchChannelStopSummary::default();
+    let mut tokens_by_link: std::collections::HashMap<Uuid, Option<String>> =
+        std::collections::HashMap::new();
+    for channel in channels {
+        let access_token = match tokens_by_link.entry(channel.email_link_id) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.get().clone(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let minted = tokens
+                    .fetch_access_token(&channel.token_identity)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(
+                            error=?error,
+                            email_link_id=%channel.email_link_id,
+                            "failed to mint an access token to stop watch channels"
+                        );
+                    })
+                    .ok();
+                entry.insert(minted).clone()
+            }
+        };
+        let Some(access_token) = access_token else {
+            summary.failed += 1;
+            continue;
+        };
+        match provider
+            .stop_watch_channel(
+                &access_token,
+                channel.email_link_id,
+                &channel.channel_id,
+                &channel.resource_id,
+            )
+            .await
+        {
+            Ok(()) => {
+                match repository
+                    .clear_watch_channel(channel.calendar_id, &channel.channel_id)
+                    .await
+                {
+                    Ok(()) => summary.stopped += 1,
+                    // Kept bookkeeping means a later pass retries the whole
+                    // teardown; the stop call tolerates already-gone channels,
+                    // so the retry converges.
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            calendar_id=%channel.calendar_id,
+                            "stopped a watch channel but failed to clear its bookkeeping"
+                        );
+                        summary.failed += 1;
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    calendar_id=%channel.calendar_id,
+                    channel_id=%channel.channel_id,
+                    "failed to stop a watch channel"
+                );
+                summary.failed += 1;
+            }
+        }
+    }
+    Ok(summary)
 }
 
 fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {

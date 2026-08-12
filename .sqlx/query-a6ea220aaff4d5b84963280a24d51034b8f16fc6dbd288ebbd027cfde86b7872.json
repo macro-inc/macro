@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                calendar.id AS calendar_id,\n                calendar.watch_channel_id AS \"channel_id!\",\n                calendar.watch_resource_id AS \"resource_id!\",\n                account.email_link_id,\n                link.fusionauth_user_id,\n                link.email_address,\n                link.provider::text AS \"provider!\"\n            FROM calendars calendar\n            JOIN calendar_accounts account ON account.id = calendar.account_id\n            JOIN email_links link ON link.id = account.email_link_id\n            WHERE calendar.watch_channel_id IS NOT NULL\n              AND calendar.watch_resource_id IS NOT NULL\n              AND (calendar.watch_expires_at IS NULL OR calendar.watch_expires_at > now())\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calendar_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "a6ea220aaff4d5b84963280a24d51034b8f16fc6dbd288ebbd027cfde86b7872"
+}

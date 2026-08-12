@@ -1,0 +1,3 @@
+name: calendar-event-local-tunnel
+runtime: nodejs
+description: Dev-only tunnel relaying Google Calendar push notifications to local stacks

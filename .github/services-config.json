@@ -35,6 +35,16 @@
         "upload_extractor_lambda_trigger"
       ]
     },
+    "calendar-event-local-tunnel": {
+      "source_paths": [
+        "services/calendar_event_local_tunnel/**",
+        "crates/calendar_watch_relay/**"
+      ],
+      "stack_path": "infra/stacks/calendar-event-local-tunnel/**",
+      "deploy_binaries": [
+        "calendar_event_local_tunnel"
+      ]
+    },
     "call-recording": {
       "source_paths": [
         "services/call_recording_preview_handler/**"

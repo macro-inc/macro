@@ -20,7 +20,7 @@ use crate::domain::{
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
         GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome,
+        GoogleSeriesMutationOutcome, GoogleWatchChannelStopper,
     },
 };
 
@@ -525,6 +525,36 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             resource_id: response.resource_id,
             expires_at,
         })
+    }
+}
+
+impl<G: GoogleRequestGate> GoogleWatchChannelStopper for GoogleCalendarClient<G> {
+    async fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        self.gate.acquire(email_link_id).await?;
+        let response = self
+            .client
+            .post(format!("{GOOGLE_CALENDAR_API}/channels/stop"))
+            .bearer_auth(access_token)
+            .json(&serde_json::json!({
+                "id": channel_id,
+                "resourceId": resource_id,
+            }))
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        // A channel Google no longer knows is already in the desired state.
+        if status.is_success() || status == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let body = response.text().await.map_err(provider_transport_error)?;
+        Err(provider_response_error(status, &body))
     }
 }
 

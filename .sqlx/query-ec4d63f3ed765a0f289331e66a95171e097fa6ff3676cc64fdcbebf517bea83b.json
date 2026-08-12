@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendars\n            SET watch_channel_id = NULL,\n                watch_resource_id = NULL,\n                watch_expires_at = NULL,\n                updated_at = now()\n            WHERE id = $1\n              AND watch_channel_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec4d63f3ed765a0f289331e66a95171e097fa6ff3676cc64fdcbebf517bea83b"
+}

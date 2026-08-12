@@ -348,6 +348,11 @@
           binaries = [ "authentication_service" ];
         }
         {
+          serviceName = "calendar-event-local-tunnel";
+          packageName = "calendar_event_local_tunnel";
+          binaries = [ "calendar_event_local_tunnel" ];
+        }
+        {
           serviceName = "connection-gateway";
           packageName = "connection_gateway";
           binaries = [ "connection_gateway_service" ];

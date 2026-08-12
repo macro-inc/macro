@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
-        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
-        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        ActiveWatchChannel, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
+        CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
+        CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
+        CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
         CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, DueCalendarReminder,
         EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
@@ -24,7 +24,7 @@ use crate::domain::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarReminderDispatchRepo,
-        CalendarRepository, GoogleCalendarSyncRepository,
+        CalendarRepository, GoogleCalendarSyncRepository, WatchChannelTeardownRepository,
     },
 };
 
@@ -3192,6 +3192,68 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        Ok(())
+    }
+}
+
+impl WatchChannelTeardownRepository for PgCalendarRepository {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_active_watch_channels(&self) -> Result<Vec<ActiveWatchChannel>, Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                calendar.id AS calendar_id,
+                calendar.watch_channel_id AS "channel_id!",
+                calendar.watch_resource_id AS "resource_id!",
+                account.email_link_id,
+                link.fusionauth_user_id,
+                link.email_address,
+                link.provider::text AS "provider!"
+            FROM calendars calendar
+            JOIN calendar_accounts account ON account.id = calendar.account_id
+            JOIN email_links link ON link.id = account.email_link_id
+            WHERE calendar.watch_channel_id IS NOT NULL
+              AND calendar.watch_resource_id IS NOT NULL
+              AND (calendar.watch_expires_at IS NULL OR calendar.watch_expires_at > now())
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| ActiveWatchChannel {
+                calendar_id: row.calendar_id,
+                channel_id: row.channel_id,
+                resource_id: row.resource_id,
+                email_link_id: row.email_link_id,
+                token_identity: CalendarLinkTokenIdentity {
+                    fusionauth_user_id: row.fusionauth_user_id,
+                    email_address: row.email_address,
+                    provider: row.provider,
+                },
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self, channel_id), err)]
+    async fn clear_watch_channel(&self, calendar_id: Uuid, channel_id: &str) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET watch_channel_id = NULL,
+                watch_resource_id = NULL,
+                watch_expires_at = NULL,
+                updated_at = now()
+            WHERE id = $1
+              AND watch_channel_id = $2
+            "#,
+            calendar_id,
+            channel_id,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
         Ok(())
     }
 }

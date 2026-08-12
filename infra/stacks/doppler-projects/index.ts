@@ -15,6 +15,7 @@ const SERVICE_NAMES = [
   'mcp-server',
   'email-service',
   'document-cognition',
+  'calendar-event-local-tunnel',
 ];
 
 for (const service_name of SERVICE_NAMES) {

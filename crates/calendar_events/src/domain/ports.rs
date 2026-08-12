@@ -7,7 +7,7 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::models::{
-    AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
+    ActiveWatchChannel, AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
     CalendarEventPatch, CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
@@ -481,6 +481,35 @@ pub trait GoogleCalendarProvider: Send + Sync + 'static {
         channel_id: Uuid,
         config: &GoogleWatchConfig,
     ) -> impl Future<Output = Result<GoogleWatchChannel, GoogleProviderError>> + Send;
+}
+
+/// Provider-side teardown of push notification channels, kept separate from
+/// [`GoogleCalendarProvider`] because only explicit channel teardown needs it.
+pub trait GoogleWatchChannelStopper: Send + Sync + 'static {
+    /// Stop one push channel. An already-gone channel counts as success.
+    fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> impl Future<Output = Result<(), GoogleProviderError>> + Send;
+}
+
+/// Bookkeeping needed to stop every open push channel at teardown.
+pub trait WatchChannelTeardownRepository: Send + Sync + 'static {
+    /// List every unexpired push channel with the identity that can stop it.
+    fn list_active_watch_channels(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ActiveWatchChannel>, Report>> + Send;
+
+    /// Clear one channel's bookkeeping, guarded by channel id so a
+    /// concurrently reopened channel is never clobbered.
+    fn clear_watch_channel(
+        &self,
+        calendar_id: Uuid,
+        channel_id: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Durable scheduling operations for periodic provider maintenance.

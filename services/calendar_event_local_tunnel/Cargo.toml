@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "calendar_event_local_tunnel"
+publish = false
+version = "0.1.0"
+default-run = "calendar_event_local_tunnel"
+
+[[bin]]
+name = "calendar_event_local_tunnel"
+path = "src/main.rs"
+
+[[bin]]
+name = "calendar_event_local_tunnel_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+calendar_watch_relay = { path = "../../crates/calendar_watch_relay" }
+doppler-config = { workspace = true }
+futures = { workspace = true }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+serde = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["trace"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

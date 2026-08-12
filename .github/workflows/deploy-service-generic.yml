@@ -10,6 +10,7 @@ on:
           - agent-schedule-service
           - authentication-service
           - bulk-upload
+          - calendar-event-local-tunnel
           - connection-gateway
           - contacts-service
           - convert-service

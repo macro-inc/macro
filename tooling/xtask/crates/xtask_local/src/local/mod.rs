@@ -15,6 +15,7 @@ use std::path::PathBuf;
 
 pub mod arch;
 pub mod build;
+pub mod calendar_push;
 pub mod cli;
 pub mod db;
 pub mod docker;

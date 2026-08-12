@@ -43,6 +43,9 @@ enum Cmd {
     SeedEnv(InstanceArgs),
     /// Run a seed scenario against an instance's host-facing endpoints.
     SeedScenario(SeedScenarioArgs),
+    /// Toggle real Google Calendar push for a local instance (relayed via
+    /// the dev email service).
+    CalendarPush(CalendarPushArgs),
     /// Stop an instance's containers (keep volumes).
     StopLocal(InstanceArgs),
     /// Drop, recreate, and migrate the instance database.
@@ -181,6 +184,25 @@ pub struct ForceArg {
 }
 
 #[derive(Args, Clone)]
+pub struct CalendarPushArgs {
+    #[command(flatten)]
+    pub instance: InstanceArgs,
+    /// What to do with the instance's calendar push overlay.
+    #[arg(value_enum)]
+    pub action: CalendarPushAction,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+pub enum CalendarPushAction {
+    /// Write the overlay so the next stack (re)start arms push.
+    Enable,
+    /// Remove the overlay; a running stack keeps push until restarted.
+    Disable,
+    /// Report whether the overlay is present.
+    Status,
+}
+
+#[derive(Args, Clone)]
 #[command(trailing_var_arg = true)]
 pub struct SeedScenarioArgs {
     #[command(flatten)]
@@ -242,6 +264,17 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::SeedEnv(a) => {
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::seed_env::emit(&instance)
+        }
+        Cmd::CalendarPush(a) => {
+            let instance = super::instance::Instance::derive(
+                a.instance.instance.as_deref(),
+                a.instance.port_base,
+            )?;
+            match a.action {
+                CalendarPushAction::Enable => super::calendar_push::enable(&instance),
+                CalendarPushAction::Disable => super::calendar_push::disable(&instance),
+                CalendarPushAction::Status => super::calendar_push::status(&instance),
+            }
         }
         Cmd::SeedScenario(a) => {
             let instance = super::instance::Instance::derive(

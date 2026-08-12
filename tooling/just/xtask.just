@@ -36,6 +36,13 @@ destroy_local *ARGS:
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
 
+# Toggle real Google Calendar push for a local instance (relayed via the dev
+# email service): `just calendar-push enable|disable|status [--instance x]`.
+# Requires CALENDAR_WATCH_RELAY_SECRET (Doppler or --env-file) to arm.
+[positional-arguments]
+calendar-push *ARGS:
+  @{{ xtask }} calendar-push "$@"
+
 # Headless stack orchestration for previews, agents, and CI.
 #   just stack up                      # full stack; static frontend served by the proxy
 #   just stack update                  # rebuild + reload only what changed (the `r` hotkey)

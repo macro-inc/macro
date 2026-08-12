@@ -2871,3 +2871,156 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .unwrap();
     assert_eq!(past, Vec::new());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn watch_channel_teardown_lists_and_clears_open_channels(pool: PgPool) {
+    let owner_id = "macro|watch-teardown@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    let account_id = repo.upsert_google_account(link_id).await.unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(
+            key,
+            lease_token,
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+    let channel = GoogleWatchChannel {
+        channel_id: Uuid::new_v4(),
+        resource_id: "resource-1".to_string(),
+        expires_at: (Utc::now() + Duration::days(6)).trunc_subsecs(6),
+    };
+    repo.record_watch_channel(key, lease_token, account_id, calendar_id, channel.clone())
+        .await
+        .unwrap();
+
+    let active = repo.list_active_watch_channels().await.unwrap();
+    let listed = active
+        .iter()
+        .find(|entry| entry.calendar_id == calendar_id)
+        .expect("the open channel is listed");
+    assert_eq!(listed.channel_id, channel.channel_id.to_string());
+    assert_eq!(listed.resource_id, "resource-1");
+    assert_eq!(listed.email_link_id, link_id);
+    assert_eq!(listed.token_identity.fusionauth_user_id, owner_id);
+    assert_eq!(listed.token_identity.provider, "GMAIL");
+
+    // Clearing is guarded by channel id, so a reopened channel can't be
+    // clobbered by a stale teardown.
+    repo.clear_watch_channel(calendar_id, "some-other-channel")
+        .await
+        .unwrap();
+    assert!(
+        repo.list_active_watch_channels()
+            .await
+            .unwrap()
+            .iter()
+            .any(|entry| entry.calendar_id == calendar_id),
+        "a mismatched channel id must not clear the bookkeeping"
+    );
+
+    repo.clear_watch_channel(calendar_id, &channel.channel_id.to_string())
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .list_active_watch_channels()
+            .await
+            .unwrap()
+            .iter()
+            .any(|entry| entry.calendar_id == calendar_id),
+        "a cleared channel is no longer listed"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn watch_channel_teardown_skips_already_expired_channels(pool: PgPool) {
+    let link_id = insert_link(&pool, "macro|watch-expired@example.com").await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(link_id, complete_grant())
+        .await
+        .unwrap();
+    let account_id = repo.upsert_google_account(link_id).await.unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(
+            key,
+            lease_token,
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+    let channel = GoogleWatchChannel {
+        channel_id: Uuid::new_v4(),
+        resource_id: "resource-expired".to_string(),
+        expires_at: (Utc::now() - Duration::hours(1)).trunc_subsecs(6),
+    };
+    repo.record_watch_channel(key, lease_token, account_id, calendar_id, channel)
+        .await
+        .unwrap();
+
+    assert!(
+        !repo
+            .list_active_watch_channels()
+            .await
+            .unwrap()
+            .iter()
+            .any(|entry| entry.calendar_id == calendar_id),
+        "an already-lapsed channel is not worth a stop call"
+    );
+}

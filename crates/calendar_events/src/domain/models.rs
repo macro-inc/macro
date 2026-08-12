@@ -866,6 +866,32 @@ pub struct GoogleWatchChannel {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Outcome of a best-effort pass stopping every open push channel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WatchChannelStopSummary {
+    /// Channels confirmed stopped (or already gone) and cleared.
+    pub stopped: usize,
+    /// Channels not fully torn down this pass — the stop call or its
+    /// bookkeeping cleanup failed. Their bookkeeping is kept so a later pass
+    /// or natural expiry finishes the job.
+    pub failed: usize,
+}
+
+/// An open push notification channel joined to the identity able to stop it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActiveWatchChannel {
+    /// Calendar row holding the channel bookkeeping.
+    pub calendar_id: Uuid,
+    /// Client-minted channel identifier.
+    pub channel_id: String,
+    /// Provider-assigned resource identifier.
+    pub resource_id: String,
+    /// Link whose grant opened the channel (also the request-gate key).
+    pub email_link_id: Uuid,
+    /// Refresh-token identity used to mint an access token for the stop call.
+    pub token_identity: CalendarLinkTokenIdentity,
+}
+
 /// How the provider adapter must reconcile one calendar this run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GoogleSyncPlan {

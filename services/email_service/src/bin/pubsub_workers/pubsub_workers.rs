@@ -306,6 +306,14 @@ async fn main() -> anyhow::Result<()> {
         RateBudget::Backfill,
     );
 
+    worker_tracker.spawn(email_service::pubsub::calendar_watch_subscriber::run(
+        db.clone(),
+        redis_client.clone(),
+        Arc::new(auth_service_client.clone()),
+        config.calendar_sync_enabled,
+        worker_cancellation_token.clone(),
+    ));
+
     let sfs_client = StaticFileServiceClient::new(
         config.internal_api_key.to_string(),
         StaticFileServiceUrl::new()?.to_string(),

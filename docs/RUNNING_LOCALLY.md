@@ -314,3 +314,55 @@ just reset_local --instance agent-a
 ```
 
 For the default instance, omit `--instance`.
+
+## Real Google Calendar Push (`calendar-push`)
+
+By default a local stack only notices provider-side calendar edits on its
+5-minute poll. Calendar push closes that gap to seconds by relaying Google's
+`events.watch` webhook deliveries through the dev-only
+`calendar-event-local-tunnel` service: Google requires a watch channel's
+address to be public HTTPS on a domain verified in the Cloud project owning
+the OAuth client, which a laptop can never satisfy, so local channels open
+against `calendar-event-local-tunnel-dev.macro.com` with a per-instance
+token, and the local pubsub workers subscribe OUT to that service (SSE) for
+deliveries addressed to their token. No tunnel daemon, no DNS, no inbound
+connectivity to your machine.
+
+```bash
+just calendar-push enable --instance agent-a   # or omit --instance
+just run_local --instance agent-a              # (re)start to apply
+```
+
+`enable` writes `infra/local/generated/<instance>/calendar-push.env`, which
+every env resolve overlays automatically. It requires
+`CALENDAR_WATCH_RELAY_SECRET`, pulled with the rest of the Doppler
+`local/lcl_personal` config (or supplied via `--env-file`); the resolve warns
+if it is missing.
+
+To verify: connect a Google account, then edit an event in the Google
+Calendar UI — the local projection should update within seconds. The pubsub
+workers log `subscribing to relayed calendar watch notifications` on start
+and `relayed watch channel handshake received` when a channel opens.
+
+Turning it off:
+
+```bash
+just calendar-push disable --instance agent-a
+```
+
+A running stack keeps push until it restarts. On graceful shutdown (stop,
+destroy, restart) the stack calls `channels.stop` at Google for every open
+channel; anything that slips through lapses at its natural expiry, and the
+tunnel drops those strays centrally, so they never reach your machine.
+
+The no-Google fake path still works for plumbing checks: stamp
+`watch_channel_id`/`watch_resource_id` on a `calendars` row, then POST to the
+local webhook directly:
+
+```bash
+curl -i -X POST http://localhost:<email_service port>/calendar/notifications \
+  -H "x-goog-channel-token: <CALENDAR_WATCH_TOKEN>" \
+  -H "x-goog-channel-id: <stamped channel id>" \
+  -H "x-goog-resource-id: <stamped resource id>" \
+  -H "x-goog-resource-state: exists"
+```

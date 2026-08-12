@@ -1,17 +1,17 @@
 use super::*;
 use crate::domain::{
     models::{
-        AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
+        ActiveWatchChannel, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
-        CalendarSyncStatus, EventReminders, EventStatus, EventTime, EventTransparency,
-        EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
+        CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarLinkTokenIdentity,
+        CalendarOccurrence, CalendarSyncStatus, EventReminders, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
         GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
         GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
-        GoogleEventSyncContext, GoogleProviderError,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, CalendarTokenError,
+        GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
     },
 };
 use chrono::{TimeZone, Utc};
@@ -700,5 +700,214 @@ async fn google_coordinator_keeps_calendar_permission_health_separate_from_gmail
     assert_eq!(
         lifecycle.failures.lock().unwrap().as_slice(),
         &[CalendarBackfillFailureDisposition::CalendarPermissionRequired]
+    );
+}
+
+#[derive(Clone, Default)]
+struct FakeTeardownRepo {
+    channels: Vec<ActiveWatchChannel>,
+    fail_clear_for: Option<String>,
+    cleared: Arc<Mutex<Vec<(Uuid, String)>>>,
+}
+
+impl WatchChannelTeardownRepository for FakeTeardownRepo {
+    async fn list_active_watch_channels(&self) -> Result<Vec<ActiveWatchChannel>, Report> {
+        Ok(self.channels.clone())
+    }
+
+    async fn clear_watch_channel(&self, calendar_id: Uuid, channel_id: &str) -> Result<(), Report> {
+        if self.fail_clear_for.as_deref() == Some(channel_id) {
+            return Err(rootcause::report!(CalendarValidationError::MissingIdentity).into());
+        }
+        self.cleared
+            .lock()
+            .unwrap()
+            .push((calendar_id, channel_id.to_owned()));
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeStopper {
+    fail_channel: Option<String>,
+    stopped: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+impl GoogleWatchChannelStopper for FakeStopper {
+    async fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        _email_link_id: Uuid,
+        channel_id: &str,
+        _resource_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        if self.fail_channel.as_deref() == Some(channel_id) {
+            return Err(GoogleProviderError::new(
+                GoogleProviderErrorKind::Transient,
+                "stop refused",
+            ));
+        }
+        self.stopped
+            .lock()
+            .unwrap()
+            .push((access_token.to_owned(), channel_id.to_owned()));
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeTokens {
+    fail_for: Option<String>,
+    minted: Arc<Mutex<Vec<String>>>,
+}
+
+impl CalendarAccessTokenProvider for FakeTokens {
+    async fn fetch_access_token(
+        &self,
+        identity: &CalendarLinkTokenIdentity,
+    ) -> Result<String, CalendarTokenError> {
+        if self.fail_for.as_deref() == Some(identity.email_address.as_str()) {
+            return Err(CalendarTokenError::Transient("mint refused".to_owned()));
+        }
+        self.minted
+            .lock()
+            .unwrap()
+            .push(identity.email_address.clone());
+        Ok(format!("token-{}", identity.email_address))
+    }
+}
+
+fn active_channel(link_id: Uuid, email: &str, channel_id: &str) -> ActiveWatchChannel {
+    ActiveWatchChannel {
+        calendar_id: Uuid::now_v7(),
+        channel_id: channel_id.to_owned(),
+        resource_id: format!("resource-{channel_id}"),
+        email_link_id: link_id,
+        token_identity: CalendarLinkTokenIdentity {
+            fusionauth_user_id: format!("fa-{email}"),
+            email_address: email.to_owned(),
+            provider: "GMAIL".to_owned(),
+        },
+    }
+}
+
+#[tokio::test]
+async fn stop_all_stops_and_clears_every_channel_minting_once_per_link() {
+    let link_a = Uuid::now_v7();
+    let link_b = Uuid::now_v7();
+    let repo = FakeTeardownRepo {
+        channels: vec![
+            active_channel(link_a, "a@example.com", "chan-1"),
+            active_channel(link_a, "a@example.com", "chan-2"),
+            active_channel(link_b, "b@example.com", "chan-3"),
+        ],
+        ..Default::default()
+    };
+    let stopper = FakeStopper::default();
+    let tokens = FakeTokens::default();
+
+    let summary = stop_all_watch_channels(&repo, &stopper, &tokens)
+        .await
+        .unwrap();
+
+    assert_eq!(summary.stopped, 3);
+    assert_eq!(summary.failed, 0);
+    assert_eq!(
+        tokens.minted.lock().unwrap().len(),
+        2,
+        "one token per link, not per channel"
+    );
+    let stopped = stopper.stopped.lock().unwrap();
+    assert!(
+        stopped
+            .iter()
+            .any(|(token, channel)| { token == "token-a@example.com" && channel == "chan-1" })
+    );
+    assert_eq!(repo.cleared.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn stop_all_keeps_bookkeeping_for_channels_that_fail_to_stop() {
+    let link = Uuid::now_v7();
+    let repo = FakeTeardownRepo {
+        channels: vec![
+            active_channel(link, "a@example.com", "chan-ok"),
+            active_channel(link, "a@example.com", "chan-bad"),
+        ],
+        ..Default::default()
+    };
+    let stopper = FakeStopper {
+        fail_channel: Some("chan-bad".to_owned()),
+        ..Default::default()
+    };
+    let tokens = FakeTokens::default();
+
+    let summary = stop_all_watch_channels(&repo, &stopper, &tokens)
+        .await
+        .unwrap();
+
+    assert_eq!(summary.stopped, 1);
+    assert_eq!(summary.failed, 1);
+    let cleared = repo.cleared.lock().unwrap();
+    assert_eq!(cleared.len(), 1);
+    assert_eq!(cleared[0].1, "chan-ok");
+}
+
+#[tokio::test]
+async fn stop_all_counts_a_failed_bookkeeping_clear_as_failed() {
+    let link = Uuid::now_v7();
+    let repo = FakeTeardownRepo {
+        channels: vec![
+            active_channel(link, "a@example.com", "chan-ok"),
+            active_channel(link, "a@example.com", "chan-uncleared"),
+        ],
+        fail_clear_for: Some("chan-uncleared".to_owned()),
+        ..Default::default()
+    };
+    let stopper = FakeStopper::default();
+    let tokens = FakeTokens::default();
+
+    let summary = stop_all_watch_channels(&repo, &stopper, &tokens)
+        .await
+        .unwrap();
+
+    assert_eq!(summary.stopped, 1);
+    assert_eq!(
+        summary.failed, 1,
+        "a stopped channel whose bookkeeping survives is not fully torn down"
+    );
+    let cleared = repo.cleared.lock().unwrap();
+    assert_eq!(cleared.len(), 1);
+    assert_eq!(cleared[0].1, "chan-ok");
+}
+
+#[tokio::test]
+async fn stop_all_counts_channels_whose_token_cannot_be_minted() {
+    let failing_link = Uuid::now_v7();
+    let healthy_link = Uuid::now_v7();
+    let repo = FakeTeardownRepo {
+        channels: vec![
+            active_channel(failing_link, "broken@example.com", "chan-1"),
+            active_channel(failing_link, "broken@example.com", "chan-2"),
+            active_channel(healthy_link, "ok@example.com", "chan-3"),
+        ],
+        ..Default::default()
+    };
+    let stopper = FakeStopper::default();
+    let tokens = FakeTokens {
+        fail_for: Some("broken@example.com".to_owned()),
+        ..Default::default()
+    };
+
+    let summary = stop_all_watch_channels(&repo, &stopper, &tokens)
+        .await
+        .unwrap();
+
+    assert_eq!(summary.stopped, 1);
+    assert_eq!(summary.failed, 2);
+    assert_eq!(
+        stopper.stopped.lock().unwrap().len(),
+        1,
+        "no stop attempts without a token"
     );
 }
