@@ -1,0 +1,94 @@
+---
+title: "Unified Tagging"
+icon: "tags"
+description: "One set of colored tags that spans every block type: docs, email, tasks, chats, and calls."
+---
+
+A tag is a [property](/concepts/properties), and because properties are shared across your whole workspace, a single tag namespace spans every block type. Tag an email `marketing` and a task `marketing` and it's the same `marketing`: one color, one filter, one click to see everything carrying it.
+
+Tags are for organizing your work by project, team, or area, like `marketing`, `hiring`, or `q3-launch`. They aren't for tracking status. Status, priority, and assignees are [properties](/concepts/properties) that describe a single item, while a tag is a property that ties related items together across the whole workspace.
+
+<Frame>
+  ![Filtering the whole workspace by a tag in search](/images/search_tags.png)
+</Frame>
+
+## What you can tag
+
+The same tags apply across:
+
+- **Documents** — tag PDFs, other files, and [snippets](/product/snippets)
+- **Tasks** — tag a task to group it with related work
+- **Emails** — tag a whole thread
+- **AI chats** — tag a conversation with an agent
+- **Calls** — tag a recording or transcript
+
+## Creating and applying tags
+
+Type `#` in a document to open the tag menu, then pick an existing tag or create a new one. Tags render inline as colored pills, and clicking a pill shows everything else carrying it.
+
+Everywhere else, use the tag panel in the properties window. Select one of your existing tags or start typing to create a new one.
+
+An item can carry as many tags as you like, so the same email or task can sit under `marketing` and `q3-launch` at once.
+
+> If you would like to select or unselect multiple tags, hold <kbd>Shift</kbd> while clicking them.
+
+<Frame>
+  <img src="/images/create_tags.png" alt="Creating a tag inline with the tag menu" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
+</Frame>
+
+## Personal and team tags
+
+When you create a tag you choose its scope:
+
+- **Personal** — only you see it. Anyone can create personal tags.
+- **Team** — shared with everyone on your team. Creating a team tag requires being on a [team](/account/teams).
+
+Renaming or recoloring a tag keeps its identity, so the change flows to every item already carrying it. Deleting a tag is destructive and it will be removed from everything at once and can't be undone.
+
+## Colors
+
+Every tag has a color from a fixed palette:
+
+<div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E5484D', display: 'inline-block' }} /> Red</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E54D2E', display: 'inline-block' }} /> Tomato</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F76B15', display: 'inline-block' }} /> Orange</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FFB224', display: 'inline-block' }} /> Amber</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F5D90A', display: 'inline-block' }} /> Yellow</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#46A758', display: 'inline-block' }} /> Green</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#12A594', display: 'inline-block' }} /> Teal</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#0091FF', display: 'inline-block' }} /> Blue</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3E63DD', display: 'inline-block' }} /> Indigo</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#8E4EC6', display: 'inline-block' }} /> Purple</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E93D82', display: 'inline-block' }} /> Pink</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#889096', display: 'inline-block' }} /> Gray</span>
+</div>
+
+## Filtering and search
+
+In any block, go to **Filter → Tags** to show only the items carrying a tag. To filter across your entire workspace at once, use the same **Tags** chip in the filter menu of [search](/product/search#filtering-by-tags). Select two or more tags and a match-mode toggle appears:
+
+- **Any** — items that have any of the selected tags (the default)
+- **All** — items that have every selected tag, for example everything tagged both `marketing` and `q3-launch`
+
+<Frame>
+  <img src="/images/filter_tags.png" alt="Filtering a block's list by tag with Filter → Tags" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
+</Frame>
+
+Clicking a tag pill anywhere jumps straight to everything else carrying it.
+
+## Managing your tags
+
+Curate the full set from **Settings → Tags**, which lists your **Personal** and **Team** tags with edit and delete actions and a **New tag** button. It's the place to rename, recolor, or clean up tags without hunting for an item that uses them.
+
+<Frame>
+  ![The Settings → Tags page, with Personal and Team sections](/images/settings_tags.png)
+</Frame>
+
+<Note>
+  **Tags are not email labels.** Your Gmail labels (Inbox, Starred, Important, and any you've made) still sync and drive inbox actions like archive and star. Macro tags are a separate, cross-workspace layer that sits on top — an email thread can carry both.
+</Note>
+
+## Tagging with agents
+
+Tell your AI client (Claude Code, Cursor) connected to the [MCP server](/AI/mcp/overview) "tag this thread `marketing`" or "make a `q3-launch` tag and add it to these tasks," and it handles the rest without you leaving your editor.

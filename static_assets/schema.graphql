@@ -78,6 +78,14 @@ type CompleteMutationRoot {
 	Update authenticated user-owned notifications and return authoritative rows.
 	"""
 	updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!
+	"""
+	Mark an accessible email thread as seen and return its authoritative cache record.
+	"""
+	markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!
+	"""
+	Add or remove one label from an accessible email thread and return its authoritative cache record.
+	"""
+	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
 }
 
 """
@@ -92,6 +100,16 @@ input DuplicateEntityInput {
 	Optional display name for the new entity.
 	"""
 	displayName: String
+}
+
+"""
+Input for fetching one email thread by its canonical identifier.
+"""
+input EmailThreadInput {
+	"""
+	The canonical email thread identifier.
+	"""
+	threadId: ID!
 }
 
 """
@@ -168,6 +186,80 @@ type GraphqlCacheDeletion {
 	Identifier used in the normalized cache key.
 	"""
 	entityId: ID!
+}
+
+"""
+The two operands of a recursive `CalendarEventFilterExpr` binary expression.
+"""
+input GraphqlCalendarEventBinaryExpr {
+	"""
+	The left-hand expression.
+	"""
+	left: GraphqlCalendarEventExpr!
+	"""
+	The right-hand expression.
+	"""
+	right: GraphqlCalendarEventExpr!
+}
+
+"""
+A recursive `CalendarEventFilterExpr` filter expression.
+"""
+input GraphqlCalendarEventExpr @oneOf {
+	"""
+	Matches when both expressions match.
+	"""
+	and: GraphqlCalendarEventBinaryExpr
+	"""
+	Matches when either expression matches.
+	"""
+	or: GraphqlCalendarEventBinaryExpr
+	"""
+	Negates an expression.
+	"""
+	not: GraphqlCalendarEventExpr
+	"""
+	Matches a domain-specific literal condition.
+	"""
+	literal: GraphqlCalendarEventLiteral
+}
+
+"""
+GraphQL input representing a calendar event literal.
+"""
+input GraphqlCalendarEventLiteral @oneOf {
+	"""
+	Canonical event id.
+	"""
+	id: ID
+	"""
+	Event status.
+	"""
+	status: String
+	"""
+	Master start must be before this RFC3339 instant.
+	"""
+	startsBefore: String
+	"""
+	Master end must be after this RFC3339 instant.
+	"""
+	endsAfter: String
+	"""
+	Attendee email.
+	"""
+	attendee: String
+	"""
+	Organizer email.
+	"""
+	organizer: String
+	"""
+	Notification done state for the requester.
+	"""
+	notificationDone: Boolean
+	"""
+	Notification seen state for the requester.
+	"""
+	notificationSeen: Boolean
 }
 
 """
@@ -796,6 +888,10 @@ enum GraphqlDocumentSubType {
 	The snippet option.
 	"""
 	SNIPPET
+	"""
+	The skill option.
+	"""
+	SKILL
 }
 
 """
@@ -846,6 +942,74 @@ input GraphqlEmailFilterAst {
 	The crm scope.
 	"""
 	crmScope: GraphqlCrmScope
+}
+
+"""
+Enriched email link accessible to the authenticated user.
+"""
+type GraphqlEmailLink {
+	"""
+	Stable email link identifier.
+	"""
+	id: ID!
+	"""
+	Macro user that owns the inbox.
+	"""
+	macroId: String!
+	"""
+	Provider email address for the inbox.
+	"""
+	emailAddress: String!
+	"""
+	SFS URL of the inbox's self-contact photo, when available.
+	"""
+	photoUrl: String
+	"""
+	Email provider.
+	"""
+	provider: GraphqlEmailProvider!
+	"""
+	Whether ongoing provider synchronization is enabled.
+	"""
+	isSyncActive: Boolean!
+	"""
+	Coarse synchronization state derived by the email domain.
+	"""
+	syncStatus: GraphqlEmailSyncStatus!
+	"""
+	Whether the provider grant must be reauthorized.
+	"""
+	needsReauth: Boolean!
+	"""
+	Inbox signature settings.
+	"""
+	settings: GraphqlEmailLinkSettings!
+	"""
+	Whether this is the owner's primary inbox.
+	"""
+	isPrimary: Boolean!
+	"""
+	Link creation timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Link last-updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+}
+
+"""
+Signature settings embedded in an authenticated user's email link.
+"""
+type GraphqlEmailLinkSettings {
+	"""
+	Whether signatures are included on replies and forwards.
+	"""
+	signatureOnRepliesForwards: Boolean!
+	"""
+	Saved, sanitized signature HTML, when configured.
+	"""
+	signature: String
 }
 
 """
@@ -908,6 +1072,42 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+}
+
+"""
+Email provider for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailProvider {
+	"""
+	Google Gmail.
+	"""
+	GMAIL
+}
+
+"""
+Coarse synchronization state for an authenticated user's linked inbox.
+"""
+enum GraphqlEmailSyncStatus {
+	"""
+	Initial synchronization is queued or running.
+	"""
+	SYNCING
+	"""
+	The inbox is active and synchronized.
+	"""
+	UP_TO_DATE
+	"""
+	Initial synchronization failed or was cancelled.
+	"""
+	ERROR
+	"""
+	The provider grant must be reauthorized.
+	"""
+	NEEDS_REAUTH
+	"""
+	Synchronization is disabled.
+	"""
+	INACTIVE
 }
 
 """
@@ -1003,6 +1203,10 @@ GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
 	"""
+	The calendar event filter to apply.
+	"""
+	calendarEventFilter: GraphqlCalendarEventExpr
+	"""
 	The document filter to apply.
 	"""
 	documentFilter: GraphqlDocumentExpr
@@ -1038,6 +1242,10 @@ input GraphqlEntityFilterAst {
 	The foreign entity filter to apply.
 	"""
 	foreignEntityFilter: GraphqlForeignEntityExpr
+	"""
+	The reminder filter to apply.
+	"""
+	reminderFilter: GraphqlReminderExpr
 	"""
 	The properties filter to apply.
 	"""
@@ -1178,6 +1386,10 @@ enum GraphqlEntityType {
 	"""
 	CALL
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	CRM company entity.
 	"""
 	CRM_COMPANY
@@ -1201,6 +1413,14 @@ enum GraphqlEntityType {
 	CRM contact entity.
 	"""
 	CRM_CONTACT
+	"""
+	Reminder entity.
+	"""
+	REMINDER
+	"""
+	AI skill entity (skill document or built-in system skill).
+	"""
+	SKILL
 }
 
 """
@@ -1588,6 +1808,10 @@ An entity type supported by the properties domain.
 """
 enum GraphqlPropertyEntityType {
 	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
 	Call record entity.
 	"""
 	CALL_RECORD
@@ -1681,6 +1905,85 @@ enum GraphqlPropertyTargetEntityType {
 A property value represented by a type-safe GraphQL union.
 """
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+
+"""
+The two operands of a recursive `ReminderFilterExpr` binary expression.
+"""
+input GraphqlReminderBinaryExpr {
+	"""
+	The left-hand expression.
+	"""
+	left: GraphqlReminderExpr!
+	"""
+	The right-hand expression.
+	"""
+	right: GraphqlReminderExpr!
+}
+
+"""
+A recursive `ReminderFilterExpr` filter expression.
+"""
+input GraphqlReminderExpr @oneOf {
+	"""
+	Matches when both expressions match.
+	"""
+	and: GraphqlReminderBinaryExpr
+	"""
+	Matches when either expression matches.
+	"""
+	or: GraphqlReminderBinaryExpr
+	"""
+	Negates an expression.
+	"""
+	not: GraphqlReminderExpr
+	"""
+	Matches a domain-specific literal condition.
+	"""
+	literal: GraphqlReminderLiteral
+}
+
+"""
+GraphQL input representing the reminder literal.
+"""
+input GraphqlReminderLiteral @oneOf {
+	"""
+	Opt this query into reminders at all. Reminders are off by default, so
+	without this (or an `id`/`entity`) Soup omits them entirely — a filter
+	of only `completed` would otherwise silently match nothing. Must be
+	`true`; there is no literal for excluding reminders, that is the default.
+	"""
+	include: Boolean
+	"""
+	The id option.
+	"""
+	id: ID
+	"""
+	The referenced entity, as `"{type}:{id}"`.
+	"""
+	entity: String
+	"""
+	Whether the owner has marked the reminder done.
+	"""
+	completed: Boolean
+	"""
+	Whether the reminder has come due and is awaiting its owner.
+	"""
+	fired: Boolean
+}
+
+"""
+How often a reminder fires.
+"""
+enum GraphqlReminderScheduleType {
+	"""
+	Fires once, at `remindAt`.
+	"""
+	ONCE
+	"""
+	Fires repeatedly, on `cron` evaluated in `timezone`.
+	"""
+	RECURRING
+}
 
 """
 A select-option property value.
@@ -1797,6 +2100,16 @@ enum GraphqlSimpleSortMethod {
 }
 
 """
+represents the skill subtype fields
+"""
+type GraphqlSkillSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 represents the snippet subtype fields
 """
 type GraphqlSnippetSubType {
@@ -1804,6 +2117,20 @@ type GraphqlSnippetSubType {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+Direction a Soup page is ordered in.
+"""
+enum GraphqlSortDirection {
+	"""
+	Oldest, or soonest-firing, first.
+	"""
+	ASC
+	"""
+	Newest first.
+	"""
+	DESC
 }
 
 """
@@ -1826,6 +2153,88 @@ type GraphqlSoupBin {
 	Items in this bin, ordered by their index within the group.
 	"""
 	items: [GraphqlSoupEntity!]!
+}
+
+"""
+GraphQL representation of a canonical calendar event.
+"""
+type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common calendar event metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The owning Macro user.
+	"""
+	ownerId: String!
+	"""
+	The event title.
+	"""
+	title: String!
+	"""
+	The event description.
+	"""
+	description: String
+	"""
+	The event location.
+	"""
+	location: String
+	"""
+	Canonical event status.
+	"""
+	status: String!
+	"""
+	Timed or all-day event span.
+	"""
+	time: JSON!
+	"""
+	Direct conference join URL.
+	"""
+	conferenceUrl: String
+	"""
+	Whether the canonical source is read-only.
+	"""
+	isReadOnly: Boolean!
+	"""
+	Creation timestamp.
+	"""
+	createdAt: String!
+	"""
+	Update timestamp.
+	"""
+	updatedAt: String!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
 }
 
 """
@@ -2421,7 +2830,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
 
 """
 GraphQL representation of the soup email attachment.
@@ -2480,45 +2889,114 @@ type GraphqlSoupEmailContact {
 }
 
 """
-GraphQL representation of the soup email label.
+An uploaded attachment embedded in a draft email message.
 """
-type GraphqlSoupEmailLabel {
+type GraphqlSoupEmailDraftAttachment {
 	"""
-	The unique identifier.
+	The attachment's canonical identifier.
 	"""
 	id: ID!
 	"""
-	The identifier of the link.
+	The draft message identifier.
+	"""
+	draftId: ID!
+	"""
+	The original filename.
+	"""
+	fileName: String!
+	"""
+	The MIME type.
+	"""
+	contentType: String!
+	"""
+	The SHA-256 content digest.
+	"""
+	sha: String!
+	"""
+	The attachment size in bytes.
+	"""
+	size: Int!
+	"""
+	The storage key containing the uploaded attachment.
+	"""
+	s3Key: String!
+}
+
+"""
+A forwarded provider attachment embedded in a draft email message.
+"""
+type GraphqlSoupEmailForwardedAttachment {
+	"""
+	The original attachment identifier.
+	"""
+	attachmentId: ID!
+	"""
+	The draft message identifier.
+	"""
+	draftId: ID!
+	"""
+	The attachment identifier assigned by the email provider.
+	"""
+	providerAttachmentId: String
+	"""
+	The provider identifier of the original message.
+	"""
+	messageProviderId: String!
+	"""
+	The original filename.
+	"""
+	filename: String
+	"""
+	The MIME type.
+	"""
+	mimeType: String
+	"""
+	The attachment size in bytes.
+	"""
+	sizeBytes: Int
+}
+
+"""
+Canonical normalized GraphQL email label used by both email threads and
+the authenticated user's label catalog.
+"""
+type GraphqlSoupEmailLabel {
+	"""
+	Stable database identifier for the label.
+	"""
+	id: ID!
+	"""
+	Identifier of the email link that owns the label.
 	"""
 	linkId: ID!
 	"""
-	The identifier of the provider label.
+	Provider-specific label identifier.
 	"""
 	providerLabelId: String!
 	"""
-	The name.
+	User-visible label name.
 	"""
 	name: String!
 	"""
-	The created timestamp in RFC 3339 format.
+	Label creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
 	"""
-	The message list visibility.
+	Provider message-list visibility value.
 	"""
 	messageListVisibility: String!
 	"""
-	The label list visibility.
+	Provider label-list visibility value.
 	"""
 	labelListVisibility: String!
 	"""
-	The type.
+	Whether the label is provider-created or user-created.
 	"""
 	type: String!
 }
 
 """
-A lightweight email content projection for Soup queries.
+An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
 	"""
@@ -2526,9 +3004,17 @@ type GraphqlSoupEmailMessage {
 	"""
 	id: ID!
 	"""
+	The identifier assigned by the email provider.
+	"""
+	providerId: String
+	"""
 	The identifier of the containing thread.
 	"""
 	threadId: ID!
+	"""
+	The identifier of the message this message replies to.
+	"""
+	replyingToId: ID
 	"""
 	The identifier of the linked email account.
 	"""
@@ -2562,9 +3048,17 @@ type GraphqlSoupEmailMessage {
 	"""
 	isSent: Boolean!
 	"""
+	Whether the message is a draft.
+	"""
+	isDraft: Boolean!
+	"""
 	Whether the message has attachments.
 	"""
 	hasAttachments: Boolean!
+	"""
+	When this draft is scheduled to be sent, in RFC 3339 format.
+	"""
+	scheduledSendTime: String
 	"""
 	The sender of the message.
 	"""
@@ -2606,6 +3100,18 @@ type GraphqlSoupEmailMessage {
 	"""
 	bodyReplyless: String
 	"""
+	Provider-hosted attachments on the message.
+	"""
+	attachments: [GraphqlSoupEmailMessageAttachment!]!
+	"""
+	Uploaded attachments belonging to a draft message.
+	"""
+	attachmentsDraft: [GraphqlSoupEmailDraftAttachment!]!
+	"""
+	Forwarded provider attachments belonging to a draft message.
+	"""
+	attachmentsForwarded: [GraphqlSoupEmailForwardedAttachment!]!
+	"""
 	The creation timestamp in RFC 3339 format.
 	"""
 	createdAt: String!
@@ -2613,6 +3119,40 @@ type GraphqlSoupEmailMessage {
 	The last-updated timestamp in RFC 3339 format.
 	"""
 	updatedAt: String!
+}
+
+"""
+A provider-hosted attachment embedded in an email message.
+"""
+type GraphqlSoupEmailMessageAttachment {
+	"""
+	The attachment's canonical database identifier.
+	"""
+	id: ID!
+	"""
+	The attachment identifier assigned by the email provider.
+	"""
+	providerId: String
+	"""
+	The original filename.
+	"""
+	filename: String
+	"""
+	The MIME type.
+	"""
+	mimeType: String
+	"""
+	The attachment size in bytes.
+	"""
+	sizeBytes: Int
+	"""
+	The corresponding static-file-service identifier, when uploaded.
+	"""
+	sfsId: ID
+	"""
+	The content identifier used by inline attachments.
+	"""
+	contentId: String
 }
 
 """
@@ -2687,10 +3227,6 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Whether the thread should appear in the inbox.
 	"""
 	inboxVisible: Boolean!
-	"""
-	The identifier of the link.
-	"""
-	linkId: ID
 	"""
 	The name.
 	"""
@@ -2784,6 +3320,18 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	frecencyScore: Float
 	"""
+	The canonical identifier of the email link that owns this thread.
+	"""
+	linkId: ID!
+	"""
+	Timestamp of the latest inbound message, in RFC 3339 format.
+	"""
+	latestInboundMessageTs: String
+	"""
+	A page of messages in this thread, newest first.
+	"""
+	messages(offset: Int, limit: Int): [GraphqlSoupEmailMessage!]!
+	"""
 	The newest non-draft content message in this thread.
 	"""
 	latestContentMessage: GraphqlSoupEmailMessage
@@ -2871,6 +3419,14 @@ enum GraphqlSoupEntityType {
 	Foreign entity.
 	"""
 	FOREIGN_ENTITY
+	"""
+	Calendar event entity.
+	"""
+	CALENDAR_EVENT
+	"""
+	Reminder entity.
+	"""
+	REMINDER
 }
 
 """
@@ -3068,6 +3624,125 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 }
 
 """
+GraphQL representation of the soup reminder.
+"""
+type GraphqlSoupReminder implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	User-visible display name — a reminder's description is its name.
+	"""
+	displayName: String
+	"""
+	Common reminder metadata.
+	
+	`owner_id` is absent because a reminder is only ever readable by its
+	owner, and `parent` because a reminder is not contained by the entity it
+	references — see [`Self::referenced_entity`].
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The entity this reminder is about, when it is attached to one.
+	
+	Only the reference is returned; the client resolves it into a Soup item
+	through the edges that already exist for that entity type.
+	"""
+	referencedEntity: GraphqlSoupReminderReference
+	"""
+	What to remind the user about.
+	"""
+	description: String!
+	"""
+	Whether the reminder fires once or repeatedly.
+	"""
+	scheduleType: GraphqlReminderScheduleType!
+	"""
+	The instant a one-shot reminder fires at, in RFC 3339 format.
+	"""
+	remindAt: String
+	"""
+	The cron expression a recurring reminder fires on.
+	"""
+	cron: String
+	"""
+	The timezone a recurring reminder's cron is evaluated in.
+	"""
+	timezone: String
+	"""
+	The next firing, in RFC 3339 format. Soup orders reminders on this.
+	"""
+	nextRunAt: String!
+	"""
+	When false, the dispatcher skips this reminder.
+	"""
+	enabled: Boolean!
+	"""
+	When a one-shot reminder fired, in RFC 3339 format.
+	"""
+	completedAt: String
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlSoupNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+The entity a reminder is about, resolved server-side.
+
+Carries `file_type`/`sub_type` rather than just the reference: a reminder is
+iconed as whatever it points at, and the client's icon path is synchronous,
+so resolving them here saves a fetch per row.
+"""
+type GraphqlSoupReminderReference {
+	"""
+	The referenced entity's id.
+	"""
+	id: ID!
+	"""
+	The referenced entity's type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	File type, when the reference is a document — `md`, `pdf`, and so on.
+	"""
+	fileType: String
+	"""
+	Sub type, when the reference is a task or snippet document.
+	"""
+	subType: String
+}
+
+"""
 A string property value.
 """
 type GraphqlStringPropertyValue {
@@ -3123,6 +3798,18 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	Labels across every owned or delegated inbox accessible to the authenticated user.
+	"""
+	emailLabels: [GraphqlSoupEmailLabel!]!
+	"""
+	Enriched owned or delegated email links accessible to the authenticated user.
+	"""
+	emailLinks: [GraphqlEmailLink!]!
+	"""
+	Fetch one accessible email thread by its canonical identifier.
+	"""
+	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
 	Fetch Soup items nested into grouping bins.
 	"""
@@ -3201,6 +3888,16 @@ input GroupedSoupInput @oneOf {
 A scalar that can represent any JSON value.
 """
 scalar JSON
+
+"""
+Input for marking an email thread as seen.
+"""
+input MarkEmailThreadSeenInput {
+	"""
+	Email thread to mark as seen.
+	"""
+	threadId: ID!
+}
 
 """
 One entity move in a batch.
@@ -3300,6 +3997,13 @@ input SoupContinuationInput {
 	Email preview view used when hydrating email Soup items.
 	"""
 	emailView: GraphqlEmailView
+	"""
+	Direction to order the page in. Defaults to DESC.
+	
+	The cursor does not carry it, so re-send whatever the initial query
+	used or the continuation flips order mid-list.
+	"""
+	sortDirection: GraphqlSortDirection
 }
 
 """
@@ -3327,6 +4031,10 @@ input SoupInitialInput {
 	AST-shaped filters applied to each Soup entity type.
 	"""
 	filters: GraphqlEntityFilterAst
+	"""
+	Direction to order the page in. Defaults to DESC.
+	"""
+	sortDirection: GraphqlSortDirection
 }
 
 """
@@ -3390,6 +4098,24 @@ type SoupUpdated {
 	Hydrate the current Soup entity.
 	"""
 	item: GraphqlSoupEntity
+}
+
+"""
+Input for adding or removing a label from an email thread.
+"""
+input UpdateEmailThreadLabelInput {
+	"""
+	Email thread whose label assignment will change.
+	"""
+	threadId: ID!
+	"""
+	Label to add or remove.
+	"""
+	labelId: ID!
+	"""
+	Whether the label should be present after the mutation.
+	"""
+	value: Boolean!
 }
 
 """

@@ -27,3 +27,12 @@ export function isMacroAgentId(id: string | undefined): boolean {
   const bare = id.startsWith('bot|') ? id.slice('bot|'.length) : id;
   return bare === MACRO_AGENT_BOT_ID;
 }
+
+/**
+ * Whether an id is a bot principal: the canonical `bot|<uuid>` form used for
+ * bot senders, participants, and mentions, or the Macro bot's bare UUID
+ * (accepted for historical content only).
+ */
+export function isBotPrincipalId(id: string | undefined): boolean {
+  return id?.startsWith('bot|') === true || isMacroAgentId(id);
+}

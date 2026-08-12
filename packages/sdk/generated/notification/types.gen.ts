@@ -68,6 +68,47 @@ export type BulkGetByEventItemIdsRequest = {
 };
 
 /**
+ * A calendar event alarm came due. Like [`ReminderMetadata`], these are
+ * self-notifications: `sender_id` must stay `None` or the only recipient is
+ * filtered out. Everything the alert renders rides in here so the
+ * dispatcher never has to resolve the event again at display time.
+ */
+export type CalendarEventReminderMetadata = {
+    /**
+     * Instance end, for timed events.
+     */
+    endsAt?: string | null;
+    /**
+     * The calendar event entity the alarm belongs to.
+     */
+    eventId: string;
+    /**
+     * Minutes before the start the alarm was configured to fire.
+     */
+    minutesBefore: number;
+    /**
+     * Stable occurrence key of the instance that is starting.
+     */
+    occurrenceKey: string;
+    /**
+     * Instance start date, for all-day events.
+     */
+    startDate?: string | null;
+    /**
+     * Instance start, for timed events.
+     */
+    startsAt?: string | null;
+    /**
+     * IANA zone for rendering local clock times, when known.
+     */
+    timeZone?: string | null;
+    /**
+     * Event display title at dispatch time.
+     */
+    title: string;
+};
+
+/**
  * Metadata for a notification that a call has started in a channel.
  *
  * Mirrors the producer-side `CallStartedNotification` in the `call` crate:
@@ -350,7 +391,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
 
 /**
  * A plain old json error response for use with axum.
@@ -817,6 +858,18 @@ export type NotifEvent = {
     tag: 'task_assigned';
 } | {
     /**
+     * A reminder the user set for themselves came due.
+     */
+    content: ReminderMetadata;
+    tag: 'reminder';
+} | {
+    /**
+     * A calendar event alarm came due.
+     */
+    content: CalendarEventReminderMetadata;
+    tag: 'calendar_event_reminder';
+} | {
+    /**
      * An AI assistant responded to a chat.
      */
     content: AiResponseMetadata;
@@ -880,6 +933,8 @@ export type NotificationDocumentSubType = {
     type: 'task';
 } | {
     type: 'snippet';
+} | {
+    type: 'skill';
 };
 
 export type NotificationServiceApiVersion = 'v1';
@@ -899,6 +954,29 @@ export type PushNotificationData = {
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Metadata for a reminder the user set for themselves coming due.
+ *
+ * There is no sender: a reminder is self-set, so the dispatcher sends it with
+ * `sender_id: None` (a recipient who is also the sender is filtered out of
+ * their own notification). Every formatter here must therefore work without
+ * one.
+ *
+ * The associated entity, when there is one, lives on the notification row
+ * rather than in here, and clients resolve its name from that — so the
+ * dispatcher does not have to look up a name across five entity types.
+ */
+export type ReminderMetadata = {
+    /**
+     * What the user asked to be reminded about.
+     */
+    description: string;
+    /**
+     * The reminder that fired.
+     */
+    reminderId: string;
 };
 
 /**

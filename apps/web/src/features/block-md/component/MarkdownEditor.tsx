@@ -49,6 +49,7 @@ import {
   CLOSE_INLINE_SEARCH_COMMAND,
   createDraggableBlockStore,
   createDragInsertStore,
+  createProgressStatsStore,
   createWordcountStatsStore,
   DefaultShortcuts,
   diffPlugin,
@@ -63,6 +64,7 @@ import {
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
+  progressPlugin,
   selectionDataPlugin,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -234,6 +236,8 @@ export function MarkdownEditor(props: {
     blockId,
     blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
   );
+  const tagApplyTargetLabel = () =>
+    blockName === 'task' ? 'Task' : 'Document';
 
   const mdDocumentName = useBlockDocumentName('');
 
@@ -455,6 +459,13 @@ export function MarkdownEditor(props: {
     createSignal<PersistentLocation>();
   const [locationReady, setLocationReady] = createSignal(false);
 
+  createEffect(() => {
+    setMdStore({ locationReady: locationReady() });
+  });
+  onCleanup(() => {
+    setMdStore({ locationReady: undefined });
+  });
+
   const { nodeId, location, commentId } = useUrlParams(URL_PARAMS);
   createEffect(on(nodeId, (id) => setHighlightNodeId(id ?? undefined)));
   createEffect(
@@ -550,10 +561,6 @@ export function MarkdownEditor(props: {
       tagsPlugin({
         menu: tagsMenuOperations,
         peerIdValidator: peerIdValidator(),
-        onCreateTag: (tag) => {
-          if (!canEdit()) return;
-          void documentTags.applyTag(tag.scope, tag.optionId);
-        },
       })
     )
     .use(
@@ -959,6 +966,10 @@ export function MarkdownEditor(props: {
   );
   setMdStore('wordcountStats', wordcountStats);
 
+  const [progressStats, setProgressStats] = createProgressStatsStore();
+  plugins.use(progressPlugin({ setStore: setProgressStats }));
+  setMdStore('progressStats', progressStats);
+
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       {/* SCUFFED: are these the right transparency values? */}
@@ -1089,6 +1100,12 @@ export function MarkdownEditor(props: {
           editor={editor}
           menu={tagsMenuOperations}
           useBlockBoundary={true}
+          applyTargetLabel={tagApplyTargetLabel()}
+          isApplied={(tag) => documentTags.isApplied(tag.optionId)}
+          onApplyTag={(tag) => {
+            if (!canEdit()) return;
+            void documentTags.applyTag(tag.scope, tag.optionId);
+          }}
         />
 
         <SnippetsMenu

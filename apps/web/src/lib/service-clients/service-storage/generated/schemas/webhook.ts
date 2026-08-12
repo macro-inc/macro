@@ -33,6 +33,9 @@ export interface Webhook {
   is_valid: boolean;
   /** Display name. */
   name: string;
+  /** Caller-chosen namespace, unique among the owning workspace's webhooks.
+Set at creation time only; it cannot be changed afterwards. */
+  namespace: string;
   /** Webhook lifecycle status. */
   status: WebhookStatus;
   /** Update timestamp. */

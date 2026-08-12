@@ -1,9 +1,11 @@
+use crate::calendar_event::SoupCalendarEvent;
 use crate::call_record::SoupCallRecord;
 use crate::crm_company::SoupCrmCompany;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::project::SoupProject;
+use crate::reminder::SoupReminder;
 use crate::{
     chat::SoupChat,
     comms::{SoupChannel, SoupChannelThread},
@@ -37,10 +39,14 @@ pub enum SoupItem<T = ()> {
     ChannelThread(SoupChannelThread),
     /// Call record item.
     Call(SoupCallRecord<T>),
+    /// Calendar event item.
+    CalendarEvent(SoupCalendarEvent<T>),
     /// CRM company item.
     CrmCompany(SoupCrmCompany<T>),
     /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
+    /// Reminder item.
+    Reminder(SoupReminder<T>),
 }
 
 impl<T> SoupItem<T> {
@@ -68,11 +74,17 @@ impl<T> SoupItem<T> {
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
+            SoupItem::CalendarEvent(event) => {
+                EntityType::CalendarEvent.with_entity_string(event.id.to_string())
+            }
             SoupItem::CrmCompany(company) => {
                 EntityType::CrmCompany.with_entity_string(company.id.to_string())
             }
             SoupItem::ForeignEntity(foreign_entity) => {
                 EntityType::ForeignEntity.with_entity_string(foreign_entity.id.to_string())
+            }
+            SoupItem::Reminder(reminder) => {
+                EntityType::Reminder.with_entity_string(reminder.id.to_string())
             }
         }
     }
@@ -88,8 +100,10 @@ impl<T> SoupItem<T> {
             SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
             // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
+            SoupItem::CalendarEvent(event) => event.updated_at,
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
+            SoupItem::Reminder(reminder) => reminder.updated_at,
         }
     }
 
@@ -150,6 +164,9 @@ impl<T> SoupItem<T> {
             // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
+            (SoupItem::CalendarEvent(event), SimpleSortMethod::CreatedAt) => event.created_at,
+            (SoupItem::CalendarEvent(_), SimpleSortMethod::ViewedAt) => DateTime::<Utc>::default(),
+            (SoupItem::CalendarEvent(event), _) => event.updated_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
                 company.viewed_at.unwrap_or_default()
@@ -162,6 +179,10 @@ impl<T> SoupItem<T> {
                 foreign_entity.created_at
             }
             (SoupItem::ForeignEntity(foreign_entity), _) => foreign_entity.updated_at,
+            // Reminders always order by when they fire, whatever sort was asked
+            // for — the same way emails always use their precomputed sort_ts.
+            // No other ordering means anything for a reminder.
+            (SoupItem::Reminder(reminder), _) => reminder.next_run_at,
         }
     }
 
@@ -192,11 +213,16 @@ impl<T> SoupItem<T> {
                 c.call_id.to_string(),
                 PropertiesEntityType::CallRecord,
             )),
+            SoupItem::CalendarEvent(event) => Some(EntityReference::new(
+                event.id.to_string(),
+                PropertiesEntityType::CalendarEvent,
+            )),
             SoupItem::CrmCompany(c) => Some(EntityReference::new(
                 c.id.to_string(),
                 PropertiesEntityType::Company,
             )),
             SoupItem::ForeignEntity(_) => None,
+            SoupItem::Reminder(_) => None,
         }
     }
 
@@ -333,6 +359,43 @@ impl<T> SoupItem<T> {
                 participants,
                 extra: f(extra),
             }),
+            SoupItem::CalendarEvent(SoupCalendarEvent {
+                id,
+                owner_id,
+                ical_uid,
+                title,
+                description,
+                location,
+                status,
+                visibility,
+                transparency,
+                time,
+                organizer_email,
+                organizer_name,
+                conference_url,
+                is_read_only,
+                created_at,
+                updated_at,
+                extra,
+            }) => SoupItem::CalendarEvent(SoupCalendarEvent {
+                id,
+                owner_id,
+                ical_uid,
+                title,
+                description,
+                location,
+                status,
+                visibility,
+                transparency,
+                time,
+                organizer_email,
+                organizer_name,
+                conference_url,
+                is_read_only,
+                created_at,
+                updated_at,
+                extra: f(extra),
+            }),
             SoupItem::CrmCompany(SoupCrmCompany {
                 id,
                 team_id,
@@ -361,6 +424,29 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(soup_foreign_entity) => {
                 SoupItem::ForeignEntity(soup_foreign_entity)
             }
+            SoupItem::Reminder(SoupReminder {
+                id,
+                description,
+                referenced_entity,
+                schedule,
+                next_run_at,
+                enabled,
+                completed_at,
+                created_at,
+                updated_at,
+                extra,
+            }) => SoupItem::Reminder(SoupReminder {
+                id,
+                description,
+                referenced_entity,
+                schedule,
+                next_run_at,
+                enabled,
+                completed_at,
+                created_at,
+                updated_at,
+                extra: f(extra),
+            }),
         }
     }
 }
@@ -377,8 +463,10 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
             SoupItem::ChannelThread(thread) => thread.id,
             SoupItem::Call(record) => record.call_id,
+            SoupItem::CalendarEvent(event) => event.id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
+            SoupItem::Reminder(reminder) => reminder.id,
         }
     }
 }

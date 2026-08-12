@@ -1,4 +1,4 @@
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { HistorySession } from '@service-sync/client';
 import { cn } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
@@ -13,8 +13,8 @@ type HistorySessionListProps = {
 };
 
 function UserName(props: { userId: string }) {
-  const { firstName } = useDisplayNameParts(tryMacroId(props.userId));
-  return <>{firstName() || userLabel(props.userId)}</>;
+  const name = () => getDisplayNameParts(tryMacroId(props.userId)).firstName;
+  return <>{name() || userLabel(props.userId)}</>;
 }
 
 const MAX_NAMED = 3;

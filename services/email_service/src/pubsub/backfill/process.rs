@@ -1,11 +1,11 @@
 use crate::pubsub::backfill::{
-    backfill_attachment, backfill_message, backfill_thread, depopulate_crm_contact,
-    depopulate_crm_for_user, error_handlers, init, list_threads, populate_crm_contact,
-    populate_crm_for_user, seed_sent_contact, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, calendar_google_backfill,
+    depopulate_crm_contact, depopulate_crm_for_user, error_handlers, increment_counters, init,
+    list_threads, populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
-use crate::util::gmail::auth::fetch_token_or_mark_reauth;
 use anyhow::Context;
+use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use models_email::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
@@ -13,6 +13,30 @@ use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
+
+/// When calendar sync is disabled, return the delivery's outbox row to the
+/// unpublished state and ack the message; the outbox drain republishes it
+/// once the switch flips back on. `None` means calendar sync is enabled and
+/// the delivery should proceed.
+async fn park_calendar_delivery(
+    ctx: &PubSubContext,
+    calendar_job_id: Uuid,
+) -> Option<Result<(), ProcessingError>> {
+    if ctx.calendar_sync_enabled {
+        return None;
+    }
+    tracing::info!(%calendar_job_id, "calendar sync disabled; returning delivery to the outbox");
+    Some(
+        crate::calendar_outbox::republish_calendar_job(&ctx.db, calendar_job_id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("failed to return calendar delivery to the outbox"),
+                })
+            }),
+    )
+}
 
 // Process a single message from the backfill queue
 pub async fn process_message(
@@ -59,40 +83,32 @@ async fn inner_process_message(
 ) -> Result<(), ProcessingError> {
     match &data.backfill_operation {
         BackfillOperation::Init(scope) => {
-            let Some(JobContext {
-                link,
-                backfill_job,
-                access_token,
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, backfill_job }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            init::init_backfill(ctx, &access_token, scope, &link, &backfill_job).await
+            init::init_backfill(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::ListThreads(scope) => {
-            let Some(JobContext {
-                link,
-                backfill_job,
-                access_token,
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, backfill_job }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            list_threads::list_threads(ctx, &access_token, scope, &link, &backfill_job).await
+            list_threads::list_threads(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::BackfillThread(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            backfill_thread::backfill_thread(ctx, &access_token, scope, &link).await
+            backfill_thread::backfill_thread(ctx, scope, &link).await
         }
         BackfillOperation::BackfillMessage(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 // BackfillMessage owns per-thread progress in addition to
                 // the job-level progress that fetch_job_context already
@@ -107,37 +123,70 @@ async fn inner_process_message(
                     .await;
                 return Ok(());
             };
-            backfill_message::backfill_message(ctx, &access_token, scope, &link).await
+            backfill_message::backfill_message(ctx, scope, &link).await
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
             // UpdateThreadMetadata is a DB-only step; skip the Gmail token
             // fetch so a revoked token can't fail this handler with
             // AccessTokenFetchFailed.
             let Some(JobContextNoToken { link, .. }) =
-                fetch_job_context_no_token(ctx, scope).await?
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
             update_metadata::update_thread_metadata(ctx, scope, &link).await
         }
         BackfillOperation::BackfillAttachment(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, true).await?
             else {
                 return Ok(());
             };
-            backfill_attachment::backfill_attachment(ctx, &access_token, &link, &scope.payload)
+            backfill_attachment::backfill_attachment(ctx, &link, &scope.payload).await
+        }
+        BackfillOperation::CalendarGoogleBackfill(scope) => {
+            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
+                return parked;
+            }
+            let link = fetch_link(ctx, scope.link_id).await?;
+            // Calendar jobs can be created immediately after an incremental
+            // Google scope grant. Bypass the Gmail token cache so this job does
+            // not reuse a pre-consent access token that lacks calendar scopes.
+            let access_token = ctx
+                .email_api
+                .get_access_token(link.id, TokenFreshness::Fresh)
                 .await
+                .map_err(|error| {
+                    let is_auth_required = matches!(error, EmailApiError::AuthRequired);
+                    let detail = DetailedError {
+                        reason: FailureReason::AccessTokenFetchFailed,
+                        source: anyhow::anyhow!(error)
+                            .context("failed to fetch token for Google Calendar backfill"),
+                    };
+                    if is_auth_required {
+                        ProcessingError::NonRetryable(detail)
+                    } else {
+                        ProcessingError::Retryable(detail)
+                    }
+                })?;
+            calendar_google_backfill::calendar_google_backfill(
+                ctx,
+                access_token.expose_secret(),
+                &link,
+                &scope.payload,
+            )
+            .await
+        }
+        BackfillOperation::FinalizeBackfill(scope) => {
+            increment_counters::finalize_backfill(ctx, scope.link_id, scope.job_id).await
         }
         BackfillOperation::SeedSentContact(scope) => {
-            let Some(JobContext {
-                link, access_token, ..
-            }) = fetch_job_context(ctx, scope).await?
+            let Some(JobContextNoToken { link, .. }) =
+                fetch_job_context_no_token(ctx, scope, false).await?
             else {
                 return Ok(());
             };
-            seed_sent_contact::seed_sent_contact(ctx, &access_token, scope, &link).await
+            seed_sent_contact::seed_sent_contact(ctx, scope, &link).await
         }
         BackfillOperation::PopulateCrmContact(scope) => {
             let link = fetch_link(ctx, scope.link_id).await?;
@@ -156,20 +205,9 @@ async fn inner_process_message(
     }
 }
 
-/// The pre-fetched context every job-scoped handler used to receive from
-/// the top-level dispatcher: the link the operation targets, the backfill
-/// job it belongs to, and a fresh Gmail access token for the link. Used by
-/// handlers that talk to Gmail.
-struct JobContext {
-    link: link::Link,
-    backfill_job: BackfillJob,
-    access_token: String,
-}
-
 /// Same as [`JobContext`] but without a Gmail access token. Used by
-/// handlers that only talk to the database (e.g. UpdateThreadMetadata) so
-/// they don't fail with `AccessTokenFetchFailed` when a user's token is
-/// revoked or temporarily unavailable.
+/// handlers that do not require a raw Gmail access token. Provider operations
+/// can still fetch tokens through `email_api`.
 struct JobContextNoToken {
     link: link::Link,
     backfill_job: BackfillJob,
@@ -178,13 +216,14 @@ struct JobContextNoToken {
 /// Shared prefetch for DB-only job-scoped handlers: loads the backfill
 /// job, short-circuits on cancellation (also cleaning up the job-level
 /// redis progress key), and loads the link. Returns `Ok(None)` when the
-/// parent backfill job has been cancelled — the caller should ack the
-/// message without running the handler. Variant-specific cancellation
-/// cleanup (e.g. per-thread progress keys) belongs at the call site, not
-/// here.
+/// parent backfill job is failed or cancelled, and normally when it is
+/// complete. Completion follow-up operations may opt into running after the
+/// terminal transition. Variant-specific cancellation cleanup (e.g.
+/// per-thread progress keys) belongs at the call site, not here.
 async fn fetch_job_context_no_token<P>(
     ctx: &PubSubContext,
     scope: &JobScopedPayload<P>,
+    allow_complete: bool,
 ) -> Result<Option<JobContextNoToken>, ProcessingError> {
     let backfill_job = email_db_client::backfill::job::get::get_backfill_job(&ctx.db, scope.job_id)
         .await
@@ -201,7 +240,11 @@ async fn fetch_job_context_no_token<P>(
             })
         })?;
 
-    if backfill_job.status == BackfillJobStatus::Cancelled {
+    if matches!(
+        backfill_job.status,
+        BackfillJobStatus::Cancelled | BackfillJobStatus::Failed
+    ) || (backfill_job.status == BackfillJobStatus::Complete && !allow_complete)
+    {
         let _ = ctx
             .redis_client
             .delete_backfill_job_progress(scope.job_id)
@@ -212,41 +255,6 @@ async fn fetch_job_context_no_token<P>(
     let link = fetch_link(ctx, scope.link_id).await?;
 
     Ok(Some(JobContextNoToken { link, backfill_job }))
-}
-
-/// As [`fetch_job_context_no_token`], plus a fresh Gmail access token for
-/// the link. For handlers that need to talk to Gmail (Init, ListThreads,
-/// BackfillThread, BackfillMessage, BackfillAttachment).
-async fn fetch_job_context<P>(
-    ctx: &PubSubContext,
-    scope: &JobScopedPayload<P>,
-) -> Result<Option<JobContext>, ProcessingError> {
-    let Some(JobContextNoToken { link, backfill_job }) =
-        fetch_job_context_no_token(ctx, scope).await?
-    else {
-        return Ok(None);
-    };
-
-    let access_token = fetch_token_or_mark_reauth(
-        &link,
-        &ctx.db,
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-        &ctx.sqs_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch access token from link"),
-        })
-    })?;
-
-    Ok(Some(JobContext {
-        link,
-        backfill_job,
-        access_token,
-    }))
 }
 
 /// Looks up a link by id, mapping the absence into a NonRetryable error

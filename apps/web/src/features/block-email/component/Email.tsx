@@ -809,7 +809,7 @@ function EmailTaskButton(props: { onClick: () => void }) {
       onMouseLeave={() => setHovering(false)}
       onClick={props.onClick}
       depth={2}
-      class="gap-1.5 rounded-full px-2 text-ink-extra-muted ring ring-edge-muted"
+      class="gap-1.5 rounded-full border border-edge-muted px-2 text-ink-extra-muted"
     >
       <AnimatedTaskIcon triggerAnimation={hovering()} />
       <span class="text-xs font-semibold">Task</span>

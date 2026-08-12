@@ -7,7 +7,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';
 import { useCanEdit } from '@core/signal/permissions';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -149,7 +149,7 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 export function OwnerValue(props: { ownerId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.ownerId));
+  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
 
   return (
     <SidePanel.Pill>

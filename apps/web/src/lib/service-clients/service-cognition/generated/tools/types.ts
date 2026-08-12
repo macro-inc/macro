@@ -178,12 +178,45 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task' | 'snippet';
+export type DocumentSubType = 'task' | 'snippet' | 'skill';
 export type EmailPreset = 'signal';
 /**
  * Item returned by the list entities AI tool.
  */
 export type EntityItem =
+  | {
+      /**
+       * Optional conference join URL.
+       */
+      conferenceUrl?: string | null;
+      /**
+       * Calendar event id.
+       */
+      id: string;
+      /**
+       * Optional location.
+       */
+      location?: string | null;
+      /**
+       * Event status.
+       */
+      status: string;
+      /**
+       * Tags on the event visible to the user.
+       */
+      tags?: AppliedTag[];
+      /**
+       * Canonical timed or all-day span.
+       */
+      time: {
+        [k: string]: unknown;
+      };
+      /**
+       * Event title.
+       */
+      title: string;
+      type: 'calendarEvent';
+    }
   | {
       /**
        * The document's file type (e.g. md, pdf, docx), when known.
@@ -198,7 +231,8 @@ export type EntityItem =
        */
       name: string;
       /**
-       * The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+       * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
+       * "skill" for skills.
        */
       subType?: string | null;
       /**
@@ -338,6 +372,7 @@ export type EntityItem =
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
+  | 'calendar_event'
   | 'document'
   | 'ai_chat'
   | 'project'
@@ -365,11 +400,21 @@ export type NotificationItemType =
   | 'chat'
   | 'call'
   | 'task'
-  | 'github';
+  | 'github'
+  | 'reminder'
+  | 'calendar';
+/**
+ * The kind of entity to move.
+ */
+export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
 /**
  * Direction for reading more messages around a cursor.
  */
 export type PageDirection = 'older' | 'newer';
+/**
+ * The kind of an item inside a project.
+ */
+export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
  * Position of a channel message.
  */
@@ -407,6 +452,10 @@ export type SearchResult = {
   type: 'web_search_result';
   url: string;
 };
+/**
+ * How search terms are matched against skill names.
+ */
+export type SearchSkillsMatchType = 'partial' | 'exact';
 /**
  * A search result annotated with the caller-visible tags on the item.
  */
@@ -1194,6 +1243,10 @@ export interface CreateDocument {
    * Whether this document is a task. Only applies to md documents.
    */
   isTask?: boolean;
+  /**
+   * The id of the project (shown as a folder in the app UI) to create the document in. Requires edit access to the project. Omit to create the document at the top level of the user's files.
+   */
+  projectId?: string | null;
 }
 /**
  * The read content response
@@ -1271,6 +1324,32 @@ export interface ImportEntityView {
   label: string;
   source: ImportSource;
   status: ImportStatus;
+}
+/**
+ * Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
+ */
+export interface CreateProject {
+  /**
+   * The id of an existing project to nest the new project inside. Requires edit access to that project. Omit to create the project at the top level.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The name of the project.
+   */
+  projectName: string;
+}
+/**
+ * The create project response.
+ */
+export interface CreateProjectResponse {
+  /**
+   * The id of the created project.
+   */
+  projectId: string;
+  /**
+   * The name of the created project.
+   */
+  projectName: string;
 }
 /**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
@@ -1516,11 +1595,11 @@ export interface DocumentSearchResult {
   score?: number | null;
 }
 /**
- * Apply AI-driven edits to a Macro document in place -- rewriting, inserting, formatting, or restructuring. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
+ * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
  */
 export interface EditDocument {
   /**
-   * The ID of the document to edit.
+   * The ID of the markdown document to edit. If you are not certain the document is markdown, call ReadMetadata first and check that `fileType` is `md` -- passing an uploaded file here fails.
    */
   document_id: string;
   /**
@@ -2041,7 +2120,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
     [k: string]: unknown;
@@ -2326,6 +2405,37 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
+ * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
+ */
+export type ListSkills = {};
+/**
+ * Response for a skill listing.
+ */
+export interface ListSkillsResponse {
+  /**
+   * The user's skills, most recently updated first.
+   */
+  results: SkillSearchResult[];
+}
+/**
+ * A skill matched by a skill search.
+ */
+export interface SkillSearchResult {
+  /**
+   * The document id of the skill. Read the skill's instructions with
+   * ReadContent using this id.
+   */
+  documentId: string;
+  /**
+   * The name of the skill.
+   */
+  name: string;
+  /**
+   * When the skill was last updated, when known.
+   */
+  updatedAt?: string | null;
+}
+/**
  * List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags.
  */
 export type ListTags = {};
@@ -2492,6 +2602,33 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
+ * Move a document, AI chat, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving an AI chat or a project requires owning it.
+ */
+export interface MoveToProject {
+  /**
+   * The id of the entity to move.
+   */
+  entityId: string;
+  entityType: MoveableEntityType;
+  /**
+   * The id of the destination project. Omit to move the entity out of its current project to the top level.
+   */
+  projectId?: string | null;
+}
+/**
+ * The move to project response.
+ */
+export interface MoveToProjectResponse {
+  /**
+   * A human-readable result message.
+   */
+  message: string;
+  /**
+   * Whether the move succeeded.
+   */
+  success: boolean;
+}
+/**
  * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
@@ -2513,6 +2650,28 @@ export interface NameSearch {
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
+}
+/**
+ * A single item inside a project.
+ */
+export interface ProjectItem {
+  /**
+   * The file type, for documents (e.g. md, pdf, docx).
+   */
+  fileType?: string | null;
+  /**
+   * The id of the item.
+   */
+  id: string;
+  itemType: ProjectItemType;
+  /**
+   * The display name of the item.
+   */
+  name: string;
+  /**
+   * When the item was last updated.
+   */
+  updatedAt?: string | null;
 }
 /**
  * Metadata for a project fetched from the database
@@ -3255,6 +3414,36 @@ export interface ReadMetadataResponse {
   documentMetadata: ReadDocumentMetadata;
   userAccessLevel: AccessLevel;
 }
+/**
+ * List the direct contents of a project (shown as a folder in the app UI): its documents, AI chats, and nested projects. Requires view access to the project. Email threads filed into the project are not included.
+ */
+export interface ReadProject {
+  /**
+   * The id of the project to read.
+   */
+  projectId: string;
+}
+/**
+ * The read project response.
+ */
+export interface ReadProjectResponse {
+  /**
+   * The project's direct children in display order.
+   */
+  items: ProjectItem[];
+  /**
+   * The id of the parent project, if this project is nested.
+   */
+  parentProjectId?: string | null;
+  /**
+   * The id of the project.
+   */
+  projectId: string;
+  /**
+   * The name of the project.
+   */
+  projectName: string;
+}
 export interface ReadResponse {
   content: ReadThreadReadContent;
 }
@@ -3302,6 +3491,25 @@ export interface RenameDocumentResponse {
    * Whether the rename succeeded.
    */
   success: boolean;
+}
+/**
+ * Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first.
+ */
+export interface SearchSkills {
+  matchType?: SearchSkillsMatchType;
+  /**
+   * The skill name to search. Pass 1-3 keywords drawn from words that would literally appear in the skill's name. The whole query is matched as a single adjacent phrase prefix, so long phrases will not match.
+   */
+  name: string;
+}
+/**
+ * Response for a skill search.
+ */
+export interface SearchSkillsResponse {
+  /**
+   * The matched skills, most recently updated first.
+   */
+  results: SkillSearchResult[];
 }
 export interface SearchToolResponse {
   results: TaggedSearchResult[];

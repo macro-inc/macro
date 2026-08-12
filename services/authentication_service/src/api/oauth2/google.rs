@@ -21,16 +21,20 @@ use crate::api::{
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
+#[cfg(test)]
+mod test;
+
 async fn link_user(
     ctx: &ApiContext,
     identity_provider_id: &str,
     code: &str,
     link_id: &uuid::Uuid,
 ) -> Result<(), (StatusCode, String)> {
-    let macro_user_id =
-        macro_db_client::in_progress_user_link::get_macro_user_id_by_link_id(&ctx.db, link_id)
+    let in_progress =
+        macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, link_id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let macro_user_id = in_progress.macro_user_id;
 
     let token_response = ctx
         .auth_client
@@ -131,18 +135,34 @@ async fn link_user(
         }
     }
 
-    // Stash the linked email on the in_progress_user_link row so /email/init can pick it up.
-    // The row is consumed and deleted by /email/init once the email_links record is created.
-    macro_db_client::in_progress_user_link::set_linked_email(&ctx.db, link_id, &user_info_email)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("unable to record linked email on in_progress_user_link {e}"),
-            )
-        })?;
+    // Stash the linked identity and Google's actual grant (which may be a
+    // subset of what was requested). /email/init applies these capabilities
+    // atomically to the durable link and schedules any newly unlocked work.
+    let granted_scopes =
+        resolved_granted_scopes(&token_response.scope, in_progress.requested_google_scopes);
+    macro_db_client::in_progress_user_link::set_linked_google_grant(
+        &ctx.db,
+        link_id,
+        &user_info_email,
+        &granted_scopes,
+    )
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to record linked Google grant on in_progress_user_link {e}"),
+        )
+    })?;
 
     Ok(())
+}
+
+fn resolved_granted_scopes(returned: &str, requested: Vec<String>) -> Vec<String> {
+    if returned.trim().is_empty() {
+        requested
+    } else {
+        calendar_events::domain::models::GoogleScopeSet::parse(returned).into_vec()
+    }
 }
 
 /// Replaces a stale Google grant on an existing IdP link with a freshly minted

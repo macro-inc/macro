@@ -57,6 +57,7 @@ notification = { path = "../../crates/notification", features = ["ai_tool"] }
 prompt = { path = "../../crates/prompt" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
+reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

@@ -1,5 +1,4 @@
 pub mod contacts;
-pub mod error;
 pub mod filters;
 pub mod gmail_ops;
 pub mod history;
@@ -218,6 +217,7 @@ pub struct HistoryMessage {
 
 /// Request body for registering a watch notification
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WatchRequest {
     pub topic_name: String,
 }

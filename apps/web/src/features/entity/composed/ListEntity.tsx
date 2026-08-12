@@ -214,9 +214,8 @@ export function ListEntity(props: ListEntityProps) {
           'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
           'bg-accent/8': props.checked,
           'bg-accent/16': props.checked && props.highlighted,
-          'bg-hover/30':
-            props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-hover/30':
+          'bg-hover': props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-hover/65':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}

@@ -9,6 +9,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "activity"
+version = "0.1.0"
+dependencies = [
+ "channel_sender",
+ "chrono",
+ "kafka_util",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "model-entity",
+ "rdkafka",
+ "readonly",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,10 +312,12 @@ dependencies = [
  "models_soup",
  "non_empty",
  "notification",
+ "projects",
  "prompt",
  "properties",
  "rand 0.9.4",
  "readonly_pool",
+ "reminders",
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
@@ -300,6 +326,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "skills",
  "soup",
  "sqlx",
  "sqs_client",
@@ -667,6 +694,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert-json-diff"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -818,7 +855,7 @@ version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "event-listener-strategy",
  "pin-project-lite",
 ]
@@ -875,7 +912,7 @@ dependencies = [
  "async-task",
  "blocking",
  "cfg-if",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-lite 2.6.1",
  "rustix 1.1.4",
 ]
@@ -1086,6 +1123,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "base64 0.22.1",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -2443,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.3.0"
+version = "0.3.2"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2514,9 +2552,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_events"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_pagination",
+ "notification",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "call"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "ai_usage",
@@ -2735,6 +2804,7 @@ dependencies = [
 name = "channels"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -2802,6 +2872,7 @@ dependencies = [
 name = "chat"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "anyhow",
@@ -2844,9 +2915,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -3503,7 +3574,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e75b2483e97a5a7da73ac68a05b629f9c53cff58d8ed1c77866079e18b00dba5"
 dependencies = [
  "digest 0.10.7",
- "spin 0.10.0",
+ "spin 0.10.1",
 ]
 
 [[package]]
@@ -3936,6 +4007,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadpool"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0be2b1d1d6ec8d846f05e137292d0b89133caf95ef33695424c09568bdd39b1b"
+dependencies = [
+ "deadpool-runtime",
+ "lazy_static",
+ "num_cpus",
+ "tokio",
+]
+
+[[package]]
+name = "deadpool-runtime"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
+
+[[package]]
 name = "debug-ignore"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3995,7 +4084,9 @@ dependencies = [
  "aws-sdk-sqs",
  "aws-smithy-types",
  "aws_lambda_events",
+ "chat",
  "chrono",
+ "documents",
  "futures",
  "lambda_runtime",
  "macro_aws_config",
@@ -4343,6 +4434,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
@@ -4377,6 +4469,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_tools",
  "ai_usage",
  "analytics_client",
@@ -4395,6 +4488,7 @@ dependencies = [
  "bytes",
  "bzip2",
  "cal",
+ "calendar_events",
  "call",
  "channel_bots",
  "channels",
@@ -4474,6 +4568,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -4596,6 +4691,7 @@ dependencies = [
 name = "documents"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -4632,6 +4728,7 @@ dependencies = [
  "macro_event_topics",
  "macro_service_urls",
  "macro_sync_service_jwt",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -4653,6 +4750,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
@@ -4895,6 +4993,7 @@ dependencies = [
 name = "email"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4907,7 +5006,6 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
- "email_db_client",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -4962,6 +5060,33 @@ name = "email_address"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
+
+[[package]]
+name = "email_api_client"
+version = "0.1.0"
+dependencies = [
+ "ammonia",
+ "base64 0.22.1",
+ "chrono",
+ "encoding_rs",
+ "gmail_client",
+ "html-escape",
+ "http 1.4.0",
+ "lol_html",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "regex",
+ "scraper",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
 
 [[package]]
 name = "email_db_client"
@@ -5067,6 +5192,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bytes",
+ "calendar_events",
  "chrono",
  "cloudfront_sign",
  "connection_gateway_client",
@@ -5077,6 +5203,7 @@ dependencies = [
  "doppler-config",
  "ego-tree",
  "email",
+ "email_api_client",
  "email_db_client",
  "email_utils",
  "entity_access",
@@ -5097,6 +5224,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5106,7 +5234,6 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
- "mailparse",
  "mime_guess",
  "model",
  "model-entity",
@@ -5122,6 +5249,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.13.4",
+ "rootcause",
  "s3_client",
  "schemars 1.2.1",
  "scraper",
@@ -5461,11 +5589,10 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "event-listener"
-version = "5.4.1"
+version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
+checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
- "concurrent-queue",
  "parking",
  "pin-project-lite",
 ]
@@ -5476,7 +5603,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "pin-project-lite",
 ]
 
@@ -5661,7 +5788,7 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -6131,6 +6258,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "chrono",
  "document_sub_type",
  "documents",
@@ -6141,6 +6269,7 @@ dependencies = [
  "hmac 0.12.1",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_env",
  "macro_env_var",
@@ -6152,6 +6281,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_notifications",
+ "model_user",
  "models_permissions",
  "notification",
  "redis",
@@ -6167,6 +6297,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "url",
  "urlencoding",
  "utoipa",
  "uuid",
@@ -6183,12 +6314,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 name = "gmail_client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "base64 0.22.1",
- "chrono",
+ "httpdate",
  "jsonwebtoken 10.3.0",
- "mail-builder",
- "mockall",
  "models_email",
  "regex",
  "reqwest 0.13.4",
@@ -6196,7 +6324,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -6244,7 +6372,10 @@ dependencies = [
  "chrono",
  "email",
  "entity_access",
+ "futures",
+ "graphql_common",
  "macro_user_id",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",
@@ -6348,6 +6479,7 @@ dependencies = [
  "filter_ast",
  "futures",
  "graphql_common",
+ "graphql_email",
  "graphql_permission",
  "item_filters",
  "macro_authorization",
@@ -6643,7 +6775,7 @@ dependencies = [
  "hash32 0.2.1",
  "rustc_version",
  "serde",
- "spin 0.9.8",
+ "spin 0.9.9",
  "stable_deref_trait",
 ]
 
@@ -7961,7 +8093,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin 0.9.8",
+ "spin 0.9.9",
 ]
 
 [[package]]
@@ -8296,6 +8428,7 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tracing",
  "workspace-hack",
 ]
@@ -9078,6 +9211,7 @@ dependencies = [
  "prompt",
  "readonly_pool",
  "redis",
+ "reminders",
  "rmcp",
  "search_service_client",
  "secretsmanager_client",
@@ -9157,6 +9291,7 @@ dependencies = [
  "macro_uuid",
  "notification",
  "readonly_pool",
+ "reminders",
  "search_service_client",
  "serde",
  "serde_json",
@@ -9406,6 +9541,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "invite_email",
  "macro_user_id",
  "mention_utils",
@@ -9622,6 +9758,7 @@ dependencies = [
  "model-entity",
  "models_pagination",
  "models_properties",
+ "reminders",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -9684,7 +9821,7 @@ dependencies = [
  "httparse",
  "memchr",
  "mime",
- "spin 0.9.8",
+ "spin 0.9.9",
  "version_check",
 ]
 
@@ -10167,6 +10304,16 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "num_cpus"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+dependencies = [
+ "hermit-abi",
+ "libc",
 ]
 
 [[package]]
@@ -11412,14 +11559,19 @@ dependencies = [
 name = "projects"
 version = "0.1.0"
 dependencies = [
+ "activity",
+ "ai_toolset",
  "anyhow",
  "async-recursion",
+ "async-trait",
  "aws-sdk-s3",
+ "aws-sdk-sqs",
  "axum",
  "axum-extra",
  "base64 0.22.1",
  "chrono",
  "document_sub_type",
+ "documents",
  "dotenvy",
  "dynamodb_client",
  "entity_access",
@@ -11449,6 +11601,7 @@ dependencies = [
  "rdkafka",
  "rootcause",
  "s3_key",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -11476,6 +11629,7 @@ dependencies = [
 name = "properties"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -11990,6 +12144,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67a77cd6f1a55ff3cb1969c2618f73107efaa6de1daf796ad60ce8f737ae97c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "readonly_pool"
 version = "0.1.0"
 dependencies = [
@@ -12143,6 +12308,40 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+
+[[package]]
+name = "reminders"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "entity_access",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "remote_env_var"
@@ -12887,10 +13086,13 @@ dependencies = [
  "axum",
  "call",
  "channels",
+ "chat",
  "chrono",
  "comms_db_client",
  "document_sub_type",
+ "documents",
  "doppler-config",
+ "email",
  "email_db_client",
  "ensure_exists",
  "futures",
@@ -13017,17 +13219,13 @@ name = "search_upload_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-sdk-sqs",
  "aws_lambda_events",
  "document_storage_service_client",
  "lambda_runtime",
- "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
- "macro_queues",
  "macro_service_urls",
  "s3_key",
- "sqs_client",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -13705,6 +13903,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cowlike",
+ "document_sub_type",
+ "email",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_search",
+ "models_soup",
+ "schemars 1.2.1",
+ "search_service_client",
+ "serde",
+ "soup",
+ "system_skills",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13824,6 +14051,7 @@ dependencies = [
  "properties",
  "readonly_pool",
  "recursion",
+ "reminders",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -13872,18 +14100,18 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.9.8"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
 dependencies = [
  "lock_api",
 ]
 
 [[package]]
 name = "spin"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
 
 [[package]]
 name = "spki"
@@ -13920,7 +14148,7 @@ dependencies = [
  "crc",
  "crossbeam-queue",
  "either",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "futures-core",
  "futures-intrusive",
  "futures-io",
@@ -14403,6 +14631,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -14512,6 +14751,15 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_skills"
+version = "0.1.0"
+dependencies = [
+ "prompt",
  "uuid",
  "workspace-hack",
 ]
@@ -16033,6 +16281,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
+ "bot_id",
  "channel_sender",
  "channels",
  "chrono",
@@ -16487,6 +16736,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "wiremock"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08db1edfb05d9b3c1542e521aea074442088292f00b5f28e435c714a98f85031"
+dependencies = [
+ "assert-json-diff",
+ "base64 0.22.1",
+ "deadpool",
+ "futures",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.9.0",
+ "hyper-util",
+ "log",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "wit-bindgen"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16702,7 +16974,6 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "concurrent-queue",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16714,7 +16985,7 @@ dependencies = [
  "either",
  "elliptic-curve",
  "errno",
- "event-listener 5.4.1",
+ "event-listener 5.4.2",
  "fastrand 2.4.1",
  "flate2",
  "foldhash 0.2.0",
@@ -16759,6 +17030,7 @@ dependencies = [
  "percent-encoding",
  "phf 0.13.1",
  "phf_shared 0.10.0",
+ "phf_shared 0.11.3",
  "phf_shared 0.13.1",
  "prettyplease",
  "proc-macro2",
@@ -16767,6 +17039,7 @@ dependencies = [
  "rand 0.10.1",
  "rand 0.8.6",
  "rand 0.9.4",
+ "rand_core 0.6.4",
  "redis",
  "regex-automata",
  "regex-syntax",
@@ -16792,7 +17065,7 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
- "spin 0.9.8",
+ "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",
  "stable_deref_trait",

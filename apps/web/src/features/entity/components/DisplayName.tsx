@@ -1,4 +1,4 @@
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { truncateLabel } from '@core/util/string';
 
 export function DisplayName(props: {
@@ -7,13 +7,17 @@ export function DisplayName(props: {
   maxChars?: number;
 }) {
   const name = () => {
-    const parts = useDisplayNameParts(tryMacroId(props.id));
+    const fullName = getDisplayName(tryMacroId(props.id));
     const format = props.format ?? 'fullName';
 
-    const raw =
-      format === 'fullName'
-        ? parts.fullName()
-        : parts[format]() || parts.fullName();
+    const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+    const raw = (() => {
+      if (format === 'firstName') return nameParts[0] || fullName;
+      if (format === 'lastName') {
+        return nameParts.length > 1 ? (nameParts.at(-1) ?? '') : fullName;
+      }
+      return fullName;
+    })();
 
     return truncateLabel(raw, props.maxChars);
   };

@@ -1,0 +1,41 @@
+[package]
+edition = "2024"
+name = "activity"
+publish = false
+version = "0.1.0"
+
+[features]
+consumer = [
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:rdkafka",
+  "dep:rootcause",
+  "dep:tokio",
+  "dep:tracing",
+  "macro_event_broker/outbound",
+]
+default = ["consumer", "outbound"]
+outbound = ["dep:sqlx"]
+
+[dependencies]
+channel_sender = { path = "../channel_sender" }
+chrono = { workspace = true }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+rdkafka = { workspace = true, optional = true }
+readonly = { workspace = true }
+rootcause = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["json"], optional = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"], optional = true }
+tracing = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

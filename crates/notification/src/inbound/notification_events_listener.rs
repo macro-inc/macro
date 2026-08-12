@@ -43,7 +43,7 @@ where
         let event = match serde_json::from_str::<NotificationDatabaseEvent>(payload) {
             Ok(event) => event,
             Err(err) => {
-                tracing::warn!(error = ?err, payload, "failed to deserialize notification database event");
+                tracing::warn!(error = ?err, payload_length = payload.len(), "failed to deserialize notification database event");
                 return;
             }
         };

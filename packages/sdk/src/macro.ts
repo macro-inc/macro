@@ -1,4 +1,5 @@
 import type { MacroOpts } from './config';
+import { BotsNamespace } from './entities/bots/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
@@ -32,6 +33,7 @@ export {
 } from './mentions';
 
 export class Macro<T extends MacroOpts = MacroOpts> {
+  readonly bots: BotsNamespace;
   readonly calls: CallRecordNamespace;
   readonly channels: ChannelNamespace;
   readonly chats: ChatNamespace;
@@ -61,6 +63,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.opts = opts;
     const client = new MacroClient(opts);
     this._client = client;
+    this.bots = new BotsNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
     this.chats = new ChatNamespace(client);
@@ -79,6 +82,14 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.webhooks = new WebhooksNamespace(client);
     (this as { events?: MacroEvents }).events = client.events;
     this.webAppUrl = client.webAppUrl;
+  }
+
+  /**
+   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
+   * auth, `macro|<email>` for user auth — fetched once and cached.
+   */
+  myPrincipalId(): Promise<string> {
+    return this._client.myPrincipalId();
   }
 
   /** Clone of this SDK acting on behalf of `userId` (sent as

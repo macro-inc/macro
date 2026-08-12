@@ -35,11 +35,35 @@ that can be swapped without a code deploy.
 | Script                       | Purpose                                                                |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `verify_aliases.ts`          | Pre/post-flight check: alias exists and points at the expected index.  |
+| `verify_mappings.ts`         | Pre/post-flight check: live mappings carry every field the code declares. |
 | `add_alias.ts`               | Idempotent additive alias (no reindex).                                |
 | `reindex_with_alias_swap.ts` | Reindex + atomic swap (handles `remove_index` for bare physical case). |
-| `create_indices.ts`          | Idempotent first-time creation of every versioned index + alias.       |
+| `create_indices.ts`          | Creates every versioned index + alias, and converges existing mappings. |
 
 All migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
+
+## Adding a field to an existing index
+
+The index bodies in `create_indices.ts` are the source of truth for mappings.
+Every body is `dynamic: 'false'`, so a field the service writes but the live
+mapping lacks is dropped silently — and a search over it matches nothing
+rather than erroring. That is how `call_records_v2` shipped without
+`properties`/`name` and left tag filters on calls returning empty (macro-2731).
+
+So the flow for a new field is:
+
+1. Add it to the body in `create_indices.ts`.
+2. Run `bun scripts/create_indices.ts` (dry-run) against each environment and
+   read the plan, then `DRY_RUN=false` to apply. Existing indices keep their
+   data and gain only the fields they're missing, via `_mapping` PUT.
+3. Backfill the affected entity through `search_processing_service`
+   (`POST /internal/backfill/<entity>`) so documents indexed before the
+   mapping existed pick the field up.
+4. Confirm with `bun scripts/verify_mappings.ts`.
+
+Convergence is additive only. A field whose live `type` disagrees with the
+body is reported, never rewritten — changing a live field's type needs the
+reindex runbook below.
 
 ## Runbook: reindex with new mapping (zero downtime)
 

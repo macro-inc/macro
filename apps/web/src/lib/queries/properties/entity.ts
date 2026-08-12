@@ -1,6 +1,11 @@
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  ENABLE_GRAPHQL_SOUP,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
@@ -20,14 +25,6 @@ import type { EntityType } from '../../service-clients/service-properties/genera
 import type { PropertyTargetEntityType } from '../../service-clients/service-properties/generated/schemas/propertyTargetEntityType';
 import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
-import {
-  type SetEntityPropertyDisposition,
-  setEntityProperty,
-} from '../../service-clients/service-storage/graphql-properties';
-import {
-  getGraphqlCacheHost,
-  getGraphqlSoupClient,
-} from '../../service-clients/service-storage/graphql-soup';
 import { queryClient } from '../client';
 import {
   getSoupEntityById,
@@ -35,18 +32,51 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
-import {
-  buildOptimisticGroupedPropertyUpdates,
-  groupedPropertyKeys,
-} from '../soup/grouped/graphql-optimistic';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { buildOptimisticSetEntityProperty } from './graphql-optimistic';
+import {
+  type AddEntityPropertyInput,
+  type BulkSaveEntityPropertiesInput,
+  createGraphqlAddEntityPropertyMutation,
+  createGraphqlBulkSaveEntityPropertiesMutation,
+  createGraphqlEntityPropertiesQuery,
+  type EntityPropertyMutationDisposition,
+} from './graphql/entity';
 import { propertiesKeys } from './keys';
 
 function toPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
 ): PropertyTargetEntityType {
-  return entityType === 'TASK' ? 'DOCUMENT' : entityType;
+  if (entityType === 'TASK') return 'DOCUMENT';
+  if (entityType === 'CALENDAR_EVENT') {
+    // Not a property target yet; surface a real error instead of a bad request.
+    throw new Error('calendar events do not support properties');
+  }
+  return entityType;
+}
+
+async function setRestEntityProperty(args: {
+  entityType: EntityType | PropertyTargetEntityType;
+  entityId: string;
+  propertyDefinitionId: string;
+  value: ReturnType<typeof propertyValueToApi>;
+}): Promise<EntityPropertyMutationDisposition> {
+  try {
+    await throwOnErr(
+      async () =>
+        await propertiesServiceClient.setEntityProperty({
+          entity_type: toPropertyTargetEntityType(args.entityType),
+          entity_id: args.entityId,
+          property_id: args.propertyDefinitionId,
+          body: { value: args.value },
+        })
+    );
+    return { kind: 'committed' };
+  } catch (error) {
+    return {
+      kind: 'permanently-failed',
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
 }
 
 export function useEntityPropertiesQuery(
@@ -54,7 +84,22 @@ export function useEntityPropertiesQuery(
   entityId: Accessor<string>,
   includeMetadata: boolean
 ) {
-  return useQuery(
+  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+
+  // Metadata properties are computed by the REST properties endpoint and are
+  // not part of the GraphQL Soup property edge. USER is not represented in
+  // Soup either. The GraphQL adapter owns those eligibility details.
+  const graphqlQuery = createGraphqlEntityPropertiesQuery({
+    entityType,
+    entityId,
+    enabled: () => graphqlSoupFlag().enabled && !includeMetadata,
+  });
+
+  const usesGraphql = graphqlQuery.isEnabled;
+
+  const restQuery = useQuery(
     () => {
       const type = entityType();
       const id = entityId();
@@ -63,6 +108,7 @@ export function useEntityPropertiesQuery(
           entityType: type,
           entityId: id,
         }).queryKey,
+        enabled: !usesGraphql() && id.length > 0,
         queryFn: async () => {
           // Always fetch with metadata so consumers with different
           // `includeMetadata` values share one cache entry and one request.
@@ -92,6 +138,29 @@ export function useEntityPropertiesQuery(
     },
     () => queryClient
   );
+
+  return {
+    get data() {
+      return usesGraphql() ? graphqlQuery.result.data : restQuery.data;
+    },
+    get error() {
+      return usesGraphql() ? graphqlQuery.result.error : restQuery.error;
+    },
+    get isLoading() {
+      return usesGraphql()
+        ? graphqlQuery.result.isLoading
+        : restQuery.isLoading;
+    },
+    get isFetching() {
+      return usesGraphql()
+        ? graphqlQuery.result.isFetching
+        : restQuery.isFetching;
+    },
+    refetch() {
+      if (entityId().length === 0) return Promise.resolve(undefined);
+      return usesGraphql() ? graphqlQuery.refetch() : restQuery.refetch();
+    },
+  };
 }
 
 function invalidatePropertiesForEntity(
@@ -126,6 +195,7 @@ function optimisticUpdateSoupEntityProperties(
     current.tag === 'channel' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
+    current.tag === 'calendarEvent' ||
     !current.data.properties
   ) {
     return undefined;
@@ -263,12 +333,15 @@ export function useDeleteEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
-        onError(error) {
+        onSuccess: (_data, variables) =>
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          ),
+        onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidatePropertiesForEntity(
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
@@ -279,48 +352,34 @@ export function useDeleteEntityPropertyMutation(
   }));
 }
 
-type AddEntityPropertyParams = {
-  entityId: string;
-  entityType: EntityType | PropertyTargetEntityType;
-  propertyDefinitionId: string;
-};
+type AddEntityPropertyParams = AddEntityPropertyInput;
 
-/** Adds property without initial value - user sets it later */
-export function useAddEntityPropertyMutation(
+function useRestAddEntityPropertyMutation(
   callbacks?: MutationCallbacks<void, Error, AddEntityPropertyParams>
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: AddEntityPropertyParams) => {
-      // New attachments have no assignment id until the server responds, so
-      // this write is never optimistic.
-      try {
-        const disposition = await setEntityProperty({
-          entityType: toPropertyTargetEntityType(vars.entityType),
-          entityId: vars.entityId,
-          propertyDefinitionId: vars.propertyDefinitionId,
-          value: null,
-        });
-        if (disposition.kind === 'permanently-failed') {
-          throw disposition.error;
-        }
-      } catch (error) {
-        if (ENABLE_GRAPHQL_SOUP()) {
-          console.error('Failed to add property', error);
-          toast.failure('Failed to add property');
-        }
-        throw error;
+      const disposition = await setRestEntityProperty({
+        entityType: vars.entityType,
+        entityId: vars.entityId,
+        propertyDefinitionId: vars.propertyDefinitionId,
+        value: null,
+      });
+      if (disposition.kind === 'permanently-failed') {
+        throw disposition.error;
       }
     },
     ...withCallbacks<void, Error, AddEntityPropertyParams>(
       {
-        onError(error) {
-          if (ENABLE_GRAPHQL_SOUP()) return;
+        onSuccess: (_data, variables) =>
+          invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          ),
+        onError(error, variables) {
           console.error('Failed to add property', error);
           toast.failure('Failed to add property');
-        },
-        onSettled: (_data, _error, variables) => {
-          if (ENABLE_GRAPHQL_SOUP()) return;
-          invalidatePropertiesForEntity(
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
           );
@@ -329,6 +388,83 @@ export function useAddEntityPropertyMutation(
       callbacks
     ),
   }));
+}
+
+/** Transport-neutral mutation interface for property attachments. */
+export type AddEntityPropertyMutation = {
+  readonly isPending: boolean;
+  readonly error: Error | null;
+  mutate(variables: AddEntityPropertyParams): void;
+  mutateAsync(variables: AddEntityPropertyParams): Promise<void>;
+};
+
+/** Adds a property through GraphQL or the REST fallback. */
+export function useAddEntityPropertyMutation(
+  callbacks?: MutationCallbacks<void, Error, AddEntityPropertyParams>
+): AddEntityPropertyMutation {
+  const restMutation = useRestAddEntityPropertyMutation(callbacks);
+  const graphqlMutation = createGraphqlAddEntityPropertyMutation<unknown>({
+    onMutate: (variables) =>
+      callbacks?.onMutate?.(variables, undefined as never),
+    onSuccess: async (variables, context) => {
+      await invalidatePropertiesForEntity(
+        variables.entityType,
+        variables.entityId
+      );
+      await callbacks?.onSuccess?.(
+        undefined,
+        variables,
+        context,
+        undefined as never
+      );
+    },
+    onError: async (error, variables, context) => {
+      console.error('Failed to add property', error);
+      toast.failure('Failed to add property');
+      await invalidatePropertiesForEntity(
+        variables.entityType,
+        variables.entityId
+      );
+      await callbacks?.onError?.(error, variables, context, undefined as never);
+    },
+    onSettled: async (error, variables, context) => {
+      await callbacks?.onSettled?.(
+        undefined,
+        error,
+        variables,
+        context,
+        undefined as never
+      );
+    },
+  });
+
+  return {
+    get isPending() {
+      return ENABLE_GRAPHQL_SOUP()
+        ? graphqlMutation.isPending
+        : restMutation.isPending;
+    },
+    get error() {
+      return ENABLE_GRAPHQL_SOUP()
+        ? graphqlMutation.error
+        : (restMutation.error ?? null);
+    },
+    mutate(variables) {
+      if (ENABLE_GRAPHQL_SOUP()) {
+        graphqlMutation.mutate(variables);
+      } else {
+        restMutation.mutate(variables);
+      }
+    },
+    async mutateAsync(variables) {
+      if (ENABLE_GRAPHQL_SOUP()) {
+        const result = await graphqlMutation.mutateAsync(variables);
+        if (result.error) throw result.error;
+      } else {
+        await restMutation.mutateAsync(variables);
+      }
+    },
+  };
 }
 
 type EntityPropertyOptionParams = {
@@ -376,14 +512,22 @@ function entityPropertyOptionCallbacks(
         );
         return { soupTxn };
       },
-      onError: (error, _vars, context) => {
+      onSuccess: (_data, variables) => {
+        invalidateSoupEntity(variables.entityId);
+        return invalidatePropertiesForEntity(
+          variables.entityType,
+          variables.entityId
+        );
+      },
+      onError: (error, variables, context) => {
         context?.soupTxn?.rollback();
+        invalidateSoupEntity(variables.entityId);
         console.error(failureMessage, error);
         toast.failure(failureMessage);
-      },
-      onSettled: (_data, _error, variables) => {
-        invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-        invalidateSoupEntity(variables.entityId);
+        return invalidatePropertiesForEntity(
+          variables.entityType,
+          variables.entityId
+        );
       },
     },
     callbacks
@@ -632,21 +776,21 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
               ];
             })
           );
+          invalidateSoupEntity(variables.entityId);
+          return invalidatePropertiesForEntity(
+            variables.entityType,
+            variables.entityId
+          );
         },
-        onError: (error, _variables, context) => {
+        onError: (error, variables, context) => {
           context?.soupTxn?.rollback();
+          invalidateSoupEntity(variables.entityId);
           console.error('Failed to update tags', error);
           toast.failure(
             thrownResultErrorHasCode(error, 'FORBIDDEN')
               ? 'Edit permissions are required to update tags'
               : 'Failed to update tags'
           );
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidateSoupEntity(variables.entityId);
-          // Returned so the mutation stays `pending` until the refetch lands,
-          // keeping the in-flight optimistic overlay visible through the
-          // reconcile with no flash back to the stale value.
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
@@ -713,24 +857,16 @@ function trackTaskPropertySave(
   });
 }
 
-type BulkSaveEntityPropertiesParams = {
-  properties: Array<{
-    entityId: string;
-    entityType: EntityType | PropertyTargetEntityType;
-    property: Property | PropertyDefinitionDomain;
-    apiValues: PropertyApiValues;
-  }>;
-};
+type BulkSaveEntityPropertiesParams = BulkSaveEntityPropertiesInput;
 
 type BulkSaveEntityPropertiesContext = {
-  usesGraphqlSoup: boolean;
   /** Index-aligned with `variables.properties`. */
   soupTxns: Array<SoupTransaction | undefined>;
 };
 
 type BulkSaveEntityPropertiesResult = {
   /** Index-aligned with the submitted properties. */
-  dispositions: SetEntityPropertyDisposition[];
+  dispositions: EntityPropertyMutationDisposition[];
 };
 
 class BulkSaveEntityPropertiesError extends Error {
@@ -740,99 +876,24 @@ class BulkSaveEntityPropertiesError extends Error {
   }
 }
 
-type QueuedPropertySave = {
-  item: BulkSaveEntityPropertiesParams['properties'][number];
-};
-const queuedPropertySaves = new Map<string, QueuedPropertySave>();
-const activeGraphqlPropertySaveCounts = new Map<string, number>();
-let settlementHost:
-  | NonNullable<ReturnType<typeof getGraphqlCacheHost>>
-  | undefined;
-let unsubscribeSettlements: (() => void) | undefined;
-
-function ensurePropertySettlementListener(): void {
-  const host = getGraphqlCacheHost();
-  if (!host || host === settlementHost) return;
-
-  unsubscribeSettlements?.();
-  settlementHost = host;
-  unsubscribeSettlements = host.onMutationSettled((settlement) => {
-    const queued = queuedPropertySaves.get(settlement.transactionId);
-    if (!queued) return;
-    queuedPropertySaves.delete(settlement.transactionId);
-
-    const { item } = queued;
-    if (settlement.status === 'committed') {
-      trackTaskPropertySave(
-        item.entityId,
-        getPropertyDefinitionId(item.property),
-        item.apiValues
-      );
-      reconcilePropertySaveCaches(item);
-      return;
-    }
-
-    // A SoupTransaction restores a whole cache snapshot, so it is unsafe to
-    // roll one back after a durable write has spent time in the queue. Refetch
-    // once all queued projections for this entity have settled instead.
-    reconcilePropertySaveCaches(item);
-    const error = new Error(settlement.error);
-    console.error('Queued property save permanently failed', error);
-    toast.failure('Failed to save properties');
-  });
-}
-
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  invalidatePropertiesForEntity(item.entityType, item.entityId);
+  void invalidatePropertiesForEntity(item.entityType, item.entityId);
   invalidateSoupEntity(item.entityId);
 }
 
-function reconcilePropertySaveCaches(
-  item: BulkSaveEntityPropertiesParams['properties'][number]
-): void {
-  const hasQueuedSave = [...queuedPropertySaves.values()].some(
-    (queued) => queued.item.entityId === item.entityId
-  );
-  const hasActiveSave =
-    (activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0) > 0;
-  if (!hasQueuedSave && !hasActiveSave) invalidatePropertySaveCaches(item);
-}
-
-function trackActiveGraphqlPropertySaves(
-  variables: BulkSaveEntityPropertiesParams
-): void {
-  for (const item of variables.properties) {
-    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
-    activeGraphqlPropertySaveCounts.set(item.entityId, count + 1);
-  }
-}
-
-function untrackActiveGraphqlPropertySaves(
-  variables: BulkSaveEntityPropertiesParams
-): void {
-  for (const item of variables.properties) {
-    const count = activeGraphqlPropertySaveCounts.get(item.entityId) ?? 0;
-    if (count <= 1) activeGraphqlPropertySaveCounts.delete(item.entityId);
-    else activeGraphqlPropertySaveCounts.set(item.entityId, count - 1);
-  }
-}
-
-function handleAcceptedPropertySave(
+function handleCommittedPropertySave(
   item: BulkSaveEntityPropertiesParams['properties'][number],
-  disposition: SetEntityPropertyDisposition
+  disposition: EntityPropertyMutationDisposition
 ): void {
-  if (disposition.kind === 'committed') {
-    trackTaskPropertySave(
-      item.entityId,
-      getPropertyDefinitionId(item.property),
-      item.apiValues
-    );
-  } else if (disposition.kind === 'queued') {
-    queuedPropertySaves.set(disposition.transactionId, { item });
-    ensurePropertySettlementListener();
-  }
+  if (disposition.kind !== 'committed') return;
+
+  trackTaskPropertySave(
+    item.entityId,
+    getPropertyDefinitionId(item.property),
+    item.apiValues
+  );
 }
 
 function reportBulkPropertySaveFailure(error: Error): void {
@@ -851,8 +912,7 @@ function rollbackBulkSoupTransactions(
   });
 }
 
-/** Saves multiple entity properties, durably queueing GraphQL writes. */
-export function useBulkSaveEntityPropertiesMutation(
+function useRestBulkSaveEntityPropertiesMutation(
   callbacks?: MutationCallbacks<
     void,
     Error,
@@ -862,73 +922,21 @@ export function useBulkSaveEntityPropertiesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: BulkSaveEntityPropertiesParams): Promise<void> => {
-      const usesGraphqlSoup = ENABLE_GRAPHQL_SOUP();
-      const save = async (
-        item: BulkSaveEntityPropertiesParams['properties'][number]
-      ) => {
-        const propertyValue = propertyValueToApi(
-          item.apiValues,
-          item.property.isMultiSelect
-        );
-        const optimisticProperty = buildOptimisticSetEntityProperty(
-          item.property,
-          item.apiValues
-        );
-        let optimisticCache;
-
-        if (usesGraphqlSoup && isInstantiatedProperty(item.property)) {
-          // Client construction owns host selection; force it before asking
-          // for the host used by inspect-driven relation discovery.
-          getGraphqlSoupClient();
-          const host = getGraphqlCacheHost();
-          if (host) {
-            try {
-              const oldGroupKeys = groupedPropertyKeys(item.property);
-              const newGroupKeys = groupedPropertyKeys(item.apiValues);
-              optimisticCache = await buildOptimisticGroupedPropertyUpdates({
-                host,
-                entityId: item.entityId,
-                propertyDefinitionId: item.property.propertyDefinitionId,
-                oldGroupKeys: oldGroupKeys ?? [],
-                newGroupKeys: newGroupKeys ?? [],
-                revalidateOnly:
-                  oldGroupKeys === undefined || newGroupKeys === undefined,
-              });
-            } catch (error) {
-              // Relation discovery is an optimization. Property writes still
-              // proceed with normalized entity optimism when cache inspection
-              // is unavailable.
-              console.warn('Failed to build grouped Soup optimism', error);
-            }
-          }
-        }
-
-        const disposition = await setEntityProperty({
-          entityType: toPropertyTargetEntityType(item.entityType),
-          entityId: item.entityId,
-          propertyDefinitionId: getPropertyDefinitionId(item.property),
-          value: propertyValue,
-          optimisticProperty,
-          optimisticCache,
-        });
-        // Register durable writes before the sequential GraphQL loop awaits the
-        // next item; settlement events are one-shot and are not replayed.
-        handleAcceptedPropertySave(item, disposition);
-        return disposition;
-      };
-
-      let dispositions: SetEntityPropertyDisposition[];
-      if (usesGraphqlSoup) {
-        // Begin each durable layer sequentially so later relation recipes see
-        // the effective result of earlier property edits.
-        dispositions = [];
-        for (const item of vars.properties) {
-          dispositions.push(await save(item));
-        }
-      } else {
-        dispositions = await Promise.all(vars.properties.map(save));
-      }
-
+      const dispositions = await Promise.all(
+        vars.properties.map(async (item) => {
+          const disposition = await setRestEntityProperty({
+            entityType: item.entityType,
+            entityId: item.entityId,
+            propertyDefinitionId: getPropertyDefinitionId(item.property),
+            value: propertyValueToApi(
+              item.apiValues,
+              item.property.isMultiSelect
+            ),
+          });
+          handleCommittedPropertySave(item, disposition);
+          return disposition;
+        })
+      );
       const result = { dispositions };
       if (
         dispositions.some(
@@ -947,11 +955,8 @@ export function useBulkSaveEntityPropertiesMutation(
       {
         onMutate: (
           vars: BulkSaveEntityPropertiesParams
-        ): BulkSaveEntityPropertiesContext => {
-          const usesGraphqlSoup = ENABLE_GRAPHQL_SOUP();
-          // Keep any populated TanStack Soup projection in sync even when
-          // GraphQL owns transport and normalized-cache optimism.
-          const soupTxns = batch(() =>
+        ): BulkSaveEntityPropertiesContext => ({
+          soupTxns: batch(() =>
             vars.properties.map((item) =>
               optimisticUpdateSoupEntityProperty(
                 item.entityId,
@@ -959,26 +964,16 @@ export function useBulkSaveEntityPropertiesMutation(
                 apiValuesToSoupPropertyValue(item.apiValues)
               )
             )
-          );
-          if (usesGraphqlSoup) trackActiveGraphqlPropertySaves(vars);
-          return { usesGraphqlSoup, soupTxns };
-        },
+          ),
+        }),
         onError: (error, _variables, context) => {
-          // REST errors settle immediately, so preserve its existing rollback.
-          // GraphQL writes may settle much later; restoring their captured
-          // snapshots could erase newer Soup updates, so refetch instead.
-          if (!context?.usesGraphqlSoup) rollbackBulkSoupTransactions(context);
+          rollbackBulkSoupTransactions(context);
           reportBulkPropertySaveFailure(error);
         },
-        onSettled: (_data, _error, variables, context) => {
-          if (context?.usesGraphqlSoup)
-            untrackActiveGraphqlPropertySaves(variables);
+        onSettled: (_data, _error, variables) => {
           batch(() => {
-            const reconciledEntityIds = new Set<string>();
             for (const item of variables.properties) {
-              if (reconciledEntityIds.has(item.entityId)) continue;
-              reconciledEntityIds.add(item.entityId);
-              reconcilePropertySaveCaches(item);
+              invalidatePropertySaveCaches(item);
             }
           });
         },
@@ -986,4 +981,93 @@ export function useBulkSaveEntityPropertiesMutation(
       callbacks
     ),
   }));
+}
+
+/** Transport-neutral mutation interface exposed to property consumers. */
+export type BulkSaveEntityPropertiesMutation = {
+  readonly isPending: boolean;
+  readonly error: Error | null;
+  mutate(variables: BulkSaveEntityPropertiesParams): void;
+  mutateAsync(variables: BulkSaveEntityPropertiesParams): Promise<void>;
+};
+
+/** Saves entity properties through GraphQL or the REST fallback. */
+export function useBulkSaveEntityPropertiesMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    BulkSaveEntityPropertiesParams,
+    BulkSaveEntityPropertiesContext
+  >
+): BulkSaveEntityPropertiesMutation {
+  const restMutation = useRestBulkSaveEntityPropertiesMutation(callbacks);
+  const graphqlMutation =
+    createGraphqlBulkSaveEntityPropertiesMutation<BulkSaveEntityPropertiesContext>(
+      {
+        onMutate: async (variables) =>
+          (await callbacks?.onMutate?.(variables, undefined as never)) ?? {
+            soupTxns: [],
+          },
+        onCommitted: handleCommittedPropertySave,
+        onSuccess: async (variables, context) => {
+          await callbacks?.onSuccess?.(
+            undefined,
+            variables,
+            context ?? { soupTxns: [] },
+            undefined as never
+          );
+        },
+        onError: async (error, variables, context) => {
+          reportBulkPropertySaveFailure(error);
+          await callbacks?.onError?.(
+            error,
+            variables,
+            context ?? { soupTxns: [] },
+            undefined as never
+          );
+        },
+        onSettled: async (error, variables, context) => {
+          batch(() => {
+            for (const item of variables.properties) {
+              invalidatePropertySaveCaches(item);
+            }
+          });
+          await callbacks?.onSettled?.(
+            undefined,
+            error,
+            variables,
+            context ?? { soupTxns: [] },
+            undefined as never
+          );
+        },
+      }
+    );
+
+  return {
+    get isPending() {
+      return ENABLE_GRAPHQL_SOUP()
+        ? graphqlMutation.isPending
+        : restMutation.isPending;
+    },
+    get error() {
+      return ENABLE_GRAPHQL_SOUP()
+        ? graphqlMutation.error
+        : (restMutation.error ?? null);
+    },
+    mutate(variables) {
+      if (ENABLE_GRAPHQL_SOUP()) {
+        graphqlMutation.mutate(variables);
+      } else {
+        restMutation.mutate(variables);
+      }
+    },
+    async mutateAsync(variables) {
+      if (ENABLE_GRAPHQL_SOUP()) {
+        const result = await graphqlMutation.mutateAsync(variables);
+        if (result.error) throw result.error;
+      } else {
+        await restMutation.mutateAsync(variables);
+      }
+    },
+  };
 }

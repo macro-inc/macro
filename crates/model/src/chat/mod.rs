@@ -56,6 +56,7 @@ pub enum AttachmentType {
     Channel,
     Email,
     Project,
+    Skill,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]

@@ -90,7 +90,9 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
         PropertiesErr::NotFound
         | PropertiesErr::OptionNotFound
         | PropertiesErr::EntityPropertyNotFound => StatusCode::NOT_FOUND,
-        PropertiesErr::DuplicateOptionValue => StatusCode::CONFLICT,
+        PropertiesErr::DuplicateOptionValue | PropertiesErr::ConflictingTeamLabel(_) => {
+            StatusCode::CONFLICT
+        }
         PropertiesErr::PermissionDenied
         | PropertiesErr::SystemPropertyNotModifiable
         | PropertiesErr::RequiredProperty
@@ -135,6 +137,10 @@ where
             "/tags",
             get(tags::list_tags::<S, A, Auth>).post(tags::ensure_tag_set::<S, A, Auth>),
         )
+        // Share a personal label with the team, and the merge that resolves a
+        // name collision reported by the promote endpoint
+        .route("/tags/promote", post(tags::promote_tag::<S, A, Auth>))
+        .route("/tags/merge", post(tags::merge_tag::<S, A, Auth>))
         // Entity Property Operations
         // GET allows anonymous access for public entities
         .route(

@@ -72,8 +72,8 @@ pub async fn get_branch_name_handler<
                 branch_name: task_branch_name.branch_name,
             }))
         }
-        Some(DocumentSubType::Snippet) | None => Err(DocumentError::BadRequest(format!(
-            "document {document_id} is not a task"
-        ))),
+        Some(DocumentSubType::Snippet | DocumentSubType::Skill) | None => Err(
+            DocumentError::BadRequest(format!("document {document_id} is not a task")),
+        ),
     }
 }

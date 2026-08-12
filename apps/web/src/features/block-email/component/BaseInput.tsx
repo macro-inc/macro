@@ -1730,6 +1730,7 @@ export function BaseInput(props: {
                         handleChipDragStart('to', option, e)
                       }
                       onChipDragEnd={handleChipDragEnd}
+                      hideMenuOnEscape
                     />
                   </RecipientDropRow>
                   {/* Expanded CC */}
@@ -1760,6 +1761,7 @@ export function BaseInput(props: {
                           handleChipDragStart('cc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1791,6 +1793,7 @@ export function BaseInput(props: {
                           handleChipDragStart('bcc', option, e)
                         }
                         onChipDragEnd={handleChipDragEnd}
+                        hideMenuOnEscape
                       />
                     </RecipientDropRow>
                   </Show>
@@ -1844,6 +1847,7 @@ export function BaseInput(props: {
                 handleChipDragStart('to', option, e)
               }
               onChipDragEnd={handleChipDragEnd}
+              hideMenuOnEscape
             />
             <Button
               variant="ghost"
@@ -1888,6 +1892,7 @@ export function BaseInput(props: {
                   handleChipDragStart('cc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>
@@ -1918,6 +1923,7 @@ export function BaseInput(props: {
                   handleChipDragStart('bcc', option, e)
                 }
                 onChipDragEnd={handleChipDragEnd}
+                hideMenuOnEscape
               />
             </RecipientDropRow>
           </Show>

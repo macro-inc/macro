@@ -1,5 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
@@ -32,14 +32,7 @@ export function SharedBadge(props: { ownerId: string }) {
 
 export function SharedBadgeSmall(props: { ownerId: string }) {
   const id = () => tryMacroId(props.ownerId);
-  const name = () => {
-    const currentId = id();
-    if (currentId) {
-      let [name] = useDisplayName(currentId);
-      return name;
-    }
-    return () => undefined;
-  };
+  const name = () => getDisplayName(id()) || undefined;
 
   return (
     <HoverCard
@@ -51,7 +44,7 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
             suppressClick
             showTooltip={false}
           />
-          <span>{name()()} shared this with you</span>
+          <span>{name()} shared this with you</span>
         </div>
       }
     >
@@ -64,14 +57,7 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
 
 export function CreatedByBadgeSmall(props: { ownerId: string }) {
   const id = () => tryMacroId(props.ownerId);
-  const name = () => {
-    const currentId = id();
-    if (currentId) {
-      let [name] = useDisplayName(currentId);
-      return name;
-    }
-    return () => undefined;
-  };
+  const name = () => getDisplayName(id()) || undefined;
 
   return (
     <HoverCard
@@ -83,7 +69,7 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
             suppressClick
             showTooltip={false}
           />
-          <span>Created by {name()()}</span>
+          <span>Created by {name()}</span>
         </div>
       }
     >
@@ -145,6 +131,26 @@ export function CallChannelNameBadge(props: { channelName: string }) {
     >
       <HashIcon class="size-3 shrink-0" />
       <span class="truncate">{props.channelName}</span>
+    </Badge>
+  );
+}
+
+/**
+ * What a reminder is about, beside its description.
+ *
+ * The same shape as {@link CallChannelNameBadge} — a reminder row is named by
+ * its own text, so this is the only thing saying which entity it points at.
+ * Presentational: the caller resolves the name and supplies the icon, since a
+ * reminder can reference any entity type.
+ */
+export function ReminderReferenceBadge(props: ParentProps<{ name: string }>) {
+  return (
+    <Badge
+      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
+      title={props.name}
+    >
+      {props.children}
+      <span class="truncate">{props.name}</span>
     </Badge>
   );
 }

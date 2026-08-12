@@ -8,7 +8,7 @@ pub mod pg_project_repo;
 pub mod s3_upload_urls;
 /// Redis content-hash counter adapter.
 pub mod sha_counter;
-/// SQS project search-index adapter.
+/// Kafka search-cleanup and SQS document-deletion adapter.
 pub mod sqs_search_indexer;
 
 pub use dynamo_bulk_upload::DynamoBulkUploadAdapter;

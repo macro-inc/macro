@@ -39,6 +39,15 @@ type JsonScalar = string | number | boolean | null;
 type ScalarKey<T> = {
   [K in StringKey<T>]-?: Present<T[K]> extends JsonScalar ? K : never;
 }[StringKey<T>];
+type NumberKey<T> = {
+  [K in StringKey<T>]-?: Present<T[K]> extends number ? K : never;
+}[StringKey<T>];
+type ScalarInsertFields<T, TExcluded extends StringKey<T>> = Partial<{
+  [K in Exclude<ScalarKey<T>, TExcluded>]: Extract<
+    Exclude<T[K], undefined>,
+    JsonScalar
+  >;
+}>;
 type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
   readonly variables: AnyVariables;
@@ -74,6 +83,13 @@ export type NormalizedEntityIdentity = {
   __typename: string;
   id: string;
 };
+type NormalizedEntityListKey<T> = {
+  [K in StringKey<T>]-?: Present<T[K]> extends readonly (infer TItem)[]
+    ? Present<TItem> extends NormalizedEntityIdentity
+      ? K
+      : never
+    : never;
+}[StringKey<T>];
 
 /** An idempotent change to a normalized-link list. */
 export type LinkDiff =
@@ -171,6 +187,16 @@ function serializeRevalidation(
   };
 }
 
+function definedScalarFields(
+  fields: Readonly<Record<string, JsonScalar | undefined>>
+): Record<string, JsonScalar> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      (entry): entry is [string, JsonScalar] => entry[1] !== undefined
+    )
+  );
+}
+
 function createSelection<T>(state: SelectionState): Selection<T> {
   const selection = {
     ...state,
@@ -236,6 +262,86 @@ export function update<TItem extends object>(
       entityKey: normalizedEntityKey(operation.entity),
     },
   } as OptimisticUpdate;
+}
+
+/**
+ * Removes an entity link from a selected embedded list item and decrements
+ * its count only when the link was present.
+ */
+export function removeEmbeddedLink<
+  TItem extends object,
+  TSelectorField extends ScalarKey<TItem>,
+  TLinkField extends NormalizedEntityListKey<TItem>,
+  TCountField extends NumberKey<TItem>,
+>(
+  selection: ListSelection<TItem>,
+  args: {
+    listItem: {
+      whereField: TSelectorField;
+      equals: Extract<Present<TItem[TSelectorField]>, JsonScalar>;
+    };
+    linkField: TLinkField;
+    countField: TCountField;
+    entity: NormalizedEntityIdentity;
+  }
+): OptimisticUpdate {
+  const update: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'removeEmbeddedLink',
+      listItem: args.listItem,
+      linkField: args.linkField,
+      countField: args.countField,
+      entityKey: normalizedEntityKey(args.entity),
+    },
+  };
+  return update as OptimisticUpdate;
+}
+
+/**
+ * Prepends an entity link inside a selected embedded list item, creating the
+ * embedded item from scalar fields when its selector does not exist. Its
+ * count is initialized or incremented only when the link is newly inserted.
+ */
+export function upsertEmbeddedLink<
+  TItem extends object,
+  TSelectorField extends ScalarKey<TItem>,
+  TLinkField extends NormalizedEntityListKey<TItem>,
+  TCountField extends NumberKey<TItem>,
+>(
+  selection: ListSelection<TItem>,
+  args: {
+    listItem: {
+      whereField: TSelectorField;
+      equals: Extract<Present<TItem[TSelectorField]>, JsonScalar>;
+    };
+    linkField: TLinkField;
+    countField: TCountField;
+    entity: NormalizedEntityIdentity;
+    insertFields: ScalarInsertFields<
+      TItem,
+      TSelectorField | TCountField | TLinkField
+    >;
+  }
+): OptimisticUpdate {
+  const update: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'upsertEmbeddedLink',
+      listItem: args.listItem,
+      linkField: args.linkField,
+      countField: args.countField,
+      entityKey: normalizedEntityKey(args.entity),
+      insertFields: definedScalarFields(args.insertFields),
+    },
+  };
+  return update as OptimisticUpdate;
 }
 
 /**

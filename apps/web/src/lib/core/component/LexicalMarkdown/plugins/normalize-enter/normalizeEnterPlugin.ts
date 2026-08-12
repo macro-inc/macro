@@ -18,6 +18,7 @@ import {
   INSERT_PARAGRAPH_COMMAND,
   KEY_ENTER_COMMAND,
   type LexicalEditor,
+  type LexicalNode,
   type RangeSelection,
 } from 'lexical';
 
@@ -46,10 +47,18 @@ function $testSelectionPosition(
 }
 
 /**
- * Returns true if the selection is at the start of an empty paragraph or is
- * directly preceded by a line break.
+ * Returns true if the selection is at the start of an element that matches
+ * `isMatchingElement`, or is directly preceded by a line break.
+ *
+ * When `emptyOnly` is true (the default), the element must also be empty for
+ * this to return true. Pass `false` to match the start of the element
+ * regardless of whether it has content (e.g. Enter from the 0th char of a
+ * non-empty heading).
  */
-function $isAtStartOfEmptyParagraph(): boolean {
+function $isAtStartOfElement(
+  isMatchingElement: (node: LexicalNode | null) => boolean,
+  emptyOnly = true
+): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
     return false;
@@ -72,13 +81,25 @@ function $isAtStartOfEmptyParagraph(): boolean {
     return false;
   }
 
-  if ($isParagraphNode(parentElement)) {
-    return isEmptyOrMatches(parentElement.getTextContent().trim(), /^$/);
+  if (isMatchingElement(parentElement)) {
+    return emptyOnly
+      ? isEmptyOrMatches(parentElement!.getTextContent().trim(), /^$/)
+      : true;
   }
   if ($isRootNode(parentElement)) {
-    return isEmptyOrMatches(node.getTextContent().trim(), /^$/);
+    return emptyOnly
+      ? isEmptyOrMatches(node.getTextContent().trim(), /^$/)
+      : true;
   }
   return false;
+}
+
+/**
+ * Returns true if the selection is at the start of an empty paragraph or is
+ * directly preceded by a line break.
+ */
+function $isAtStartOfEmptyParagraph(): boolean {
+  return $isAtStartOfElement($isParagraphNode);
 }
 
 /**
@@ -96,7 +117,7 @@ function $handleEnterAtBlockStart(): boolean {
   const rootParent = selectionNode.getTopLevelElement();
   if (!rootParent) return false;
 
-  if ($isQuoteNode(rootParent)) {
+  if ($isQuoteNode(rootParent) || $isHeadingNode(rootParent)) {
     if (rootParent.getTextContent() === '') {
       const paragraph = $createParagraphNode();
       rootParent.replace(paragraph);
@@ -156,8 +177,23 @@ function $handleEnterFromHeading(): boolean {
 
   const anchorBlock = selection.anchor.getNode().getTopLevelElement();
   const focusBlock = selection.focus.getNode().getTopLevelElement();
+
+  // Return false if the anchor block is a heading with empty text to use default
+  // replace with paragraph behavior.
+  if ($isHeadingNode(anchorBlock) && anchorBlock.getTextContent() === '') {
+    return false;
+  }
+
   if (!$isHeadingNode(anchorBlock) || anchorBlock !== focusBlock) {
     return false;
+  }
+
+  // Enter from the very start of a non-empty heading: insert an empty
+  // paragraph above the heading instead of splitting it into a heading +
+  // paragraph. The heading and its content stay intact below.
+  if ($isAtStartOfElement($isHeadingNode, false)) {
+    anchorBlock.insertBefore($createParagraphNode());
+    return true;
   }
 
   const nextBlock = selection.insertParagraph();

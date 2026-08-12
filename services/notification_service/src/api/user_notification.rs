@@ -10,11 +10,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::{
-    AiResponseMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment, GithubPrMention,
-    GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    AiResponseMetadata, CalendarEventReminderMetadata, ChannelMentionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, CommentedOnDocumentMetadata,
+    DocumentMentionMetadata, GithubPrComment, GithubPrMention, GithubPrReview,
+    GithubPrStatusChanged, GithubReviewRequested, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotifEvent, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 use notification::{
     domain::{models::Notification, service::NotificationReader},
@@ -45,6 +45,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         MentionedInDocumentCommentMetadata::TYPE_NAME,
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
         CommentedOnDocumentMetadata::TYPE_NAME,
+        CalendarEventReminderMetadata::TYPE_NAME,
     ])
 });
 

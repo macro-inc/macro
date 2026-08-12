@@ -31,6 +31,7 @@ export function useContactEmailsQuery(
     () => {
       const addr = email();
       const base = {
+        calf: { l: { id: NIL_UUID } },
         df: { l: { id: NIL_UUID } },
         chanf: { l: { ChannelId: NIL_UUID } },
         cthf: { l: { ThreadId: NIL_UUID } },

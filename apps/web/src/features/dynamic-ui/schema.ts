@@ -43,25 +43,6 @@ export const MdWidgetSchema = z.object({
 });
 export type MdWidget = z.infer<typeof MdWidgetSchema>;
 
-/** A single labelled metric, optionally with a trend delta. */
-export const StatWidgetSchema = z.object({
-  type: z.literal('stat'),
-  label: z.string(),
-  value: z.union([z.string(), z.number()]),
-  /** e.g. "PRs", "%", "ms" — rendered next to the value. */
-  unit: z.string().optional(),
-  /** Change vs a prior period. */
-  delta: z
-    .object({
-      value: z.number(),
-      direction: z.enum(['up', 'down', 'neutral']),
-      /** e.g. "vs last week". */
-      label: z.string().optional(),
-    })
-    .optional(),
-});
-export type StatWidget = z.infer<typeof StatWidgetSchema>;
-
 /** A chronological sequence of events. Great for "what happened" answers. */
 export const TimelineWidgetSchema = z.object({
   type: z.literal('timeline'),
@@ -100,14 +81,6 @@ export const ListWidgetSchema = z.object({
   limit: z.number().optional(),
 });
 export type ListWidget = z.infer<typeof ListWidgetSchema>;
-
-/** A rich preview card for a single entity (task, md doc, …) — the same rich
- *  body shown on hover, rendered inline. */
-export const CardWidgetSchema = z.object({
-  type: z.literal('card'),
-  entity: EntityRefSchema,
-});
-export type CardWidget = z.infer<typeof CardWidgetSchema>;
 
 /** Render a single channel message with surrounding context. */
 export const ChannelMessageWidgetSchema = z.object({
@@ -153,19 +126,15 @@ export const ContainerWidgetSchema: z.ZodType<ContainerWidget> = z.object({
 
 export type Widget =
   | MdWidget
-  | StatWidget
   | TimelineWidget
   | ListWidget
-  | CardWidget
   | ChannelMessageWidget
   | ContainerWidget;
 
 export const WidgetSchema: z.ZodType<Widget> = z.union([
   MdWidgetSchema,
-  StatWidgetSchema,
   TimelineWidgetSchema,
   ListWidgetSchema,
-  CardWidgetSchema,
   ChannelMessageWidgetSchema,
   ContainerWidgetSchema,
 ]);

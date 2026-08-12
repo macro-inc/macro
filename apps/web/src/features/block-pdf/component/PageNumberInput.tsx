@@ -67,7 +67,7 @@ export function PageNumberInput() {
           <div class="cursor-default">
             <input
               class={cn(
-                'rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent',
+                'rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent',
                 'font-medium cursor-default text-center',
                 getWidthClass(currentPageNumber())
               )}

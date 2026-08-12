@@ -7,7 +7,10 @@
 //! field is a cache miss (Phase 1: no partial results — nullability-based
 //! partials are a later phase; the metadata is already generated).
 
-use crate::document::{FieldNode, MissingVariable, Operation, Selection, resolve_args_key};
+use crate::document::{
+    FieldNode, MissingVariable, Operation, Selection, resolve_args, resolved_args_key,
+};
+use crate::entity_resolver::EntityResolverLookup;
 use crate::meta;
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
@@ -17,17 +20,17 @@ use thiserror::Error;
 /// Synchronous view over records available right now (hot tier + any
 /// batch-fetched records).
 pub trait RecordSource {
-    fn get(&self, key: &EntityKey) -> Option<&Record>;
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record>;
 }
 
-impl RecordSource for std::collections::BTreeMap<EntityKey, Record> {
-    fn get(&self, key: &EntityKey) -> Option<&Record> {
+impl RecordSource for std::collections::BTreeMap<EntityKey<'static>, Record> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
         std::collections::BTreeMap::get(self, key)
     }
 }
 
-impl RecordSource for std::collections::HashMap<EntityKey, Record> {
-    fn get(&self, key: &EntityKey) -> Option<&Record> {
+impl RecordSource for std::collections::HashMap<EntityKey<'static>, Record> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
         std::collections::HashMap::get(self, key)
     }
 }
@@ -48,9 +51,12 @@ pub enum ReadOutcome {
     /// All selected data present.
     Complete(Json),
     /// Some records weren't in the [`RecordSource`]; fetch these and retry.
-    NeedRecords(BTreeSet<EntityKey>),
+    NeedRecords(BTreeSet<EntityKey<'static>>),
     /// A record exists but a selected field was never written → miss.
-    Miss { entity: EntityKey, field: String },
+    Miss {
+        entity: EntityKey<'static>,
+        field: String,
+    },
 }
 
 /// Attempts to answer `op` from `source`. `deps` accumulates every entity
@@ -59,31 +65,70 @@ pub fn denormalize(
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey>,
+    deps: &mut BTreeSet<EntityKey<'static>>,
 ) -> Result<ReadOutcome, DenormalizeError> {
-    denormalize_record(
+    denormalize_with_entity_resolvers(
+        op,
+        variables,
+        source,
+        deps,
+        &EntityResolverLookup::default(),
+    )
+}
+
+/// Attempts to answer `op` while applying validated read-only entity links.
+pub fn denormalize_with_entity_resolvers(
+    op: &Operation,
+    variables: &serde_json::Map<String, Json>,
+    source: &impl RecordSource,
+    deps: &mut BTreeSet<EntityKey<'static>>,
+    entity_resolvers: &EntityResolverLookup,
+) -> Result<ReadOutcome, DenormalizeError> {
+    denormalize_record_with_entity_resolvers(
         &EntityKey::root(),
         meta::QUERY_ROOT_TYPE,
         &op.selection_set,
         variables,
         source,
         deps,
+        entity_resolvers,
     )
 }
 
 /// Projects one normalized record through a fragment selection.
 pub fn denormalize_record(
-    key: &EntityKey,
+    key: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
-    deps: &mut BTreeSet<EntityKey>,
+    deps: &mut BTreeSet<EntityKey<'static>>,
+) -> Result<ReadOutcome, DenormalizeError> {
+    denormalize_record_with_entity_resolvers(
+        key,
+        type_name,
+        selections,
+        variables,
+        source,
+        deps,
+        &EntityResolverLookup::default(),
+    )
+}
+
+fn denormalize_record_with_entity_resolvers(
+    key: &EntityKey<'static>,
+    type_name: &str,
+    selections: &[Selection],
+    variables: &serde_json::Map<String, Json>,
+    source: &impl RecordSource,
+    deps: &mut BTreeSet<EntityKey<'static>>,
+    entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     let mut walk = Walk {
         variables,
         source,
         deps,
+        entity_resolvers,
         missing_records: BTreeSet::new(),
         miss: None,
     };
@@ -107,10 +152,11 @@ pub fn denormalize_record(
 struct Walk<'a, S: RecordSource> {
     variables: &'a serde_json::Map<String, Json>,
     source: &'a S,
-    deps: &'a mut BTreeSet<EntityKey>,
-    missing_records: BTreeSet<EntityKey>,
+    deps: &'a mut BTreeSet<EntityKey<'static>>,
+    entity_resolvers: &'a EntityResolverLookup,
+    missing_records: BTreeSet<EntityKey<'static>>,
     /// First field-level miss encountered.
-    miss: Option<(EntityKey, String)>,
+    miss: Option<(EntityKey<'static>, String)>,
 }
 
 impl<'a, S: RecordSource> Walk<'a, S> {
@@ -118,7 +164,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
     /// already determined to be incomplete (missing record / miss noted).
     fn read_record(
         &mut self,
-        key: &EntityKey,
+        key: &EntityKey<'static>,
         type_name: &str,
         selections: &[Selection],
     ) -> Result<Option<Json>, DenormalizeError> {
@@ -136,7 +182,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
     /// Reads selected fields out of a record's or embedded object's map.
     fn read_fields(
         &mut self,
-        owner: &EntityKey,
+        owner: &EntityKey<'static>,
         fields: &std::collections::BTreeMap<String, CacheValue>,
         concrete: &str,
         selections: &[Selection],
@@ -157,13 +203,33 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                     field: f.name.clone(),
                 }
             })?;
-            let args = resolve_args_key(f, self.variables)?;
-            let storage_key = field_key(&f.name, args.as_deref());
+            let entity_resolver = self.entity_resolvers.get(concrete, &f.name);
+            let arguments = match resolve_args(f, self.variables) {
+                Ok(arguments) => arguments,
+                Err(_) if entity_resolver.is_some() => {
+                    self.mark_miss(owner, f.name.clone());
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let args_key = resolved_args_key(f, &arguments);
+            let storage_key = field_key(&f.name, args_key.as_deref());
+
+            if let Some(entity_resolver) = entity_resolver {
+                let Some(target_key) = entity_resolver.entity_key(&arguments) else {
+                    self.mark_miss(owner, storage_key);
+                    continue;
+                };
+                let json =
+                    self.read_record(&target_key, &entity_resolver.target_type, &f.selection_set)?;
+                if let Some(json) = json {
+                    out.insert(f.response_key.clone(), json);
+                }
+                continue;
+            }
 
             let Some(value) = fields.get(&storage_key) else {
-                if self.miss.is_none() {
-                    self.miss = Some((owner.clone(), storage_key));
-                }
+                self.mark_miss(owner, storage_key);
                 continue;
             };
             let json = self.read_value(owner, f, fmeta.ty.name, value)?;
@@ -177,9 +243,15 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         Ok(Some(Json::Object(out)))
     }
 
+    fn mark_miss(&mut self, owner: &EntityKey<'static>, field: String) {
+        if self.miss.is_none() {
+            self.miss = Some((owner.clone(), field));
+        }
+    }
+
     fn read_value(
         &mut self,
-        owner: &EntityKey,
+        owner: &EntityKey<'static>,
         field: &FieldNode,
         named_type: &str,
         value: &CacheValue,

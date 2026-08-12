@@ -60,10 +60,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative flex flex-col gap-2 p-4 rounded-lg min-w-0 ring',
+            'relative flex flex-col gap-2 p-4 rounded-lg min-w-0 border',
             props.isFocused
-              ? 'bg-active/60 ring-edge'
-              : 'bg-ink-muted/2.5 hover:bg-active/40 hover:ring-edge ring-transparent'
+              ? 'bg-active/60 border-edge'
+              : 'bg-ink-muted/2.5 hover:bg-active/40 hover:border-edge border-transparent'
           )}
           style={{
             '--user-icon-width': '1rem',

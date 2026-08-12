@@ -16,7 +16,7 @@ import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
 import MacroEmbed from '@icon/macro-embed.svg';
@@ -269,7 +269,7 @@ function MetadataInfo(props: {
  * User info with icon and display name
  */
 function UserInfo(props: { userId: string }) {
-  const [displayName] = useDisplayName(tryMacroId(props.userId));
+  const displayName = () => getDisplayName(tryMacroId(props.userId));
   return (
     <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
       <UserIconComponent
@@ -425,7 +425,7 @@ function PreviewPropertyPill(props: {
       <Layer depth={2}>
         <div
           class={cn(
-            'inline-flex items-center gap-1.5 min-w-0 max-w-full ring ring-edge-muted',
+            'inline-flex items-center gap-1.5 min-w-0 max-w-full border border-edge-muted',
             'px-2 py-1 leading-tight text-left rounded-full bg-surface'
           )}
         >

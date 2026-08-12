@@ -2,7 +2,6 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   config,
-  getSearchEventQueue,
   getServiceUrl,
   ServiceUrl,
   stack,
@@ -14,8 +13,6 @@ const tags = {
   tech_lead: 'hutch',
   project: 'cloud-storage-search',
 };
-
-const { searchEventQueueArn } = getSearchEventQueue();
 
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
@@ -36,7 +33,6 @@ const searchUploadHandler = new SearchUploadHandler(
       ),
       DOCUMENT_STORAGE_SERVICE_AUTH_KEY: pulumi.interpolate`${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}`,
     },
-    searchEventQueueArn,
     tags,
   }
 );

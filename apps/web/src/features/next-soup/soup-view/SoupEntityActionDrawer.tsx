@@ -32,6 +32,7 @@ export function SoupEntityActionDrawer() {
       activeTab: activeTab(),
       activeListView: content.id,
       viewedProjectId: viewedProjectIdFromContent(content),
+      splitHandle: panel.handle,
     });
   };
 
@@ -74,9 +75,11 @@ export function SoupEntityActionDrawer() {
                     {(action) => (
                       <button
                         type="button"
+                        disabled={action.disabled}
                         class={cn(
                           'flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface',
-                          action.destructive ? 'text-failure-ink' : 'text-ink'
+                          action.destructive ? 'text-failure-ink' : 'text-ink',
+                          action.disabled && 'opacity-50'
                         )}
                         onClick={async (e: MouseEvent) => {
                           if (action.id === 'share') {

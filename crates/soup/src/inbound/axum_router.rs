@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
-        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupType,
+        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
         grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
@@ -34,6 +34,7 @@ use item_filters::{
     EntityFilters,
     ast::{
         EntityFilterAst, ExpandErr, LiteralTree,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
@@ -43,6 +44,7 @@ use item_filters::{
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
+        reminder::ReminderLiteral,
     },
 };
 use macro_authorization::{
@@ -83,6 +85,35 @@ pub struct Params {
     /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
+    /// Sort direction. Options are asc, desc. Defaults to desc.
+    ///
+    /// Re-send this with every page: it is not carried in the cursor.
+    ///
+    /// Applies to the timestamp sort methods only. `asc` combined with
+    /// `frecency` is rejected rather than ignored: frecency pages are ordered
+    /// by relevance score and the cursor comparison assumes descending, so
+    /// there is no ascending frecency order to give.
+    #[serde(default)]
+    sort_direction: Option<SoupApiSortDirection>,
+}
+
+/// Sort direction accepted by non-grouped soup API endpoints.
+#[derive(Debug, Clone, Copy, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SoupApiSortDirection {
+    /// Oldest, or soonest-firing, first.
+    Asc,
+    /// Newest first.
+    Desc,
+}
+
+impl From<SoupApiSortDirection> for SoupSortDirection {
+    fn from(value: SoupApiSortDirection) -> Self {
+        match value {
+            SoupApiSortDirection::Asc => SoupSortDirection::Asc,
+            SoupApiSortDirection::Desc => SoupSortDirection::Desc,
+        }
+    }
 }
 
 /// Sort options accepted by non-grouped soup API endpoints.
@@ -495,6 +526,8 @@ where
         R: Clone + Serialize + Send,
     {
         let user_for_favorites = macro_user_id.copied().into_owned();
+        let sort_direction: SoupSortDirection =
+            params.sort_direction.map(Into::into).unwrap_or_default();
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method
@@ -517,6 +550,15 @@ where
                 .unwrap_or_else(create_fallback),
         };
 
+        // Frecency pages are ordered by relevance score, and that branch never
+        // applies the merged sort the direction would flip. Rejecting beats
+        // accepting the parameter and silently doing nothing with it. Checked
+        // against the resolved query so a frecency *cursor* is caught too, not
+        // just an initial request naming the method.
+        if sort_direction == SoupSortDirection::Asc && matches!(cursor, SoupQuery::Frecency(_)) {
+            return Err(SoupHandlerErr::AscendingFrecencyUnsupported);
+        }
+
         // CRM authorization (team membership for CRM scope, admin/owner
         // role for hidden companies) is enforced by the soup domain and
         // CRM service from the receipt itself; the router just forwards
@@ -531,6 +573,7 @@ where
                     },
                     limit: params.limit.unwrap_or(20),
                     cursor,
+                    sort_direction,
                     user: macro_user_id,
                     email_preview_view: email_view,
                     link_ids,
@@ -703,6 +746,9 @@ pub enum SoupHandlerErr {
     /// Hidden CRM company query was requested without admin privileges.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
+    /// Ascending order was requested for a frecency-sorted query.
+    #[error("sort_direction=asc is not supported with sort_method=frecency")]
+    AscendingFrecencyUnsupported,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -719,7 +765,9 @@ impl From<SoupErr> for SoupHandlerErr {
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
+            SoupHandlerErr::ExpandErr(_)
+            | SoupHandlerErr::Expand
+            | SoupHandlerErr::AscendingFrecencyUnsupported => StatusCode::BAD_REQUEST,
             SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
                 StatusCode::FORBIDDEN
             }
@@ -1059,6 +1107,10 @@ where
 /// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
+    /// filters applied to canonical calendar events
+    #[serde(default, rename = "calf")]
+    #[schema(value_type = serde_json::Value)]
+    pub calendar_event_filter: LiteralTree<CalendarEventLiteral>,
     /// the filters that should be applied to the document entity
     #[serde(default, rename = "df")]
     #[schema(value_type = serde_json::Value)]
@@ -1099,6 +1151,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
+    /// Filters applied to reminders (wire key `remf`). Unlike every other
+    /// filter here, empty/omitted returns **no** reminders: they are opt-in,
+    /// so the caller must send `inc`, an id, or an entity to get any.
+    #[serde(default, rename = "remf")]
+    #[schema(value_type = serde_json::Value)]
+    pub reminder_filter: LiteralTree<ReminderLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -1141,6 +1199,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -1161,6 +1220,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             soup_type,
             limit,
             cursor,
+            sort_direction,
             user,
             email_preview_view,
             link_ids,
@@ -1179,6 +1239,7 @@ impl ApiEntityFilterAst {
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
+            calendar_event_filter,
             document_filter,
             project_filter,
             chat_filter,
@@ -1188,6 +1249,7 @@ impl ApiEntityFilterAst {
             foreign_entity_filter,
             call_filter,
             crm_company_filter,
+            reminder_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -1242,6 +1304,7 @@ impl ApiEntityFilterAst {
         };
 
         Ok(EntityFilterAst {
+            calendar_event_filter,
             document_filter,
             project_filter,
             chat_filter,
@@ -1254,6 +1317,7 @@ impl ApiEntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            reminder_filter,
             properties_filter,
         })
     }

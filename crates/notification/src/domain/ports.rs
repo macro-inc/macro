@@ -193,6 +193,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     fn get_device_endpoint(
         &self,
         device_token: &str,
+        device_type: &DeviceType,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 
     /// Upsert a device registration: create a new one or update the existing
@@ -205,14 +206,28 @@ pub trait NotificationRepository: Send + Sync + 'static {
         device_type: &DeviceType,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Delete the device registration matching the given token and type.
+    /// Delete all of the user's device registrations matching the given token
+    /// and type.
     ///
-    /// Returns the endpoint ARN that was removed.
-    fn delete_device_by_token(
+    /// Returns the endpoint ARNs that were removed (empty if none matched).
+    fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
+
+    /// Delete registrations that share the given token and type but point at a
+    /// different endpoint than `active_endpoint` — stale rows left behind when
+    /// SNS minted a new endpoint for the same physical device.
+    ///
+    /// Returns the endpoint ARNs that were removed.
+    fn delete_stale_devices_by_token(
         &self,
         device_token: &str,
         device_type: &DeviceType,
-    ) -> impl Future<Output = Result<String, Report>> + Send;
+        active_endpoint: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
 
     /// Delete a device registration by its endpoint ARN.
     fn delete_device_by_endpoint(

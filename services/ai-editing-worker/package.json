@@ -16,6 +16,7 @@
 		"@ai-sdk/openai": "^3.0.73",
 		"@hono/zod-validator": "^0.8.0",
 		"@loro-mirror/core": "workspace:*",
+		"@macro-inc/observability": "workspace:*",
 		"@macro-inc/collaboration": "workspace:*",
 		"@macro-inc/lexical-core": "workspace:*",
 		"ai": "^6.0.207",

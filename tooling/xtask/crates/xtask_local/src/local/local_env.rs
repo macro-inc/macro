@@ -65,6 +65,10 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        // Calendar ingestion/sync ships dark (both flags default off in
+        // deployed envs); local stacks keep it on for development.
+        env.insert("CALENDAR_SYNC_ENABLED".into(), "true".into());
+        env.insert("CALENDAR_SCOPE_ENABLED".into(), "true".into());
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);

@@ -1242,7 +1242,17 @@ pub fn cors(request_origin: Option<&str>) -> Cors {
 
     Cors::new()
         .with_credentials(true)
-        .with_allowed_headers(vec!["authorization", "content-type"])
+        // `traceparent`/`tracestate` are injected by the web client's traced
+        // fetch wrapper (see `safeFetch`), so they must be preflight-allowed or
+        // the browser blocks every instrumented call. Kept in sync with
+        // `macro_cors::EXTRA_HEADERS`, which the axum services use; this worker
+        // can't share that list because it's built on tower-http.
+        .with_allowed_headers(vec![
+            "authorization",
+            "content-type",
+            "traceparent",
+            "tracestate",
+        ])
         .with_methods(vec![
             Method::Get,
             Method::Post,

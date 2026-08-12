@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NotificationDocumentSubTypeOneOf } from './notificationDocumentSubTypeOneOf';
+import type { NotificationDocumentSubTypeOneOfFive } from './notificationDocumentSubTypeOneOfFive';
 import type { NotificationDocumentSubTypeOneOfThree } from './notificationDocumentSubTypeOneOfThree';
 
 /**
@@ -13,4 +14,5 @@ Serializes as `{ "type": "task" }` matching the storage service pattern.
  */
 export type NotificationDocumentSubType =
   | NotificationDocumentSubTypeOneOf
-  | NotificationDocumentSubTypeOneOfThree;
+  | NotificationDocumentSubTypeOneOfThree
+  | NotificationDocumentSubTypeOneOfFive;

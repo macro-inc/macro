@@ -594,6 +594,65 @@
         }
       }
     },
+    "/bots/me": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/me`.",
+        "operationId": "get_self_bot",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -716,6 +775,97 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/calendar-events": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Return calendar occurrences visible to the authenticated requester.",
+        "operationId": "list_occurrences",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive UTC viewport start.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive UTC viewport end.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Inclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Exclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of occurrences, from 1 through 2,000.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2000,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation cursor returned by the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Calendar occurrences in the requested viewport",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOccurrenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported calendar viewport"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Calendar query failed"
           }
         }
       }
@@ -5436,6 +5586,73 @@
         }
       }
     },
+    "/documents/create_skill": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "operationId": "create_skill_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a skill.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created skill."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_snippet": {
       "post": {
         "tags": ["document"],
@@ -6026,6 +6243,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/system_skills": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Lists the built-in system skills. System skills are static, code-defined\nAI instructions (see the `system_skills` crate); they surface in the\nskills menu and AI skill tools like user skills, but have no document\nbehind them, so clients must not offer to open them.",
+        "operationId": "get_system_skills_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response listing the built-in system skills.",
+                  "required": ["skills"],
+                  "properties": {
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SystemSkillSummary"
+                      },
+                      "description": "Every system skill, in display order."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7665,12 +7922,15 @@
                 "document",
                 "project",
                 "email_thread",
+                "calendar_event",
                 "team",
                 "call",
                 "foreign_entity",
                 "static_file",
                 "crm_company",
-                "crm_contact"
+                "crm_contact",
+                "reminder",
+                "skill"
               ]
             }
           },
@@ -7802,11 +8062,14 @@
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
-        "summary": "Redirects the user to the github sync app installation page.",
+        "summary": "Redirects an authenticated user to the github sync app installation page.",
         "operationId": "install_sync",
         "responses": {
           "307": {
-            "description": "Redirects to the github sync app installation page"
+            "description": "Temporary redirect to the GitHub sync app installation page"
+          },
+          "401": {
+            "description": "Authentication failed"
           }
         }
       }
@@ -8134,6 +8397,15 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
+            }
+          },
+          {
+            "name": "sort_direction",
+            "in": "query",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SoupApiSortDirection"
             }
           },
           {
@@ -9442,6 +9714,398 @@
         }
       }
     },
+    "/reminders": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "List the caller's reminders, soonest firing first.",
+        "operationId": "list_reminders",
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "description": "Restrict to reminders attached to this entity type. Requires `entityId`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The type of an entity in Macro",
+              "enum": [
+                "user",
+                "chat",
+                "channel",
+                "channel_message",
+                "document",
+                "project",
+                "email_thread",
+                "calendar_event",
+                "team",
+                "call",
+                "foreign_entity",
+                "static_file",
+                "crm_company",
+                "crm_contact",
+                "reminder",
+                "skill"
+              ]
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "description": "Restrict to reminders attached to this entity id. Requires `entityType`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeCompleted",
+            "in": "query",
+            "description": "Include reminders that have already fired.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size. Defaults to 100; larger values are capped at 500. A value\nthat is not a non-negative integer is rejected by the query extractor.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "`nextCursor` from a previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindersList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["reminders"],
+        "summary": "Create a reminder, optionally attached to an entity the caller can view.",
+        "operationId": "create_reminder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the requested entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested entity does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reminders/{id}": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "Fetch one of the caller's reminders.",
+        "operationId": "get_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["reminders"],
+        "summary": "Delete one of the caller's reminders.",
+        "operationId": "delete_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reminder deleted"
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["reminders"],
+        "summary": "Modify one of the caller's reminders.",
+        "operationId": "update_reminder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The reminder id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed request body (plain text)"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views": {
       "get": {
         "tags": ["saved_views"],
@@ -10114,6 +10778,16 @@
               }
             }
           },
+          "409": {
+            "description": "Namespace already used in the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -10443,12 +11117,15 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -11416,6 +12093,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "calf": {
+            "description": "filters applied to canonical calendar events"
+          },
           "callf": {
             "description": "the filters that should be applied to the call entity"
           },
@@ -11459,6 +12139,9 @@
           },
           "propf": {
             "description": "the filters that should be applied based on entity properties"
+          },
+          "remf": {
+            "description": "Filters applied to reminders (wire key `remf`). Unlike every other\nfilter here, empty/omitted returns **no** reminders: they are opt-in,\nso the caller must send `inc`, an id, or an entity to get any."
           }
         }
       },
@@ -11764,6 +12447,11 @@
           }
         }
       },
+      "AttendeeResponseStatus": {
+        "type": "string",
+        "description": "RSVP state for an attendee.",
+        "enum": ["needs_action", "accepted", "declined", "tentative"]
+      },
       "BTreeMap": {
         "type": "object",
         "additionalProperties": {
@@ -11873,6 +12561,17 @@
               "type": {
                 "type": "string",
                 "enum": ["snippet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
               }
             }
           }
@@ -12119,6 +12818,278 @@
             "minimum": 0
           }
         }
+      },
+      "CalendarAttendee": {
+        "type": "object",
+        "description": "An attendee on a calendar event.",
+        "required": [
+          "email",
+          "responseStatus",
+          "isOrganizer",
+          "isOptional",
+          "isSelf"
+        ],
+        "properties": {
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Optional attendee comment."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Provider display name."
+          },
+          "email": {
+            "type": "string",
+            "description": "Normalized email address."
+          },
+          "isOptional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          },
+          "isOrganizer": {
+            "type": "boolean",
+            "description": "Whether this attendee is the organizer."
+          },
+          "isSelf": {
+            "type": "boolean",
+            "description": "Whether this attendee represents the connected account."
+          },
+          "responseStatus": {
+            "$ref": "#/components/schemas/AttendeeResponseStatus",
+            "description": "RSVP state."
+          }
+        }
+      },
+      "CalendarEvent": {
+        "type": "object",
+        "description": "A stable, first-class Macro calendar event entity.",
+        "required": [
+          "id",
+          "ownerId",
+          "icalUid",
+          "title",
+          "status",
+          "visibility",
+          "transparency",
+          "time",
+          "recurrenceLines",
+          "sequence",
+          "isReadOnly",
+          "attendees",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees, keyed by email during persistence."
+          },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct join URL when known."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity creation time."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "icalUid": {
+            "type": "string",
+            "description": "RFC 5545 UID used to reconcile provider and email sources."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro entity identifier."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the current user can edit the canonical source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user who owns this event entity."
+          },
+          "recurrenceLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`)."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Per-user reminder configuration. Skipped when it is the provider\ndefault so projections stored before reminders were modeled still\ncompare equal."
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Provider/iCalendar sequence number.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/EventStatus",
+            "description": "Event status."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Timed or all-day shape."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarEventFilters": {
+        "type": "object",
+        "description": "Filters for canonical calendar-event entities.",
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Attendee email addresses."
+          },
+          "calendar_event_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Canonical event ids."
+          },
+          "ends_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events ending after this instant."
+          },
+          "organizers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Organizer email addresses."
+          },
+          "starts_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include master events starting before this instant."
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
+      "CalendarOccurrence": {
+        "type": "object",
+        "description": "A materialized recurrence instance optimized for range queries.",
+        "required": ["eventId", "occurrenceKey", "time", "isCancelled"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning event entity."
+          },
+          "isCancelled": {
+            "type": "boolean",
+            "description": "Whether the instance was cancelled."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable key within the event."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Provider recurrence identifier, when applicable."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Instance time."
+          }
+        }
+      },
+      "CalendarOccurrenceItem": {
+        "type": "object",
+        "description": "One materialized occurrence paired with its stable calendar event entity.",
+        "required": ["event", "occurrence"],
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/CalendarEvent"
+          },
+          "occurrence": {
+            "$ref": "#/components/schemas/CalendarOccurrence"
+          }
+        }
+      },
+      "CalendarOccurrenceResponse": {
+        "type": "object",
+        "description": "Paginated calendar occurrence viewport response.",
+        "required": ["items", "hasMore", "syncStatus"],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarOccurrenceItem"
+            }
+          },
+          "nextCursor": {
+            "type": ["string", "null"]
+          },
+          "syncStatus": {
+            "$ref": "#/components/schemas/CalendarSyncStatus",
+            "description": "Aggregate ingestion state; clients render a skeleton while `syncing`."
+          }
+        }
+      },
+      "CalendarSyncStatus": {
+        "type": "string",
+        "description": "Aggregate ingestion state across every calendar account visible to a\nrequester, letting clients render progressively while sources build.",
+        "enum": ["syncing", "ready"]
       },
       "CallActiveResponse": {
         "type": "object",
@@ -12692,6 +13663,57 @@
             "type": "string",
             "format": "uuid",
             "description": "Reusable code for joining the channel."
+          }
+        }
+      },
+      "ChannelMentionedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::Mentioned`].",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender",
+          "channel_type",
+          "content",
+          "mentioned",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel containing the message."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Type of channel containing the message."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp reported by the repository."
+          },
+          "mentioned": {
+            "$ref": "#/components/schemas/SimpleMention",
+            "description": "The mentioned entity this event is about (`user`, `bot`, `document`, …).\n\nThe message's full mention list travels on `channel.message_posted`."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the message carrying the mention."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ChannelSender",
+            "description": "Message author; may be a bot."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Thread parent id when the message is a thread reply."
           }
         }
       },
@@ -13272,6 +14294,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/ChannelMessagePostedMetadata",
                 "description": "A message was posted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An entity (user, bot, document, …) was mentioned in a message.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.mentioned"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelMentionedMetadata",
+                "description": "An entity (user, bot, document, …) was mentioned in a message."
               }
             }
           },
@@ -14145,6 +15182,86 @@
           }
         }
       },
+      "CreateReminderRequest": {
+        "type": "object",
+        "description": "Request body for creating a reminder.",
+        "required": ["description", "schedule"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What to remind the caller about."
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Id of the entity to attach the reminder to. Requires `entityType`."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "Type of the entity to attach the reminder to. Requires `entityId`."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "When and how often the reminder fires."
+          }
+        }
+      },
+      "CreateSkillRequest": {
+        "type": "object",
+        "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "required": ["skillName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty skill document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the skill with."
+          },
+          "skillName": {
+            "type": "string",
+            "description": "The name of the skill."
+          }
+        }
+      },
+      "CreateSkillResponse": {
+        "type": "object",
+        "description": "Response for creating a skill.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created skill."
+          }
+        }
+      },
       "CreateSnippetRequest": {
         "type": "object",
         "description": "Request body for creating a snippet — a reusable markdown document that can\nbe inserted into any markdown area.",
@@ -14312,7 +15429,7 @@
       "CreateWebhookRequest": {
         "type": "object",
         "description": "Request to create a webhook.",
-        "required": ["scope", "name", "endpoint_url", "filters"],
+        "required": ["scope", "namespace", "name", "endpoint_url", "filters"],
         "properties": {
           "endpoint_url": {
             "type": "string",
@@ -14337,6 +15454,10 @@
             "type": "string",
             "description": "Display name."
           },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
+          },
           "scope": {
             "$ref": "#/components/schemas/WebhookScope",
             "description": "Scope that owns the webhook."
@@ -14349,6 +15470,7 @@
         "required": [
           "id",
           "workspace_id",
+          "namespace",
           "name",
           "endpoint_url",
           "signing_secret",
@@ -14398,6 +15520,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
           },
           "signing_secret": {
             "type": "string",
@@ -15046,6 +16172,29 @@
         "description": "API-visible content lifecycle state derived from current document metadata.",
         "enum": ["unknown", "pending", "ready"]
       },
+      "DocumentContentUploadedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::ContentUploaded`].",
+        "required": ["document_id", "owner", "file_type"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the document whose stored bytes changed."
+          },
+          "document_version_id": {
+            "type": ["string", "null"],
+            "description": "Version written, or the converted-file marker; `None` for unversioned\nwrites (mirrors `SearchExtractorMessage::document_version_id`)."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/FileType",
+            "description": "File type of the uploaded object (may differ from the document's own\ntype, e.g. `pdf` for the converted rendition of a docx)."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The owner of the document (used by the extractor to resolve S3 keys)."
+          }
+        }
+      },
       "DocumentCopiedMetadata": {
         "type": "object",
         "description": "Metadata for [`DocumentTopicEvent::Copied`].",
@@ -15550,9 +16699,31 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
+      },
+      "DocumentPurgedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::Purged`].",
+        "required": ["document_id"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the hard-deleted document."
+          }
+        }
       },
       "DocumentResponse": {
         "type": "object",
@@ -15686,7 +16857,26 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet"]
+        "enum": ["task", "snippet", "skill"]
+      },
+      "DocumentSyncContentUpdatedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::SyncContentUpdated`].",
+        "required": ["document_id", "file_type"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the live-collab document whose content changed."
+          },
+          "document_version_id": {
+            "type": ["string", "null"],
+            "description": "Version marker for the sync snapshot, when the caller supplies one."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/FileType",
+            "description": "File type of the sync document (markdown today)."
+          }
+        }
       },
       "DocumentTeamShareResponse": {
         "type": "object",
@@ -15748,6 +16938,51 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentDeletedMetadata",
                 "description": "A document was soft-deleted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The document's stored bytes were (re)written to S3.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.content_uploaded"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentContentUploadedMetadata",
+                "description": "The document's stored bytes were (re)written to S3."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A live-collab (sync) document's content changed and should be re-extracted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.sync_content_updated"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentSyncContentUpdatedMetadata",
+                "description": "A live-collab (sync) document's content changed and should be re-extracted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The document row was permanently deleted (hard delete).",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.purged"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentPurgedMetadata",
+                "description": "The document row was permanently deleted (hard delete)."
               }
             }
           },
@@ -16214,6 +17449,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "calendar_event_filters": {
+            "$ref": "#/components/schemas/CalendarEventFilters",
+            "description": "the bundled [CalendarEventFilters]"
+          },
           "call_filters": {
             "$ref": "#/components/schemas/CallFilters",
             "description": "the bundled [CallFilters]"
@@ -16256,6 +17495,10 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "reminder_filters": {
+            "$ref": "#/components/schemas/ReminderFilters",
+            "description": "the bundled [ReminderFilters]"
           },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
@@ -16381,6 +17624,7 @@
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
         "enum": [
+          "CALENDAR_EVENT",
           "CALL_RECORD",
           "CHANNEL",
           "CHAT",
@@ -16402,6 +17646,107 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "EventReminderOverride": {
+        "type": "object",
+        "description": "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires.",
+        "required": ["method", "minutes"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "Provider method, stored verbatim; only `popup` fires Macro\nnotifications."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes before the event start.",
+            "minimum": 0
+          }
+        }
+      },
+      "EventReminders": {
+        "type": "object",
+        "description": "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely.",
+        "required": ["useDefault"],
+        "properties": {
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReminderOverride"
+            },
+            "description": "Explicit reminders replacing the defaults when `use_default` is off."
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Whether the calendar's default reminders apply."
+          }
+        }
+      },
+      "EventStatus": {
+        "type": "string",
+        "description": "Canonical event status.",
+        "enum": ["confirmed", "tentative", "cancelled"]
+      },
+      "EventTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An event with absolute instants.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end instant."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start instant."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time-zone identifier, when supplied."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An all-day event using RFC 5545's exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive local end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive local start date."
+              }
+            }
+          }
+        ],
+        "description": "The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema."
+      },
+      "EventTransparency": {
+        "type": "string",
+        "description": "Whether an event blocks availability.",
+        "enum": ["opaque", "transparent"]
+      },
+      "EventVisibility": {
+        "type": "string",
+        "description": "Visibility of event details.",
+        "enum": ["default", "public", "private", "confidential"]
       },
       "ExcludeDefaultViewRequest": {
         "type": "object",
@@ -16478,12 +17823,15 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -16522,12 +17870,15 @@
                   "document",
                   "project",
                   "email_thread",
+                  "calendar_event",
                   "team",
                   "call",
                   "foreign_entity",
                   "static_file",
                   "crm_company",
-                  "crm_contact"
+                  "crm_contact",
+                  "reminder",
+                  "skill"
                 ]
               }
             ],
@@ -17854,6 +19205,34 @@
             "description": "The unique GitHub identifier for the comment or review.",
             "minimum": 0
           },
+          "inReplyToId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The id of the comment this one replies to, when it is part of a review\nthread. Only ever present on `review_comment` sources.",
+            "minimum": 0
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The line in the current diff the comment is anchored to. Cleared by\nGitHub when later commits outdate the comment's diff.",
+            "minimum": 0
+          },
+          "originalLine": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The line the comment was originally anchored to, kept even when the\ndiff has since changed.",
+            "minimum": 0
+          },
+          "path": {
+            "type": ["string", "null"],
+            "description": "The repository-relative file path the review comment is anchored to.\nOnly ever present on `review_comment` sources."
+          },
+          "pullRequestReviewId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.",
+            "minimum": 0
+          },
           "source": {
             "type": "string",
             "description": "The GitHub source for the comment, such as `issue_comment` or `review_comment`."
@@ -18350,6 +19729,17 @@
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -18467,7 +19857,7 @@
       },
       "PatchWebhookRequest": {
         "type": "object",
-        "description": "Request to patch a webhook.",
+        "description": "Request to patch a webhook. The webhook's namespace is fixed at creation\ntime and is deliberately not patchable.",
         "properties": {
           "endpoint_url": {
             "type": ["string", "null"],
@@ -19748,6 +21138,182 @@
           }
         }
       },
+      "Reminder": {
+        "type": "object",
+        "description": "A reminder belonging to a user.\n\n`user_id` is deliberately absent: a reminder is only ever read by its owner,\nso the field would be redundant on the wire.",
+        "required": [
+          "id",
+          "description",
+          "schedule",
+          "nextRunAt",
+          "enabled",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Set once the owner marks the reminder as dealt with. Firing does not\nset it — a delivered reminder is waiting on its owner, not finished."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reminder was created."
+          },
+          "description": {
+            "type": "string",
+            "description": "What to remind the user about."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "When false, the dispatcher skips this reminder."
+          },
+          "entityId": {
+            "type": ["string", "null"],
+            "description": "Id of the associated entity, when the reminder is attached to one."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "Type of the associated entity, when the reminder is attached to one."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reminder id."
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The next firing, derived from `schedule` on write."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "When and how often the reminder fires."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reminder was last modified."
+          }
+        }
+      },
+      "ReminderFilters": {
+        "type": "object",
+        "description": "Filters for reminders.",
+        "properties": {
+          "completed": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+          },
+          "fired": {
+            "type": ["boolean", "null"],
+            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
+      "ReminderSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Fires once, at a fixed instant.",
+            "required": ["remindAt", "type"],
+            "properties": {
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant to fire at."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
+            "required": ["cron", "timezone", "type"],
+            "properties": {
+              "cron": {
+                "type": "string",
+                "description": "Cron expression, either the conventional 5-field\n`min hour dom mon dow` or the 6-/7-field\n`sec min hour dom mon dow [year]`. A 5-field expression is stored\nnormalized to 6 fields with a zero seconds field, so `0 9 * * *` and\n`0 0 9 * * *` are the same schedule and both read back as the latter."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The timezone the cron expression is evaluated in."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["recurring"]
+              }
+            }
+          }
+        ],
+        "description": "When a reminder fires."
+      },
+      "RemindersList": {
+        "type": "object",
+        "description": "The caller's reminders, soonest firing first.",
+        "required": ["reminders"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Pass back as `cursor` to fetch the next page. Absent on the last page —\nits absence is the only end-of-list signal, since a page can be short."
+          },
+          "reminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reminder"
+            },
+            "description": "The reminders."
+          }
+        }
+      },
       "RemoveParticipantsRequest": {
         "type": "object",
         "description": "Request to remove participants.",
@@ -20208,6 +21774,11 @@
           "frecency"
         ]
       },
+      "SoupApiSortDirection": {
+        "type": "string",
+        "description": "Sort direction accepted by non-grouped soup API endpoints.",
+        "enum": ["asc", "desc"]
+      },
       "SoupAttachment": {
         "type": "object",
         "description": "An email attachment as displayed in Soup.",
@@ -20248,6 +21819,158 @@
             "type": ["integer", "null"],
             "format": "int64",
             "description": "Attachment size in bytes."
+          }
+        }
+      },
+      "SoupCalendarEventTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Absolute timed event.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "All-day event with an exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive start date."
+              }
+            }
+          }
+        ],
+        "description": "Timed or all-day calendar event span.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores — the generated OpenAPI schema would otherwise\nclaim snake_case fields the wire never carries."
+      },
+      "SoupCalendarEvent_SoupPropertiesField": {
+        "type": "object",
+        "description": "A canonical calendar event entity in Soup.",
+        "required": [
+          "id",
+          "ownerId",
+          "icalUid",
+          "title",
+          "status",
+          "visibility",
+          "transparency",
+          "time",
+          "isReadOnly",
+          "createdAt",
+          "updatedAt",
+          "extra"
+        ],
+        "properties": {
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct conference join URL."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity creation timestamp."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "extra": {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          "icalUid": {
+            "type": "string",
+            "description": "RFC 5545 UID used for source reconciliation."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Entity identifier."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the selected canonical source is read-only."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional location label."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Owning Macro user."
+          },
+          "status": {
+            "type": "string",
+            "description": "Canonical status."
+          },
+          "time": {
+            "$ref": "#/components/schemas/SoupCalendarEventTime",
+            "description": "Canonical master time."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "type": "string",
+            "description": "Availability transparency."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update timestamp."
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Canonical visibility."
           }
         }
       },
@@ -20727,6 +22450,17 @@
                 "enum": ["snippet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A skill document — markdown instructions for AI",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["skill"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -21140,6 +22874,21 @@
           },
           {
             "type": "object",
+            "description": "Calendar event item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCalendarEvent_SoupPropertiesField",
+                "description": "Calendar event item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendarEvent"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "CRM company item.",
             "required": ["data", "tag"],
             "properties": {
@@ -21165,6 +22914,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["foreignEntity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Reminder item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupReminder_SoupPropertiesField",
+                "description": "Reminder item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["reminder"]
               }
             }
           }
@@ -21420,6 +23184,173 @@
           }
         }
       },
+      "SoupReminderReference": {
+        "type": "object",
+        "description": "The entity a reminder is about, resolved server-side.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, and the client's icon path is synchronous, so this is resolved here\nrather than costing a fetch per row.",
+        "required": ["id", "entityType"],
+        "properties": {
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill"
+                ]
+              }
+            ],
+            "description": "The referenced entity's type."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "File type, when the reference is a document — `md`, `pdf`, and so on."
+          },
+          "id": {
+            "type": "string",
+            "description": "The referenced entity's id."
+          },
+          "subType": {
+            "type": ["string", "null"],
+            "description": "Sub type, when the reference is a task or snippet document."
+          }
+        }
+      },
+      "SoupReminderSchedule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Fires once, at a fixed instant.",
+            "required": ["remindAt", "type"],
+            "properties": {
+              "remindAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant to fire at."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Fires repeatedly, on a cron schedule evaluated in `timezone`.",
+            "required": ["cron", "timezone", "type"],
+            "properties": {
+              "cron": {
+                "type": "string",
+                "description": "Cron expression, normalized to the 6-field form."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "The timezone the cron expression is evaluated in."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["recurring"]
+              }
+            }
+          }
+        ],
+        "description": "How often a reminder fires, flattened for the wire.\n\nThe domain's [`ReminderSchedule`] is an internally-tagged enum carrying a\nvalidated cron type; Soup only needs enough to render \"once\" vs \"every\nweekday at 9am\", so the cron is exposed as a plain string."
+      },
+      "SoupReminder_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "description",
+              "schedule",
+              "nextRunAt",
+              "enabled",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "completedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Set once a one-shot reminder has fired."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was created."
+              },
+              "description": {
+                "type": "string",
+                "description": "What to remind the user about. Doubles as the display name."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "When false, the dispatcher skips this reminder."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The reminder id."
+              },
+              "nextRunAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The next firing. This is what Soup sorts reminders on."
+              },
+              "referencedEntity": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupReminderReference",
+                    "description": "The entity this reminder is about, when attached to one, with enough\ndetail for the client to render and open it without a second fetch."
+                  }
+                ]
+              },
+              "schedule": {
+                "$ref": "#/components/schemas/SoupReminderSchedule",
+                "description": "When and how often the reminder fires."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the reminder was last modified."
+              }
+            }
+          }
+        ],
+        "description": "A reminder as displayed in Soup.\n\nReminders are user-owned rather than shared, so unlike most Soup items they\ncarry no access metadata — the repository only ever returns the caller's own."
+      },
       "SoupThreadInfo": {
         "type": "object",
         "description": "Thread metadata and preview replies for soup channel messages.",
@@ -21544,6 +23475,22 @@
           },
           "peer": {
             "type": "string"
+          }
+        }
+      },
+      "SystemSkillSummary": {
+        "type": "object",
+        "description": "A built-in system skill: static, code-defined AI instructions surfaced\nthrough the same tools as user-authored skill documents, but with no\ndocument behind them.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The well-known id the skill is referenced by in mentions and AI tools."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the skill."
           }
         }
       },
@@ -21834,6 +23781,28 @@
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
+      },
+      "UpdateReminderRequest": {
+        "type": "object",
+        "description": "Request body for modifying a reminder. Omitted fields are left unchanged;\nthe entity association is not modifiable.\n\nEvery field is optional but **not** nullable. `Option` here means \"absent\",\nand serde cannot tell an explicit `null` from an omitted key — so a body of\n`{\"enabled\": null}` would deserialize to an empty patch and be rejected as\nhaving no fields to update. `nullable = false` keeps the schema from\nadvertising a value the API has no meaning for; the deserializer still\ntolerates `null` rather than erroring on it.",
+        "properties": {
+          "completed": {
+            "type": "boolean",
+            "description": "Mark the reminder as dealt with, or live again. Distinct from\n`enabled`, which controls whether the dispatcher considers it."
+          },
+          "description": {
+            "type": "string",
+            "description": "Replacement description."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the reminder should fire at all."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ReminderSchedule",
+            "description": "Replacement schedule."
+          }
+        }
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
@@ -22134,6 +24103,7 @@
         "required": [
           "id",
           "workspace_id",
+          "namespace",
           "name",
           "endpoint_url",
           "headers",
@@ -22182,6 +24152,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Caller-chosen namespace, unique among the owning workspace's webhooks.\nSet at creation time only; it cannot be changed afterwards."
           },
           "status": {
             "$ref": "#/components/schemas/WebhookStatus",

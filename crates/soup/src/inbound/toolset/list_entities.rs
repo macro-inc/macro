@@ -1,7 +1,9 @@
 //! ListEntities tool for browsing workspace items.
 
 use crate::domain::{
-    models::{EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupType},
+    models::{
+        EnrichedSoupItem, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+    },
     ports::SoupService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -12,6 +14,7 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
@@ -86,6 +89,8 @@ impl EmailPreset {
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemType {
+    /// Calendar event.
+    CalendarEvent,
     /// Macro document.
     Document,
     /// AI chat conversation.
@@ -108,6 +113,25 @@ pub enum ItemType {
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EntityItem {
+    /// Canonical calendar event item.
+    #[serde(rename_all = "camelCase")]
+    CalendarEvent {
+        /// Calendar event id.
+        id: Uuid,
+        /// Event title.
+        title: String,
+        /// Event status.
+        status: String,
+        /// Optional location.
+        location: Option<String>,
+        /// Optional conference join URL.
+        conference_url: Option<String>,
+        /// Canonical timed or all-day span.
+        time: serde_json::Value,
+        /// Tags on the event visible to the user.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        tags: Vec<AppliedTag>,
+    },
     /// Macro document item.
     #[serde(rename_all = "camelCase")]
     Document {
@@ -118,7 +142,8 @@ pub enum EntityItem {
         /// The document's file type (e.g. md, pdf, docx), when known.
         #[serde(skip_serializing_if = "Option::is_none")]
         file_type: Option<String>,
-        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets,
+        /// "skill" for skills.
         #[serde(skip_serializing_if = "Option::is_none")]
         sub_type: Option<String>,
         /// Tags on the document visible to the user.
@@ -217,12 +242,22 @@ impl EntityItem {
         tag_map: &HashMap<Uuid, AppliedTag>,
     ) -> Self {
         match item {
+            SoupItem::CalendarEvent(event) => EntityItem::CalendarEvent {
+                id: event.id,
+                title: event.title,
+                status: event.status,
+                location: event.location,
+                conference_url: event.conference_url,
+                time: serde_json::to_value(event.time).unwrap_or(serde_json::Value::Null),
+                tags: resolve_applied_tags(&event.extra.properties, tag_map),
+            },
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
                 sub_type: doc.sub_type.as_ref().map(|sub_type| {
                     match sub_type {
                         SoupDocumentSubType::Task { .. } => "task",
                         SoupDocumentSubType::Snippet {} => "snippet",
+                        SoupDocumentSubType::Skill {} => "skill",
                     }
                     .to_string()
                 }),
@@ -264,10 +299,13 @@ impl EntityItem {
                 created_by: record.created_by,
                 tags: resolve_applied_tags(&record.extra.properties, tag_map),
             },
-            // `entity_filter_ast` force-filters CrmCompany out — kept
-            // loud here so a contract break is obvious, not silent.
+            // `entity_filter_ast` force-filters CrmCompany and Reminder out —
+            // kept loud here so a contract break is obvious, not silent.
             SoupItem::CrmCompany(_) => {
                 unreachable!("ListEntities tool does not surface CrmCompany rows")
+            }
+            SoupItem::Reminder(_) => {
+                unreachable!("ListEntities tool does not surface Reminder rows")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -312,11 +350,13 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Chat(chat) => &chat.extra.properties,
             SoupItem::Project(project) => &project.extra.properties,
             SoupItem::EmailThread(thread) => &thread.extra.properties,
+            SoupItem::CalendarEvent(event) => &event.extra.properties,
             SoupItem::CrmCompany(company) => &company.extra.properties,
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
-            | SoupItem::ForeignEntity(_) => return false,
+            | SoupItem::ForeignEntity(_)
+            | SoupItem::Reminder(_) => return false,
         };
         properties
             .iter()
@@ -358,7 +398,7 @@ pub struct ListEntities {
 
     /// Document entity AST filter.
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}; for skills, {\"l\":{\"dst\":\"skill\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]
@@ -496,6 +536,7 @@ impl ListEntities {
         };
 
         let ast = EntityFilterAst {
+            calendar_event_filter: None,
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
             chat_filter: self.chat_filter.clone(),
@@ -515,6 +556,9 @@ impl ListEntities {
             // AI never sees one.
             crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
             foreign_entity_filter: self.foreign_entity_filter.clone(),
+            // Reminders are opt-in in Soup, so leaving this unset is already
+            // what keeps them out of the tool surface — no force-filter needed.
+            reminder_filter: None,
             properties_filter,
         };
 
@@ -534,6 +578,11 @@ impl ListEntities {
         };
 
         EntityFilterAst {
+            calendar_event_filter: if include_types.contains(&ItemType::CalendarEvent) {
+                ast.calendar_event_filter
+            } else {
+                Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil()))))
+            },
             document_filter: if include_types.contains(&ItemType::Document) {
                 ast.document_filter
             } else {
@@ -582,6 +631,8 @@ impl ListEntities {
             } else {
                 Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
+            // Same as CrmCompany — no ItemType::Reminder to toggle against.
+            reminder_filter: ast.reminder_filter,
             properties_filter: ast.properties_filter,
         }
     }
@@ -712,6 +763,8 @@ where
                     soup_type: SoupType::Expanded,
                     limit,
                     cursor: SoupQuery::new_sort_simple(sort_method, filters),
+                    // The tool has no ascending mode; newest first as before.
+                    sort_direction: SoupSortDirection::default(),
                     user: request_context.user_id.clone(),
                     email_preview_view,
                     link_ids,
@@ -801,6 +854,7 @@ pub(super) fn build_summary(
     let mut channels = 0;
     let mut channel_threads = 0;
     let mut call_records = 0;
+    let mut calendar_events = 0;
     let mut foreign_entities = 0;
 
     for item in items {
@@ -812,6 +866,7 @@ pub(super) fn build_summary(
             EntityItem::Channel { .. } => channels += 1,
             EntityItem::ChannelThread { .. } => channel_threads += 1,
             EntityItem::Call { .. } => call_records += 1,
+            EntityItem::CalendarEvent { .. } => calendar_events += 1,
             EntityItem::ForeignEntity { .. } => foreign_entities += 1,
         }
     }
@@ -857,6 +912,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{call_records} call record{}",
             if call_records == 1 { "" } else { "s" }
+        ));
+    }
+    if calendar_events > 0 {
+        parts.push(format!(
+            "{calendar_events} calendar event{}",
+            if calendar_events == 1 { "" } else { "s" }
         ));
     }
     if foreign_entities > 0 {

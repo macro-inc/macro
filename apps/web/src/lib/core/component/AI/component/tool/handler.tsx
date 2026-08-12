@@ -6,6 +6,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
@@ -25,6 +26,7 @@ import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
+import { moveToProjectHandler } from './MoveToProject';
 import {
   listNotificationsHandler,
   markNotificationsDoneHandler,
@@ -44,9 +46,11 @@ import {
 import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
+import { readProjectHandler } from './ReadProject';
 import { readThreadHandler } from './ReadThread';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
+import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
@@ -75,16 +79,19 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
+  ListSkills: listSkillsHandler,
   ListNotifications: listNotificationsHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
+  MoveToProject: moveToProjectHandler,
   BashCodeExecution: bashCodeExecutionHandler,
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  CreateProject: createProjectHandler,
   CreateTag: createTagHandler,
   DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
@@ -99,7 +106,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  ReadProject: readProjectHandler,
   RenameDocument: renameDocumentHandler,
+  SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,

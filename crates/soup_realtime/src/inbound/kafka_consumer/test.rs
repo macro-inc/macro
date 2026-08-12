@@ -10,11 +10,14 @@ use channels::domain::{
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use chrono::Utc;
 use documents::domain::events::{
-    DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentInteractionMetadata,
+    DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
     DocumentUpdatedMetadata, InteractionReason,
 };
 use email::domain::events::{
-    EmailEventOrigin, EmailTopicEvent, ThreadReadMetadata, ThreadTrashedMetadata,
+    EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
+    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadTrashedMetadata, ThreadsReindexReason,
+    ThreadsReindexRequestedMetadata,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -79,7 +82,7 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
         self.patches.lock().expect("patches lock").push(patch);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if attempt <= self.failures {
@@ -176,6 +179,30 @@ fn document_edit_interactions_map_to_updated_patches() {
         Patch::Updated(_)
     ));
     assert!(patches_from_document_event(&first_join).is_empty());
+}
+
+#[test]
+fn search_only_document_events_do_not_emit_patches() {
+    let events = [
+        DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            owner: user(),
+            file_type: "pdf".parse().expect("valid file type"),
+            document_version_id: Some("convert".to_string()),
+        }),
+        DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+            file_type: "md".parse().expect("valid file type"),
+            document_version_id: None,
+        }),
+        DocumentTopicEvent::Purged(DocumentPurgedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        }),
+    ];
+
+    for event in events {
+        assert!(patches_from_document_event(&event).is_empty());
+    }
 }
 
 #[test]
@@ -354,6 +381,89 @@ fn email_state_events_map_to_updated_or_deleted_patches() {
 }
 
 #[test]
+fn new_email_events_map_to_realtime_thread_patches() {
+    let link_id = Uuid::now_v7();
+    let thread_id = Uuid::now_v7();
+    let second_thread_id = Uuid::now_v7();
+
+    let visible_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: false,
+    });
+    let hidden_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "hidden-message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: true,
+    });
+    let marked_spam = EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
+        link_id,
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        spam: true,
+        origin: EmailEventOrigin::UserAction,
+    });
+    let restored_from_spam = EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
+        link_id,
+        owner: user(),
+        actor: Some(user()),
+        thread_id,
+        spam: false,
+        origin: EmailEventOrigin::UserAction,
+    });
+    let backfilled = EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
+        link_id,
+        owner: user(),
+        thread_id,
+    });
+    let reindex_requested =
+        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+            link_id,
+            owner: user(),
+            thread_ids: vec![thread_id, second_thread_id],
+            reason: ThreadsReindexReason::ContactsChanged,
+        });
+
+    assert!(matches!(
+        patches_from_email_event(&visible_draft)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(patches_from_email_event(&hidden_draft).is_empty());
+    assert!(matches!(
+        patches_from_email_event(&marked_spam)[0].patch,
+        Patch::Deleted(_)
+    ));
+    assert!(matches!(
+        patches_from_email_event(&restored_from_spam)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(matches!(
+        patches_from_email_event(&backfilled)[0].patch,
+        Patch::Updated(_)
+    ));
+
+    let reindex_patches = patches_from_email_event(&reindex_requested);
+    assert_eq!(reindex_patches.len(), 2);
+    assert_eq!(
+        patch_entity(&reindex_patches[0]).entity_id,
+        thread_id.to_string()
+    );
+    assert_eq!(
+        patch_entity(&reindex_patches[1]).entity_id,
+        second_thread_id.to_string()
+    );
+}
+
+#[test]
 fn attachment_events_use_only_metadata_available_on_the_existing_event() {
     let channel_id = Uuid::now_v7();
     let event =
@@ -390,8 +500,8 @@ fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
 }
 
-#[tokio::test]
-async fn updated_payload_maps_to_document_patch() {
+#[test]
+fn updated_payload_maps_to_document_patch() {
     let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
         DOCUMENT_ID,
         updated_event(),
@@ -399,9 +509,7 @@ async fn updated_payload_maps_to_document_patch() {
     let service = flaky_service(0);
 
     assert!(matches!(
-        process_event(&service, &event, 0, 0)
-            .await
-            .expect("processing succeeds"),
+        process_event(&service, &event).expect("processing succeeds"),
         EventOutcome::Notified
     ));
 
@@ -425,34 +533,16 @@ fn malformed_and_unknown_events_are_rejected_by_the_declared_collection() {
     assert!(decode_payload(payload).is_err());
 }
 
-#[tokio::test(start_paused = true)]
-async fn transient_service_failures_retry_then_succeed() {
-    let service = flaky_service(2);
-    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
-        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
+#[test]
+fn service_failure_is_returned_without_retry() {
+    let event = DeclaredMacroEvent::DocumentMacroEvent(DocumentMacroEvent::with_event(
+        DOCUMENT_ID,
+        updated_event(),
     ));
+    let service = flaky_service(1);
 
-    notify_with_retry(&service, patch, 2, 17)
-        .await
-        .expect("eventual success");
+    assert!(process_event(&service, &event).is_err());
 
-    assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
-    assert_eq!(service.patches.lock().expect("patches lock").len(), 3);
-}
-
-#[tokio::test(start_paused = true)]
-async fn exhausted_retries_return_for_redelivery() {
-    let service = flaky_service(u32::MAX);
-    let patch = SoupRealtimePatch::for_entity(Patch::Updated(
-        EntityType::Document.with_entity_string(DOCUMENT_ID.to_string()),
-    ));
-
-    notify_with_retry(&service, patch, 2, 17)
-        .await
-        .expect_err("persistent failure returns without a commit");
-
-    assert_eq!(
-        service.attempts.load(Ordering::SeqCst),
-        MAX_SERVICE_ATTEMPTS
-    );
+    assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(service.patches.lock().expect("patches lock").len(), 1);
 }

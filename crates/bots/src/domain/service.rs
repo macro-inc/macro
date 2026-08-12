@@ -3,9 +3,9 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        CreateChannelScopedBotResponse, PatchBotRequest,
+        AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner,
+        BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -238,6 +238,15 @@ where
         self.ensure_manageable(caller, bot_id).await
     }
 
+    async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
+        // A bot may always read itself; no manageability check.
+        self.repo
+            .get_bot(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("bot not found".to_string()))
+    }
+
     async fn patch_bot(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -331,10 +340,19 @@ where
 
     async fn list_bot_channels(
         &self,
-        caller: MacroUserIdStr<'static>,
+        caller: BotChannelListCaller,
         bot_id: BotId,
     ) -> Result<Vec<BotChannel>, BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
+        match caller {
+            BotChannelListCaller::User(user_id) => {
+                self.ensure_manageable(user_id, bot_id).await?;
+            }
+            BotChannelListCaller::Bot(caller_id) if caller_id == bot_id => {}
+            BotChannelListCaller::Internal => {}
+            BotChannelListCaller::Bot(_) => {
+                return Err(BotError::Unauthorized);
+            }
+        }
         self.repo
             .list_bot_channels(bot_id)
             .await

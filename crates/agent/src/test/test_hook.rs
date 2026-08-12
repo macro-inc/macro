@@ -1,6 +1,9 @@
 use crate::hook::*;
+use crate::stream::StreamPart;
 use ai_toolset::SearchableTool;
-use rig_core::agent::{HookAction, InvalidToolCallContext, InvalidToolCallHookAction, PromptHook};
+use rig_core::agent::{
+    HookAction, InvalidToolCallContext, InvalidToolCallHookAction, PromptHook, ToolCallHookAction,
+};
 use rig_core::providers::anthropic::completion::CompletionModel as AnthropicModel;
 use schemars::Schema;
 use std::pin::Pin;
@@ -86,6 +89,74 @@ async fn on_tool_result_registers_nothing_when_buffer_empty() {
     .await;
 
     assert!(registered.lock().unwrap().is_empty());
+}
+
+/// A bare bridge with no routing, no loaded-tool buffer, and an empty
+/// searchable catalog, for exercising [`StreamBridge::on_tool_call`] in
+/// isolation.
+fn bare_bridge() -> (
+    StreamBridge,
+    tokio::sync::mpsc::UnboundedReceiver<Result<StreamPart, crate::AgentError>>,
+) {
+    let (register, _registered) = recording_register();
+    StreamBridge::channel(
+        Arc::new(|_| None),
+        Arc::new(Mutex::new(Vec::new())),
+        register,
+        Arc::new(vec![]),
+        CancellationToken::new(),
+    )
+}
+
+#[tokio::test]
+async fn on_tool_call_parses_object_args() {
+    let (bridge, mut rx) = bare_bridge();
+
+    let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_call(
+        &bridge,
+        "Search",
+        None,
+        "call-1",
+        "{\"query\":\"cats\"}",
+    )
+    .await;
+
+    assert!(matches!(action, ToolCallHookAction::Continue));
+    let Ok(StreamPart::ToolCall(tool_call)) = rx.try_recv().unwrap() else {
+        panic!("expected a tool call");
+    };
+    assert_eq!(tool_call.json, serde_json::json!({"query": "cats"}));
+}
+
+/// Anthropic's Messages API rejects a `tool_use.input` that is not a JSON
+/// object. A zero-argument tool call can arrive with an empty or otherwise
+/// non-object `args` string; the hook must always hand back an object so a
+/// bad value never gets persisted into chat history and replayed later.
+#[tokio::test]
+async fn on_tool_call_coerces_non_object_args_to_empty_object() {
+    for args in ["", "null", "\"oops\"", "[1,2,3]", "not json at all"] {
+        let (bridge, mut rx) = bare_bridge();
+
+        let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_call(
+            &bridge,
+            "ListSkills",
+            None,
+            "call-1",
+            args,
+        )
+        .await;
+
+        assert!(matches!(action, ToolCallHookAction::Continue));
+        let Ok(StreamPart::ToolCall(tool_call)) = rx.try_recv().unwrap() else {
+            panic!("expected a tool call for args {args:?}");
+        };
+        assert_eq!(
+            tool_call.json,
+            serde_json::json!({}),
+            "args {args:?} must coerce to an empty object, not {:?}",
+            tool_call.json
+        );
+    }
 }
 
 /// An [`InvalidToolCallContext`] for a model-emitted call to `tool_name`.

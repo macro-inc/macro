@@ -369,6 +369,11 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
             continue;
           }
 
+          if (node.getIsDraft()) {
+            $unwrapMarkNode(node);
+            continue;
+          }
+
           if (node.getIDs().length > 1) {
             node.deleteID(markId);
             continue;

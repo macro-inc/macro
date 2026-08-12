@@ -48,14 +48,6 @@ inputs:
     description: 'Optional service key from .github/services-config.json; used to build Lambda artifacts before preview'
     required: false
     default: ''
-  cachix-auth-token:
-    description: 'Cachix auth token used when building Lambda artifacts'
-    required: false
-    default: ''
-  sccache-bucket:
-    description: 'Optional S3 bucket for shared sccache storage during Lambda artifact builds'
-    required: false
-    default: ''
 
 runs:
   using: composite
@@ -64,13 +56,6 @@ runs:
     - uses: actions/checkout@v6
       with:
         lfs: ${{ inputs.use-lfs }}
-
-    - name: Configure Cachix
-      if: ${{ inputs.cloud-storage-service-name != '' }}
-      uses: ./.github/actions/setup-cachix
-      with:
-        cachix-auth-token: ${{ inputs.cachix-auth-token }}
-        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Check Lambda config
       if: ${{ inputs.cloud-storage-service-name != '' }}

@@ -37,6 +37,7 @@ import {
   BLUR_COMMAND,
   COMMAND_PRIORITY_LOW,
   FOCUS_COMMAND,
+  mergeRegister,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import {
@@ -45,10 +46,10 @@ import {
   createMemo,
   createSignal,
   For,
-  onCleanup,
   Show,
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { lazyRegister } from '../../plugins';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
 import { createLayoutTick } from './createLayoutTick';
 
@@ -144,85 +145,71 @@ export function TableMoveHandle() {
   const trackSelection = createCallback(() => {
     // Keep the handle (and the selection it represents) frozen mid-drag.
     if (dragging()) return;
-    const currentEditor = editor();
-    if (!currentEditor) return;
-    currentEditor.read(() => {
-      const selection = $getSelection();
-      if ($isTableSelection(selection)) {
-        const anchorNode = $getNodeByKey(selection.anchor.key);
-        const focusNode = $getNodeByKey(selection.focus.key);
-        if (!anchorNode || !focusNode) {
-          setAnchorCellKey(undefined);
-          setFocusCellKey(undefined);
-          setAnchorCellMerged(false);
-          return;
-        }
-        const anchorCell = $getTableCellNodeFromLexicalNode(anchorNode);
-        const focusCell = $getTableCellNodeFromLexicalNode(focusNode);
-        setAnchorCellKey(anchorCell?.getKey());
-        setFocusCellKey(focusCell?.getKey());
-        setAnchorCellMerged(
-          !!anchorCell &&
-            (anchorCell.getColSpan() > 1 || anchorCell.getRowSpan() > 1)
-        );
+    const selection = $getSelection();
+    if ($isTableSelection(selection)) {
+      const anchorNode = $getNodeByKey(selection.anchor.key);
+      const focusNode = $getNodeByKey(selection.focus.key);
+      if (!anchorNode || !focusNode) {
+        setAnchorCellKey(undefined);
+        setFocusCellKey(undefined);
+        setAnchorCellMerged(false);
         return;
       }
-      if ($isRangeSelection(selection)) {
-        const anchorNode = $getNodeByKey(selection.anchor.key);
-        const cell = anchorNode
-          ? $getTableCellNodeFromLexicalNode(anchorNode)
-          : null;
-        setAnchorCellKey(cell?.getKey());
-        setFocusCellKey(cell?.getKey());
-        setAnchorCellMerged(
-          !!cell && (cell.getColSpan() > 1 || cell.getRowSpan() > 1)
-        );
-        return;
-      }
-      setAnchorCellKey(undefined);
-      setFocusCellKey(undefined);
-      setAnchorCellMerged(false);
-    });
+      const anchorCell = $getTableCellNodeFromLexicalNode(anchorNode);
+      const focusCell = $getTableCellNodeFromLexicalNode(focusNode);
+      setAnchorCellKey(anchorCell?.getKey());
+      setFocusCellKey(focusCell?.getKey());
+      setAnchorCellMerged(
+        !!anchorCell &&
+          (anchorCell.getColSpan() > 1 || anchorCell.getRowSpan() > 1)
+      );
+      return;
+    }
+    if ($isRangeSelection(selection)) {
+      const anchorNode = $getNodeByKey(selection.anchor.key);
+      const cell = anchorNode
+        ? $getTableCellNodeFromLexicalNode(anchorNode)
+        : null;
+      setAnchorCellKey(cell?.getKey());
+      setFocusCellKey(cell?.getKey());
+      setAnchorCellMerged(
+        !!cell && (cell.getColSpan() > 1 || cell.getRowSpan() > 1)
+      );
+      return;
+    }
+    setAnchorCellKey(undefined);
+    setFocusCellKey(undefined);
+    setAnchorCellMerged(false);
   });
 
-  const removeSelectionListener = editor()?.registerCommand(
-    SELECTION_CHANGE_COMMAND,
-    () => {
-      trackSelection();
-      return false;
-    },
-    COMMAND_PRIORITY_LOW
-  );
-  const removeUpdateListener = editor()?.registerUpdateListener(() => {
-    trackSelection();
-    bumpLayout();
-  });
-
-  // Escape (via @lexical/rich-text) and clicking elsewhere blur the editor
-  // without clearing its selection, which would otherwise leave the handle
-  // floating over a selection that is no longer visible.
-  const removeFocusListener = editor()?.registerCommand(
-    FOCUS_COMMAND,
-    () => {
-      setEditorFocused(true);
-      return false;
-    },
-    COMMAND_PRIORITY_LOW
-  );
-  const removeBlurListener = editor()?.registerCommand(
-    BLUR_COMMAND,
-    () => {
-      setEditorFocused(false);
-      return false;
-    },
-    COMMAND_PRIORITY_LOW
-  );
-
-  onCleanup(() => {
-    removeSelectionListener?.();
-    removeUpdateListener?.();
-    removeFocusListener?.();
-    removeBlurListener?.();
+  lazyRegister(editor, (e) => {
+    return mergeRegister(
+      e.registerCommand(
+        SELECTION_CHANGE_COMMAND,
+        () => {
+          trackSelection();
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
+      ),
+      e.registerUpdateListener(bumpLayout),
+      e.registerCommand(
+        FOCUS_COMMAND,
+        () => {
+          setEditorFocused(true);
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
+      ),
+      e.registerCommand(
+        BLUR_COMMAND,
+        () => {
+          setEditorFocused(false);
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
+      )
+    );
   });
 
   // Top-right corner of the union of the anchor and focus cells (opposite

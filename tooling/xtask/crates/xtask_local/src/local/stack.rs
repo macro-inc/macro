@@ -24,7 +24,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{Mode, arch, env_layer, frontend, mailpit, proxy, snapshot, summary};
+use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapshot, summary};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -197,13 +197,18 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     // joined just before `bring_up_app` creates that container. (Dry run:
     // synchronously, so the command preview prints in order.)
     if static_frontend && stage.is_dry_run() {
-        frontend::build_static(&stage, &instance, args.frontend_dist.as_deref())?;
+        frontend::build_static(&stage, &instance, mode, args.frontend_dist.as_deref())?;
     }
     let fe_build = (static_frontend && !stage.is_dry_run()).then(|| {
         let instance = instance.clone();
         let prebuilt = args.frontend_dist.clone();
         std::thread::spawn(move || {
-            frontend::build_static(&Stage::from_env().quiet(), &instance, prebuilt.as_deref())
+            frontend::build_static(
+                &Stage::from_env().quiet(),
+                &instance,
+                mode,
+                prebuilt.as_deref(),
+            )
         })
     });
 
@@ -262,6 +267,9 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         return Ok(instance);
     }
     super::bring_up_app(&stage, mode, &instance, &env)?;
+    let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| sdk_webhook::start(&instance))
+        .transpose()?;
 
     // Headless "ready" means the backend answers through the proxy — the caller
     // (a CI step, an agent) acts on the URL the moment we return.
@@ -356,6 +364,7 @@ pub fn update(args: &UpdateArgs) -> Result<()> {
         reload_static_frontend(
             &stage,
             &instance,
+            mode,
             &env,
             &state,
             args.frontend_dist.as_deref(),
@@ -402,6 +411,7 @@ fn apply_prebuilt_binaries(
 fn reload_static_frontend(
     stage: &Stage,
     instance: &Instance,
+    mode: Mode,
     env: &env_layer::ResolvedEnv,
     state: &StackState,
     frontend_dist: Option<&Path>,
@@ -412,7 +422,7 @@ fn reload_static_frontend(
              re-run `just stack up` to serve one"
         );
     }
-    frontend::build_static(stage, instance, frontend_dist)?;
+    frontend::build_static(stage, instance, mode, frontend_dist)?;
     // build_static replaces the staged directory, so the container must be
     // recreated to establish a bind mount to the new inode.
     let mut up = super::compose_cmd(instance, env);

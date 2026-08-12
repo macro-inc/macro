@@ -1,5 +1,5 @@
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import { isDocumentEntity } from '@entity';
+import { isDocumentEntity, isSkillEntity } from '@entity';
 import {
   config,
   IMAGE_EXTENSIONS,
@@ -17,6 +17,14 @@ const docSnippetFilter = config({
   id: 'doc-snippet',
   predicate: (e) => isDocumentEntity(e) && e.subType?.type === 'snippet',
   // Snippets are markdown documents in storage; subtype is enforced client-side
+  // so this composes with other file-type OR filters.
+  query: { include: { fileAssoc: ['assoc:md'] } },
+});
+
+const docSkillFilter = config({
+  id: 'doc-skill',
+  predicate: isSkillEntity,
+  // Skills are markdown documents in storage; subtype is enforced client-side
   // so this composes with other file-type OR filters.
   query: { include: { fileAssoc: ['assoc:md'] } },
 });
@@ -40,6 +48,7 @@ export const emailAttachmentsFilter = config({
 export const DOCUMENT_CONTEXTUAL_FILTERS = [
   docMarkdownFilter,
   docSnippetFilter,
+  docSkillFilter,
   docCanvasFilter,
   emailAttachmentsFilter,
 ] as const;

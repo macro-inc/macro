@@ -2,6 +2,13 @@ use models_opensearch::SearchIndex;
 
 use crate::{Result, error::OpensearchClientError};
 
+#[cfg(test)]
+mod test;
+
+fn resolve_destination(index_override: Option<&str>) -> &str {
+    index_override.unwrap_or(SearchIndex::Emails.as_ref())
+}
+
 /// Deletes all email messages with the specified link_id
 #[tracing::instrument(skip(client))]
 pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &str) -> Result<()> {
@@ -58,6 +65,7 @@ pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &
 pub async fn delete_email_message_by_id(
     client: &opensearch::OpenSearch,
     message_id: &str,
+    index_override: Option<&str>,
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
@@ -67,10 +75,9 @@ pub async fn delete_email_message_by_id(
         },
     });
 
+    let index = resolve_destination(index_override);
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Emails.as_ref(),
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

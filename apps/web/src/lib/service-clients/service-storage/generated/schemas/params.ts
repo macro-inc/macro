@@ -6,6 +6,7 @@
  */
 import type { ParamsExpand } from './paramsExpand';
 import type { ParamsLimit } from './paramsLimit';
+import type { ParamsSortDirection } from './paramsSortDirection';
 import type { ParamsSortMethod } from './paramsSortMethod';
 
 /**
@@ -19,5 +20,6 @@ export interface Params {
    * @minimum 0
    */
   limit?: ParamsLimit;
+  sort_direction?: ParamsSortDirection;
   sort_method?: ParamsSortMethod;
 }

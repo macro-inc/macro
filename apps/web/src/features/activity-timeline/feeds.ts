@@ -35,10 +35,10 @@ const EXCLUDED_NOTIFICATION_TAGS: ReadonlySet<string> = new Set([
 export function createNotificationTimelineFeed(args: {
   done?: boolean;
 }): TimelineFeed {
-  const query = useUserNotificationsQuery({
+  const query = useUserNotificationsQuery(() => ({
     limit: PAGE_SIZE,
     done: args.done,
-  });
+  }));
 
   const rows = createMemo((): UnifiedNotification[] => query.data ?? []);
 

@@ -108,6 +108,30 @@ pub struct ChannelMessagePostedMetadata {
     pub created_at: DateTime<Utc>,
 }
 
+/// Metadata for [`ChannelTopicEvent::Mentioned`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelMentionedMetadata {
+    /// Channel containing the message.
+    pub channel_id: Uuid,
+    /// The id of the message carrying the mention.
+    pub message_id: Uuid,
+    /// Thread parent id when the message is a thread reply.
+    pub thread_id: Option<Uuid>,
+    /// Message author; may be a bot.
+    pub sender: ChannelSender<'static>,
+    /// Type of channel containing the message.
+    pub channel_type: ChannelType,
+    /// Message body.
+    pub content: String,
+    /// The mentioned entity this event is about (`user`, `bot`, `document`, …).
+    ///
+    /// The message's full mention list travels on `channel.message_posted`.
+    pub mentioned: SimpleMention,
+    /// Creation timestamp reported by the repository.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Metadata for [`ChannelTopicEvent::MessagePatched`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -219,6 +243,9 @@ pub enum ChannelTopicEvent {
     /// A message was posted.
     #[serde(rename = "channel.message_posted")]
     MessagePosted(ChannelMessagePostedMetadata),
+    /// An entity (user, bot, document, …) was mentioned in a message.
+    #[serde(rename = "channel.mentioned")]
+    Mentioned(ChannelMentionedMetadata),
     /// A message's content was patched.
     #[serde(rename = "channel.message_patched")]
     MessagePatched(ChannelMessagePatchedMetadata),
@@ -273,6 +300,11 @@ impl ChannelMacroEvent {
             metadata.channel_id,
             ChannelTopicEvent::MessagePosted(metadata),
         )
+    }
+
+    /// Build a mentioned event keyed by the containing channel id.
+    pub fn mentioned(metadata: ChannelMentionedMetadata) -> Self {
+        Self::new(metadata.channel_id, ChannelTopicEvent::Mentioned(metadata))
     }
 
     /// Build a message patched event keyed by the containing channel id.

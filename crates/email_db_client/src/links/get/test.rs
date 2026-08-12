@@ -341,6 +341,51 @@ async fn fetch_inbox_details_joins_settings_backfill_and_photo(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_inbox_details_reads_google_scopes_from_side_table(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    let granted_scopes = vec![
+        "https://www.googleapis.com/auth/calendar.readonly".to_owned(),
+        "https://www.googleapis.com/auth/calendar.events".to_owned(),
+    ];
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_link_google_scopes (link_id, granted_scopes, grant_version)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (link_id) DO UPDATE
+        SET granted_scopes = EXCLUDED.granted_scopes,
+            grant_version = EXCLUDED.grant_version,
+            updated_at = now()
+        "#,
+        link_id,
+        &granted_scopes,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert_eq!(details.len(), 1);
+    assert_eq!(details[0].google_granted_scopes, granted_scopes);
+
+    sqlx::query!(
+        "DELETE FROM email_link_google_scopes WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert_eq!(details.len(), 1);
+    assert!(details[0].google_granted_scopes.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn fetch_inbox_details_includes_delegated_inbox_with_optional_fields_absent(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

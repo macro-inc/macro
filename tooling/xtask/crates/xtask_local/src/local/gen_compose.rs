@@ -29,6 +29,7 @@ use super::{Mode, repo_root};
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
+pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
@@ -96,6 +97,7 @@ pub fn generate(
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
         add_local_infra(&mut services, instance, static_frontend);
+        add_sdk_webhook_relay(&mut services, instance)?;
     }
     // Live Gmail sync: forward watch notifications from the instance's own
     // Pub/Sub subscription to the email service's webhook. Per-instance
@@ -159,6 +161,41 @@ pub fn generate(
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
+}
+
+fn add_sdk_webhook_relay(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+) -> Result<()> {
+    super::sdk_webhook::ensure_keys(instance)?;
+    let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
+        context: repo_root()
+            .join("infra/local/sdk-webhook-relay")
+            .display()
+            .to_string(),
+        ..Default::default()
+    });
+    services.insert(
+        "sdk-webhook-relay".to_string(),
+        Some(dct::Service {
+            image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
+            build_: Some(build),
+            ports: dct::Ports::Short(vec![format!(
+                "127.0.0.1:{}:22",
+                super::sdk_webhook::ssh_port(instance)
+            )]),
+            volumes: vec![dct::Volumes::Simple(format!(
+                "{}:/etc/ssh/authorized_keys/{}:ro",
+                super::sdk_webhook::key_dir(instance)
+                    .join("id_ed25519.pub")
+                    .display(),
+                "sdk-webhook"
+            ))],
+            networks: net_aliases(&[("services", &["sdk-webhook-relay"])]),
+            ..Default::default()
+        }),
+    );
+    Ok(())
 }
 
 /// LocalStack (S3/SQS/DynamoDB), reachable as `localstack` on both networks.

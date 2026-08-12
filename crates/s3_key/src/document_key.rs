@@ -22,6 +22,7 @@ pub const DOCX_EXTENSION: &str = "docx";
 /// - `Versioned`: `{user_id}/{document_id}/{version_id}` — a specific document version
 /// - `ConvertedPdf`: `{user_id}/{document_id}/converted.pdf` — a DOCX converted to PDF
 /// - `TempDocx`: `temp_files/{document_id}.docx` — a temporary DOCX export
+/// - `SyncServiceSnapshot`: `sync_service_snapshot/{document_id}` — a cached CRDT snapshot
 /// - `BomPart`: `{sha}` — a content-addressable BOM part from DOCX uploads
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum DocumentKey {
@@ -43,6 +44,11 @@ pub enum DocumentKey {
     },
     /// A temporary DOCX export: `temp_files/{document_id}.docx`
     TempDocx {
+        /// The document ID.
+        document_id: String,
+    },
+    /// A sync-service CRDT snapshot cache object: `sync_service_snapshot/{document_id}`.
+    SyncServiceSnapshot {
         /// The document ID.
         document_id: String,
     },
@@ -75,6 +81,9 @@ impl DocumentKey {
                     document_id: document_id.to_string(),
                 })
             }
+            2 if split[0] == SYNC_SERVICE_SNAPSHOT_PREFIX => Ok(Self::SyncServiceSnapshot {
+                document_id: split[1].to_string(),
+            }),
             3 => {
                 let user_id = urlencoding::decode(split[0]).context("UTF-8")?.into_owned();
                 let document_id = split[1].to_string();
@@ -112,7 +121,8 @@ impl DocumentKey {
         match self {
             Self::Versioned { document_id, .. }
             | Self::ConvertedPdf { document_id, .. }
-            | Self::TempDocx { document_id } => Some(document_id),
+            | Self::TempDocx { document_id }
+            | Self::SyncServiceSnapshot { document_id } => Some(document_id),
             Self::BomPart { .. } => None,
         }
     }
@@ -125,6 +135,11 @@ impl DocumentKey {
     /// Returns `true` if this is a temporary DOCX export key.
     pub fn is_temp(&self) -> bool {
         matches!(self, Self::TempDocx { .. })
+    }
+
+    /// Returns `true` if this is a sync-service snapshot cache key.
+    pub fn is_sync_service_snapshot(&self) -> bool {
+        matches!(self, Self::SyncServiceSnapshot { .. })
     }
 
     /// Returns `true` if this is a BOM part key.
@@ -146,7 +161,7 @@ impl DocumentKey {
         match self {
             Self::Versioned { version_id, .. } => Some(version_id.to_string()),
             Self::ConvertedPdf { .. } => Some(CONVERTED_DOCUMENT_FILE_NAME.to_string()),
-            Self::TempDocx { .. } | Self::BomPart { .. } => None,
+            Self::TempDocx { .. } | Self::SyncServiceSnapshot { .. } | Self::BomPart { .. } => None,
         }
     }
 
@@ -163,6 +178,9 @@ impl DocumentKey {
                 document_id,
             } => build_docx_to_pdf_converted_document_key(user_id, document_id),
             Self::TempDocx { document_id } => build_temp_docx_key(document_id),
+            Self::SyncServiceSnapshot { document_id } => {
+                format!("{SYNC_SERVICE_SNAPSHOT_PREFIX}/{document_id}")
+            }
             Self::BomPart { sha } => sha.clone(),
         }
     }

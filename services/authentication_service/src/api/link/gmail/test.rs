@@ -78,3 +78,41 @@ async fn professional_features_skip_existing_inbox_check() {
     );
     assert!(result.is_ok());
 }
+
+#[test]
+fn authorization_url_requests_incremental_calendar_access() {
+    let scopes = format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter());
+    let url = google_authorization_url(
+        "client-id",
+        "https://auth.example.com/oauth2/callback",
+        &scopes,
+        "state",
+    )
+    .unwrap();
+    let params = url
+        .query_pairs()
+        .collect::<std::collections::HashMap<_, _>>();
+
+    assert_eq!(
+        params
+            .get("include_granted_scopes")
+            .map(|value| value.as_ref()),
+        Some("true")
+    );
+    assert_eq!(
+        params.get("access_type").map(|value| value.as_ref()),
+        Some("offline")
+    );
+    assert_eq!(
+        params.get("prompt").map(|value| value.as_ref()),
+        Some("consent")
+    );
+    let granted = params.get("scope").unwrap();
+    for calendar_scope in calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES {
+        assert!(
+            granted
+                .split_ascii_whitespace()
+                .any(|scope| scope == calendar_scope)
+        );
+    }
+}

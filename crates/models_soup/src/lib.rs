@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+/// Calendar event models for Soup responses.
+pub mod calendar_event;
 /// Call record models for Soup responses.
 pub mod call_record;
 /// Chat models for Soup responses.
@@ -22,5 +24,7 @@ pub mod item;
 pub mod project;
 /// Property models attached to Soup items.
 pub mod properties;
+/// Reminder models for Soup responses.
+pub mod reminder;
 
 pub use properties::SoupProperty;

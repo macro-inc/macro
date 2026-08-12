@@ -40,6 +40,7 @@ fn created_event_has_exact_sanitized_wire_shape() {
         WebhookTopicEvent::Created(WebhookCreatedMetadata {
             webhook_id: WEBHOOK_ID.to_string(),
             workspace_id: WORKSPACE_ID.to_string(),
+            namespace: "document-updates".to_string(),
             created_by_user_id: user_id("macro|creator@example.com"),
             name: "Document updates".to_string(),
             endpoint_url: "https://example.com/hooks/macro".to_string(),
@@ -60,6 +61,7 @@ fn created_event_has_exact_sanitized_wire_shape() {
             "metadata": {
                 "webhook_id": WEBHOOK_ID,
                 "workspace_id": WORKSPACE_ID,
+                "namespace": "document-updates",
                 "created_by_user_id": "macro|creator@example.com",
                 "name": "Document updates",
                 "endpoint_url": "https://example.com/hooks/macro",
@@ -190,6 +192,35 @@ fn validated_event_has_exact_sanitized_wire_shape() {
 }
 
 #[test]
+fn decodes_v1_created_payload_persisted_before_namespaces_existed() {
+    let payload = serde_json::to_vec(&json!({
+        "event_id": "01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f",
+        "schema_version": 1,
+        "event_type": "webhook.created",
+        "metadata": {
+            "webhook_id": WEBHOOK_ID,
+            "workspace_id": WORKSPACE_ID,
+            "created_by_user_id": "macro|creator@example.com",
+            "name": "Document updates",
+            "endpoint_url": "https://example.com/hooks/macro",
+            "status": "active",
+            "is_valid": false,
+            "filters": [],
+            "header_names": [],
+            "created_at": "2026-07-20T17:01:02Z",
+        },
+    }))
+    .expect("serializable payload");
+
+    let decoded = WebhookMacroEvent::decode(WEBHOOK_ID, &payload).expect("decodable v1 event");
+    let WebhookTopicEvent::Created(metadata) = &decoded.event().event else {
+        panic!("expected a created event");
+    };
+    assert_eq!(metadata.namespace, "");
+    assert_eq!(metadata.webhook_id, WEBHOOK_ID);
+}
+
+#[test]
 fn constructors_key_events_by_subject_webhook_id() {
     let cases = [
         WebhookMacroEvent::created(
@@ -197,6 +228,7 @@ fn constructors_key_events_by_subject_webhook_id() {
             WebhookCreatedMetadata {
                 webhook_id: WEBHOOK_ID.to_string(),
                 workspace_id: WORKSPACE_ID.to_string(),
+                namespace: "lifecycle-events".to_string(),
                 created_by_user_id: user_id("macro|creator@example.com"),
                 name: "Lifecycle events".to_string(),
                 endpoint_url: "https://example.com/hooks/macro".to_string(),
@@ -269,6 +301,7 @@ fn macro_event_round_trips_without_exposing_secrets_or_header_values() {
         WebhookCreatedMetadata {
             webhook_id: WEBHOOK_ID.to_string(),
             workspace_id: WORKSPACE_ID.to_string(),
+            namespace: "lifecycle-events".to_string(),
             created_by_user_id: user_id("macro|creator@example.com"),
             name: "Lifecycle events".to_string(),
             endpoint_url: "https://example.com/hooks/macro".to_string(),

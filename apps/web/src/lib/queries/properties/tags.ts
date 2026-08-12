@@ -2,7 +2,10 @@ import { useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import { propertiesServiceClient } from '../../service-clients/service-properties/client';
+import {
+  parseTagNameConflict,
+  propertiesServiceClient,
+} from '../../service-clients/service-properties/client';
 import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
 import type { EnsureTagSetRequest } from '../../service-clients/service-properties/generated/schemas/ensureTagSetRequest';
 import type { PropertyOption } from '../../service-clients/service-properties/generated/schemas/propertyOption';
@@ -428,4 +431,97 @@ export function useDeletePropertyOptionMutation(
       callbacks
     ),
   }));
+}
+
+type PromoteTagParams = {
+  /** The personal label being shared with the team. */
+  optionId: string;
+};
+
+/**
+ * Share a personal label with the caller's team.
+ *
+ * The option id survives the move, so entities already carrying the label keep
+ * it — only its owning definition changes. Rejects with a
+ * `TAG_NAME_CONFLICT` error carrying the colliding team label when the team
+ * already has one by that name; read it with `parseTagNameConflict` and offer
+ * {@link useMergeTagMutation} instead.
+ */
+export function usePromoteTagMutation(
+  callbacks?: MutationCallbacks<PropertyOptionResponse, Error, PromoteTagParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: PromoteTagParams) =>
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.promoteTag({
+            body: { option_id: vars.optionId },
+          })
+      ),
+    ...withCallbacks<PropertyOptionResponse, Error, PromoteTagParams>(
+      {
+        onError(error) {
+          // A name collision is a prompt, not a failure — the caller turns it
+          // into the "replace with the team label?" confirmation.
+          if (parseTagNameConflict(error)) return;
+          console.error('Failed to share label with team', error);
+          toast.failure('Failed to share label with team');
+        },
+        onSuccess: (option) => onTagRemapped(option),
+      },
+      callbacks
+    ),
+  }));
+}
+
+type MergeTagParams = {
+  /** The personal label being retired. */
+  optionId: string;
+  /** The team label its entities are retagged with. */
+  targetOptionId: string;
+};
+
+/**
+ * Replace a personal label with an existing team label, retagging everything
+ * that carried the personal one. The team label's name and color win.
+ */
+export function useMergeTagMutation(
+  callbacks?: MutationCallbacks<PropertyOptionResponse, Error, MergeTagParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: MergeTagParams) =>
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.mergeTag({
+            body: {
+              option_id: vars.optionId,
+              target_option_id: vars.targetOptionId,
+            },
+          })
+      ),
+    ...withCallbacks<PropertyOptionResponse, Error, MergeTagParams>(
+      {
+        onError(error) {
+          console.error('Failed to replace label with the team label', error);
+          toast.failure('Failed to replace label');
+        },
+        onSuccess: (option) => onTagRemapped(option),
+      },
+      callbacks
+    ),
+  }));
+}
+
+/**
+ * Refresh everything a promote or merge moved.
+ *
+ * Both rewrite which definition owns the label AND the values stored on every
+ * entity that carried it (a merge also swaps the option id), so the cached
+ * entity properties behind tag chips, filters and `TagsRow` are stale too —
+ * not just the tag sets. There are no WS events for this, so the whole
+ * properties namespace is refetched rather than reconciled by hand.
+ */
+function onTagRemapped(option: PropertyOptionResponse) {
+  invalidatePropertyOptions(option.propertyDefinitionId);
+  invalidateAllProperties();
 }

@@ -19,10 +19,13 @@ export const EntityType = {
   document: 'document',
   project: 'project',
   email_thread: 'email_thread',
+  calendar_event: 'calendar_event',
   team: 'team',
   call: 'call',
   foreign_entity: 'foreign_entity',
   static_file: 'static_file',
   crm_company: 'crm_company',
   crm_contact: 'crm_contact',
+  reminder: 'reminder',
+  skill: 'skill',
 } as const;

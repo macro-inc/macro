@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.macro_id,\n                l.email_address::text AS \"email_address!\",\n                COALESCE(g.granted_scopes, '{}') AS \"granted_scopes!\",\n                COALESCE(g.grant_version, 0) AS \"grant_version!\"\n            FROM email_links l\n            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id\n            WHERE l.id = $1\n            FOR UPDATE OF l\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "granted_scopes!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_version!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d46629520beb24f9ce40480fbaf29efe6e0a14d9d508f5697ccdb70fe42a0488"
+}

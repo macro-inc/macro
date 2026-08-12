@@ -1,10 +1,11 @@
 //! Webhook domain ports.
 
 use super::models::{
-    CreateWebhookRequest, ListWebhooksResponse, NormalizedWebhookEvent, PatchWebhookRequest,
-    PreparedWebhookDelivery, RawWebhookEventQueueMessage, ValidateWebhookResponse, Webhook,
-    WebhookDeliveryAttempt, WebhookEventQueueMessage, WebhookHttpOutcome,
-    WebhookHttpOutcomeDetails, WebhookId, WebhookValidationResult, WebhookWorkerDisposition,
+    CreateWebhookOutcome, CreateWebhookRequest, ListWebhooksResponse, NormalizedWebhookEvent,
+    PatchWebhookRequest, PreparedWebhookDelivery, RawWebhookEventQueueMessage,
+    ValidateWebhookResponse, Webhook, WebhookDeliveryAttempt, WebhookEventQueueMessage,
+    WebhookHttpOutcome, WebhookHttpOutcomeDetails, WebhookId, WebhookValidationResult,
+    WebhookWorkerDisposition,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,6 +17,10 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     type Err: Into<anyhow::Error> + Send;
 
     /// Create a webhook and its initial rule.
+    ///
+    /// Namespaces are unique among a workspace's live webhooks; implementations
+    /// must report a clash as [`CreateWebhookOutcome::NamespaceConflict`]
+    /// rather than an error.
     fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
@@ -23,7 +28,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         request: CreateWebhookRequest,
         signing_secret: String,
         headers: serde_json::Value,
-    ) -> impl Future<Output = Result<Webhook, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreateWebhookOutcome, Self::Err>> + Send;
 
     /// Get an active webhook by id.
     fn get_webhook(
@@ -273,6 +278,9 @@ pub enum WebhookError {
     /// Bad request.
     #[error("{0}")]
     BadRequest(String),
+    /// Conflict with existing state.
+    #[error("{0}")]
+    Conflict(String),
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,

@@ -24,18 +24,47 @@ async fn insert_candidates_dedupes_pairs(pool: Pool<Postgres>) -> anyhow::Result
     let inserted = insert_candidates(&pool, link_id, &emails).await?;
     assert_eq!(inserted, 2);
 
-    // Re-inserting the same pairs (plus one new) only adds the new row.
+    // Re-recording the same pairs (plus one new) refreshes rather than
+    // duplicating: three rows touched, but still only three rows total.
     let emails = vec![
         "a@ext.test".to_string(),
         "b@ext.test".to_string(),
         "c@ext.test".to_string(),
     ];
-    let inserted = insert_candidates(&pool, link_id, &emails).await?;
-    assert_eq!(inserted, 1);
+    let recorded = insert_candidates(&pool, link_id, &emails).await?;
+    assert_eq!(recorded, 3);
 
     let (_, count) = get_max_id_and_count(&pool).await?.unwrap();
     assert_eq!(count, 3);
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn insert_candidates_refreshes_created_at_on_repeat(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::new_v4();
+    insert_link(&pool, link_id).await;
+
+    let emails = vec!["a@ext.test".to_string()];
+    insert_candidates(&pool, link_id, &emails).await?;
+
+    // Backdate so the refresh is unambiguous.
+    sqlx::query!(r#"UPDATE crm_cleanup_candidates SET created_at = now() - INTERVAL '2 days'"#)
+        .execute(&pool)
+        .await?;
+    let before = list_candidates_page(&pool, 0, i64::MAX, 10).await?[0].created_at;
+
+    insert_candidates(&pool, link_id, &emails).await?;
+    let after = list_candidates_page(&pool, 0, i64::MAX, 10).await?[0].created_at;
+
+    // The pruning clock restarts on each new delete for the pair, so a
+    // populate still in flight can't be outrun by a stale timestamp.
+    assert!(
+        after > before,
+        "expected created_at to be refreshed: {before} -> {after}"
+    );
     Ok(())
 }
 

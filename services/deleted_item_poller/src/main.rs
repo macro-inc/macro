@@ -41,13 +41,11 @@ async fn main() -> Result<(), Error> {
 
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
-    let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
     .document_delete_queue(&document_delete_queue)
-    .chat_delete_queue(&chat_delete_queue)
-    .search_event_queue(&search_event_queue);
+    .chat_delete_queue(&chat_delete_queue);
 
     let ctx = context::Context {
         db,

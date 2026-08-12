@@ -44,7 +44,7 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
     {
       type: 'component',
       id: LIST_VIEW_ID.channels,
-      redistributionWidth: { preferredPx: 360 },
+      redistributionWidth: { preferredPx: 300 },
     },
     {
       type: 'component',
@@ -56,7 +56,7 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
       id: LIST_VIEW_ID.companies,
       redistributionWidth: {
         preferredPx: 880,
-        maxViewportFraction: 0.7,
+        maxViewportFraction: 0.6,
       },
     },
   ];

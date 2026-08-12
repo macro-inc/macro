@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    models::{WebhookFilter, WebhookStatus},
+    models::{WebhookFilter, WebhookScope, WebhookStatus},
     ports::{WebhookRepo, WebhookWorkspaceResolver},
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -27,8 +27,13 @@ fn second_user_id() -> MacroUserIdStr<'static> {
 }
 
 fn create_request() -> CreateWebhookRequest {
+    create_request_with_namespace("build-events")
+}
+
+fn create_request_with_namespace(namespace: &str) -> CreateWebhookRequest {
     CreateWebhookRequest {
-        scope: crate::domain::models::WebhookScope::User,
+        scope: WebhookScope::User,
+        namespace: namespace.to_string(),
         name: "Build events".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: None,
@@ -100,10 +105,29 @@ async fn insert_team_member(pool: &PgPool, user_id: &str, team_id: Uuid) -> anyh
 }
 
 async fn create_webhook(repo: &PgRepository) -> Webhook {
+    create_webhook_in_workspace(repo, USER_ID, create_request()).await
+}
+
+async fn create_webhook_in_workspace(
+    repo: &PgRepository,
+    workspace_id: &str,
+    request: CreateWebhookRequest,
+) -> Webhook {
+    match try_create_webhook(repo, workspace_id, request).await {
+        CreateWebhookOutcome::Created(webhook) => *webhook,
+        CreateWebhookOutcome::NamespaceConflict => panic!("unexpected namespace conflict"),
+    }
+}
+
+async fn try_create_webhook(
+    repo: &PgRepository,
+    workspace_id: &str,
+    request: CreateWebhookRequest,
+) -> CreateWebhookOutcome {
     repo.create_webhook(
         user_id(),
-        USER_ID.to_string(),
-        create_request(),
+        workspace_id.to_string(),
+        request,
         "signing-secret".to_string(),
         json!({ "X-Test": "true" }),
     )
@@ -140,13 +164,14 @@ async fn insert_webhook_for_matching(
     sqlx::query!(
         r#"
         INSERT INTO webhook (
-            id, workspace_id, name, endpoint_url, signing_secret,
+            id, workspace_id, namespace, name, endpoint_url, signing_secret,
             filters, status, is_valid, created_by_user_id, deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
         id,
         workspace_id,
+        id,
         name,
         endpoint_url,
         "signing-secret",
@@ -170,6 +195,7 @@ async fn create_inserts_webhook_with_filters(pool: PgPool) -> anyhow::Result<()>
     let webhook = create_webhook(&repo).await;
 
     assert!(webhook.id.starts_with("wh_"));
+    assert_eq!(webhook.namespace, "build-events");
     assert_eq!(
         webhook.filters,
         vec![WebhookFilter {
@@ -182,19 +208,65 @@ async fn create_inserts_webhook_with_filters(pool: PgPool) -> anyhow::Result<()>
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_with_taken_namespace_returns_conflict(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    let first = create_webhook(&repo).await;
+
+    let outcome = try_create_webhook(&repo, USER_ID, create_request()).await;
+
+    assert!(matches!(outcome, CreateWebhookOutcome::NamespaceConflict));
+    let webhooks = repo
+        .list_webhooks_for_workspaces(vec![USER_ID.to_string()])
+        .await?;
+    assert_eq!(webhook_ids(&webhooks), vec![first.id.as_str()]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_with_same_namespace_in_another_workspace_succeeds(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    create_webhook(&repo).await;
+
+    let webhook = create_webhook_in_workspace(&repo, OTHER_WORKSPACE_ID, create_request()).await;
+
+    assert_eq!(webhook.workspace_id, OTHER_WORKSPACE_ID);
+    assert_eq!(webhook.namespace, "build-events");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn namespace_is_reusable_after_soft_delete(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    let deleted = create_webhook(&repo).await;
+    repo.delete_webhook(deleted.id.clone()).await?;
+
+    let webhook = create_webhook(&repo).await;
+
+    assert_ne!(webhook.id, deleted.id);
+    assert_eq!(webhook.namespace, "build-events");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn object_shaped_filters_are_rejected_by_check_constraint(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let result = sqlx::query!(
         r#"
         INSERT INTO webhook (
-            id, workspace_id, name, endpoint_url, signing_secret,
+            id, workspace_id, namespace, name, endpoint_url, signing_secret,
             filters, created_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
         "wh_object_filters",
         USER_ID,
+        "object-filters",
         "Object filters",
         "https://example.com/webhook",
         "signing-secret",

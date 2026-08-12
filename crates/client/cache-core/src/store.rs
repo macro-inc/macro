@@ -23,19 +23,19 @@ pub trait Storage: MaybeSend {
     /// Fetches records; result is aligned with `keys` (`None` = absent).
     fn get_batch(
         &self,
-        keys: &[EntityKey],
+        keys: &[EntityKey<'_>],
     ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
 
     /// Upserts records atomically (all-or-nothing per batch).
     fn put_batch(
         &mut self,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
         &mut self,
-        keys: &[EntityKey],
+        keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Scans normalized records of the requested concrete types in ascending
@@ -43,9 +43,9 @@ pub trait Storage: MaybeSend {
     fn scan_records(
         &self,
         type_names: &[String],
-        after: Option<&EntityKey>,
+        after: Option<&EntityKey<'static>>,
         limit: usize,
-    ) -> impl Future<Output = Result<Vec<(EntityKey, Record)>, Self::Error>> + MaybeSend;
+    ) -> impl Future<Output = Result<Vec<(EntityKey<'static>, Record)>, Self::Error>> + MaybeSend;
 
     /// Atomically appends a mutation and its optimistic layer to the queue.
     fn enqueue_mutation(
@@ -82,7 +82,7 @@ pub trait Storage: MaybeSend {
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
     /// Atomically removes a permanently failed mutation and its optimistic
@@ -101,7 +101,7 @@ pub trait Storage: MaybeSend {
 /// Hash-map storage for tests and as the Phase 1 default.
 #[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
-    records: HashMap<EntityKey, Record>,
+    records: HashMap<EntityKey<'static>, Record>,
     mutations: BTreeMap<
         MutationId,
         (
@@ -129,18 +129,21 @@ impl InMemoryStorage {
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
-    async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         Ok(keys.iter().map(|k| self.records.get(k).cloned()).collect())
     }
 
-    async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
         for (k, v) in entries {
             self.records.insert(k, v);
         }
         Ok(())
     }
 
-    async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         for k in keys {
             self.records.remove(k);
         }
@@ -150,9 +153,9 @@ impl Storage for InMemoryStorage {
     async fn scan_records(
         &self,
         type_names: &[String],
-        after: Option<&EntityKey>,
+        after: Option<&EntityKey<'static>>,
         limit: usize,
-    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
         if limit == 0 || type_names.is_empty() {
             return Ok(Vec::new());
         }
@@ -161,7 +164,7 @@ impl Storage for InMemoryStorage {
         let mut records: Vec<_> = self
             .records
             .iter()
-            .filter(|(key, _)| after.is_none_or(|after| *key > after))
+            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > after))
             .filter(|(key, _)| {
                 key.0
                     .split_once(':')
@@ -254,7 +257,7 @@ impl Storage for InMemoryStorage {
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         let Some((mutation, _)) = self.mutations.get(&id) else {
             return Ok(false);

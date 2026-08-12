@@ -4,7 +4,7 @@ import FilterIcon from '@phosphor/funnel-simple.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { cn, HoverCard, Layer } from '@ui';
+import { Button, cn, HoverCard, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
@@ -23,6 +23,9 @@ const chipClass = cn(
   'px-1.5 py-0.5 leading-tight rounded-full bg-surface text-ink-muted text-xs',
   'hover:text-ink'
 );
+const hoverMenuLabelClass = 'min-w-0 max-w-[30ch] truncate';
+const hoverMenuIconButtonClass =
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted [&_:where(svg)]:size-3.5';
 
 function HoverTagRow(props: {
   tag: ResolvedTag;
@@ -30,31 +33,47 @@ function HoverTagRow(props: {
   onEdit: (tag: ResolvedTag) => void;
 }) {
   return (
-    <div class="flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-ink hover:bg-hover">
-      <Show
-        when={props.onFilter}
-        fallback={
-          <span class="flex min-w-0 flex-1 items-center gap-1.5">
-            <TagDot color={props.tag.color} />
-            <span class="min-w-0 truncate">{props.tag.label}</span>
-          </span>
-        }
-      >
+    <div class="flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-ink hover:bg-hover">
+      <span class="flex min-w-0 flex-1 items-center gap-1.5">
+        <TagDot color={props.tag.color} />
+        <span class={hoverMenuLabelClass}>{props.tag.label}</span>
+      </span>
+      <Show when={props.onFilter}>
         {(onFilter) => (
-          <button
+          <Button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-            onClick={() => onFilter()(props.tag.optionId)}
+            variant="ghost"
+            size="icon-sm"
+            noTouchResize
+            tooltip="Filter by tag"
+            aria-label={`Filter by ${props.tag.label}`}
+            class={hoverMenuIconButtonClass}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onFilter()(props.tag.optionId);
+            }}
           >
-            <TagDot color={props.tag.color} />
-            <span class="min-w-0 truncate">{props.tag.label}</span>
-          </button>
+            <FilterIcon class="size-3.5" />
+          </Button>
         )}
       </Show>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
+        noTouchResize
+        tooltip="Edit tag"
         aria-label={`Edit ${props.tag.label}`}
-        class="flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted hover:bg-hover hover:text-ink"
+        class={hoverMenuIconButtonClass}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -62,7 +81,7 @@ function HoverTagRow(props: {
         }}
       >
         <PencilIcon class="size-3.5" />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -73,11 +92,11 @@ function TagHoverContent(props: {
   onEdit: (tag: ResolvedTag) => void;
 }) {
   return (
-    <div class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink hover:bg-hover">
+    <div class="flex flex-col gap-0.5 text-ink">
       <Show
         when={props.onFilterByTag}
         fallback={
-          <span class="flex min-w-0 flex-1 items-center gap-1.5">
+          <span class="flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5">
             <TagDot color={props.tag.color} />
             <span class="min-w-0 truncate">{props.tag.label}</span>
           </span>
@@ -86,11 +105,11 @@ function TagHoverContent(props: {
         {(onFilterByTag) => (
           <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left"
+            class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover"
             onClick={() => onFilterByTag()(props.tag.optionId)}
           >
             <FilterIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span>
+            <span class={hoverMenuLabelClass}>
               Filter by <span class="font-medium">{props.tag.label}</span>
             </span>
           </button>
@@ -99,14 +118,17 @@ function TagHoverContent(props: {
       <button
         type="button"
         aria-label={`Edit ${props.tag.label}`}
-        class="flex size-5 shrink-0 items-center justify-center rounded text-ink-extra-muted hover:bg-hover hover:text-ink"
+        class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
           props.onEdit(props.tag);
         }}
       >
-        <PencilIcon class="size-3.5" />
+        <PencilIcon class="size-3.5 shrink-0 text-ink-muted" />
+        <span class={hoverMenuLabelClass}>
+          Edit <span class="font-medium">{props.tag.label}</span>
+        </span>
       </button>
     </div>
   );
@@ -320,7 +342,7 @@ export function InlineTagsPill(props: {
         <TagPicker
           docTags={props.docTags}
           triggerClass={cn(
-            'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+            'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
             'px-2 py-1 leading-tight text-left rounded-full bg-surface',
             'hover:bg-hover text-ink-muted focus-visible:bg-active focus-visible:ring-accent/10',
             tags().length === 0 && 'text-ink-extra-muted',

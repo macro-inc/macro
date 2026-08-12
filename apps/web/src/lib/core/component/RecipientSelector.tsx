@@ -276,6 +276,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
+  hideMenuOnEscape?: boolean;
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -320,7 +321,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const debouncedHandleChange = debounce(handleChange, 100);
 
-  const [isOpen, setIsOpen] = createSignal<boolean>();
+  const [isOpen, setIsOpen] = createSignal(false);
+  const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
+    createSignal(Boolean(props.focusOnMount));
+
+  const setComboboxOpen = (next: boolean) => {
+    if (next && suppressOpenUntilInputChange()) return;
+    setIsOpen(next);
+  };
 
   const hasValidCustomEmail = () => {
     const input = inputValue();
@@ -330,7 +338,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   createEffect(() => {
     if (hasValidCustomEmail()) {
-      setIsOpen(true);
+      setComboboxOpen(true);
     }
   });
 
@@ -572,7 +580,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   let contentEl: HTMLElement | undefined;
 
   const onInputChange = (next: string) => {
+    const previous = inputValue();
     setInputValue(next);
+    if (next !== previous) {
+      setSuppressOpenUntilInputChange(false);
+    }
+    if (next.length === 0) return;
+
+    setIsOpen(true);
 
     // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
     // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
@@ -592,7 +607,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         triggerMode={props.triggerMode ?? 'input'}
         closeOnSelection={true}
         open={isOpen()}
-        onOpenChange={setIsOpen}
+        onOpenChange={setComboboxOpen}
         disabled={props.disabled}
         validationState={invalid() ? 'invalid' : 'valid'}
         options={optionsWithSelected()}
@@ -614,7 +629,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
         class={cn(
           'ph-no-capture w-full text-sm offset-2 bg-surface rounded-2xl',
-          !props.hideBorder && 'ring ring-edge',
+          !props.hideBorder && 'border border-edge',
           !props.noPadding && 'p-2',
           props.class
         )}
@@ -761,7 +776,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
                     onFocus={() => {
-                      if (props.openOnFocus ?? true) setIsOpen(true);
+                      if (props.openOnFocus ?? true) setComboboxOpen(true);
                     }}
                     onKeyDown={(e) => {
                       if (
@@ -771,14 +786,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         setDisabled(true);
                         queueMicrotask(() => setDisabled(false));
                       }
-                      if (e.key === 'Escape') {
-                        if (inputValue().length === 0) {
-                          inputRef()?.blur();
-                        }
-                      }
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
+                      if (e.key === 'Escape' && isOpen()) {
+                        e.preventDefault();
+                        if (props.hideMenuOnEscape) {
+                          e.stopPropagation();
+                        }
+                        setSuppressOpenUntilInputChange(true);
+                        setIsOpen(false);
+                        return;
+                      }
+
                       if (e.key === 'Tab' && context.isOpen()) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -855,7 +875,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge"
+              class="z-modal-content border border-edge bg-surface translate-y-1 p-2 rounded-xl shadow-lg shadow-drop-shadow"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

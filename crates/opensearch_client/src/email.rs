@@ -32,8 +32,12 @@ impl OpensearchClient {
     }
 
     /// Deletes a particular email message
-    pub async fn delete_email_message_by_id(&self, message_id: &str) -> Result<()> {
-        delete::email::delete_email_message_by_id(&self.inner, message_id).await
+    pub async fn delete_email_message_by_id(
+        &self,
+        message_id: &str,
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        delete::email::delete_email_message_by_id(&self.inner, message_id, index_override).await
     }
 
     /// Deletes all email messages with the specified link_id

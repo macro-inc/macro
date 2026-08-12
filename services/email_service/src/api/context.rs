@@ -1,4 +1,8 @@
 use axum::extract::FromRef;
+use calendar_events::{
+    domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
+    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+};
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
@@ -8,8 +12,11 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
+use email_service::calendar_tokens::CalendarTokenProviderAdapter;
+use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 
 use email_service::config::Config;
+use email_service::outbound::email_api::GmailApi;
 use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
@@ -26,6 +33,12 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::task::TaskTracker;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+pub(crate) type CalendarGrantService = CalendarService<PgCalendarRepository>;
+pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
+    PgCalendarRepository,
+    GoogleCalendarClient<RedisCalendarRequestGate>,
+    CalendarTokenProviderAdapter,
+>;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =
     EntityAccessManagementServiceImpl<entity_access_management::outbound::PgRepository>;
@@ -46,7 +59,9 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 pub(crate) struct ApiContext {
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
+    // The raw client is retained only for Gmail webhook JWKS/JWT authentication.
     pub gmail_client: Arc<gmail_client::GmailClient>,
+    pub email_api: GmailApi,
     pub redis_client: Arc<RedisClient>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub s3_client: Arc<s3_client::S3>,
@@ -63,4 +78,6 @@ pub(crate) struct ApiContext {
         EmailThreadRouterState<EmailSvc, EmailEntityAccessService, AuthorizationService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
     pub macro_event_broker: Arc<EmailEventBroker>,
+    pub calendar_service: Arc<CalendarGrantService>,
+    pub calendar_mutation_service: Arc<CalendarMutationSvc>,
 }

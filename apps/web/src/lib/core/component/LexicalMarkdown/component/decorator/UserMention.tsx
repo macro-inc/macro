@@ -1,6 +1,6 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { createMemo, createSignal, useContext } from 'solid-js';
@@ -24,7 +24,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
     props.userId ? tryMacroId(userId()) : undefined
   );
 
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
 
   const email = createMemo(() => {
     const id = macroId();

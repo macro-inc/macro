@@ -1,3 +1,5 @@
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 /// Kafka event contracts for call lifecycle events.
 pub mod events;
 

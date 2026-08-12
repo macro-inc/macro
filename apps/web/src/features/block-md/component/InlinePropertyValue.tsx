@@ -46,7 +46,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         <Layer depth={2}>
           <Property.EditTrigger
             class={cn(
-              'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
+              'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
               'px-2 py-1 leading-tight text-left rounded-full',
               'bg-surface',
               'focus-visible:bg-active focus-visible:ring-accent/10',

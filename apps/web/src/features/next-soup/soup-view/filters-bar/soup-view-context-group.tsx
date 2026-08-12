@@ -12,7 +12,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export const SoupViewContextGroup = () => {
+export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
   const panel = useSplitPanelOrThrow();
   const { soup, viewMode } = useSoupView();
   const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
@@ -54,6 +54,7 @@ export const SoupViewContextGroup = () => {
           options={TASK_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
+          hideLabel={props.hideLabel}
         />
       </Show>
       {/* The board is inherently grouped by stage columns, so grouping only
@@ -65,6 +66,7 @@ export const SoupViewContextGroup = () => {
           options={COMPANY_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
+          hideLabel={props.hideLabel}
         />
       </Show>
       <Show when={component() === 'tag'}>
@@ -74,6 +76,7 @@ export const SoupViewContextGroup = () => {
           options={TAG_VIEW_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
+          hideLabel={props.hideLabel}
         />
       </Show>
     </Show>

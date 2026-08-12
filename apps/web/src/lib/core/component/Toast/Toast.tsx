@@ -136,7 +136,7 @@ interface ToastSuccessOptions extends ToastOptions {
  * Replaces the icon, title, and accent color of the standard layout while
  * still using the shared Surface chrome and progress/dismiss machinery.
  */
-interface CustomToastConfig {
+export interface CustomToastConfig {
   title: string;
   content?: () => JSX.Element;
   icon?: Component<{ class?: string }>;

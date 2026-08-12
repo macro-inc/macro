@@ -553,38 +553,78 @@ async fn resolve_channel_display_name(
             Ok(info.name.clone().unwrap_or_default())
         }
         ChannelType::Private | ChannelType::DirectMessage => {
-            let participant_ids = load_active_participant_ids(pool, info.id).await?;
-            let name_lookup = load_user_display_names(pool, &participant_ids).await?;
+            let principals = load_active_participant_principals(pool, info.id).await?;
+            let user_ids: Vec<MacroUserIdStr<'static>> = principals
+                .iter()
+                .filter_map(|principal| MacroUserIdStr::try_from(principal.clone()).ok())
+                .collect();
+            let bot_ids: Vec<BotId> = principals
+                .iter()
+                .filter_map(|principal| {
+                    bot_id::BotIdStr::parse_from_str(principal)
+                        .ok()
+                        .map(|id| id.bot_id())
+                })
+                .collect();
+            let name_lookup = load_user_display_names(pool, &user_ids).await?;
+            let bot_name_lookup = load_bot_display_names(pool, &bot_ids).await?;
+            let display_name = |principal: &String| {
+                principal_display_name(principal, &name_lookup, &bot_name_lookup)
+            };
 
             if matches!(info.channel_type, ChannelType::DirectMessage)
-                && participant_ids
+                && principals
                     .iter()
-                    .any(|participant_id| participant_id.as_ref() == viewer_user_id.as_ref())
+                    .any(|principal| principal == viewer_user_id.as_ref())
             {
-                if let Some(other_participant_id) = participant_ids
+                if let Some(name) = principals
                     .iter()
-                    .find(|participant_id| participant_id.as_ref() != viewer_user_id.as_ref())
+                    .filter(|principal| principal.as_str() != viewer_user_id.as_ref())
+                    .find_map(display_name)
                 {
-                    return Ok(id_to_display_name(other_participant_id, &name_lookup));
+                    return Ok(name);
                 }
 
                 tracing::warn!(channel_id=%info.id, "direct message channel has no other participant");
                 return Ok("Unknown".to_string());
             }
 
-            Ok(participant_ids
+            Ok(principals
                 .iter()
-                .map(|participant_id| id_to_display_name(participant_id, &name_lookup))
+                .filter_map(display_name)
                 .collect::<Vec<_>>()
                 .join(", "))
         }
     }
 }
 
-async fn load_active_participant_ids(
+/// Display name for a participant principal: users resolve through the name
+/// lookup, bots through the bot-name lookup (Macro AI is code-defined).
+/// Unrecognized principals yield `None`.
+fn principal_display_name(
+    principal: &str,
+    name_lookup: &NameLookup,
+    bot_name_lookup: &HashMap<BotId, String>,
+) -> Option<String> {
+    if let Ok(user_id) = MacroUserIdStr::try_from(principal.to_string()) {
+        return Some(id_to_display_name(&user_id, name_lookup));
+    }
+    let bot_id = bot_id::BotIdStr::parse_from_str(principal).ok()?.bot_id();
+    if bot_id == bot_id::MACRO_AI_BOT_ID {
+        return Some(bot_id::MACRO_AI_NAME.to_string());
+    }
+    Some(
+        bot_name_lookup
+            .get(&bot_id)
+            .cloned()
+            .unwrap_or_else(|| "Bot".to_string()),
+    )
+}
+
+async fn load_active_participant_principals(
     pool: &PgPool,
     channel_id: Uuid,
-) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+) -> anyhow::Result<Vec<String>> {
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
@@ -597,9 +637,31 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    rows.into_iter()
-        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
-        .collect()
+    Ok(rows.into_iter().map(|row| row.user_id).collect())
+}
+
+async fn load_bot_display_names(
+    pool: &PgPool,
+    bot_ids: &[BotId],
+) -> anyhow::Result<HashMap<BotId, String>> {
+    if bot_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let uuids: Vec<Uuid> = bot_ids.iter().map(|bot_id| bot_id.as_uuid()).collect();
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, name
+        FROM bots
+        WHERE id = ANY($1) AND deleted_at IS NULL
+        "#,
+        &uuids,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (BotId::new_from_uuid(row.id), row.name))
+        .collect())
 }
 
 async fn load_user_display_names(
@@ -3556,15 +3618,12 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .filter_map(|row| {
-                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
-                Some(ChannelParticipant {
-                    channel_id: row.channel_id,
-                    user_id: user_id.as_ref().to_string(),
-                    role: row.role,
-                    joined_at: row.joined_at,
-                    left_at: row.left_at,
-                })
+            .map(|row| ChannelParticipant {
+                channel_id: row.channel_id,
+                user_id: row.user_id,
+                role: row.role,
+                joined_at: row.joined_at,
+                left_at: row.left_at,
             })
             .collect())
     }

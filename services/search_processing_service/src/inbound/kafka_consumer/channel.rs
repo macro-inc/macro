@@ -51,6 +51,13 @@ pub(super) fn describe_channel_event(event: &ChannelTopicEvent) -> ChannelEventD
             channel_id: metadata.channel_id,
             event_type: "channel.message_posted",
         },
+        // Mentions carry no index change beyond the message_posted event
+        // emitted alongside them.
+        ChannelTopicEvent::Mentioned(metadata) => ChannelEventDescription {
+            action: ChannelIndexAction::Ignore,
+            channel_id: metadata.channel_id,
+            event_type: "channel.mentioned",
+        },
         ChannelTopicEvent::MessagePatched(metadata) => ChannelEventDescription {
             action: ChannelIndexAction::UpsertMessage {
                 channel_id: metadata.channel_id,

@@ -87,9 +87,12 @@ export const useSoupNavigationHotkeys = (
     });
   };
 
+  // Group labels are structural rows — stepping with j/k or the arrow keys
+  // moves through entities only and never focuses a header.
   const navigateToOpenableEntity = (offset: -1 | 1) => {
     let skippedDuplicate = false;
     const next = soup.navigate.by(offset, {
+      skipGroupHeaders: true,
       skip: (row) => {
         if (
           !splitHandle.isControllerSplit() ||
@@ -149,7 +152,7 @@ export const useSoupNavigationHotkeys = (
   });
 
   const navigateAndSelectEntity = (offset: number) => {
-    const nextRow = soup.navigate.by(offset);
+    const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!nextRow) return true;
     soup.selection.select(nextRow.row.original);
     scrollTo(nextRow.index);
@@ -158,7 +161,7 @@ export const useSoupNavigationHotkeys = (
 
   const handleNavigationSelection = (offset: number) => {
     const focusedEntity = soup.focus.item();
-    const next = soup.navigate.peekOffset(offset);
+    const next = soup.navigate.peekOffset(offset, { skipGroupHeaders: true });
 
     const selection = soup.selection;
 
@@ -190,7 +193,7 @@ export const useSoupNavigationHotkeys = (
 
     if (selection.isSelected(nextEntity.id)) {
       selection.toggle(focusedEntity);
-      soup.navigate.by(offset);
+      soup.navigate.by(offset, { skipGroupHeaders: true });
       scrollTo(next.index);
       return true;
     }

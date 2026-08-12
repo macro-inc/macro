@@ -9,6 +9,8 @@
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export interface ApiEntityFilterAst {
+  /** filters applied to canonical calendar events */
+  calf?: unknown;
   /** the filters that should be applied to the call entity */
   callf?: unknown;
   /** Filters applied to the crm_company entity (wire key `ccf`).
@@ -43,4 +45,8 @@ unlike the materialized [`EntityFilterAst`] used for cursors. */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */
   propf?: unknown;
+  /** Filters applied to reminders (wire key `remf`). Unlike every other
+filter here, empty/omitted returns **no** reminders: they are opt-in,
+so the caller must send `inc`, an id, or an entity to get any. */
+  remf?: unknown;
 }

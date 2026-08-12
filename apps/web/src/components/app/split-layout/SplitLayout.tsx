@@ -15,7 +15,6 @@ import {
   createMemo,
   createSelector,
   For,
-  on,
   onCleanup,
   type Setter,
   Show,
@@ -26,7 +25,6 @@ import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
 import {
   createSplitLayout,
-  SplitEvent,
   type SplitId,
   type SplitManager,
 } from './layoutManager';
@@ -76,15 +74,18 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   // Store a ref to each panel by id
   const panelRefs = new Map<SplitId, HTMLDivElement>();
-  createEffect(
-    on(splitManager.events, (event) => {
-      if (event.type === SplitEvent.Remove) {
-        panelRefs.delete(event.splitId);
-      }
-    })
-  );
 
   const splits = createMemo(splitManager.splits);
+
+  // Drop refs for departed splits by reconciling against the live list:
+  // batched mutations can remove several splits in one flush (e.g. closing
+  // a Preview Pair), and the events signal only surfaces the last event.
+  createEffect(() => {
+    const alive = new Set(splits().map(({ id }) => id));
+    for (const id of panelRefs.keys()) {
+      if (!alive.has(id)) panelRefs.delete(id);
+    }
+  });
 
   const activeSplitSelector = createSelector(splitManager.activeSplitId);
 
@@ -135,7 +136,17 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                       <Suspense>
                         <Resize.Panel
                           id={id}
-                          minSize={splitMinWidthForContent(handle().content())}
+                          minSize={splitMinWidthForContent(handle().content(), {
+                            isPreviewController: handle().isControllerSplit(),
+                          })}
+                          // A Preview Pair is one layout unit: its two splits
+                          // share the space a single split would get. Both
+                          // members key their group by the Controller's id.
+                          shareGroup={
+                            splitManager.viewerOf(id) !== undefined
+                              ? id
+                              : splitManager.controllerOf(id)
+                          }
                           // Automatic redistribution targets an engaged
                           // Controller at its configured preferred width.
                           // This is not a hard max: the gutter can still be

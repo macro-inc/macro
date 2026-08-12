@@ -20,8 +20,13 @@ pub use graphql_channel::{
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, email_content_loader,
+    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailMutationService,
+    EmailServiceEmailContentReader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
+    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailMutation,
+    GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus, MarkEmailThreadSeenInput,
+    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
+    email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
@@ -50,7 +55,7 @@ pub use graphql_properties::{
     entity_properties_loader,
 };
 pub use schema::{
-    SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot, SoupSchema,
-    SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
+    EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
+    SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
     build_schema_with_service, build_schema_with_services,
 };

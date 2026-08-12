@@ -266,8 +266,9 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Sends a mobile welcome email to the given address, if it hasn't already been sent
-     * and the email is not blocked.
+     * Enrolls a mobile lead in the Loops nurture sequence, which sends the welcome
+     * email inviting them to register on desktop. No-ops if the address was already
+     * enrolled, and rejects blocked addresses.
      */
     public sendMobileWelcomeEmail<ThrowOnError extends boolean = false>(options: Options<SendMobileWelcomeEmailData, ThrowOnError>): RequestResult<SendMobileWelcomeEmailResponses, SendMobileWelcomeEmailErrors, ThrowOnError> {
         return (options.client ?? this.client).post<SendMobileWelcomeEmailResponses, SendMobileWelcomeEmailErrors, ThrowOnError>({

@@ -15,6 +15,7 @@ const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  calendar_event_filters: { calendar_event_ids: EXCLUDE },
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
   channel_thread_filters: { thread_ids: EXCLUDE },
@@ -153,6 +154,18 @@ export function filterSoupItemByRequestBody(
           data.foreignEntitySource
         )
     )
+    .with(
+      { tag: 'calendarEvent' },
+      ({ data }) =>
+        !isIdFilteredOut(
+          body.calendar_event_filters?.calendar_event_ids,
+          data.id
+        )
+    )
+    .with(
+      { tag: 'reminder' },
+      ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
+    )
     .exhaustive();
 }
 
@@ -191,6 +204,7 @@ function queryIncludeToRequestBody(query: Query): SoupBody {
       ids: include.foreignEntityRecordId,
       foreign_entity_sources: include.foreignEntitySource,
     },
+    calendar_event_filters: { calendar_event_ids: include.calendarEventId },
   };
 }
 

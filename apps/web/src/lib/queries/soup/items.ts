@@ -1,17 +1,17 @@
 import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
+  makeGroupComparator,
   parseGroupMeta,
-  resolveGroupMetaForKey,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
-import {
-  type GroupByField,
-  type GroupMeta,
-  NOT_SET_GROUP_KEY,
-} from '@queries/soup/grouped/types';
+import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
 import {
   isDisplayableSoupItem,
@@ -28,15 +28,14 @@ import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
 import {
-  fetchGraphqlGroupedSoup,
-  fetchGraphqlSoup,
-} from '@service-storage/graphql-soup';
-import { type StaleTime, useInfiniteQuery } from '@tanstack/solid-query';
+  type InfiniteData,
+  type StaleTime,
+  useInfiniteQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import {
-  makeGraphqlGroupedSoupInput,
-  makeGraphqlSoupInput,
-} from './graphql-ast';
+import { queryClient } from '../client';
+import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
+import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 
 export type SoupParams = Params;
 
@@ -149,7 +148,8 @@ export const useSoupItemsQuery = (
   }));
 };
 
-export const useSoupAstItemsQuery = (
+/** REST implementation kept private behind {@link useSoupAstItemsQuery}. */
+const useRestSoupAstItemsQuery = (
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
@@ -190,49 +190,7 @@ export const useSoupAstItemsQuery = (
             };
           };
 
-          const fetchGraphql = async () => {
-            const response = await fetchGraphqlGroupedSoup(
-              makeGraphqlGroupedSoupInput({
-                params: { ...params, sort_method },
-                body,
-                groupBy,
-              })
-            );
-
-            return {
-              items: response.items,
-              groups: response.groups.map((group): GroupMeta => {
-                const firstItem = response.items[group.itemIds[0] ?? ''];
-                const resolved = resolveGroupMetaForKey(
-                  groupBy,
-                  group.key,
-                  firstItem
-                );
-                return {
-                  key: group.key,
-                  label: resolved?.label ?? group.key,
-                  displayOrder: resolved?.displayOrder ?? null,
-                  totalCount: group.totalCount,
-                  itemIds: group.itemIds,
-                  nextCursor: group.nextCursor,
-                };
-              }),
-            };
-          };
-
-          const response =
-            transport === 'graphql'
-              ? await fetchGraphql().catch((error: unknown) => {
-                  if (
-                    error instanceof Error &&
-                    error.message.startsWith('Unsupported GraphQL Soup AST:')
-                  ) {
-                    console.warn(error.message);
-                    return fetchRest();
-                  }
-                  throw error;
-                })
-              : await fetchRest();
+          const response = await fetchRest();
 
           return {
             kind: 'grouped',
@@ -256,28 +214,7 @@ export const useSoupAstItemsQuery = (
               })
           );
 
-        const fetchGraphql = async () =>
-          await fetchGraphqlSoup(
-            makeGraphqlSoupInput({
-              params,
-              body,
-              cursor: ctx.pageParam,
-            })
-          );
-
-        const response =
-          transport === 'graphql'
-            ? await fetchGraphql().catch((error: unknown) => {
-                if (
-                  error instanceof Error &&
-                  error.message.startsWith('Unsupported GraphQL Soup AST:')
-                ) {
-                  console.warn(error.message);
-                  return fetchRest();
-                }
-                throw error;
-              })
-            : await fetchRest();
+        const response = await fetchRest();
 
         return {
           kind: 'flat',
@@ -365,67 +302,166 @@ export const useSoupAstItemsQuery = (
   });
 };
 
-// Stable UUIDs from migrations/20251128000001_seed_system_properties.sql.
-// Custom (user-created) options fall through to displayOrder.
-const STATUS_OPTION_ORDER: readonly string[] = [
-  '00000001-0000-0000-0002-000000000001', // Not Started
-  '00000001-0000-0000-0002-000000000002', // In Progress
-  '00000001-0000-0000-0002-000000000003', // In Review
-  NOT_SET_GROUP_KEY,
-  '00000001-0000-0000-0002-000000000004', // Completed
-  '00000001-0000-0000-0002-000000000005', // Canceled
-];
+/** Transport selected by the Soup AST query facade. */
+export type SoupAstItemsQueryTransport = 'rest' | 'graphql';
 
-const PRIORITY_OPTION_ORDER: readonly string[] = [
-  '00000001-0000-0000-0003-000000000004', // Urgent
-  '00000001-0000-0000-0003-000000000003', // High
-  '00000001-0000-0000-0003-000000000002', // Medium
-  '00000001-0000-0000-0003-000000000001', // Low
-  NOT_SET_GROUP_KEY,
-];
+/** Stable query surface shared by the REST and urql-solid implementations. */
+export type SoupAstItemsQuery = {
+  readonly data: SoupAstItemsData | undefined;
+  readonly error: Error | null;
+  readonly isLoading: boolean;
+  readonly isFetching: boolean;
+  readonly isPlaceholderData: boolean;
+  readonly isFetchingNextPage: boolean;
+  readonly isEnabled: boolean;
+  readonly hasNextPage: boolean;
+  readonly transport: SoupAstItemsQueryTransport;
+  fetchNextPage(): Promise<void>;
+  refetch(): Promise<void>;
+  /** Discards continuation pages while retaining the initial page. */
+  resetToInitialPage(): void;
+  /** Forces the selected transport to refetch from the network. */
+  refresh(): Promise<void>;
+};
 
-function keyRank(order: readonly string[], key: string): number {
-  const i = order.indexOf(key);
-  return i === -1 ? order.length : i;
-}
+/**
+ * Queries Soup through urql-solid when the feature is enabled and the current
+ * AST has a complete GraphQL translation. Unsupported requests retain the REST
+ * behavior. Explicit `rest` and `graphql` transport values remain available
+ * for rollout controls; forced GraphQL still falls back safely when unsupported.
+ */
+export function useSoupAstItemsQuery(
+  args: Accessor<SoupAstItemsQueryArgs>,
+  options?: Accessor<SoupItemsQueryOptions>
+): SoupAstItemsQuery {
+  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
 
-function defaultOrder(a: GroupMeta, b: GroupMeta): number {
-  if (a.displayOrder === null && b.displayOrder === null) return 0;
-  if (a.displayOrder === null) return 1;
-  if (b.displayOrder === null) return -1;
-  return a.displayOrder - b.displayOrder;
-}
+  const queryEnabled = () => options?.().enabled !== false;
+  const graphqlRequested = () => {
+    const requestedTransport = args().transport;
+    if (requestedTransport === 'rest') return false;
+    if (requestedTransport === 'graphql') return true;
+    return graphqlSoupFlag().enabled;
+  };
 
-function makeGroupComparator(
-  groupBy: GroupByField | undefined
-): (a: GroupMeta, b: GroupMeta) => number {
-  if (groupBy?.type === 'property') {
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS) {
-      return (a, b) => {
-        const diff =
-          keyRank(STATUS_OPTION_ORDER, a.key) -
-          keyRank(STATUS_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : defaultOrder(a, b);
-      };
-    }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY) {
-      return (a, b) => {
-        const diff =
-          keyRank(PRIORITY_OPTION_ORDER, a.key) -
-          keyRank(PRIORITY_OPTION_ORDER, b.key);
-        return diff !== 0 ? diff : defaultOrder(a, b);
-      };
-    }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
-      return (a, b) => {
-        const aNotSet = a.key === NOT_SET_GROUP_KEY;
-        const bNotSet = b.key === NOT_SET_GROUP_KEY;
-        if (aNotSet && bNotSet) return 0;
-        if (aNotSet) return 1;
-        if (bNotSet) return -1;
-        return a.label.localeCompare(b.label);
-      };
-    }
-  }
-  return defaultOrder;
+  const graphqlFlatQuery = createGraphqlSoupAstItemsQuery(
+    () => ({ params: args().params, body: args().body }),
+    () => ({
+      enabled:
+        graphqlRequested() && queryEnabled() && args().groupBy === undefined,
+      showSupportedForeignEntities: options?.().showSupportedForeignEntities,
+    })
+  );
+  const graphqlGroupedQuery = createGraphqlGroupedSoupAstItemsQuery(
+    () => ({
+      params: args().params,
+      body: args().body,
+      groupBy: args().groupBy,
+    }),
+    () => ({
+      enabled:
+        graphqlRequested() && queryEnabled() && args().groupBy !== undefined,
+      showSupportedForeignEntities: options?.().showSupportedForeignEntities,
+    })
+  );
+
+  const activeGraphqlQuery = () =>
+    args().groupBy === undefined ? graphqlFlatQuery : graphqlGroupedQuery;
+  const usesGraphql = () =>
+    graphqlRequested() && activeGraphqlQuery().isSupported();
+
+  const restQuery = useRestSoupAstItemsQuery(args, () => {
+    const currentOptions = options?.();
+    return {
+      ...currentOptions,
+      enabled: queryEnabled() && !usesGraphql(),
+    };
+  });
+
+  const resetRestToInitialPage = () => {
+    const { params, body, groupBy, transport } = args();
+    queryClient.setQueryData<InfiniteData<SoupAstItemsPage, string | null>>(
+      soupKeys.astItems({ params, body, groupBy, transport }).queryKey,
+      (previous) => {
+        if (!previous || previous.pages.length <= 1) return previous;
+        return {
+          ...previous,
+          pages: previous.pages.slice(0, 1),
+          pageParams: previous.pageParams.slice(0, 1),
+        };
+      }
+    );
+  };
+
+  return {
+    get data() {
+      return usesGraphql() ? activeGraphqlQuery().data() : restQuery.data;
+    },
+    get error() {
+      return usesGraphql()
+        ? (activeGraphqlQuery().error() ?? null)
+        : (restQuery.error ?? null);
+    },
+    get isLoading() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isLoading()
+        : restQuery.isLoading;
+    },
+    get isFetching() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isFetching()
+        : restQuery.isFetching;
+    },
+    get isPlaceholderData() {
+      return usesGraphql() ? false : restQuery.isPlaceholderData;
+    },
+    get isFetchingNextPage() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isFetchingNextPage()
+        : restQuery.isFetchingNextPage;
+    },
+    get isEnabled() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isEnabled()
+        : restQuery.isEnabled;
+    },
+    get hasNextPage() {
+      return usesGraphql()
+        ? activeGraphqlQuery().hasNextPage()
+        : (restQuery.hasNextPage ?? false);
+    },
+    get transport() {
+      return usesGraphql() ? 'graphql' : 'rest';
+    },
+    async fetchNextPage() {
+      if (usesGraphql()) {
+        await activeGraphqlQuery().fetchNextPage();
+      } else {
+        await restQuery.fetchNextPage();
+      }
+    },
+    async refetch() {
+      if (usesGraphql()) {
+        await activeGraphqlQuery().refresh();
+      } else {
+        await restQuery.refetch();
+      }
+    },
+    resetToInitialPage() {
+      // Reset both urql bindings: a grouping switch can reactivate a flat page
+      // chain (or vice versa) that was loaded before the current view.
+      graphqlFlatQuery.resetToInitialPage();
+      graphqlGroupedQuery.resetToInitialPage();
+      if (!usesGraphql()) resetRestToInitialPage();
+    },
+    async refresh() {
+      if (usesGraphql()) {
+        await activeGraphqlQuery().refresh();
+      } else {
+        await restQuery.refetch({ throwOnError: true });
+      }
+    },
+  };
 }

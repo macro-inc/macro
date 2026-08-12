@@ -18,8 +18,9 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
         })],
     }];
 
+    let records = HashMap::new();
     let result = resolve_fields_owner(
-        &HashMap::new(),
+        &records,
         &fields,
         "GraphqlSoupChannel",
         &selections,
@@ -28,4 +29,62 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
     .unwrap();
 
     assert!(matches!(result, OwnerResolution::Absent));
+}
+
+#[test]
+fn variable_filters_match_recursive_partial_objects_with_or_semantics() {
+    let Json::Object(variables) = serde_json::json!({
+        "input": {
+            "continuation": {
+                "groupBy": {
+                    "field": "PROPERTY",
+                    "propertyDefinitionId": "status-def"
+                },
+                "groupKey": "in-progress",
+                "cursor": "cursor-1"
+            }
+        }
+    }) else {
+        unreachable!()
+    };
+    let Json::Object(unrelated) = serde_json::json!({
+        "input": {"initial": {"groupBy": {"field": "PROPERTY"}}}
+    }) else {
+        unreachable!()
+    };
+    let Json::Object(relevant) = serde_json::json!({
+        "input": {"continuation": {"groupBy": {
+            "field": "PROPERTY",
+            "propertyDefinitionId": "status-def"
+        }}}
+    }) else {
+        unreachable!()
+    };
+
+    assert!(matches_variable_filters(&variables, &[]));
+    assert!(matches_variable_filters(&variables, &[unrelated, relevant]));
+}
+
+#[test]
+fn variable_filters_reject_different_or_missing_nested_values() {
+    let Json::Object(variables) = serde_json::json!({
+        "input": {"initial": {"groupBy": {
+            "field": "PROPERTY",
+            "propertyDefinitionId": "status-def"
+        }}}
+    }) else {
+        unreachable!()
+    };
+    let Json::Object(different) = serde_json::json!({
+        "input": {"initial": {"groupBy": {"propertyDefinitionId": "priority-def"}}}
+    }) else {
+        unreachable!()
+    };
+    let Json::Object(missing) = serde_json::json!({
+        "input": {"continuation": {"groupBy": {"propertyDefinitionId": "status-def"}}}
+    }) else {
+        unreachable!()
+    };
+
+    assert!(!matches_variable_filters(&variables, &[different, missing]));
 }

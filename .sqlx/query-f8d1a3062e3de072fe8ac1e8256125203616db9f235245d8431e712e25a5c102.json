@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT completed_at IS NULL AS \"pending!\"\n        FROM email_backfill_completion_outbox\n        WHERE backfill_job_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pending!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f8d1a3062e3de072fe8ac1e8256125203616db9f235245d8431e712e25a5c102"
+}

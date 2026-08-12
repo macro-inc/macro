@@ -36,6 +36,8 @@ function transformDocumentSubType(
       };
     case 'GraphqlSnippetSubType':
       return { type: 'snippet' };
+    case 'GraphqlSkillSubType':
+      return { type: 'skill' };
   }
 }
 

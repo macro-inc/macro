@@ -1,11 +1,11 @@
 pub(crate) mod call;
 pub(crate) mod channel;
-mod chat;
+pub(crate) mod chat;
 pub mod context;
-mod document;
-mod email;
+pub(crate) mod document;
+pub(crate) mod email;
 pub(crate) mod project;
-mod properties;
+pub(crate) mod properties;
 mod user;
 pub mod worker;
 
@@ -57,31 +57,24 @@ pub async fn process_message(
             )
             .await?;
         }
-        SearchQueueMessage::RemoveEmailLink(message) => {
-            email::remove::process_remove_messages_by_link_id(&ctx.opensearch_client, &message)
-                .await?;
-        }
-        SearchQueueMessage::ExtractEmailThreadMessage(message) => {
-            email::upsert::process_upsert_thread_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
         SearchQueueMessage::ExtractEmailThreadBatch(message) => {
+            let thread_ids = message
+                .thread_ids
+                .iter()
+                .map(|thread_id| {
+                    thread_id
+                        .parse::<Uuid>()
+                        .context("failed to parse thread_id as UUID")
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
             email::upsert::process_upsert_thread_batch_message(
                 &ctx.opensearch_client,
                 &ctx.db,
-                &message,
+                &thread_ids,
+                &message.macro_user_id,
+                message.index_override.as_deref(),
             )
             .await?;
-        }
-        SearchQueueMessage::RemoveEmailMessage(message) => {
-            email::remove::process_remove_message(&ctx.opensearch_client, &message).await?;
-        }
-        SearchQueueMessage::ExtractEmailMessage(message) => {
-            email::upsert::process_upsert_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
-        SearchQueueMessage::RemoveDocument(message) => {
-            document::process_remove_message(&ctx.opensearch_client, &message).await?;
         }
         SearchQueueMessage::ExtractDocumentText(message) => {
             document::process_extract_text_message(
@@ -104,19 +97,8 @@ pub async fn process_message(
             )
             .await?;
         }
-        SearchQueueMessage::UpdateDocumentProperties(message) => {
-            properties::process_entity_property_update(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
-        SearchQueueMessage::UpdateDocumentName(message) => {
-            document::process_update_name_message(&ctx.opensearch_client, &ctx.db, &message)
-                .await?;
-        }
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
-        }
-        SearchQueueMessage::RemoveChatMessage(message) => {
-            chat::remove_chat_message(&ctx.opensearch_client, &message).await?;
         }
         SearchQueueMessage::CallRecord(message) => {
             let call_id = message

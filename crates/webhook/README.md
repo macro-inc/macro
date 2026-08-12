@@ -83,8 +83,8 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
   `channel.message_posted`, `channel.message_patched`,
   `channel.message_deleted`, `channel.message_attachment_created`,
-  `channel.message_attachment_removed`, `channel.participant_added`, and
-  `channel.participant_removed`.
+  `channel.message_attachment_removed`, `channel.participant_added`,
+  `channel.participant_removed`, and `channel.mentioned`.
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
 
@@ -93,6 +93,15 @@ people who currently have access to the entity. The matching workspace set
 contains each person's Macro user ID, for personal webhooks, plus every team ID
 to which any of those people belongs. The set is deduplicated before matching,
 so one person or team is considered only once.
+
+`channel.mentioned` is emitted once per distinct entity `@`-mentioned in a
+channel message — users (`macro|<email>`), bots (`bot|<uuid>`), documents, and
+any future mentionable kind. Bot mentions only emit when the bot is an active
+channel participant; the author may itself be a bot. Like every channel
+event, access and `ids` filtering are by channel: the entity is the channel
+containing the message, and the mentioned entity travels in the payload's
+`mentioned` field for consumers to filter on (e.g. the SDK's
+`events.onSelfMention`).
 
 Webhook events use `entity_type = "webhook"` and take the event metadata's
 `workspace_id` as the sole matching workspace. This is a strict owner-workspace

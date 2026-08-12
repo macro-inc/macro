@@ -20,6 +20,7 @@ import { bindStateAs } from '../utils';
 import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
+import { normalizeTripleClickPlugin } from './normalize-triple-click';
 
 export type PluginFunction = (editor: LexicalEditor) => () => void;
 
@@ -76,6 +77,10 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
 
     richText() {
       cleanupFunctions.push(registerRichText(editor));
+      // `registerRichText` (classic API) does not wire up triple-click
+      // selection normalization the way the newer RichTextExtension does, so
+      // register it explicitly here.
+      cleanupFunctions.push(normalizeTripleClickPlugin()(editor));
       return pluginManager;
     },
 

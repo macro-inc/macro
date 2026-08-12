@@ -1414,6 +1414,18 @@
         }
       }
     },
+    "/mcp/servers/auth/client-metadata": {
+      "get": {
+        "tags": ["mcp"],
+        "summary": "Return Macro's public OAuth Client ID Metadata Document.",
+        "operationId": "mcp_oauth_client_metadata",
+        "responses": {
+          "200": {
+            "description": "Macro OAuth client metadata document"
+          }
+        }
+      }
+    },
     "/mcp/servers/auth/start": {
       "post": {
         "tags": ["mcp"],
@@ -1997,7 +2009,7 @@
       },
       "AttachmentType": {
         "type": "string",
-        "enum": ["document", "image", "channel", "email", "project"]
+        "enum": ["document", "image", "channel", "email", "project", "skill"]
       },
       "CallToolRequest": {
         "type": "object",
@@ -2608,12 +2620,15 @@
           "document",
           "project",
           "email_thread",
+          "calendar_event",
           "team",
           "call",
           "foreign_entity",
           "static_file",
           "crm_company",
-          "crm_contact"
+          "crm_contact",
+          "reminder",
+          "skill"
         ]
       },
       "ErrorBody": {

@@ -3,10 +3,10 @@ mod test;
 
 use std::{marker::PhantomData, sync::Arc};
 
-use async_graphql::{Context, MergedObject, Object, Schema, Subscription};
+use async_graphql::{Context, ID, MergedObject, Object, Schema, Subscription};
 use axum::extract::FromRef;
 use email::{
-    domain::ports::{EmailService, NoOpEmailService},
+    domain::ports::{EmailService, EmailUserService, NoOpEmailService},
     inbound::axum::previews_router::EmailRouterState,
 };
 use entity_access::domain::ports::{EntityAccessService, NoOpEntityAccessService};
@@ -15,8 +15,11 @@ use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
 };
-use graphql_common::require_authorized_user;
-use graphql_email::{NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader};
+use graphql_common::{parse_id, require_authorized_user};
+use graphql_email::{
+    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader,
+    SoupEmailContentEdgeReader,
+};
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{EntityFavoriteEdgeReader, NoOpEntityFavoriteEdgeReader};
 use graphql_notification::{
@@ -29,8 +32,9 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{
-    GroupedSoup, GroupedSoupInput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
-    resolve_grouped_soup, resolve_soup, resolve_soup_updates,
+    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
+    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
+    resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -53,11 +57,13 @@ pub struct CompleteMutationRoot<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
+    ES: EmailService,
 >(
     PropertiesMutationRoot<W>,
     EntityMutationRoot<M, E>,
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
+    GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
 );
 
 impl<
@@ -67,7 +73,8 @@ impl<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
-> CompleteMutationRoot<W, M, E, C, N, A>
+    ES: EmailService,
+> CompleteMutationRoot<W, M, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
     fn new() -> Self {
@@ -76,6 +83,7 @@ impl<
             EntityMutationRoot::<M, E>::new(),
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
+            GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
         )
     }
 }
@@ -91,7 +99,7 @@ impl<
 /// `FR` the favorite edge reader, and `AR` the access edge reader.
 pub type SoupSchema<S, R, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR> = Schema<
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>,
-    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS>,
+    CompleteMutationRoot<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS, E>,
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR>,
 >;
 
@@ -208,6 +216,13 @@ pub struct GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER, FR, AR> {
     user_id: MacroUserIdStr<'static>,
 }
 
+/// Input for fetching one email thread by its canonical identifier.
+#[derive(async_graphql::InputObject)]
+pub struct EmailThreadInput {
+    /// The canonical email thread identifier.
+    thread_id: ID,
+}
+
 /// Build a GraphQL schema for Soup suitable for SDL export or introspection.
 pub fn build_schema() -> SchemaOnlySoupSchema {
     build_schema_with_services(NoOpSoupService, NoOpSoupRealtimeSubscriptionService)
@@ -236,7 +251,7 @@ pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR
 >
 where
     S: SoupService + Clone,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -265,7 +280,7 @@ pub fn build_schema_with_services<S, R, E, EAS, Auth, St, W, M, C, N, NR, PR, ER
 where
     S: SoupService + Clone,
     R: SoupRealtimeSubscriptionService + Clone,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -284,7 +299,7 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS>::new(),
+        CompleteMutationRoot::<W, M, SoupEdges<NR, PR, ER, FR, AR>, C, N, EAS, E>::new(),
         SoupSubscriptionRoot::new(realtime_service),
     )
     .finish()
@@ -313,7 +328,7 @@ pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR, AR
 >
 where
     S: SoupService,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -342,7 +357,7 @@ pub fn build_schema_from_arcs<S, R, E, EAS, Auth, St, W, M, C, N, NR, PR, ER, FR
 where
     S: SoupService,
     R: SoupRealtimeSubscriptionService,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -367,7 +382,7 @@ where
 impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR> SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>
 where
     S: SoupService + Clone,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -427,7 +442,7 @@ where
 impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR> GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER, FR, AR>
 where
     S: SoupService,
-    E: EmailService,
+    E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -443,6 +458,29 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// Authenticated user email catalog fields supplied by `graphql_email`.
+    #[graphql(flatten)]
+    async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlEmailQuery<E>> {
+        let state = ctx.data::<St>()?;
+        let service = EmailRouterState::<E>::from_ref(state).service();
+        Ok(GraphqlEmailQuery::new(service, self.user_id.clone()))
+    }
+
+    /// Fetch one accessible email thread by its canonical identifier.
+    async fn email_thread(
+        &self,
+        ctx: &Context<'_>,
+        input: EmailThreadInput,
+    ) -> async_graphql::Result<Option<GraphqlSoupEmailThread<SoupEdges<NR, PR, ER, FR, AR>>>> {
+        let thread_id = parse_id(input.thread_id, "threadId")?;
+        resolve_soup_email_thread::<SoupEdges<NR, PR, ER, FR, AR>>(
+            ctx,
+            self.user_id.clone(),
+            thread_id,
+        )
+        .await
     }
 
     /// Fetch Soup items nested into grouping bins.

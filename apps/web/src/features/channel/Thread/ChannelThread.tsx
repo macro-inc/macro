@@ -1,7 +1,7 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
@@ -35,7 +35,7 @@ export function ChannelThread(props: ThreadProps) {
   const userId = useUserId();
   const replyUserId = () => userId() ?? props.data().sender_id;
   const macroId = () => tryMacroId(replyUserId());
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
@@ -244,7 +244,6 @@ export function ChannelThread(props: ThreadProps) {
       ],
       ([activeTargetReplyId, _targetReplyId, replies]) => {
         if (!activeTargetReplyId) {
-          if (replySelection.selectedId()) replySelection.clear();
           return;
         }
         const found = replies.some((r) => r.id === activeTargetReplyId);

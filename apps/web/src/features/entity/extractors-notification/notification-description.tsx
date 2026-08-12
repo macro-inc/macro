@@ -1,5 +1,5 @@
 import type { NotificationType } from '@core/types';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
 import { createMemo } from 'solid-js';
 import type { Notification } from '../types/notification';
@@ -48,10 +48,10 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   };
 
   const macroFirstName = (id: string) => {
-    const parts = useDisplayNameParts(tryMacroId(id), {
+    const parts = getDisplayNameParts(tryMacroId(id), {
       emailFallback: 'local-part',
     });
-    return parts.firstName() || parts.fullName();
+    return parts.firstName || parts.fullName;
   };
 
   // Sender display labels for the notification/stack. GitHub PR senders are

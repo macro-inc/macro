@@ -25,6 +25,8 @@ env_vars! {
     pub struct OpensearchPassword;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
+    pub struct GithubInstallationStateSecret;
+    pub struct GithubSyncAppClientSecret;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
     pub struct LivekitServerUrl;
@@ -98,6 +100,8 @@ pub struct Config {
     pub opensearch_password: OpensearchPassword,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
+    pub github_installation_state_secret: GithubInstallationStateSecret,
+    pub github_sync_app_client_secret: GithubSyncAppClientSecret,
     pub kafka_brokers: KafkaBrokers,
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
@@ -139,6 +143,12 @@ pub struct Config {
     /// The document limit for free users
     #[macro_config_default(20)]
     pub document_limit: u64,
+
+    /// Master switch for calendar event reminder dispatch. When `false`
+    /// (the default) the worker drains its queue without delivering, so
+    /// synced reminder schedules produce no notifications until enabled.
+    #[macro_config_default(false)]
+    pub calendar_reminder_dispatch_enabled: bool,
 
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]

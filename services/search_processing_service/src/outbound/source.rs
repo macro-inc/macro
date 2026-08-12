@@ -6,7 +6,7 @@ use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage, project::UpsertProject,
+    email::EmailThreadBatchMessage, project::UpsertProject,
 };
 
 use crate::config::BackfillPageSizes;
@@ -14,15 +14,15 @@ use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
     EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
-    SourcePage,
+    PropertySourcePage, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
 const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
 
 /// Page size for the properties backfill's distinct-entity-id scan. A fixed
-/// value rather than a config knob: property rows are few and one message is
-/// enqueued per entity.
+/// value rather than a config knob: property rows are few and each entity is
+/// reindexed directly.
 const PROPERTIES_PAGE_SIZE: usize = 5000;
 
 /// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
@@ -280,6 +280,29 @@ impl BackfillSource for PgBackfillSource {
             .filter(|n| *n > 0)
             .unwrap_or(DEFAULT_EMAIL_BATCH_SIZE);
 
+        // An explicit id list pages in memory: each page is a primary-key
+        // lookup, so a targeted repair never runs the scan-and-sort that the
+        // `since` and full variants depend on.
+        if !req.thread_ids.is_empty() {
+            let page = page_of(&req.thread_ids, offset, self.page_sizes.emails);
+            if page.is_empty() {
+                return Ok(SourcePage::empty());
+            }
+            let rows = email_db_client::threads::get::get_thread_ids_with_macro_user_id_by_ids(
+                &self.db, page,
+            )
+            .await
+            .map_err(BackfillError::Source)?;
+            // Advance by the ids consumed, not the rows found, or unknown ids
+            // would stall the drain loop on the same page forever.
+            return Ok(email_source_page(
+                rows,
+                batch_size,
+                page.len(),
+                req.index_override.as_deref(),
+            ));
+        }
+
         let rows = match req.since {
             Some(since) => {
                 email_db_client::threads::get::get_paginated_thread_ids_with_macro_user_id_since(
@@ -305,41 +328,19 @@ impl BackfillSource for PgBackfillSource {
             return Ok(SourcePage::empty());
         }
 
-        let mut by_user: HashMap<String, Vec<String>> = HashMap::new();
-        for (thread_id, macro_user_id) in rows {
-            by_user
-                .entry(macro_user_id)
-                .or_default()
-                .push(thread_id.to_string());
-        }
-
-        let messages: Vec<SearchQueueMessage> = by_user
-            .into_iter()
-            .flat_map(|(macro_user_id, thread_ids)| {
-                thread_ids
-                    .chunks(batch_size)
-                    .map(|chunk| {
-                        SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
-                            thread_ids: chunk.to_vec(),
-                            macro_user_id: macro_user_id.clone(),
-                            index_override: req.index_override.clone(),
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
-        Ok(SourcePage {
-            messages,
+        Ok(email_source_page(
+            rows,
+            batch_size,
             rows_consumed,
-        })
+            req.index_override.as_deref(),
+        ))
     }
 
     async fn fetch_entity_properties(
         &self,
         req: &PropertiesBackfillRequest,
         offset: usize,
-    ) -> Result<SourcePage, BackfillError> {
+    ) -> Result<PropertySourcePage, BackfillError> {
         let entity_type = EntityType::from_str(&req.entity_type)
             .map_err(|e| BackfillError::Source(anyhow::Error::new(e)))?;
 
@@ -354,18 +355,9 @@ impl BackfillSource for PgBackfillSource {
             .map_err(BackfillError::Source)?;
 
         let rows_consumed = entity_ids.len();
-        let messages: Vec<SearchQueueMessage> = entity_ids
-            .into_iter()
-            .map(|entity_id| {
-                SearchQueueMessage::UpdateDocumentProperties(DocumentPropertiesUpdate {
-                    document_id: entity_id,
-                    entity_type: entity_type.to_string(),
-                })
-            })
-            .collect();
-
-        Ok(SourcePage {
-            messages,
+        Ok(PropertySourcePage {
+            entity_ids,
+            entity_type,
             rows_consumed,
         })
     }
@@ -417,3 +409,52 @@ impl BackfillSource for PgBackfillSource {
         ))
     }
 }
+
+/// The `offset..offset + limit` window of `ids`, empty once the offset passes
+/// the end so the drain loop terminates.
+fn page_of(ids: &[uuid::Uuid], offset: usize, limit: usize) -> &[uuid::Uuid] {
+    let start = offset.min(ids.len());
+    let end = start.saturating_add(limit).min(ids.len());
+    &ids[start..end]
+}
+
+/// Group resolved threads by owner and chunk each owner's threads into batch
+/// messages. `rows_consumed` is what the drain loop advances its offset by.
+fn email_source_page(
+    rows: Vec<(uuid::Uuid, String)>,
+    batch_size: usize,
+    rows_consumed: usize,
+    index_override: Option<&str>,
+) -> SourcePage {
+    let mut by_user: HashMap<String, Vec<String>> = HashMap::new();
+    for (thread_id, macro_user_id) in rows {
+        by_user
+            .entry(macro_user_id)
+            .or_default()
+            .push(thread_id.to_string());
+    }
+
+    let messages: Vec<SearchQueueMessage> = by_user
+        .into_iter()
+        .flat_map(|(macro_user_id, thread_ids)| {
+            thread_ids
+                .chunks(batch_size)
+                .map(|chunk| {
+                    SearchQueueMessage::ExtractEmailThreadBatch(EmailThreadBatchMessage {
+                        thread_ids: chunk.to_vec(),
+                        macro_user_id: macro_user_id.clone(),
+                        index_override: index_override.map(str::to_string),
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    SourcePage {
+        messages,
+        rows_consumed,
+    }
+}
+
+#[cfg(test)]
+mod test;

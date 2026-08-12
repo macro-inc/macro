@@ -14,6 +14,7 @@ export function PreviewButton(
     disabledLabel?: string;
     onEngage?: () => void;
     onOpenChange?: (open: boolean) => void;
+    hideLabel?: boolean;
   } = {}
 ) {
   const panel = useSplitPanelOrThrow();
@@ -68,9 +69,12 @@ export function PreviewButton(
           depth={2}
           class="bg-surface"
           disabled={!canEngage()}
+          aria-label={props.hideLabel ? 'Preview' : undefined}
         >
           {isController() ? <EyeSlashIcon /> : <EyeIcon />}
-          <span>Preview</span>
+          <Show when={!props.hideLabel}>
+            <span>Preview</span>
+          </Show>
         </Button>
       </Tooltip>
     </Show>

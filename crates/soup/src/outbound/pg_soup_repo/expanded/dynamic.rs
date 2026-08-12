@@ -8,6 +8,7 @@ use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    calendar_event::CalendarEventLiteral,
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
@@ -17,6 +18,7 @@ use item_filters::ast::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
+    calendar_event::SoupCalendarEvent,
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
     item::SoupItem,
@@ -125,6 +127,29 @@ static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
                     AND uh."itemType" = 'project'
                     AND uh."userId" = $1
                 WHERE p."deletedAt" IS NULL
+"#;
+
+static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'calendar_event'::text as item_type,
+                    event.id::text as id,
+                    CASE $2
+                        WHEN 'created_at' THEN event.created_at
+                        WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
+                        ELSE event.updated_at
+                    END::timestamptz as sort_ts,
+                    NULL::text as project_id,
+                    'CALENDAR_EVENT'::property_entity_type as property_entity_type
+                FROM calendar_events event
+                WHERE (
+                      event.owner_id = $1
+                      OR EXISTS (
+                          SELECT 1
+                          FROM macro_user_links link
+                          WHERE link.link_id = event.source_link_id
+                            AND link.primary_macro_id = $1
+                      )
+                  )
 "#;
 
 // -- Detail clauses: full columns, joined back from TopItems --
@@ -265,7 +290,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
-            NULL as "is_persistent",
+            NULL::boolean as "is_persistent",
             di.sha as "sha",
             dt.sub_type as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
@@ -279,6 +304,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
                 ELSE NULL
             END as "is_completed",
             d."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -313,23 +339,24 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
         SELECT
             'chat' as "item_type",
             c.id as "id",
-            NULL as "document_version_id",
+            NULL::text as "document_version_id",
             c."userId" as "user_id",
             c.name as "name",
-            NULL as "branched_from_id",
-            NULL as "branched_from_version_id",
-            NULL as "document_family_id",
-            NULL as "file_type",
+            NULL::text as "branched_from_id",
+            NULL::bigint as "branched_from_version_id",
+            NULL::bigint as "document_family_id",
+            NULL::text as "file_type",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
-            NULL as "sha",
-            NULL as "sub_type",
+            NULL::text as "sha",
+            NULL::document_sub_type_value as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
             gi.sort_ts as "sort_ts",
-            NULL as "is_completed",
+            NULL::boolean as "is_completed",
             c."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -344,23 +371,24 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
         SELECT
             'project' as "item_type",
             p.id as "id",
-            NULL as "document_version_id",
+            NULL::text as "document_version_id",
             p."userId" as "user_id",
             p.name as "name",
-            NULL as "branched_from_id",
-            NULL as "branched_from_version_id",
-            NULL as "document_family_id",
-            NULL as "file_type",
+            NULL::text as "branched_from_id",
+            NULL::bigint as "branched_from_version_id",
+            NULL::bigint as "document_family_id",
+            NULL::text as "file_type",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
-            NULL as "is_persistent",
-            NULL as "sha",
-            NULL as "sub_type",
+            NULL::boolean as "is_persistent",
+            NULL::text as "sha",
+            NULL::document_sub_type_value as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
             gi.sort_ts as "sort_ts",
-            NULL as "is_completed",
+            NULL::boolean as "is_completed",
             p."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -371,6 +399,66 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             AND uh."itemType" = 'project'
             AND uh."userId" = $1
         WHERE gi.item_type = 'project'
+"#;
+
+static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
+        SELECT
+            'calendar_event' as "item_type",
+            event.id::text as "id",
+            NULL::text as "document_version_id",
+            event.owner_id as "user_id",
+            event.title as "name",
+            NULL::text as "branched_from_id",
+            NULL::bigint as "branched_from_version_id",
+            NULL::bigint as "document_family_id",
+            NULL::text as "file_type",
+            event.created_at as "created_at",
+            event.updated_at as "updated_at",
+            NULL::text as "project_id",
+            NULL::boolean as "is_persistent",
+            NULL::text as "sha",
+            NULL::document_sub_type_value as "sub_type",
+            NULL::timestamptz as "viewed_at",
+            gi.sort_ts as "sort_ts",
+            NULL::boolean as "is_completed",
+            NULL::timestamptz as "deleted_at",
+            jsonb_build_object(
+                'id', event.id,
+                'ownerId', event.owner_id,
+                'icalUid', event.ical_uid,
+                'title', event.title,
+                'description', event.description,
+                'location', event.location,
+                'status', event.status,
+                'visibility', event.visibility,
+                'transparency', event.transparency,
+                'time', CASE
+                    WHEN event.starts_at IS NOT NULL THEN jsonb_build_object(
+                        'kind', 'timed',
+                        'startsAt', event.starts_at,
+                        'endsAt', event.ends_at,
+                        'timeZone', event.time_zone
+                    )
+                    ELSE jsonb_build_object(
+                        'kind', 'allDay',
+                        'startDate', event.start_date,
+                        'endDate', event.end_date
+                    )
+                END,
+                'organizerEmail', event.organizer_email,
+                'organizerName', event.organizer_name,
+                'conferenceUrl', event.conference_url,
+                'isReadOnly', event.is_read_only,
+                'createdAt', event.created_at,
+                'updatedAt', event.updated_at,
+                'extra', NULL
+            ) as "calendar_event",
+            gi.group_key as "group_key",
+            gi.group_total_count as "group_total_count",
+            gi.row_in_group as "row_in_group"
+        FROM GroupedItems gi
+        INNER JOIN calendar_events event ON event.id::text = gi.id
+        WHERE gi.item_type = 'calendar_event'
 "#;
 
 static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
@@ -394,6 +482,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::timestamptz as "sort_ts",
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             NULL::text as "group_key",
             NULL::bigint as "group_total_count",
             NULL::bigint as "row_in_group"
@@ -419,7 +508,11 @@ fn build_notification_exists_clause(
     )
 }
 
-fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    done: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -431,7 +524,11 @@ fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: 
     )
 }
 
-fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    seen: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -723,6 +820,73 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     }
 }
 
+/// A single-quoted SQL string literal with embedded quotes doubled. The
+/// calendar filter inlines caller-supplied strings (statuses, attendee and
+/// organizer emails), which unlike the ids the sibling builders inline are
+/// not shaped by a parser first.
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Renders the calendar-event filter bind-free, like every other arm of the
+/// hand-numbered grouped query: `push_bind` placeholders would start at `$1`
+/// and collide with the positionally-bound user id. The notification clauses
+/// reference `$1` as the requesting user, which both this query and
+/// `cursor_soup` guarantee.
+fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> String {
+    let Some(expr) = ast else {
+        return String::new();
+    };
+    let expr = push_not_inward(expr, false);
+    let formatting = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => {
+            format!("event.id = '{id}'")
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Status(status)) => {
+            format!("event.status = {}", sql_string_literal(&status))
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::StartsBefore(value)) => {
+            format!(
+                "COALESCE(event.starts_at, event.start_date::timestamp AT TIME ZONE 'UTC') < '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::EndsAfter(value)) => {
+            format!(
+                "COALESCE(event.ends_at, event.end_date::timestamp AT TIME ZONE 'UTC') > '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Attendee(email)) => {
+            format!(
+                "EXISTS (SELECT 1 FROM calendar_event_attendees attendee \
+                 WHERE attendee.event_id = event.id AND attendee.email = lower({}))",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Organizer(email)) => {
+            format!(
+                "lower(event.organizer_email) = lower({})",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("event.id", "calendar_event", done)
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("event.id", "calendar_event", seen)
+        }
+    });
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
 fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -810,7 +974,10 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_properties_filter(ast: Option<&Expr<PropertiesLiteral>>, entity_id_sql: &str) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
+    ast: Option<&Expr<PropertiesLiteral>>,
+    entity_id_sql: &str,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -916,6 +1083,18 @@ fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => id.is_nil(),
             filter_ast::ExprFrame::Literal(_) => false,
         })
     })
@@ -1367,7 +1546,6 @@ fn build_query(
             WHERE false"#,
         );
     }
-
     builder.push(DETAIL_SUFFIX);
 
     builder
@@ -1424,6 +1602,7 @@ enum SoupRow {
     Document(DocumentRow),
     Chat(ChatRow),
     Project(ProjectRow),
+    CalendarEvent(SoupCalendarEvent<()>),
 }
 
 impl<'a> FromRow<'a, PgRow> for SoupRow {
@@ -1433,6 +1612,12 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
             "document" => Ok(SoupRow::Document(DocumentRow::from_row(row)?)),
             "chat" => Ok(SoupRow::Chat(ChatRow::from_row(row)?)),
             "project" => Ok(SoupRow::Project(ProjectRow::from_row(row)?)),
+            "calendar_event" => {
+                let value: serde_json::Value = row.try_get("calendar_event")?;
+                let event = serde_json::from_value(value)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+                Ok(SoupRow::CalendarEvent(event))
+            }
             _ => Err(sqlx::Error::TypeNotFound {
                 type_name: item_type.to_string(),
             }),
@@ -1545,6 +1730,7 @@ impl SoupRow {
                 deleted_at,
                 extra: (),
             }),
+            SoupRow::CalendarEvent(event) => SoupItem::CalendarEvent(event),
         })
     }
 }
@@ -1719,6 +1905,15 @@ fn build_grouped_query<'a>(
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Project],
         );
+    // Gated like the other three legs. Beyond skipping a union branch that can
+    // never match, this keeps the NIL-id exclusion every Soup query now sends
+    // from reaching `push_filter` below — see the bind-numbering note there.
+    let include_calendar_events =
+        !calendar_event_filter_is_impossible(filter_ast.calendar_event_filter.as_deref())
+            && properties_filter_can_apply_to(
+                filter_ast.properties_filter.as_deref(),
+                &[PropertyEntityType::CalendarEvent],
+            );
 
     push_accessible_items_cte(
         &mut builder,
@@ -1766,6 +1961,18 @@ fn build_grouped_query<'a>(
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "p.id",
+        ));
+    }
+
+    if include_calendar_events {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
+        builder.push(build_calendar_event_filter(
+            filter_ast.calendar_event_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "event.id::text",
         ));
     }
 
@@ -1837,6 +2044,13 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut combined_needs_separator);
         builder.push(
             GROUPED_PROJECT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_calendar_events {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE
                 .replace("GroupedItems gi", &format!("{} gi", source_table)),
         );
     }

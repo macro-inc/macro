@@ -29,8 +29,6 @@ use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-use std::sync::Arc;
-
 use super::error::PropertiesErr;
 use super::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
@@ -41,32 +39,18 @@ use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
     EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagScope, TagSet, UpdatePropertyOptionOutcome,
-    ViewReceipt,
+    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope,
+    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
+use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
 
-/// Entity types whose search index denormalizes property values, i.e. whose
-/// property mutations must enqueue a search reindex.
-fn is_search_indexed(entity_type: EntityType) -> bool {
-    matches!(
-        entity_type,
-        EntityType::Task
-            | EntityType::Document
-            | EntityType::Thread
-            | EntityType::Chat
-            | EntityType::Project
-            | EntityType::CallRecord
-    )
-}
-
 /// Implementation of [`PropertiesService`] using repository, permission,
-/// notification, search-indexing, and event-publishing ports.
+/// notification, and event-publishing ports.
 #[derive(Debug)]
 pub struct PropertiesServiceImpl<R, P, N, B = NoopMacroEventBroker>
 where
@@ -78,7 +62,6 @@ where
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
-    search_indexer: Option<Arc<dyn PropertySearchIndexer>>,
     event_broker: B,
 }
 
@@ -98,7 +81,6 @@ where
             repository,
             permission_service,
             notification_service,
-            search_indexer: None,
             event_broker: NoopMacroEventBroker,
         }
     }
@@ -120,16 +102,8 @@ where
             repository: self.repository,
             permission_service: self.permission_service,
             notification_service: self.notification_service,
-            search_indexer: self.search_indexer,
             event_broker,
         }
-    }
-
-    /// Attach a search-reindex publisher so property mutations refresh the
-    /// search index. Builder-style so existing constructions are unaffected.
-    pub fn with_search_indexer(mut self, search_indexer: Arc<dyn PropertySearchIndexer>) -> Self {
-        self.search_indexer = Some(search_indexer);
-        self
     }
 
     /// Publish a property lifecycle event without coupling broker availability
@@ -271,12 +245,15 @@ where
             .map(|receipt| {
                 let canonical_entity_type = receipt.entity_type();
                 let storage_entity_type = match canonical_entity_type {
+                    AccessEntityType::CalendarEvent => EntityType::CalendarEvent,
                     AccessEntityType::Document => Uuid::parse_str(receipt.entity_id())
                         .ok()
                         .and_then(|document_id| document_sub_types.get(&document_id))
                         .map_or(EntityType::Document, |sub_type| match sub_type {
                             DocumentSubType::Task => EntityType::Task,
-                            DocumentSubType::Snippet => EntityType::Document,
+                            DocumentSubType::Snippet | DocumentSubType::Skill => {
+                                EntityType::Document
+                            }
                         }),
                     AccessEntityType::EmailThread => EntityType::Thread,
                     AccessEntityType::Call => EntityType::CallRecord,
@@ -317,24 +294,6 @@ where
             .ok_or_else(|| PropertiesErr::Validation("Missing property target".to_string()))
     }
 
-    /// Best-effort publish of a property reindex for entity types whose
-    /// search index denormalizes property values. Logs and continues on
-    /// failure so a missed reindex never fails the mutation itself.
-    async fn enqueue_property_upsert(&self, entity_id: &str, entity_type: EntityType) {
-        let Some(search_indexer) = self.search_indexer.as_ref() else {
-            return;
-        };
-        if !is_search_indexed(entity_type) {
-            return;
-        }
-        if let Err(error) = search_indexer
-            .enqueue_upsert(entity_id.to_string(), entity_type)
-            .await
-        {
-            tracing::warn!(error = ?error, entity_id = %entity_id, "failed to enqueue search reindex for property change");
-        }
-    }
-
     /// Fetch a property definition, ensuring it exists, isn't a system
     /// property, and is owned by the caller (their user property or a property
     /// of their team).
@@ -363,6 +322,78 @@ where
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(PropertiesErr::NotFound)
+    }
+
+    /// Resolve the personal tag definition that owns `option_id`, rejecting
+    /// options the caller does not own and options that are not labels.
+    async fn owned_personal_tag_option(
+        &self,
+        option_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(PropertyOption, PropertyDefinition), PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let option = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        let definition = self
+            .repository
+            .get_tag_definition(PropertyDefinitionOwner::User(user_id))
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        if option.property_definition_id != definition.id {
+            return Err(PropertiesErr::OptionNotFound);
+        }
+
+        Ok((option, definition))
+    }
+
+    /// Provision the team tag set the caller is sharing a label into.
+    async fn target_team_tag_definition(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<PropertyDefinition, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let team_id = team_id_from_receipt(team).ok_or(PropertiesErr::TeamMembershipRequired)?;
+        let result = self
+            .repository
+            .get_or_create_tag_definition(PropertyDefinitionOwner::Team(team_id))
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if result.created {
+            self.publish_property_event(Self::property_created_event(&result.definition, user_id));
+        }
+
+        Ok(result.definition)
+    }
+
+    /// Publish one entity-property event per entity the remap rewrote, so the
+    /// search index and Soup rebuild those entities from the committed rows.
+    fn publish_tag_remap_events(&self, remap: &TagRemapOutcome, actor: &MacroUserIdStr<'_>) {
+        for mutation in &remap.mutations {
+            self.publish_property_event(PropertyMacroEvent::entity_property_updated(
+                EntityPropertyUpdatedMetadata {
+                    entity_property_id: mutation.property.id,
+                    entity_id: mutation.property.entity_id.clone(),
+                    entity_type: mutation.property.entity_type,
+                    property_definition_id: mutation.property.property_definition_id,
+                    actor_user_id: Some(actor.clone().into_owned()),
+                    value: mutation.value.clone(),
+                    updated_at: mutation.property.updated_at,
+                },
+            ));
+        }
     }
 
     /// Resolve a tag set's options. A missing definition yields an empty set.
@@ -617,7 +648,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(entity_id, entity_type).await;
         self.publish_property_event(Self::entity_property_updated_event(
             &property,
             &property_value,
@@ -686,8 +716,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
         self.publish_property_event(Self::entity_property_updated_event(
             &mutation.property,
             &mutation.value,
@@ -724,8 +752,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), subject.storage_entity_type)
-            .await;
         if let Some(mutation) = mutation {
             self.publish_property_event(Self::entity_property_updated_event(
                 &mutation.property,
@@ -798,8 +824,6 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        self.enqueue_property_upsert(access.entity_id(), entity_type)
-            .await;
         self.publish_entity_property_selection_events(&selections, access);
 
         Ok(selections)
@@ -887,8 +911,6 @@ where
                 continue;
             }
 
-            // Convert the repo error to a Send type up front so the raw
-            // `R::Err` is never held across the reindex await below.
             let update_result = self
                 .repository
                 .bulk_update_entity_property_options(
@@ -905,7 +927,6 @@ where
                         .last()
                         .map(|selection| selection.option_ids.clone())
                         .unwrap_or_default();
-                    self.enqueue_property_upsert(entity_id, entity_type).await;
                     self.publish_entity_property_selection_events(&selections, &access[index]);
                     outcomes[index] = Some(EntityOptionUpdateOutcome::Applied { option_ids });
                 }
@@ -1372,6 +1393,87 @@ where
         }
 
         self.build_tag_set(scope, Some(result.definition)).await
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn promote_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let (_, source_definition) = self.owned_personal_tag_option(option_id, user_id).await?;
+        let target_definition = self.target_team_tag_definition(user_id, team).await?;
+
+        let outcome = self
+            .repository
+            .promote_tag_option(option_id, source_definition.id, target_definition.id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let remap = match outcome {
+            TagPromotionOutcome::Promoted(remap) => remap,
+            TagPromotionOutcome::Conflict(conflict) => {
+                tracing::info!(
+                    conflicting_option_id = %conflict.id,
+                    "team already has a label with that name"
+                );
+                return Err(PropertiesErr::ConflictingTeamLabel(Box::new(conflict)));
+            }
+        };
+
+        tracing::info!(
+            entities_retagged = remap.mutations.len(),
+            "promoted personal label to the team tag set"
+        );
+
+        // The option keeps its id, so this reports the same label now hanging
+        // off the team definition rather than a newly created one.
+        self.publish_property_event(Self::property_option_updated_event(&remap.option, user_id));
+        self.publish_tag_remap_events(&remap, user_id);
+
+        Ok(remap.option)
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn merge_tag_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        option_id: Uuid,
+        target_option_id: Uuid,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        if option_id == target_option_id {
+            return Err(PropertiesErr::Validation(
+                "cannot merge a label into itself".to_string(),
+            ));
+        }
+
+        let (source_option, source_definition) =
+            self.owned_personal_tag_option(option_id, user_id).await?;
+        let target_definition = self.target_team_tag_definition(user_id, team).await?;
+
+        let remap = self
+            .repository
+            .merge_tag_option(
+                option_id,
+                source_definition.id,
+                target_option_id,
+                target_definition.id,
+            )
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        tracing::info!(
+            entities_retagged = remap.mutations.len(),
+            "merged personal label into an existing team label"
+        );
+
+        self.publish_property_event(Self::property_option_deleted_event(&source_option, user_id));
+        self.publish_tag_remap_events(&remap, user_id);
+
+        Ok(remap.option)
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]

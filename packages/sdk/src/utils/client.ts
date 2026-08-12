@@ -15,7 +15,10 @@ import {
   type ServiceName,
   WEB_APP_URLS,
 } from '../config';
+import { BotsNamespace } from '../entities/bots/namespace';
+import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
+import { resolveLocalPortmap } from '../local-portmap';
 
 export class MacroClient {
   readonly auth: AuthSdk;
@@ -32,13 +35,20 @@ export class MacroClient {
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
   private readonly requestedAs?: string;
+  private selfPrincipal?: Promise<string>;
 
   constructor(opts: MacroOpts) {
     const env: Env = opts.env ?? 'dev';
-    const hosts = { ...HOSTS[env], ...opts.hosts };
+    const localPortmap =
+      env === 'local' ? resolveLocalPortmap() : undefined;
+    const hosts = { ...HOSTS[env], ...localPortmap?.hosts, ...opts.hosts };
     const envWebUrl =
       typeof process !== 'undefined' ? process.env.MACRO_WEB_URL : undefined;
-    this.webAppUrl = opts.webAppUrl ?? envWebUrl ?? WEB_APP_URLS[env];
+    this.webAppUrl =
+      opts.webAppUrl ??
+      envWebUrl ??
+      localPortmap?.webAppUrl ??
+      WEB_APP_URLS[env];
     this.authConfig = resolveAuth(opts);
     this.requestedAs = opts.requestedAs;
     if (this.requestedAs && this.authConfig.type !== 'bot') {
@@ -75,6 +85,28 @@ export class MacroClient {
     }
   }
 
+  /** Whether requests have a user identity accepted by acting-user endpoints. */
+  hasActingUser(): boolean {
+    return this.authConfig.type === 'user' || this.requestedAs !== undefined;
+  }
+
+  /**
+   * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
+   * auth, `macro|<email>` for user auth — fetched once and cached. Failed
+   * lookups are not cached, so a later call retries.
+   */
+  myPrincipalId(): Promise<string> {
+    this.selfPrincipal ??= (
+      this.authConfig.type === 'bot'
+        ? new BotsNamespace(this).me().then((bot) => `bot|${bot.id}`)
+        : User.me(this).then((user) => user.id)
+    ).catch((error) => {
+      this.selfPrincipal = undefined;
+      throw error;
+    });
+    return this.selfPrincipal;
+  }
+
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
@@ -82,10 +114,12 @@ export class MacroClient {
       const tok = typeof source === 'function' ? await source() : source;
       if (this.authConfig.type === 'bot') {
         request.headers.set('x-macro-bot-token', tok);
-        request.headers.set(
-          'x-macro-bot-scope',
-          this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
-        );
+        if (!request.headers.has('x-macro-bot-scope')) {
+          request.headers.set(
+            'x-macro-bot-scope',
+            this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
+          );
+        }
         if (this.requestedAs) {
           request.headers.set(
             'x-macro-bot-for-macro-user-id',

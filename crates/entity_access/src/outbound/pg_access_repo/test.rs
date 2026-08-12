@@ -926,3 +926,81 @@ async fn team_item_access_rejects_unsupported_entity_type(pool: PgPool) -> anyho
     ));
     Ok(())
 }
+
+const REMINDER_OWNER: &str = "macro|reminder-owner@example.com";
+const REMINDER_STRANGER: &str = "macro|reminder-stranger@example.com";
+
+async fn insert_reminder_user(pool: &PgPool, id: &str) -> anyhow::Result<()> {
+    let macro_user_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+           VALUES ($1, $2, $2, $2)"#,
+        macro_user_id,
+        id,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#,
+        id,
+        macro_user_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn insert_reminder(pool: &PgPool, owner: &str) -> anyhow::Result<Uuid> {
+    let id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO reminder (id, user_id, description, next_run_at, remind_at)
+           VALUES ($1, $2, 'follow up', now(), now())"#,
+        id,
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Reminder access is ownership and nothing else — the boundary
+/// `ReminderAccessExtractor` relies on to gate every reminder item route.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reminder_access_is_owner_for_the_owner_and_nothing_for_anyone_else(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_reminder_user(&pool, REMINDER_OWNER).await?;
+    insert_reminder_user(&pool, REMINDER_STRANGER).await?;
+    let reminder_id = insert_reminder(&pool, REMINDER_OWNER).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let owner = repo
+        .get_reminder_access(&reminder_id.to_string(), Some(&user_id(REMINDER_OWNER)))
+        .await?;
+    assert_eq!(owner, Some(AccessLevel::Owner));
+
+    let stranger = repo
+        .get_reminder_access(&reminder_id.to_string(), Some(&user_id(REMINDER_STRANGER)))
+        .await?;
+    assert_eq!(stranger, None, "a reminder is never shared");
+
+    let anonymous = repo
+        .get_reminder_access(&reminder_id.to_string(), None)
+        .await?;
+    assert_eq!(anonymous, None);
+
+    // A reminder that does not exist is indistinguishable from one that is not
+    // yours, which is what keeps the id from leaking.
+    let missing = repo
+        .get_reminder_access(&Uuid::new_v4().to_string(), Some(&user_id(REMINDER_OWNER)))
+        .await?;
+    assert_eq!(missing, None);
+
+    let malformed = repo
+        .get_reminder_access("not-a-uuid", Some(&user_id(REMINDER_OWNER)))
+        .await
+        .expect_err("a malformed id is a bad request, not a denial");
+    assert!(matches!(malformed, AccessError::BadRequest(_)));
+
+    Ok(())
+}

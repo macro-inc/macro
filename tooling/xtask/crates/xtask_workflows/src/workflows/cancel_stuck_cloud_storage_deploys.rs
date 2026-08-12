@@ -1,5 +1,5 @@
 //! `Cancel Stuck Cloud Storage Deploys` — hourly cron that cancels
-//! `deploy-cloud-storage-on-push` runs stuck queued/in_progress past a
+//! `deploy_on_push` runs stuck queued/in_progress past a
 //! threshold. Generated into `cancel_stuck_cloud_storage_deploys.yml`
 //! (replaces the hand-written `cancel-stuck-cloud-storage-deploys.yml`).
 //!
@@ -57,8 +57,8 @@ fn cancel_stuck() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         // Keep in sync with the deploy trigger's generated filename
-        // (see deploy_cloud_storage_on_push.rs).
-        .add_env(("WORKFLOW_FILE", "deploy_cloud_storage_on_push.yml"))
+        // (see deploy_on_push.rs).
+        .add_env(("WORKFLOW_FILE", "deploy_on_push.yml"))
         .add_env(("MAX_AGE_MINUTES", "${{ inputs.max-age-minutes || '90' }}"))
         .add_env(("DRY_RUN", "${{ inputs.dry-run || 'false' }}"))
         .add_env(("GH_TOKEN", "${{ github.token }}"))

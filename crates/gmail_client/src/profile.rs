@@ -1,40 +1,26 @@
-use crate::GmailClient;
-use anyhow::Context;
+use crate::error::{decode_json_response, unsuccessful_response};
+use crate::{GmailApiHttpError, GmailClient};
 use models_email::gmail::GmailUserProfile;
 
 #[tracing::instrument(skip(client, access_token), err)]
-pub async fn get_profile_threads_total(
+pub(crate) async fn get_profile(
     client: &GmailClient,
     access_token: &str,
-) -> anyhow::Result<i32> {
-    let url = format!("{}/users/me/profile", client.base_url);
-    let http_client = client.inner.clone();
-
-    let response = http_client
-        .get(&url)
+) -> Result<GmailUserProfile, GmailApiHttpError> {
+    let response = client
+        .inner
+        .get(format!("{}/users/me/profile", client.base_url))
         .bearer_auth(access_token)
         .send()
         .await
-        .context("Failed to send request to Gmail API (get user profile)")?;
+        .map_err(GmailApiHttpError::transport)?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body".to_string());
-        anyhow::bail!(
-            "Gmail API error {} (get user profile): {}",
-            status,
-            error_body
-        );
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
     }
 
-    // Parse the response directly into our GmailUserProfile structure
-    let user_profile = response
-        .json::<GmailUserProfile>()
-        .await
-        .context("Failed to parse Gmail API response into user profile")?;
-
-    Ok(user_profile.threads_total)
+    decode_json_response(response).await
 }
+
+#[cfg(test)]
+mod test;

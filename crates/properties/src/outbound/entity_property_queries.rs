@@ -9,18 +9,18 @@ use crate::domain::model::{
     EntityPropertyMutationSnapshot, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
 };
 
-struct EntityPropertyMutationRow {
-    id: Uuid,
-    entity_id: String,
-    entity_type: EntityType,
-    property_definition_id: Uuid,
-    value: Option<serde_json::Value>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
+pub(super) struct EntityPropertyMutationRow {
+    pub(super) id: Uuid,
+    pub(super) entity_id: String,
+    pub(super) entity_type: EntityType,
+    pub(super) property_definition_id: Uuid,
+    pub(super) value: Option<serde_json::Value>,
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
+    pub(super) updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl EntityPropertyMutationRow {
-    fn into_snapshot(self) -> anyhow::Result<EntityPropertyMutationSnapshot> {
+    pub(super) fn into_snapshot(self) -> anyhow::Result<EntityPropertyMutationSnapshot> {
         let value = match self.value {
             Some(value) if !value.is_null() => Some(serde_json::from_value(value)?),
             Some(_) | None => None,

@@ -9,6 +9,7 @@ use crate::meta::{self, FieldKind, TypeKind};
 use crate::value::EntityKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
@@ -62,14 +63,14 @@ impl RecordSelection {
 
 /// Opaque exclusive cursor into entity-key record ordering.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordCursor(EntityKey);
+pub struct RecordCursor(EntityKey<'static>);
 
 impl RecordCursor {
-    pub(crate) fn new(entity_key: EntityKey) -> Self {
+    pub(crate) fn new(entity_key: EntityKey<'static>) -> Self {
         Self(entity_key)
     }
 
-    pub(crate) fn entity_key(&self) -> &EntityKey {
+    pub(crate) fn entity_key(&self) -> &EntityKey<'static> {
         &self.0
     }
 }
@@ -247,7 +248,7 @@ fn referenced_variable(value: &ArgValue) -> Option<&str> {
     }
 }
 
-fn encode_cursor(entity_key: &EntityKey) -> String {
+fn encode_cursor(entity_key: &EntityKey<'_>) -> String {
     let encoded: String = entity_key
         .0
         .as_bytes()
@@ -257,7 +258,7 @@ fn encode_cursor(entity_key: &EntityKey) -> String {
     format!("r1.{encoded}")
 }
 
-fn decode_cursor(value: &str) -> Result<EntityKey, &'static str> {
+fn decode_cursor(value: &str) -> Result<EntityKey<'static>, &'static str> {
     let encoded = value
         .strip_prefix("r1.")
         .ok_or("invalid record-selection cursor")?;
@@ -273,6 +274,7 @@ fn decode_cursor(value: &str) -> Result<EntityKey, &'static str> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     String::from_utf8(bytes)
+        .map(Cow::Owned)
         .map(EntityKey)
         .map_err(|_| "invalid record-selection cursor")
 }

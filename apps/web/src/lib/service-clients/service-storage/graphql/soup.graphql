@@ -10,6 +10,29 @@ query Soup($input: SoupInput!) {
 	}
 }
 
+query SoupBackfill($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...SoupItemFields
+				... on GraphqlSoupEmailThread {
+					viewerPermission {
+						__typename
+						... on GraphqlAccessLevelPermission {
+							accessLevel
+						}
+					}
+					messages(offset: 0, limit: 20) {
+						...EmailThreadMessageFields
+					}
+				}
+			}
+			nextCursor
+		}
+	}
+}
+
 fragment SoupItemFields on GraphqlSoupEntity {
 	__typename
 	...SoupEntityCoreFields
@@ -63,6 +86,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						ownerId
 						inboxVisible
 						linkId
+						latestInboundMessageTs
 						emailName: name
 						snippet
 						senderEmail
@@ -94,6 +118,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 							createdAt
 						}
 						labels {
+							__typename
 							id
 							linkId
 							providerLabelId
@@ -229,6 +254,40 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						sourceMetadata
 						createdAt
 						updatedAt
+					}
+					... on GraphqlSoupReminder {
+						reminderDescription: description
+						scheduleType
+						remindAt
+						cron
+						timezone
+						nextRunAt
+						enabled
+						completedAt
+						createdAt
+						updatedAt
+						referencedEntity {
+							id
+							entityType
+							fileType
+							subType
+						}
+						properties {
+							...SoupPropertyFields
+						}
+					}
+					... on GraphqlSoupCalendarEvent {
+						calendarEventTitle: title
+						calendarEventStatus: status
+						time
+						conferenceUrl
+						isReadOnly
+						ownerId
+						createdAt
+						updatedAt
+						properties {
+							...SoupPropertyFields
+						}
 					}
 }
 

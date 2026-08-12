@@ -1,5 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Users from '@phosphor-icons/core/regular/users.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
@@ -16,7 +16,7 @@ type TeamInvite = ListTeamMembersResponse['invited'][number];
 const formatRole = (role: string) => role.split('_').join(' ');
 
 function TeamMemberRow(props: { member: TeamMember }) {
-  const [displayName] = useDisplayName(tryMacroId(props.member.userId));
+  const displayName = () => getDisplayName(tryMacroId(props.member.userId));
   const name = () => displayName() || props.member.userId;
 
   return (

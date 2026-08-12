@@ -140,13 +140,9 @@ export function SearchHighlight({
   return null;
 }
 
-export function FloatingSearchHighlight({
-  anchorElem = document.body,
-}: {
-  anchorElem?: HTMLElement;
-}) {
+export function FloatingSearchHighlight(props: { anchorElem?: HTMLElement }) {
   return (
-    <Portal mount={anchorElem}>
+    <Portal mount={props.anchorElem}>
       <For each={FindAndReplaceStore.get.styles}>
         {(item) => (
           <div

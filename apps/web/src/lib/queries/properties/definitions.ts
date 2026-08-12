@@ -6,6 +6,7 @@ import { propertiesServiceClient } from '../../service-clients/service-propertie
 import type { CreatePropertyDefinitionRequest } from '../../service-clients/service-properties/generated/schemas/createPropertyDefinitionRequest';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '../../service-clients/service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from '../../service-clients/service-properties/generated/schemas/propertyDefinitionResponse';
 import type { PropertyScope } from '../../service-clients/service-properties/generated/schemas/propertyScope';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -44,6 +45,32 @@ export function useListPropertiesQuery(
       staleTime: 1000 * 60 * 5, // 5 minutes
     };
   });
+}
+
+export async function fetchPropertyDefinitionWithOptions(
+  definitionId: string
+): Promise<PropertyDefinitionResponse | undefined> {
+  const data = await queryClient.fetchQuery({
+    queryKey: propertiesKeys.definitions({
+      scope: 'all',
+      includeOptions: true,
+    }).queryKey,
+    queryFn: async () =>
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.listProperties({
+            scope: 'all',
+            include_options: true,
+          })
+      ),
+    staleTime: 0,
+  });
+
+  return data.find((item) =>
+    'definition' in item
+      ? item.definition.id === definitionId
+      : item.id === definitionId
+  );
 }
 
 function invalidatePropertyDefinitions() {

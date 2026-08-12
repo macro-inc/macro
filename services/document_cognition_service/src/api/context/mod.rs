@@ -94,7 +94,7 @@ pub type DcsAiProjectionService =
 /// Concrete MCP router state for DCS.
 pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
     mcp_client::outbound::pg_server_repo::PgServerRepo,
-    mcp_client::domain::service::OAuthService<
+    mcp_client::outbound::oauth::OAuthService<
         mcp_client::outbound::pg_server_repo::PgServerRepo,
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore,
     >,
