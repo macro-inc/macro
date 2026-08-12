@@ -1,7 +1,7 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { onMount } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { EventComposerForm } from './EventComposerForm';
 import type { CalendarEvent } from './types';
 import { useEventEditor } from './useEventEditor';
@@ -16,16 +16,18 @@ export function EventComposer(props: { event?: CalendarEvent }) {
   });
 
   const isEdit = () => props.event !== undefined;
+  const [calendarPillMount, setCalendarPillMount] =
+    createSignal<HTMLDivElement>();
 
   onMount(() =>
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')
   );
 
   return (
-    <div class="portal-scope flex h-full min-h-0 flex-col gap-3 p-4 text-ink">
-      <div class="flex shrink-0 items-center justify-end">
+    <div class="portal-scope flex h-full min-h-0 flex-col gap-6 p-4 text-ink">
+      <div class="flex shrink-0 items-center justify-between px-2">
+        <div ref={setCalendarPillMount} class="min-w-0" />
         <Button
-          class="ml-auto"
           aria-label={
             isEdit() ? 'Close event editor' : 'Close new event composer'
           }
@@ -45,6 +47,7 @@ export function EventComposer(props: { event?: CalendarEvent }) {
         guestOptions={editor.guestOptions}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
         attendees={props.event?.attendees}
+        calendarPillMount={calendarPillMount()}
         pending={editor.pending()}
         onCancel={close}
         onSubmit={editor.save}

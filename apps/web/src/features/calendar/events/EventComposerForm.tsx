@@ -1,4 +1,3 @@
-import MapPinIcon from '@phosphor/map-pin.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { Button, cn, Select } from '@ui';
@@ -11,10 +10,12 @@ import {
   For,
   Show,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { EventDateTimeRangePill } from './EventDateTimeField';
 import {
   EventComposerCalendarPill,
   EventComposerGuestsPill,
+  EventComposerLocationPill,
   EventComposerRecurrencePill,
 } from './EventComposerPropertyPills';
 import {
@@ -65,6 +66,7 @@ export interface EventComposerFormProps {
   guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
   attendees?: CalendarAttendee[];
+  calendarPillMount?: HTMLDivElement;
   pending: boolean;
   class?: string;
   onCancel: () => void;
@@ -284,40 +286,9 @@ export function EventComposerForm(props: EventComposerFormProps) {
         submit();
       }}
     >
-      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scrollbar-hidden">
-        <div class="px-2">
-          <input
-            type="text"
-            value={state().title}
-            onInput={(event) =>
-              setState({ ...state(), title: event.currentTarget.value })
-            }
-            placeholder="New event"
-            aria-label="Title"
-            autofocus={!isEdit()}
-            disabled={fieldIsDisabled('title')}
-            class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
-          />
-        </div>
-
-        <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
-          <DateTimeRange />
-          <EventComposerGuestsPill
-            options={props.guestOptions}
-            selected={selectedGuests()}
-            attendees={props.attendees}
-            onChange={setSelectedGuests}
-            disabled={props.pending}
-            readOnly={fieldIsReadOnly('guests')}
-          />
-          <EventComposerRecurrencePill
-            options={recurrenceOptions()}
-            value={selectedRecurrenceOption()}
-            onChange={changeRecurrenceChoice}
-            disabled={props.pending}
-            readOnly={fieldIsReadOnly('recurrence')}
-          />
-          <Show when={props.calendarOptions.length > 1 || isEdit()}>
+      <Show when={props.calendarPillMount}>
+        {(mount) => (
+          <Portal mount={mount()}>
             <EventComposerCalendarPill
               options={props.calendarOptions}
               value={selectedCalendarOption()}
@@ -325,47 +296,77 @@ export function EventComposerForm(props: EventComposerFormProps) {
               disabled={props.pending}
               readOnly={fieldIsReadOnly('calendar')}
             />
+          </Portal>
+        )}
+      </Show>
+
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto scrollbar-hidden">
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-1">
+            <div class="px-2">
+              <input
+                type="text"
+                value={state().title}
+                onInput={(event) =>
+                  setState({ ...state(), title: event.currentTarget.value })
+                }
+                placeholder="New event"
+                aria-label="Title"
+                autofocus={!isEdit()}
+                disabled={fieldIsDisabled('title')}
+                class="h-9 w-full bg-transparent text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
+              />
+            </div>
+
+            <input
+              type="text"
+              value={state().description}
+              onInput={(event) =>
+                setState({ ...state(), description: event.currentTarget.value })
+              }
+              placeholder="Add description..."
+              aria-label="Description"
+              disabled={fieldIsDisabled('description')}
+              class="h-9 w-full bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
+            />
+          </div>
+
+          <Show when={dateRangeError()}>
+            {(error) => (
+              <p
+                id={dateRangeErrorId}
+                role="alert"
+                class="px-2 text-xs text-failure"
+              >
+                {error()}
+              </p>
+            )}
           </Show>
+
+          <div class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm">
+            <DateTimeRange />
+            <EventComposerRecurrencePill
+              options={recurrenceOptions()}
+              value={selectedRecurrenceOption()}
+              onChange={changeRecurrenceChoice}
+              disabled={props.pending}
+              readOnly={fieldIsReadOnly('recurrence')}
+            />
+            <EventComposerGuestsPill
+              options={props.guestOptions}
+              selected={selectedGuests()}
+              attendees={props.attendees}
+              onChange={setSelectedGuests}
+              disabled={props.pending}
+              readOnly={fieldIsReadOnly('guests')}
+            />
+            <EventComposerLocationPill
+              value={state().location}
+              onChange={(location) => setState({ ...state(), location })}
+              disabled={fieldIsDisabled('location')}
+            />
+          </div>
         </div>
-
-        <Show when={dateRangeError()}>
-          {(error) => (
-            <p
-              id={dateRangeErrorId}
-              role="alert"
-              class="px-2 text-xs text-failure"
-            >
-              {error()}
-            </p>
-          )}
-        </Show>
-
-        <div class="flex min-w-0 items-center gap-2 px-2">
-          <MapPinIcon class="size-4 shrink-0 text-ink-extra-muted" />
-          <input
-            type="text"
-            value={state().location}
-            onInput={(event) =>
-              setState({ ...state(), location: event.currentTarget.value })
-            }
-            placeholder="Add location..."
-            aria-label="Location"
-            disabled={fieldIsDisabled('location')}
-            class="h-8 min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
-          />
-        </div>
-
-        <textarea
-          value={state().description}
-          onInput={(event) =>
-            setState({ ...state(), description: event.currentTarget.value })
-          }
-          placeholder="Add description..."
-          aria-label="Description"
-          rows={5}
-          disabled={fieldIsDisabled('description')}
-          class="min-h-24 w-full resize-none bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
-        />
 
         <Show when={recurrenceChoice() === 'custom'}>
           <div class="flex flex-col gap-2.5 rounded-lg border border-edge-muted p-3 text-xs text-ink-muted">

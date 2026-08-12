@@ -5,6 +5,7 @@ import { Popover } from '@kobalte/core/popover';
 import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MapPinIcon from '@phosphor/map-pin.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
@@ -448,6 +449,73 @@ export function EventComposerGuestsPill(props: EventComposerGuestsPillProps) {
     >
       <ReadOnlyEventComposerGuestsPill {...props} />
     </Show>
+  );
+}
+
+export interface EventComposerLocationPillProps {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+/** Compact editable location property pill. */
+export function EventComposerLocationPill(
+  props: EventComposerLocationPillProps
+) {
+  const [open, setOpen] = createSignal(false);
+  let input: HTMLInputElement | undefined;
+
+  return (
+    <Popover
+      open={open() && !props.disabled}
+      onOpenChange={(nextOpen) => setOpen(!props.disabled && nextOpen)}
+      placement="bottom-start"
+      gutter={4}
+      flip
+      slide
+    >
+      <Tooltip label="Set the event location" placement="bottom">
+        <Popover.Trigger
+          disabled={props.disabled}
+          aria-label="Location"
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+        >
+          <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          <span
+            class={cn(
+              'min-w-0 truncate',
+              props.value ? 'text-ink' : 'text-ink-extra-muted'
+            )}
+          >
+            {props.value || 'Add location'}
+          </span>
+          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Popover.Trigger>
+      </Tooltip>
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content
+            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              queueMicrotask(() => input?.focus());
+            }}
+          >
+            <Popover.Title class="sr-only">Event location</Popover.Title>
+            <input
+              ref={input}
+              type="text"
+              value={props.value}
+              onInput={(event) => props.onChange(event.currentTarget.value)}
+              placeholder="Add location..."
+              aria-label="Location"
+              disabled={props.disabled}
+              class="h-8 w-full rounded-md border border-edge-muted bg-surface px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+            />
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
   );
 }
 
