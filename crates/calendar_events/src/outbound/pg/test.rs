@@ -2925,17 +2925,4 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
         event.conference_provider,
         Some(ConferenceProvider::GoogleMeet)
     );
-
-    // Mutation policy refuses conference changes on conferences Macro does
-    // not manage, so the classification has to reach the mutation target too
-    // — resolving it as `None` would silently reopen that path.
-    let target = repo
-        .get_event_mutation_target(owner_id, event.id)
-        .await
-        .unwrap()
-        .expect("the owner can mutate their own event");
-    assert_eq!(
-        target.conference_provider,
-        Some(ConferenceProvider::GoogleMeet)
-    );
 }

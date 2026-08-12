@@ -2435,11 +2435,16 @@ export type CommentThread = {
 /**
  * The conferencing system backing an event's join URL.
  *
- * Only Google Meet is attachable and detachable by Macro. Everything else —
- * Zoom and friends arriving as `addOn` conference data, or a legacy classic
- * Hangout — is surfaced for joining but never rewritten: mutation policy
- * refuses any conference change on such an event, because Macro could not
- * recreate what the change would destroy.
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
 

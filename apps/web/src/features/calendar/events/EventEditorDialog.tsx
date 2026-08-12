@@ -69,24 +69,33 @@ interface EditorState {
   location: string;
   description: string;
   guests: string;
-  /** Whether the saved event should carry a Macro-managed Google Meet. */
-  googleMeet: boolean;
-}
-
-/** Whether the event carries a Google Meet that Macro may detach. */
-function hasGoogleMeet(event: CalendarEvent) {
-  return event.conferenceProvider === 'google_meet';
+  /** What conferencing the saved event should carry. */
+  conference: ConferenceChoice;
 }
 
 /**
- * Whether a conference is attached that Macro must not rewrite. Offering to
- * detach a Zoom link would destroy it, and Macro cannot recreate one.
+ * `existing` keeps a conference Macro did not create — a Zoom-style `addOn`
+ * conference or a legacy Hangout. Macro can detach or replace it on request,
+ * but cannot put one back, so leaving the editor without touching it must
+ * submit no conference change at all.
  */
-function hasForeignConference(event: CalendarEvent | undefined) {
-  return (
-    event?.conferenceUrl !== undefined &&
-    event.conferenceProvider !== 'google_meet'
-  );
+type ConferenceChoice = 'none' | 'google_meet' | 'existing';
+
+function initialConference(event: CalendarEvent | undefined): ConferenceChoice {
+  if (!event?.conferenceUrl) return 'none';
+  return event.conferenceProvider === 'google_meet'
+    ? 'google_meet'
+    : 'existing';
+}
+
+/** Label for a conference Macro did not create, taken from its join URL. */
+function foreignConferenceLabel(url: string | undefined) {
+  if (!url) return 'Video conferencing';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'Video conferencing';
+  }
 }
 
 function initialEditorState(event: CalendarEvent | undefined): EditorState {
@@ -100,7 +109,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
       location: '',
       description: '',
       guests: '',
-      googleMeet: false,
+      conference: 'none',
     };
   }
   if (event.allDay) {
@@ -118,7 +127,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
       location: event.location ?? '',
       description: event.description ?? '',
       guests: '',
-      googleMeet: hasGoogleMeet(event),
+      conference: initialConference(event),
     };
   }
   return {
@@ -129,7 +138,7 @@ function initialEditorState(event: CalendarEvent | undefined): EditorState {
     location: event.location ?? '',
     description: event.description ?? '',
     guests: '',
-    googleMeet: hasGoogleMeet(event),
+    conference: initialConference(event),
   };
 }
 
@@ -373,7 +382,10 @@ export function EventEditorDialog(props: {
         lines !== undefined && lines.join('\n') !== initialLines.join('\n');
       // Omitting `conference` leaves the provider's conference untouched, so
       // an unrelated edit never regenerates or drops a working join link.
-      const conferenceChanged = current.googleMeet !== hasGoogleMeet(event);
+      // `existing` is therefore never submitted: it means "left alone".
+      const conferenceChanged =
+        current.conference !== 'existing' &&
+        current.conference !== initialConference(event);
       update.mutate({
         eventId: event.eventId,
         patch: {
@@ -384,7 +396,10 @@ export function EventEditorDialog(props: {
           ...(recurrenceChanged ? { recurrenceLines: lines } : {}),
           ...(reminders ? { reminders } : {}),
           ...(conferenceChanged
-            ? { conference: current.googleMeet ? 'google_meet' : 'none' }
+            ? {
+                conference:
+                  current.conference === 'google_meet' ? 'google_meet' : 'none',
+              }
             : {}),
         },
       });
@@ -399,7 +414,9 @@ export function EventEditorDialog(props: {
       description: current.description === '' ? undefined : current.description,
       attendees: parseGuestEmails(current.guests).map((email) => ({ email })),
       reminders,
-      ...(current.googleMeet ? { conference: 'google_meet' as const } : {}),
+      ...(current.conference === 'google_meet'
+        ? { conference: 'google_meet' as const }
+        : {}),
     });
   };
 
@@ -678,44 +695,46 @@ export function EventEditorDialog(props: {
               </Show>
             </div>
           </Show>
-          <Show
-            when={!hasForeignConference(props.event)}
-            fallback={
-              <div class="flex items-center gap-2 text-xs text-ink-muted">
-                <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
-                <span>This event uses another conferencing provider.</span>
-              </div>
-            }
-          >
-            <Show
-              when={state().googleMeet}
-              fallback={
-                <Button
-                  variant="base"
-                  size="sm"
-                  class="w-full justify-center rounded-lg"
-                  label="Add Google Meet video conferencing"
-                  onClick={() => setState({ ...state(), googleMeet: true })}
-                >
-                  <VideoCameraIcon class="size-4 shrink-0" />
-                  <span>Add Google Meet</span>
-                </Button>
-              }
-            >
+          <div class="flex flex-col gap-2">
+            <Show when={state().conference !== 'none'}>
               <div class="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 text-xs text-ink">
                 <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
-                <span class="flex-1">Google Meet</span>
+                <span class="flex-1 truncate">
+                  {state().conference === 'google_meet'
+                    ? 'Google Meet'
+                    : foreignConferenceLabel(props.event?.conferenceUrl)}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  label="Remove Google Meet"
-                  onClick={() => setState({ ...state(), googleMeet: false })}
+                  label="Remove conferencing"
+                  onClick={() => setState({ ...state(), conference: 'none' })}
                 >
                   <XIcon />
                 </Button>
               </div>
             </Show>
-          </Show>
+            <Show when={state().conference !== 'google_meet'}>
+              <Button
+                variant="base"
+                size="sm"
+                class="w-full justify-center rounded-lg"
+                label="Add Google Meet video conferencing"
+                onClick={() =>
+                  setState({ ...state(), conference: 'google_meet' })
+                }
+              >
+                <VideoCameraIcon class="size-4 shrink-0" />
+                <span>Add Google Meet</span>
+              </Button>
+            </Show>
+            <Show when={state().conference === 'existing'}>
+              <span class="text-xs text-ink-extra-muted">
+                Adding Google Meet replaces the current conferencing, which
+                Macro cannot put back.
+              </span>
+            </Show>
+          </div>
           <input
             type="text"
             value={state().location}

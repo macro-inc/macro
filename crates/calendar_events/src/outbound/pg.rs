@@ -1205,7 +1205,6 @@ impl CalendarRepository for PgCalendarRepository {
                 event.id AS event_id,
                 event.owner_id,
                 event.is_read_only,
-                event.conference_provider,
                 source.provider_event_id AS "provider_event_id!",
                 source.provider_recurring_event_id,
                 source.account_id AS "account_id!",
@@ -1250,7 +1249,6 @@ impl CalendarRepository for PgCalendarRepository {
         Ok(row.map(|row| CalendarEventMutationTarget {
             event_id: row.event_id,
             is_read_only: row.is_read_only,
-            conference_provider: row.conference_provider.as_deref().map(conference_provider),
             provider_event_id: row.provider_event_id,
             provider_recurring_event_id: row.provider_recurring_event_id,
             owner_id: row.owner_id,

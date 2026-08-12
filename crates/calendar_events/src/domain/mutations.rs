@@ -12,9 +12,8 @@ use uuid::Uuid;
 use super::{
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, ConferenceProvider, EventReminders, EventTime,
-        OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX,
-        REMINDER_OVERRIDES_MAX,
+        CalendarEventPatch, CalendarEventUpsert, EventReminders, EventTime, OccurrenceRange,
+        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
@@ -156,15 +155,6 @@ where
         let target = self.resolve_mutation_target(requester_id, event_id).await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
-        }
-        // Macro only manages the Meet conferences it creates. Attaching one
-        // over a third-party conference, or detaching that conference, both
-        // destroy a join link Macro cannot recreate, so either direction is
-        // refused rather than forwarded to the provider.
-        if patch.conference.is_some()
-            && target.conference_provider == Some(ConferenceProvider::Other)
-        {
-            return Err(CalendarMutationError::ForeignConference);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
         let updated = self
