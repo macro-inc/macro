@@ -1,6 +1,4 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import XIcon from '@phosphor/x.svg';
-import { Button } from '@ui';
 import { onCleanup, onMount } from 'solid-js';
 import { EventComposerForm } from './EventComposerForm';
 import type { EventEditorInitialValues } from './EventEditorForm';
@@ -29,21 +27,7 @@ export function EventComposer(props: {
   onCleanup(() => props.onClose?.());
 
   return (
-    <div class="portal-scope flex h-full min-h-0 flex-col gap-4 p-4 text-ink">
-      <div class="flex shrink-0 items-center justify-end">
-        <Button
-          aria-label={
-            isEdit() ? 'Close event editor' : 'Close new event composer'
-          }
-          variant="ghost"
-          size="icon-sm"
-          disabled={editor.pending()}
-          onClick={close}
-        >
-          <XIcon />
-        </Button>
-      </div>
-
+    <div class="portal-scope flex h-full min-h-0 flex-col p-4 text-ink">
       <EventComposerForm
         initialValues={editor.initialValues() ?? props.initialValues}
         isEdit={isEdit()}
