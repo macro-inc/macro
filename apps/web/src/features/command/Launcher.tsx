@@ -790,6 +790,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     runWithInputFocused: true,
   }).withGroup(hkGroup);
 
+  const searchModeHotkey = registerHotkey({
+    hotkey: '/',
+    scopeId: launcherScope,
+    description: 'Toggle search mode',
+    keyDownHandler: () => {
+      setLauncherSearchMode(!searchMode());
+      return true;
+    },
+    runWithInputFocused: true,
+    displayPriority: 6,
+  }).withGroup(hkGroup);
+
   registerHotkey({
     hotkey: 'escape',
     scopeId: launcherScope,
@@ -880,12 +892,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                 placeholder="Search create options"
                 value={searchQuery()}
                 onInput={(event) => setSearchQuery(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setLauncherSearchMode(false);
-                  }
-                }}
               />
             </div>
           </Show>
@@ -894,13 +900,18 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             onChange={setLauncherSearchMode}
             size="xs"
             label={
-              <span class="text-[11px] font-medium leading-none text-ink-extra-muted/70">
-                Search mode
+              <span class="flex items-center gap-1 text-[11px] font-medium leading-none text-ink-extra-muted/70">
+                Search mode{' '}
+                <Hotkey
+                  shortcut={searchModeHotkey.hotkey()}
+                  theme="subtle"
+                  class="px-2 py-0.5"
+                />
               </span>
             }
             labelClass="flex items-center"
             controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
-            class="ml-auto flex-row-reverse gap-1.5 rounded-full bg-ink/4 px-2 py-1"
+            class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
