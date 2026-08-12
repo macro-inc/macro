@@ -1766,6 +1766,14 @@
         "description": "Request body for adding a new MCP server.",
         "required": ["url", "server_name"],
         "properties": {
+          "client_id": {
+            "type": ["string", "null"],
+            "description": "Pre-registered OAuth client ID for providers that don't support\nDynamic Client Registration (e.g. HubSpot)."
+          },
+          "client_secret": {
+            "type": ["string", "null"],
+            "description": "Pre-registered OAuth client secret, if the provider issued one."
+          },
           "server_name": {
             "type": "string",
             "description": "Human-readable name for the server."
@@ -3824,15 +3832,29 @@
       "ServerResponse": {
         "type": "object",
         "description": "An MCP server record as returned by the API.",
-        "required": ["url", "server_name", "enabled", "authenticated"],
+        "required": [
+          "url",
+          "server_name",
+          "enabled",
+          "authenticated",
+          "has_client_secret"
+        ],
         "properties": {
           "authenticated": {
             "type": "boolean",
             "description": "Whether the server has valid stored credentials."
           },
+          "client_id": {
+            "type": ["string", "null"],
+            "description": "Pre-registered OAuth client ID, if the user supplied one."
+          },
           "enabled": {
             "type": "boolean",
             "description": "Whether the server is enabled for tool use."
+          },
+          "has_client_secret": {
+            "type": "boolean",
+            "description": "Whether a pre-registered OAuth client secret is stored."
           },
           "server_name": {
             "type": "string",
@@ -4160,6 +4182,14 @@
         "description": "Request body for updating an MCP server.",
         "required": ["url"],
         "properties": {
+          "client_id": {
+            "type": ["string", "null"],
+            "description": "Pre-registered OAuth client ID for providers without DCR. Pass an\nempty string to clear it."
+          },
+          "client_secret": {
+            "type": ["string", "null"],
+            "description": "Pre-registered OAuth client secret, if the provider issued one. Pass\nan empty string to clear it."
+          },
           "enabled": {
             "type": ["boolean", "null"],
             "description": "Enable or disable the server."

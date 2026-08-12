@@ -133,13 +133,48 @@ impl<S, R> OAuthService<S, R> {
         self.register_dcr_client(auth_manager, scopes).await
     }
 
+    /// Configure the OAuth client from pre-registered credentials stored on the
+    /// server record, when the user supplied a static client id (for providers
+    /// that don't support Dynamic Client Registration, e.g. HubSpot). Returns
+    /// `Ok(None)` when there is no client id to use, so callers fall through to
+    /// the provider registry or DCR.
+    fn configure_pre_registered_client(
+        &self,
+        record: Option<&McpServerRecord>,
+        auth_manager: &mut AuthorizationManager,
+    ) -> anyhow::Result<Option<ResolvedClient>> {
+        let Some(client_id) = record.and_then(|r| r.client_id.as_deref()) else {
+            return Ok(None);
+        };
+        let client_secret = record.and_then(|r| r.client_secret.clone());
+
+        let mut config =
+            OAuthClientConfig::new(client_id.to_string(), self.client_metadata.redirect_uri());
+        if let Some(secret) = &client_secret {
+            config = config.with_client_secret(secret.clone());
+        }
+        auth_manager.configure_client(config)?;
+
+        tracing::info!(%client_id, "using pre-registered OAuth client from server record");
+        Ok(Some(ResolvedClient {
+            client_id: client_id.to_string(),
+            client_secret,
+            scopes: Vec::new(),
+        }))
+    }
+
     #[cfg(feature = "providers")]
     async fn resolve_client_config(
         &self,
         server_url: &str,
+        record: Option<&McpServerRecord>,
         auth_manager: &mut AuthorizationManager,
         supports_client_metadata: bool,
     ) -> anyhow::Result<ResolvedClient> {
+        if let Some(client) = self.configure_pre_registered_client(record, auth_manager)? {
+            return Ok(client);
+        }
+
         if let Some(creds) = self.pre_registered.get(server_url) {
             let config = OAuthClientConfig::new(
                 creds.client_id.clone(),
@@ -166,9 +201,14 @@ impl<S, R> OAuthService<S, R> {
     async fn resolve_client_config(
         &self,
         _server_url: &str,
+        record: Option<&McpServerRecord>,
         auth_manager: &mut AuthorizationManager,
         supports_client_metadata: bool,
     ) -> anyhow::Result<ResolvedClient> {
+        if let Some(client) = self.configure_pre_registered_client(record, auth_manager)? {
+            return Ok(client);
+        }
+
         let scopes = auth_manager.select_scopes(None, &[]);
         self.resolve_dynamic_client(auth_manager, supports_client_metadata, scopes)
             .await
@@ -197,8 +237,17 @@ where
         auth_manager.set_state_store(in_memory_state.clone());
         auth_manager.set_credential_store(InMemoryCredentialStore::new());
 
+        // Load any pre-registered client credentials the user supplied for this
+        // server (a static client id/secret for a provider without DCR).
+        let record = self.server_store.load(user_id, server_url).await?;
+
         let resolved = self
-            .resolve_client_config(server_url, &mut auth_manager, supports_client_metadata)
+            .resolve_client_config(
+                server_url,
+                record.as_ref(),
+                &mut auth_manager,
+                supports_client_metadata,
+            )
             .await?;
 
         let scope_refs: Vec<&str> = resolved.scopes.iter().map(String::as_str).collect();
@@ -277,12 +326,21 @@ where
             .map_err(|e| anyhow::anyhow!("invalid user_id in pending context: {e}"))?
             .into_owned();
 
+        // Preserve any pre-registered client id/secret across the exchange:
+        // completing OAuth only replaces the token grant, not the static client
+        // credentials the user supplied for a provider without DCR. The load is
+        // propagated (not swallowed) so a transient failure can't silently wipe
+        // those credentials on save.
+        let existing = self.server_store.load(&user_id, &pending.server_url).await?;
+
         let record = McpServerRecord {
             user_id,
             url: pending.server_url,
             server_name: pending.server_name,
             credentials: Some(credentials.clone()),
             enabled: true,
+            client_id: existing.as_ref().and_then(|r| r.client_id.clone()),
+            client_secret: existing.as_ref().and_then(|r| r.client_secret.clone()),
         };
 
         self.server_store

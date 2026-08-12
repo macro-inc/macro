@@ -7,6 +7,8 @@
 
 export * from './accessLevel';
 export * from './addServerRequest';
+export * from './addServerRequestClientId';
+export * from './addServerRequestClientSecret';
 export * from './aiFeature';
 export * from './assistantMessagePart';
 export * from './assistantMessagePartOneOf';
@@ -180,6 +182,7 @@ export * from './sendChatMessagePayloadAllOfAdditionalInstructions';
 export * from './sendChatMessagePayloadAllOfAttachments';
 export * from './sendChatMessageResponse';
 export * from './serverResponse';
+export * from './serverResponseClientId';
 export * from './setPricingRequest';
 export * from './sharePermissionV2';
 export * from './sharePermissionV2ChannelSharePermissions';
@@ -216,6 +219,8 @@ export * from './updateChannelSharePermission';
 export * from './updateChannelSharePermissionAccessLevel';
 export * from './updateOperation';
 export * from './updateServerRequest';
+export * from './updateServerRequestClientId';
+export * from './updateServerRequestClientSecret';
 export * from './updateServerRequestEnabled';
 export * from './updateServerRequestServerName';
 export * from './updateSharePermissionRequestV2';

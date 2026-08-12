@@ -14,6 +14,15 @@ export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
  */
 export type AddServerRequest = {
     /**
+     * Pre-registered OAuth client ID for providers that don't support
+     * Dynamic Client Registration (e.g. HubSpot).
+     */
+    client_id?: string | null;
+    /**
+     * Pre-registered OAuth client secret, if the provider issued one.
+     */
+    client_secret?: string | null;
+    /**
      * Human-readable name for the server.
      */
     server_name: string;
@@ -1131,9 +1140,17 @@ export type ServerResponse = {
      */
     authenticated: boolean;
     /**
+     * Pre-registered OAuth client ID, if the user supplied one.
+     */
+    client_id?: string | null;
+    /**
      * Whether the server is enabled for tool use.
      */
     enabled: boolean;
+    /**
+     * Whether a pre-registered OAuth client secret is stored.
+     */
+    has_client_secret: boolean;
     /**
      * Human-readable server name.
      */
@@ -1340,6 +1357,16 @@ export type UpdateOperation = 'add' | 'remove' | 'replace';
  * Request body for updating an MCP server.
  */
 export type UpdateServerRequest = {
+    /**
+     * Pre-registered OAuth client ID for providers without DCR. Pass an
+     * empty string to clear it.
+     */
+    client_id?: string | null;
+    /**
+     * Pre-registered OAuth client secret, if the provider issued one. Pass
+     * an empty string to clear it.
+     */
+    client_secret?: string | null;
     /**
      * Enable or disable the server.
      */

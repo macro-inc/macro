@@ -140,6 +140,13 @@ pub struct AddServerRequest {
     url: String,
     /// Human-readable name for the server.
     server_name: String,
+    /// Pre-registered OAuth client ID for providers that don't support
+    /// Dynamic Client Registration (e.g. HubSpot).
+    #[serde(default)]
+    client_id: Option<String>,
+    /// Pre-registered OAuth client secret, if the provider issued one.
+    #[serde(default)]
+    client_secret: Option<String>,
 }
 
 /// Request body for updating an MCP server.
@@ -153,6 +160,14 @@ pub struct UpdateServerRequest {
     /// Enable or disable the server.
     #[serde(default)]
     enabled: Option<bool>,
+    /// Pre-registered OAuth client ID for providers without DCR. Pass an
+    /// empty string to clear it.
+    #[serde(default)]
+    client_id: Option<String>,
+    /// Pre-registered OAuth client secret, if the provider issued one. Pass
+    /// an empty string to clear it.
+    #[serde(default)]
+    client_secret: Option<String>,
 }
 
 /// Query parameters for deleting an MCP server.
@@ -209,6 +224,10 @@ pub struct ServerResponse {
     enabled: bool,
     /// Whether the server has valid stored credentials.
     authenticated: bool,
+    /// Pre-registered OAuth client ID, if the user supplied one.
+    client_id: Option<String>,
+    /// Whether a pre-registered OAuth client secret is stored.
+    has_client_secret: bool,
 }
 
 impl ServerResponse {
@@ -218,6 +237,8 @@ impl ServerResponse {
             server_name: record.server_name.clone(),
             enabled: record.enabled,
             authenticated: record.credentials.is_some(),
+            client_id: record.client_id.clone(),
+            has_client_secret: record.client_secret.is_some(),
         }
     }
 }
@@ -236,6 +257,9 @@ pub enum McpHandlerErr {
     /// The callback was missing both a code and an error parameter.
     #[error("malformed OAuth callback: missing code and error parameters")]
     MalformedCallback,
+    /// A client secret was supplied without a client id.
+    #[error("{0}")]
+    InvalidCredentials(String),
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
@@ -245,9 +269,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
-            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
-                StatusCode::BAD_REQUEST
-            }
+            McpHandlerErr::OAuthRejected(_)
+            | McpHandlerErr::MalformedCallback
+            | McpHandlerErr::InvalidCredentials(_) => StatusCode::BAD_REQUEST,
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -261,6 +285,32 @@ impl IntoResponse for McpHandlerErr {
 }
 
 // -- handlers -----------------------------------------------------------------
+
+/// Normalize an optional credential field: trim surrounding whitespace and
+/// treat an empty string as "no value", so an empty form field clears it.
+fn clean_credential(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Validate that a pre-registered client secret is only ever set together with
+/// a client id; a secret without an id would be silently unusable during the
+/// OAuth flow.
+fn validate_oauth_credentials(
+    client_id: Option<&str>,
+    client_secret: Option<&str>,
+) -> Result<(), McpHandlerErr> {
+    if client_secret.is_some() && client_id.is_none() {
+        return Err(McpHandlerErr::InvalidCredentials(
+            "a client secret requires a client id".to_string(),
+        ));
+    }
+    Ok(())
+}
 
 #[utoipa::path(
     get,
@@ -323,12 +373,34 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
+
+    // Adding an existing URL is an upsert. Load the current row so the
+    // response reflects its stored OAuth grant, and so we preserve
+    // pre-registered client credentials when the request omits them.
+    let existing = state
+        .store
+        .load(&user.macro_user_id, &body.url)
+        .await
+        .map_err(anyhow::Error::from)?;
+
+    let client_id = match body.client_id {
+        Some(value) => clean_credential(value),
+        None => existing.as_ref().and_then(|e| e.client_id.clone()),
+    };
+    let client_secret = match body.client_secret {
+        Some(value) => clean_credential(value),
+        None => existing.as_ref().and_then(|e| e.client_secret.clone()),
+    };
+    validate_oauth_credentials(client_id.as_deref(), client_secret.as_deref())?;
+
     let record = McpServerRecord {
         user_id: user.macro_user_id.clone(),
         url: body.url,
         server_name: body.server_name,
-        credentials: None,
+        credentials: existing.as_ref().and_then(|e| e.credentials.clone()),
         enabled: true,
+        client_id,
+        client_secret,
     };
 
     state
@@ -383,6 +455,13 @@ where
     if let Some(enabled) = body.enabled {
         record.enabled = enabled;
     }
+    if let Some(client_id) = body.client_id {
+        record.client_id = clean_credential(client_id);
+    }
+    if let Some(client_secret) = body.client_secret {
+        record.client_secret = clean_credential(client_secret);
+    }
+    validate_oauth_credentials(record.client_id.as_deref(), record.client_secret.as_deref())?;
 
     state
         .store

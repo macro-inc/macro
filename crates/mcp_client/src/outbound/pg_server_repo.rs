@@ -31,11 +31,16 @@ impl PgServerRepo {
     fn encrypt(&self, creds: &StoredCredentials) -> Result<Vec<u8>, sqlx::Error> {
         let plaintext =
             serde_json::to_vec(creds).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        self.encrypt_bytes(&plaintext)
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<Vec<u8>, sqlx::Error> {
         let cipher = Aes256Gcm::new(self.encryption_key.as_bytes().into());
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = cipher
-            .encrypt(&nonce, plaintext.as_ref())
-            .map_err(|e| sqlx::Error::Protocol(format!("credential encryption failed: {e}")))?;
+            .encrypt(&nonce, plaintext)
+            .map_err(|e| sqlx::Error::Protocol(format!("encryption failed: {e}")))?;
         let mut out = Vec::with_capacity(NONCE_LEN + ciphertext.len());
         out.extend_from_slice(&nonce);
         out.extend(ciphertext);
@@ -44,20 +49,23 @@ impl PgServerRepo {
 
     #[tracing::instrument(skip_all, err)]
     fn decrypt(&self, data: &[u8]) -> Result<StoredCredentials, sqlx::Error> {
+        let plaintext = self.decrypt_bytes(data)?;
+        serde_json::from_slice(&plaintext).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    fn decrypt_bytes(&self, data: &[u8]) -> Result<Vec<u8>, sqlx::Error> {
         if data.len() <= NONCE_LEN {
-            return Err(sqlx::Error::Decode(
-                "credential ciphertext too short".into(),
-            ));
+            return Err(sqlx::Error::Decode("ciphertext too short".into()));
         }
         let (nonce_bytes, ciphertext) = data.split_at(NONCE_LEN);
         let nonce: &[u8; NONCE_LEN] = nonce_bytes
             .try_into()
             .map_err(|_| sqlx::Error::Decode("invalid nonce length".into()))?;
         let cipher = Aes256Gcm::new(self.encryption_key.as_bytes().into());
-        let plaintext = cipher.decrypt(nonce.into(), ciphertext).map_err(|e| {
-            sqlx::Error::Decode(format!("credential decryption failed: {e}").into())
-        })?;
-        serde_json::from_slice(&plaintext).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        cipher
+            .decrypt(nonce.into(), ciphertext)
+            .map_err(|e| sqlx::Error::Decode(format!("decryption failed: {e}").into()))
     }
 }
 
@@ -72,17 +80,28 @@ impl McpServerStore for PgServerRepo {
             .map(|c| self.encrypt(c))
             .transpose()?;
 
+        let encrypted_secret: Option<Vec<u8>> = record
+            .client_secret
+            .as_deref()
+            .map(|s| self.encrypt_bytes(s.as_bytes()))
+            .transpose()?;
+
         // Never clobber stored credentials with NULL on conflict: re-adding
         // an existing server (e.g. via the Add Server dialog) must not wipe
-        // a valid OAuth grant.
+        // a valid OAuth grant. The pre-registered client id/secret are
+        // overwritten outright because callers that omit them re-load and
+        // pass through the stored values (see the axum handlers), so a plain
+        // overwrite here still preserves them while allowing explicit clears.
         sqlx::query!(
             r#"
-            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO mcp_servers (user_id, url, server_name, credentials, enabled, client_id, client_secret)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (user_id, url) DO UPDATE
             SET server_name = EXCLUDED.server_name,
                 credentials = COALESCE(EXCLUDED.credentials, mcp_servers.credentials),
                 enabled     = EXCLUDED.enabled,
+                client_id   = EXCLUDED.client_id,
+                client_secret = EXCLUDED.client_secret,
                 updated_at  = NOW()
             "#,
             record.user_id.as_ref(),
@@ -90,6 +109,8 @@ impl McpServerStore for PgServerRepo {
             record.server_name,
             encrypted.as_deref(),
             record.enabled,
+            record.client_id.as_deref(),
+            encrypted_secret.as_deref(),
         )
         .execute(&self.pool)
         .await?;
@@ -105,7 +126,7 @@ impl McpServerStore for PgServerRepo {
     ) -> Result<Option<McpServerRecord>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, client_id, client_secret
             FROM mcp_servers
             WHERE user_id = $1 AND url = $2
             "#,
@@ -115,8 +136,18 @@ impl McpServerStore for PgServerRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
-            .transpose()
+        row.map(|r| {
+            self.to_record(
+                r.user_id,
+                r.url,
+                r.server_name,
+                r.credentials,
+                r.enabled,
+                r.client_id,
+                r.client_secret,
+            )
+        })
+        .transpose()
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -146,7 +177,7 @@ impl McpServerStore for PgServerRepo {
     ) -> Result<Vec<McpServerRecord>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, url, server_name, credentials, enabled
+            SELECT user_id, url, server_name, credentials, enabled, client_id, client_secret
             FROM mcp_servers
             WHERE user_id = $1
             ORDER BY created_at
@@ -157,13 +188,24 @@ impl McpServerStore for PgServerRepo {
         .await?;
 
         rows.into_iter()
-            .map(|r| self.to_record(r.user_id, r.url, r.server_name, r.credentials, r.enabled))
+            .map(|r| {
+                self.to_record(
+                    r.user_id,
+                    r.url,
+                    r.server_name,
+                    r.credentials,
+                    r.enabled,
+                    r.client_id,
+                    r.client_secret,
+                )
+            })
             .collect()
     }
 }
 
 impl PgServerRepo {
     #[tracing::instrument(skip_all, err)]
+    #[expect(clippy::too_many_arguments, reason = "maps a DB row into a record")]
     fn to_record(
         &self,
         user_id: String,
@@ -171,6 +213,8 @@ impl PgServerRepo {
         server_name: String,
         credentials: Option<Vec<u8>>,
         enabled: bool,
+        client_id: Option<String>,
+        client_secret: Option<Vec<u8>>,
     ) -> Result<McpServerRecord, sqlx::Error> {
         let user_id = MacroUserIdStr::parse_from_str(&user_id)
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
@@ -178,12 +222,21 @@ impl PgServerRepo {
 
         let credentials = credentials.map(|c| self.decrypt(&c)).transpose()?;
 
+        let client_secret = client_secret
+            .map(|b| {
+                let plaintext = self.decrypt_bytes(&b)?;
+                String::from_utf8(plaintext).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+            })
+            .transpose()?;
+
         Ok(McpServerRecord {
             user_id,
             url,
             server_name,
             credentials,
             enabled,
+            client_id,
+            client_secret,
         })
     }
 }

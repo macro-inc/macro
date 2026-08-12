@@ -47,6 +47,13 @@ pub struct McpServerRecord {
     pub credentials: Option<StoredCredentials>,
     /// Whether the user has this toolset enabled.
     pub enabled: bool,
+    /// Pre-registered OAuth client ID for providers that don't support Dynamic
+    /// Client Registration (e.g. HubSpot). When set, authorization uses this
+    /// client instead of attempting DCR.
+    pub client_id: Option<String>,
+    /// Pre-registered OAuth client secret, if the provider issued one.
+    #[serde(skip)]
+    pub client_secret: Option<String>,
 }
 
 impl McpConnector for McpServerRecord {

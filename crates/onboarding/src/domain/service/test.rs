@@ -188,6 +188,8 @@ fn record(url: &str, authenticated: bool) -> McpServerRecord {
         credentials: authenticated
             .then(|| StoredCredentials::new("client".into(), None, Vec::new(), None)),
         enabled: true,
+        client_id: None,
+        client_secret: None,
     }
 }
 

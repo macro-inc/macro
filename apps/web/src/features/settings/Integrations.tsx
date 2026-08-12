@@ -6,9 +6,13 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
+import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import {
   useAddMcpServerMutation,
@@ -35,18 +39,57 @@ function hostFromUrl(url: string): string {
   }
 }
 
+/** A password-style input with a reveal toggle, for client secrets. */
+function SecretInput(props: {
+  value: string;
+  placeholder?: string;
+  onInput: (value: string) => void;
+}) {
+  const [revealed, setRevealed] = createSignal(false);
+  return (
+    <div class="relative w-full">
+      <input
+        type={revealed() ? 'text' : 'password'}
+        class="settings-input w-full pr-9"
+        autocomplete="off"
+        placeholder={props.placeholder}
+        value={props.value}
+        onInput={(e) => props.onInput(e.currentTarget.value)}
+      />
+      <button
+        type="button"
+        class="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted transition-colors hover:text-ink"
+        aria-label={revealed() ? 'Hide secret' : 'Show secret'}
+        onClick={() => setRevealed((v) => !v)}
+      >
+        {revealed() ? (
+          <EyeSlashIcon class="size-4" />
+        ) : (
+          <EyeIcon class="size-4" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function AddServerForm(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [name, setName] = createSignal('');
   const [url, setUrl] = createSignal('');
+  const [clientId, setClientId] = createSignal('');
+  const [clientSecret, setClientSecret] = createSignal('');
+  const [showOauth, setShowOauth] = createSignal(false);
   const addMutation = useAddMcpServerMutation();
   const authMutation = useStartMcpAuthMutation();
 
   const reset = () => {
     setName('');
     setUrl('');
+    setClientId('');
+    setClientSecret('');
+    setShowOauth(false);
   };
 
   const startAuth = (serverName: string, serverUrl: string) => {
@@ -68,8 +111,24 @@ function AddServerForm(props: {
     const u = url().trim();
     if (!n || !u) return;
 
+    // Only send credentials when a client id was supplied; a secret without an
+    // id is unusable and the backend rejects it.
+    const clientIdValue = clientId().trim();
+    const clientSecretValue = clientSecret().trim();
+
     addMutation.mutate(
-      { server_name: n, url: u },
+      {
+        server_name: n,
+        url: u,
+        ...(clientIdValue
+          ? {
+              client_id: clientIdValue,
+              ...(clientSecretValue
+                ? { client_secret: clientSecretValue }
+                : {}),
+            }
+          : {}),
+      },
       {
         onSuccess: () => {
           startAuth(n, u);
@@ -130,6 +189,59 @@ function AddServerForm(props: {
                 }}
               />
             </label>
+
+            {/* Optional pre-registered OAuth credentials, for providers that
+                don't support Dynamic Client Registration (e.g. HubSpot). */}
+            <div class="flex flex-col gap-2">
+              <button
+                type="button"
+                class="flex w-fit items-center gap-1 text-xs text-ink-muted transition-colors hover:text-ink"
+                onClick={() => setShowOauth((v) => !v)}
+              >
+                <CaretDownIcon
+                  class={
+                    showOauth()
+                      ? 'size-3 transition-transform rotate-180'
+                      : 'size-3 transition-transform'
+                  }
+                />
+                OAuth credentials (optional)
+              </button>
+              <Show when={showOauth()}>
+                <div class="flex flex-col gap-3 rounded-lg border border-ink/[0.05] p-3">
+                  <p class="text-xs text-ink-extra-muted">
+                    For servers that don't support automatic client registration
+                    (e.g. HubSpot). Leave blank to use the standard flow.
+                  </p>
+                  <Show
+                    when={clientSecret() !== '' && clientId().trim() === ''}
+                  >
+                    <p class="text-xs text-failure">
+                      Enter a client ID to use the client secret.
+                    </p>
+                  </Show>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="text-xs text-ink-muted">Client ID</span>
+                    <input
+                      type="text"
+                      class="settings-input w-full"
+                      placeholder="Client ID"
+                      autocomplete="off"
+                      value={clientId()}
+                      onInput={(e) => setClientId(e.currentTarget.value)}
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="text-xs text-ink-muted">Client Secret</span>
+                    <SecretInput
+                      value={clientSecret()}
+                      placeholder="Client Secret"
+                      onInput={setClientSecret}
+                    />
+                  </label>
+                </div>
+              </Show>
+            </div>
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
@@ -184,6 +296,116 @@ function writeAuthAttempted(url: string, attempted: boolean): void {
   }
 }
 
+/**
+ * Edit the pre-registered OAuth client id/secret for a server. Only shown for
+ * servers without a completed OAuth grant, where these credentials are what
+ * lets a non-DCR provider (e.g. HubSpot) authorize at all.
+ */
+function ConfigureCredentialsDialog(props: {
+  onOpenChange: (open: boolean) => void;
+  server: ServerResponse;
+}) {
+  const updateMutation = useUpdateMcpServerMutation();
+  // Remounted on each open (see the keyed <Show> in ServerRow), so these
+  // always initialize from the latest server values without an effect.
+  const [clientId, setClientId] = createSignal(props.server.client_id ?? '');
+  const [clientSecret, setClientSecret] = createSignal('');
+
+  const handleSave = () => {
+    const cid = clientId().trim();
+    const csecret = clientSecret().trim();
+    // Clearing the id also clears the stored secret, so we never leave a
+    // secret behind without an id (which the backend rejects).
+    const clearedId = cid === '' && (props.server.client_id ?? '') !== '';
+
+    updateMutation.mutate(
+      {
+        url: props.server.url,
+        client_id: cid,
+        ...(csecret !== '' || clearedId ? { client_secret: csecret } : {}),
+      },
+      {
+        onSuccess: () => {
+          toast.success('OAuth credentials updated');
+          props.onOpenChange(false);
+        },
+        onError: () => {
+          toast.failure('Failed to update credentials');
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && props.onOpenChange(false)}
+      position="center"
+      class="w-100"
+    >
+      <Panel depth={2} class="rounded-xl">
+        <Panel.Header class="px-6">
+          <span class="text-ink text-sm font-semibold">
+            OAuth credentials — {props.server.server_name}
+          </span>
+        </Panel.Header>
+        <Panel.Body class="p-6 flex flex-col gap-5">
+          <div class="flex flex-col gap-4">
+            <p class="text-xs text-ink-extra-muted">
+              Some providers (e.g. HubSpot) don't support automatic client
+              registration. Supply the client ID and secret from your provider's
+              developer settings to connect them.
+            </p>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs text-ink-muted">Client ID</span>
+              <input
+                type="text"
+                class="settings-input w-full"
+                placeholder="Client ID"
+                autocomplete="off"
+                value={clientId()}
+                onInput={(e) => setClientId(e.currentTarget.value)}
+              />
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs text-ink-muted">Client Secret</span>
+              <SecretInput
+                value={clientSecret()}
+                placeholder={
+                  props.server.has_client_secret
+                    ? '•••••••• (leave blank to keep current)'
+                    : 'Client Secret'
+                }
+                onInput={setClientSecret}
+              />
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              onClick={() => props.onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              disabled={updateMutation.isPending}
+              onClick={handleSave}
+            >
+              {updateMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </Panel.Body>
+      </Panel>
+    </Dialog>
+  );
+}
+
 function ServerRow(props: { server: ServerResponse }) {
   const updateMutation = useUpdateMcpServerMutation();
   const deleteMutation = useDeleteMcpServerMutation();
@@ -192,6 +414,7 @@ function ServerRow(props: { server: ServerResponse }) {
   const [attempted, setAttempted] = createSignal(
     readAuthAttempted(props.server.url)
   );
+  const [showConfigure, setShowConfigure] = createSignal(false);
 
   // A recorded attempt on a still-disconnected server means the last connect
   // attempt didn't succeed. Clear the flag once the server authenticates.
@@ -293,6 +516,15 @@ function ServerRow(props: { server: ServerResponse }) {
               ? 'Try Again'
               : 'Connect'}
         </Button>
+        <Button
+          variant="base"
+          size="sm"
+          depth={3}
+          tooltip="Configure OAuth credentials"
+          onClick={() => setShowConfigure(true)}
+        >
+          <SlidersHorizontalIcon class="size-4" />
+        </Button>
       </Show>
 
       <Show when={props.server.authenticated}>
@@ -339,6 +571,13 @@ function ServerRow(props: { server: ServerResponse }) {
         >
           <XIcon class="size-4" />
         </Button>
+      </Show>
+
+      <Show when={showConfigure()} keyed>
+        <ConfigureCredentialsDialog
+          onOpenChange={setShowConfigure}
+          server={props.server}
+        />
       </Show>
     </IntegrationRow>
   );

@@ -4,6 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { UpdateServerRequestClientId } from './updateServerRequestClientId';
+import type { UpdateServerRequestClientSecret } from './updateServerRequestClientSecret';
 import type { UpdateServerRequestEnabled } from './updateServerRequestEnabled';
 import type { UpdateServerRequestServerName } from './updateServerRequestServerName';
 
@@ -11,6 +13,12 @@ import type { UpdateServerRequestServerName } from './updateServerRequestServerN
  * Request body for updating an MCP server.
  */
 export interface UpdateServerRequest {
+  /** Pre-registered OAuth client ID for providers without DCR. Pass an
+empty string to clear it. */
+  client_id?: UpdateServerRequestClientId;
+  /** Pre-registered OAuth client secret, if the provider issued one. Pass
+an empty string to clear it. */
+  client_secret?: UpdateServerRequestClientSecret;
   /** Enable or disable the server. */
   enabled?: UpdateServerRequestEnabled;
   /** New name for the server. */

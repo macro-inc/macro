@@ -4,6 +4,7 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { ServerResponseClientId } from './serverResponseClientId';
 
 /**
  * An MCP server record as returned by the API.
@@ -11,8 +12,12 @@
 export interface ServerResponse {
   /** Whether the server has valid stored credentials. */
   authenticated: boolean;
+  /** Pre-registered OAuth client ID, if the user supplied one. */
+  client_id?: ServerResponseClientId;
   /** Whether the server is enabled for tool use. */
   enabled: boolean;
+  /** Whether a pre-registered OAuth client secret is stored. */
+  has_client_secret: boolean;
   /** Human-readable server name. */
   server_name: string;
   /** The MCP server URL. */

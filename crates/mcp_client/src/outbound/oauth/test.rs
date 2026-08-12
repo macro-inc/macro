@@ -18,7 +18,17 @@ const CLIENT_METADATA_URL: &str =
 const REDIRECT_URI: &str = "https://document-cognition.macro.com/mcp/servers/auth/callback";
 
 #[derive(Clone, Default)]
-struct FakeServerStore;
+struct FakeServerStore {
+    record: Arc<Mutex<Option<McpServerRecord>>>,
+}
+
+impl FakeServerStore {
+    fn with_record(record: McpServerRecord) -> Self {
+        Self {
+            record: Arc::new(Mutex::new(Some(record))),
+        }
+    }
+}
 
 impl McpServerStore for FakeServerStore {
     type Err = anyhow::Error;
@@ -32,7 +42,11 @@ impl McpServerStore for FakeServerStore {
         _user_id: &MacroUserIdStr<'static>,
         _server_url: &str,
     ) -> Result<Option<McpServerRecord>, Self::Err> {
-        Ok(None)
+        Ok(self
+            .record
+            .lock()
+            .expect("state mutex is not poisoned")
+            .clone())
     }
 
     async fn delete(
@@ -175,8 +189,14 @@ async fn spawn_authorization_server(
 }
 
 fn oauth_service() -> OAuthService<FakeServerStore, FakeStateStore> {
+    oauth_service_with_store(FakeServerStore::default())
+}
+
+fn oauth_service_with_store(
+    server_store: FakeServerStore,
+) -> OAuthService<FakeServerStore, FakeStateStore> {
     OAuthService::new(
-        FakeServerStore,
+        server_store,
         FakeStateStore::default(),
         OAuthClientMetadata::new(CLIENT_METADATA_URL.to_string(), REDIRECT_URI.to_string()),
         PreRegisteredProviders::empty(),
@@ -234,5 +254,35 @@ async fn dcr_remains_the_fallback_when_cimd_is_not_supported() {
         Some("dcr-client-id")
     );
     assert_eq!(registrations.load(Ordering::SeqCst), 1);
+    server_task.abort();
+}
+
+#[tokio::test]
+async fn pre_registered_credentials_skip_dynamic_registration() {
+    let (base_url, registrations, server_task) = spawn_authorization_server(false).await;
+    let server_url = format!("{base_url}/mcp");
+
+    let record = McpServerRecord {
+        user_id: test_user_id(),
+        url: server_url.clone(),
+        server_name: "HubSpot".to_string(),
+        credentials: None,
+        enabled: true,
+        client_id: Some("hubspot-client-id".to_string()),
+        client_secret: Some("hubspot-client-secret".to_string()),
+    };
+    let service = oauth_service_with_store(FakeServerStore::with_record(record));
+
+    let authorization_url = service
+        .start_authorization(&test_user_id(), &server_url, "HubSpot")
+        .await
+        .expect("pre-registered authorization starts");
+
+    // The user-supplied client id is used verbatim, and no DCR call is made.
+    assert_eq!(
+        query_parameter(&authorization_url, "client_id").as_deref(),
+        Some("hubspot-client-id")
+    );
+    assert_eq!(registrations.load(Ordering::SeqCst), 0);
     server_task.abort();
 }

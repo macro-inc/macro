@@ -4,11 +4,18 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { AddServerRequestClientId } from './addServerRequestClientId';
+import type { AddServerRequestClientSecret } from './addServerRequestClientSecret';
 
 /**
  * Request body for adding a new MCP server.
  */
 export interface AddServerRequest {
+  /** Pre-registered OAuth client ID for providers that don't support
+Dynamic Client Registration (e.g. HubSpot). */
+  client_id?: AddServerRequestClientId;
+  /** Pre-registered OAuth client secret, if the provider issued one. */
+  client_secret?: AddServerRequestClientSecret;
   /** Human-readable name for the server. */
   server_name: string;
   /** The MCP server's streamable HTTP URL. */
