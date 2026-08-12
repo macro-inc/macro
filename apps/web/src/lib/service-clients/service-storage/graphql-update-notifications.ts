@@ -3,6 +3,7 @@ import {
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
+import { match } from 'ts-pattern';
 import {
   type NotificationUpdateOperation,
   UpdateNotificationsDocument,
@@ -43,14 +44,11 @@ function createOptimisticUpdateNotificationsData({
         __typename: 'GraphqlNotification' as const,
         id,
       };
-      switch (operation) {
-        case 'MARK_SEEN':
-          return { ...identity, seen: true, viewedAt };
-        case 'MARK_DONE':
-          return { ...identity, done: true };
-        case 'MARK_UNDONE':
-          return { ...identity, done: false };
-      }
+      return match(operation)
+        .with('MARK_SEEN', () => ({ ...identity, seen: true, viewedAt }))
+        .with('MARK_DONE', () => ({ ...identity, done: true }))
+        .with('MARK_UNDONE', () => ({ ...identity, done: false }))
+        .exhaustive();
     });
 
   // GraphQL result types model complete server data, while the cache
