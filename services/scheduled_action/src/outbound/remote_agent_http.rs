@@ -21,7 +21,7 @@
 #[cfg(test)]
 mod test;
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -250,6 +250,7 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || ip.is_broadcast()
                 || ip.is_unspecified()
                 || ip.octets() == [169, 254, 169, 254]
+                || is_shared_v4(ip)
         }
         IpAddr::V6(ip) => {
             // `::ffff:169.254.169.254` reaches the same host as the IPv4
@@ -265,6 +266,14 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || (ip.segments()[0] & 0xffc0) == 0xfe80
         }
     }
+}
+
+/// RFC 6598 shared address space (100.64.0.0/10), used for carrier-grade NAT
+/// and inside some cloud networks. `Ipv4Addr::is_shared` is still unstable, so
+/// check the prefix directly.
+fn is_shared_v4(ip: Ipv4Addr) -> bool {
+    let [first, second, ..] = ip.octets();
+    first == 100 && (64..=127).contains(&second)
 }
 
 /// First [`RESPONSE_PREVIEW_MAX_BYTES`] of a body, on a char boundary.

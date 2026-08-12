@@ -83,9 +83,26 @@ where
         // and the eventual execution record can link back to it.
         // Both kinds write their run transcript to a chat, so the UI (which
         // navigates by chat_id) is identical for a remote agent.
-        let chat_id = match action.kind {
+        let created_chat = match action.kind {
             ActionKind::Agent | ActionKind::RemoteAgent => {
-                agent_task::create_run_chat(&self.db, &action).await?
+                agent_task::create_run_chat(&self.db, &action).await
+            }
+        };
+
+        // The claim is taken before setup, and only the spawned run releases
+        // it. Failing here without releasing would leave the action unrunnable
+        // until the claim goes stale (MAX_ACTION_TIME).
+        let chat_id = match created_chat {
+            Ok(chat_id) => chat_id,
+            Err(e) => {
+                if let Err(release_error) = self.repo.release_action(&id).await {
+                    tracing::error!(
+                        error=?release_error,
+                        action_id=?id,
+                        "failed to release action claim after run setup failed"
+                    );
+                }
+                return Err(e);
             }
         };
 

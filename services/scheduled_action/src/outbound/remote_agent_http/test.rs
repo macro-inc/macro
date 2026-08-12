@@ -25,11 +25,17 @@ fn rejects_private_loopback_and_metadata_addresses() {
     assert!(blocked("::ffff:169.254.169.254"));
     assert!(blocked("::ffff:127.0.0.1"));
     assert!(blocked("::ffff:10.0.0.1"));
+    // RFC 6598 shared address space (carrier-grade NAT, some cloud networks).
+    assert!(blocked("100.64.0.1"));
+    assert!(blocked("100.127.255.255"));
 }
 
 #[test]
 fn allows_public_addresses() {
     assert!(!blocked("93.184.216.34"));
+    // Neighbours of the RFC 6598 block that are ordinary public addresses.
+    assert!(!blocked("100.63.255.255"));
+    assert!(!blocked("100.128.0.1"));
     assert!(!blocked("2606:2800:220:1:248:1893:25c8:1946"));
 }
 
