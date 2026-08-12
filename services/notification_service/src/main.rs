@@ -6,6 +6,7 @@ use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::fanout_websocket::FanoutWebSocketSender;
 use ::notification::outbound::kafka_websocket::KafkaWebSocketSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
@@ -197,11 +198,19 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let websocket_adapter = KafkaWebSocketSender::new(MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create Kafka WebSocket notification publisher")?,
-        GlobalSpawner,
-    ));
+    let websocket_adapter = FanoutWebSocketSender::new(
+        WebSocketGatewayAdapter {
+            gateway: ConnectionGatewayClient::new(
+                config.internal_api_key.as_ref().to_string(),
+                connection_gateway_url,
+            ),
+        },
+        KafkaWebSocketSender::new(MacroEventBrokerService::new(
+            KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+                .context("failed to create Kafka WebSocket notification publisher")?,
+            GlobalSpawner,
+        )),
+    );
 
     let mobile_adapter = MobilePushAdapter {
         push_service: aws_sdk_sns::Client::new(&aws_config),

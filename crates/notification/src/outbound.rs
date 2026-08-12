@@ -6,6 +6,8 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+/// WebSocket notification fanout across multiple delivery adapters.
+pub mod fanout_websocket;
 /// Kafka-backed WebSocket notification delivery.
 pub mod kafka_websocket;
 pub mod last_online_checker;
