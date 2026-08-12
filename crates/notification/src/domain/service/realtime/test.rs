@@ -77,6 +77,33 @@ async fn distributes_notifications_to_every_recipient_subscription() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn reports_slow_consumer_subscription_exit() {
+    let subscribed = user("subscribed");
+    let consumer = FakeConsumer {
+        messages: Mutex::new(VecDeque::new()),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let service = WebSocketNotificationConsumerService::new(consumer);
+    let subscription = service.subscribe(subscribed.clone());
+
+    for index in 0..=SUBSCRIBER_BUFFER_CAPACITY.get() {
+        let notification = Arc::new(TestNotification {
+            kind: index.to_string(),
+        });
+        service
+            .broadcasts
+            .publish(&subscribed, notification)
+            .expect("subscriber remains until its buffer fills");
+        tokio::task::yield_now().await;
+    }
+
+    assert_eq!(
+        subscription.exit_reason().await,
+        crate::domain::ports::WebSocketNotificationSubscriptionExit::SlowConsumer
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn ignores_recipients_without_subscribers() {
     let subscribed = user("subscribed");
     let consumer = FakeConsumer {

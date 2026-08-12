@@ -6420,6 +6420,7 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "async-stream",
  "chrono",
  "futures",
  "graphql_common",
@@ -6431,6 +6432,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

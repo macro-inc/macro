@@ -12,7 +12,10 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
     models::websocket_notification_event::WebSocketNotificationMetadata,
-    ports::{WebSocketNotificationConsumer, WebSocketNotificationSubscriptionService},
+    ports::{
+        WebSocketNotificationConsumer, WebSocketNotificationSubscription,
+        WebSocketNotificationSubscriptionService,
+    },
 };
 
 /// Number of messages retained by each user-keyed broadcast channel.
@@ -55,15 +58,34 @@ where
 
     /// Subscribes to WebSocket notifications addressed to `user_id`.
     ///
-    /// The returned receiver is closed if its buffer fills, ensuring a slow subscriber cannot
+    /// The returned subscription reports if its buffer fills, ensuring a slow subscriber cannot
     /// delay the shared consumer or other subscribers.
     #[must_use]
     pub fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<T>> {
-        self.broadcasts
+    ) -> WebSocketNotificationSubscription<Arc<T>> {
+        let (receiver, broadcast_exit_reason) = self
+            .broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
+            .into_parts();
+        let (exit_reason_sender, exit_reason) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            use crate::domain::ports::WebSocketNotificationSubscriptionExit;
+
+            let reason = match broadcast_exit_reason.await {
+                Ok(broadcast::ExitReason::SlowConsumer) => {
+                    WebSocketNotificationSubscriptionExit::SlowConsumer
+                }
+                Ok(broadcast::ExitReason::Lagging { skipped }) => {
+                    WebSocketNotificationSubscriptionExit::Lagging { skipped }
+                }
+                Ok(broadcast::ExitReason::ReceiverClosed | broadcast::ExitReason::SenderClosed)
+                | Err(_) => WebSocketNotificationSubscriptionExit::Closed,
+            };
+            let _ = exit_reason_sender.send(reason);
+        });
+        WebSocketNotificationSubscription::from_parts(receiver, exit_reason)
     }
 
     /// Receives notifications and distributes them to subscribers until reception fails.
@@ -109,7 +131,10 @@ where
     C: WebSocketNotificationConsumer<T>,
     T: Send + Sync + 'static,
 {
-    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> tokio::sync::mpsc::Receiver<Arc<T>> {
+    fn subscribe(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> WebSocketNotificationSubscription<Arc<T>> {
         WebSocketNotificationConsumerService::subscribe(self, user_id)
     }
 }

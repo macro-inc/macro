@@ -1,12 +1,16 @@
 use std::{collections::VecDeque, sync::Mutex};
 
-use async_graphql::{EmptyMutation, Schema};
+use async_graphql::{EmptyMutation, Object, Schema};
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{NotifEvent, TaskAssignedMetadata};
 use notification::domain::{
-    models::queue_message::RealtimeNotif, ports::WebSocketNotificationSubscriptionService,
+    models::queue_message::RealtimeNotif,
+    ports::{
+        WebSocketNotificationSubscription, WebSocketNotificationSubscriptionExit,
+        WebSocketNotificationSubscriptionService,
+    },
 };
 
 use super::*;
@@ -21,7 +25,8 @@ impl Query {
 }
 
 struct TestSubscriptionService {
-    receivers: Mutex<VecDeque<tokio::sync::mpsc::Receiver<Arc<RealtimeNotif<NotifEvent>>>>>,
+    subscriptions:
+        Mutex<VecDeque<WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>>>>,
 }
 
 impl WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>
@@ -30,22 +35,37 @@ impl WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>
     fn subscribe(
         &self,
         _user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Arc<RealtimeNotif<NotifEvent>>> {
-        self.receivers
+    ) -> WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>> {
+        self.subscriptions
             .lock()
-            .expect("receiver lock")
+            .expect("subscription lock")
             .pop_front()
             .expect("subscription opened once")
     }
+}
+
+fn subscription(
+    exit: WebSocketNotificationSubscriptionExit,
+) -> (
+    tokio::sync::mpsc::Sender<Arc<RealtimeNotif<NotifEvent>>>,
+    WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>>,
+) {
+    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (exit_sender, exit_receiver) = tokio::sync::oneshot::channel();
+    exit_sender.send(exit).expect("exit receiver remains open");
+    (
+        sender,
+        WebSocketNotificationSubscription::from_parts(receiver, exit_receiver),
+    )
 }
 
 #[tokio::test]
 async fn notification_updates_streams_realtime_notifications() {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
     let assigned_by = MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap();
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
     let service = TestSubscriptionService {
-        receivers: Mutex::new(VecDeque::from([receiver])),
+        subscriptions: Mutex::new(VecDeque::from([subscription])),
     };
     let schema = Schema::new(
         Query,
@@ -54,7 +74,7 @@ async fn notification_updates_streams_realtime_notifications() {
     );
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
-            "subscription { notificationUpdates { id eventType entityType entityId metadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } }",
+            "subscription { notificationUpdates { id eventType entityType entityId typedMetadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } }",
         )
         .data(user_id),
     ));
@@ -96,24 +116,53 @@ async fn notification_updates_streams_realtime_notifications() {
     assert_eq!(data["notificationUpdates"]["entityType"], "DOCUMENT");
     assert_eq!(data["notificationUpdates"]["entityId"], "task-1");
     assert_eq!(
-        data["notificationUpdates"]["metadata"]["__typename"],
+        data["notificationUpdates"]["typedMetadata"]["__typename"],
         "GraphqlTaskAssignedMetadata"
     );
-    assert_eq!(data["notificationUpdates"]["metadata"]["taskId"], "task-1");
     assert_eq!(
-        data["notificationUpdates"]["metadata"]["taskName"],
+        data["notificationUpdates"]["typedMetadata"]["taskId"],
+        "task-1"
+    );
+    assert_eq!(
+        data["notificationUpdates"]["typedMetadata"]["taskName"],
         "Test task"
     );
     assert_eq!(
-        data["notificationUpdates"]["metadata"]["assignedBy"],
+        data["notificationUpdates"]["typedMetadata"]["assignedBy"],
         "macro|assigner@example.com"
+    );
+}
+
+#[tokio::test]
+async fn notification_updates_reports_slow_consumers() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
+    let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::SlowConsumer);
+    drop(sender);
+    let service = TestSubscriptionService {
+        subscriptions: Mutex::new(VecDeque::from([subscription])),
+    };
+    let schema = Schema::new(
+        Query,
+        EmptyMutation,
+        NotificationSubscriptionRoot::new(service),
+    );
+    let mut responses = Box::pin(schema.execute_stream(
+        async_graphql::Request::new("subscription { notificationUpdates { id } }").data(user_id),
+    ));
+
+    let response = futures::StreamExt::next(&mut responses)
+        .await
+        .expect("terminal subscription response");
+    assert_eq!(
+        response.errors[0].message,
+        "notification subscription closed because the client was too slow"
     );
 }
 
 #[tokio::test]
 async fn notification_updates_requires_an_authenticated_user() {
     let service = TestSubscriptionService {
-        receivers: Mutex::new(VecDeque::new()),
+        subscriptions: Mutex::new(VecDeque::new()),
     };
     let schema = Schema::new(
         Query,

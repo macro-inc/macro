@@ -314,13 +314,58 @@ pub trait WebSocketNotificationConsumer<T>: Send + Sync + 'static {
     > + Send;
 }
 
+/// Why a WebSocket notification subscription ended after its messages were drained.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WebSocketNotificationSubscriptionExit {
+    /// The subscription closed normally.
+    Closed,
+    /// The subscriber's bounded buffer filled.
+    SlowConsumer,
+    /// The subscriber fell behind the shared broadcast buffer.
+    Lagging {
+        /// Number of messages skipped by the broadcast receiver.
+        skipped: u64,
+    },
+}
+
+/// A WebSocket notification receiver with independently observable completion status.
+pub struct WebSocketNotificationSubscription<T> {
+    receiver: tokio::sync::mpsc::Receiver<T>,
+    exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+}
+
+impl<T> WebSocketNotificationSubscription<T> {
+    /// Creates a subscription from its message and exit-reason receivers.
+    pub fn from_parts(
+        receiver: tokio::sync::mpsc::Receiver<T>,
+        exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+    ) -> Self {
+        Self {
+            receiver,
+            exit_reason,
+        }
+    }
+
+    /// Receives the next buffered notification.
+    pub async fn recv(&mut self) -> Option<T> {
+        self.receiver.recv().await
+    }
+
+    /// Returns why the forwarding task stopped after buffered notifications are drained.
+    pub async fn exit_reason(self) -> WebSocketNotificationSubscriptionExit {
+        self.exit_reason
+            .await
+            .unwrap_or(WebSocketNotificationSubscriptionExit::Closed)
+    }
+}
+
 /// Provides user-scoped subscriptions to received WebSocket notifications decoded as `T`.
 pub trait WebSocketNotificationSubscriptionService<T>: Send + Sync + 'static {
     /// Subscribes to WebSocket notifications addressed to `user_id`.
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<std::sync::Arc<T>>;
+    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>>;
 }
 
 impl<S, T> WebSocketNotificationSubscriptionService<T> for std::sync::Arc<S>
@@ -330,7 +375,7 @@ where
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<std::sync::Arc<T>> {
+    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>> {
         self.as_ref().subscribe(user_id)
     }
 }
@@ -345,9 +390,11 @@ impl<T: Send + Sync + 'static> WebSocketNotificationSubscriptionService<T>
     fn subscribe(
         &self,
         _user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<std::sync::Arc<T>> {
+    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>> {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
-        receiver
+        let (exit_reason_sender, exit_reason) = tokio::sync::oneshot::channel();
+        let _ = exit_reason_sender.send(WebSocketNotificationSubscriptionExit::Closed);
+        WebSocketNotificationSubscription::from_parts(receiver, exit_reason)
     }
 }
 

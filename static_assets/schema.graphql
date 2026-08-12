@@ -99,7 +99,7 @@ type CompleteSubscriptionRoot {
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
-	notificationUpdates: GraphqlRealtimeNotification!
+	notificationUpdates: GraphqlSoupNotification!
 }
 
 """
@@ -2888,60 +2888,6 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
-A notification delivered to the authenticated user in realtime.
-"""
-type GraphqlRealtimeNotification {
-	"""
-	The notification identifier.
-	"""
-	id: ID!
-	"""
-	The event that produced the notification.
-	"""
-	eventType: String!
-	"""
-	The type of the associated entity.
-	"""
-	entityType: GraphqlEntityType!
-	"""
-	The identifier of the associated entity.
-	"""
-	entityId: String!
-	"""
-	Whether the notification has been sent.
-	"""
-	sent: Boolean!
-	"""
-	Whether notification processing is complete.
-	"""
-	done: Boolean!
-	"""
-	Whether the recipient has seen the notification.
-	"""
-	seen: Boolean!
-	"""
-	The notification creation time in RFC 3339 format.
-	"""
-	createdAt: String!
-	"""
-	The time the notification was viewed, in RFC 3339 format.
-	"""
-	viewedAt: String
-	"""
-	The notification's last update time in RFC 3339 format.
-	"""
-	updatedAt: String!
-	"""
-	The identifier of the user who triggered the notification.
-	"""
-	senderId: String
-	"""
-	Event-specific notification metadata.
-	"""
-	metadata: GraphqlNotifEvent!
-}
-
-"""
 The two operands of a recursive `ReminderFilterExpr` binary expression.
 """
 input GraphqlReminderBinaryExpr {
@@ -4635,9 +4581,13 @@ type GraphqlSoupNotification {
 	"""
 	senderId: String
 	"""
-	Event-specific notification metadata.
+	Raw event-specific notification metadata.
 	"""
-	metadata: GraphqlNotifEvent!
+	metadata: JSON! @deprecated(reason: "Use typedMetadata with union inline fragments")
+	"""
+	Typed event-specific notification metadata.
+	"""
+	typedMetadata: GraphqlNotifEvent
 }
 
 """
@@ -5249,6 +5199,10 @@ input UpdateNotificationsInput {
 	operation: NotificationUpdateOperation!
 }
 
+"""
+Marks an element of a GraphQL schema as no longer supported.
+"""
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
 """
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """

@@ -272,6 +272,27 @@ impl<T: Notification> TaggedContent<T> {
 }
 
 impl UserNotificationRow<serde_json::Value> {
+    /// Deserialize the row's tagged metadata without cloning or consuming the row.
+    pub fn deserialize_metadata_ref<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        let mut encoded = Vec::new();
+        {
+            let mut serializer = serde_json::Serializer::new(&mut encoded);
+            let mut map = serde::Serializer::serialize_map(&mut serializer, Some(2))?;
+            serde::ser::SerializeMap::serialize_entry(
+                &mut map,
+                "tag",
+                &self.notification_event_type,
+            )?;
+            serde::ser::SerializeMap::serialize_entry(
+                &mut map,
+                "content",
+                &self.notification_metadata,
+            )?;
+            serde::ser::SerializeMap::end(map)?;
+        }
+        serde_json::from_slice(&encoded)
+    }
+
     /// Wrap the raw JSON metadata in a [`TaggedContent`] using the row's
     /// `notification_event_type` as the tag. This produces the adjacently-tagged
     /// shape produced by [`UserNotificationRow::into_tagged`] +
