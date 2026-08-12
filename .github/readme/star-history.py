@@ -2,7 +2,7 @@
 from datetime import date
 
 # Cumulative star counts from the GitHub stargazers API (starred_at timestamps),
-# sampled through 2026-08-12 16:14 UTC, where the total was 1421.
+# sampled through 2026-08-12 22:40 UTC, where the total was 1698.
 SERIES = [
     (date(2025, 11, 18), 0),
     (date(2025, 11, 28), 5),
@@ -35,14 +35,14 @@ SERIES = [
     (date(2026, 8, 7), 765),
     (date(2026, 8, 10), 899),
     (date(2026, 8, 11), 1063),
-    (date(2026, 8, 12), 1421),
+    (date(2026, 8, 12), 1698),
 ]
 
 W, H = 1100, 560
 L, R, T, B = 76, 52, 112, 62           # plot padding
 PX0, PX1 = L, W - R
 PY0, PY1 = T, H - B
-YMAX = 1500
+YMAX = 2000
 LATEST = SERIES[-1][1]
 ORANGE = "#f26a1b"
 
