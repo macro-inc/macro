@@ -33,7 +33,9 @@ const GUEST_NAME_COLLATOR = new Intl.Collator(undefined, {
 const GUEST_OPTION_HEIGHT_PX = 36;
 const GUEST_OPTION_MAX_VISIBLE_COUNT = 5;
 const PROPERTY_TRIGGER_CLASS =
-  'flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
+  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
+const PROPERTY_VALUE_CLASS =
+  'group-hover:text-ink group-focus-visible:text-ink group-data-expanded:text-ink';
 
 export type EventComposerSelectOption = {
   value: string;
@@ -96,6 +98,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
           <span
             class={cn(
               'min-w-0 truncate',
+              PROPERTY_VALUE_CLASS,
               props.selected.length > 0
                 ? 'text-current'
                 : 'text-ink-extra-muted'
@@ -288,6 +291,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             <span
               class={cn(
                 'min-w-0 truncate',
+                PROPERTY_VALUE_CLASS,
                 props.selected.length > 0
                   ? 'text-current'
                   : 'text-ink-extra-muted'
@@ -505,6 +509,7 @@ export function EventComposerLocationPill(
           <span
             class={cn(
               'min-w-0 truncate',
+              PROPERTY_VALUE_CLASS,
               props.value ? 'text-current' : 'text-ink-extra-muted'
             )}
           >
