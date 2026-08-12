@@ -76,13 +76,15 @@ pub struct AgentSession {
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionBot {
     /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
     pub id: BotId,
     /// Display name.
     pub name: String,
     /// Avatar, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
 }
 

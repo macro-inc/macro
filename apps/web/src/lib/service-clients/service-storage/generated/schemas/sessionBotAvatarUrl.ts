@@ -8,4 +8,4 @@
 /**
  * Avatar, when it has one.
  */
-export type SessionBotDtoAvatarUrl = string | null;
+export type SessionBotAvatarUrl = string | null;

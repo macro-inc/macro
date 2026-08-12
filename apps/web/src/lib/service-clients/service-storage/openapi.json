@@ -11464,7 +11464,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/SessionBotDto",
+                "$ref": "#/components/schemas/SessionBot",
                 "description": "The agent whose messages the log derives, absent for the same reason\nthe session id is.\n\nHere because a client renders those messages and cannot otherwise work\nout who sent them: the sender of an agent message is this session's\nbot, and no other response a channel fetches names it. Asking for the\nchannel's bots is the wrong question - those are bots explicitly added\nto a channel, which a session's agent need not be."
               }
             ]
@@ -22075,9 +22075,9 @@
           }
         }
       },
-      "SessionBotDto": {
+      "SessionBot": {
         "type": "object",
-        "description": "The agent behind a session, mirroring [`SessionBot`].",
+        "description": "The agent behind a session, as much of it as rendering a message needs.",
         "required": ["id", "name"],
         "properties": {
           "avatarUrl": {
@@ -22085,8 +22085,7 @@
             "description": "Avatar, when it has one."
           },
           "id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/BotId",
             "description": "The bot's id. A message it sent has `\"bot|{id}\"` as its sender."
           },
           "name": {

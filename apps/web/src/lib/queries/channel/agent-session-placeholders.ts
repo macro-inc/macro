@@ -20,7 +20,7 @@ import { foldedReference, type MessageId } from '@core/agent-fold/message-id';
 import type { FoldedMessage } from '@core/agent-fold/types';
 import type { ApiChannelMessage } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
-import type { SessionBotDto } from '@service-storage/generated/schemas/sessionBotDto';
+import type { SessionBot } from '@service-storage/generated/schemas/sessionBot';
 import {
   findTopLevelMessageInChannelMessagesWhere,
   insertTopLevelMessageIntoChannelMessages,
@@ -53,12 +53,12 @@ function findPlaceholder(
  * nothing for a session whose agent was never added, which is the ordinary
  * case. The server knows exactly which bot; this is where it says so.
  */
-const sessionBots = new Map<string, SessionBotDto>();
+const sessionBots = new Map<string, SessionBot>();
 
 /** Remember the agent behind a channel's session, from its log response. */
 export function rememberSessionBot(
   channelId: string,
-  bot: SessionBotDto | null | undefined
+  bot: SessionBot | null | undefined
 ): void {
   if (bot) sessionBots.set(channelId, bot);
 }

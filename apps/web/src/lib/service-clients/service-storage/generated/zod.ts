@@ -202,14 +202,12 @@ export const getAgentChannelLogResponse = zod
               .string()
               .nullish()
               .describe('Avatar, when it has one.'),
-            id: zod
-              .uuid()
-              .describe(
-                'The bot\'s id. A message it sent has `\"bot|{id}\"` as its sender.'
-              ),
+            id: zod.string(),
             name: zod.string().describe('Display name.'),
           })
-          .describe('The agent behind a session, mirroring [`SessionBot`].'),
+          .describe(
+            'The agent behind a session, as much of it as rendering a message needs.'
+          ),
       ])
       .optional(),
     entries: zod

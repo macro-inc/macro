@@ -31,7 +31,8 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSessionLog, Message, SessionStatus,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSessionLog, Message, SessionBot,
+    SessionStatus,
 };
 use crate::domain::service::AgentSessionService;
 
@@ -374,7 +375,7 @@ pub struct AgentChannelLogResponse {
     /// channel's bots is the wrong question - those are bots explicitly added
     /// to a channel, which a session's agent need not be.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bot: Option<SessionBotDto>,
+    pub bot: Option<SessionBot>,
     /// Every logged frame, oldest first. Folding depends on this order. Empty
     /// when there is no session.
     pub entries: Vec<AgentSessionLogEntryDto>,
@@ -395,27 +396,10 @@ impl From<ChannelSessionLog> for AgentChannelLogResponse {
     fn from(log: ChannelSessionLog) -> Self {
         Self {
             agent_session_id: Some(log.agent_session_id.as_uuid()),
-            bot: Some(SessionBotDto {
-                id: log.bot.id.as_uuid(),
-                name: log.bot.name,
-                avatar_url: log.bot.avatar_url,
-            }),
+            bot: Some(log.bot),
             entries: log.entries.into_iter().map(Into::into).collect(),
         }
     }
-}
-
-/// The agent behind a session, mirroring [`SessionBot`].
-#[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionBotDto {
-    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
-    pub id: Uuid,
-    /// Display name.
-    pub name: String,
-    /// Avatar, when it has one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub avatar_url: Option<String>,
 }
 
 /// One entry of a session's protocol log.

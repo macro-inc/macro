@@ -4,6 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SessionBotDto } from './sessionBotDto';
+import type { SessionBot } from './sessionBot';
 
-export type AgentChannelLogResponseBot = null | SessionBotDto;
+export type AgentChannelLogResponseBot = null | SessionBot;

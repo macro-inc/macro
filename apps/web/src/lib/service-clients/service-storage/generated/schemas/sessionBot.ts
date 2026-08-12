@@ -4,16 +4,18 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SessionBotDtoAvatarUrl } from './sessionBotDtoAvatarUrl';
+
+import type { BotId } from './botId';
+import type { SessionBotAvatarUrl } from './sessionBotAvatarUrl';
 
 /**
- * The agent behind a session, mirroring [`SessionBot`].
+ * The agent behind a session, as much of it as rendering a message needs.
  */
-export interface SessionBotDto {
+export interface SessionBot {
   /** Avatar, when it has one. */
-  avatarUrl?: SessionBotDtoAvatarUrl;
+  avatarUrl?: SessionBotAvatarUrl;
   /** The bot's id. A message it sent has `"bot|{id}"` as its sender. */
-  id: string;
+  id: BotId;
   /** Display name. */
   name: string;
 }
