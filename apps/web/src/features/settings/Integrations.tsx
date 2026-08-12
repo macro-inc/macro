@@ -7,6 +7,8 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
@@ -36,12 +38,29 @@ function hostFromUrl(url: string): string {
   }
 }
 
+/** Header names that carry a static credential, so the server does not need OAuth. */
+const AUTH_HEADER_NAMES = new Set([
+  'authorization',
+  'x-api-key',
+  'api-key',
+  'x-auth-token',
+]);
+
+/** True when any header looks like a static API key / bearer token. */
+function hasAuthHeader(headers?: Record<string, string>): boolean {
+  if (!headers) return false;
+  return Object.keys(headers).some((key) =>
+    AUTH_HEADER_NAMES.has(key.trim().toLowerCase())
+  );
+}
+
 /** A single key-value header entry. */
 function HeaderRow(props: {
   pair: { key: string; value: string };
   onChange: (pair: { key: string; value: string }) => void;
   onRemove: () => void;
 }) {
+  const [revealValue, setRevealValue] = createSignal(false);
   return (
     <div class="flex items-center gap-2">
       <input
@@ -55,14 +74,28 @@ function HeaderRow(props: {
       />
       <span class="text-ink-muted text-xs">:</span>
       <input
-        type="text"
+        type={revealValue() ? 'text' : 'password'}
         class="settings-input flex-1"
         placeholder="Value"
+        autocomplete="off"
         value={props.pair.value}
         onInput={(e) =>
           props.onChange({ key: props.pair.key, value: e.currentTarget.value })
         }
       />
+      <Button
+        variant="base"
+        size="sm"
+        depth={3}
+        tooltip={revealValue() ? 'Hide value' : 'Show value'}
+        onClick={() => setRevealValue((v) => !v)}
+      >
+        {revealValue() ? (
+          <EyeSlashIcon class="size-3.5" />
+        ) : (
+          <EyeIcon class="size-3.5" />
+        )}
+      </Button>
       <Button
         variant="base"
         size="sm"
@@ -128,9 +161,11 @@ function AddServerForm(props: {
       { server_name: n, url: u, headers: headersObject() },
       {
         onSuccess: () => {
-          // Only start OAuth when the server has no static headers —
-          // API-key / bearer-token servers authenticate via headers directly.
-          if (!headersObject()) {
+          // Skip auto-OAuth only when the user attached an auth-shaped header
+          // (API key / bearer token); those servers authenticate via the
+          // header directly. Non-auth headers (e.g. gateway routing) still
+          // fall through to the OAuth flow.
+          if (!hasAuthHeader(headersObject())) {
             startAuth(n, u);
           }
           reset();
@@ -286,16 +321,11 @@ function HeadersConfigDialog(props: {
     const h = props.server.headers ?? {};
     return Object.entries(h).map(([key, value]) => ({ key, value }));
   };
+  // Remounted on each open (see the keyed <Show> in ServerRow), so the pairs
+  // always initialize from the latest server headers without an effect.
   const [pairs, setPairs] = createSignal<
     { key: string; value: string }[]
   >(initialHeaders());
-
-  // Reset when server changes
-  createEffect(() => {
-    if (props.open) {
-      setPairs(initialHeaders());
-    }
-  });
 
   const addHeader = () => {
     setPairs((prev) => [...prev, { key: '', value: '' }]);
@@ -402,7 +432,16 @@ function ServerRow(props: { server: ServerResponse }) {
     }
   });
 
-  const connectionFailed = () => !props.server.authenticated && attempted();
+  // A server reads as connected when it has OAuth credentials or usable
+  // static headers (e.g. an API key sent via the Authorization header).
+  const hasHeaders = () =>
+    props.server.headers && Object.keys(props.server.headers).length > 0;
+  const connected = () => props.server.authenticated || hasHeaders();
+
+  // OAuth-specific attempt tracking: a failed OAuth flow on a server without
+  // static headers leaves the row disconnected and "try again"-able.
+  const authAttemptFailed = () => !props.server.authenticated && attempted();
+  const connectionFailed = () => !connected() && attempted();
 
   const handleToggleEnabled = () => {
     updateMutation.mutate(
@@ -470,10 +509,6 @@ function ServerRow(props: { server: ServerResponse }) {
   const Icon = (): SvgIcon =>
     QUICK_CONNECT_ICON_MAP.get(props.server.url) ?? (PlugIcon as SvgIcon);
 
-  const hasHeaders = () =>
-    props.server.headers &&
-    Object.keys(props.server.headers).length > 0;
-
   return (
     <IntegrationRow
       icon={(() => {
@@ -483,7 +518,7 @@ function ServerRow(props: { server: ServerResponse }) {
       title={
         <span class="flex items-center gap-1.5">
           <span class="min-w-0 truncate">{props.server.server_name}</span>
-          <Show when={props.server.authenticated}>
+          <Show when={connected()}>
             <CheckIcon class="size-3 shrink-0 text-success" />
           </Show>
           <Show when={connectionFailed()}>
@@ -508,13 +543,13 @@ function ServerRow(props: { server: ServerResponse }) {
         >
           {authMutation.isPending
             ? 'Connecting...'
-            : connectionFailed()
+            : authAttemptFailed()
               ? 'Try Again'
               : 'Connect'}
         </Button>
       </Show>
 
-      <Show when={props.server.authenticated}>
+      <Show when={connected()}>
         <ToggleSwitch
           size="md"
           checked={props.server.enabled}
@@ -572,13 +607,15 @@ function ServerRow(props: { server: ServerResponse }) {
         </Button>
       </Show>
 
-      <HeadersConfigDialog
-        open={showHeadersDialog()}
-        onOpenChange={setShowHeadersDialog}
-        server={props.server}
-        onSave={handleSaveHeaders}
-        saving={updateMutation.isPending}
-      />
+      <Show when={showHeadersDialog()} keyed>
+        <HeadersConfigDialog
+          open
+          onOpenChange={setShowHeadersDialog}
+          server={props.server}
+          onSave={handleSaveHeaders}
+          saving={updateMutation.isPending}
+        />
+      </Show>
     </IntegrationRow>
   );
 }
