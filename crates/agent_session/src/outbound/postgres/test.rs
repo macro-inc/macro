@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::AuthorKind;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -148,6 +149,51 @@ async fn create_and_get_round_trips(pool: PgPool) {
     );
     assert_eq!(owner.role, "owner");
     assert_eq!(owner.left_at, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn placeholders_share_one_unique_identifier(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let message_id = MessageId::first(AuthorKind::Agent);
+    let author = Author::Agent;
+
+    let (first, second) = tokio::join!(
+        Comms::create_message_placeholder(&repo, &session, message_id, &author),
+        Comms::create_message_placeholder(&repo, &session, message_id, &author),
+    );
+    first.expect("create placeholder");
+    second.expect("concurrent placeholder creation");
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            identifier.id AS "id!",
+            identifier.agent_session_id,
+            identifier.turn,
+            identifier.author,
+            message.agent_session_message_identifier_id AS "identifier_id!"
+        FROM comms_messages AS message
+        JOIN agent_session_message_identifier AS identifier
+          ON identifier.id = message.agent_session_message_identifier_id
+        WHERE identifier.agent_session_id = $1
+          AND identifier.turn = $2
+          AND identifier.author = $3
+        "#,
+        session.id.as_uuid(),
+        i64::from(message_id.turn.0),
+        message_id.author.as_str(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read placeholder identifier");
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, rows[0].identifier_id);
+    assert_eq!(rows[0].agent_session_id, session.id.as_uuid());
+    assert_eq!(rows[0].turn, i64::from(message_id.turn.0));
+    assert_eq!(rows[0].author, message_id.author.as_str());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

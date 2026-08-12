@@ -128,6 +128,8 @@ fn a_channel_message_forwards_to_its_session() {
         panic!("an existing-session event should forward");
     };
     assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(forward.channel_id, Uuid::from_u128(1));
+    assert_eq!(forward.thread_id, Uuid::from_u128(2));
     assert_eq!(forward.sender, Some(user()));
     assert_eq!(forward.content, "@claude fix the tests");
 }

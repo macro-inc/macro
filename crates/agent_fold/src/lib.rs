@@ -65,10 +65,10 @@
 //! for frame in frames {
 //!     match machine.push(frame) {
 //!         IncrementalFoldResult::NewMessage(message) => {
-//!             println!("new {}", message.id());
+//!             println!("new {:?}", message.id());
 //!         }
 //!         IncrementalFoldResult::MessageUpdate(message) => {
-//!             println!("redraw {}", message.id());
+//!             println!("redraw {:?}", message.id());
 //!         }
 //!         // Most frames are handshake or bookkeeping traffic.
 //!         IncrementalFoldResult::Unchanged => {}

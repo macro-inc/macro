@@ -2,7 +2,7 @@
  * The channel rows a live agent session's folded messages render into.
  *
  * A folded message is only ever shown through a placeholder comms row — a
- * message with no content whose `agent_session_message_id` names it (see
+ * message with no content whose `agent_session_message` names it (see
  * `ChannelMessage`'s `FoldedMessageLayout`). The server writes those rows as
  * it folds, but a client watching a session live learns about a new message
  * before that row can reach it, so it makes one itself and lets the real row
@@ -16,6 +16,7 @@
  *   channel does not end up with the turn twice.
  */
 
+import { foldedReference, type MessageId } from '@core/agent-fold/message-id';
 import type { FoldedMessage } from '@core/agent-fold/types';
 import type { ApiChannelMessage } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
@@ -30,12 +31,17 @@ import {
 /** The channel row rendering a given folded message, if the client has one. */
 function findPlaceholder(
   channelId: string,
-  agentSessionMessageId: string
+  agentSessionId: string,
+  messageId: MessageId
 ): ApiChannelMessage | undefined {
-  return findTopLevelMessageInChannelMessagesWhere(
-    channelId,
-    (message) => message.agent_session_message_id === agentSessionMessageId
-  );
+  return findTopLevelMessageInChannelMessagesWhere(channelId, (message) => {
+    const reference = foldedReference(message.agent_session_message);
+    return (
+      reference?.agentSessionId === agentSessionId &&
+      reference.messageId.turn === messageId.turn &&
+      reference.messageId.author === messageId.author
+    );
+  });
 }
 
 /**
@@ -116,18 +122,20 @@ async function placeholderSender(
 /**
  * An existing placeholder row for the same side of the conversation.
  *
- * Matched on the composite id's trailing `:user`/`:agent`, which is the
- * author the server chose the row's sender from — the same question being
- * asked here.
+ * Matched on the reference's `author`, which is the side the server chose the
+ * row's sender from — the same question being asked here.
  */
 function findPlaceholderFromSameAuthor(
   channelId: string,
   folded: FoldedMessage
 ): ApiChannelMessage | undefined {
-  const suffix = `:${folded.author.kind}`;
-  return findTopLevelMessageInChannelMessagesWhere(channelId, (message) =>
-    (message.agent_session_message_id ?? '').endsWith(suffix)
-  );
+  return findTopLevelMessageInChannelMessagesWhere(channelId, (message) => {
+    const reference = foldedReference(message.agent_session_message);
+    return (
+      reference?.agentSessionId === folded.agentSessionId &&
+      reference.messageId.author === folded.author.kind
+    );
+  });
 }
 
 /**
@@ -142,17 +150,22 @@ export async function ensureAgentSessionPlaceholder(
   channelId: string,
   folded: FoldedMessage
 ): Promise<void> {
-  const agentSessionMessageId = folded.agentSessionMessageId;
-  if (findPlaceholder(channelId, agentSessionMessageId)) return;
+  const agentSessionId = folded.agentSessionId;
+  const messageId: MessageId = {
+    turn: folded.turn,
+    author: folded.author.kind,
+  };
+  if (findPlaceholder(channelId, agentSessionId, messageId)) return;
 
   const sender = await placeholderSender(channelId, folded);
   // Re-checked: resolving the sender can await, and another frame for the same
   // message may have inserted the row in the meantime.
-  if (findPlaceholder(channelId, agentSessionMessageId)) return;
+  if (findPlaceholder(channelId, agentSessionId, messageId)) return;
   if (!sender) {
     console.warn('[agent-fold] no sender for a live placeholder', {
       channelId,
-      agentSessionMessageId,
+      agentSessionId,
+      messageId,
     });
     return;
   }
@@ -165,9 +178,13 @@ export async function ensureAgentSessionPlaceholder(
     insertTopLevelMessageIntoChannelMessages(data, {
       id: crypto.randomUUID(),
       channel_id: channelId,
-      agent_session_message_id: agentSessionMessageId,
-      // Null on purpose. A placeholder's body is the folded message joined in
-      // by `agent_session_message_id`; anything stored here would be a lie.
+      agent_session_message: {
+        agent_session_id: agentSessionId,
+        turn: messageId.turn,
+        author: messageId.author,
+      },
+      // Null on purpose. A placeholder's body is the folded message it names;
+      // anything stored here would be a lie.
       content: null,
       sender_id: sender.sender_id,
       sender: sender.sender,
@@ -191,10 +208,11 @@ export async function ensureAgentSessionPlaceholder(
  */
 export function adoptAgentSessionPlaceholder(
   channelId: string,
-  agentSessionMessageId: string,
+  agentSessionId: string,
+  foldedId: MessageId,
   messageId: string
 ): void {
-  const synthesized = findPlaceholder(channelId, agentSessionMessageId);
+  const synthesized = findPlaceholder(channelId, agentSessionId, foldedId);
   if (!synthesized || synthesized.id === messageId) return;
 
   setChannelMessagesData(channelId, (data) =>

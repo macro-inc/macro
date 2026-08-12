@@ -66,6 +66,17 @@ impl FoldedMessageRepo for StaticMessages {
             .cloned()
             .unwrap_or_default())
     }
+
+    async fn next_turn_id(&self, session: AgentSessionId) -> Result<TurnId, rootcause::Report> {
+        Ok(TurnId(
+            self.messages
+                .lock()
+                .expect("message table is not poisoned")
+                .get(&session)
+                .and_then(|messages| messages.last())
+                .map_or(0, |message| message.id.0 + 1),
+        ))
+    }
 }
 
 /// Both placeholder keys a completed turn produces, in fold order.
@@ -276,15 +287,15 @@ async fn appends_place_one_comms_placeholder_per_folded_message() {
 }
 
 // A live connection's frames do not come through `append_event` - the actor
-// writes them into `PlaceholderSyncingLogs`, which folds incrementally rather
+// writes them into `LiveSessionLogWriter`, which folds incrementally rather
 // than asking what the whole log derives. These pin that path.
 
-/// A `PlaceholderSyncingLogs` over the given store, as `register_transport`
+/// A `LiveSessionLogWriter` over the given store, as `register_transport`
 /// builds one for a connection - with nobody watching its channel.
 fn connection<C: Comms + Clone + Send + Sync + 'static>(
     repo: InMemoryAgentSessionRepo,
     comms: C,
-) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C, NoOpRealtime> {
+) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, C, NoOpRealtime> {
     streaming_connection(repo, comms, NoOpRealtime)
 }
 
@@ -293,12 +304,12 @@ fn streaming_connection<C, Rt>(
     repo: InMemoryAgentSessionRepo,
     comms: C,
     realtime: Rt,
-) -> PlaceholderSyncingLogs<InMemoryAgentSessionRepo, C, Rt>
+) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, C, Rt>
 where
     C: Comms + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Send + Sync + 'static,
 {
-    PlaceholderSyncingLogs::new(repo, comms, realtime)
+    LiveSessionLogWriter::new(repo, comms, realtime)
 }
 
 /// A [`Comms`] that refuses the first `n` placeholder writes, so a test can
@@ -361,10 +372,10 @@ async fn a_connections_frames_place_one_placeholder_per_folded_message() {
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
     let comms = RecordingComms::new();
-    let logs = connection(repo.clone(), comms.clone());
+    let mut logs = connection(repo.clone(), comms.clone());
 
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("append succeeds");
 
@@ -386,14 +397,14 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     let repo = InMemoryAgentSessionRepo::new();
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
-    let logs = connection(repo.clone(), RecordingComms::new());
+    let mut logs = connection(repo.clone(), RecordingComms::new());
 
     let log = parse_log_as(test_session(), TURN);
     let frames = log.len();
     assert!(frames > 5, "the fixture is worth counting reads over");
 
     for entry in log {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("append succeeds");
     }
@@ -414,7 +425,7 @@ async fn the_agents_placeholder_appears_before_its_turn_ends() {
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
     let comms = RecordingComms::new();
-    let logs = connection(repo.clone(), comms.clone());
+    let mut logs = connection(repo.clone(), comms.clone());
 
     let log = parse_log_as(test_session(), TURN);
     let frames = log.len();
@@ -428,7 +439,7 @@ async fn the_agents_placeholder_appears_before_its_turn_ends() {
 
     let mut placed_at = None;
     for (index, entry) in log.into_iter().enumerate() {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("append succeeds");
         if placed_at.is_none() && comms.created().contains(&agent_side) {
@@ -459,9 +470,9 @@ async fn re_attaching_does_not_place_a_message_twice() {
     let comms = RecordingComms::new();
 
     // A first connection folds the whole recording.
-    let first = connection(repo.clone(), comms.clone());
+    let mut first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&first, entry)
+        AgentSessionLogWriter::append(&mut first, entry)
             .await
             .expect("append succeeds");
     }
@@ -470,8 +481,8 @@ async fn re_attaching_does_not_place_a_message_twice() {
 
     // A second connection over the same log, as an attach would build.
     let offered_before = comms.offered();
-    let second = connection(repo.clone(), comms.clone());
-    AgentSessionLogRepo::create(&second, any_event(test_session()))
+    let mut second = connection(repo.clone(), comms.clone());
+    AgentSessionLogWriter::append(&mut second, any_event(test_session()))
         .await
         .expect("append succeeds");
 
@@ -495,14 +506,14 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
     let comms = FlakyComms::refusing(1);
-    let logs = connection(repo.clone(), comms.clone());
+    let mut logs = connection(repo.clone(), comms.clone());
 
     // Drive up to and including the prompt - the fixture opens with handshake
     // traffic, and the prompt is the first frame that derives anything.
     let mut log = parse_log_as(test_session(), TURN).into_iter();
     for entry in log.by_ref() {
         let is_prompt = entry.user_id.is_some();
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("a refused placeholder does not fail the append");
         if is_prompt {
@@ -519,7 +530,7 @@ async fn a_refused_placeholder_is_retried_on_the_next_frame() {
     // Everything the fixture derives still lands, the refused message
     // included.
     for entry in log {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("append succeeds");
     }
@@ -548,18 +559,18 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
     repo.insert_session(test_agent_session(test_session(), channel));
     let comms = RecordingComms::new();
 
-    let first = connection(repo.clone(), comms.clone());
+    let mut first = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogRepo::create(&first, entry)
+        AgentSessionLogWriter::append(&mut first, entry)
             .await
             .expect("append succeeds");
     }
     assert_eq!(comms.created(), both_sides(channel, 0));
 
     // A second connection over the same log, then a fresh prompt.
-    let second = connection(repo.clone(), comms.clone());
+    let mut second = connection(repo.clone(), comms.clone());
     for entry in parse_log_as(test_session(), SECOND_PROMPT) {
-        AgentSessionLogRepo::create(&second, entry)
+        AgentSessionLogWriter::append(&mut second, entry)
             .await
             .expect("append succeeds");
     }
@@ -592,11 +603,11 @@ async fn a_connections_frames_are_published_to_its_channel() {
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
     let realtime = RecordingRealtime::new();
-    let logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime.clone());
+    let mut logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime.clone());
 
     let log = parse_log_as(test_session(), TURN);
     for entry in log.clone() {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("append succeeds");
     }
@@ -644,12 +655,12 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
     {
         let repo = InMemoryAgentSessionRepo::new();
         repo.insert_session(test_agent_session(test_session(), Uuid::from_u128(0xc4a2)));
-        let logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime);
+        let mut logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime);
 
         let log = parse_log_as(test_session(), TURN);
         let frames = log.len();
         for entry in log {
-            AgentSessionLogRepo::create(&logs, entry)
+            AgentSessionLogWriter::append(&mut logs, entry)
                 .await
                 .expect("append succeeds");
         }
@@ -675,12 +686,12 @@ async fn a_failed_publish_does_not_fail_the_append() {
     let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session(), channel));
     let comms = RecordingComms::new();
-    let logs = streaming_connection(repo.clone(), comms.clone(), RecordingRealtime::down());
+    let mut logs = streaming_connection(repo.clone(), comms.clone(), RecordingRealtime::down());
 
     let log = parse_log_as(test_session(), TURN);
     let frames = log.len();
     for entry in log {
-        AgentSessionLogRepo::create(&logs, entry)
+        AgentSessionLogWriter::append(&mut logs, entry)
             .await
             .expect("a refused publish does not fail the append");
     }

@@ -118,13 +118,8 @@ export type StopReason =
  * A turn produces at most two: the user's prompt and the agent's reply.
  */
 export interface FoldedMessage {
-  /**
-   * The composite id the placeholder comms message for this folded message
-   * carries in its `agent_session_message_id`:
-   * `"{agentSessionId}:{turn}:{author}"`. Placeholder rows join to folded
-   * messages by this, one to one.
-   */
-  agentSessionMessageId: string;
+  /** Session that scopes this message id. */
+  agentSessionId: string;
   /** The turn within the session, assigned in log order from zero. */
   turn: number;
   author: FoldedAuthor;
@@ -141,7 +136,7 @@ export interface FoldedMessage {
  * What folding one more log frame changed.
  *
  * The message comes whole rather than as a delta, so either kind is applied
- * the same way — replace whatever is held under this `agentSessionMessageId`.
+ * the same way — replace whatever is held under this session, turn, and author.
  * `kind` says whether a channel row for it exists yet: a turn has no
  * placeholder message until the fold first derives it, and `'new'` is the one
  * moment a client can synthesize one.

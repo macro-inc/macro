@@ -67,8 +67,9 @@ async fn container_session_runs_and_logs_end_to_end() {
         .unwrap();
     let agent = container.agent();
 
-    let record = sessions
-        .create_session(params(id), container.clone())
+    let record = sessions.create_session(params(id)).await.unwrap();
+    sessions
+        .attach_session(id, container.clone())
         .await
         .unwrap();
     assert_eq!(record.id, id);
@@ -146,8 +147,9 @@ async fn a_live_sessions_frames_place_holders_in_its_channel() {
         .unwrap();
     let agent = container.agent();
 
-    let record = sessions
-        .create_session(params(id), container.clone())
+    let record = sessions.create_session(params(id)).await.unwrap();
+    sessions
+        .attach_session(id, container.clone())
         .await
         .unwrap();
     assert!(
@@ -201,7 +203,8 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
     let first = ContainerMock::default();
     let second = ContainerMock::default();
 
-    sessions.create_session(params(id), first).await.unwrap();
+    sessions.create_session(params(id)).await.unwrap();
+    sessions.attach_session(id, first).await.unwrap();
     let error = sessions.attach_session(id, second).await.unwrap_err();
 
     assert!(matches!(error, AgentSessionError::AlreadyConnected(found) if found == id));

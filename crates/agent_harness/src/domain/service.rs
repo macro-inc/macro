@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams};
+use agent_session::domain::model::{
+    AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+};
 use agent_session::domain::service::AgentSessionService;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -136,43 +138,40 @@ where
         let OpenSession { bot_id, origin } = command;
         let repo_url = self.defaults.repo_url.clone();
 
-        // The container comes up before the session exists anywhere: the
-        // session row is the commitment that a session is real, so nothing
-        // observable happens until there is a transport for it.
-        let container = self
-            .containers
-            .spawn(SpawnContainer {
-                session_id,
+        let session = self
+            .sessions
+            .create_session(CreateAgentSessionParams {
+                id: session_id,
+                owner_id: origin.sender.clone(),
+                bot_id,
+                thread_id: Some(origin.thread_id),
+                originating_message_id: Some(origin.message_id),
+                model: self.defaults.model.clone(),
+                harness: self.defaults.harness.clone(),
                 repo_url: repo_url.clone(),
             })
             .await?;
 
-        let session = self
-            .sessions
-            .create_session(
-                CreateAgentSessionParams {
-                    id: session_id,
-                    owner_id: origin.sender.clone(),
-                    bot_id,
-                    thread_id: Some(origin.thread_id),
-                    originating_message_id: Some(origin.message_id),
-                    model: self.defaults.model.clone(),
-                    harness: self.defaults.harness.clone(),
-                    repo_url,
-                },
-                container,
-            )
-            .await?;
-
         self.announcer
             .announce(SessionAnnouncement {
+                session_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
                 session_channel_id: session.channel_id,
+                prompted_message_id: MessageId::first(AuthorKind::User),
+                prompted_content: origin.content.clone(),
                 triggered_by: origin.sender.clone(),
             })
             .await?;
 
+        let container = self
+            .containers
+            .spawn(SpawnContainer {
+                session_id,
+                repo_url,
+            })
+            .await?;
+        self.sessions.attach_session(session_id, container).await?;
         self.sessions
             .send_action(
                 session_id,
@@ -185,7 +184,32 @@ where
 
     #[tracing::instrument(err, skip(self, command), fields(%session_id))]
     async fn forward(&self, session_id: AgentSessionId, command: ForwardMessage) -> Result<()> {
-        let ForwardMessage { sender, content } = command;
+        let ForwardMessage {
+            channel_id,
+            thread_id,
+            sender,
+            content,
+        } = command;
+        let announcement = if let Some(triggered_by) = &sender {
+            let session = self.sessions.get_session(session_id).await?;
+
+            if channel_id == session.channel_id {
+                None // no notification for dedicated channel
+            } else {
+                let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
+                Some(SessionAnnouncement {
+                    session_id,
+                    origin_channel_id: channel_id,
+                    origin_thread_id: thread_id,
+                    session_channel_id: session.channel_id,
+                    prompted_message_id,
+                    prompted_content: content.clone(),
+                    triggered_by: triggered_by.clone(),
+                })
+            }
+        } else {
+            None
+        };
         let action = AgentAction::prompt(content);
 
         match self
@@ -193,16 +217,19 @@ where
             .send_action(session_id, sender.clone(), action.clone())
             .await
         {
-            Ok(()) => return Ok(()),
-            Err(AgentSessionError::Disconnected(_)) => {}
+            Ok(()) => {}
+            Err(AgentSessionError::Disconnected(_)) => {
+                let container = self.containers.resume(session_id).await?;
+                self.sessions.attach_session(session_id, container).await?;
+                self.sessions
+                    .send_action(session_id, sender, action)
+                    .await?;
+            }
             Err(error) => return Err(error.into()),
         }
-
-        let container = self.containers.resume(session_id).await?;
-        self.sessions.attach_session(session_id, container).await?;
-        self.sessions
-            .send_action(session_id, sender, action)
-            .await?;
+        if let Some(announcement) = announcement {
+            self.announcer.announce(announcement).await?;
+        }
         Ok(())
     }
 }

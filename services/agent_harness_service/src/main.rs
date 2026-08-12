@@ -34,12 +34,13 @@ use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::Config;
 use connection_gateway_client::ConnectionGatewayClient;
 use kafka_util::{GroupName, KafkaEventConsumer};
+use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_service_urls::ConnectionGatewayUrl;
+use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
@@ -146,7 +147,14 @@ async fn main() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(side_effects),
         channels::domain::service::NoopChannelReferenceSharePermissions,
     ));
-    let announcer = ChannelAnnouncer::new(channel_service, bot_id);
+    let announcer = ChannelAnnouncer::new(
+        channel_service,
+        bot_id,
+        LexicalClient::new(
+            config.internal_api_key.clone(),
+            LexicalServiceUrl::new()?.to_string(),
+        ),
+    );
 
     let harness = Arc::new(AgentHarnessService::new(
         sessions,

@@ -91,12 +91,17 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<AgentSessionLog>>> + Send;
 }
 
+/// Sequential live log writer owned by one session actor.
+pub trait AgentSessionLogWriter: Send + 'static {
+    /// Persist and fold one frame into this connection's live projection.
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
+}
+
 /// Writing agent-message placeholder rows into comms.
 ///
-/// A placeholder is a comms message with no stored body whose
-/// `agent_session_message_id` - the composite
-/// `"{agent_session_id}:{turn}:{author}"` - names the folded message of an
-/// agent session it renders.
+/// A placeholder is a comms message with no stored body that references an
+/// agent-session message identifier. The identifier stores the session and
+/// its session-local `"{turn}:{author}"` message id.
 ///
 /// One placeholder per folded message, not per turn: a turn's prompt and its
 /// reply have different authors, so collapsing them onto one row would leave
@@ -115,8 +120,8 @@ pub trait Comms {
         session: &AgentSession,
     ) -> impl Future<Output = Result<HashSet<MessageId>, rootcause::Report>> + Send;
 
-    /// Write a bodyless placeholder row to the session's channel, carrying
-    /// the given message key inside its `agent_session_message_id`.
+    /// Write a bodyless placeholder row to the session's channel, referencing
+    /// the given message key.
     ///
     /// `author` sets the row's sender: the agent's messages are sent by the
     /// session's bot, a user's by that user.
@@ -124,9 +129,9 @@ pub trait Comms {
     /// **Must be idempotent.** Writing a message that already has a row is a
     /// success that changes nothing, not an error - a reconnecting session
     /// re-derives its whole log and re-offers every placeholder in it, and
-    /// nothing upstream filters those out. In Postgres the partial unique
-    /// index on `agent_session_message_id` is what enforces this; an
-    /// implementation without one has to do it itself.
+    /// nothing upstream filters those out. In Postgres the identifier table's
+    /// unique session/message constraint and the placeholder's unique foreign
+    /// key enforce this; an implementation without them has to do it itself.
     fn create_message_placeholder(
         &self,
         session: &AgentSession,

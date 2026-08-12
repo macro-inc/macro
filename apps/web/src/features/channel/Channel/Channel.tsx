@@ -233,7 +233,7 @@ export function Channel(props: ChannelProps) {
 
   // The dumb agent viewer: for an agent channel, fetch the session's protocol
   // log, fold it, and hand a message-id lookup down the message tree so
-  // placeholder rows (null content + agent_session_message_id) render their
+  // placeholder rows (null content + agent_session_message) render their
   // folded side. See `FoldedMessagesScope` for what wrapping the tree in
   // `foldedMessages.Provider` below does.
   const foldedMessages = createFoldedMessagesScope(() => props.channelId);

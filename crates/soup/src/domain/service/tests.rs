@@ -587,12 +587,12 @@ fn channel_thread_message(
                 triggered_by: None,
                 reactions: Vec::new(),
                 attachments: Vec::new(),
-                agent_session_message_id: None,
+                agent_session_message: None,
             }],
         },
         reactions: Vec::new(),
         attachments: Vec::new(),
-        agent_session_message_id: None,
+        agent_session_message: None,
     }
 }
 

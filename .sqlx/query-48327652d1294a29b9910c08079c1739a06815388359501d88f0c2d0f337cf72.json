@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                message.id,\n                message.channel_id,\n                message.thread_id,\n                message.sender_id,\n                message.triggered_by_user_id,\n                message.content,\n                identifier.agent_session_id AS \"agent_session_id?\",\n                identifier.turn AS \"agent_session_turn?\",\n                        identifier.author AS \"agent_session_author?\",\n                message.created_at,\n                message.updated_at,\n                message.edited_at::timestamptz AS \"edited_at?\",\n                message.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages AS message\n            LEFT JOIN agent_session_message_identifier AS identifier\n              ON identifier.id = message.agent_session_message_identifier_id\n            WHERE message.id = $1 AND message.channel_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "triggered_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "agent_session_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "agent_session_turn?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "agent_session_author?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "edited_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "deleted_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "48327652d1294a29b9910c08079c1739a06815388359501d88f0c2d0f337cf72"
+}

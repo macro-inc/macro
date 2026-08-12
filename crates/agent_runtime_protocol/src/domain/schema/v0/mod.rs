@@ -41,6 +41,8 @@ pub enum SystemEvent {
     /// `initialize`/`session/new` handshake. Sent at most once per
     /// connection, before any ACP traffic.
     AcpReady,
+    /// The session transport closed or failed and no more frames will arrive.
+    Disconnected,
     /// An application-defined event name with no protocol-level meaning yet.
     Unknown(String),
 }
@@ -51,6 +53,7 @@ impl SystemEvent {
     pub fn as_str(&self) -> &str {
         match self {
             Self::AcpReady => "acp_ready",
+            Self::Disconnected => "disconnected",
             Self::Unknown(name) => name,
         }
     }
@@ -72,6 +75,7 @@ impl<'de> Deserialize<'de> for SystemEvent {
     {
         Ok(match String::deserialize(deserializer)?.as_str() {
             "acp_ready" => Self::AcpReady,
+            "disconnected" => Self::Disconnected,
             name => Self::Unknown(name.to_owned()),
         })
     }

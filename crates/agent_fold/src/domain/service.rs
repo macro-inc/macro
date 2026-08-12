@@ -9,7 +9,7 @@
 //! leaves open.
 
 use crate::domain::log::AgentSessionId;
-use crate::domain::model::FoldedMessage;
+use crate::domain::model::{FoldedMessage, TurnId};
 use crate::domain::ports::{FoldSession, FoldedMessageRepo};
 
 /// Serves [`FoldedMessageRepo`] queries by delegating to a [`FoldSession`].
@@ -35,5 +35,9 @@ where
         session: AgentSessionId,
     ) -> Result<Vec<FoldedMessage>, rootcause::Report> {
         self.sessions.fold_session(session).await
+    }
+
+    async fn next_turn_id(&self, session: AgentSessionId) -> Result<TurnId, rootcause::Report> {
+        self.sessions.next_turn_id(session).await
     }
 }

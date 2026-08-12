@@ -2,11 +2,12 @@
 mod test;
 
 use crate::domain::models::{
-    Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-    AttachmentGenericReference, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
-    ChannelContextMessage, ChannelMessage, ChannelMessageKind, ChannelParticipant, ChannelType,
-    CountedReaction, CreateEntityMentionOptions, MessageAttachment, MessagePageDirection,
-    ParticipantRole, ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
+    Activity, ActivityType, AgentSessionMessageIdentifier, AttachmentChannelReference,
+    AttachmentEntityReference, AttachmentGenericReference, AuthorKind, BotSenderProfile,
+    ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
+    ChannelMessageKind, ChannelParticipant, ChannelType, CountedReaction,
+    CreateEntityMentionOptions, MessageAttachment, MessagePageDirection, ParticipantRole,
+    ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
 };
 pub use crate::domain::models::{
     AddParticipantsRequest, ChannelJoinCodeResponse, ChannelPreview, ChannelPreviewData,
@@ -1911,6 +1912,30 @@ impl ApiMessageSender {
     }
 }
 
+/// Identifies the folded agent-session message a placeholder message renders.
+///
+/// Nested rather than three sibling fields, because the three only ever make
+/// sense together: a message either names a folded message or has a body.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+struct ApiAgentSessionMessageIdentifier {
+    /// Agent session whose folded message this renders.
+    agent_session_id: Uuid,
+    /// Turn within that session, assigned in log order from zero.
+    turn: i64,
+    /// Which side of the turn produced the message.
+    author: AuthorKind,
+}
+
+impl From<AgentSessionMessageIdentifier> for ApiAgentSessionMessageIdentifier {
+    fn from(identifier: AgentSessionMessageIdentifier) -> Self {
+        Self {
+            agent_session_id: identifier.agent_session_id,
+            turn: i64::from(identifier.message_id.turn.0),
+            author: identifier.message_id.author,
+        }
+    }
+}
+
 /// A top-level channel message with thread info.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ApiChannelMessage {
@@ -1925,10 +1950,9 @@ pub struct ApiChannelMessage {
     /// Message content. `None` on agent-turn placeholder messages, whose body
     /// is folded from the agent session log and joined in by the client.
     content: Option<String>,
-    /// The agent session turn this placeholder renders, as the composite
-    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders;
-    /// join it against the folded messages of the channel's agent session.
-    agent_session_message_id: Option<String>,
+    /// The folded agent-session message this placeholder renders. Absent on
+    /// ordinary messages, which carry their own body.
+    agent_session_message: Option<ApiAgentSessionMessageIdentifier>,
     /// When the message was created.
     created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -1957,7 +1981,7 @@ impl From<ChannelMessage> for ApiChannelMessage {
             ),
             sender_id: m.sender_id,
             content: m.content,
-            agent_session_message_id: m.agent_session_message_id,
+            agent_session_message: m.agent_session_message.map(Into::into),
             created_at: m.created_at,
             updated_at: m.updated_at,
             edited_at: m.edited_at,
@@ -1999,9 +2023,9 @@ pub struct ApiChannelContextMessage {
     sender: ApiMessageSender,
     /// Message content. `None` on agent-turn placeholder messages.
     content: Option<String>,
-    /// The agent session turn this placeholder renders, as the composite
-    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
-    agent_session_message_id: Option<String>,
+    /// The folded agent-session message this placeholder renders. Absent on
+    /// ordinary messages, which carry their own body.
+    agent_session_message: Option<ApiAgentSessionMessageIdentifier>,
     /// When the message was created.
     created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -2025,7 +2049,7 @@ impl From<ChannelContextMessage> for ApiChannelContextMessage {
             ),
             sender_id: message.sender_id,
             content: message.content,
-            agent_session_message_id: message.agent_session_message_id,
+            agent_session_message: message.agent_session_message.map(Into::into),
             created_at: message.created_at,
             updated_at: message.updated_at,
             edited_at: message.edited_at,
@@ -2163,9 +2187,9 @@ pub struct ApiThreadReply {
     sender: ApiMessageSender,
     /// Reply content. `None` on agent-turn placeholder messages.
     content: Option<String>,
-    /// The agent session turn this placeholder renders, as the composite
-    /// `"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders.
-    agent_session_message_id: Option<String>,
+    /// The folded agent-session message this placeholder renders. Absent on
+    /// ordinary messages, which carry their own body.
+    agent_session_message: Option<ApiAgentSessionMessageIdentifier>,
     /// When the reply was created.
     created_at: DateTime<Utc>,
     /// When the reply was last updated.
@@ -2189,7 +2213,7 @@ impl From<ThreadReply> for ApiThreadReply {
             ),
             sender_id: r.sender_id,
             content: r.content,
-            agent_session_message_id: r.agent_session_message_id,
+            agent_session_message: r.agent_session_message.map(Into::into),
             created_at: r.created_at,
             updated_at: r.updated_at,
             edited_at: r.edited_at,

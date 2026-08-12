@@ -7,7 +7,7 @@ mod test;
 
 use crate::domain::error::Result;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, Author, AuthorKind, ChannelSession,
+    AgentSession, AgentSessionId, AgentSessionLog, Author, ChannelSession,
     CreateAgentSessionParams, Message, MessageId, SessionBot, SessionStatus, TurnId,
 };
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, Comms};
@@ -550,9 +550,12 @@ impl Comms for PgAgentSessionRepo {
     ) -> std::result::Result<HashSet<MessageId>, rootcause::Report> {
         let rows = sqlx::query!(
             r#"
-            SELECT agent_session_turn AS "turn!", agent_session_author AS "author!"
-            FROM comms_messages
-            WHERE channel_id = $1 AND agent_session_id = $2
+            SELECT identifier.turn, identifier.author
+            FROM comms_messages AS message
+            JOIN agent_session_message_identifier AS identifier
+              ON identifier.id = message.agent_session_message_identifier_id
+            WHERE message.channel_id = $1
+              AND identifier.agent_session_id = $2
             "#,
             session.channel_id,
             session.id.as_uuid(),
@@ -561,15 +564,18 @@ impl Comms for PgAgentSessionRepo {
         .await
         .map_err(|error| rootcause::report!(error))?;
 
-        Ok(rows
-            .into_iter()
-            .filter_map(|row| {
-                Some(MessageId {
-                    turn: TurnId(row.turn.try_into().ok()?),
-                    author: row.author.parse::<AuthorKind>().ok()?,
+        rows.into_iter()
+            .map(|row| {
+                Ok(MessageId {
+                    turn: TurnId(u32::try_from(row.turn).map_err(|_| {
+                        rootcause::report!("agent session turn out of range: {}", row.turn)
+                    })?),
+                    author: row.author.parse().map_err(|_| {
+                        rootcause::report!("invalid agent session author: {}", row.author)
+                    })?,
                 })
             })
-            .collect())
+            .collect()
     }
 
     async fn create_message_placeholder(
@@ -581,16 +587,32 @@ impl Comms for PgAgentSessionRepo {
         let sender = self.placeholder_sender(session, author).await?;
         sqlx::query!(
             r#"
-            INSERT INTO comms_messages
-                (id, channel_id, sender_id, agent_session_id, agent_session_turn, agent_session_author)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (agent_session_id, agent_session_turn, agent_session_author)
-                WHERE agent_session_id IS NOT NULL
+            WITH identifier AS (
+                INSERT INTO agent_session_message_identifier (id, agent_session_id, turn, author)
+                VALUES ($4, $5, $6, $7)
+                ON CONFLICT (agent_session_id, turn, author)
+                -- A no-op update so the existing row's id is returned; a
+                -- re-offered placeholder must resolve to the identifier it
+                -- already has, not the id minted for this attempt.
+                DO UPDATE SET turn = EXCLUDED.turn
+                RETURNING id
+            )
+            INSERT INTO comms_messages (
+                id,
+                channel_id,
+                sender_id,
+                agent_session_message_identifier_id
+            )
+            SELECT $1, $2, $3, identifier.id
+            FROM identifier
+            ON CONFLICT (agent_session_message_identifier_id)
+                WHERE agent_session_message_identifier_id IS NOT NULL
                 DO NOTHING
             "#,
             macro_uuid::generate_uuid_v7(),
             session.channel_id,
             sender,
+            macro_uuid::generate_uuid_v7(),
             session.id.as_uuid(),
             i64::from(id.turn.0),
             id.author.as_str(),

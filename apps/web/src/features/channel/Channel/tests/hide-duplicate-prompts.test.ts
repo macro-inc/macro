@@ -1,5 +1,6 @@
 import type { FoldedMessage } from '@core/agent-fold/types';
 import type { FoldedMessageLookup } from '@queries/channel/folded-messages';
+import type { ApiAgentSessionMessageIdentifier } from '@service-storage/generated/schemas/apiAgentSessionMessageIdentifier';
 import { describe, expect, it } from 'vitest';
 import { duplicatePromptRowIds } from '../hide-duplicate-prompts';
 
@@ -11,7 +12,7 @@ function folded(
   text: string
 ): FoldedMessage {
   return {
-    agentSessionMessageId: `${SESSION}:${turn}:${kind}`,
+    agentSessionId: SESSION,
     turn,
     author: kind === 'user' ? { kind: 'user' } : { kind: 'agent' },
     parts: [{ kind: 'text', text }],
@@ -23,36 +24,45 @@ function folded(
  * so it was never posted here; turns 1 and 2 were typed into the channel.
  */
 const FOLD: Record<string, FoldedMessage> = {
-  [`${SESSION}:0:user`]: folded(
+  '0:user': folded(
     0,
     'user',
     '<m-user-mention>{"userId":"bot|0"}</m-user-mention> how do channels work'
   ),
-  [`${SESSION}:0:agent`]: folded(0, 'agent', 'Channels are…'),
-  [`${SESSION}:1:user`]: folded(
+  '0:agent': folded(0, 'agent', 'Channels are…'),
+  '1:user': folded(
     1,
     'user',
     "woah that's cool is this written in php mostly?"
   ),
-  [`${SESSION}:2:user`]: folded(2, 'user', 'neato'),
+  '2:user': folded(2, 'user', 'neato'),
 };
-const lookup: FoldedMessageLookup = (id) => FOLD[id];
+const lookup: FoldedMessageLookup = (sessionId, id) =>
+  sessionId === SESSION ? FOLD[`${id.turn}:${id.author}`] : undefined;
 
 type Row = {
   id: string;
-  agent_session_message_id: string | null;
+  agent_session_message: ApiAgentSessionMessageIdentifier | null;
   content: string | null;
 };
 
-const placeholder = (agentSessionMessageId: string): Row => ({
-  id: `row-${agentSessionMessageId}`,
-  agent_session_message_id: agentSessionMessageId,
-  content: null,
-});
+/** Fixtures name a folded message `"{turn}:{author}"` — it reads better here. */
+const placeholder = (key: string): Row => {
+  const [turn, author] = key.split(':');
+  return {
+    id: `row-${key}`,
+    agent_session_message: {
+      agent_session_id: SESSION,
+      turn: Number(turn),
+      author: author as 'user' | 'agent',
+    },
+    content: null,
+  };
+};
 
 const posted = (content: string): Row => ({
   id: `row-posted-${content}`,
-  agent_session_message_id: null,
+  agent_session_message: null,
   content,
 });
 
@@ -65,7 +75,7 @@ function visible(rows: Row[], fold: FoldedMessageLookup | undefined): Row[] {
 describe('duplicatePromptRowIds', () => {
   it('hides a folded prompt the channel already posted', () => {
     const rows = [
-      placeholder(`${SESSION}:1:user`),
+      placeholder('1:user'),
       posted("woah that's cool is this written in php mostly?"),
     ];
 
@@ -75,21 +85,19 @@ describe('duplicatePromptRowIds', () => {
   });
 
   it('keeps a prompt with no posted copy — the session opened elsewhere', () => {
-    const rows = [placeholder(`${SESSION}:0:user`), posted('neato')];
+    const rows = [placeholder('0:user'), posted('neato')];
 
-    expect(visible(rows, lookup).map((row) => row.id)).toContain(
-      `row-${SESSION}:0:user`
-    );
+    expect(visible(rows, lookup).map((row) => row.id)).toContain('row-0:user');
   });
 
   it('never hides an agent message, whatever the channel says', () => {
-    const rows = [placeholder(`${SESSION}:0:agent`), posted('Channels are…')];
+    const rows = [placeholder('0:agent'), posted('Channels are…')];
 
     expect(visible(rows, lookup)).toHaveLength(2);
   });
 
   it('hides nothing while the fold has not landed', () => {
-    const rows = [placeholder(`${SESSION}:1:user`), posted('anything')];
+    const rows = [placeholder('1:user'), posted('anything')];
 
     expect(duplicatePromptRowIds(rows, undefined).size).toBe(0);
   });
@@ -97,30 +105,30 @@ describe('duplicatePromptRowIds', () => {
   it('identifies rows by their own id, not by the message they render', () => {
     // The channel filters a list of row keys, so an id that is not a row id
     // hides nothing — which is exactly how the first attempt at this failed.
-    const rows = [placeholder(`${SESSION}:2:user`), posted('neato')];
+    const rows = [placeholder('2:user'), posted('neato')];
 
-    expect([...duplicatePromptRowIds(rows, lookup)]).toEqual([
-      `row-${SESSION}:2:user`,
-    ]);
+    expect([...duplicatePromptRowIds(rows, lookup)]).toEqual(['row-2:user']);
   });
 
   it('the whole real channel: turn 0 kept, turns 1 and 2 hidden', () => {
     const rows = [
-      placeholder(`${SESSION}:0:user`),
-      placeholder(`${SESSION}:0:agent`),
+      placeholder('0:user'),
+      placeholder('0:agent'),
       posted("woah that's cool is this written in php mostly?"),
-      placeholder(`${SESSION}:1:user`),
+      placeholder('1:user'),
       posted('neato'),
-      placeholder(`${SESSION}:2:user`),
+      placeholder('2:user'),
     ];
 
     expect(
-      visible(rows, lookup).map(
-        (row) => row.agent_session_message_id ?? `posted:${row.content}`
+      visible(rows, lookup).map((row) =>
+        row.agent_session_message
+          ? `${row.agent_session_message.turn}:${row.agent_session_message.author}`
+          : `posted:${row.content}`
       )
     ).toEqual([
-      `${SESSION}:0:user`,
-      `${SESSION}:0:agent`,
+      '0:user',
+      '0:agent',
       "posted:woah that's cool is this written in php mostly?",
       'posted:neato',
     ]);

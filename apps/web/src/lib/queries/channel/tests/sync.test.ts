@@ -122,6 +122,45 @@ describe('channel sync', () => {
     testQueryClient.clear();
   });
 
+  it('preserves agent placeholder identifiers from websocket messages', () => {
+    testQueryClient.setQueryData(
+      getChannelMessagesQueryKey('channel-1'),
+      createChannelMessagesData([[]])
+    );
+
+    handleCommsMessage({
+      id: 'placeholder-1',
+      channel_id: 'channel-1',
+      thread_id: null,
+      sender_id: 'bot|agent',
+      sender: { id: 'agent', type: 'bot' },
+      content: null,
+      agent_session_message: {
+        agent_session_id: 'session-1',
+        turn: 1,
+        author: 'agent',
+      },
+      created_at: '2024-01-03T00:00:00.000Z',
+      updated_at: '2024-01-03T00:00:00.000Z',
+      edited_at: null,
+      deleted_at: null,
+      nonce: 'external-placeholder',
+    });
+
+    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
+      getChannelMessagesQueryKey('channel-1')
+    );
+    expect(cached?.pages[0].items[0]).toMatchObject({
+      id: 'placeholder-1',
+      content: null,
+      agent_session_message: {
+        agent_session_id: 'session-1',
+        turn: 1,
+        author: 'agent',
+      },
+    });
+  });
+
   it('replaces top-level attachments in the rendered cache', () => {
     testQueryClient.setQueryData(
       getChannelMessagesQueryKey('channel-1'),

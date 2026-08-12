@@ -12,10 +12,9 @@
 //! recognize as the story of the session: what they asked, what the agent
 //! said, what it ran, and what it wanted permission to do.
 
-use crate::domain::log::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 /// One prompt-to-stop cycle within a session.
 ///
@@ -25,7 +24,9 @@ use std::path::PathBuf;
 ///
 /// A turn is not the unit a channel renders - see [`MessageId`], which is
 /// what a comms placeholder stores.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TurnId(pub u32);
 
 /// A tool call within a turn, identified by its ACP `toolCallId`.
@@ -42,11 +43,15 @@ pub struct ToolUseId(pub String);
 /// stored address them by this.
 ///
 /// The one exception to "nothing here is persisted": a comms placeholder
-/// message stores the message it renders, as `"{turn}:{author}"` under a
-/// session prefix, relying on exactly this stability. One placeholder per
-/// message, not per turn - a turn's prompt and its reply are separate rows
-/// so each can carry its own sender.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// message stores the message it renders, as these two fields alongside a
+/// session id, relying on exactly this stability. They stay two fields
+/// everywhere they travel - column, wire, and JSON - so nothing has to format
+/// or reparse a composite to get at either half. One placeholder per message,
+/// not per turn: a turn's prompt and its reply are separate rows so each can
+/// carry its own sender.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct MessageId {
     /// The turn the message belongs to.
     pub turn: TurnId,
@@ -54,50 +59,24 @@ pub struct MessageId {
     pub author: AuthorKind,
 }
 
-impl std::fmt::Display for MessageId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}:{}", self.turn.0, self.author.as_str())
+impl MessageId {
+    /// The first folded message authored by `author` in a session.
+    #[must_use]
+    pub const fn first(author: AuthorKind) -> Self {
+        Self {
+            turn: TurnId(0),
+            author,
+        }
     }
-}
 
-impl std::str::FromStr for MessageId {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let (turn, author) = value.split_once(':').ok_or(())?;
-        Ok(Self {
-            turn: TurnId(turn.parse().map_err(|_| ())?),
-            author: author.parse().map_err(|_| ())?,
-        })
+    /// Address the other side of this turn without changing its turn id.
+    #[must_use]
+    pub const fn with_author(self, author: AuthorKind) -> Self {
+        Self {
+            turn: self.turn,
+            author,
+        }
     }
-}
-
-/// The composite id a placeholder comms message stores in its
-/// `agent_session_message_id` column: `"{agent_session_id}:{turn}:{author}"`.
-///
-/// Folded messages have no table of their own, so this composite is the whole
-/// mapping between a comms row and the message it renders. Whoever writes a
-/// placeholder builds it, and whoever renders one reproduces it from the same
-/// parts - which now includes the browser, folding the same log through this
-/// crate compiled to WASM. It lives here, with the ids it is made of, so those
-/// two cannot drift; the string is persisted, so drift would silently
-/// unrender a channel.
-///
-/// Keyed per message rather than per turn: a turn yields a prompt and a reply
-/// with different senders, and each needs its own row.
-#[must_use]
-pub fn composite_message_id(session: AgentSessionId, id: MessageId) -> String {
-    format!("{}:{id}", session.as_uuid())
-}
-
-/// The message key inside a [`composite_message_id`] built for `session`, or
-/// `None` when the composite names a different session or is malformed.
-#[must_use]
-pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> Option<MessageId> {
-    composite
-        .strip_prefix(&format!("{}:", session.as_uuid()))?
-        .parse()
-        .ok()
 }
 
 /// Which side of the conversation produced a message.
@@ -120,8 +99,12 @@ pub fn parse_composite_message_id(session: AgentSessionId, composite: &str) -> O
     strum::Display,
     strum::EnumString,
     strum::IntoStaticStr,
+    serde::Serialize,
+    serde::Deserialize,
 )]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum AuthorKind {
     /// A person.
     User,
@@ -424,25 +407,42 @@ pub enum StopReason {
 /// [`Self::NewMessage`] and [`Self::MessageUpdate`] carry the whole message as
 /// it now stands rather than a delta, so a consumer applies an update by
 /// replacing whatever it holds under the same [`FoldedMessage::id`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IncrementalFoldResult<'a> {
     /// A message the machine had not derived before. Reported exactly once
     /// per message, before any update to it.
-    NewMessage(&'a FoldedMessage),
+    NewMessage(Cow<'a, FoldedMessage>),
     /// A message the machine had already reported, whose content changed.
-    MessageUpdate(&'a FoldedMessage),
+    MessageUpdate(Cow<'a, FoldedMessage>),
     /// The frame changed nothing renderable - a handshake, bookkeeping, or an
     /// update this fold does not model.
     Unchanged,
 }
 
-impl<'a> IncrementalFoldResult<'a> {
+/// An incremental fold result that owns any message it carries.
+pub type OwnedIncrementalFoldResult = IncrementalFoldResult<'static>;
+
+impl IncrementalFoldResult<'_> {
     /// The message that changed, or `None` for [`Self::Unchanged`].
     #[must_use]
-    pub fn message(self) -> Option<&'a FoldedMessage> {
+    pub fn message(&self) -> Option<&FoldedMessage> {
         match self {
-            Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message),
+            Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message.as_ref()),
             Self::Unchanged => None,
+        }
+    }
+
+    /// Own the changed message so this result can cross a task boundary.
+    #[must_use]
+    pub fn into_owned(self) -> OwnedIncrementalFoldResult {
+        match self {
+            Self::NewMessage(message) => {
+                IncrementalFoldResult::NewMessage(Cow::Owned(message.into_owned()))
+            }
+            Self::MessageUpdate(message) => {
+                IncrementalFoldResult::MessageUpdate(Cow::Owned(message.into_owned()))
+            }
+            Self::Unchanged => IncrementalFoldResult::Unchanged,
         }
     }
 }

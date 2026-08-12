@@ -28,6 +28,7 @@ inbound = [
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
+  "agent_fold/openapi",
   "entity_access/inbound",
   "models_pagination/axum",
   "ports",
@@ -79,6 +80,7 @@ activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 attachment = { path = "../attachment", optional = true }
 axum = { workspace = true, optional = true }
+agent_fold = { path = "../agent_fold", default-features = false }
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
 entity_mutation = { path = "../entity_mutation", optional = true }

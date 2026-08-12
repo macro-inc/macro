@@ -14,5 +14,6 @@
  * Version 2.1 - Jun 23, 2026. Added PasteNode
  * Version 2.2 - Jul 13, 2026. Added optional adaptColors display hint to HtmlRenderNode.
  * Version 2.3 - Jul 15, 2026. Added TagMentionNode.
+ * Version 2.4 - Aug 11, 2026. Changed MagicChipNode into a block response surface.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.3;
+export const MARKDOWN_VERSION_COUNTER = 2.4;

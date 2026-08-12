@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiChannelMessageAgentSessionMessageId } from './apiChannelMessageAgentSessionMessageId';
+import type { ApiChannelMessageAgentSessionMessage } from './apiChannelMessageAgentSessionMessage';
 import type { ApiChannelMessageContent } from './apiChannelMessageContent';
 import type { ApiChannelMessageDeletedAt } from './apiChannelMessageDeletedAt';
 import type { ApiChannelMessageEditedAt } from './apiChannelMessageEditedAt';
@@ -17,10 +17,7 @@ import type { ApiThreadInfo } from './apiThreadInfo';
  * A top-level channel message with thread info.
  */
 export interface ApiChannelMessage {
-  /** The agent session turn this placeholder renders, as the composite
-`"{agent_session_id}:{turn}"`. Set only on agent-turn placeholders;
-join it against the folded messages of the channel's agent session. */
-  agent_session_message_id?: ApiChannelMessageAgentSessionMessageId;
+  agent_session_message?: ApiChannelMessageAgentSessionMessage;
   /** Attachments on this message. */
   attachments: ApiMessageAttachment[];
   /** Channel id. */

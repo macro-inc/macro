@@ -1,6 +1,6 @@
 //! Commands and values used by the harness domain.
 
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, MessageId};
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -32,6 +32,10 @@ pub struct OpenSession {
 /// Deliver a message to a session that already exists.
 #[derive(Debug, Clone)]
 pub struct ForwardMessage {
+    /// Channel where this follow-up was posted.
+    pub channel_id: Uuid,
+    /// Thread where its Magic Chip should be posted.
+    pub thread_id: Uuid,
     /// Who sent it, when it came from a user.
     pub sender: Option<MacroUserIdStr<'static>>,
     /// The message text, verbatim.
@@ -47,15 +51,21 @@ pub enum HarnessCommand {
     Forward(ForwardMessage),
 }
 
-/// Facts required to announce a newly created session.
+/// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Agent session represented by the announcement.
+    pub session_id: AgentSessionId,
     /// Channel containing the mention that opened the session.
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
     /// Dedicated channel created for the agent session.
     pub session_channel_id: Uuid,
+    /// Folded user message that prompts the anchored agent response.
+    pub prompted_message_id: MessageId,
+    /// Text of the prompting message, quoted back in the announcement.
+    pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
 }

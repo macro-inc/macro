@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH identifier AS (\n                INSERT INTO agent_session_message_identifier (id, agent_session_id, turn, author)\n                VALUES ($4, $5, $6, $7)\n                ON CONFLICT (agent_session_id, turn, author)\n                -- A no-op update so the existing row's id is returned; a\n                -- re-offered placeholder must resolve to the identifier it\n                -- already has, not the id minted for this attempt.\n                DO UPDATE SET turn = EXCLUDED.turn\n                RETURNING id\n            )\n            INSERT INTO comms_messages (\n                id,\n                channel_id,\n                sender_id,\n                agent_session_message_identifier_id\n            )\n            SELECT $1, $2, $3, identifier.id\n            FROM identifier\n            ON CONFLICT (agent_session_message_identifier_id)\n                WHERE agent_session_message_identifier_id IS NOT NULL\n                DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53c64eb8bac14c88c1f0c61617e9058cb542a8609eae4f90d02c73a95ffa22bb"
+}

@@ -280,10 +280,10 @@ pub fn test_agent_session(id: AgentSessionId, channel_id: Uuid) -> AgentSession 
 /// An in-memory [`Comms`] that records the placeholder messages written
 /// through it.
 ///
-/// Behaves like the real table, including its partial unique index on
-/// `agent_session_message_id`: writing a message that already has a row is
-/// accepted and changes nothing, the way `ON CONFLICT DO NOTHING` does. That
-/// matters because a live connection relies on it - see
+/// Behaves like the real identifier table, including its unique session and
+/// message key: writing a message that already has a row is accepted and
+/// changes nothing, the way `ON CONFLICT DO NOTHING` does. That matters
+/// because a live connection relies on it - see
 /// [`Comms::create_message_placeholder`] - so a store that appended blindly
 /// would report duplicates the real one cannot produce.
 ///
