@@ -15,7 +15,7 @@ function isMagicChipData(value: unknown): value is MagicChipData {
   const data = value as Record<string, unknown>;
   return (
     typeof data.agentSessionId === 'string' &&
-    typeof data.channelId === 'string' &&
+    (data.channelId === undefined || typeof data.channelId === 'string') &&
     isMagicChipMessage(data.promptedMessage) &&
     isMagicChipStatus(data.status)
   );

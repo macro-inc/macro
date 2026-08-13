@@ -45,8 +45,8 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   // Always on: a chip that exists in a document has to render its session
   // regardless of whether the channel surfaces the fold.
   const foldedMessages = createFoldedMessages(
-    () => props.channelId,
-    () => true,
+    () => props.channelId ?? '',
+    () => props.channelId !== undefined,
     { observeEntries }
   );
   const unsubscribe = subscribeAgentSessionLog(

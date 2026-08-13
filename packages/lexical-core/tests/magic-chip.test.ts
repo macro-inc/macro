@@ -20,4 +20,19 @@ describe('MagicChipNode', () => {
     });
     expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
   });
+
+  it('round-trips a channel-less session chip', () => {
+    const channelLess =
+      '<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>';
+    const state = markdownToSerializedEditorStateWithIds(channelLess);
+
+    expect(state.root.children[0]).toMatchObject({
+      type: 'magic-chip',
+      agentSessionId: 'session-2',
+      promptedMessage: { turn: 0, author: 'user' },
+      status: 'booting',
+    });
+    expect(state.root.children[0]).not.toHaveProperty('channelId');
+    expect(serializedEditorStateToMarkdown(state)).toBe(channelLess);
+  });
 });

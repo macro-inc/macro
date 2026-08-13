@@ -13,7 +13,7 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 3;
+const VERSION = 4;
 
 export const MAGIC_CHIP_NODE_TYPE = 'magic-chip';
 
@@ -46,7 +46,7 @@ export type MagicChipMessage = {
 /** Persisted identity and status for a static Magic Chip. */
 export type MagicChipData = {
   agentSessionId: string;
-  channelId: string;
+  channelId?: string;
   promptedMessage: MagicChipMessage;
   status: MagicChipStatus;
 };
@@ -90,7 +90,7 @@ export class MagicChipNode extends DecoratorNode<
   DecoratorComponent<MagicChipDecoratorProps> | undefined
 > {
   __agentSessionId: string;
-  __channelId: string;
+  __channelId?: string;
   __promptedMessage: MagicChipMessage;
   __status: MagicChipStatus;
 
@@ -110,7 +110,7 @@ export class MagicChipNode extends DecoratorNode<
 
   constructor(
     agentSessionId: string,
-    channelId: string,
+    channelId: string | undefined,
     promptedMessage: MagicChipMessage,
     status: MagicChipStatus,
     key?: NodeKey
@@ -148,7 +148,9 @@ export class MagicChipNode extends DecoratorNode<
   exportComponentProps(): MagicChipData {
     return {
       agentSessionId: this.__agentSessionId,
-      channelId: this.__channelId,
+      ...(this.__channelId === undefined
+        ? {}
+        : { channelId: this.__channelId }),
       promptedMessage: this.__promptedMessage,
       status: this.__status,
     };

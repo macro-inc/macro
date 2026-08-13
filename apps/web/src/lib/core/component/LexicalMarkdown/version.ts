@@ -15,5 +15,6 @@
  * Version 2.2 - Jul 13, 2026. Added optional adaptColors display hint to HtmlRenderNode.
  * Version 2.3 - Jul 15, 2026. Added TagMentionNode.
  * Version 2.4 - Aug 11, 2026. Changed MagicChipNode into a block response surface.
+ * Version 2.5 - Aug 13, 2026. Made MagicChipNode channelId optional for standalone sessions.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.4;
+export const MARKDOWN_VERSION_COUNTER = 2.5;

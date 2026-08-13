@@ -13,7 +13,11 @@ export const MagicChip: Component<MagicChipDecoratorProps> = (props) => {
     <MagicChipView
       agentSessionId={props.agentSessionId}
       presentation={model.presentation()}
-      onOpen={() => insertSplit({ type: 'channel', id: props.channelId })}
+      onOpen={
+        props.channelId
+          ? () => insertSplit({ type: 'channel', id: props.channelId! })
+          : undefined
+      }
     />
   );
 };

@@ -22,12 +22,13 @@ function settled(presentation: MagicChipPresentation) {
 const ActivityLine: Component<{
   agentSessionId: string;
   activity: MagicChipActivity;
-  onOpen: () => void;
+  onOpen?: () => void;
 }> = (props) => (
   <button
     type="button"
     class="flex h-6 w-full min-w-0 items-center gap-2 text-left"
     data-magic-chip={props.agentSessionId}
+    disabled={!props.onOpen}
     onMouseDown={(event) => event.preventDefault()}
     onClick={props.onOpen}
   >
@@ -71,7 +72,7 @@ const StreamingAnswer: Component<{
   agentSessionId: string;
   markdown: string;
   activity: MagicChipActivity;
-  onOpen: () => void;
+  onOpen?: () => void;
 }> = (props) => (
   <div
     class="grid w-full min-w-0 justify-items-start gap-1"
@@ -92,7 +93,7 @@ const StreamingAnswer: Component<{
 const SettledAnswer: Component<{
   agentSessionId: string;
   markdown: string;
-  onOpen: () => void;
+  onOpen?: () => void;
 }> = (props) => (
   <div
     class="grid w-full min-w-0 justify-items-start gap-1"
@@ -104,6 +105,7 @@ const SettledAnswer: Component<{
       class="pl-3.5 mb-2 text-xs text-ink-extra-muted hover:text-ink"
       onMouseDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
+      disabled={!props.onOpen}
     >
       Open session
     </button>
@@ -114,7 +116,7 @@ const SettledAnswer: Component<{
 export const MagicChipView: Component<{
   agentSessionId: string;
   presentation: MagicChipPresentation;
-  onOpen: () => void;
+  onOpen?: () => void;
 }> = (props) => (
   <Switch>
     <Match when={working(props.presentation)}>
