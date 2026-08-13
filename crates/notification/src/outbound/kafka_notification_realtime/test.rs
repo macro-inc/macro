@@ -125,29 +125,6 @@ async fn publishes_one_event_per_call_for_one_user() {
 }
 
 #[tokio::test]
-async fn rejects_updates_for_multiple_users_without_publishing() {
-    let records = Arc::new(Mutex::new(Vec::new()));
-    let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
-        RecordingPublisher {
-            records: Arc::clone(&records),
-            fail: false,
-        },
-        TokioSpawner,
-    ));
-    let updates = [
-        update(user("macro|first@example.com"), uuid::Uuid::nil()),
-        update(user("macro|second@example.com"), uuid::Uuid::nil()),
-    ];
-
-    publisher
-        .publish_updates(&updates)
-        .await
-        .expect_err("mixed-user update batch is rejected");
-
-    assert!(records.lock().expect("records lock").is_empty());
-}
-
-#[tokio::test]
 async fn empty_updates_do_not_publish_events() {
     let records = Arc::new(Mutex::new(Vec::new()));
     let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(

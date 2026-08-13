@@ -42,13 +42,6 @@ impl<B: MacroEventBroker> NotificationRealtimePublisher for KafkaNotificationRea
             return Ok(());
         };
 
-        if updates
-            .iter()
-            .any(|update| update.user.as_ref() != first.user.as_ref())
-        {
-            rootcause::bail!("notification realtime update batch contains multiple users");
-        }
-
         let notification_updates = updates
             .iter()
             .flat_map(|update| &update.update.updates)
