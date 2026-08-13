@@ -8,7 +8,14 @@ import TrashIcon from '@phosphor/trash.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
-import { Button, Dialog, Layer, Panel } from '@ui';
+import {
+  Button,
+  Dialog,
+  Layer,
+  type ManagedDialogProps,
+  Panel,
+  useImperativeDialog,
+} from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
 import { EventRsvpSection } from './EventRsvpSection';
@@ -97,7 +104,10 @@ interface EventDetailsOverlayProps {
 
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   const openEventComposer = useOpenEventComposer();
-  const [deleteOpen, setDeleteOpen] = createSignal(false);
+  const deleteDialog = useDeleteEventDialog({
+    event: () => props.event,
+    onDeleted: () => props.onOpenChange(false),
+  });
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
@@ -105,85 +115,69 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   };
 
   return (
-    <>
-      <MobileDrawer
-        side="bottom"
-        open
-        onOpenChange={(open) => {
-          if (!open && deleteOpen()) return;
-          props.onOpenChange(open);
-        }}
-        preventScroll={false}
-        preventScrollbarShift={false}
-      >
-        <MobileDrawer.Portal>
-          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-          <MobileDrawer.Content
-            aria-label={props.event.title}
-            class="overflow-hidden"
-          >
-            <MobileDrawer.Handle class="pointer-events-none absolute inset-x-0 top-0 z-1" />
-            <div class="flex shrink-0 items-center justify-between px-2 pb-3 pt-2">
-              <MobileDrawer.Close
-                as={Button}
-                aria-label="Close event details"
-                variant="ghost"
-                size="icon-md"
-                depth={3}
-                class="rounded-md text-ink-extra-muted [&_svg]:size-4"
-              >
-                <CloseIcon />
-              </MobileDrawer.Close>
-              <Show when={canModify()}>
-                <div class="flex items-center gap-1">
-                  <Button
-                    aria-label="Edit event"
-                    variant="ghost"
-                    size="icon-md"
-                    depth={3}
-                    class="rounded-md text-ink-extra-muted [&_svg]:size-4"
-                    onClick={openEditor}
-                  >
-                    <PencilSimpleIcon />
-                  </Button>
-                  <Button
-                    aria-label="Delete event"
-                    variant="ghost"
-                    size="icon-md"
-                    depth={3}
-                    class="rounded-md text-ink-extra-muted [&_svg]:size-4"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <TrashIcon />
-                  </Button>
-                </div>
-              </Show>
-            </div>
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <div class="px-3">
-                <EventDetails
-                  event={props.event}
-                  timeFormat={props.timeFormat}
-                />
+    <MobileDrawer
+      side="bottom"
+      open
+      onOpenChange={(open) => {
+        if (!open && deleteDialog.isOpen()) return;
+        props.onOpenChange(open);
+      }}
+      preventScroll={false}
+      preventScrollbarShift={false}
+    >
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Content
+          aria-label={props.event.title}
+          class="overflow-hidden"
+        >
+          <MobileDrawer.Handle class="pointer-events-none absolute inset-x-0 top-0 z-1" />
+          <div class="flex shrink-0 items-center justify-between px-2 pb-3 pt-2">
+            <MobileDrawer.Close
+              as={Button}
+              aria-label="Close event details"
+              variant="ghost"
+              size="icon-md"
+              depth={3}
+              class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+            >
+              <CloseIcon />
+            </MobileDrawer.Close>
+            <Show when={canModify()}>
+              <div class="flex items-center gap-1">
+                <Button
+                  aria-label="Edit event"
+                  variant="ghost"
+                  size="icon-md"
+                  depth={3}
+                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  onClick={openEditor}
+                >
+                  <PencilSimpleIcon />
+                </Button>
+                <Button
+                  aria-label="Delete event"
+                  variant="ghost"
+                  size="icon-md"
+                  depth={3}
+                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  onClick={deleteDialog.open}
+                >
+                  <TrashIcon />
+                </Button>
               </div>
-              <EventAttendeesSection attendees={props.event.attendees} />
-              <EventRsvpSection event={props.event} buttonSize="md" />
+            </Show>
+          </div>
+          <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div class="px-3">
+              <EventDetails event={props.event} timeFormat={props.timeFormat} />
             </div>
-          </MobileDrawer.Content>
-        </MobileDrawer.Portal>
-      </MobileDrawer>
-      <Show when={deleteOpen()}>
-        <DeleteEventDialog
-          open
-          event={props.event}
-          onClose={() => setDeleteOpen(false)}
-          onDeleted={() => {
-            setDeleteOpen(false);
-            props.onOpenChange(false);
-          }}
-        />
-      </Show>
-    </>
+            <EventAttendeesSection attendees={props.event.attendees} />
+            <EventRsvpSection event={props.event} buttonSize="md" />
+          </div>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
   );
 }
 
@@ -191,12 +185,30 @@ interface EventDetailsPopoverProps extends EventDetailsOverlayProps {
   anchor: HTMLElement;
 }
 
-function DeleteEventDialog(props: {
-  open: boolean;
-  event: CalendarEvent;
-  onClose: () => void;
+function useDeleteEventDialog(props: {
+  event: Accessor<CalendarEvent>;
   onDeleted: () => void;
 }) {
+  const dialog = useImperativeDialog(DeleteEventDialog);
+
+  const open = () =>
+    dialog.open({
+      event: props.event(),
+      onDeleted: () => {
+        dialog.close();
+        props.onDeleted();
+      },
+    });
+
+  return { open, isOpen: dialog.isOpen };
+}
+
+function DeleteEventDialog(
+  props: ManagedDialogProps & {
+    event: CalendarEvent;
+    onDeleted: () => void;
+  }
+) {
   const isRecurring = () =>
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
@@ -224,9 +236,9 @@ function DeleteEventDialog(props: {
   return (
     <Dialog
       open={props.open}
-      onOpenChange={(open) =>
-        !open && !deleteEvent.isPending && props.onClose()
-      }
+      onOpenChange={(open) => {
+        if (!open && !deleteEvent.isPending) props.onOpenChange(false);
+      }}
     >
       <Panel depth={2} class="max-w-[calc(100vw-2rem)] rounded-xl text-ink">
         <Panel.Header class="gap-1 px-2">
@@ -292,7 +304,7 @@ function DeleteEventDialog(props: {
               class="rounded-lg"
               disabled={deleteEvent.isPending}
               label="Cancel"
-              onClick={props.onClose}
+              onClick={() => props.onOpenChange(false)}
             >
               Cancel
             </Button>
@@ -317,7 +329,10 @@ function DeleteEventDialog(props: {
 /** Anchors event details and actions to a rendered calendar event. */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
-  const [deleteOpen, setDeleteOpen] = createSignal(false);
+  const deleteDialog = useDeleteEventDialog({
+    event: () => props.event,
+    onDeleted: () => props.onOpenChange(false),
+  });
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
@@ -325,116 +340,101 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   };
 
   return (
-    <>
-      <Popover
-        anchorRef={() => props.anchor}
-        open
-        onOpenChange={(open) => {
-          // Keep the popover mounted while its delete dialog is open.
-          if (!open && deleteOpen()) return;
-          props.onOpenChange(open);
-        }}
-        placement="right-start"
-        gutter={8}
-        flip
-        slide
-      >
-        <Popover.Portal>
-          <Layer depth={3}>
-            <Popover.Content
-              class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
-              onInteractOutside={(event) => {
-                // FullCalendar selects on click (pointer release), so dismissing on
-                // pointer down would briefly close the popover before reopening it.
-                const target = event.detail.originalEvent.target;
-                if (
-                  target instanceof Element &&
-                  target.closest('.fc-event') !== null
-                ) {
-                  event.preventDefault();
-                }
-              }}
-              onFocusOutside={(event) => {
-                // Deep links open this popover while their freshly-opened
-                // split is still claiming focus; that focus movement lands
-                // outside the popover and would dismiss it on arrival. Focus
-                // alone never closes the details — pointer interaction
-                // outside or Escape still does.
+    <Popover
+      anchorRef={() => props.anchor}
+      open
+      onOpenChange={(open) => {
+        // Keep the popover mounted while its delete dialog is open.
+        if (!open && deleteDialog.isOpen()) return;
+        props.onOpenChange(open);
+      }}
+      placement="right-start"
+      gutter={8}
+      flip
+      slide
+    >
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content
+            class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
+            onInteractOutside={(event) => {
+              // FullCalendar selects on click (pointer release), so dismissing on
+              // pointer down would briefly close the popover before reopening it.
+              const target = event.detail.originalEvent.target;
+              if (
+                target instanceof Element &&
+                target.closest('.fc-event') !== null
+              ) {
                 event.preventDefault();
-              }}
-              onCloseAutoFocus={(event) => {
-                const shouldRestoreFocus = !event.defaultPrevented;
-                event.preventDefault();
-                if (shouldRestoreFocus && props.anchor.isConnected) {
-                  props.anchor.focus();
-                }
-              }}
-            >
-              <Popover.Arrow class="fill-surface" />
-              <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
-                <Popover.Title class="sr-only">
-                  {props.event.title}
-                </Popover.Title>
-                <div class="flex items-center justify-end gap-1 px-2 pt-2">
-                  <Show when={canModify()}>
-                    <Button
-                      aria-label="Edit event"
-                      variant="ghost"
-                      size="icon-sm"
-                      depth={3}
-                      class="rounded-md text-ink-muted [&_svg]:size-4"
-                      onClick={openEditor}
-                    >
-                      <PencilSimpleIcon />
-                    </Button>
-                    <Button
-                      aria-label="Delete event"
-                      variant="ghost"
-                      size="icon-sm"
-                      depth={3}
-                      class="rounded-md text-ink-muted [&_svg]:size-4"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <TrashIcon />
-                    </Button>
-                  </Show>
-                  <Popover.CloseButton
-                    as={Button}
-                    aria-label="Close event details"
+              }
+            }}
+            onFocusOutside={(event) => {
+              // Deep links open this popover while their freshly-opened
+              // split is still claiming focus; that focus movement lands
+              // outside the popover and would dismiss it on arrival. Focus
+              // alone never closes the details — pointer interaction
+              // outside or Escape still does.
+              event.preventDefault();
+            }}
+            onCloseAutoFocus={(event) => {
+              const shouldRestoreFocus = !event.defaultPrevented;
+              event.preventDefault();
+              if (shouldRestoreFocus && props.anchor.isConnected) {
+                props.anchor.focus();
+              }
+            }}
+          >
+            <Popover.Arrow class="fill-surface" />
+            <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
+              <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
+              <div class="flex items-center justify-end gap-1 px-2 pt-2">
+                <Show when={canModify()}>
+                  <Button
+                    aria-label="Edit event"
                     variant="ghost"
                     size="icon-sm"
                     depth={3}
                     class="rounded-md text-ink-muted [&_svg]:size-4"
+                    onClick={openEditor}
                   >
-                    <CloseIcon />
-                  </Popover.CloseButton>
-                </div>
-                <div>
-                  <div class="px-3 pb-3">
-                    <EventDetails
-                      event={props.event}
-                      timeFormat={props.timeFormat}
-                    />
-                  </div>
-                  <EventAttendeesSection attendees={props.event.attendees} />
-                  <EventRsvpSection event={props.event} />
-                </div>
+                    <PencilSimpleIcon />
+                  </Button>
+                  <Button
+                    aria-label="Delete event"
+                    variant="ghost"
+                    size="icon-sm"
+                    depth={3}
+                    class="rounded-md text-ink-muted [&_svg]:size-4"
+                    onClick={deleteDialog.open}
+                  >
+                    <TrashIcon />
+                  </Button>
+                </Show>
+                <Popover.CloseButton
+                  as={Button}
+                  aria-label="Close event details"
+                  variant="ghost"
+                  size="icon-sm"
+                  depth={3}
+                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                >
+                  <CloseIcon />
+                </Popover.CloseButton>
               </div>
-            </Popover.Content>
-          </Layer>
-        </Popover.Portal>
-      </Popover>
-      <Show when={deleteOpen()}>
-        <DeleteEventDialog
-          open
-          event={props.event}
-          onClose={() => setDeleteOpen(false)}
-          onDeleted={() => {
-            setDeleteOpen(false);
-            props.onOpenChange(false);
-          }}
-        />
-      </Show>
-    </>
+              <div>
+                <div class="px-3 pb-3">
+                  <EventDetails
+                    event={props.event}
+                    timeFormat={props.timeFormat}
+                  />
+                </div>
+                <EventAttendeesSection attendees={props.event.attendees} />
+                <EventRsvpSection event={props.event} />
+              </div>
+            </div>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
   );
 }
