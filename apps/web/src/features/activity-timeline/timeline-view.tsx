@@ -128,7 +128,7 @@ export function TimelinePane(props: {
         </Show>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="mx-auto flex w-full max-w-2xl flex-col px-3 pb-10 mobile:pb-(--mobile-content-inset-bottom)">
+        <div class="mx-auto flex w-full max-w-2xl flex-col px-3 pb-10 touch:pb-(--mobile-content-inset-bottom)">
           <Show
             when={!props.feed.isLoading()}
             fallback={

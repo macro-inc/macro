@@ -683,7 +683,7 @@ function EmailContent(props: EmailViewProps) {
             {(draft) => (
               // The email block is bottom-anchored (no default panel inset),
               // so the compose branch pads around the chrome itself.
-              <div class="size-full mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+              <div class="size-full touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <EmailCompose draftID={draft().db_id!} />
               </div>
             )}
@@ -704,7 +704,7 @@ function EmailContent(props: EmailViewProps) {
                   ),
               }}
             >
-              {/* Edge-to-edge on mobile: the message list carries its own
+              {/* Edge-to-edge on mobile/tablet: the message list carries its own
                   insets in-scroll and under-scrolls the floating chrome. */}
               <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar

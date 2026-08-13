@@ -1,6 +1,7 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -192,7 +193,7 @@ function SidePanelLayoutInner(
           <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
-            <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
+            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
@@ -227,10 +228,10 @@ function SidePanelHeaderToggle() {
       variant="base"
       size="icon-sm"
       class={cn(
-        !isMobile() && 'bg-surface',
-        isMobile() &&
+        !isTouchDevice() && 'bg-surface',
+        isTouchDevice() &&
           'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-        isMobile() && ctx.isOpen() && 'text-accent'
+        isTouchDevice() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
       hotkey={TOKENS.block.toggleSidePanel}

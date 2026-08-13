@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { DEFAULT_LIGHT_THEME } from '@theme/constants';
 import { currentThemeId, themeDepth } from '@theme/signals/themeSignals';
 import { createMemo, type JSX } from 'solid-js';
@@ -10,7 +10,7 @@ type LayerProps = {
 
 export function Layer(props: LayerProps) {
   const isDefaultMobileLight = createMemo(
-    () => currentThemeId() === DEFAULT_LIGHT_THEME && isMobile()
+    () => currentThemeId() === DEFAULT_LIGHT_THEME && isTouchDevice()
   );
   // HACK: on default mobile light theme, we reverse the sign
   const sign = () => (isDefaultMobileLight() ? -1 : 1);
@@ -20,7 +20,7 @@ export function Layer(props: LayerProps) {
   const BORDER_SCALAR = 0.4;
   // For pure black mobile theme, we need to set a min step to get appropriate contrast
   const nearBlackStepMin = () =>
-    (props.depth ?? 0) > 0 && isMobile() ? 0.19 : 0;
+    (props.depth ?? 0) > 0 && isTouchDevice() ? 0.19 : 0;
 
   return (
     <div

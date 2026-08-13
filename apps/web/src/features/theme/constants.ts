@@ -1,10 +1,10 @@
-import { isMobile } from '@core/mobile/isMobile';
 import type { ThemeV2 } from './types/themeTypes';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
 export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
 
-const MACRO_DARK: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isMobile()  ? {
+const MACRO_DARK: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isTouchDevice()  ? {
       depth: 0.35,
       tokens: {
         a0: { l: 0.75, c: 0.20, h:  59 },
@@ -45,7 +45,7 @@ const MACRO_DARK: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isMobile()  
       },
     };
 
-const MACRO_LIGHT: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isMobile()
+const MACRO_LIGHT: Pick<ThemeV2, 'depth' | 'tokens' | 'overrides'> = isTouchDevice()
   ? {
       depth: 0.06,
       tokens: {

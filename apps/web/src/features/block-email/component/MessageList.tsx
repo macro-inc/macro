@@ -68,9 +68,9 @@ export function MessageList(props: MessageListProps) {
         'pt-1 pb-[calc(1.5rem+var(--thread-bottom-pad,0px))] w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5',
         // In-scroll top inset: messages rest below the floating split chrome
         // but under-scroll it.
-        'mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
+        'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         props.underScrollsBottom &&
-          'mobile:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
+          'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
       ref={context.registerMessagesList}
       onscroll={(e) => {

@@ -1,5 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
@@ -16,7 +16,7 @@ export function useSplitLayout() {
     options?: OpenWithSplitOptions
   ) {
     const splitManager = globalSplitManager();
-    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
+    const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');

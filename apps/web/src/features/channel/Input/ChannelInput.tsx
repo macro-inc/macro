@@ -13,6 +13,7 @@ import {
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
@@ -481,7 +482,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
-          class="mobile:rounded-full mobile:island"
+          class="touch:rounded-full touch:island"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -511,12 +512,12 @@ export function ChannelInput(props: ChannelInputProps) {
           collapsedInput.collapse();
         }}
         class={cn(
-          'rounded-xl mobile:rounded-3xl mobile:island',
+          'rounded-xl touch:rounded-3xl touch:island',
           isCollapsed() && 'hidden',
-          isMobile() && 'bg-chrome'
+          isTouchDevice() && 'bg-chrome'
         )}
-        hideBorder={isMobile()}
-        depth={isMobile() ? 3 : 2}
+        hideBorder={isTouchDevice()}
+        depth={isTouchDevice() ? 3 : 2}
         solid
       >
         {renderSurfaceContent()}

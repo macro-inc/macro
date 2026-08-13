@@ -350,7 +350,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             around it tightens as the panel narrows, and goes uniform once the
             sidebar collapses. Full-bleed on mobile. */}
         <div
-          class="flex-1 min-w-0 overflow-hidden mobile:p-0"
+          class="flex-1 min-w-0 overflow-hidden touch:p-0"
           classList={{
             'py-2 pr-2 pl-0': !compact() && !narrow(),
             'py-1 pr-1 pl-0': !compact() && narrow(),
@@ -376,7 +376,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </div>
               </Show>
 
-              <div class="relative min-h-0 flex-1 overflow-hidden mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+              <div class="relative min-h-0 flex-1 overflow-hidden touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <Show when={isCurrentTab('Account')}>
                   <Suspense>
                     <Account />

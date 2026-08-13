@@ -90,7 +90,7 @@ export function StaticSplitLabel(props: {
               {props.label}
             </span>
             <Show when={panel.titleFileMenuTrigger()}>
-              <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted mobile:block" />
+              <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted touch:block" />
             </Show>
           </span>
           <div
@@ -140,7 +140,7 @@ export function SplitLabel(props: {
         {truncatedLabel()}
       </span>
       <Show when={panel.titleFileMenuTrigger()}>
-        <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted mobile:block" />
+        <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted touch:block" />
       </Show>
     </span>
   );

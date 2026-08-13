@@ -32,8 +32,8 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
 import { plural } from '@core/util/string';
@@ -1283,7 +1283,7 @@ export function BaseInput(props: {
   // connect before focusing.
   createEffect(() => {
     if (!form().shouldFocusInput()) return;
-    if (isMobile()) {
+    if (isTouchDevice()) {
       form().setShouldFocusInput(false);
       return;
     }
@@ -1443,7 +1443,7 @@ export function BaseInput(props: {
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
   const composePortalScope = () => (isMobileDrawer() ? 'local' : undefined);
   const sendActionHidden = () =>
-    isMobile() &&
+    isTouchDevice() &&
     !hasBodyText() &&
     // Forwards carry the quoted thread as content, so send is available without typing anything.
     effectiveReplyType() !== 'forward';
@@ -2149,7 +2149,7 @@ export function BaseInput(props: {
                   sendTime={form().sendTime() ?? null}
                   onSendTimeChange={handleSendTimeChange}
                   disabled={scheduleSendDisabled()}
-                  disablePortal={isMobile()}
+                  disablePortal={isTouchDevice()}
                 />
               </Show>
               <SendButton

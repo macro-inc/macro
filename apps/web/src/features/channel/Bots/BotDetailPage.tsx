@@ -169,7 +169,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
   return (
     <>
       <div class="size-full overflow-y-auto bg-surface text-ink">
-        <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 mobile:px-5 mobile:pt-8 mobile:pb-12">
+        <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 touch:px-5 touch:pt-8 touch:pb-12">
           <Button
             type="button"
             variant="ghost"

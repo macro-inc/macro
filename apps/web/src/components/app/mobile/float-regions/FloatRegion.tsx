@@ -1,5 +1,5 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onCleanup, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { type FloatRegionName, FloatRegions } from './float-region-state';
@@ -32,7 +32,7 @@ export function FloatRegion(props: FloatRegionProps) {
     region: props.region,
     priority: props.priority ?? 0,
     isActive: () =>
-      isMobile() &&
+      isTouchDevice() &&
       (panel?.isPanelActive() ?? true) &&
       (props.active?.() ?? true),
   });
@@ -52,7 +52,7 @@ export function FloatRegion(props: FloatRegionProps) {
  */
 export function FloatRegionOrInline(props: FloatRegionProps) {
   return (
-    <Show when={isMobile()} fallback={props.children}>
+    <Show when={isTouchDevice()} fallback={props.children}>
       <FloatRegion {...props} />
     </Show>
   );

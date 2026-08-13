@@ -8,7 +8,7 @@ import { isSoloSettings } from '@core/constant/SettingsState';
 import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -103,7 +103,7 @@ export function SplitPanel(props: SplitPanelProps) {
 
   createEffect(
     on([panelRef], () => {
-      if (isMobile()) return;
+      if (isTouchDevice()) return;
       // Only the active split may claim focus on mount. A Preview Pair's Viewer
       // is created with activate:false while its controller stays active, and
       // must not steal the keyboard from it.
@@ -139,7 +139,7 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   createEffect(() => {
-    const safeTop = isMobile() ? getSafeAreaInset('top') : 0;
+    const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
     const offset =
       safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
@@ -152,18 +152,18 @@ export function SplitPanel(props: SplitPanelProps) {
 
   const shouldHideSplitHeader = createMemo(
     () =>
-      (isMobile() && isListViewID(props.handle.content().id)) ||
+      (isTouchDevice() && isListViewID(props.handle.content().id)) ||
       isSoloSettings()
   );
 
   const splitFocusStyling = () =>
-    !isMobile() &&
+    !isTouchDevice() &&
     props.active &&
     multipleSplits() &&
     !props.handle.isSpotLight();
 
   const splitUnfocusedStyling = () =>
-    !isMobile() && !props.active && multipleSplits();
+    !isTouchDevice() && !props.active && multipleSplits();
 
   const gutterSize = () =>
     globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
@@ -175,7 +175,9 @@ export function SplitPanel(props: SplitPanelProps) {
    */
   const tuckedBehindController = createMemo(() => {
     return (
-      !isMobile() && !props.handle.isSpotLight() && props.handle.isViewerSplit()
+      !isTouchDevice() &&
+      !props.handle.isSpotLight() &&
+      props.handle.isViewerSplit()
     );
   });
 
@@ -186,7 +188,7 @@ export function SplitPanel(props: SplitPanelProps) {
    */
   const hasTuckedViewer = createMemo(() => {
     return (
-      !isMobile() &&
+      !isTouchDevice() &&
       !props.handle.isSpotLight() &&
       props.handle.isControllerSplit()
     );
@@ -200,7 +202,7 @@ export function SplitPanel(props: SplitPanelProps) {
    */
   const previewPairFocusStyling = createMemo(() => {
     const manager = globalSplitManager();
-    if (!manager || isMobile() || props.handle.isSpotLight()) return false;
+    if (!manager || isTouchDevice() || props.handle.isSpotLight()) return false;
 
     const peerId = props.handle.isControllerSplit()
       ? manager.viewerOf(props.split.id)
@@ -258,16 +260,16 @@ export function SplitPanel(props: SplitPanelProps) {
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              // mobile:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile
+              // touch:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile/tablet
               // search overlay paints over it.
-              'relative size-full mobile:isolate': !props.handle.isSpotLight(),
+              'relative size-full touch:isolate': !props.handle.isSpotLight(),
             }}
             style={{
               '--split-header-height': `${
                 shouldHideSplitHeader() ? 0 : (headerSize.height ?? 0)
               }px`,
               // The hard spacer for top-anchored content on full-frame
-              // mobile: status bar + floating header strip.
+              // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
               // Slide the preview pane left across the gutter so it sits
@@ -296,7 +298,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   : undefined
               }
               class={cn(
-                'rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0! bg-panel',
+                'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
                 {
                   'shadow-sm shadow-drop-shadow/50 bg-panel/80 dark-mode:bg-panel/30':
                     splitUnfocusedStyling(),
@@ -314,15 +316,15 @@ export function SplitPanel(props: SplitPanelProps) {
                   'rounded-r-none': hasTuckedViewer(),
                 }
               )}
-              depth={isMobile() ? 0 : 1}
+              depth={isTouchDevice() ? 0 : 1}
             >
               <Panel.Header
                 class={cn(
                   'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
                   'z-split-panel-chrome',
-                  // On mobile the header collapses to a zero-height grid row;
+                  // On mobile/tablet the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
-                  'mobile:min-h-0 mobile:border-b-0',
+                  'touch:min-h-0 touch:border-b-0',
                   shouldHideSplitHeader() && 'hidden'
                 )}
               >
@@ -336,7 +338,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 class={cn(
                   'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
-                  isMobile() && 'hidden',
+                  isTouchDevice() && 'hidden',
                   'border-b-0'
                 )}
               >

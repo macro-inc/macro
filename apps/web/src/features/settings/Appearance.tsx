@@ -58,7 +58,7 @@ function CopyThemeButton(props: { themeId: string; name: string }) {
       <button
         type="button"
         aria-label={`Copy ${props.name}`}
-        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        class="rounded p-0.5 hover:text-ink touch:p-1.5"
         onPointerDown={(e) => e.stopPropagation()}
         onPointerUp={(e) => e.stopPropagation()}
         onClick={(e) => {
@@ -81,7 +81,7 @@ function EditThemeButton(props: { name: string; onEdit: () => void }) {
       <button
         type="button"
         aria-label={`Edit ${props.name}`}
-        class="rounded p-0.5 hover:text-ink mobile:p-1.5"
+        class="rounded p-0.5 hover:text-ink touch:p-1.5"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
