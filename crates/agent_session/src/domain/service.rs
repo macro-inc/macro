@@ -40,7 +40,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, CreateAgentSessionParams,
-    LogAppended, MessageId, SessionLog,
+    LogAppended, MessageId, SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -321,7 +321,7 @@ where
 
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.
-        AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
+        let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
 
         if let Some(fold) = &mut self.fold {
             let _ = fold.push(log.clone());
@@ -341,7 +341,7 @@ where
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
-        if let Err(error) = self.stream(session, log).await {
+        if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
                 %session,
@@ -405,7 +405,7 @@ where
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,
-        entry: AgentSessionLog,
+        entry: StoredAgentSessionLog,
     ) -> std::result::Result<(), rootcause::Report> {
         self.realtime
             .publish(LogAppended {

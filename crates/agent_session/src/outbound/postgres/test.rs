@@ -109,7 +109,7 @@ async fn append_system_event(
     agent_session_id: AgentSessionId,
     event: SystemEvent,
 ) {
-    AgentSessionLogRepo::create(
+    let _ = AgentSessionLogRepo::create(
         repo,
         AgentSessionLog {
             agent_session_id,
@@ -234,7 +234,7 @@ async fn set_model_log_entry_projects_the_session_model(pool: PgPool) {
         .await
         .expect("persist ACP session id");
 
-    AgentSessionLogRepo::create(
+    let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
             agent_session_id: id,
@@ -278,7 +278,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 
     let user = user_id("macro|agent-session-log-test@example.com");
 
-    AgentSessionLogRepo::create(
+    let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
             agent_session_id: session_id,
@@ -300,7 +300,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
         SessionStatus::Event(SystemEvent::AcpReady)
     ));
 
-    AgentSessionLogRepo::create(
+    let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
             agent_session_id: session_id,

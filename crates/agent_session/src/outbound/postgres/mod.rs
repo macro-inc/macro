@@ -398,7 +398,7 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
 }
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
-    async fn create(&self, log: AgentSessionLog) -> Result<()> {
+    async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         let model_change = match &log.content {
             Message::ToRuntime(message) => AgentSetModelAction::from_runtime(message),
             _ => None,
@@ -415,10 +415,11 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .begin()
             .await
             .context("begin agent session log create")?;
-        sqlx::query!(
+        let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
             VALUES ($1, $2, $3, $4, $5)
+            RETURNING created_at
             "#,
             macro_uuid::generate_uuid_v7(),
             log.agent_session_id.as_uuid(),
@@ -426,7 +427,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             direction,
             content,
         )
-        .execute(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to create agent session log entry")?;
 
@@ -472,7 +473,10 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .await
             .context("commit agent session log create")?;
 
-        Ok(())
+        Ok(StoredAgentSessionLog {
+            created_at,
+            entry: log,
+        })
     }
 
     async fn list_by_session(

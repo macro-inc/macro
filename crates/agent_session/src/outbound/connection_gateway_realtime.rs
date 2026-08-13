@@ -5,7 +5,7 @@
 //!
 //! Websocket payloads are not part of the OpenAPI surface, so nothing
 //! generates the client's half of this. The paired type is
-//! `apps/web/src/lib/core/agent-fold/stream-protocol.ts`, hand-written against
+//! `apps/web/src/lib/queries/agent-session/realtime-protocol.ts`, hand-written against
 //! what is here; the two doc comments point at each other and are the whole
 //! agreement.
 //!
@@ -15,13 +15,14 @@
 //! ```json
 //! {
 //!   "agentSessionId": "019f…",
+//!   "createdAt":      "2026-08-13T12:34:56.789Z",
 //!   "userId":         "macro|someone@example.com",
 //!   "direction":      "to_server",
 //!   "content":        { "type": "acp", "jsonrpc": "2.0", … }
 //! }
 //! ```
 //!
-//! The last three fields are exactly the entry shape
+//! The last four fields are exactly the entry shape
 //! `GET /agent-sessions/{id}/log` serves, flattened in the same way. That is
 //! the point of the contract rather than an accident of it: a client catching
 //! up on a log and a client following one are folding the same bytes, so they
@@ -32,7 +33,9 @@
 //! identified by that session plus the session-local `"{turn}:{author}"` id
 //! the fold derives.
 
-use crate::domain::model::{AgentSessionId, AgentSessionLog, LogAppended, Message};
+use crate::domain::model::{
+    AgentSessionId, AgentSessionLog, LogAppended, Message, StoredAgentSessionLog,
+};
 use crate::domain::ports::AgentSessionRealtime;
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -56,6 +59,9 @@ pub struct AgentSessionLogEvent {
     /// folded messages are keyed by.
     #[serde(rename = "agentSessionId")]
     pub agent_session_id: Uuid,
+    /// When the durable log recorded the frame.
+    #[serde(rename = "createdAt")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
     /// The user whose action produced the frame, when one did.
     #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
@@ -69,15 +75,16 @@ impl AgentSessionLogEvent {
     /// The event for one appended frame.
     #[must_use]
     pub fn new(event: LogAppended) -> Self {
-        let LogAppended {
-            agent_session_id,
+        let StoredAgentSessionLog {
+            created_at,
             entry: AgentSessionLog {
                 user_id, content, ..
             },
-        } = event;
+        } = event.entry;
 
         Self {
-            agent_session_id: agent_session_id.as_uuid(),
+            agent_session_id: event.agent_session_id.as_uuid(),
+            created_at,
             user_id: user_id.map(|user| user.to_string()),
             message: content,
         }
@@ -155,7 +162,16 @@ mod test {
     use super::*;
     use agent_fold::testing::{TURN, parse_log_as, test_session};
 
-    /// The event is the REST entry shape plus two ids - the property the
+    fn stored(entry: AgentSessionLog) -> StoredAgentSessionLog {
+        StoredAgentSessionLog {
+            created_at: chrono::DateTime::parse_from_rfc3339("2026-08-13T12:34:56.789Z")
+                .expect("valid timestamp")
+                .to_utc(),
+            entry,
+        }
+    }
+
+    /// The event is the REST entry shape plus its session id - the property the
     /// client relies on to fold a streamed frame and a fetched one with the
     /// same code. Asserted on the serialized keys rather than the types,
     /// because it is the bytes the two halves actually agree on.
@@ -168,18 +184,25 @@ mod test {
 
         let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
             agent_session_id: test_session(),
-            entry,
+            entry: stored(entry),
         }))
         .expect("the event serializes");
 
         let object = value.as_object().expect("an event is a JSON object");
         assert_eq!(
             object.keys().map(String::as_str).collect::<Vec<_>>(),
-            vec!["agentSessionId", "userId", "direction", "content"],
+            vec![
+                "agentSessionId",
+                "createdAt",
+                "userId",
+                "direction",
+                "content"
+            ],
             "the frame is flattened in beside the id, not nested under it"
         );
         assert_eq!(object["direction"], "to_runtime");
         assert_eq!(object["content"]["method"], "session/prompt");
+        assert_eq!(object["createdAt"], "2026-08-13T12:34:56.789Z");
     }
 
     /// An unattributed frame omits the key rather than sending null, matching
@@ -193,7 +216,7 @@ mod test {
 
         let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
             agent_session_id: test_session(),
-            entry,
+            entry: stored(entry),
         }))
         .expect("the event serializes");
 

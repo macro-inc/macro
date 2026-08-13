@@ -99,8 +99,8 @@ pub struct LogAppended {
     /// The session the entry belongs to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
-    /// The frame, exactly as the log stored it.
-    pub entry: AgentSessionLog,
+    /// The frame and the timestamp assigned when it was stored.
+    pub entry: StoredAgentSessionLog,
 }
 
 /// One entry of a session's log as it was stored, with the time the log

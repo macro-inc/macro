@@ -188,7 +188,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 }
 
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
-    async fn create(&self, log: AgentSessionLog) -> Result<()> {
+    async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         let model_change = match &log.content {
             crate::domain::model::Message::ToRuntime(message) => {
                 agent_runtime_protocol::domain::action::AgentSetModelAction::from_runtime(message)
@@ -202,7 +202,16 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             _ => None,
         };
         let session_id = log.agent_session_id;
-        self.extend_log([log]);
+        let stored = StoredAgentSessionLog {
+            created_at: chrono::Utc::now(),
+            entry: log,
+        };
+        self.logs
+            .lock()
+            .expect("in-memory log store is not poisoned")
+            .entry(session_id)
+            .or_default()
+            .push(stored.clone());
         if let Some(event) = event
             && let Some(session) = self
                 .sessions
@@ -224,7 +233,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             session.model = change.model;
             session.modified_at = chrono::Utc::now();
         }
-        Ok(())
+        Ok(stored)
     }
 
     async fn list_by_session(

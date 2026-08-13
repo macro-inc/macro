@@ -98,7 +98,6 @@ async fn appending_persists_the_event() {
 #[tokio::test]
 async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session()));
     let mut logs = connection(repo.clone());
 
@@ -129,7 +128,6 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
 #[tokio::test]
 async fn a_connections_frames_are_published_to_its_channel() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session()));
     let realtime = RecordingRealtime::new();
     let mut logs = streaming_connection(repo.clone(), realtime.clone());
@@ -149,6 +147,20 @@ async fn a_connections_frames_are_published_to_its_channel() {
             .all(|event| event.agent_session_id == test_session()),
         "every event names the session"
     );
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .expect("stored log can be read");
+    assert_eq!(
+        published
+            .iter()
+            .map(|event| event.entry.created_at)
+            .collect::<Vec<_>>(),
+        stored
+            .iter()
+            .map(|entry| entry.created_at)
+            .collect::<Vec<_>>(),
+        "published timestamps are the timestamps assigned by persistence"
+    );
     // Compared as the JSON they are published as: the client folds these
     // bytes with the same code it folds the fetched log with.
     let frame = |entry: AgentSessionLog| {
@@ -160,7 +172,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .into_iter()
-            .map(|event| frame(event.entry))
+            .map(|event| frame(event.entry.entry))
             .collect::<Vec<_>>(),
         log.into_iter().map(frame).collect::<Vec<_>>(),
         "the frames go out as they were logged"
@@ -209,7 +221,6 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
 #[tokio::test]
 async fn a_failed_publish_does_not_fail_the_append() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
     repo.insert_session(test_agent_session(test_session()));
     let mut logs = streaming_connection(repo.clone(), RecordingRealtime::down());
 
