@@ -6,5 +6,5 @@
  */
 import type { AccessLevel } from './accessLevel';
 
-export type UpdateSharePermissionRequestV2PublicAccessLevel =
+export type UpdateSharePermissionRequestV2LinkShareAccessLevel =
   null | AccessLevel;

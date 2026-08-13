@@ -4,8 +4,6 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { AccessLevel } from './accessLevel';
 
-/**
- * If the item is publicly accessible
- */
-export type UpdateSharePermissionRequestV2IsPublic = boolean | null;
+export type SharePermissionV2LinkShareAccessLevel = null | AccessLevel;

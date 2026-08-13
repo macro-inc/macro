@@ -36,14 +36,14 @@ export type EntityRefInput = {
   type: GraphqlEntityType;
 };
 
-/** Shared public/channel share-policy update. */
+/** Shared link/channel share-policy update. */
 export type EntitySharePolicyInput = {
   /** Channel access entries to add, remove, or replace. */
   channelSharePermissions?: Array<ChannelSharePolicyInput> | null | undefined;
-  /** Whether public access should be enabled. */
-  isPublic?: boolean | null | undefined;
-  /** Public access level when public access is enabled. */
-  publicAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
+  /** Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing. */
+  linkShare?: GraphqlLinkShare | null | undefined;
+  /** Link access level. Omit to leave unchanged or pass null to clear it. */
+  linkShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
 };
 
 /** The two operands of a recursive `CalendarEventFilterExpr` binary expression. */
@@ -658,6 +658,13 @@ export type GraphqlGroupByInput = {
   propertyDefinitionId?: string | number | null | undefined;
 };
 
+/** Audience allowed to access an entity through its share link. */
+export type GraphqlLinkShare =
+  /** Anyone with the link can access the entity. */
+  | 'PUBLIC'
+  /** Members of the owner's team with the link can access the entity. */
+  | 'TEAM';
+
 /** GraphQL channel type used by notification metadata. */
 export type GraphqlNotificationChannelType =
   /** Direct-message channel. */
@@ -1064,7 +1071,7 @@ export type SoupInput =
 export type UpdateEntitySharePolicyInput = {
   /** Entity whose share policy should change. */
   entity: EntityRefInput;
-  /** New public/channel policy values. */
+  /** New link/channel policy values. */
   policy: EntitySharePolicyInput;
 };
 

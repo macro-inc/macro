@@ -4,6 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AccessLevel } from './accessLevel';
+import type { LinkShare } from './linkShare';
 
-export type SharePermissionV2PublicAccessLevel = null | AccessLevel;
+export type UpdateSharePermissionRequestV2LinkShare = null | LinkShare;

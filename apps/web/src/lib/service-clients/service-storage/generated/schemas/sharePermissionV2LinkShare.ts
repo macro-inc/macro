@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { LinkShare } from './linkShare';
 
-/**
- * If the item is publicly accessible
- */
-export type UpdateSharePermissionRequestV2IsPublic = boolean | null;
+export type SharePermissionV2LinkShare = null | LinkShare;

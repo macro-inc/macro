@@ -4,6 +4,6 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { AccessLevel } from './accessLevel';
+import type { LinkShare } from './linkShare';
 
-export type SharePermissionV2PublicAccessLevel = null | AccessLevel;
+export type SharePermissionV2LinkShare = null | LinkShare;
