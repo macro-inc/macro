@@ -3,17 +3,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
 import {
   Button,
-  Dialog,
+  DeleteDialog,
   Layer,
   type ManagedDialogProps,
-  Panel,
   useImperativeDialog,
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
@@ -234,95 +232,57 @@ function DeleteEventDialog(
   };
 
   return (
-    <Dialog
+    <DeleteDialog
       open={props.open}
-      onOpenChange={(open) => {
-        if (!open && !deleteEvent.isPending) props.onOpenChange(false);
-      }}
+      onOpenChange={props.onOpenChange}
+      title="Delete event"
+      pending={deleteEvent.isPending}
+      onDelete={confirm}
     >
-      <Panel depth={2} class="max-w-[calc(100vw-2rem)] rounded-xl text-ink">
-        <Panel.Header class="gap-1 px-2">
-          <Dialog.CloseButton
-            as={Button}
-            variant="ghost"
-            size="icon-sm"
-            disabled={deleteEvent.isPending}
-          >
-            <CloseIcon />
-          </Dialog.CloseButton>
-          <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
-            Delete event
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="flex flex-col gap-3 p-3">
-          <Show
-            when={isRecurring()}
-            fallback={
-              <p class="max-w-80 text-sm text-ink-muted">
-                Delete “{props.event.title || 'Untitled event'}”? Guests will be
-                notified.
-              </p>
-            }
-          >
-            <div class="flex max-w-80 flex-col gap-2 text-sm text-ink-muted">
-              <p>
-                Remove “{props.event.title || 'Untitled event'}”? Guests will be
-                notified.
-              </p>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="delete-scope"
-                  checked={scope() === 'this_event'}
-                  onChange={() => setScope('this_event')}
-                />
-                This event
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="delete-scope"
-                  checked={scope() === 'this_and_following'}
-                  onChange={() => setScope('this_and_following')}
-                />
-                This and following events
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="delete-scope"
-                  checked={scope() === 'all'}
-                  onChange={() => setScope('all')}
-                />
-                All events
-              </label>
-            </div>
-          </Show>
-          <div class="flex justify-end gap-1 pt-2">
-            <Button
-              variant="ghost"
-              class="rounded-lg"
-              disabled={deleteEvent.isPending}
-              label="Cancel"
-              onClick={() => props.onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="active"
-              class="rounded-lg"
-              disabled={deleteEvent.isPending}
-              label="Delete"
-              onClick={confirm}
-            >
-              <Show when={deleteEvent.isPending} fallback="Delete">
-                <SpinnerIcon class="size-4 animate-spin" />
-              </Show>
-            </Button>
-          </div>
-        </Panel.Body>
-      </Panel>
-    </Dialog>
+      <Show
+        when={isRecurring()}
+        fallback={
+          <p>
+            Delete “{props.event.title || 'Untitled event'}”? Guests will be
+            notified.
+          </p>
+        }
+      >
+        <div class="flex flex-col gap-2">
+          <p>
+            Remove “{props.event.title || 'Untitled event'}”? Guests will be
+            notified.
+          </p>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="delete-scope"
+              checked={scope() === 'this_event'}
+              onChange={() => setScope('this_event')}
+            />
+            This event
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="delete-scope"
+              checked={scope() === 'this_and_following'}
+              onChange={() => setScope('this_and_following')}
+            />
+            This and following events
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="delete-scope"
+              checked={scope() === 'all'}
+              onChange={() => setScope('all')}
+            />
+            All events
+          </label>
+        </div>
+      </Show>
+    </DeleteDialog>
   );
 }
 
