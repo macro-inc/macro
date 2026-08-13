@@ -135,6 +135,13 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Lexical has the same host-vs-container split. The plain
+        // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
+        // which only reads the `OVERRIDE_` form.
+        env.insert(
+            "OVERRIDE_LEXICAL_SERVICE_URL".into(),
+            "http://lexical-service:8096".into(),
+        );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
         // token fetches (email-service → `/internal/google_access_token`)
