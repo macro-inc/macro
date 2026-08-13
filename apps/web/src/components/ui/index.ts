@@ -45,6 +45,8 @@ export type {
   ConfirmDialogProps,
 } from './components/ConfirmDialog';
 export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
+export type { DeleteDialogProps } from './components/DeleteDialog';
+export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
 export { Dropdown } from './components/Dropdown';
