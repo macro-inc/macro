@@ -55,7 +55,8 @@ export type DialogHandle = {
   readonly closed: Promise<DialogClosedEvent>;
 };
 
-type ManagedDialogComponent = Component<any>;
+type StoredManagedDialogProps = ManagedDialogProps & Record<string, unknown>;
+type ManagedDialogComponent = Component<StoredManagedDialogProps>;
 /** Props callers provide when opening a managed dialog. */
 export type ManagedDialogInput<P extends ManagedDialogProps> = Omit<
   P,
