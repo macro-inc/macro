@@ -271,9 +271,7 @@ pub trait NotificationEventsReceiver: Send + 'static {
 
 /// Port for publishing realtime notification updates.
 pub trait NotificationRealtimePublisher: Send + Sync + 'static {
-    /// Publish notification status updates to the user who owns the notifications.
-    ///
-    /// Every update in a non-empty slice must target the same user.
+    /// Publish notification status updates to the users who own the notifications.
     fn publish_updates(
         &self,
         updates: &[UserNotificationStatusUpdate<'_>],
