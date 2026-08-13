@@ -1,8 +1,8 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMessagePostedMetadata, AgentTriggerTopicEvent,
-    ChannelEventMetadata, ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
+    ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
@@ -140,49 +140,4 @@ fn a_channel_message_forwards_to_its_session() {
     let announce = deliver.announce.expect("a channel prompt offers an origin");
     assert_eq!(announce.channel_id, Uuid::from_u128(1));
     assert_eq!(announce.thread_id, Uuid::from_u128(2));
-}
-
-#[test]
-fn a_session_message_delivers_without_an_origin() {
-    let (session_id, command) = agent_trigger_to_harness_command(
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::AgentSessionMessage(
-            AgentSessionMessagePostedMetadata {
-                bot_id: BotId::TEST_A,
-                agent_session_id: AgentSessionId::TEST_A,
-                sender: ChannelSender::new_from_user(user()),
-                content: "keep going".to_owned(),
-            },
-        )),
-        BotId::TEST_A,
-    )
-    .expect("a session message for our bot should yield a command");
-
-    let HarnessCommand::Deliver(deliver) = command else {
-        panic!("a session message should deliver");
-    };
-    assert_eq!(session_id, AgentSessionId::TEST_A);
-    assert_eq!(deliver.action, AgentAction::prompt("keep going"));
-    assert_eq!(deliver.actor, Some(user()));
-    assert!(
-        deliver.announce.is_none(),
-        "the sender addressed the session itself; there is nowhere else to answer"
-    );
-}
-
-#[test]
-fn a_session_message_for_a_foreign_bot_is_skipped() {
-    let skipped = agent_trigger_to_harness_command(
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::AgentSessionMessage(
-            AgentSessionMessagePostedMetadata {
-                bot_id: BotId::TEST_B,
-                agent_session_id: AgentSessionId::TEST_A,
-                sender: ChannelSender::new_from_user(user()),
-                content: "keep going".to_owned(),
-            },
-        )),
-        BotId::TEST_A,
-    )
-    .unwrap_err();
-
-    assert_eq!(skipped, Skipped::ForeignBot);
 }

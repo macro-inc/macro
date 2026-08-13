@@ -2,7 +2,6 @@
 
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
-use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionsTopic;
@@ -39,24 +38,6 @@ pub enum NewAgentSessionEvent {
     TopLevelMentioned(AgentBotMentionedEvent),
 }
 
-/// A message sent straight into an agent session, not through any channel.
-///
-/// The session-native replacement for the dedicated channel: a caller that
-/// has the session addresses it directly. Nothing produces this yet - the
-/// topic that will carry it does not exist - but the vocabulary is declared
-/// so the decision logic and the harness already have one home for it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentSessionMessagePostedMetadata {
-    /// Whose session this is, so foreign traffic is dropped before any read.
-    pub bot_id: BotId,
-    /// The session the message was sent to.
-    pub agent_session_id: AgentSessionId,
-    /// Who sent it.
-    pub sender: ChannelSender<'static>,
-    /// The message text, verbatim.
-    pub content: String,
-}
-
 /// A message for a session that already exists.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChannelEventMetadata {
@@ -77,9 +58,6 @@ pub struct ChannelEventMetadata {
 pub enum ExistingAgentSessionEvent {
     /// A message arrived on one of the session's channel surfaces.
     Channel(ChannelEventMetadata),
-    /// A message was sent straight to the session. Declared but not yet
-    /// produced - see [`AgentSessionMessagePostedMetadata`].
-    AgentSessionMessage(AgentSessionMessagePostedMetadata),
 }
 
 /// Events publishable to [`MacroAgentSessionsTopic`].

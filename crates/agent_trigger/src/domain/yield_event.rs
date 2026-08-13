@@ -1,8 +1,5 @@
 //! What one incoming message means for one bot.
 
-#[cfg(test)]
-mod test;
-
 use agent_session::domain::model::{AgentSessionId, ChannelSession};
 use bot_id::BotId;
 use channel_sender::ChannelSender;
@@ -10,8 +7,8 @@ use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, AgentSessionMessagePostedMetadata,
-    ChannelEventMetadata, ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
+    NewAgentSessionEvent,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
@@ -89,12 +86,6 @@ pub enum PotentialTriggerEvent<'a> {
         /// The bot being evaluated when no session exists.
         mentioned_bot: Option<BotId>,
     },
-    /// A message sent straight into an agent session.
-    ///
-    /// Nothing produces this yet: it is the session-native replacement for
-    /// the dedicated channel, declared so the decision logic already has one
-    /// home when its topic lands.
-    AgentSessionMessage(&'a AgentSessionMessagePostedMetadata),
 }
 
 /// What to publish for one incoming message.
@@ -112,32 +103,7 @@ pub fn yield_event(
             existing,
             mentioned_bot,
         } => yield_channel_event(posted, existing, *mentioned_bot, has_agent),
-        PotentialTriggerEvent::AgentSessionMessage(message) => {
-            yield_session_event(message, has_agent)
-        }
     }
-}
-
-/// A message sent straight to a session needs no mention and no lookup: the
-/// session is named, so the only questions left are the universal gates.
-fn yield_session_event(
-    message: &AgentSessionMessagePostedMetadata,
-    has_agent: bool,
-) -> AgentSessionEventDecision {
-    if !has_agent {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::BotHasNoAgent {
-            bot_id: message.bot_id,
-        });
-    }
-    if is_own_message(message.bot_id, &message.sender) {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::OwnMessage {
-            bot_id: message.bot_id,
-        });
-    }
-    AgentSessionEventDecision::Event(AgentSessionMacroEvent::existing_event(
-        ExistingAgentSessionEvent::AgentSessionMessage(message.clone()),
-        message.bot_id,
-    ))
 }
 
 fn yield_channel_event(
