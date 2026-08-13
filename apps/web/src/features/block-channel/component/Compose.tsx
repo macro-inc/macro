@@ -240,6 +240,7 @@ export function ChannelCompose() {
               placeholder="To: Macro users or email addresses"
               triedToSubmit={triedToSubmit}
               focusOnMount
+              hideMenuOnEscape
             />
             <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
               <InfoIcon class="shrink-0 size-8 mr-4 fill-edge" />

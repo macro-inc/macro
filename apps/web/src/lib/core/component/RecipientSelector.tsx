@@ -799,6 +799,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         return;
                       }
 
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const inputEl = inputRef();
+                        const currentSearch = inputValue().trim();
+                        if (currentSearch.length > 0) {
+                          setInputValue('');
+                          if (inputEl) inputEl.value = '';
+                          return;
+                        }
+
+                        inputEl?.blur();
+                        return;
+                      }
+
                       if (e.key === 'Tab' && context.isOpen()) {
                         e.preventDefault();
                         e.stopPropagation();

@@ -1,0 +1,97 @@
+import type { JSX } from 'solid-js';
+import { Button } from './Button';
+import { Dialog } from './Dialog';
+import {
+  type DialogHandle,
+  type ManagedDialogProps,
+  type OpenDialogOptions,
+  openDialog,
+  type PropsSource,
+} from './ImperativeDialog';
+import { Surface } from './Surface';
+
+/** Presentation options for the shared confirmation dialog. */
+export type ConfirmDialogDisplayProps = {
+  title: JSX.Element;
+  /** Dialog copy. `children` is used when `body` is omitted. */
+  body?: JSX.Element;
+  children?: JSX.Element;
+  confirmLabel?: JSX.Element;
+  cancelLabel?: JSX.Element;
+  tone?: 'default' | 'danger';
+};
+
+export type ConfirmDialogProps = ManagedDialogProps &
+  ConfirmDialogDisplayProps & {
+    onConfirm: () => void;
+  };
+
+/** Complete dialog used by `confirmDialog`. */
+export function ConfirmDialog(props: ConfirmDialogProps) {
+  return (
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      position="center"
+      class="w-[90%] max-w-120"
+    >
+      <Surface depth={2} class="rounded-xl text-ink">
+        <div class="shrink-0 flex items-center border-b border-edge-muted px-5 py-3">
+          <Dialog.Title class="text-sm font-semibold">
+            {props.title}
+          </Dialog.Title>
+        </div>
+        <div class="flex flex-col gap-4 p-5">
+          <Dialog.Description as="div" class="text-sm leading-5 text-ink-muted">
+            {props.body ?? props.children}
+          </Dialog.Description>
+          <div class="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => props.onOpenChange(false)}
+            >
+              {props.cancelLabel ?? 'Cancel'}
+            </Button>
+            <Button
+              type="button"
+              variant={props.tone === 'danger' ? 'danger' : 'active'}
+              size="sm"
+              onClick={props.onConfirm}
+            >
+              {props.confirmLabel ?? 'Confirm'}
+            </Button>
+          </div>
+        </div>
+      </Surface>
+    </Dialog>
+  );
+}
+
+function resolveProps<P extends object>(source: PropsSource<P>): P {
+  return typeof source === 'function' ? source() : source;
+}
+
+/** Opens the shared confirmation dialog and resolves with the user's choice. */
+export function confirmDialog(
+  props: PropsSource<ConfirmDialogDisplayProps>,
+  options?: OpenDialogOptions
+): Promise<boolean> {
+  let confirmed = false;
+  let handle!: DialogHandle;
+
+  handle = openDialog(
+    ConfirmDialog,
+    () => ({
+      ...resolveProps(props),
+      onConfirm: () => {
+        confirmed = true;
+        handle.close();
+      },
+    }),
+    options
+  );
+
+  return handle.closed.then(() => confirmed);
+}

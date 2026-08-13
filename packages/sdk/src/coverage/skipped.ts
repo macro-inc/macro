@@ -52,6 +52,7 @@ export const authExcluded = [
   'healthHandler',
   'initGithubLink',
   'initGmailLink',
+  'initOutlookLink',
   'inviteToTeam',
   'joinTeam',
   'logout',

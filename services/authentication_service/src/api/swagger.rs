@@ -24,6 +24,7 @@ use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
+use crate::api::link::outlook::InitOutlookLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
@@ -80,6 +81,7 @@ use model::user::{
                 link::github::check_github_link_status_handler,
                 link::gmail::init_gmail_link_handler,
                 link::gmail::check_gmail_link_status_handler,
+                link::outlook::init_outlook_link_handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
@@ -181,6 +183,7 @@ use model::user::{
                         GithubLinkStatusResponse,
                         InitGmailLinkResponse,
                         GmailLinkStatusResponse,
+                        InitOutlookLinkResponse,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,

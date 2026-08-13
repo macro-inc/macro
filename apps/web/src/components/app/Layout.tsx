@@ -65,7 +65,7 @@ import {
   useLocation,
   useNavigate,
 } from '@solidjs/router';
-import { cn } from '@ui';
+import { cn, ImperativeDialogHost } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
@@ -428,6 +428,7 @@ function LayoutInner(props: RouteSectionProps) {
         'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
+      <ImperativeDialogHost />
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>

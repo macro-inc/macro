@@ -7,8 +7,8 @@ use crate::stream::ChatCompletionStream;
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
+use rig_agent::tool::server::{ToolServer, ToolServerHandle};
 use rig_core::message::Message;
-use rig_core::tool::server::{ToolServer, ToolServerHandle};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
@@ -157,10 +157,7 @@ impl AgentLoop {
 
         let handle = ToolServer::new().run();
         for adapter in adapters {
-            handle
-                .add_tool(adapter)
-                .await
-                .expect("failed to register tool");
+            handle.add_dynamic_tool(adapter).await;
         }
 
         // Registers `SearchTools`-discovered tools with the live tool server so
@@ -200,9 +197,7 @@ impl AgentLoop {
                             context.clone(),
                             request_context_rw.clone(),
                         );
-                        if let Err(e) = handle.add_tool(adapter).await {
-                            tracing::warn!(error = ?e, "failed to load searched tool");
-                        }
+                        handle.add_dynamic_tool(adapter).await;
                     }
                 }) as Pin<Box<dyn Future<Output = ()> + Send>>
             })
@@ -259,7 +254,6 @@ impl AgentLoop {
     where
         Context: Clone + Send + Sync + 'static,
         M: rig_core::completion::CompletionModel + 'static,
-        M::StreamingResponse: rig_core::completion::GetTokenUsage + Send + Sync,
     {
         self.session_with(
             toolset,

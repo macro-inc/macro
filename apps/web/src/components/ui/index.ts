@@ -40,6 +40,11 @@ export {
   CommandMenuShell,
   createCommandListController,
 } from './components/CommandMenuPrimitives';
+export type {
+  ConfirmDialogDisplayProps,
+  ConfirmDialogProps,
+} from './components/ConfirmDialog';
+export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
 export { Dropdown } from './components/Dropdown';
@@ -52,6 +57,21 @@ export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanne
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 export { Hotkey } from './components/Hotkey';
 export { HoverCard } from './components/HoverCard';
+export type {
+  DialogClosedEvent,
+  DialogCloseReason,
+  DialogHandle,
+  ImperativeDialogController,
+  ManagedDialogInput,
+  ManagedDialogProps,
+  OpenDialogOptions,
+  PropsSource,
+} from './components/ImperativeDialog';
+export {
+  ImperativeDialogHost,
+  openDialog,
+  useImperativeDialog,
+} from './components/ImperativeDialog';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
