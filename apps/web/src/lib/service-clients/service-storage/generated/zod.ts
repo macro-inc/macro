@@ -3415,9 +3415,6 @@ export const getChannelsResponse = zod
               .describe(
                 'Whether the requesting user is an active participant of the channel.'
               ),
-            kind: zod
-              .enum(['normal', 'agent'])
-              .describe('Channel kind in API responses.'),
             latest_message: zod
               .union([
                 zod.null(),
@@ -9400,10 +9397,7 @@ export const getItemsSoupResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -9438,10 +9432,7 @@ export const getItemsSoupResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -9519,12 +9510,7 @@ export const getItemsSoupResponse = zod
                     )
                     .describe('Attachments on this message.'),
                   channel_id: zod.uuid().describe('Channel id.'),
-                  content: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Message content. `None` on agent-turn placeholder messages.'
-                    ),
+                  content: zod.string().describe('Message content.'),
                   created_at: zod.iso
                     .datetime({})
                     .describe('Creation timestamp.'),
@@ -9610,12 +9596,7 @@ export const getItemsSoupResponse = zod
                                     .describe('An attachment on a message.')
                                 )
                                 .describe('Attachments on this reply.'),
-                              content: zod
-                                .string()
-                                .nullish()
-                                .describe(
-                                  'Reply content. `None` on agent-turn placeholder messages.'
-                                ),
+                              content: zod.string().describe('Reply content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -13044,10 +13025,7 @@ export const postItemsSoupResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -13082,10 +13060,7 @@ export const postItemsSoupResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -13163,12 +13138,7 @@ export const postItemsSoupResponse = zod
                     )
                     .describe('Attachments on this message.'),
                   channel_id: zod.uuid().describe('Channel id.'),
-                  content: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Message content. `None` on agent-turn placeholder messages.'
-                    ),
+                  content: zod.string().describe('Message content.'),
                   created_at: zod.iso
                     .datetime({})
                     .describe('Creation timestamp.'),
@@ -13254,12 +13224,7 @@ export const postItemsSoupResponse = zod
                                     .describe('An attachment on a message.')
                                 )
                                 .describe('Attachments on this reply.'),
-                              content: zod
-                                .string()
-                                .nullish()
-                                .describe(
-                                  'Reply content. `None` on agent-turn placeholder messages.'
-                                ),
+                              content: zod.string().describe('Reply content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -16154,10 +16119,7 @@ export const postItemsSoupAstResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -16192,10 +16154,7 @@ export const postItemsSoupAstResponse = zod
                             .object({
                               content: zod
                                 .string()
-                                .nullish()
-                                .describe(
-                                  'Message content. `None` on agent-turn placeholder messages.'
-                                ),
+                                .describe('Message content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -16273,12 +16232,7 @@ export const postItemsSoupAstResponse = zod
                     )
                     .describe('Attachments on this message.'),
                   channel_id: zod.uuid().describe('Channel id.'),
-                  content: zod
-                    .string()
-                    .nullish()
-                    .describe(
-                      'Message content. `None` on agent-turn placeholder messages.'
-                    ),
+                  content: zod.string().describe('Message content.'),
                   created_at: zod.iso
                     .datetime({})
                     .describe('Creation timestamp.'),
@@ -16364,12 +16318,7 @@ export const postItemsSoupAstResponse = zod
                                     .describe('An attachment on a message.')
                                 )
                                 .describe('Attachments on this reply.'),
-                              content: zod
-                                .string()
-                                .nullish()
-                                .describe(
-                                  'Reply content. `None` on agent-turn placeholder messages.'
-                                ),
+                              content: zod.string().describe('Reply content.'),
                               created_at: zod.iso
                                 .datetime({})
                                 .describe('Creation timestamp.'),
@@ -19562,10 +19511,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                   .object({
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Message content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Message content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),
@@ -19604,10 +19550,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                   .object({
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Message content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Message content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),
@@ -19691,12 +19634,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           )
                           .describe('Attachments on this message.'),
                         channel_id: zod.uuid().describe('Channel id.'),
-                        content: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            'Message content. `None` on agent-turn placeholder messages.'
-                          ),
+                        content: zod.string().describe('Message content.'),
                         created_at: zod.iso
                           .datetime({})
                           .describe('Creation timestamp.'),
@@ -19790,10 +19728,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       .describe('Attachments on this reply.'),
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Reply content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Reply content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),
@@ -22674,10 +22609,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                   .object({
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Message content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Message content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),
@@ -22716,10 +22648,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                   .object({
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Message content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Message content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),
@@ -22803,12 +22732,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           )
                           .describe('Attachments on this message.'),
                         channel_id: zod.uuid().describe('Channel id.'),
-                        content: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            'Message content. `None` on agent-turn placeholder messages.'
-                          ),
+                        content: zod.string().describe('Message content.'),
                         created_at: zod.iso
                           .datetime({})
                           .describe('Creation timestamp.'),
@@ -22902,10 +22826,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       .describe('Attachments on this reply.'),
                                     content: zod
                                       .string()
-                                      .nullish()
-                                      .describe(
-                                        'Reply content. `None` on agent-turn placeholder messages.'
-                                      ),
+                                      .describe('Reply content.'),
                                     created_at: zod.iso
                                       .datetime({})
                                       .describe('Creation timestamp.'),

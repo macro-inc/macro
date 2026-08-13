@@ -190,15 +190,6 @@ async fn create_and_get_round_trips(pool: PgPool) {
     );
     assert_eq!(session.thread_id, None);
     assert!(matches!(session.status, SessionStatus::NoMessages));
-
-    // A session stands alone: no channel is minted for it.
-    let agent_channels = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM comms_channels WHERE kind = 'agent'"#
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count agent channels");
-    assert_eq!(agent_channels, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.id AS \"message_id!\",\n            m.thread_id,\n            m.sender_id AS \"sender_id!\",\n            m.content,\n            m.created_at AS \"created_at!\",\n            m.updated_at AS \"updated_at!\",\n            m.deleted_at::timestamptz AS \"deleted_at?\",\n            COALESCE(\n                ARRAY(\n                    SELECT entity_type || ':' || entity_id\n                    FROM comms_entity_mentions em\n                    WHERE em.source_entity_type = 'message'\n                      AND em.source_entity_id = m.id::text\n                ),\n                '{}'::text[]\n            ) AS \"mentions!\"\n        FROM comms_messages m\n        WHERE m.channel_id = $1\n          AND m.deleted_at IS NULL\n        ORDER BY m.created_at DESC\n        LIMIT $2\n        ",
+  "query": "\n        SELECT\n            m.id AS \"message_id!\",\n            m.thread_id,\n            m.sender_id AS \"sender_id!\",\n            m.content AS \"content!\",\n            m.created_at AS \"created_at!\",\n            m.updated_at AS \"updated_at!\",\n            m.deleted_at::timestamptz AS \"deleted_at?\",\n            COALESCE(\n                ARRAY(\n                    SELECT entity_type || ':' || entity_id\n                    FROM comms_entity_mentions em\n                    WHERE em.source_entity_type = 'message'\n                      AND em.source_entity_id = m.id::text\n                ),\n                '{}'::text[]\n            ) AS \"mentions!\"\n        FROM comms_messages m\n        WHERE m.channel_id = $1\n          AND m.deleted_at IS NULL\n        ORDER BY m.created_at DESC\n        LIMIT $2\n        ",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "content",
+        "name": "content!",
         "type_info": "Text"
       },
       {
@@ -61,5 +61,5 @@
       null
     ]
   },
-  "hash": "78bc7a6beb2f3935f8df07744673a17fb223a8163faddf8d3b12926941cba8ed"
+  "hash": "993f8bd336bc9ba45ab51edac700887af626bf74de28e395ab8a1875bc9fe9ac"
 }

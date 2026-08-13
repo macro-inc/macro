@@ -1,7 +1,7 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use channel_sender::ChannelSender;
@@ -46,7 +46,6 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
-        kind: ChannelKind::DedicatedChannel,
         message: message(ChannelSender::new_from_user(user())),
     }))
 }

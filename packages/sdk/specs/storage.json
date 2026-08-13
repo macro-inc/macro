@@ -11967,11 +11967,6 @@
           }
         }
       },
-      "ApiChannelKind": {
-        "type": "string",
-        "description": "Channel kind in API responses.",
-        "enum": ["normal", "agent"]
-      },
       "ApiChannelListMessage": {
         "type": "object",
         "description": "Channel message in API responses.",
@@ -12215,7 +12210,6 @@
         "required": [
           "id",
           "channel_type",
-          "kind",
           "auto_join_team",
           "created_at",
           "updated_at",
@@ -12255,10 +12249,6 @@
           "is_participant": {
             "type": "boolean",
             "description": "Whether the requesting user is an active participant of the channel."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/ApiChannelKind",
-            "description": "Channel kind: `normal`, or `agent` for an agent session's dedicated\nchannel whose agent messages are folded placeholders."
           },
           "latest_message": {
             "oneOf": [
@@ -13977,14 +13967,15 @@
         "required": [
           "message_id",
           "sender_id",
+          "content",
           "created_at",
           "updated_at",
           "mentions"
         ],
         "properties": {
           "content": {
-            "type": ["string", "null"],
-            "description": "Message content. `None` on agent-turn placeholder messages."
+            "type": "string",
+            "description": "Message content."
           },
           "created_at": {
             "type": "string",
@@ -22463,6 +22454,7 @@
           "channel_id",
           "sender_id",
           "sender",
+          "content",
           "created_at",
           "updated_at",
           "thread",
@@ -22483,8 +22475,8 @@
             "description": "Channel id."
           },
           "content": {
-            "type": ["string", "null"],
-            "description": "Message content. `None` on agent-turn placeholder messages."
+            "type": "string",
+            "description": "Message content."
           },
           "created_at": {
             "type": "string",
@@ -23720,6 +23712,7 @@
           "id",
           "sender_id",
           "sender",
+          "content",
           "created_at",
           "updated_at",
           "reactions",
@@ -23734,8 +23727,8 @@
             "description": "Attachments on this reply."
           },
           "content": {
-            "type": ["string", "null"],
-            "description": "Reply content. `None` on agent-turn placeholder messages."
+            "type": "string",
+            "description": "Reply content."
           },
           "created_at": {
             "type": "string",

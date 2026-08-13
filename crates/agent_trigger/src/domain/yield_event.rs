@@ -7,8 +7,7 @@ use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
-    NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, NewAgentSessionEvent,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
@@ -141,7 +140,6 @@ fn yield_channel_event(
             AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
                 bot_id: session_bot,
                 session_id: session.id,
-                kind: ChannelKind::MentionThread,
                 message: posted.clone(),
             }),
         ),

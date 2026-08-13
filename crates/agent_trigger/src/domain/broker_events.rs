@@ -10,16 +10,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod test;
 
-/// Which of a session's two surfaces a message arrived on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ChannelKind {
-    /// The session's dedicated channel, where every message is for the agent.
-    DedicatedChannel,
-    /// The thread the session was created from, where the bot was pinged.
-    MentionThread,
-}
-
 /// A session opened by a mention in a channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentBotMentionedEvent {
@@ -45,8 +35,6 @@ pub struct ChannelEventMetadata {
     pub bot_id: BotId,
     /// The session to feed.
     pub session_id: AgentSessionId,
-    /// Which surface it arrived on.
-    pub kind: ChannelKind,
     /// The message, verbatim.
     pub message: ChannelMessagePostedMetadata,
 }
@@ -56,7 +44,7 @@ pub struct ChannelEventMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum ExistingAgentSessionEvent {
-    /// A message arrived on one of the session's channel surfaces.
+    /// A mentioned message arrived in the session's originating thread.
     Channel(ChannelEventMetadata),
 }
 

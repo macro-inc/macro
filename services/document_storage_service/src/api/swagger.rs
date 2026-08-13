@@ -485,7 +485,6 @@ use utoipa::OpenApi;
             channels::inbound::list_router::ApiChannelListMessage,
             channels::inbound::list_router::ApiChannelListParticipant,
             channels::inbound::list_router::ApiChannelListType,
-            channels::inbound::list_router::ApiChannelKind,
             channels::inbound::list_router::ApiParticipantListRole,
 
             // Channels

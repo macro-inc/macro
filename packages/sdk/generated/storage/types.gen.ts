@@ -466,11 +466,6 @@ export type ApiChannelDetail = {
 };
 
 /**
- * Channel kind in API responses.
- */
-export type ApiChannelKind = 'normal' | 'agent';
-
-/**
  * Channel message in API responses.
  */
 export type ApiChannelListMessage = {
@@ -684,11 +679,6 @@ export type ApiChannelWithLatest = {
      * Whether the requesting user is an active participant of the channel.
      */
     is_participant: boolean;
-    /**
-     * Channel kind: `normal`, or `agent` for an agent session's dedicated
-     * channel whose agent messages are folded placeholders.
-     */
-    kind: ApiChannelKind;
     latest_message?: null | ApiChannelListMessage;
     latest_non_thread_message?: null | ApiChannelListMessage;
     /**
@@ -1968,9 +1958,9 @@ export type ChannelMentionedMetadata = {
  */
 export type ChannelMessage = {
     /**
-     * Message content. `None` on agent-turn placeholder messages.
+     * Message content.
      */
-    content?: string | null;
+    content: string;
     /**
      * Creation timestamp.
      */
@@ -7015,9 +7005,9 @@ export type SoupChannelThread = {
      */
     channel_id: string;
     /**
-     * Message content. `None` on agent-turn placeholder messages.
+     * Message content.
      */
-    content?: string | null;
+    content: string;
     /**
      * Creation timestamp.
      */
@@ -7834,9 +7824,9 @@ export type SoupThreadReply = {
      */
     attachments: Array<SoupMessageAttachment>;
     /**
-     * Reply content. `None` on agent-turn placeholder messages.
+     * Reply content.
      */
-    content?: string | null;
+    content: string;
     /**
      * Creation timestamp.
      */

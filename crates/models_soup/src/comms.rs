@@ -82,8 +82,8 @@ pub struct ChannelMessage {
     pub thread_id: Option<Uuid>,
     /// Sender id.
     pub sender_id: String,
-    /// Message content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Message content.
+    pub content: String,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -135,8 +135,8 @@ pub struct SoupChannelThread {
     pub sender_id: String,
     /// Structured sender identity.
     pub sender: SoupMessageSender,
-    /// Message content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Message content.
+    pub content: String,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -203,8 +203,8 @@ pub struct SoupThreadReply {
     pub sender_id: String,
     /// Structured sender identity.
     pub sender: SoupMessageSender,
-    /// Reply content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Reply content.
+    pub content: String,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -338,7 +338,7 @@ impl ChannelMessage {
             message_id: message.message_id,
             thread_id: message.thread_id,
             sender_id: message.sender_id,
-            content: Some(message.content),
+            content: message.content,
             created_at: message.created_at,
             updated_at: message.updated_at,
             deleted_at: message.deleted_at,
@@ -352,7 +352,7 @@ impl ChannelMessage {
             message_id: message.id,
             thread_id: None,
             sender_id: message.sender_id,
-            content: Some(message.content),
+            content: message.content,
             created_at: message.created_at,
             updated_at: message.updated_at,
             deleted_at: message.deleted_at,
@@ -369,7 +369,7 @@ impl ChannelMessage {
             message_id: reply.id,
             thread_id: Some(parent_id),
             sender_id: reply.sender_id,
-            content: Some(reply.content),
+            content: reply.content,
             created_at: reply.created_at,
             updated_at: reply.updated_at,
             deleted_at: None,
@@ -385,7 +385,7 @@ impl ChannelMessage {
             message_id: row.id,
             thread_id: None,
             sender_id: row.sender_id,
-            content: Some(row.content),
+            content: row.content,
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
@@ -399,7 +399,7 @@ impl ChannelMessage {
             message_id: row.id,
             thread_id: Some(row.thread_id),
             sender_id: row.sender_id,
-            content: Some(row.content),
+            content: row.content,
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: None,
@@ -544,7 +544,7 @@ impl From<channels::domain::models::ThreadReply> for SoupThreadReply {
             id: reply.id,
             sender: SoupMessageSender::from_message_sender(&reply.sender_id, reply.bot_profile),
             sender_id: reply.sender_id,
-            content: Some(reply.content),
+            content: reply.content,
             created_at: reply.created_at,
             updated_at: reply.updated_at,
             edited_at: reply.edited_at,
@@ -572,7 +572,7 @@ impl SoupChannelThread {
             channel_id: message.channel_id,
             sender: SoupMessageSender::from_message_sender(&message.sender_id, message.bot_profile),
             sender_id: message.sender_id,
-            content: Some(message.content),
+            content: message.content,
             created_at: message.created_at,
             updated_at: message.updated_at,
             edited_at: message.edited_at,

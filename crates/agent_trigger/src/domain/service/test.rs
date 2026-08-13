@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{
-    AgentTriggerTopicEvent, ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 
 fn user() -> MacroUserIdStr<'static> {
@@ -94,7 +94,6 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
     };
     assert_eq!(metadata.bot_id, BotId::TEST_A);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
-    assert_eq!(metadata.kind, ChannelKind::MentionThread);
 }
 
 /// A reply in a session's originating thread that does not mention the bot

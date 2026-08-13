@@ -512,28 +512,6 @@ impl std::fmt::Display for ChannelType {
     }
 }
 
-/// Kind of channel: an ordinary channel, or an agent session's dedicated
-/// channel whose agent messages are placeholders folded from the session log.
-///
-/// Stored in the TEXT `comms_channels.kind` column - `type_name = "TEXT"`
-/// points the fieldless enum derive at the built-in string type instead of a
-/// Postgres enum.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
-#[cfg_attr(
-    feature = "outbound",
-    sqlx(type_name = "TEXT", rename_all = "snake_case")
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ChannelKind {
-    /// An ordinary channel.
-    #[default]
-    Normal,
-    /// An agent session's dedicated channel.
-    Agent,
-}
-
 /// Request to add a user to all organization channels.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -1322,8 +1300,6 @@ pub struct ChannelListItem {
     pub name: Option<String>,
     /// Channel type.
     pub channel_type: ChannelType,
-    /// Channel kind.
-    pub kind: ChannelKind,
     /// Organization id.
     pub org_id: Option<i64>,
     /// Team id.
