@@ -241,7 +241,6 @@ export function ChannelCompose() {
               triedToSubmit={triedToSubmit}
               focusOnMount
               hideMenuOnEscape
-              debugName="channel-compose-recipients"
             />
             <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
               <InfoIcon class="shrink-0 size-8 mr-4 fill-edge" />

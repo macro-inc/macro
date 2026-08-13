@@ -397,14 +397,7 @@ export function ChannelInput(props: ChannelInputProps) {
     hide: true,
     keyDownHandler: () => {
       // Block upstream escape handlers when ESC should close inline menus.
-      const inlineMenuOpen = markdownEditor.controls.isInlineMenuOpen();
-      if (import.meta.env.DEV) {
-        console.debug('[ChannelInput] escape intercept', {
-          inlineMenuOpen,
-          activeElement: document.activeElement,
-        });
-      }
-      return inlineMenuOpen;
+      return markdownEditor.controls.isInlineMenuOpen();
     },
   });
 
