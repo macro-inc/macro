@@ -73,13 +73,21 @@ mod test {
     }
 
     async fn insert_share_permission(pool: &Pool<Postgres>, id: &str) -> anyhow::Result<()> {
-        sqlx::query(
+        sqlx::query!(
             r#"
-            INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-            VALUES ($1, FALSE, NULL, NOW(), NOW())
+            INSERT INTO "SharePermission" (
+                id,
+                "linkShare",
+                "linkShareAccessLevel",
+                "isPublic",
+                "publicAccessLevel",
+                "createdAt",
+                "updatedAt"
+            )
+            VALUES ($1, NULL, NULL, FALSE, NULL, NOW(), NOW())
             "#,
+            id,
         )
-        .bind(id)
         .execute(pool)
         .await?;
 

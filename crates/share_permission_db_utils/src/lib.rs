@@ -164,8 +164,15 @@ pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> a
     let mut transaction = pool.begin().await.context("failed to start transaction")?;
     let share_permission_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-        VALUES (false, NULL, NOW(), NOW())
+        INSERT INTO "SharePermission" (
+            "linkShare",
+            "linkShareAccessLevel",
+            "isPublic",
+            "publicAccessLevel",
+            "createdAt",
+            "updatedAt"
+        )
+        VALUES (NULL, NULL, false, NULL, NOW(), NOW())
         RETURNING id as "id!"
         "#,
     )

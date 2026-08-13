@@ -68,8 +68,8 @@ pub async fn insert_thread_share_permissions(
     // Create a new share permission
     let share_permission = SharePermissionV2 {
         id: macro_uuid::generate_uuid_v7().to_string(),
-        is_public: false,
-        public_access_level: None,
+        link_share: None,
+        link_share_access_level: None,
         owner: owner_id.to_string(),
         channel_share_permissions: None,
     };
