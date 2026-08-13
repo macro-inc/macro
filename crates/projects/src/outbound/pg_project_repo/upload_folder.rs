@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, FileTypeExt};
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
 use model::project::Project;
-use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::{MarkedUploadedTree, UploadFolderRepoArgs};
@@ -264,17 +264,29 @@ async fn create_document_share_permission(
     document_id: &str,
     permission: &SharePermissionV2,
 ) -> Result<(), sqlx::Error> {
+    let link_share = permission.link_share;
+    let link_share_access_level =
+        share::normalize_link_share_access_level(link_share, permission.link_share_access_level);
+    let legacy_is_public = link_share == Some(LinkShare::Public);
+    let link_share = link_share.map(|value| value.to_string());
+    let link_share_access_level = link_share_access_level.map(|level| level.to_string());
+
     let permission_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-        VALUES ($1, $2, NOW(), NOW())
+        INSERT INTO "SharePermission" (
+            "linkShare",
+            "linkShareAccessLevel",
+            "isPublic",
+            "publicAccessLevel",
+            "createdAt",
+            "updatedAt"
+        )
+        VALUES ($1, $2, $3, $2, NOW(), NOW())
         RETURNING id
         "#,
-        permission.is_public,
-        permission
-            .public_access_level
-            .as_ref()
-            .map(ToString::to_string),
+        link_share,
+        link_share_access_level,
+        legacy_is_public,
     )
     .fetch_one(transaction.as_mut())
     .await?;
