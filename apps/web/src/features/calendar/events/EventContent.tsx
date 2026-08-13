@@ -19,10 +19,11 @@ const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
 
 /** Renders responsive event content for FullCalendar. */
 export function CalendarEventContent(props: CalendarEventContentProps) {
+  const isRenderedAllDay = () => props.renderProps.event.allDay;
   const isCompact = () =>
-    props.event.allDay || props.renderProps.view.type === 'dayGridMonth';
+    isRenderedAllDay() || props.renderProps.view.type === 'dayGridMonth';
   const showLocation = () =>
-    !props.event.allDay && props.renderProps.view.type === 'timeGridDay';
+    !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
   const selfResponseStatus = () =>
     props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
   const usesSingleLineLayout = () => {

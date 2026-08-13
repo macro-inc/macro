@@ -68,7 +68,7 @@ export interface CalendarEvent {
   start: string;
   /** Exclusive ISO timestamp or local date string. */
   end: string;
-  /** Whether the event occupies the all-day area. */
+  /** Whether the canonical occurrence is all-day rather than timed. */
   allDay: boolean;
   /** Calendar source that owns the event. */
   calendar: CalendarSource;

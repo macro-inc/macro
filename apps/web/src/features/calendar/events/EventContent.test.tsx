@@ -35,11 +35,14 @@ function calendarEvent(durationMinutes: number): CalendarEvent {
   };
 }
 
-function renderProps(timeText: string): EventContentArg {
+function renderProps(
+  timeText: string,
+  options: { allDay?: boolean; viewType?: string } = {}
+): EventContentArg {
   return {
-    event: { start },
+    event: { allDay: options.allDay ?? false, start },
     timeText,
-    view: { type: 'timeGridWeek' },
+    view: { type: options.viewType ?? 'timeGridWeek' },
   } as EventContentArg;
 }
 
@@ -79,5 +82,34 @@ describe('CalendarEventContent', () => {
         )
       )
     ).toBeTruthy();
+  });
+
+  it('uses compact content when a timed event is rendered in the all-day row', () => {
+    const event = {
+      ...calendarEvent(24 * 60),
+      location: 'Conference room',
+    };
+    const { container } = render(() => (
+      <CalendarEventContent
+        event={event}
+        renderProps={renderProps('', {
+          allDay: true,
+          viewType: 'timeGridDay',
+        })}
+        isSelected={false}
+        timeFormat="12-hour"
+      />
+    ));
+
+    expect(
+      container.querySelector('.calendar-event-content-compact')
+    ).toBeTruthy();
+    expect(
+      container.querySelector('.calendar-event-content-layout-single-line')
+    ).toBeTruthy();
+    expect(
+      screen.getByText(formatCompactCalendarTime(start, '12-hour'))
+    ).toBeTruthy();
+    expect(screen.queryByText('Conference room')).toBeNull();
   });
 });
