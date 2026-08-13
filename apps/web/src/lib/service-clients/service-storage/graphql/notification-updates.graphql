@@ -1,0 +1,5 @@
+subscription NotificationUpdates {
+	notificationUpdates {
+		...SoupNotificationFields
+	}
+}

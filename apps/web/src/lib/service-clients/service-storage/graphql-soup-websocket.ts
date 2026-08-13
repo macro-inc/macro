@@ -1,7 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client } from '@urql/core';
-import { SoupUpdatesDocument } from './graphql/generated/graphql';
+import {
+  NotificationUpdatesDocument,
+  SoupUpdatesDocument,
+} from './graphql/generated/graphql';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -77,41 +80,54 @@ export function createGraphqlSoupWebSocketUrlResolver({
   };
 }
 
-/** Owns the one Soup update subscription for a page context. */
-export function createSoupUpdatesSubscriptionLifecycle(): {
+const LIVE_UPDATE_SUBSCRIPTIONS = [
+  {
+    document: SoupUpdatesDocument,
+    errorMessage: 'GraphQL Soup updates subscription error',
+  },
+  {
+    document: NotificationUpdatesDocument,
+    errorMessage: 'GraphQL notification updates subscription error',
+  },
+] as const;
+
+/** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
+export function createGraphqlSoupSubscriptionsLifecycle(): {
   replace(client?: Pick<Client, 'subscription'>, host?: CacheHost): void;
   dispose(): void;
 } {
-  let unsubscribe: (() => void) | undefined;
+  let unsubscribes: Array<() => void> = [];
+
+  const unsubscribeAll = () => {
+    for (const unsubscribe of unsubscribes) unsubscribe();
+    unsubscribes = [];
+  };
 
   return {
     replace(client, host) {
-      unsubscribe?.();
-      unsubscribe = undefined;
+      unsubscribeAll();
       if (!client || !host || host.disabled) return;
 
       let signaledFailure = false;
-      const subscription = client
-        .subscription(SoupUpdatesDocument, {})
-        .subscribe((result) => {
-          if (result.error) {
-            console.warn(
-              'GraphQL Soup updates subscription error',
-              result.error
-            );
-            if (!signaledFailure) {
-              signaledFailure = true;
-              toast.failure('Live updates disconnected', {
-                subtext: 'Refresh the app to reconnect.',
-              });
-            }
-          }
-        });
-      unsubscribe = () => subscription.unsubscribe();
+      unsubscribes = LIVE_UPDATE_SUBSCRIPTIONS.map(
+        ({ document, errorMessage }) => {
+          const subscription = client
+            .subscription(document, {})
+            .subscribe((result) => {
+              if (result.error) {
+                console.warn(errorMessage, result.error);
+                if (!signaledFailure) {
+                  signaledFailure = true;
+                  toast.failure('Live updates disconnected', {
+                    subtext: 'Refresh the app to reconnect.',
+                  });
+                }
+              }
+            });
+          return () => subscription.unsubscribe();
+        }
+      );
     },
-    dispose() {
-      unsubscribe?.();
-      unsubscribe = undefined;
-    },
+    dispose: unsubscribeAll,
   };
 }
