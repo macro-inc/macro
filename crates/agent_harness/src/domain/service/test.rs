@@ -598,50 +598,10 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
         sent.iter().any(|message| matches!(
             message,
             ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)))
-                if request.method.as_ref() == "session/set_model"
+                if request.method.as_ref() == "session/set_config_option"
         )),
         "the running agent is told, got {sent:?}"
     );
-}
-
-#[tokio::test]
-async fn changing_the_model_of_a_disconnected_session_is_a_no_op() {
-    let (service, repo, containers, _announcer) = harness();
-    let id = disconnected_session(&repo, &containers).await;
-
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::set_model("opus"),
-                actor: None,
-            },
-        )
-        .await
-        .expect("a disconnected session is not a failure to change the model");
-
-    assert_eq!(
-        repo.get(id).await.expect("the session exists").model,
-        "claude",
-        "without a live runtime there is no model change to project"
-    );
-}
-
-#[tokio::test]
-async fn stopping_a_disconnected_session_succeeds_with_nothing_to_do() {
-    let (service, repo, containers, _announcer) = harness();
-    let id = disconnected_session(&repo, &containers).await;
-
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::Stop,
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("stopping something already stopped is what the caller asked for");
 }
 
 #[tokio::test]
@@ -693,6 +653,34 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
+async fn compact_through_control_reaches_opencode_as_a_slash_command() {
+    let (service, _repo, containers, _announcer) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::Compact,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("compaction should reach the running agent");
+
+    assert_eq!(
+        prompts(&container.agent()),
+        [
+            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from(
+                agent_runtime_protocol::domain::action::COMPACT_COMMAND
+            )],
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_prompt_through_control_resumes_a_disconnected_session() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
@@ -721,8 +709,6 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
     let (result, resumed) = tokio::join!(prompted, drive_resume);
     result.expect("a prompt must not be silently dropped when nothing is attached");
 
-    // Unlike a stop or a model change, a prompt is work the agent has not
-    // done - answering "fine" would lose it.
     assert_eq!(containers.resumed(), 1, "the container is brought back");
     assert_eq!(
         prompts(&resumed.agent()),

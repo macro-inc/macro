@@ -9,6 +9,8 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Error as AcpError, JsonRpcMessage, JsonRpcNotification, JsonRpcResponse, RawJsonRpcMessage,
 };
+use agent_runtime_protocol::domain::action::AgentSetModelAction;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 
@@ -168,7 +170,7 @@ impl FakeAgent {
             .iter()
             .filter_map(|frame| match frame {
                 RawJsonRpcMessage::Request(request) => {
-                    Some(parse(&request.method, &request.params))
+                    ClientRequest::parse_message(&request.method, &request.params).ok()
                 }
                 RawJsonRpcMessage::Notification(_) | RawJsonRpcMessage::Response(_) => None,
             })
@@ -215,27 +217,44 @@ impl FakeAgent {
     pub(crate) fn deliver(&self, frame: RawJsonRpcMessage) {
         if let RawJsonRpcMessage::Request(request) = &frame {
             let mut progress = self.lock_progress();
-            match parse::<ClientRequest>(&request.method, &request.params) {
-                ClientRequest::InitializeRequest(_) => {
-                    progress.initializing = Some(request.id.clone());
-                }
-                ClientRequest::NewSessionRequest(_)
-                | ClientRequest::LoadSessionRequest(_)
-                | ClientRequest::ResumeSessionRequest(_) => {
-                    assert_eq!(
-                        progress.stage,
-                        Stage::Initialized,
-                        "harness sent {} before initialize completed",
-                        request.method
-                    );
-                    progress.opening = Some(request.id.clone());
-                }
-                other => assert_eq!(
+            let parsed = ClientRequest::parse_message(&request.method, &request.params);
+            if parsed.is_err()
+                && AgentSetModelAction::from_runtime(&ToRuntimeMessage::Acp(AcpMessage(
+                    frame.clone(),
+                )))
+                .is_some()
+            {
+                assert_eq!(
                     progress.stage,
                     Stage::SessionOpen,
-                    "harness sent {} before its ACP session existed: {other:?}",
+                    "harness sent {} before its ACP session existed",
                     request.method
-                ),
+                );
+            } else {
+                match parsed.unwrap_or_else(|error| {
+                    panic!("{} did not parse as ACP: {error}", request.method)
+                }) {
+                    ClientRequest::InitializeRequest(_) => {
+                        progress.initializing = Some(request.id.clone());
+                    }
+                    ClientRequest::NewSessionRequest(_)
+                    | ClientRequest::LoadSessionRequest(_)
+                    | ClientRequest::ResumeSessionRequest(_) => {
+                        assert_eq!(
+                            progress.stage,
+                            Stage::Initialized,
+                            "harness sent {} before initialize completed",
+                            request.method
+                        );
+                        progress.opening = Some(request.id.clone());
+                    }
+                    other => assert_eq!(
+                        progress.stage,
+                        Stage::SessionOpen,
+                        "harness sent {} before its ACP session existed: {other:?}",
+                        request.method
+                    ),
+                }
             }
         }
         self.received.send_modify(|frames| frames.push(frame));

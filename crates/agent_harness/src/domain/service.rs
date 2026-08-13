@@ -262,16 +262,13 @@ where
             .await
         {
             Ok(()) => {}
-            // Work the agent has not done yet, with nothing to do it: bring
-            // the container back and deliver into the new connection.
-            Err(AgentSessionError::Disconnected(_)) if action.must_reach_agent() => {
+            // Nothing is attached, so bring the container back and retry the
+            // action against the new connection.
+            Err(AgentSessionError::Disconnected(_)) => {
                 let container = self.containers.resume(session_id).await?;
                 self.sessions.attach_session(session_id, container).await?;
                 self.sessions.send_action(session_id, actor, action).await?;
             }
-            // Nothing attached, and nothing to fix: the action is already
-            // satisfied by the disconnection or by its durable half.
-            Err(AgentSessionError::Disconnected(_)) => return Ok(()),
             Err(error) => return Err(error.into()),
         }
 
