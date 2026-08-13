@@ -26,12 +26,20 @@ pub enum NotificationTopicEvent<'a, T: Clone> {
     /// A notification should be delivered to active WebSocket connections.
     #[serde(rename = "notification.websocket_delivery_requested")]
     WebSocketDeliveryRequested(WebSocketNotificationMetadata<T>),
-    /// Notification rows were patched or deleted for a set of users.
-    #[serde(rename = "notification.status_updated")]
-    NotificationStatusUpdated {
-        /// Users who own the notification updates.
+    /// One notification was patched or deleted for a set of users.
+    #[serde(rename = "notification.status_updated_for_users")]
+    NotificationStatusUpdatedForUsers {
+        /// Users who own the notification update.
         users: Vec<MacroUserIdStr<'a>>,
-        /// Notification row patches and deletes shared by the users.
+        /// Notification row patch or deletion shared by the users.
+        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+    },
+    /// Several notifications were patched or deleted for one user.
+    #[serde(rename = "notification.statuses_updated_for_user")]
+    NotificationStatusesUpdatedForUser {
+        /// User who owns the notification updates.
+        user: MacroUserIdStr<'a>,
+        /// Notification row patches and deletions for the user.
         updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
     },
 }
@@ -51,13 +59,27 @@ pub struct NotificationMacroEvent<'a, T: Clone> {
 }
 
 impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> NotificationMacroEvent<'a, T> {
-    /// Creates a notification status update event keyed by its generated event ID.
-    pub fn status_updated(
+    /// Creates an event for one notification status update shared by several users.
+    pub fn status_updated_for_users(
         users: Vec<MacroUserIdStr<'a>>,
-        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
     ) -> Self {
         let event =
-            Event::new(NotificationTopicEvent::NotificationStatusUpdated { users, updates });
+            Event::new(NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update });
+        let key = event.event_id.to_string();
+
+        Self::with_event(key, event)
+    }
+
+    /// Creates an event for several notification status updates belonging to one user.
+    pub fn statuses_updated_for_user(
+        user: MacroUserIdStr<'a>,
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+    ) -> Self {
+        let event = Event::new(NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+            user,
+            updates,
+        });
         let key = event.event_id.to_string();
 
         Self::with_event(key, event)

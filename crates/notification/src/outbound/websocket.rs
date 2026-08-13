@@ -8,7 +8,7 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::{NotificationStatusUpdate, UserNotificationStatusUpdate};
+use crate::domain::models::{NotificationStatusPayload, NotificationStatusUpdate};
 use crate::domain::ports::{NotificationRealtimePublisher, RealtimeSender};
 
 /// WebSocket gateway implementation of the realtime sender port.
@@ -207,20 +207,31 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> RealtimeSender for WebSocke
 }
 
 impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGatewayClient> {
-    async fn publish_updates(
-        &self,
-        updates: &[UserNotificationStatusUpdate<'_>],
-    ) -> Result<(), Report> {
-        let messages = updates
-            .iter()
-            .map(|update| {
-                Ok(UniqueMessage {
+    async fn publish_updates(&self, payload: &NotificationStatusPayload<'_>) -> Result<(), Report> {
+        let messages = match payload {
+            NotificationStatusPayload::NotificationForUsers { users, update } => {
+                let message_content = serde_json::to_value(NotificationStatusUpdate::new(vec![
+                    update.as_ref().clone(),
+                ]))?;
+                users
+                    .iter()
+                    .map(|user| UniqueMessage {
+                        message_type: NotificationStatusUpdate::MESSAGE_TYPE,
+                        message_content: message_content.clone(),
+                        entity: EntityType::User.with_entity_str(user.as_ref()),
+                    })
+                    .collect()
+            }
+            NotificationStatusPayload::UserNotifications { user, updates } => {
+                vec![UniqueMessage {
                     message_type: NotificationStatusUpdate::MESSAGE_TYPE,
-                    message_content: serde_json::to_value(&update.update)?,
-                    entity: EntityType::User.with_entity_str(update.user.as_ref()),
-                })
-            })
-            .collect::<Result<Vec<_>, serde_json::Error>>()?;
+                    message_content: serde_json::to_value(NotificationStatusUpdate::new(
+                        updates.clone(),
+                    ))?,
+                    entity: EntityType::User.with_entity_str(user.as_ref()),
+                }]
+            }
+        };
 
         self.gateway.batch_send_unique_messages(messages).await?;
         Ok(())

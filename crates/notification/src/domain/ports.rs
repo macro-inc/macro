@@ -16,7 +16,7 @@ use uuid::Uuid;
 use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;
-use crate::domain::models::{TaggedContent, UserNotificationStatusUpdate};
+use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
@@ -274,7 +274,7 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
     /// Publish notification status updates to the users who own the notifications.
     fn publish_updates(
         &self,
-        updates: &[UserNotificationStatusUpdate<'_>],
+        payload: &NotificationStatusPayload<'_>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -283,7 +283,7 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
 pub struct NoopNotificationRealtimePublisher;
 
 impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
-    async fn publish_updates(&self, _: &[UserNotificationStatusUpdate<'_>]) -> Result<(), Report> {
+    async fn publish_updates(&self, _: &NotificationStatusPayload<'_>) -> Result<(), Report> {
         Ok(())
     }
 }

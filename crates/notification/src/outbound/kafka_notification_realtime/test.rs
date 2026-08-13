@@ -8,7 +8,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::models::websocket_notification_event::NotificationTopicEvent;
-use crate::domain::models::{NotificationStatusUpdate, PatchDelete};
 
 #[derive(Debug)]
 struct PublishedRecord {
@@ -58,46 +57,17 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user ID")
 }
 
-fn update(
-    user: MacroUserIdStr<'static>,
-    notification_id: uuid::Uuid,
-) -> UserNotificationStatusUpdate<'static> {
-    UserNotificationStatusUpdate {
-        user,
-        update: NotificationStatusUpdate::new(vec![PatchDelete::Delete {
-            id: notification_id,
-        }]),
-    }
+fn publisher(
+    records: Arc<Mutex<Vec<PublishedRecord>>>,
+    fail: bool,
+) -> KafkaNotificationRealtimePublisher<MacroEventBrokerService<RecordingPublisher, TokioSpawner>> {
+    KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
+        RecordingPublisher { records, fail },
+        TokioSpawner,
+    ))
 }
 
-#[tokio::test]
-async fn publishes_one_typed_event_per_call() {
-    let records = Arc::new(Mutex::new(Vec::new()));
-    let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
-        RecordingPublisher {
-            records: Arc::clone(&records),
-            fail: false,
-        },
-        TokioSpawner,
-    ));
-    let first_user = user("macro|first@example.com");
-    let second_user = user("macro|second@example.com");
-    let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
-        .expect("valid notification ID");
-    let updates = [
-        update(first_user.clone(), notification_id),
-        update(second_user.clone(), notification_id),
-    ];
-
-    publisher
-        .publish_updates(&updates)
-        .await
-        .expect("publish succeeds");
-
-    let records = records.lock().expect("records lock");
-    assert_eq!(records.len(), 1);
-
-    let record = &records[0];
+fn assert_envelope(record: &PublishedRecord, event_type: &str) -> serde_json::Value {
     assert_eq!(record.topic, "macro.notifications");
     let payload: serde_json::Value =
         serde_json::from_slice(&record.payload).expect("payload is valid JSON");
@@ -106,63 +76,115 @@ async fn publishes_one_typed_event_per_call() {
         payload["event_id"].as_str().expect("event ID is a string")
     );
     assert_eq!(payload["schema_version"], 1);
-    assert_eq!(payload["event_type"], "notification.status_updated");
+    assert_eq!(payload["event_type"], event_type);
+    payload
+}
+
+#[tokio::test]
+async fn publishes_one_notification_for_many_users_event() {
+    let records = Arc::new(Mutex::new(Vec::new()));
+    let publisher = publisher(Arc::clone(&records), false);
+    let first_user = user("macro|first@example.com");
+    let second_user = user("macro|second@example.com");
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
+        .expect("valid notification ID");
+    let payload = NotificationStatusPayload::NotificationForUsers {
+        users: vec![first_user.clone(), second_user.clone()],
+        update: Box::new(PatchDelete::Delete {
+            id: notification_id,
+        }),
+    };
+
+    publisher
+        .publish_updates(&payload)
+        .await
+        .expect("publish succeeds");
+
+    let records = records.lock().expect("records lock");
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    let payload = assert_envelope(record, "notification.status_updated_for_users");
     assert_eq!(
         payload["metadata"]["users"],
         serde_json::json!([first_user.as_ref(), second_user.as_ref()])
     );
-    assert_eq!(payload["metadata"]["updates"].as_array().unwrap().len(), 1);
 
     let decoded =
         NotificationMacroEvent::<serde_json::Value>::decode(record.key.clone(), &record.payload)
             .expect("event round-trips");
-    let NotificationTopicEvent::NotificationStatusUpdated { users, updates } =
+    let NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } =
         decoded.into_topic_event()
     else {
-        panic!("expected notification status update event");
+        panic!("expected notification status update for users event");
     };
     assert_eq!(users, vec![first_user, second_user]);
-    assert_eq!(updates.len(), 1);
     assert_eq!(
-        serde_json::to_value(updates).unwrap(),
-        payload["metadata"]["updates"]
+        *update,
+        PatchDelete::Delete {
+            id: notification_id
+        }
     );
 }
 
 #[tokio::test]
-async fn empty_updates_do_not_publish_events() {
+async fn publishes_many_notifications_for_one_user_event() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
-        RecordingPublisher {
-            records: Arc::clone(&records),
-            fail: false,
-        },
-        TokioSpawner,
-    ));
+    let publisher = publisher(Arc::clone(&records), false);
+    let recipient = user("macro|recipient@example.com");
+    let first_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
+        .expect("valid notification ID");
+    let second_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e78")
+        .expect("valid notification ID");
+    let payload = NotificationStatusPayload::UserNotifications {
+        user: recipient.clone(),
+        updates: vec![
+            PatchDelete::Delete { id: first_id },
+            PatchDelete::Delete { id: second_id },
+        ],
+    };
 
     publisher
-        .publish_updates(&[])
+        .publish_updates(&payload)
         .await
-        .expect("empty update list succeeds");
+        .expect("publish succeeds");
 
-    assert!(records.lock().expect("records lock").is_empty());
+    let records = records.lock().expect("records lock");
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    let payload = assert_envelope(record, "notification.statuses_updated_for_user");
+    assert_eq!(payload["metadata"]["user"], recipient.as_ref());
+    assert_eq!(payload["metadata"]["updates"].as_array().unwrap().len(), 2);
+
+    let decoded =
+        NotificationMacroEvent::<serde_json::Value>::decode(record.key.clone(), &record.payload)
+            .expect("event round-trips");
+    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } =
+        decoded.into_topic_event()
+    else {
+        panic!("expected notification statuses update for user event");
+    };
+    assert_eq!(user, recipient);
+    assert_eq!(
+        updates,
+        vec![
+            PatchDelete::Delete { id: first_id },
+            PatchDelete::Delete { id: second_id },
+        ]
+    );
 }
 
 #[tokio::test]
 async fn propagates_publish_failures() {
-    let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
-        RecordingPublisher {
-            records: Arc::new(Mutex::new(Vec::new())),
-            fail: true,
-        },
-        TokioSpawner,
-    ));
+    let publisher = publisher(Arc::new(Mutex::new(Vec::new())), true);
+    let payload = NotificationStatusPayload::UserNotifications {
+        user: user("macro|recipient@example.com"),
+        updates: vec![PatchDelete::Delete {
+            id: uuid::Uuid::nil(),
+        }],
+    };
 
     publisher
-        .publish_updates(&[update(
-            user("macro|recipient@example.com"),
-            uuid::Uuid::nil(),
-        )])
+        .publish_updates(&payload)
         .await
         .expect_err("publish failure propagates");
 }

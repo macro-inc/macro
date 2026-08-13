@@ -87,14 +87,23 @@ pub struct NotificationStatusUpdate<'a> {
     pub updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
 }
 
-/// A realtime notification status update scoped to one user.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserNotificationStatusUpdate<'a> {
-    /// The user who should receive the update.
-    pub user: MacroUserIdStr<'a>,
-    /// The status update payload for that user.
-    pub update: NotificationStatusUpdate<'a>,
+/// A realtime notification status update with explicit user/notification cardinality.
+#[derive(Debug, Clone)]
+pub enum NotificationStatusPayload<'a> {
+    /// One notification update applied to many users.
+    NotificationForUsers {
+        /// Users who should receive the update.
+        users: Vec<MacroUserIdStr<'a>>,
+        /// The notification patch or deletion shared by the users.
+        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+    },
+    /// Many notification updates applied to one user.
+    UserNotifications {
+        /// User who should receive the updates.
+        user: MacroUserIdStr<'a>,
+        /// Notification patches and deletions for the user.
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+    },
 }
 
 impl<'a> NotificationStatusUpdate<'a> {

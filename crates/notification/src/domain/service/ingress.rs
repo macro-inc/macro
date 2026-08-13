@@ -19,8 +19,7 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusUpdate, NotificationTypeName, PatchDelete, UserNotificationRow,
-    UserNotificationStatusUpdate,
+    NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -522,11 +521,11 @@ where
                     diff: Cow::Borrowed(notification),
                 })
                 .collect();
-            let update = UserNotificationStatusUpdate {
+            let payload = NotificationStatusPayload::UserNotifications {
                 user: req.user_id.copied(),
-                update: NotificationStatusUpdate::new(updates),
+                updates,
             };
-            if let Err(err) = self.realtime.publish_updates(&[update]).await {
+            if let Err(err) = self.realtime.publish_updates(&payload).await {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }

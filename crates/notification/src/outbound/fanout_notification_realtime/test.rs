@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
-use crate::domain::models::NotificationStatusUpdate;
 
 struct RecordingPublisher {
     calls: Arc<AtomicUsize>,
@@ -12,7 +11,7 @@ struct RecordingPublisher {
 impl NotificationRealtimePublisher for RecordingPublisher {
     async fn publish_updates(
         &self,
-        _updates: &[UserNotificationStatusUpdate<'_>],
+        _payload: &NotificationStatusPayload<'_>,
     ) -> Result<(), Report> {
         self.calls.fetch_add(1, Ordering::SeqCst);
 
@@ -24,13 +23,13 @@ impl NotificationRealtimePublisher for RecordingPublisher {
     }
 }
 
-fn update() -> UserNotificationStatusUpdate<'static> {
-    UserNotificationStatusUpdate {
+fn payload() -> NotificationStatusPayload<'static> {
+    NotificationStatusPayload::UserNotifications {
         user: macro_user_id::user_id::MacroUserIdStr::try_from(
             "macro|recipient@example.com".to_string(),
         )
         .expect("valid user ID"),
-        update: NotificationStatusUpdate::new(Vec::new()),
+        updates: Vec::new(),
     }
 }
 
@@ -50,7 +49,7 @@ async fn publishes_through_both_adapters() {
     );
 
     publisher
-        .publish_updates(&[update()])
+        .publish_updates(&payload())
         .await
         .expect("both publishes succeed");
 
@@ -74,7 +73,7 @@ async fn attempts_both_adapters_when_one_fails() {
     );
 
     publisher
-        .publish_updates(&[update()])
+        .publish_updates(&payload())
         .await
         .expect_err("one failed publish fails the fanout");
 

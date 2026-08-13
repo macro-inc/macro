@@ -5,7 +5,7 @@ mod test;
 
 use rootcause::Report;
 
-use crate::domain::models::UserNotificationStatusUpdate;
+use crate::domain::models::NotificationStatusPayload;
 use crate::domain::ports::NotificationRealtimePublisher;
 
 /// Notification realtime publisher that publishes through two underlying adapters.
@@ -29,14 +29,11 @@ where
     A: NotificationRealtimePublisher,
     B: NotificationRealtimePublisher,
 {
-    #[tracing::instrument(err, skip_all, fields(update_count = updates.len()))]
-    async fn publish_updates(
-        &self,
-        updates: &[UserNotificationStatusUpdate<'_>],
-    ) -> Result<(), Report> {
+    #[tracing::instrument(err, skip_all)]
+    async fn publish_updates(&self, payload: &NotificationStatusPayload<'_>) -> Result<(), Report> {
         let (first, second) = futures::future::join(
-            self.first.publish_updates(updates),
-            self.second.publish_updates(updates),
+            self.first.publish_updates(payload),
+            self.second.publish_updates(payload),
         )
         .await;
 
