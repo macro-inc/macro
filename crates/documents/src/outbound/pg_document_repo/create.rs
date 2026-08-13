@@ -1,7 +1,7 @@
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{FileType, VersionIDWithTimeStamps};
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
+use models_permissions::share_permission::SharePermissionV2;
 
 /// Inserts a record into the document table
 /// Returns the document id
@@ -164,24 +164,20 @@ pub async fn set_share_permission(
     let link_share_access_level = share_permission
         .link_share_access_level
         .map(|value| value.to_string());
-    let is_public = share_permission.link_share == Some(LinkShare::Public);
 
     let share_permission_row = sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
-            "isPublic",
-            "publicAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, $3, $2, NOW(), NOW())
+        VALUES ($1, $2, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level,
-        is_public,
     )
     .fetch_one(transaction.as_mut())
     .await?;

@@ -105,8 +105,6 @@ async fn insert_github_pr_task(
 struct SharePermissionColumns {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
-    is_public: bool,
-    public_access_level: Option<String>,
 }
 
 async fn share_permission_columns(
@@ -118,9 +116,7 @@ async fn share_permission_columns(
         r#"
         SELECT
             sp."linkShare" as "link_share?",
-            sp."linkShareAccessLevel" as "link_share_access_level?",
-            sp."isPublic" as "is_public!",
-            sp."publicAccessLevel" as "public_access_level?"
+            sp."linkShareAccessLevel" as "link_share_access_level?"
         FROM "SharePermission" sp
         JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
         WHERE dp."documentId" = $1
@@ -372,7 +368,7 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_create_document_dual_writes_link_share_fields(pool: Pool<Postgres>) {
+async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let document = repo
         .create_document(create_document_args(TEST_DOCUMENT_OWNER_ID, false, None))
@@ -383,8 +379,6 @@ async fn test_create_document_dual_writes_link_share_fields(pool: Pool<Postgres>
 
     assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level.as_deref(), Some("edit"));
 }
 
 #[sqlx::test(
@@ -564,8 +558,6 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
 
     assert_eq!(result.link_share, None);
     assert_eq!(result.link_share_access_level, None);
-    assert!(!result.is_public);
-    assert_eq!(result.public_access_level, None);
     assert_eq!(
         direct_user_access_sources(&pool).await,
         vec![TEST_DOCUMENT_OWNER_ID.to_string()]
@@ -599,8 +591,6 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
 
     assert_eq!(result.link_share.as_deref(), Some("TEAM"));
     assert_eq!(result.link_share_access_level.as_deref(), Some("comment"));
-    assert!(!result.is_public);
-    assert_eq!(result.public_access_level.as_deref(), Some("comment"));
     assert_eq!(
         direct_user_access_sources(&pool).await,
         vec![TEST_DOCUMENT_OWNER_ID.to_string()]
@@ -634,8 +624,6 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
 
     assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level.as_deref(), Some("edit"));
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: TEST_DOCUMENT_ID.to_string(),
@@ -655,8 +643,6 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
     let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
     assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(result.link_share_access_level, None);
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level, None);
     assert_eq!(
         direct_user_access_sources(&pool).await,
         vec![
@@ -700,8 +686,6 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
 
     assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level.as_deref(), Some("edit"));
     assert_eq!(
         direct_user_access_sources(&pool).await,
         vec![

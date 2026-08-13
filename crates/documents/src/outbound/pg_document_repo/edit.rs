@@ -1,9 +1,9 @@
 //! SQL operations for editing document metadata and share permissions.
 
 use model_entity::EntityType;
+use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Postgres, Transaction};
 
 pub(super) async fn get_document_owner(
@@ -109,7 +109,7 @@ pub(super) async fn update_share_permission(
     Ok(())
 }
 
-/// Update the SharePermission row and its legacy mirrors.
+/// Update the SharePermission row.
 #[allow(
     clippy::disallowed_methods,
     reason = "the optional fields require a dynamic SET clause; identifiers are trusted and values are bound"
@@ -119,29 +119,17 @@ async fn update_share_permission_row(
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> Result<(), sqlx::Error> {
-    enum Parameter {
-        Bool(bool),
-        String(Option<String>),
-    }
-
     let mut set_parts = Vec::new();
     let mut parameters = Vec::new();
 
-    let mut push_parameter = |column: &str, parameter: Parameter| {
+    let mut push_parameter = |column: &str, parameter: Option<String>| {
         let parameter_index = parameters.len() + 2;
         set_parts.push(format!("\"{column}\" = ${parameter_index}"));
         parameters.push(parameter);
     };
 
     if let Some(link_share) = share_permission.link_share {
-        push_parameter(
-            "linkShare",
-            Parameter::String(link_share.map(|value| value.to_string())),
-        );
-        push_parameter(
-            "isPublic",
-            Parameter::Bool(link_share == Some(LinkShare::Public)),
-        );
+        push_parameter("linkShare", link_share.map(|value| value.to_string()));
 
         let access_level = link_share.map(|_| {
             share_permission
@@ -150,18 +138,12 @@ async fn update_share_permission_row(
                 .unwrap_or(AccessLevel::View)
                 .to_string()
         });
-        push_parameter(
-            "linkShareAccessLevel",
-            Parameter::String(access_level.clone()),
-        );
-        push_parameter("publicAccessLevel", Parameter::String(access_level));
+        push_parameter("linkShareAccessLevel", access_level);
     } else if let Some(access_level) = share_permission.link_share_access_level {
-        let access_level = access_level.map(|value| value.to_string());
         push_parameter(
             "linkShareAccessLevel",
-            Parameter::String(access_level.clone()),
+            access_level.map(|value| value.to_string()),
         );
-        push_parameter("publicAccessLevel", Parameter::String(access_level));
     }
 
     if set_parts.is_empty() {
@@ -181,10 +163,7 @@ async fn update_share_permission_row(
     let mut query = sqlx::query(&query).bind(share_permission_id);
 
     for parameter in parameters {
-        query = match parameter {
-            Parameter::Bool(value) => query.bind(value),
-            Parameter::String(value) => query.bind(value),
-        };
+        query = query.bind(parameter);
     }
 
     query.execute(transaction.as_mut()).await?;
