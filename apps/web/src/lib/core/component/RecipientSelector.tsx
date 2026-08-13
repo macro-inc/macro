@@ -277,6 +277,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
   hideMenuOnEscape?: boolean;
+  debugName?: string;
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
@@ -794,8 +795,46 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         if (props.hideMenuOnEscape) {
                           e.stopPropagation();
                         }
+                        if (import.meta.env.DEV && props.debugName) {
+                          console.debug('[RecipientSelector] escape', {
+                            debugName: props.debugName,
+                            action: 'close',
+                            activeElement: document.activeElement,
+                            isOpen: true,
+                          });
+                        }
                         setSuppressOpenUntilInputChange(true);
                         setIsOpen(false);
+                        return;
+                      }
+
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const inputEl = inputRef();
+                        const currentSearch = inputValue().trim();
+                        if (currentSearch.length > 0) {
+                          setInputValue('');
+                          if (inputEl) inputEl.value = '';
+                          if (import.meta.env.DEV && props.debugName) {
+                            console.debug('[RecipientSelector] escape', {
+                              debugName: props.debugName,
+                              action: 'clear-search',
+                              activeElement: document.activeElement,
+                              isOpen: false,
+                            });
+                          }
+                          return;
+                        }
+
+                        if (import.meta.env.DEV && props.debugName) {
+                          console.debug('[RecipientSelector] escape', {
+                            debugName: props.debugName,
+                            action: 'blur',
+                            activeElement: document.activeElement,
+                            isOpen: false,
+                          });
+                        }
+                        inputEl?.blur();
                         return;
                       }
 

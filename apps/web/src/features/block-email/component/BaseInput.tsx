@@ -1815,6 +1815,11 @@ export function BaseInput(props: {
                   form().setSubject(e.currentTarget.value);
                   scheduleDraftSave();
                 }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') return;
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }}
                 placeholder="Subject"
               />
             </div>
@@ -1951,6 +1956,11 @@ export function BaseInput(props: {
               onInput={(e) => {
                 form().setSubject(e.currentTarget.value);
                 scheduleDraftSave();
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                e.preventDefault();
+                e.currentTarget.blur();
               }}
               placeholder="Subject:"
             />
