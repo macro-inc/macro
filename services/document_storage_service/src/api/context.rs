@@ -1,8 +1,3 @@
-use agent_fold::domain::service::FoldedMessageService;
-use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::inbound::axum_router::AgentSessionRouterState;
-use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
-use agent_session::outbound::postgres::PgAgentSessionRepo;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
@@ -463,21 +458,6 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
-/// Type alias for the agent session router state: the domain service backed
-/// by the Postgres repo, which serves the session and log ports, and answers
-/// turn queries by folding the log on read. A live session's frames also go
-/// out over the connection gateway, addressed at the session's viewers -
-/// which the same repo answers.
-pub(crate) type DssAgentSessionState = AgentSessionRouterState<
-    AgentSessionServiceImpl<
-        PgAgentSessionRepo,
-        FoldedMessageService<PgAgentSessionRepo>,
-        ConnectionGatewayAgentSessionRealtime<PgAgentSessionRepo>,
-    >,
-    EntityAccessService,
-    AuthorizationService,
->;
-
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -529,7 +509,6 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
-    pub agent_session_state: DssAgentSessionState,
 }
 
 env_var! {

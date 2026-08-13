@@ -1,6 +1,8 @@
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
-import type { AgentSessionLogResponse } from '@service-storage/generated/schemas/agentSessionLogResponse';
+import type {
+  AgentSessionLogEntryDto,
+  AgentSessionLogResponse,
+} from '@service-agent-harness/generated/schemas';
 import type { Result } from 'neverthrow';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,10 +13,12 @@ const fold = vi.hoisted(() => ({
   pushSessionEntries: vi.fn(),
   sessionMessages: vi.fn(),
 }));
-const storage = vi.hoisted(() => ({ getAgentSessionLog: vi.fn() }));
+const harness = vi.hoisted(() => ({ getLog: vi.fn() }));
 
 vi.mock('@core/agent-fold/client', () => fold);
-vi.mock('@service-storage/client', () => ({ storageServiceClient: storage }));
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: harness,
+}));
 
 import {
   acquireAgentSessionFold,
@@ -43,7 +47,7 @@ beforeEach(() => {
   fold.openSession.mockResolvedValue([message]);
   fold.sessionMessages.mockResolvedValue([message]);
   fold.pushSessionEntries.mockResolvedValue([]);
-  storage.getAgentSessionLog.mockResolvedValue(ok({ bot, entries: [] }));
+  harness.getLog.mockResolvedValue(ok({ bot, entries: [] }));
 });
 
 describe('buffer overlap', () => {
@@ -74,7 +78,7 @@ describe('shared session folds', () => {
     let resolveFetch!: (
       value: Result<AgentSessionLogResponse, unknown>
     ) => void;
-    storage.getAgentSessionLog.mockReturnValue(
+    harness.getLog.mockReturnValue(
       new Promise<Result<AgentSessionLogResponse, unknown>>((resolve) => {
         resolveFetch = resolve;
       })
@@ -125,7 +129,7 @@ describe('shared session folds', () => {
       agentSessionId: 'session-a',
     });
 
-    expect(storage.getAgentSessionLog).toHaveBeenCalledTimes(1);
+    expect(harness.getLog).toHaveBeenCalledTimes(1);
     expect(fold.openSession).toHaveBeenCalledTimes(1);
     expect(first.bot).toEqual(bot);
     first.release();
@@ -137,13 +141,13 @@ describe('shared session folds', () => {
   });
 
   it('releases a failed acquisition without retaining shared state', async () => {
-    storage.getAgentSessionLog.mockResolvedValueOnce(
+    harness.getLog.mockResolvedValueOnce(
       err([{ code: 'HTTP_ERROR', message: 'nope' }])
     );
     await expect(
       acquireAgentSessionFold({ agentSessionId: 'session-a' })
     ).rejects.toThrow();
     await acquireAgentSessionFold({ agentSessionId: 'session-a' });
-    expect(storage.getAgentSessionLog).toHaveBeenCalledTimes(2);
+    expect(harness.getLog).toHaveBeenCalledTimes(2);
   });
 });

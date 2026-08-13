@@ -4,7 +4,7 @@ import {
   subscribeAgentSessionLog,
 } from '@queries/agent-session/session-fold';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
+import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,

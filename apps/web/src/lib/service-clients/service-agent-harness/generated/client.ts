@@ -4,7 +4,72 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ControlRequest } from './schemas';
+import type {
+  AgentSessionLogResponse,
+  AgentSessionResponse,
+  ControlRequest,
+} from './schemas';
+
+/**
+ * @summary Get an agent session by id.
+ */
+export type getAgentSessionResponse200 = {
+  data: AgentSessionResponse;
+  status: 200;
+};
+
+export type getAgentSessionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionResponseSuccess = getAgentSessionResponse200 & {
+  headers: Headers;
+};
+export type getAgentSessionResponseError = (
+  | getAgentSessionResponse401
+  | getAgentSessionResponse403
+  | getAgentSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionResponse =
+  | getAgentSessionResponseSuccess
+  | getAgentSessionResponseError;
+
+export const getGetAgentSessionUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}`;
+};
+
+export const getAgentSession = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionResponse> => {
+  const res = await fetch(getGetAgentSessionUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionResponse;
+};
 
 /**
  * @summary Delete an agent session and its live resources.
@@ -133,4 +198,72 @@ export const controlAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as controlAgentSessionResponse;
+};
+
+/**
+ * Served unfolded, and whole: the fold is a left fold over the frames from
+the beginning, so a reader that skipped any of them would derive different
+turn numbering.
+
+An unknown session is an error: the response has to name the session's
+agent, and a session that never existed has none to name.
+ * @summary The raw protocol log of one agent session.
+ */
+export type getAgentSessionLogResponse200 = {
+  data: AgentSessionLogResponse;
+  status: 200;
+};
+
+export type getAgentSessionLogResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionLogResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionLogResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionLogResponseSuccess =
+  getAgentSessionLogResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionLogResponseError = (
+  | getAgentSessionLogResponse401
+  | getAgentSessionLogResponse403
+  | getAgentSessionLogResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionLogResponse =
+  | getAgentSessionLogResponseSuccess
+  | getAgentSessionLogResponseError;
+
+export const getGetAgentSessionLogUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/log`;
+};
+
+export const getAgentSessionLog = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionLogResponse> => {
+  const res = await fetch(getGetAgentSessionLogUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionLogResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionLogResponse;
 };

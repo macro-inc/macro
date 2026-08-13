@@ -139,9 +139,8 @@ impl<R, Access, Auth> FromRef<AgentSessionControlState<R, Access, Auth>> for Arc
 /// Build the read-only agent session router. Mount it under the path prefix
 /// the composition root chooses, e.g. `/agent-sessions`.
 ///
-/// Separate from [`agent_session_control_router`] because these routes only
-/// read the database and so can be served by any process, while the control
-/// routes have to run where the session's actor lives.
+/// Separate from [`agent_session_control_router`] because reads depend on the
+/// session query service while controls depend on the live-session recipient.
 pub fn agent_session_read_router<T, Access, Auth, S>(
     state: AgentSessionRouterState<T, Access, Auth>,
 ) -> Router<S>

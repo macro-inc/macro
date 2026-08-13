@@ -1,7 +1,7 @@
 /** The Connection Gateway event type for one appended agent-session frame. */
 export const AGENT_SESSION_LOG_EVENT = 'agent_session_log';
 
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
+import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
 /**
  * One persisted log entry, addressed by session for realtime delivery.

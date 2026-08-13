@@ -239,10 +239,8 @@ impl MailEnv {
 /// credentials.
 ///
 /// The bot id and snapshot name are deterministic (the bot is seeded by
-/// migration). The two secrets are seeded EMPTY so the keys exist for the
-/// process-env overlay - `DAYTONA_API_KEY=... just run_local` - because that
-/// overlay only overrides keys already present. With no key the service still
-/// starts; it just fails (with a clear error) when a session is opened.
+/// migration). The two secrets are seeded empty so the process-env overlay can
+/// replace them; the harness refuses to start unless both are supplied.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,

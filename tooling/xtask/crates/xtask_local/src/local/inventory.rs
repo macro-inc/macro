@@ -260,12 +260,10 @@ pub const RUST_SERVICES: &[RustService] = &[
         cargo_bin: "agent_harness_service",
         package: "agent_harness_service",
         host_port: None,
-        path_prefix: None,
+        path_prefix: Some("/agent-harness"),
         is_websocket: false,
-        // Runs by default, but inert without credentials: `LocalEnv` seeds
-        // DAYTONA_API_KEY empty (the service starts and warns), and
-        // `DAYTONA_API_KEY=... just run_local` arms it via the process-env
-        // overlay.
+        // Runs by default. LocalEnv reserves the credential keys so the
+        // process-env overlay can supply them; startup requires both.
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,

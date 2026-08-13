@@ -19,8 +19,9 @@ use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
     GithubToken as GithubTokenSecret, Snapshot,
 };
+use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::inbound::axum_router::AgentSessionControlState;
+use agent_session::inbound::axum_router::{AgentSessionControlState, AgentSessionRouterState};
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
@@ -81,11 +82,14 @@ async fn main() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    if config.daytona_api_key.is_empty() {
-        tracing::warn!(
-            "DAYTONA_API_KEY is empty: the service will run, but opening a session will fail until it is set"
-        );
-    }
+    anyhow::ensure!(
+        !config.daytona_api_key.trim().is_empty(),
+        "DAYTONA_API_KEY is required"
+    );
+    anyhow::ensure!(
+        !config.github_token.trim().is_empty(),
+        "GITHUB_TOKEN is required"
+    );
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -110,7 +114,10 @@ async fn main() -> anyhow::Result<()> {
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
-        ConnectionGatewayAgentSessionRealtime::new(connection_gateway.clone(), session_repo),
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_repo.clone(),
+        ),
     );
 
     // Containers: Daytona sandboxes.
@@ -172,9 +179,9 @@ async fn main() -> anyhow::Result<()> {
         },
     ));
 
-    // The control routes, served from this process because that is where the
-    // sessions they act on live. Spawned rather than awaited: the Kafka loop
-    // below owns the main task, and both run until shutdown.
+    // The complete session API is served from this process because it owns the
+    // live sessions. Spawned rather than awaited: the Kafka loop below owns the
+    // main task, and both run until shutdown.
     let authorization_service = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(
             JwtValidationArgs::new_with_secret_manager(
@@ -196,6 +203,15 @@ async fn main() -> anyhow::Result<()> {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    let read_state = AgentSessionRouterState::new(
+        AgentSessionServiceImpl::new(
+            session_repo.clone(),
+            FoldedMessageService::new(session_repo),
+            NoOpRealtime,
+        ),
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
         entity_access,
@@ -203,7 +219,8 @@ async fn main() -> anyhow::Result<()> {
     );
     let http_port = config.port;
     let http = tokio::spawn(async move {
-        if let Err(error) = api::setup_and_serve(control_state, http_port, shutdown_signal()).await
+        if let Err(error) =
+            api::setup_and_serve(read_state, control_state, http_port, shutdown_signal()).await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
         }

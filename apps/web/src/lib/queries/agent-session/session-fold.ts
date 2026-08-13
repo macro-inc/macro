@@ -5,9 +5,11 @@ import {
   sessionMessages,
 } from '@core/agent-fold/client';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
-import { storageServiceClient } from '@service-storage/client';
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
-import type { SessionBot } from '@service-storage/generated/schemas/sessionBot';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type {
+  AgentSessionLogEntryDto,
+  SessionBot,
+} from '@service-agent-harness/generated/schemas';
 import { type AgentSessionLogEvent, entryOf } from './realtime-protocol';
 
 /** Receives the folded messages changed by appended frames. */
@@ -98,9 +100,7 @@ export async function acquireAgentSessionFold(args: {
 async function open(state: SessionState): Promise<void> {
   let machineOpen = false;
   try {
-    const result = await storageServiceClient.getAgentSessionLog({
-      agent_session_id: state.agentSessionId,
-    });
+    const result = await agentHarnessServiceClient.getLog(state.agentSessionId);
     if (result.isErr()) {
       throw new Error(`failed to fetch agent session ${state.agentSessionId}`);
     }
