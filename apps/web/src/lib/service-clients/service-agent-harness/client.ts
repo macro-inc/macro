@@ -12,21 +12,21 @@ const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 export const agentHarnessServiceClient = {
   get(sessionId: string) {
     return fetchWithToken<AgentSessionResponse>(
-      `${agentHarnessHost}/agent-sessions/${encodeURIComponent(sessionId)}`,
+      `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'GET' }
     );
   },
 
   getLog(sessionId: string) {
     return fetchWithToken<AgentSessionLogResponse>(
-      `${agentHarnessHost}/agent-sessions/${encodeURIComponent(sessionId)}/log`,
+      `${agentHarnessHost}/agent-sessions/${sessionId}/log`,
       { method: 'GET' }
     );
   },
 
   control(sessionId: string, request: ControlRequest) {
     return fetchWithToken<Record<string, never>>(
-      `${agentHarnessHost}/agent-sessions/${encodeURIComponent(sessionId)}/control`,
+      `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,7 +37,7 @@ export const agentHarnessServiceClient = {
 
   delete(sessionId: string) {
     return fetchWithToken<Record<string, never>>(
-      `${agentHarnessHost}/agent-sessions/${encodeURIComponent(sessionId)}`,
+      `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'DELETE' }
     ).then((result) => result.map(() => undefined));
   },
