@@ -71,10 +71,17 @@
       "owner": "alice",
       "name": "Handbook",
       "file": "pdf.pdf",
-      "public": "view",
+      "link_share": "PUBLIC",
+      "link_share_access_level": "view",
       "share": [{ "with": "user:erin", "level": "edit" }]
     },
-    "bob-notes": { "owner": "bob", "name": "Bob Notes", "file": "md.md" }
+    "bob-notes": {
+      "owner": "bob",
+      "name": "Bob Notes",
+      "file": "md.md",
+      "link_share": "TEAM",
+      "link_share_access_level": "view"
+    }
   },
   "tasks": {
     "ship-tags": {
