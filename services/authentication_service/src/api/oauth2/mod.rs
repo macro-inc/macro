@@ -2,6 +2,7 @@ use crate::config::BASE_URL;
 use axum::{Router, extract::State, routing::get};
 use tower_cookies::CookieManagerLayer;
 
+mod account_link;
 mod github;
 mod google;
 mod login;
