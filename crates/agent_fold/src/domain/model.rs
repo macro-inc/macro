@@ -188,6 +188,53 @@ pub enum MessagePart {
     Permission(Permission),
     /// A user-issued control operation on the session.
     Control(Control),
+    /// The agent's working todo list for the turn.
+    Plan(Plan),
+}
+
+/// The agent's todo list, as it last stood.
+///
+/// Each `plan` session update carries the complete list with current
+/// statuses, and the fold replaces the whole part with it - so a turn shows
+/// one plan, always in its latest state, rather than a trail of revisions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    /// The tasks, in the order the agent listed them.
+    pub entries: Vec<PlanEntry>,
+}
+
+/// One task on a [`Plan`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanEntry {
+    /// What this task aims to accomplish.
+    pub content: String,
+    /// The task's relative importance.
+    pub priority: PlanEntryPriority,
+    /// Where the task got to.
+    pub status: PlanEntryStatus,
+}
+
+/// A [`PlanEntry`]'s relative importance, mirroring ACP's
+/// `PlanEntryPriority`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanEntryPriority {
+    /// Critical to the overall goal.
+    High,
+    /// Important but not critical.
+    Medium,
+    /// Nice to have but not essential.
+    Low,
+}
+
+/// Where a [`PlanEntry`] got to, mirroring ACP's `PlanEntryStatus`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanEntryStatus {
+    /// Not started yet.
+    Pending,
+    /// Currently being worked on.
+    InProgress,
+    /// Successfully completed.
+    Completed,
 }
 
 /// A session control operation shown in the conversation timeline.

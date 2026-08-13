@@ -97,7 +97,13 @@ export type FoldedMessagePart =
       outcome: PermissionOutcome | null;
     }
   /**  A user-issued control operation on the session. */
-  | { kind: 'control'; control: Control };
+  | { kind: 'control'; control: Control }
+  /**  The agent's working todo list for the turn, as it last stood. */
+  | {
+      kind: 'plan';
+      /**  The tasks, in the order the agent listed them. */
+      entries: PlanEntry[];
+    };
 
 /**
  *  One choice offered for a permission request, mirroring
@@ -125,6 +131,28 @@ export type PermissionOutcome =
     }
   /**  The request was cancelled without a choice. */
   | { kind: 'cancelled' };
+
+/**  One task on a plan, mirroring [`crate::domain::model::PlanEntry`]. */
+export type PlanEntry = {
+  /**  What this task aims to accomplish. */
+  content: string;
+  /**  The task's relative importance. */
+  priority: PlanPriority;
+  /**  Where the task got to. */
+  status: PlanStatus;
+};
+
+/**
+ *  A plan entry's relative importance, mirroring
+ *  [`crate::domain::model::PlanEntryPriority`].
+ */
+export type PlanPriority = 'high' | 'medium' | 'low';
+
+/**
+ *  Where a plan entry got to, mirroring
+ *  [`crate::domain::model::PlanEntryStatus`].
+ */
+export type PlanStatus = 'pending' | 'in_progress' | 'completed';
 
 /**  Why a turn stopped, mirroring [`crate::domain::model::StopReason`]. */
 export type StopReason =

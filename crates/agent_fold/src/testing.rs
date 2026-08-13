@@ -106,6 +106,13 @@ pub const RESUMED_NO_PROMPT: &str = include_str!("../fixtures/resumed_no_prompt.
 /// connection dropped and reattached.
 pub const LONG_MULTI_RESUME: &str = include_str!("../fixtures/long_multi_resume.jsonl");
 
+/// A real recording: one turn in which the agent builds a three-item todo
+/// list and checks the items off one by one, emitting a `plan` session
+/// update - the complete list, statuses included - on every change (and,
+/// as real harnesses do, re-emitting it unchanged in between). The only
+/// fixture carrying `plan` frames.
+pub const PLAN_TODO: &str = include_str!("../fixtures/plan_todo.jsonl");
+
 /// The session id fixture logs are parsed into by default.
 #[must_use]
 pub fn test_session() -> AgentSessionId {
