@@ -179,6 +179,9 @@ export function EmailCard() {
                 resyncing={resyncingIds().has(primary().id)}
                 onResync={() => handleResyncInbox(primary().id)}
                 onReconnect={() => void startAddInbox()}
+                onEnableCalendar={() =>
+                  void startAddInbox({ scopes: 'calendar' })
+                }
                 onRemove={() =>
                   setRemoveTarget({
                     id: primary().id,
@@ -205,6 +208,9 @@ export function EmailCard() {
                 resyncing={resyncingIds().has(link.id)}
                 onResync={() => handleResyncInbox(link.id)}
                 onReconnect={() => void startAddInbox()}
+                onEnableCalendar={() =>
+                  void startAddInbox({ scopes: 'calendar' })
+                }
                 onRemove={() =>
                   setRemoveTarget({
                     id: link.id,
@@ -384,6 +390,7 @@ function InboxRow(props: {
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
+  onEnableCalendar: () => void;
   onRemove: () => void;
 }) {
   const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
@@ -481,8 +488,9 @@ function InboxRow(props: {
               Reconnect
             </Button>
           </Show>
-          {/* Reconnecting re-runs consent with the calendar scope, so a link
-              that already shows Reconnect doesn't need a second button. */}
+          {/* A link that needs a full reconnect gets calendar access on the
+              pass after it: Reconnect restores the mailbox, then this button
+              appears to add the calendar scope. */}
           <Show
             when={
               calendarUiEnabled() &&
@@ -494,7 +502,7 @@ function InboxRow(props: {
               variant="active"
               size="sm"
               depth={3}
-              onClick={props.onReconnect}
+              onClick={props.onEnableCalendar}
               aria-label={`Enable calendar for ${props.link.email_address}`}
             >
               Enable calendar

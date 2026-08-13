@@ -1,4 +1,4 @@
-//! WebSocket sender that fans each delivery out to two adapters.
+//! Realtime sender that fans each delivery out to two adapters.
 
 #[cfg(test)]
 mod test;
@@ -9,25 +9,25 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::ports::WebSocketSender;
+use crate::domain::ports::RealtimeSender;
 
-/// WebSocket sender that delivers through two underlying senders.
+/// Realtime sender that delivers through two underlying senders.
 ///
 /// Both sends are awaited concurrently. The delivery receipts are combined when both sends
 /// succeed; an error from either sender fails the combined send after both attempts complete.
-pub struct FanoutWebSocketSender<A, B> {
+pub struct FanoutRealtimeSender<A, B> {
     first: A,
     second: B,
 }
 
-impl<A, B> FanoutWebSocketSender<A, B> {
+impl<A, B> FanoutRealtimeSender<A, B> {
     /// Creates a sender that fans each delivery out to `first` and `second`.
     pub fn new(first: A, second: B) -> Self {
         Self { first, second }
     }
 }
 
-impl<A: WebSocketSender, B: WebSocketSender> WebSocketSender for FanoutWebSocketSender<A, B> {
+impl<A: RealtimeSender, B: RealtimeSender> RealtimeSender for FanoutRealtimeSender<A, B> {
     #[tracing::instrument(err, skip_all, fields(recipient_count = recipients.len()))]
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,

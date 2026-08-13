@@ -43,7 +43,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::NotifEvent;
 use notification::domain::{
-    models::queue_message::RealtimeNotif,
+    models::NotificationSubscriptionUpdate,
     ports::{
         NoopWebSocketNotificationSubscriptionService, WebSocketNotificationSubscriptionService,
     },
@@ -103,7 +103,7 @@ pub struct CompleteSubscriptionRoot<R, NS, Auth, St, NR, PR, ER, FR, AR>(
 )
 where
     R: SoupRealtimeSubscriptionService,
-    NS: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
     MacroAuthorizationState<Auth>: FromRef<St>,
@@ -317,7 +317,8 @@ pub fn build_schema_with_services<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR
 where
     S: SoupService + Clone,
     R: SoupRealtimeSubscriptionService + Clone,
-    NS: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>> + Clone,
+    NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>
+        + Clone,
     E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -400,7 +401,7 @@ pub fn build_schema_from_arcs<S, R, NS, E, EAS, Auth, St, W, M, C, N, NR, PR, ER
 where
     S: SoupService,
     R: SoupRealtimeSubscriptionService,
-    NS: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
     E: EmailService + EmailUserService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,

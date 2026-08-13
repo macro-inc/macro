@@ -55,6 +55,12 @@ import type { UserTokensResponse } from './generated/schemas/userTokensResponse'
 
 const authHost = SERVER_HOSTS['auth-service'];
 
+/**
+ * Which permissions a Google consent screen asks for. `calendar` covers an
+ * inbox that is already connected, so the screen lists calendar access alone.
+ */
+export type ConsentScopes = 'gmail' | 'gmail_and_calendar' | 'calendar';
+
 const authApiFetch = <T extends ObjectLike>(
   input: string,
   init?: SafeFetchInit
@@ -555,20 +561,21 @@ export const authServiceClient = {
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
    *
-   * Pass `includeCalendar` only from calendar entry points: it adds the Google
-   * Calendar scope to the consent request, and plain Gmail connects must not
-   * ask for calendar access.
+   * `scopes` selects which permissions the consent screen asks for. Only
+   * calendar entry points may request calendar access, and an inbox that is
+   * already connected should ask for `calendar` alone so the user isn't
+   * re-consenting to mailbox access they have already granted.
    */
   async initGmailLink(
     originalUrl?: string,
-    options?: { includeCalendar?: boolean }
+    options?: { scopes?: ConsentScopes }
   ) {
     const params = new URLSearchParams();
     if (originalUrl) {
       params.set('original_url', encodeURIComponent(originalUrl));
     }
-    if (options?.includeCalendar) {
-      params.set('include_calendar', 'true');
+    if (options?.scopes) {
+      params.set('scopes', options.scopes);
     }
     const query = params.toString();
     const url = query

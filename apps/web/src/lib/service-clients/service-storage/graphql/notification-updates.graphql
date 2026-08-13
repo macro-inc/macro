@@ -1,5 +1,25 @@
 subscription NotificationUpdates {
 	notificationUpdates {
-		...SoupNotificationFields
+		__typename
+		... on GraphqlNotification {
+			id
+			eventType
+			entityType
+			notificationEntityId: entityId
+			sent
+			done
+			seen
+			createdAt
+			viewedAt
+			updatedAt
+			senderId
+			metadata {
+				...SoupNotificationMetadataFields
+			}
+		}
+		... on GraphqlCacheDeletion {
+			graphqlTypeName
+			entityId
+		}
 	}
 }

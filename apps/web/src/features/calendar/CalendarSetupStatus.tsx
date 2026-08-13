@@ -68,6 +68,13 @@ export function CalendarSetupStatus() {
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
 
+  // Only the permission state has a working mailbox already; connecting and
+  // reconnecting both need the mailbox scopes alongside calendar.
+  const startSetup = () =>
+    void startAddInbox({
+      scopes: setupState() === 'permission' ? 'calendar' : 'gmail_and_calendar',
+    });
+
   return (
     <Show when={setupState() !== undefined}>
       <Show
@@ -79,7 +86,7 @@ export function CalendarSetupStatus() {
               variant="active"
               size="sm"
               label={setupMessage().action}
-              onClick={() => void startAddInbox({ includeCalendar: true })}
+              onClick={startSetup}
             >
               {setupMessage().action}
             </Button>
@@ -99,7 +106,7 @@ export function CalendarSetupStatus() {
               variant="active"
               size="sm"
               label={setupMessage().action}
-              onClick={() => void startAddInbox({ includeCalendar: true })}
+              onClick={startSetup}
             >
               {setupMessage().action}
             </Button>

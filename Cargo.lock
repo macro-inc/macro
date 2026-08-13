@@ -10014,6 +10014,7 @@ dependencies = [
  "macro_uuid",
  "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
  "models_pagination",
  "rate_limit",

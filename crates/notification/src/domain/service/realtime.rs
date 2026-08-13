@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{borrow::Cow, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -11,9 +11,12 @@ use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
-    models::websocket_notification_event::WebSocketNotificationMetadata,
+    models::{
+        NotificationDelete, NotificationSubscriptionUpdate, PatchDelete, UserNotificationRow,
+        websocket_notification_event::{NotificationTopicEvent, WebSocketNotificationMetadata},
+    },
     ports::{
-        WebSocketNotificationConsumer, WebSocketNotificationSubscription,
+        NotificationTopicEventConsumer, WebSocketNotificationSubscription,
         WebSocketNotificationSubscriptionService,
     },
 };
@@ -32,21 +35,21 @@ fn receive_retry_strategy() -> impl Iterator<Item = Duration> {
         .take(MAX_RECEIVE_ATTEMPTS - 1)
 }
 
-/// Service for distributing received WebSocket notifications decoded as `T` to user-scoped
-/// subscribers.
+/// Service for distributing received notification rows to user-scoped subscribers.
 pub struct WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer<T>,
-    T: Send + Sync + 'static,
+    C: NotificationTopicEventConsumer<T>,
+    T: Clone + Send + Sync + 'static,
 {
     consumer: C,
-    broadcasts: BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, Arc<T>>,
+    broadcasts:
+        BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, NotificationSubscriptionUpdate<T>>,
 }
 
 impl<C, T> WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer<T>,
-    T: Send + Sync + 'static,
+    C: NotificationTopicEventConsumer<T>,
+    T: Clone + Send + Sync + 'static,
 {
     /// Creates a WebSocket notification consumer service backed by `consumer`.
     pub fn new(consumer: C) -> Self {
@@ -56,7 +59,7 @@ where
         }
     }
 
-    /// Subscribes to WebSocket notifications addressed to `user_id`.
+    /// Subscribes to notification updates owned by `user_id`.
     ///
     /// The returned subscription reports if its buffer fills, ensuring a slow subscriber cannot
     /// delay the shared consumer or other subscribers.
@@ -64,7 +67,7 @@ where
     pub fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<Arc<T>> {
+    ) -> WebSocketNotificationSubscription<NotificationSubscriptionUpdate<T>> {
         let (receiver, broadcast_exit_reason) = self
             .broadcasts
             .subscribe(user_id, SUBSCRIBER_BUFFER_CAPACITY)
@@ -88,53 +91,88 @@ where
         WebSocketNotificationSubscription::from_parts(receiver, exit_reason)
     }
 
-    /// Receives notifications and distributes them to subscribers until reception fails.
+    /// Publishes one update to every active subscriber for `user_id`.
+    fn publish_update(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        update: NotificationSubscriptionUpdate<T>,
+    ) {
+        match self.broadcasts.publish(user_id, update) {
+            Ok(subscriber_count) => tracing::trace!(
+                subscriber_count,
+                user_id = %user_id,
+                "distributed WebSocket notification update"
+            ),
+            Err(_) => tracing::trace!(
+                user_id = %user_id,
+                "dropping WebSocket notification update without subscribers"
+            ),
+        }
+    }
+
+    /// Converts a topic patch or deletion into a subscriber update.
+    fn subscription_update(
+        update: PatchDelete<uuid::Uuid, Cow<'static, UserNotificationRow<T>>>,
+    ) -> NotificationSubscriptionUpdate<T> {
+        match update {
+            PatchDelete::Patch { diff } => {
+                NotificationSubscriptionUpdate::Updated(Arc::new(diff.into_owned()))
+            }
+            PatchDelete::Delete { id } => NotificationSubscriptionUpdate::Deleted(id),
+        }
+    }
+
+    /// Receives topic events and distributes WebSocket notification updates until reception fails.
     ///
-    /// Callers should run this future in a supervised task. Notifications for users without active
+    /// Callers should run this future in a supervised task. Updates for users without active
     /// subscribers are intentionally dropped.
     #[tracing::instrument(skip(self), err)]
     pub async fn run(&self) -> Result<(), Report> {
         loop {
-            let WebSocketNotificationMetadata {
-                recipients,
-                notification,
-            } = Retry::start(receive_retry_strategy(), || self.consumer.recv())
+            let event = Retry::start(receive_retry_strategy(), || self.consumer.recv())
                 .await
                 .context(format!(
-                    "failed to receive WebSocket notification after {MAX_RECEIVE_ATTEMPTS} attempts"
+                    "failed to receive notification topic event after {MAX_RECEIVE_ATTEMPTS} attempts"
                 ))?;
-            let notification = Arc::new(notification);
 
-            for recipient in recipients {
-                match self
-                    .broadcasts
-                    .publish(&recipient, Arc::clone(&notification))
-                {
-                    Ok(subscriber_count) => tracing::trace!(
-                        subscriber_count,
-                        user_id = %recipient,
-                        "distributed WebSocket notification"
-                    ),
-                    Err(_) => tracing::trace!(
-                        user_id = %recipient,
-                        "dropping WebSocket notification without subscribers"
-                    ),
+            match event {
+                NotificationTopicEvent::WebSocketDeliveryRequested(
+                    WebSocketNotificationMetadata { notifications },
+                ) => {
+                    for notification in notifications {
+                        let owner_id = notification.owner_id.clone();
+                        self.publish_update(
+                            &owner_id,
+                            NotificationSubscriptionUpdate::Updated(Arc::new(notification)),
+                        );
+                    }
+                }
+                NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } => {
+                    let NotificationDelete::Delete { id } = *update;
+                    for user_id in users {
+                        self.publish_update(&user_id, NotificationSubscriptionUpdate::Deleted(id));
+                    }
+                }
+                NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } => {
+                    for update in updates {
+                        self.publish_update(&user, Self::subscription_update(update));
+                    }
                 }
             }
         }
     }
 }
 
-impl<C, T> WebSocketNotificationSubscriptionService<T>
+impl<C, T> WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<T>>
     for WebSocketNotificationConsumerService<C, T>
 where
-    C: WebSocketNotificationConsumer<T>,
-    T: Send + Sync + 'static,
+    C: NotificationTopicEventConsumer<T>,
+    T: Clone + Send + Sync + 'static,
 {
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<Arc<T>> {
+    ) -> WebSocketNotificationSubscription<NotificationSubscriptionUpdate<T>> {
         WebSocketNotificationConsumerService::subscribe(self, user_id)
     }
 }

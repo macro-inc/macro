@@ -58,14 +58,12 @@ pub struct NotificationStatusPatch {
 }
 
 /// A patch-or-delete update for an entity identified by `I`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "c")]
 pub enum PatchDelete<I, T> {
     /// The value with id I should be patched with data T.
     Patch {
-        /// The id to patch.
-        id: I,
-        /// The data to patch.
+        /// The data to patch, including its identifier.
         #[serde(flatten)]
         diff: T,
     },
@@ -76,33 +74,64 @@ pub enum PatchDelete<I, T> {
     },
 }
 
+/// A deletion update for an entity identified by `I`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "t", content = "c")]
+pub enum NotificationDelete<I> {
+    /// The value with id `I` should be deleted.
+    Delete {
+        /// The id to delete.
+        id: I,
+    },
+}
+
+/// A user-scoped notification update delivered to realtime subscribers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotificationSubscriptionUpdate<T> {
+    /// A notification was created or updated.
+    Updated(Arc<UserNotificationRow<T>>),
+    /// A notification should be removed from the normalized cache.
+    Deleted(Uuid),
+}
+
 /// Realtime payload emitted when notification seen/done state changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NotificationStatusUpdate {
+pub struct NotificationStatusUpdate<'a> {
     /// Constant event discriminator for frontend consumers.
     #[serde(rename = "type")]
     pub event_type: String,
     /// The changed notification rows.
-    pub updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>,
+    pub updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
 }
 
-/// A realtime notification status update scoped to one user.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserNotificationStatusUpdate<'a> {
-    /// The user who should receive the update.
-    pub user: MacroUserIdStr<'a>,
-    /// The status update payload for that user.
-    pub update: NotificationStatusUpdate,
+/// A realtime notification status update with explicit user/notification cardinality.
+#[derive(Debug, Clone)]
+pub enum NotificationStatusPayload<'a> {
+    /// One notification deletion applied to many users.
+    NotificationForUsers {
+        /// Users who should receive the deletion.
+        users: Vec<MacroUserIdStr<'a>>,
+        /// The notification deletion shared by the users.
+        update: Box<NotificationDelete<Uuid>>,
+    },
+    /// Many notification updates applied to one user.
+    UserNotifications {
+        /// User who should receive the updates.
+        user: MacroUserIdStr<'a>,
+        /// Notification patches and deletions for the user.
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+    },
 }
 
-impl NotificationStatusUpdate {
+impl<'a> NotificationStatusUpdate<'a> {
     /// The connection-gateway message type for notification status changes.
     pub const MESSAGE_TYPE: &'static str = "notification_status_updated";
 
     /// Build a realtime status update payload.
-    pub fn new(updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>) -> Self {
+    pub fn new(
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+    ) -> Self {
         Self {
             event_type: Self::MESSAGE_TYPE.to_string(),
             updates,
@@ -114,7 +143,7 @@ impl NotificationStatusUpdate {
 ///
 /// The metadata field is generic so callers can deserialize it into
 /// whatever type they need without this crate depending on the caller's models.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
     pub owner_id: MacroUserIdStr<'static>,

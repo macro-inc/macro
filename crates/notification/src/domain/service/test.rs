@@ -10,7 +10,9 @@ use crate::domain::models::queue_message::{
     ConnGatewayNotification, EmailContent, EmailCreateBundle, NotificationChannel, QueueMessage,
     RawQueueMessage, RealtimeNotif,
 };
-use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
+use crate::domain::models::request::{
+    NotificationEntityRef, NotificationItemType, NotificationStatus, UpdateNotificationsRequest,
+};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
@@ -18,7 +20,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    SnsEndpointManager, WebSocketSender,
+    RealtimeSender, SnsEndpointManager,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
@@ -39,9 +41,15 @@ use std::time::Duration;
 use uuid::Uuid;
 
 /// A test notification type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestNotification {
     message: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(tag = "tag", content = "content", rename_all = "snake_case")]
+enum TestNotifEvent {
+    TestNotification(TestNotification),
 }
 
 impl Notification for TestNotification {
@@ -103,6 +111,8 @@ struct MockRepository {
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
     basic_notifications: Vec<NotificationIdAndCollapseKey>,
     digest_eligible_notification_ids: Option<HashSet<Uuid>>,
+    entity_notifications:
+        HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
@@ -118,6 +128,7 @@ impl MockRepository {
             stored_collapse_keys: Mutex::new(Vec::new()),
             basic_notifications: Vec::new(),
             digest_eligible_notification_ids: None,
+            entity_notifications: HashMap::new(),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
         }
@@ -136,6 +147,15 @@ impl MockRepository {
         ids: impl IntoIterator<Item = Uuid>,
     ) -> Self {
         self.digest_eligible_notification_ids = Some(ids.into_iter().collect());
+        self
+    }
+
+    fn with_entity_notifications(
+        mut self,
+        entity_ref: NotificationEntityRef,
+        notifications: Vec<UserNotificationRow<serde_json::Value>>,
+    ) -> Self {
+        self.entity_notifications.insert(entity_ref, notifications);
         self
     }
 
@@ -348,17 +368,19 @@ impl NotificationRepository for MockRepository {
     async fn get_entity_notifications_batch(
         &self,
         _user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
-    ) -> Result<
-        std::collections::HashMap<
-            crate::domain::models::request::NotificationEntityRef,
-            Vec<UserNotificationRow<serde_json::Value>>,
-        >,
-        Report,
-    > {
+        entity_refs: Vec<NotificationEntityRef>,
+    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
+    {
         Ok(entity_refs
             .into_iter()
-            .map(|entity_ref| (entity_ref, Vec::new()))
+            .map(|entity_ref| {
+                let notifications = self
+                    .entity_notifications
+                    .get(&entity_ref)
+                    .cloned()
+                    .unwrap_or_default();
+                (entity_ref, notifications)
+            })
             .collect())
     }
 
@@ -579,19 +601,13 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn get_entity_notifications_batch(
         &self,
-        _user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
-    ) -> Result<
-        std::collections::HashMap<
-            crate::domain::models::request::NotificationEntityRef,
-            Vec<UserNotificationRow<serde_json::Value>>,
-        >,
-        Report,
-    > {
-        Ok(entity_refs
-            .into_iter()
-            .map(|entity_ref| (entity_ref, Vec::new()))
-            .collect())
+        user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<NotificationEntityRef>,
+    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
+    {
+        (**self)
+            .get_entity_notifications_batch(user_id, entity_refs)
+            .await
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -1236,10 +1252,10 @@ async fn test_no_apns_collapse_key_when_apns_not_enabled() {
 // Egress Service Tests
 // ============================================================================
 
-/// Mock WebSocket sender that always succeeds.
-struct MockWebSocketSender;
+/// Mock realtime sender that always succeeds.
+struct MockRealtimeSender;
 
-impl WebSocketSender for MockWebSocketSender {
+impl RealtimeSender for MockRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
@@ -1396,7 +1412,7 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
 ) -> NotificationEgressService<
     MockQueue,
     MockRepository,
-    MockWebSocketSender,
+    MockRealtimeSender,
     MockMobileSender,
     MockEmailSender,
     R,
@@ -1406,7 +1422,7 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
     NotificationEgressService {
         queue: MockQueue::new(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter,
@@ -1503,6 +1519,89 @@ async fn test_egress_conn_gateway_not_rate_limited() {
     // Should succeed - ConnGateway messages are not rate limited
     assert_eq!(results.len(), 1);
     assert!(results[0].is_ok());
+}
+
+// ============================================================================
+// Notification Reader Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {
+    let user = test_user_id("alice@example.com");
+    let entity_ref = NotificationEntityRef {
+        entity_type: NotificationItemType::Document,
+        id: "doc-1".to_string(),
+    };
+    let now = Utc::now();
+    let valid_id = Uuid::now_v7();
+    let invalid_id = Uuid::now_v7();
+    let mut valid = updated_notification(user.clone(), valid_id, false, None, now);
+    valid.notification_metadata = json!({ "message": "hello" });
+    let mut invalid = updated_notification(user.clone(), invalid_id, false, None, now);
+    invalid.notification_metadata = json!({ "unexpected": true });
+
+    let service = NotificationReaderService {
+        repository: Arc::new(
+            MockRepository::new()
+                .with_entity_notifications(entity_ref.clone(), vec![invalid, valid]),
+        ),
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+
+    let notifications = service
+        .get_entity_notifications_batch::<TestNotifEvent>(user, vec![entity_ref.clone()])
+        .await
+        .expect("invalid metadata does not fail the batch");
+
+    assert_eq!(notifications[&entity_ref].len(), 1);
+    let notification = &notifications[&entity_ref][0];
+    assert_eq!(notification.notification_id, valid_id);
+    assert_eq!(
+        notification.notification_metadata,
+        TestNotifEvent::TestNotification(TestNotification {
+            message: "hello".to_string(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_get_entity_notifications_batch_deserializes_tagged_metadata() {
+    let user = test_user_id("alice@example.com");
+    let entity_ref = NotificationEntityRef {
+        entity_type: NotificationItemType::Document,
+        id: "doc-1".to_string(),
+    };
+    let notification_id = Uuid::now_v7();
+    let now = Utc::now();
+    let mut notification = updated_notification(user.clone(), notification_id, false, None, now);
+    notification.notification_metadata = json!({ "message": "hello" });
+
+    let service = NotificationReaderService {
+        repository: Arc::new(
+            MockRepository::new().with_entity_notifications(entity_ref.clone(), vec![notification]),
+        ),
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+
+    let notifications = service
+        .get_entity_notifications_batch::<TestNotifEvent>(user, vec![entity_ref.clone()])
+        .await
+        .expect("tagged notification metadata deserializes");
+
+    let notification = &notifications[&entity_ref][0];
+    assert_eq!(notification.notification_id, notification_id);
+    assert_eq!(
+        notification.notification_metadata,
+        TestNotifEvent::TestNotification(TestNotification {
+            message: "hello".to_string(),
+        })
+    );
 }
 
 // ============================================================================
@@ -1886,7 +1985,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let service = NotificationEgressService {
         queue: MockQueue::new(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: mobile_sender.clone(),
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2022,7 +2121,7 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2077,7 +2176,7 @@ async fn test_poll_email_digests_skips_when_all_notifications_ineligible() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_digest_eligible_notification_ids([]),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2145,7 +2244,7 @@ async fn test_poll_email_digests_filters_ineligible_notifications_before_renderi
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_digest_eligible_notification_ids([eligible_id]),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2215,10 +2314,10 @@ impl NotificationQueue for EgressTestQueue {
     }
 }
 
-/// WebSocket sender that hangs indefinitely (simulates a stuck connection).
-struct HangingWebSocketSender;
+/// Realtime sender that hangs indefinitely (simulates a stuck connection).
+struct HangingRealtimeSender;
 
-impl WebSocketSender for HangingWebSocketSender {
+impl RealtimeSender for HangingRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
@@ -2272,7 +2371,7 @@ async fn test_poll_and_deliver_deletes_rate_limited_message() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: exceeding_rate_limiter(),
@@ -2317,7 +2416,7 @@ async fn test_poll_and_deliver_times_out_slow_delivery() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: HangingWebSocketSender,
+        realtime: HangingRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2385,7 +2484,7 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: FailingMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2603,7 +2702,7 @@ async fn test_poll_email_digests_skips_publish_when_user_disabled_type() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_type_disabled_user(user),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2665,7 +2764,7 @@ async fn test_poll_email_digests_publishes_when_user_has_not_disabled_type() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_type_disabled_user(other_user),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),

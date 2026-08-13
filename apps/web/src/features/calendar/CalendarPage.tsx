@@ -56,6 +56,10 @@ import {
   canEditCalendarEventTime,
 } from './events/event-interaction';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
+import {
+  isMultiDaySelectionPreview,
+  multiDaySelectionRenderingPlugin,
+} from './events/multi-day-selection-rendering';
 import type { CalendarTimeFormat } from './events/types';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
@@ -439,7 +443,12 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
 
   return (
     <FullCalendar.Root
-      plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+      plugins={[
+        dayGridPlugin,
+        interactionPlugin,
+        timeGridPlugin,
+        multiDaySelectionRenderingPlugin,
+      ]}
       initialView={calendarView.displaySettings.periodView}
       initialDate={props.initialDate}
       height="100%"
@@ -488,7 +497,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
             calendarEvent.calendar.color
           );
         }
-        if (isMirror) return;
+        if (isMirror || isMultiDaySelectionPreview(event)) return;
 
         eventElements.set(eventId, el);
         // A re-render (query settling, live refresh) replaces chip elements.
@@ -501,7 +510,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
         notifyChipMount();
       }}
       eventWillUnmount={({ el, event, isMirror }) => {
-        if (isMirror) return;
+        if (isMirror || isMultiDaySelectionPreview(event)) return;
 
         const eventId = calendarEventRenderId(event);
         if (eventElements.get(eventId) === el) {
@@ -567,9 +576,10 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
           );
           if (
             !event &&
-            renderProps.isMirror &&
-            !renderProps.isDragging &&
-            !renderProps.isResizing
+            (isMultiDaySelectionPreview(renderProps.event) ||
+              (renderProps.isMirror &&
+                !renderProps.isDragging &&
+                !renderProps.isResizing))
           ) {
             return (
               <div class="calendar-event-selection-preview flex h-full min-w-0 flex-col overflow-hidden px-1 py-0.5 text-xs leading-tight">

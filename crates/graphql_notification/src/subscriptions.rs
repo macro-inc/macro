@@ -1,36 +1,59 @@
 #[cfg(test)]
 mod test;
 
-use std::sync::Arc;
-
-use async_graphql::{Context, Subscription};
-use graphql_common::require_authenticated_user;
+use async_graphql::{Context, ID, OutputType, Subscription, Union};
+use graphql_common::{GraphqlCacheDeletion, require_authenticated_user};
 use model_notifications::NotifEvent;
 use notification::domain::{
-    models::queue_message::RealtimeNotif,
+    models::NotificationSubscriptionUpdate,
     ports::{WebSocketNotificationSubscriptionExit, WebSocketNotificationSubscriptionService},
 };
 use tokio_stream::Stream;
 
 use crate::GraphqlNotification;
 
+/// Realtime notification patch represented as either an update or cache deletion.
+#[allow(clippy::large_enum_variant)] // Notification updates already carry shared rows without allocation.
+#[derive(Union)]
+pub enum GraphqlNotificationPatch {
+    /// A notification that was created or updated.
+    Updated(GraphqlNotification),
+    /// A normalized notification record that must be deleted.
+    Deleted(GraphqlCacheDeletion),
+}
+
+impl From<NotificationSubscriptionUpdate<NotifEvent>> for GraphqlNotificationPatch {
+    fn from(value: NotificationSubscriptionUpdate<NotifEvent>) -> Self {
+        match value {
+            NotificationSubscriptionUpdate::Updated(notification) => {
+                Self::Updated(GraphqlNotification::from(notification))
+            }
+            NotificationSubscriptionUpdate::Deleted(notification_id) => {
+                Self::Deleted(GraphqlCacheDeletion::new(
+                    <GraphqlNotification as OutputType>::type_name(),
+                    ID(notification_id.to_string()),
+                ))
+            }
+        }
+    }
+}
+
 /// Subscribe to realtime notifications addressed to the authenticated user.
 pub fn subscribe_to_notifications<S>(
     service: &S,
     ctx: &Context<'_>,
 ) -> async_graphql::Result<
-    impl Stream<Item = async_graphql::Result<GraphqlNotification>> + Send + 'static,
+    impl Stream<Item = async_graphql::Result<GraphqlNotificationPatch>> + Send + 'static,
 >
 where
-    S: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    S: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
 {
     let user_id = require_authenticated_user(ctx)?;
     let mut subscription = service.subscribe(user_id.clone());
 
     Ok(async_stream::stream! {
-        while let Some(notification) = subscription.recv().await {
-            let notification = Arc::unwrap_or_clone(notification);
-            yield Ok(GraphqlNotification::from_realtime(user_id.clone(), notification));
+        while let Some(update) = subscription.recv().await {
+            yield Ok(GraphqlNotificationPatch::from(update));
         }
 
         match subscription.exit_reason().await {
@@ -65,14 +88,14 @@ impl<S> NotificationSubscriptionRoot<S> {
 #[Subscription]
 impl<S> NotificationSubscriptionRoot<S>
 where
-    S: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    S: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
 {
     /// Subscribe to realtime notifications for the authenticated user.
     async fn notification_updates(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<GraphqlNotification>> + 'static,
+        impl Stream<Item = async_graphql::Result<GraphqlNotificationPatch>> + 'static,
     > {
         subscribe_to_notifications(&self.service, ctx)
     }
