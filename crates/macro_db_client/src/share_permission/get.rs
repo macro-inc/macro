@@ -1,9 +1,42 @@
 use anyhow::Context;
 use model::thread::EmailThreadPermission;
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use std::str::FromStr;
+
+fn parse_share_permission(
+    id: String,
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+    owner: String,
+    channel_share_permissions: Option<serde_json::Value>,
+) -> anyhow::Result<SharePermissionV2> {
+    let link_share = link_share
+        .map(|value| {
+            LinkShare::from_str(&value)
+                .with_context(|| format!("invalid link share value {value:?}"))
+        })
+        .transpose()?;
+    let link_share_access_level = link_share_access_level
+        .map(|value| {
+            AccessLevel::from_str(&value)
+                .with_context(|| format!("invalid link share access level {value:?}"))
+        })
+        .transpose()?;
+    let channel_share_permissions = channel_share_permissions
+        .map(serde_json::from_value::<Vec<ChannelSharePermission>>)
+        .transpose()?
+        .filter(|permissions| !permissions.is_empty());
+
+    Ok(SharePermissionV2 {
+        id,
+        link_share,
+        link_share_access_level,
+        owner,
+        channel_share_permissions,
+    })
+}
 
 #[tracing::instrument(skip(db))]
 pub async fn get_share_permission_id(
@@ -113,8 +146,8 @@ pub async fn get_document_share_permission(
         r#"
             SELECT
                 sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?",
+                sp."linkShare" as "link_share?",
+                sp."linkShareAccessLevel" as "link_share_access_level?",
                 d."owner" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -138,29 +171,13 @@ pub async fn get_document_share_permission(
     .fetch_one(db)
     .await?;
 
-    let channel_share_permissions: Option<Vec<ChannelSharePermission>> =
-        if let Some(channel_share_permissions) = result.channel_share_permissions {
-            let channel_share_permissions: Vec<ChannelSharePermission> =
-                serde_json::from_value(channel_share_permissions)?;
-            match channel_share_permissions.is_empty() {
-                true => None,
-                false => Some(channel_share_permissions),
-            }
-        } else {
-            None
-        };
-
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
-    Ok(SharePermissionV2 {
-        id: result.id,
-        is_public: result.is_public,
-        public_access_level,
-        owner: result.owner,
-        channel_share_permissions,
-    })
+    parse_share_permission(
+        result.id,
+        result.link_share,
+        result.link_share_access_level,
+        result.owner,
+        result.channel_share_permissions,
+    )
 }
 
 #[tracing::instrument(skip(db))]
@@ -172,8 +189,8 @@ pub async fn get_chat_share_permission(
         r#"
             SELECT
                 sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?",
+                sp."linkShare" as "link_share?",
+                sp."linkShareAccessLevel" as "link_share_access_level?",
                 c."userId" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -197,29 +214,13 @@ pub async fn get_chat_share_permission(
     .fetch_one(db)
     .await?;
 
-    let channel_share_permissions: Option<Vec<ChannelSharePermission>> =
-        if let Some(channel_share_permissions) = result.channel_share_permissions {
-            let channel_share_permissions: Vec<ChannelSharePermission> =
-                serde_json::from_value(channel_share_permissions)?;
-            match channel_share_permissions.is_empty() {
-                true => None,
-                false => Some(channel_share_permissions),
-            }
-        } else {
-            None
-        };
-
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
-    Ok(SharePermissionV2 {
-        id: result.id,
-        is_public: result.is_public,
-        public_access_level,
-        owner: result.owner,
-        channel_share_permissions,
-    })
+    parse_share_permission(
+        result.id,
+        result.link_share,
+        result.link_share_access_level,
+        result.owner,
+        result.channel_share_permissions,
+    )
 }
 
 #[tracing::instrument(skip(db))]
@@ -231,8 +232,8 @@ pub async fn get_macro_share_permission(
         r#"
         SELECT
                 sp.id as id,
-                sp."isPublic" as is_public,
-                sp."publicAccessLevel" as "public_access_level?",
+                sp."linkShare" as "link_share?",
+                sp."linkShareAccessLevel" as "link_share_access_level?",
                 m."user_id" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -256,29 +257,13 @@ pub async fn get_macro_share_permission(
     .fetch_one(db)
     .await?;
 
-    let channel_share_permissions: Option<Vec<ChannelSharePermission>> =
-        if let Some(channel_share_permissions) = result.channel_share_permissions {
-            let channel_share_permissions: Vec<ChannelSharePermission> =
-                serde_json::from_value(channel_share_permissions)?;
-            match channel_share_permissions.is_empty() {
-                true => None,
-                false => Some(channel_share_permissions),
-            }
-        } else {
-            None
-        };
-
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
-    Ok(SharePermissionV2 {
-        id: result.id,
-        is_public: result.is_public,
-        public_access_level,
-        owner: result.owner,
-        channel_share_permissions,
-    })
+    parse_share_permission(
+        result.id,
+        result.link_share,
+        result.link_share_access_level,
+        result.owner,
+        result.channel_share_permissions,
+    )
 }
 
 #[tracing::instrument(skip(db))]
@@ -405,73 +390,4 @@ pub async fn get_items_by_share_permission_ids(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("channel_share_permissions")))]
-    async fn test_get_document_share_permission(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let permission = get_document_share_permission(&pool, "d1").await?;
-        assert_eq!(permission.id, "sp-d1".to_string());
-        assert!(permission.is_public);
-        assert_eq!(permission.public_access_level, Some(AccessLevel::Edit));
-        assert_eq!(permission.owner, "macro|user@user.com".to_string());
-        assert_eq!(
-            permission.channel_share_permissions,
-            Some(vec![
-                ChannelSharePermission {
-                    channel_id: "c1".to_string(),
-                    access_level: AccessLevel::View,
-                },
-                ChannelSharePermission {
-                    channel_id: "c2".to_string(),
-                    access_level: AccessLevel::Edit,
-                }
-            ])
-        );
-
-        let permission = get_document_share_permission(&pool, "d2").await?;
-        assert_eq!(permission.id, "sp-d2".to_string());
-        assert!(!permission.is_public);
-        assert!(permission.public_access_level.is_none());
-        assert_eq!(permission.owner, "macro|user2@user.com".to_string());
-        assert!(permission.channel_share_permissions.is_none());
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("channel_share_permissions")))]
-    async fn test_get_chat_share_permission(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let permission = get_chat_share_permission(&pool, "c1").await?;
-        assert_eq!(permission.id, "sp-c1".to_string());
-        assert!(permission.is_public);
-        assert_eq!(permission.public_access_level, Some(AccessLevel::Edit));
-        assert_eq!(permission.owner, "macro|user@user.com".to_string());
-        assert_eq!(
-            permission.channel_share_permissions,
-            Some(vec![
-                ChannelSharePermission {
-                    channel_id: "c1".to_string(),
-                    access_level: AccessLevel::View,
-                },
-                ChannelSharePermission {
-                    channel_id: "c2".to_string(),
-                    access_level: AccessLevel::Edit,
-                }
-            ])
-        );
-
-        let permission = get_chat_share_permission(&pool, "c2").await?;
-        assert_eq!(permission.id, "sp-c2".to_string());
-        assert!(!permission.is_public);
-        assert!(permission.public_access_level.is_none());
-        assert_eq!(permission.owner, "macro|user2@user.com".to_string());
-        assert!(permission.channel_share_permissions.is_none());
-
-        Ok(())
-    }
-}
+mod test;
