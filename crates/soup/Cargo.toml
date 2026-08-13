@@ -54,6 +54,7 @@ channels = { path = "../channels", default-features = false, features = [
   "list",
 ] }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }

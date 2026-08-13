@@ -291,6 +291,27 @@ pub enum ApiGroupByField {
         #[serde(skip_serializing_if = "Option::is_none")]
         entity_type: Option<ApiPropertyEntityType>,
     },
+    /// Forward-looking due-date buckets: Today, Upcoming, Later, Backlog.
+    ///
+    /// Reads a `Date`-typed property (typically the system due date). Unlike
+    /// `date`, which buckets activity recency backwards, these look forward
+    /// from the viewer's current day.
+    #[serde(rename = "due_date_bucket")]
+    DueDateBucket {
+        /// The `Date`-typed property definition UUID to bucket on
+        property_definition_id: Uuid,
+        /// Optional entity type filter for the property lookup
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entity_type: Option<ApiPropertyEntityType>,
+        /// IANA timezone the day boundaries are computed in (e.g.
+        /// `America/New_York`). Unset or unrecognized falls back to UTC, which
+        /// mis-buckets tasks due late in the viewer's evening.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        time_zone: Option<String>,
+        /// Days after today counted as Upcoming. Defaults to 7.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        horizon_days: Option<u16>,
+    },
 }
 
 impl From<ApiGroupByField> for GroupByField {
@@ -305,6 +326,17 @@ impl From<ApiGroupByField> for GroupByField {
             } => GroupByField::Property {
                 property_definition_id,
                 entity_type: entity_type.map(|et| PropertyEntityType::from(et).to_string()),
+            },
+            ApiGroupByField::DueDateBucket {
+                property_definition_id,
+                entity_type,
+                time_zone,
+                horizon_days,
+            } => GroupByField::DueDateBucket {
+                property_definition_id,
+                entity_type: entity_type.map(|et| PropertyEntityType::from(et).to_string()),
+                time_zone,
+                horizon_days,
             },
         }
     }

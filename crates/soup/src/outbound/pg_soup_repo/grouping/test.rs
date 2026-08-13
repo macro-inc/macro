@@ -774,3 +774,200 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
 
     Ok(())
 }
+
+const DUE_DATE_PROPERTY_ID: uuid::Uuid = uuid::uuid!("00000001-0000-0000-0000-000000000004");
+
+/// A fixed moment so the generated boundaries are assertable.
+fn fixed_now() -> chrono::DateTime<chrono::Utc> {
+    use chrono::TimeZone;
+    chrono::Utc.with_ymd_and_hms(2026, 8, 12, 15, 0, 0).unwrap()
+}
+
+fn due_date_field(time_zone: Option<&str>) -> GroupByField {
+    GroupByField::DueDateBucket {
+        property_definition_id: DUE_DATE_PROPERTY_ID,
+        entity_type: None,
+        time_zone: time_zone.map(str::to_string),
+        horizon_days: None,
+    }
+}
+
+#[test]
+fn due_date_select_bakes_in_the_viewer_day_boundaries() {
+    let expr = group_select_expr_at(&due_date_field(Some("UTC")), fixed_now());
+
+    assert!(expr.contains("'backlog'"));
+    assert!(expr.contains("'today'"));
+    assert!(expr.contains("'upcoming'"));
+    assert!(expr.contains("'later'"));
+    // End of today and end of the default 7-day horizon, as literals.
+    assert!(expr.contains("'2026-08-13T00:00:00'"), "{expr}");
+    assert!(expr.contains("'2026-08-20T00:00:00'"), "{expr}");
+}
+
+#[test]
+fn due_date_boundaries_shift_with_the_requested_timezone() {
+    let ny = group_select_expr_at(&due_date_field(Some("America/New_York")), fixed_now());
+
+    // 2026-08-12T15:00Z is 11:00 EDT, so the viewer's today ends at 04:00Z.
+    assert!(ny.contains("'2026-08-13T04:00:00'"), "{ny}");
+}
+
+/// The timezone arrives from a client header, so a bad value must degrade
+/// rather than fail the request.
+#[test]
+fn an_unrecognized_timezone_falls_back_to_utc() {
+    let bogus = group_select_expr_at(&due_date_field(Some("Mars/Olympus_Mons")), fixed_now());
+    let utc = group_select_expr_at(&due_date_field(None), fixed_now());
+
+    assert_eq!(bogus, utc);
+    assert!(utc.contains("'2026-08-13T00:00:00'"));
+}
+
+#[test]
+fn due_date_order_expr_matches_the_bucket_ranks() {
+    let expr = group_order_expr_at(&due_date_field(Some("UTC")), fixed_now());
+
+    assert!(expr.contains("IS NULL THEN 3"));
+    assert!(expr.contains("THEN 0"));
+    assert!(expr.contains("THEN 1"));
+    assert!(expr.contains("ELSE 2"));
+}
+
+/// A `Date` property value is a JSON scalar, so this join must read it directly
+/// rather than expanding it as an array the way property grouping does — that
+/// path yields NULL for every row and files every task under Backlog.
+#[test]
+fn due_date_join_reads_the_scalar_value() {
+    let join = group_join_clause(&due_date_field(None)).unwrap();
+
+    assert!(join.sql.contains("ep_due"));
+    assert!(join.sql.contains("ep.values->>'value' AS due_text"));
+    assert!(join.sql.contains("ep.values->>'type' = 'Date'"));
+    assert!(join.sql.contains("LIMIT 1"));
+    assert!(join.sql.contains(&DUE_DATE_PROPERTY_ID.to_string()));
+    assert!(
+        !join.sql.contains("jsonb_array_elements"),
+        "scalar dates must not go through the array-expanding lateral"
+    );
+    assert!(join.entity_type_bind.is_none());
+}
+
+#[test]
+fn due_date_join_binds_an_entity_type_scope() {
+    let field = GroupByField::DueDateBucket {
+        property_definition_id: DUE_DATE_PROPERTY_ID,
+        entity_type: Some("TASK".to_string()),
+        time_zone: None,
+        horizon_days: None,
+    };
+
+    let join = group_join_clause(&field).unwrap();
+
+    assert!(join.sql.contains("AND ep.entity_type = $10"));
+    assert_eq!(join.entity_type_bind.as_deref(), Some("TASK"));
+}
+
+/// Executes the bucketing against Postgres, which is the only way to confirm
+/// that comparing `values->>'value'` as *text* against a Z-less boundary agrees
+/// with comparing instants — the premise the whole approach rests on.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn due_date_bucketing_agrees_with_postgres(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use models_grouping::{compute_gtd_bucket, gtd_boundaries};
+
+    const TASK_ID: &str = "11111111-0000-0000-0000-000000000000";
+
+    let now = fixed_now();
+    let boundaries = gtd_boundaries(now, chrono_tz::UTC, 7);
+    let today_end = models_grouping::boundary_prefix(boundaries.today_end);
+    let horizon_end = models_grouping::boundary_prefix(boundaries.horizon_end);
+
+    // The cases that make the textual comparison non-obvious: overdue, the last
+    // instant of today, midnight exactly (with and without fractional seconds),
+    // and the far side of the horizon.
+    let cases = [
+        ("2026-07-01T09:00:00Z", "today"),
+        ("2026-08-12T23:59:59.999Z", "today"),
+        ("2026-08-13T00:00:00Z", "upcoming"),
+        ("2026-08-13T00:00:00.000Z", "upcoming"),
+        ("2026-08-19T23:59:59Z", "upcoming"),
+        ("2026-08-20T00:00:00Z", "later"),
+        ("2026-09-30T12:00:00.5Z", "later"),
+    ];
+
+    // Unchecked on purpose: a `query!` here would need a fresh `.sqlx` cache
+    // entry, and this test adds no new schema knowledge worth that.
+    sqlx::query(
+        r#"
+        INSERT INTO document_sub_type (document_id, sub_type)
+        VALUES ('11111111-0000-0000-0000-000000000000', 'task')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    for (raw, expected) in cases {
+        sqlx::query(
+            r#"
+            INSERT INTO entity_properties
+                (id, entity_id, entity_type, property_definition_id, values)
+            VALUES ($1, $2, 'TASK', $3, jsonb_build_object('type', 'Date', 'value', $4::text))
+            ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values
+            "#,
+        )
+        .bind(uuid::uuid!("e0000000-0000-0000-0000-0000000000d0"))
+        .bind(TASK_ID)
+        .bind(DUE_DATE_PROPERTY_ID)
+        .bind(raw)
+        .execute(&pool)
+        .await?;
+
+        // Ask Postgres to bucket it with exactly the expression the query uses.
+        let sql = format!(
+            "SELECT ({}) AS key",
+            models_grouping::gtd_bucket_sql_key("ep.values->>'value'", &boundaries)
+        );
+        let key: String = sqlx::query_scalar(&format!(
+            "{sql} FROM entity_properties ep
+             WHERE ep.entity_id = $1 AND ep.property_definition_id = $2"
+        ))
+        .bind(TASK_ID)
+        .bind(DUE_DATE_PROPERTY_ID)
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(
+            key, expected,
+            "postgres bucketed {raw} as {key} against [{today_end}, {horizon_end})"
+        );
+
+        // ...and Rust must reach the same answer for the same input.
+        let parsed = chrono::DateTime::parse_from_rfc3339(raw)?.with_timezone(&chrono::Utc);
+        assert_eq!(
+            compute_gtd_bucket(Some(parsed), &boundaries),
+            expected,
+            "rust disagreed with postgres for {raw}"
+        );
+    }
+
+    // A task with no due-date row at all lands in Backlog.
+    let missing: Option<String> = sqlx::query_scalar(
+        "SELECT ep.values->>'value' FROM entity_properties ep
+         WHERE ep.entity_id = $1 AND ep.property_definition_id = $2",
+    )
+    .bind("22222222-0000-0000-0000-000000000000")
+    .bind(DUE_DATE_PROPERTY_ID)
+    .fetch_optional(&pool)
+    .await?
+    .flatten();
+    assert_eq!(missing, None);
+    assert_eq!(compute_gtd_bucket(None, &boundaries), "backlog");
+
+    Ok(())
+}

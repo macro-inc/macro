@@ -2337,6 +2337,11 @@ enum GraphqlGroupByField {
 	Group by a property value.
 	"""
 	PROPERTY
+	"""
+	Group into forward-looking due-date buckets: Today, Upcoming, Later,
+	Backlog. Reads a `Date`-typed property.
+	"""
+	DUE_DATE_BUCKET
 }
 
 """
@@ -2348,13 +2353,24 @@ input GraphqlGroupByInput {
 	"""
 	field: GraphqlGroupByField!
 	"""
-	Property definition to group by when `field` is `PROPERTY`.
+	Property definition to group by when `field` is `PROPERTY` or
+	`DUE_DATE_BUCKET`.
 	"""
 	propertyDefinitionId: ID
 	"""
 	Optional property entity type restriction.
 	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	IANA timezone the due-date day boundaries are computed in. Only valid
+	with `DUE_DATE_BUCKET`; unset falls back to UTC.
+	"""
+	timeZone: String
+	"""
+	Days after today counted as Upcoming. Only valid with
+	`DUE_DATE_BUCKET`; unset defaults to 7.
+	"""
+	horizonDays: Int
 }
 
 """
