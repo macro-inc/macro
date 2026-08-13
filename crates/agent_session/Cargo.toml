@@ -15,10 +15,15 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 agent_fold = { path = "../agent_fold" }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 axum = { workspace = true }
 bots = { path = "../bots"}
 connection_gateway_client = { path = "../connection_gateway_client" }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "inbound",
+  "ports",
+] }
+entity_access_db_utils = { path = "../entity_access_db_utils" }
 model-entity = { path = "../model-entity" }
 clap = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

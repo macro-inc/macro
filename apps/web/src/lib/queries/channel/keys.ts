@@ -25,9 +25,6 @@ export const channelKeys = createQueryKeys('channel', {
   threadReplies: (channelID: string, messageID: string) => ({
     queryKey: [channelID, messageID],
   }),
-  foldedMessages: (channelID: string) => ({
-    queryKey: [channelID],
-  }),
   resolveMessage: (channelID: string, messageID: string) => ({
     queryKey: [channelID, messageID],
   }),

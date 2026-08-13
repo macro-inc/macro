@@ -1,11 +1,9 @@
-import { foldedReference } from '@core/agent-fold/message-id';
 import type { ApiThreadReply } from '@service-storage/client';
 import type { ApiChannelContextMessage as ApiMessage } from '@service-storage/generated/schemas/apiChannelContextMessage';
 import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { consumeNonce } from '../nonce';
-import { adoptAgentSessionPlaceholder } from './agent-session-placeholders';
 import { ChannelNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -29,11 +27,6 @@ type CommsMessagePayload = ApiMessage & {
   nonce: string;
   sender?: ApiMessageSender;
 };
-
-/** The folded message a placeholder payload names, if it is a placeholder. */
-function payloadReference(payload: CommsMessagePayload) {
-  return foldedReference(payload.agent_session_message);
-}
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -62,20 +55,6 @@ type CommsAttachmentPayload = {
  * - Catches edge cases like server-side message modifications
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
-  // An agent-turn placeholder may already be on screen under a client-chosen
-  // id, put there by the fold the moment it derived the message this row was
-  // written for. Claim it before anything below looks the row up by id, or
-  // the insert path adds the turn a second time.
-  const reference = payloadReference(payload);
-  if (reference) {
-    adoptAgentSessionPlaceholder(
-      payload.channel_id,
-      reference.agentSessionId,
-      reference.messageId,
-      payload.id
-    );
-  }
-
   const isExternalUpdate = !consumeNonce(
     ChannelNonceKeys.MESSAGE,
     payload.nonce
@@ -122,7 +101,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
             sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
-            agent_session_message: payload.agent_session_message,
             created_at: payload.created_at,
             updated_at: payload.updated_at,
             edited_at: payload.edited_at,
@@ -137,7 +115,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
             sender: payload.sender ?? senderFromStorageId(payload.sender_id),
             sender_id: payload.sender_id,
             content: payload.content,
-            agent_session_message: payload.agent_session_message,
             created_at: payload.created_at,
             updated_at: payload.updated_at,
             edited_at: payload.edited_at,

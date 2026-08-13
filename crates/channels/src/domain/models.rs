@@ -15,31 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-pub use agent_fold::domain::model::{AuthorKind, MessageId, TurnId};
 pub use bot_id::BotId;
 
 /// Actor identity for channel mutations.
 pub type Sender = ChannelSender<'static>;
-
-/// Identifies the folded agent-session message a placeholder row renders.
-///
-/// One value rather than loose columns, mirroring the
-/// `agent_session_message_identifier` row it is read from: a placeholder
-/// either names a folded message - session, turn, and side together - or it
-/// has a body of its own. A turn without its session, or a session without a
-/// side, is not a state this can be in.
-///
-/// The message half is the fold's own [`MessageId`], so what identifies a
-/// folded message has one definition. Flattened so the wire keeps its three
-/// flat fields.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentSessionMessageIdentifier {
-    /// Agent session whose folded message this renders.
-    pub agent_session_id: Uuid,
-    /// Folded message within that session.
-    #[serde(flatten)]
-    pub message_id: MessageId,
-}
 
 /// Public bot profile attached to bot-authored messages.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -169,12 +148,8 @@ pub struct ChannelMessage {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Message body. `None` on agent-turn placeholder messages, whose body is
-    /// folded from the agent session log on read instead of being stored.
-    pub content: Option<String>,
-    /// The folded agent-session message this placeholder renders. `None` on
-    /// ordinary messages, which carry their own body.
-    pub agent_session_message: Option<AgentSessionMessageIdentifier>,
+    /// Message body.
+    pub content: String,
     /// When the message was created.
     pub created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -208,8 +183,8 @@ pub struct RecentChannelMessage {
     pub thread_id: Option<Uuid>,
     /// Sender actor id.
     pub sender_id: String,
-    /// Message body. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Message body.
+    pub content: String,
     /// Message creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Message update timestamp.
@@ -251,11 +226,8 @@ pub struct ThreadReply {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Reply body. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
-    /// The folded agent-session message this placeholder renders. `None` on
-    /// ordinary messages, which carry their own body.
-    pub agent_session_message: Option<AgentSessionMessageIdentifier>,
+    /// Reply body.
+    pub content: String,
     /// When the reply was created.
     pub created_at: DateTime<Utc>,
     /// When the reply was last updated.
@@ -395,11 +367,8 @@ pub struct ChannelContextMessage {
     pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
-    /// Message content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
-    /// The folded agent-session message this placeholder renders. `None` on
-    /// ordinary messages, which carry their own body.
-    pub agent_session_message: Option<AgentSessionMessageIdentifier>,
+    /// Message content.
+    pub content: String,
     /// When the message was created.
     pub created_at: DateTime<Utc>,
     /// When the message was last updated.
@@ -423,9 +392,8 @@ pub struct AttachmentChannelReference {
     pub thread_id: Option<Uuid>,
     /// Sender of the message.
     pub sender_id: String,
-    /// Full message content (might be used for preview/snippet). `None` on
-    /// agent-turn placeholder messages.
-    pub message_content: Option<String>,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
     /// When the message itself was created.
     pub message_created_at: DateTime<Utc>,
     /// When the attachment row was created.
@@ -469,11 +437,8 @@ pub struct TopLevelMessageRow {
     pub sender_id: String,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Message content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
-    /// The folded agent-session message this placeholder renders. `None` on
-    /// ordinary messages, which carry their own body.
-    pub agent_session_message: Option<AgentSessionMessageIdentifier>,
+    /// Message content.
+    pub content: String,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -506,11 +471,8 @@ pub struct ThreadReplyRow {
     pub sender_id: String,
     /// For an agent (bot) reply, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Reply content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
-    /// The folded agent-session message this placeholder renders. `None` on
-    /// ordinary messages, which carry their own body.
-    pub agent_session_message: Option<AgentSessionMessageIdentifier>,
+    /// Reply content.
+    pub content: String,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -548,28 +510,6 @@ impl std::fmt::Display for ChannelType {
             ChannelType::Team => f.write_str("team"),
         }
     }
-}
-
-/// Kind of channel: an ordinary channel, or an agent session's dedicated
-/// channel whose agent messages are placeholders folded from the session log.
-///
-/// Stored in the TEXT `comms_channels.kind` column - `type_name = "TEXT"`
-/// points the fieldless enum derive at the built-in string type instead of a
-/// Postgres enum.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
-#[cfg_attr(
-    feature = "outbound",
-    sqlx(type_name = "TEXT", rename_all = "snake_case")
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ChannelKind {
-    /// An ordinary channel.
-    #[default]
-    Normal,
-    /// An agent session's dedicated channel.
-    Agent,
 }
 
 /// Request to add a user to all organization channels.
@@ -1096,8 +1036,8 @@ pub struct MutatedMessage {
     pub sender_id: ChannelSender<'static>,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
-    /// Message body. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Message body.
+    pub content: String,
     /// Created timestamp.
     pub created_at: DateTime<Utc>,
     /// Updated timestamp.
@@ -1360,8 +1300,6 @@ pub struct ChannelListItem {
     pub name: Option<String>,
     /// Channel type.
     pub channel_type: ChannelType,
-    /// Channel kind.
-    pub kind: ChannelKind,
     /// Organization id.
     pub org_id: Option<i64>,
     /// Team id.

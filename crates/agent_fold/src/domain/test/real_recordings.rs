@@ -11,11 +11,11 @@
 //! record a session.
 
 use super::util::{
-    LONG_MULTI_RESUME, REAL_MULTI_TURN, REAL_SINGLE_TURN, RESUMED_AND_CONTINUED, RESUMED_NO_PROMPT,
-    capturing_warnings, parse_log,
+    LONG_MULTI_RESUME, PLAN_TODO, REAL_MULTI_TURN, REAL_SINGLE_TURN, RESUMED_AND_CONTINUED,
+    RESUMED_NO_PROMPT, capturing_warnings, parse_log,
 };
 use crate::domain::fold::{FoldMachineImpl, fold};
-use crate::domain::model::{Author, FoldedMessage};
+use crate::domain::model::{Author, FoldedMessage, MessagePart, PlanEntryStatus};
 use crate::domain::ports::FoldMachine;
 
 /// Every real fixture, alongside how many of its messages are expected to be
@@ -28,6 +28,7 @@ const REAL_FIXTURES: &[(&str, &str)] = &[
     ("resumed_and_continued", RESUMED_AND_CONTINUED),
     ("resumed_no_prompt", RESUMED_NO_PROMPT),
     ("long_multi_resume", LONG_MULTI_RESUME),
+    ("plan_todo", PLAN_TODO),
 ];
 
 #[test]
@@ -68,8 +69,10 @@ fn resumed_no_prompt_still_derives_the_agents_reply() {
     assert!(
         !messages
             .iter()
-            .any(|message| message.author.kind() == crate::domain::model::AuthorKind::User),
-        "this recording carries no session/prompt, so it should derive no user message"
+            .filter(|message| message.author.kind() == crate::domain::model::AuthorKind::User)
+            .flat_map(|message| message.parts.iter())
+            .any(|part| matches!(part, crate::domain::model::MessagePart::Text(_))),
+        "this recording carries no session/prompt, so it should derive no user text"
     );
 }
 
@@ -152,6 +155,84 @@ fn three_resumes_in_one_log_derive_distinct_message_ids() {
         "every message should have a distinct (turn, author) key - a collision \
          means turn numbering reset somewhere across the three resumes"
     );
+}
+
+/// A turn's plan folds to one part holding the list as it last stood, not a
+/// trail of revisions: `plan_todo` carries eleven `plan` frames - the list
+/// growing to three items and then completing one by one, each state
+/// re-emitted unchanged at least once - and all of them must land in a
+/// single part showing every item completed.
+#[test]
+fn plan_updates_replace_one_part_in_place() {
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(PLAN_TODO)));
+
+    assert_eq!(warnings, vec![], "plan frames should fold, not warn");
+    let plans: Vec<_> = messages
+        .iter()
+        .flat_map(|message| message.parts.iter())
+        .filter_map(|part| match part {
+            MessagePart::Plan(plan) => Some(plan),
+            _ => None,
+        })
+        .collect();
+    let [plan] = plans.as_slice() else {
+        panic!("eleven plan frames should fold to exactly one part, got {plans:#?}");
+    };
+    assert_eq!(
+        plan.entries
+            .iter()
+            .map(|entry| (entry.content.as_str(), entry.status))
+            .collect::<Vec<_>>(),
+        vec![
+            ("a", PlanEntryStatus::Completed),
+            ("b", PlanEntryStatus::Completed),
+            ("c", PlanEntryStatus::Completed),
+        ],
+        "the part should hold the list as it last stood"
+    );
+}
+
+/// The harness re-emits the plan unchanged between real changes: every one
+/// of `plan_todo`'s six distinct plan states arrives twice, back to back. A
+/// re-emit that changes nothing must report
+/// [`IncrementalFoldResult::Unchanged`] rather than a message update, so the
+/// streaming path does not fan a no-op out to every follower.
+///
+/// [`IncrementalFoldResult::Unchanged`]: crate::domain::model::IncrementalFoldResult::Unchanged
+#[test]
+fn identical_plan_re_emits_report_unchanged() {
+    use crate::domain::model::IncrementalFoldResult;
+
+    // Which log entries are plan frames, read off the raw lines - parse_log
+    // maps non-empty lines to entries one to one.
+    let is_plan: Vec<bool> = PLAN_TODO
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.contains(r#""sessionUpdate":"plan""#))
+        .collect();
+    let log = parse_log(PLAN_TODO);
+    assert_eq!(is_plan.len(), log.len());
+    assert_eq!(
+        is_plan.iter().filter(|plan| **plan).count(),
+        12,
+        "the recording carries six states, each emitted twice"
+    );
+
+    let mut machine = FoldMachineImpl::new();
+    let mut changed = 0;
+    let mut unchanged = 0;
+    for (entry, is_plan) in log.into_iter().zip(is_plan) {
+        let result = machine.push(entry);
+        if is_plan {
+            match result {
+                IncrementalFoldResult::Unchanged => unchanged += 1,
+                _ => changed += 1,
+            }
+        }
+    }
+
+    assert_eq!(changed, 6, "each distinct plan state reports one change");
+    assert_eq!(unchanged, 6, "each verbatim re-emit reports nothing");
 }
 
 /// What each small-to-medium real fixture actually folds to, pinned whole

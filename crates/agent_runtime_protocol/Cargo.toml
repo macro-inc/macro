@@ -12,6 +12,7 @@ default = ["transport"]
 # rather than speaking to a runtime.
 transport = ["dep:axum", "dep:futures", "dep:tokio", "dep:tokio-tungstenite"]
 test-utils = []
+utoipa = ["dep:utoipa"]
 
 [dependencies]
 agent-client-protocol = { workspace = true }
@@ -26,6 +27,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
 agent-client-protocol = { workspace = true }

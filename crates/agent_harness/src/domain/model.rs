@@ -1,6 +1,8 @@
 //! Commands and values used by the harness domain.
 
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::{AgentSessionId, MessageId};
+use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -29,26 +31,75 @@ pub struct OpenSession {
     pub origin: MentionOrigin,
 }
 
-/// Deliver a message to a session that already exists.
+/// Where a prompt came from, when it came from somewhere the session should
+/// answer back into.
 #[derive(Debug, Clone)]
-pub struct ForwardMessage {
-    /// Channel where this follow-up was posted.
+pub struct AnnounceOrigin {
+    /// Channel the prompt was posted in.
     pub channel_id: Uuid,
-    /// Thread where its Magic Chip should be posted.
+    /// Thread the announcement replies into.
     pub thread_id: Uuid,
-    /// Who sent it, when it came from a user.
-    pub sender: Option<MacroUserIdStr<'static>>,
-    /// The message text, verbatim.
-    pub content: String,
+}
+
+/// Do something in a session that already exists.
+#[derive(Debug, Clone)]
+pub struct DeliverAction {
+    /// What the agent is being asked to do.
+    pub action: AgentAction,
+    /// The user responsible, absent when nobody in particular is.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// Where to announce this, for prompts that arrived from elsewhere.
+    ///
+    /// `None` means "do not announce": either the caller drove the session
+    /// directly, so there is nowhere else to answer, or the action is not the
+    /// kind anyone announces. A prompt posted into the session's own dedicated
+    /// channel passes `Some`, and is still suppressed - the harness only
+    /// learns the session's channel when it runs.
+    pub announce: Option<AnnounceOrigin>,
 }
 
 /// One operation executed by the harness for an agent session.
+///
+/// Create, act, destroy. Everything that happens *within* a session's life is
+/// a [`DeliverAction`], because the differences that used to justify separate
+/// commands - whether to reconnect a dead session, whether to announce - are
+/// properties of the action and its origin, not of the request that carried
+/// it.
 #[derive(Debug, Clone)]
 pub enum HarnessCommand {
     /// Open a new session.
     Open(OpenSession),
-    /// Feed a session that already exists.
-    Forward(ForwardMessage),
+    /// Act on a session that already exists.
+    Deliver(DeliverAction),
+    /// Release a session's live resources and delete it.
+    Delete,
+}
+
+impl DeliverAction {
+    /// A prompt from a user, arriving from a channel that may need answering.
+    pub fn prompt(
+        content: impl Into<String>,
+        actor: Option<MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Self {
+        Self {
+            action: AgentAction::prompt(content),
+            actor,
+            announce,
+        }
+    }
+}
+
+impl From<ControlEvent> for DeliverAction {
+    /// A control request names no origin: whoever called the endpoint is
+    /// looking at the session already.
+    fn from(event: ControlEvent) -> Self {
+        Self {
+            action: event.action,
+            actor: event.actor,
+            announce: None,
+        }
+    }
 }
 
 /// Facts required to announce one prompt into its originating context.
@@ -60,8 +111,6 @@ pub struct SessionAnnouncement {
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
-    /// Dedicated channel created for the agent session.
-    pub session_channel_id: Uuid,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message_id: MessageId,
     /// Text of the prompting message, quoted back in the announcement.

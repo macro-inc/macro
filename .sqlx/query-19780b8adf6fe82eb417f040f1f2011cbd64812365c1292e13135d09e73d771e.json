@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                message.id,\n                message.thread_id AS \"thread_id!\",\n                message.sender_id,\n                message.triggered_by_user_id,\n                message.content AS \"content!\",\n                message.created_at,\n                message.updated_at,\n                message.edited_at::timestamptz AS \"edited_at?\"\n            FROM comms_messages AS message\n            WHERE message.thread_id = $1\n              AND message.deleted_at IS NULL\n            ORDER BY message.created_at ASC, message.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "triggered_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "edited_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "19780b8adf6fe82eb417f040f1f2011cbd64812365c1292e13135d09e73d771e"
+}

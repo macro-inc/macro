@@ -4,7 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessageContent } from './channelMessageContent';
 import type { ChannelMessageDeletedAt } from './channelMessageDeletedAt';
 import type { ChannelMessageThreadId } from './channelMessageThreadId';
 
@@ -12,8 +11,8 @@ import type { ChannelMessageThreadId } from './channelMessageThreadId';
  * Lightweight channel message for soup payloads.
  */
 export interface ChannelMessage {
-  /** Message content. `None` on agent-turn placeholder messages. */
-  content?: ChannelMessageContent;
+  /** Message content. */
+  content: string;
   /** Creation timestamp. */
   created_at: string;
   /** Deletion timestamp. */

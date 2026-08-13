@@ -55,18 +55,20 @@ use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
-    AnsiText, Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
-    PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
-    ToolUse, ToolUseId, TurnId,
+    AnsiText, Author, Control, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart,
+    Permission, PermissionOption, PermissionOptionKind, PermissionOutcome, Plan, PlanEntry,
+    PlanEntryPriority, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUse, ToolUseId,
+    TurnId,
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 use agent_client_protocol::schema::v1::{
-    Content, ContentBlock, Meta, PromptRequest, RequestId, RequestPermissionOutcome,
-    RequestPermissionRequest, RequestPermissionResponse, Response, SessionNotification,
-    SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation, ToolCallStatus, ToolCallUpdate,
-    ToolKind,
+    Content, ContentBlock, Meta, Plan as AcpPlan, PromptRequest, RequestId,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
+    SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
+    ToolCallStatus, ToolCallUpdate, ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
@@ -255,6 +257,9 @@ struct Turn {
     /// Where each permission sits in the agent message's parts, so outcomes
     /// can find it.
     permission_positions: HashMap<ToolUseId, usize>,
+    /// Where this turn's plan sits in the agent message's parts, so later
+    /// plan updates can replace it.
+    plan_position: Option<usize>,
 }
 
 impl FoldState {
@@ -268,23 +273,45 @@ impl FoldState {
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
-            Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
-                // A user's prompt opens a turn.
-                RawJsonRpcMessage::Request(request)
-                    if PromptRequest::matches_method(&request.method) =>
-                {
-                    self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+                if let Some(action) = AgentAction::control_from_runtime(message) {
+                    return match action {
+                        AgentAction::SetModel(action) => self.record_control(
+                            Control::SetModel {
+                                model: action.model,
+                            },
+                            entry.user_id.clone(),
+                        ),
+                        AgentAction::Compact => match &acp.0 {
+                            RawJsonRpcMessage::Request(request) => {
+                                self.begin_compact(&request.id, entry.user_id.clone())
+                            }
+                            _ => None,
+                        },
+                        AgentAction::Stop => {
+                            self.record_control(Control::Stop, entry.user_id.clone())
+                        }
+                        AgentAction::Prompt(_) => None,
+                    };
                 }
-                // The user's answer to a permission request.
-                RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                    self.resolve_permission(id, Some(result))
+                match &acp.0 {
+                    // A user's prompt opens a turn.
+                    RawJsonRpcMessage::Request(request)
+                        if PromptRequest::matches_method(&request.method) =>
+                    {
+                        self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                    }
+                    // The user's answer to a permission request.
+                    RawJsonRpcMessage::Response(Response::Result { id, result }) => {
+                        self.resolve_permission(id, Some(result))
+                    }
+                    RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
+                        self.resolve_permission(id, None)
+                    }
+                    // Handshake and configuration traffic: nothing to render.
+                    RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
                 }
-                RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
-                    self.resolve_permission(id, None)
-                }
-                // Handshake and configuration traffic: nothing to render.
-                RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
-            },
+            }
 
             Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
                 // The bulk of the log: streamed content and tool activity.
@@ -372,9 +399,54 @@ impl FoldState {
             agent: None,
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
+            plan_position: None,
         });
 
         changed
+    }
+
+    fn begin_compact(
+        &mut self,
+        prompt_id: &RequestId,
+        user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Option<Changed> {
+        let closed = self.close_turn(None);
+        debug_assert!(closed.is_none());
+        let id = TurnId(self.turns_opened);
+        self.turns_opened += 1;
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id,
+            author: Author::User(user_id),
+            parts: NonEmpty::one(MessagePart::Control(Control::Compact)),
+            stop: None,
+        });
+        self.turn = Some(Turn {
+            id,
+            prompt_id: Some(prompt_id.clone()),
+            agent: None,
+            tool_positions: HashMap::new(),
+            permission_positions: HashMap::new(),
+            plan_position: None,
+        });
+        Some(Changed::new(message))
+    }
+
+    fn record_control(
+        &mut self,
+        control: Control,
+        user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Option<Changed> {
+        let id = TurnId(self.turns_opened);
+        self.turns_opened += 1;
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id,
+            author: Author::User(user_id),
+            parts: NonEmpty::one(MessagePart::Control(control)),
+            stop: None,
+        });
+        Some(Changed::new(message))
     }
 
     /// Handle the response to `session/prompt`: close the turn.
@@ -462,13 +534,8 @@ impl FoldState {
             | SessionUpdate::AvailableCommandsUpdate(_)
             | SessionUpdate::CurrentModeUpdate(_)
             | SessionUpdate::ConfigOptionUpdate(_) => None,
-            // Plans are renderable and worth folding, but no recorded session
-            // has produced one yet, so there is nothing to verify a shape
-            // against. Logged rather than guessed at.
-            SessionUpdate::Plan(_) => {
-                self.warn(FoldError::Unknown { kind: wire_kind });
-                None
-            }
+            // The agent's todo list, carried whole each time.
+            SessionUpdate::Plan(plan) => self.apply_plan(plan),
             _ => {
                 self.warn(FoldError::Unknown { kind: wire_kind });
                 None
@@ -559,6 +626,41 @@ impl FoldState {
         );
 
         Some(Changed::updated(message))
+    }
+
+    /// Handle a `plan` update: the agent's todo list, carried whole each time.
+    ///
+    /// The first update pushes a plan part onto the turn's agent message;
+    /// every later one replaces that part wholesale, which is ACP's own
+    /// contract ("the client replaces the entire plan with each update"). An
+    /// update identical to what the part already holds changes nothing - the
+    /// harness re-emits the list more often than it changes it.
+    fn apply_plan(&mut self, update: AcpPlan) -> Option<Changed> {
+        let plan = Plan {
+            entries: update.entries.into_iter().map(plan_entry).collect(),
+        };
+
+        if let Some(position) = self.turn.as_ref().and_then(|turn| turn.plan_position) {
+            let (message, parts) = self.agent_parts_mut()?;
+            if let Some(MessagePart::Plan(existing)) = parts.get_mut(position) {
+                if *existing == plan {
+                    return None;
+                }
+                *existing = plan;
+            }
+            return Some(Changed::updated(message));
+        }
+
+        // An empty list derives nothing to render, so no part is created for
+        // one; the turn's first non-empty update creates it. A list that
+        // *becomes* empty is a replacement like any other, handled above.
+        if plan.entries.is_empty() {
+            return None;
+        }
+
+        let (changed, position) = self.push_agent_part(MessagePart::Plan(plan))?;
+        self.open_turn().plan_position = Some(position);
+        Some(changed)
     }
 
     /// Handle a `session/request_permission`: add a permission part and record
@@ -734,6 +836,7 @@ impl FoldState {
             agent: None,
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
+            plan_position: None,
         });
     }
 
@@ -921,6 +1024,43 @@ fn generic_output(content: &[ToolCallContent]) -> Option<String> {
         .collect::<Vec<_>>()
         .join("");
     (!text.is_empty()).then_some(text)
+}
+
+/// An ACP plan entry in the fold's own vocabulary.
+fn plan_entry(entry: agent_client_protocol::schema::v1::PlanEntry) -> PlanEntry {
+    PlanEntry {
+        content: entry.content,
+        priority: plan_entry_priority(entry.priority),
+        status: plan_entry_status(entry.status),
+    }
+}
+
+fn plan_entry_priority(
+    priority: agent_client_protocol::schema::v1::PlanEntryPriority,
+) -> PlanEntryPriority {
+    use agent_client_protocol::schema::v1::PlanEntryPriority as Acp;
+    match priority {
+        Acp::High => PlanEntryPriority::High,
+        Acp::Medium => PlanEntryPriority::Medium,
+        Acp::Low => PlanEntryPriority::Low,
+        // `#[non_exhaustive]`; a priority ACP adds later is not demonstrably
+        // more or less important than the middle.
+        _ => PlanEntryPriority::Medium,
+    }
+}
+
+fn plan_entry_status(
+    status: agent_client_protocol::schema::v1::PlanEntryStatus,
+) -> PlanEntryStatus {
+    use agent_client_protocol::schema::v1::PlanEntryStatus as Acp;
+    match status {
+        Acp::Pending => PlanEntryStatus::Pending,
+        Acp::InProgress => PlanEntryStatus::InProgress,
+        Acp::Completed => PlanEntryStatus::Completed,
+        // `#[non_exhaustive]`; an unknown status has not demonstrably
+        // finished, same as `ToolStatus`.
+        _ => PlanEntryStatus::Pending,
+    }
 }
 
 fn permission_option_kind(

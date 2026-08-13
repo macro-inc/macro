@@ -13,7 +13,7 @@ const agentAnnouncementRequest = z.object({
 	promptMarkdown: z.string(),
 	chip: z.object({
 		agentSessionId: z.string(),
-		channelId: z.string(),
+		channelId: z.string().optional(),
 		promptedMessage: z.object({
 			turn: z.number().int().nonnegative(),
 			author: z.enum(MAGIC_CHIP_AUTHORS),

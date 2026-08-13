@@ -103,6 +103,30 @@ function partActivity(part: FoldedMessagePart): MagicChipActivity {
       label: 'Permission needed',
       busy: false,
     }))
+    .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
+      label: 'Model changed',
+      detail: part.control.model,
+      busy: false,
+    }))
+    .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
+      label: 'Context compacted',
+      busy: false,
+    }))
+    .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
+      label: 'Stop requested',
+      busy: false,
+    }))
+    .with({ kind: 'plan' }, ({ entries }) => {
+      const completed = entries.filter(
+        (entry) => entry.status === 'completed'
+      ).length;
+      const current = entries.find((entry) => entry.status === 'in_progress');
+      return {
+        label: `Todos ${completed}/${entries.length}`,
+        detail: current?.content,
+        busy: completed < entries.length,
+      };
+    })
     .exhaustive();
 }
 

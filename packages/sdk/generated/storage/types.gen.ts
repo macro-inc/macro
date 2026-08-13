@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -56,6 +56,62 @@ export type AddPinRequest = {
 };
 
 /**
+ * One entry of a session's protocol log.
+ *
+ * Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
+ * frame's own two fields, flattened in beside the attribution, which is the
+ * same shape a recorded session's JSONL carries. A reader can deserialize the
+ * `direction`/`content` pair straight back into the fold's own log type
+ * rather than through a transport vocabulary of its own.
+ *
+ * `agentSessionId` is not repeated per entry: every entry in a response
+ * belongs to the session named once at the top.
+ *
+ * `Deserialize` is for the wire-contract tests only - nothing server-side
+ * decodes its own response type.
+ */
+export type AgentSessionLogEntryDto = LogFrameDto & {
+    /**
+     * When the log recorded the frame.
+     *
+     * The frame itself carries no time, so this comes from the log row. It is
+     * what a reader has to order these against anything else it is showing
+     * beside them - the fold derives an order among the messages of one
+     * session and nothing more.
+     */
+    createdAt: string;
+    /**
+     * The user whose action produced the frame, absent when no user did.
+     *
+     * Only prompts carry one, and only when the frame was attributed at the
+     * time - a replayed or recorded session's are anonymous.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Response body for one session's raw protocol log.
+ *
+ * A wrapper rather than a bare array so that anything which is about the
+ * response rather than about a frame has somewhere to go later without
+ * breaking every client.
+ */
+export type AgentSessionLogResponse = {
+    /**
+     * The agent whose messages the log derives.
+     *
+     * Here because a client renders those messages and cannot otherwise work
+     * out who sent them: the sender of an agent message is this session's
+     * bot, and nothing else names it.
+     */
+    bot: SessionBot;
+    /**
+     * Every logged frame, oldest first. Folding depends on this order.
+     */
+    entries: Array<AgentSessionLogEntryDto>;
+};
+
+/**
  * Response body describing an agent session.
  */
 export type AgentSessionResponse = {
@@ -67,10 +123,6 @@ export type AgentSessionResponse = {
      * The bot running the agent.
      */
     botId: string;
-    /**
-     * The session's dedicated channel.
-     */
-    channelId: string;
     /**
      * When the session was created.
      */
@@ -95,6 +147,10 @@ export type AgentSessionResponse = {
      * The exact message that invoked the bot, if any.
      */
     originatingMessageId?: string | null;
+    /**
+     * The user who created and owns the session.
+     */
+    ownerId: string;
     /**
      * The repository the session works with.
      */
@@ -3018,7 +3074,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * When and how often the reminder fires.
      */
@@ -4723,7 +4779,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4745,7 +4801,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -5614,6 +5670,34 @@ export type LocationResponseV3 = {
     type: 'syncServiceContent';
 };
 
+/**
+ * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
+ */
+export type LogDirectionDto = 'to_server' | 'to_runtime';
+
+/**
+ * The two fields [`AgentSessionLogEntryDto`] flattens in.
+ *
+ * Schema only. Nothing constructs one: the entry serializes through
+ * [`Message`], and this exists so the generated clients see `direction` and
+ * `content` as named fields instead of an open map. A hand-built copy could
+ * drift from the fold's wire format, and the point of the endpoint is that it
+ * cannot - so this describes that format without being able to produce it.
+ */
+export type LogFrameDto = {
+    /**
+     * The protocol envelope, verbatim. Opaque here: it is Agent Runtime
+     * Protocol, whose shape belongs to the fold rather than this endpoint.
+     */
+    content: {
+        [key: string]: unknown;
+    };
+    /**
+     * Which way the frame travelled.
+     */
+    direction: LogDirectionDto;
+};
+
 export type MacroUserIdStr = string;
 
 export type Mentions = {
@@ -6338,7 +6422,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * Reminder id.
      */
@@ -6538,6 +6622,24 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * The agent behind a session, as much of it as rendering a message needs.
+ */
+export type SessionBot = {
+    /**
+     * Avatar, when it has one.
+     */
+    avatarUrl?: string | null;
+    /**
+     * The bot's id. A message it sent has `"bot|{id}"` as its sender.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
 };
 
 /**
@@ -7710,7 +7812,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -8038,57 +8140,6 @@ export type TypingAction = 'start' | 'stop';
 export type UnthreadedPdfUuidRequest = {
     attachmentType: 'highlight';
     uuid: string;
-};
-
-/**
- * Request body for replacing an agent session. This is full-resource `PUT`
- * semantics: fetch the session, modify it, and send the whole thing back.
- * `channelId` and `createdAt` are immutable; echo the values returned by the
- * get endpoint.
- */
-export type UpdateAgentSessionRequest = {
-    /**
-     * The ACP session id, if one exists.
-     */
-    acpSessionId?: string | null;
-    /**
-     * The bot running the agent.
-     */
-    botId: string;
-    /**
-     * The session's dedicated channel. Immutable; echo the value returned
-     * by the get endpoint.
-     */
-    channelId: string;
-    /**
-     * When the session was created. Immutable; echo the value returned by
-     * the get endpoint.
-     */
-    createdAt: string;
-    /**
-     * Harness slug.
-     */
-    harness: string;
-    /**
-     * Model slug.
-     */
-    model: string;
-    /**
-     * The exact message that invoked the bot, if any.
-     */
-    originatingMessageId?: string | null;
-    /**
-     * The repository the session works with.
-     */
-    repoUrl: string;
-    /**
-     * The session's status.
-     */
-    status: SessionStatusDto;
-    /**
-     * The root message of the thread the session was created from, if any.
-     */
-    threadId?: string | null;
 };
 
 export type UpdateChannelSharePermission = {
@@ -8498,30 +8549,6 @@ export type GetRecentActivityHandlerResponses = {
 
 export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
-export type DeleteAgentSessionData = {
-    body?: never;
-    path: {
-        /**
-         * ID of the agent session
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/agent-sessions/{session_id}';
-};
-
-export type DeleteAgentSessionErrors = {
-    401: string;
-    403: string;
-    500: string;
-};
-
-export type DeleteAgentSessionError = DeleteAgentSessionErrors[keyof DeleteAgentSessionErrors];
-
-export type DeleteAgentSessionResponses = {
-    200: unknown;
-};
-
 export type GetAgentSessionData = {
     body?: never;
     path: {
@@ -8548,8 +8575,8 @@ export type GetAgentSessionResponses = {
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
 
-export type UpdateAgentSessionData = {
-    body: UpdateAgentSessionRequest;
+export type GetAgentSessionLogData = {
+    body?: never;
     path: {
         /**
          * ID of the agent session
@@ -8557,20 +8584,22 @@ export type UpdateAgentSessionData = {
         session_id: string;
     };
     query?: never;
-    url: '/agent-sessions/{session_id}';
+    url: '/agent-sessions/{session_id}/log';
 };
 
-export type UpdateAgentSessionErrors = {
+export type GetAgentSessionLogErrors = {
     401: string;
     403: string;
     500: string;
 };
 
-export type UpdateAgentSessionError = UpdateAgentSessionErrors[keyof UpdateAgentSessionErrors];
+export type GetAgentSessionLogError = GetAgentSessionLogErrors[keyof GetAgentSessionLogErrors];
 
-export type UpdateAgentSessionResponses = {
-    200: unknown;
+export type GetAgentSessionLogResponses = {
+    200: AgentSessionLogResponse;
 };
+
+export type GetAgentSessionLogResponse = GetAgentSessionLogResponses[keyof GetAgentSessionLogResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -11733,7 +11762,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -12560,7 +12589,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

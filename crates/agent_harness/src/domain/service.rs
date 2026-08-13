@@ -8,15 +8,17 @@ use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{
     AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
 };
+use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
 use agent_session::domain::service::AgentSessionService;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    ForwardMessage, HarnessCommand, OpenSession, SessionAnnouncement, SessionDefaults,
-    SpawnContainer,
+    AnnounceOrigin, DeliverAction, HarnessCommand, OpenSession, SessionAnnouncement,
+    SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
@@ -116,6 +118,48 @@ where
     }
 }
 
+/// The harness is what holds a session's live resources, so it is what the
+/// control routes notify. Both operations go through the per-session queue, so
+/// a teardown cannot land in the middle of an open and a model change cannot
+/// overtake the prompt it was meant to follow.
+impl<Sessions, Containers, Announcer> AgentSessionNotificationRecipient
+    for AgentHarnessService<Sessions, Containers, Announcer>
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+{
+    async fn session_deleted(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::Delete)
+            .await
+            .map_err(into_session_error)
+    }
+
+    async fn control_event(
+        &self,
+        id: AgentSessionId,
+        event: ControlEvent,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::Deliver(event.into()))
+            .await
+            .map_err(into_session_error)
+    }
+}
+
+/// Collapse a harness failure back into the session vocabulary the port speaks.
+///
+/// A harness error that started life as a session error is unwrapped rather
+/// than re-wrapped, so a caller still sees `Disconnected` as `Disconnected`.
+fn into_session_error(error: HarnessError) -> AgentSessionError {
+    match error {
+        HarnessError::Session(error) => error,
+        other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
+    }
+}
+
 impl<Sessions, Containers, Announcer> AgentHarnessInner<Sessions, Containers, Announcer>
 where
     Sessions: AgentSessionService,
@@ -125,8 +169,23 @@ where
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
-            HarnessCommand::Forward(command) => self.forward(session_id, command).await,
+            HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
+            HarnessCommand::Delete => self.delete(session_id).await,
         }
+    }
+
+    /// Release everything the session holds, then delete it.
+    ///
+    /// The durable delete goes last on purpose. Crashing between the two
+    /// leaves a session whose container is gone, which `resume` heals by
+    /// spawning a new one; the other order leaves a paid sandbox that nothing
+    /// knows to reap.
+    #[tracing::instrument(err, skip(self), fields(%session_id))]
+    async fn delete(&self, session_id: AgentSessionId) -> Result<()> {
+        self.sessions.close_session(session_id).await?;
+        self.containers.teardown(session_id).await?;
+        self.sessions.delete_session(session_id).await?;
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self, command), fields(
@@ -138,8 +197,7 @@ where
         let OpenSession { bot_id, origin } = command;
         let repo_url = self.defaults.repo_url.clone();
 
-        let session = self
-            .sessions
+        self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
                 owner_id: origin.sender.clone(),
@@ -157,7 +215,6 @@ where
                 session_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
-                session_channel_id: session.channel_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: origin.content.clone(),
                 triggered_by: origin.sender.clone(),
@@ -182,55 +239,71 @@ where
         Ok(())
     }
 
+    /// Do one thing in a session that already exists.
+    ///
+    /// Three steps, in this order: persist whatever the action changes about
+    /// the session, work out whether anyone needs telling, then deliver it.
+    /// Announcing last means nothing is announced that was never sent.
     #[tracing::instrument(err, skip(self, command), fields(%session_id))]
-    async fn forward(&self, session_id: AgentSessionId, command: ForwardMessage) -> Result<()> {
-        let ForwardMessage {
-            channel_id,
-            thread_id,
-            sender,
-            content,
+    async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
+        let DeliverAction {
+            action,
+            actor,
+            announce,
         } = command;
-        let announcement = if let Some(triggered_by) = &sender {
-            let session = self.sessions.get_session(session_id).await?;
 
-            if channel_id == session.channel_id {
-                None // no notification for dedicated channel
-            } else {
-                let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
-                Some(SessionAnnouncement {
-                    session_id,
-                    origin_channel_id: channel_id,
-                    origin_thread_id: thread_id,
-                    session_channel_id: session.channel_id,
-                    prompted_message_id,
-                    prompted_content: content.clone(),
-                    triggered_by: triggered_by.clone(),
-                })
-            }
-        } else {
-            None
-        };
-        let action = AgentAction::prompt(content);
+        let announcement = self
+            .announcement(session_id, &action, actor.as_ref(), announce)
+            .await?;
 
         match self
             .sessions
-            .send_action(session_id, sender.clone(), action.clone())
+            .send_action(session_id, actor.clone(), action.clone())
             .await
         {
             Ok(()) => {}
+            // Nothing is attached, so bring the container back and retry the
+            // action against the new connection.
             Err(AgentSessionError::Disconnected(_)) => {
                 let container = self.containers.resume(session_id).await?;
                 self.sessions.attach_session(session_id, container).await?;
-                self.sessions
-                    .send_action(session_id, sender, action)
-                    .await?;
+                self.sessions.send_action(session_id, actor, action).await?;
             }
             Err(error) => return Err(error.into()),
         }
+
         if let Some(announcement) = announcement {
             self.announcer.announce(announcement).await?;
         }
         Ok(())
+    }
+
+    /// Who, if anyone, should be told that this landed.
+    ///
+    /// Only prompts are announced, and only when the caller named an origin
+    /// to answer back into. A session has no channel of its own, so an origin
+    /// is never redundant.
+    async fn announcement(
+        &self,
+        session_id: AgentSessionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<Option<SessionAnnouncement>> {
+        let (Some(origin), Some(triggered_by), AgentAction::Prompt(prompt)) =
+            (announce, actor, action)
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(SessionAnnouncement {
+            session_id,
+            origin_channel_id: origin.channel_id,
+            origin_thread_id: origin.thread_id,
+            prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
+            prompted_content: prompt.prompt.clone(),
+            triggered_by: triggered_by.clone(),
+        }))
     }
 }
 

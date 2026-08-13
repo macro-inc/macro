@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{
-    AgentTriggerTopicEvent, ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 
 fn user() -> MacroUserIdStr<'static> {
@@ -45,7 +45,7 @@ fn message(mentions: Vec<SimpleMention>) -> ChannelMessagePostedMetadata {
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
         id,
-        channel_id: Uuid::from_u128(1),
+        owner_id: MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         thread_id: None,
         originating_message_id: None,
         bot_id,
@@ -60,20 +60,19 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
 }
 
 #[tokio::test]
-async fn evaluates_a_dedicated_channel_without_a_mentioned_bot() {
-    let posted = message(vec![]);
+async fn forwards_a_mentioned_thread_reply_to_its_session() {
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
         .expect_find_for_channel()
         .with(
-            mockall::predicate::eq(posted.channel_id),
             mockall::predicate::eq(posted.thread_id),
-            mockall::predicate::eq(None),
+            mockall::predicate::eq(Some(BotId::TEST_A)),
         )
         .once()
-        .return_once(|_, _, _| {
+        .return_once(|_, _| {
             Box::pin(async {
-                Ok(ChannelSession::InDedicatedChannel(session(
+                Ok(ChannelSession::CreatedFromThread(session(
                     AgentSessionId::TEST_A,
                     BotId::TEST_A,
                 )))
@@ -95,22 +94,40 @@ async fn evaluates_a_dedicated_channel_without_a_mentioned_bot() {
     };
     assert_eq!(metadata.bot_id, BotId::TEST_A);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
-    assert_eq!(metadata.kind, ChannelKind::DedicatedChannel);
+}
+
+/// A reply in a session's originating thread that does not mention the bot
+/// stays a normal channel message.
+#[tokio::test]
+async fn a_thread_reply_without_a_mention_does_not_forward() {
+    let posted = message(vec![]);
+    let mut sessions = MockAgentSessionRepo::new();
+    sessions
+        .expect_find_for_channel()
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+    let bots = MockAgentBotLookup::new();
+    let service = AgentTriggerService::new(sessions, bots);
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
 }
 
 #[tokio::test]
 async fn evaluates_every_mentioned_agent_bot() {
     let posted = message(vec![mention_of(BotId::TEST_B), mention_of(BotId::TEST_A)]);
-    let channel_id = posted.channel_id;
     let thread_id = posted.thread_id;
     let mut sessions = MockAgentSessionRepo::new();
     sessions
         .expect_find_for_channel()
-        .withf(move |actual_channel_id, actual_thread_id, bot_id| {
-            *actual_channel_id == channel_id && *actual_thread_id == thread_id && bot_id.is_some()
-        })
+        .withf(move |actual_thread_id, bot_id| *actual_thread_id == thread_id && bot_id.is_some())
         .times(2)
-        .returning(|_, _, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .returning(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_has_agent()
         .times(2)
@@ -139,12 +156,11 @@ async fn evaluates_a_repeated_bot_mention_once() {
     sessions
         .expect_find_for_channel()
         .with(
-            mockall::predicate::eq(posted.channel_id),
             mockall::predicate::eq(posted.thread_id),
             mockall::predicate::eq(Some(BotId::TEST_A)),
         )
         .once()
-        .return_once(|_, _, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_has_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
@@ -169,7 +185,7 @@ async fn ignores_a_mentioned_bot_without_an_agent() {
     sessions
         .expect_find_for_channel()
         .once()
-        .return_once(|_, _, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_has_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
@@ -187,15 +203,15 @@ async fn ignores_a_mentioned_bot_without_an_agent() {
 }
 
 #[tokio::test]
-async fn deduplicates_a_dedicated_session_found_for_multiple_mentions() {
+async fn deduplicates_a_session_found_for_multiple_mentions() {
     let posted = message(vec![mention_of(BotId::TEST_A), mention_of(BotId::TEST_B)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
         .expect_find_for_channel()
         .times(2)
-        .returning(|_, _, _| {
+        .returning(|_, _| {
             Box::pin(async {
-                Ok(ChannelSession::InDedicatedChannel(session(
+                Ok(ChannelSession::CreatedFromThread(session(
                     AgentSessionId::TEST_A,
                     BotId::TEST_A,
                 )))

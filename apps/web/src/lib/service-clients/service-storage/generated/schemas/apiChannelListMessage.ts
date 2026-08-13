@@ -4,7 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiChannelListMessageContent } from './apiChannelListMessageContent';
 import type { ApiChannelListMessageDeletedAt } from './apiChannelListMessageDeletedAt';
 import type { ApiChannelListMessageThreadId } from './apiChannelListMessageThreadId';
 
@@ -12,8 +11,8 @@ import type { ApiChannelListMessageThreadId } from './apiChannelListMessageThrea
  * Channel message in API responses.
  */
 export interface ApiChannelListMessage {
-  /** Message content. `None` on agent-turn placeholder messages. */
-  content?: ApiChannelListMessageContent;
+  /** Message content. */
+  content: string;
   /** Creation timestamp. */
   created_at: string;
   /** Deletion timestamp, if deleted. */

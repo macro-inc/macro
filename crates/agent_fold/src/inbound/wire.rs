@@ -17,9 +17,11 @@
 
 use crate::domain::log::AgentSessionId;
 use crate::domain::model::{
-    Author, FileDiff as ModelFileDiff, FoldedMessage as ModelFoldedMessage, IncrementalFoldResult,
-    MessagePart, Permission, PermissionOption as ModelPermissionOption, PermissionOptionKind,
-    PermissionOutcome as ModelPermissionOutcome, StopReason as ModelStopReason,
+    Author, Control as ModelControl, FileDiff as ModelFileDiff,
+    FoldedMessage as ModelFoldedMessage, IncrementalFoldResult, MessagePart, Permission,
+    PermissionOption as ModelPermissionOption, PermissionOptionKind,
+    PermissionOutcome as ModelPermissionOutcome, Plan as ModelPlan, PlanEntry as ModelPlanEntry,
+    PlanEntryPriority, PlanEntryStatus, StopReason as ModelStopReason,
     ToolDetail as ModelToolDetail, ToolStatus as ModelToolStatus, ToolUse,
 };
 use serde::Serialize;
@@ -153,6 +155,13 @@ enum FoldedMessagePart {
         /// [`permission_outcome`].
         outcome: Option<PermissionOutcome>,
     },
+    /// A user-issued control operation on the session.
+    Control { control: Control },
+    /// The agent's working todo list for the turn, as it last stood.
+    Plan {
+        /// The tasks, in the order the agent listed them.
+        entries: Vec<PlanEntry>,
+    },
 }
 
 impl From<MessagePart> for FoldedMessagePart {
@@ -180,6 +189,93 @@ impl From<MessagePart> for FoldedMessagePart {
                 options: options.into_iter().map(Into::into).collect(),
                 outcome: permission_outcome(outcome),
             },
+            MessagePart::Control(control) => Self::Control {
+                control: control.into(),
+            },
+            MessagePart::Plan(ModelPlan { entries }) => Self::Plan {
+                entries: entries.into_iter().map(Into::into).collect(),
+            },
+        }
+    }
+}
+
+/// One task on a plan, mirroring [`crate::domain::model::PlanEntry`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+struct PlanEntry {
+    /// What this task aims to accomplish.
+    content: String,
+    /// The task's relative importance.
+    priority: PlanPriority,
+    /// Where the task got to.
+    status: PlanStatus,
+}
+
+impl From<ModelPlanEntry> for PlanEntry {
+    fn from(entry: ModelPlanEntry) -> Self {
+        Self {
+            content: entry.content,
+            priority: entry.priority.into(),
+            status: entry.status.into(),
+        }
+    }
+}
+
+/// A plan entry's relative importance, mirroring
+/// [`crate::domain::model::PlanEntryPriority`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+enum PlanPriority {
+    High,
+    Medium,
+    Low,
+}
+
+impl From<PlanEntryPriority> for PlanPriority {
+    fn from(priority: PlanEntryPriority) -> Self {
+        match priority {
+            PlanEntryPriority::High => Self::High,
+            PlanEntryPriority::Medium => Self::Medium,
+            PlanEntryPriority::Low => Self::Low,
+        }
+    }
+}
+
+/// Where a plan entry got to, mirroring
+/// [`crate::domain::model::PlanEntryStatus`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+enum PlanStatus {
+    Pending,
+    InProgress,
+    Completed,
+}
+
+impl From<PlanEntryStatus> for PlanStatus {
+    fn from(status: PlanEntryStatus) -> Self {
+        match status {
+            PlanEntryStatus::Pending => Self::Pending,
+            PlanEntryStatus::InProgress => Self::InProgress,
+            PlanEntryStatus::Completed => Self::Completed,
+        }
+    }
+}
+
+/// A control operation shown in the session timeline.
+#[derive(Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum Control {
+    SetModel { model: String },
+    Compact,
+    Stop,
+}
+
+impl From<ModelControl> for Control {
+    fn from(control: ModelControl) -> Self {
+        match control {
+            ModelControl::SetModel { model } => Self::SetModel { model },
+            ModelControl::Compact => Self::Compact,
+            ModelControl::Stop => Self::Stop,
         }
     }
 }

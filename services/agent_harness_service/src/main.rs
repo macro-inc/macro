@@ -5,6 +5,7 @@
 //! manager, and a channel service with the full side-effect stack for
 //! announcements, then drives the orchestrator from `macro.agent_sessions`.
 
+mod api;
 mod config;
 
 use std::sync::Arc;
@@ -18,7 +19,9 @@ use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
     GithubToken as GithubTokenSecret, Snapshot,
 };
+use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
+use agent_session::inbound::axum_router::{AgentSessionControlState, AgentSessionRouterState};
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
@@ -35,6 +38,11 @@ use config::Config;
 use connection_gateway_client::ConnectionGatewayClient;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use lexical_client::LexicalClient;
+use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
+};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
@@ -74,11 +82,14 @@ async fn main() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    if config.daytona_api_key.is_empty() {
-        tracing::warn!(
-            "DAYTONA_API_KEY is empty: the service will run, but opening a session will fail until it is set"
-        );
-    }
+    anyhow::ensure!(
+        !config.daytona_api_key.trim().is_empty(),
+        "DAYTONA_API_KEY is required"
+    );
+    anyhow::ensure!(
+        !config.github_token.trim().is_empty(),
+        "GITHUB_TOKEN is required"
+    );
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -95,17 +106,18 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayUrl::new()?.to_string(),
     ));
 
-    // Sessions: persistence and live actors. The same repo answers all four
-    // ports, as in the `document_storage_service` root - a session's actor
-    // writes its log through the fold and comms so the frames it records show
-    // up as placeholder messages in the session's channel, and pushes each
-    // frame at the channel's participants so a viewer sees it happen.
+    // Sessions: persistence and live actors. The same repo answers every port,
+    // as in the `document_storage_service` root - a session's actor writes its
+    // log and pushes each frame at the channel's participants so a viewer sees
+    // it happen.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
-        session_repo.clone(),
-        ConnectionGatewayAgentSessionRealtime::new(connection_gateway.clone(), session_repo),
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_repo.clone(),
+        ),
     );
 
     // Containers: Daytona sandboxes.
@@ -166,6 +178,53 @@ async fn main() -> anyhow::Result<()> {
             repo_url: config.harness_repo_url.clone(),
         },
     ));
+
+    // The complete session API is served from this process because it owns the
+    // live sessions. Spawned rather than awaited: the Kafka loop below owns the
+    // main task, and both run until shutdown.
+    let authorization_service = MacroAuthorizationServiceImpl::new(
+        MacroAuthJwtValidator::new(
+            JwtValidationArgs::new_with_secret_manager(
+                config.environment,
+                &secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
+                    &aws_config,
+                )),
+            )
+            .await?,
+        ),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.clone(),
+            default_user_id: None,
+        },
+        PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
+    );
+    let entity_access = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
+    );
+    let read_state = AgentSessionRouterState::new(
+        AgentSessionServiceImpl::new(
+            session_repo.clone(),
+            FoldedMessageService::new(session_repo),
+            NoOpRealtime,
+        ),
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let control_state = AgentSessionControlState::new(
+        harness.clone(),
+        entity_access,
+        MacroAuthorizationState::new(Arc::new(authorization_service)),
+    );
+    let http_port = config.port;
+    let http = tokio::spawn(async move {
+        if let Err(error) =
+            api::setup_and_serve(read_state, control_state, http_port, shutdown_signal()).await
+        {
+            tracing::error!(error = ?error, "agent harness service http stopped");
+        }
+    });
 
     // The consumer: every agent-session event, filtered to our bot.
     let consumer =
@@ -260,6 +319,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    http.abort();
     container_shutdown.shutdown_all().await;
 
     while let Some(result) = tasks.join_next().await {

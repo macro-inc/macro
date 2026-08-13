@@ -46,7 +46,7 @@ impl AgentBotLookup for PgAgentBotLookup {
             .get_bot(bot_id)
             .await
             .map(|bot| bot.is_some_and(|bot| bot.has_agent))
-            .map_err(|error| agent_session::domain::error::AgentSessionError::Unknown(error.into()))
+            .map_err(agent_session::domain::error::AgentSessionError::Unknown)
     }
 }
 

@@ -223,20 +223,27 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_harness",
+ "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
  "anyhow",
+ "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
+ "axum",
  "bot_id",
  "bots",
  "channels",
  "connection_gateway_client",
  "contacts",
  "database_env_vars",
+ "entity_access",
  "kafka_util",
  "lexical_client",
+ "macro_auth",
+ "macro_authorization",
  "macro_aws_config",
  "macro_config",
+ "macro_cors",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -246,10 +253,14 @@ dependencies = [
  "macro_uuid",
  "notification",
  "rdkafka",
+ "secretsmanager_client",
  "serde",
+ "serde_json",
  "sqlx",
  "tokio",
  "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
  "workspace-hack",
 ]
 
@@ -269,6 +280,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tracing",
+ "utoipa",
 ]
 
 [[package]]
@@ -285,6 +297,8 @@ dependencies = [
  "clap",
  "connection_gateway_client",
  "dashmap",
+ "entity_access",
+ "entity_access_db_utils",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -2989,7 +3003,6 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
- "agent_fold",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4654,8 +4667,6 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
- "agent_fold",
- "agent_session",
  "ai_tools",
  "ai_usage",
  "analytics_client",

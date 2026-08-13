@@ -1,6 +1,7 @@
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use channel_sender::ChannelSender;
@@ -45,7 +46,6 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
-        kind: ChannelKind::DedicatedChannel,
         message: message(ChannelSender::new_from_user(user())),
     }))
 }
@@ -124,12 +124,19 @@ fn a_channel_message_forwards_to_its_session() {
         agent_trigger_to_harness_command(channel_message(BotId::TEST_A), BotId::TEST_A)
             .expect("a channel event for our bot should yield a command");
 
-    let HarnessCommand::Forward(forward) = command else {
-        panic!("an existing-session event should forward");
+    let HarnessCommand::Deliver(deliver) = command else {
+        panic!("an existing-session event should deliver");
     };
     assert_eq!(session_id, AgentSessionId::TEST_A);
-    assert_eq!(forward.channel_id, Uuid::from_u128(1));
-    assert_eq!(forward.thread_id, Uuid::from_u128(2));
-    assert_eq!(forward.sender, Some(user()));
-    assert_eq!(forward.content, "@claude fix the tests");
+    assert_eq!(deliver.actor, Some(user()));
+    assert_eq!(
+        deliver.action,
+        AgentAction::prompt("@claude fix the tests"),
+        "a channel message becomes a prompt"
+    );
+    // Offered rather than decided here: whether this is the session's own
+    // channel is not knowable from the event alone.
+    let announce = deliver.announce.expect("a channel prompt offers an origin");
+    assert_eq!(announce.channel_id, Uuid::from_u128(1));
+    assert_eq!(announce.thread_id, Uuid::from_u128(2));
 }

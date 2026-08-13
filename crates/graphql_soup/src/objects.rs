@@ -1191,9 +1191,9 @@ impl GraphqlSoupChannelMessagePreview {
         &self.message.sender_id
     }
 
-    /// The content. `None` on agent-turn placeholder messages.
-    async fn content(&self) -> Option<&str> {
-        self.message.content.as_deref()
+    /// The content.
+    async fn content(&self) -> &str {
+        &self.message.content
     }
 
     /// The created timestamp in RFC 3339 format.
@@ -1408,9 +1408,9 @@ where
         None
     }
 
-    /// The message content. `None` on agent-turn placeholder messages.
-    async fn content(&self) -> Option<&str> {
-        self.0.content.as_deref()
+    /// The message content.
+    async fn content(&self) -> &str {
+        &self.0.content
     }
 
     /// Common channel-message metadata.

@@ -2,17 +2,25 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
     ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
 };
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
+use agent_runtime_protocol::domain::{
+    action::AgentAction,
+    schema::v0::{AcpMessage, ToRuntimeMessage},
+};
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
-use agent_session::domain::ports::{AgentSessionLogRepo as _, AgentSessionRepo as _, NoOpRealtime};
+use agent_session::domain::ports::{
+    AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
+    ControlEvent, NoOpRealtime,
+};
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::testing::{InMemoryAgentSessionRepo, RecordingComms};
+use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -20,7 +28,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    ForwardMessage, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults, SpawnContainer,
+    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults,
+    SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::testing::helpers::agent::FakeAgent;
@@ -45,13 +54,17 @@ fn open_command() -> OpenSession {
     }
 }
 
-fn forward_message(content: &str) -> ForwardMessage {
-    ForwardMessage {
-        channel_id: macro_uuid::Uuid::from_u128(0xf0),
-        thread_id: macro_uuid::Uuid::from_u128(0xf1),
-        sender: Some(sender()),
-        content: content.to_owned(),
-    }
+/// A prompt arriving from a channel that is not the session's own, so it is
+/// the announcing case.
+fn forward_message(content: &str) -> DeliverAction {
+    DeliverAction::prompt(
+        content,
+        Some(sender()),
+        Some(AnnounceOrigin {
+            channel_id: macro_uuid::Uuid::from_u128(0xf0),
+            thread_id: macro_uuid::Uuid::from_u128(0xf1),
+        }),
+    )
 }
 
 fn harness() -> (
@@ -59,7 +72,6 @@ fn harness() -> (
         AgentSessionServiceImpl<
             InMemoryAgentSessionRepo,
             FoldedMessageService<InMemoryAgentSessionRepo>,
-            RecordingComms,
             NoOpRealtime,
         >,
         MockContainerManager,
@@ -76,7 +88,6 @@ fn harness() -> (
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
-            RecordingComms::new(),
             NoOpRealtime,
         ),
         containers.clone(),
@@ -191,15 +202,13 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    // The row exists, carries the origin, and was announced with its real
-    // dedicated channel id.
+    // The row exists, carries the origin, and was announced into it.
     let session = repo.get(id).await.expect("the session row exists");
     assert_eq!(session.acp_session_id.as_deref(), Some("acp-test"));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
-    assert_eq!(announced[0].session_channel_id, session.channel_id);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
     assert_eq!(announced[0].triggered_by, origin.sender);
@@ -275,7 +284,7 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     service
         .execute(
             id,
-            HarnessCommand::Forward(forward_message("and add a regression test")),
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
         )
         .await
         .expect("forward to a live session should succeed");
@@ -294,27 +303,6 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     );
     assert_eq!(announced[1].origin_channel_id, Uuid::from_u128(0xf0));
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
-
-    let session = repo.get(id).await.expect("the session exists");
-    service
-        .execute(
-            id,
-            HarnessCommand::Forward(ForwardMessage {
-                channel_id: session.channel_id,
-                thread_id: Uuid::from_u128(0xf2),
-                sender: Some(sender()),
-                content: "continue in the agent channel".to_owned(),
-            }),
-        )
-        .await
-        .expect("forward in the dedicated channel should succeed");
-
-    assert_eq!(prompts(&container.agent()).len(), 3);
-    assert_eq!(
-        announcer.announced().len(),
-        2,
-        "dedicated-channel prompts must not post an announcement reply"
-    );
 }
 
 #[tokio::test]
@@ -343,7 +331,7 @@ async fn a_delivery_failure_is_not_automatically_resumed() {
     let result = service
         .execute(
             id,
-            HarnessCommand::Forward(forward_message("do not retry this")),
+            HarnessCommand::Deliver(forward_message("do not retry this")),
         )
         .await;
 
@@ -358,7 +346,7 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
 
     let forward = service.execute(
         id,
-        HarnessCommand::Forward(forward_message("continue after reconnecting")),
+        HarnessCommand::Deliver(forward_message("continue after reconnecting")),
     );
     let drive_resume = async {
         loop {
@@ -390,7 +378,7 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
         .into_iter()
         .filter(|log| {
             matches!(
-                &log.content,
+                &log.entry.content,
                 Message::ToRuntime(agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage::Acp(
                     agent_runtime_protocol::domain::schema::v0::AcpMessage(
                         agent_client_protocol::RawJsonRpcMessage::Request(request)
@@ -406,8 +394,8 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
 async fn concurrent_forwards_share_one_session_recovery() {
     let (service, repo, containers, announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
-    let first = service.execute(id, HarnessCommand::Forward(forward_message("first")));
-    let second = service.execute(id, HarnessCommand::Forward(forward_message("second")));
+    let first = service.execute(id, HarnessCommand::Deliver(forward_message("first")));
+    let second = service.execute(id, HarnessCommand::Deliver(forward_message("second")));
     let drive_resume = async {
         loop {
             if containers.resumed() == 1 {
@@ -456,10 +444,10 @@ async fn different_sessions_execute_concurrently() {
     let (service, repo, containers, _announcer) = harness();
     let first_id = disconnected_session(&repo, &containers).await;
     let second_id = disconnected_session(&repo, &containers).await;
-    let first = service.execute(first_id, HarnessCommand::Forward(forward_message("first")));
+    let first = service.execute(first_id, HarnessCommand::Deliver(forward_message("first")));
     let second = service.execute(
         second_id,
-        HarnessCommand::Forward(forward_message("second")),
+        HarnessCommand::Deliver(forward_message("second")),
     );
     let drive_resumes = async {
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
@@ -503,7 +491,7 @@ async fn an_admitted_command_survives_caller_cancellation() {
     let id = disconnected_session(&repo, &containers).await;
     let completion = service.execute(
         id,
-        HarnessCommand::Forward(forward_message("finish even when nobody is waiting")),
+        HarnessCommand::Deliver(forward_message("finish even when nobody is waiting")),
     );
     drop(completion);
 
@@ -548,4 +536,182 @@ fn session_of(containers: &MockContainerManager) -> AgentSessionId {
         .into_iter()
         .next()
         .expect("exactly one session has a container")
+}
+
+/// Open a session and complete its handshake, returning its live container.
+async fn live_session(
+    service: &AgentHarnessService<
+        AgentSessionServiceImpl<
+            InMemoryAgentSessionRepo,
+            FoldedMessageService<InMemoryAgentSessionRepo>,
+            NoOpRealtime,
+        >,
+        MockContainerManager,
+        AnnouncerMock,
+    >,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+) -> ContainerMock {
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    container
+}
+
+#[tokio::test]
+async fn changing_the_model_persists_it_and_tells_the_running_agent() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::set_model("opus"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("changing the model should succeed");
+
+    assert_eq!(
+        repo.get(id).await.expect("the session exists").model,
+        "opus",
+        "the new model is durable, not only in flight"
+    );
+    let sent = container.sent();
+    assert!(
+        sent.iter().any(|message| matches!(
+            message,
+            ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)))
+                if request.method.as_ref() == "session/set_config_option"
+        )),
+        "the running agent is told, got {sent:?}"
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_session_tears_down_its_container_and_removes_it() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = AgentSessionId::new();
+    live_session(&service, &containers, id).await;
+
+    service
+        .session_deleted(id)
+        .await
+        .expect("deleting a live session should succeed");
+
+    assert_eq!(containers.torn_down(), 1, "the sandbox is destroyed");
+    assert!(
+        repo.get(id).await.is_err(),
+        "the session row is gone once its resources are"
+    );
+}
+
+#[tokio::test]
+async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
+    let (service, _repo, containers, announcer) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let announced_before = announcer.announced().len();
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("and now the docs"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("prompting through control should succeed");
+
+    assert_eq!(
+        prompts(&container.agent()).len(),
+        2,
+        "the opening prompt, then this one"
+    );
+    assert_eq!(
+        announcer.announced().len(),
+        announced_before,
+        "a control prompt names no origin, so there is nowhere to announce"
+    );
+}
+
+#[tokio::test]
+async fn compact_through_control_reaches_opencode_as_a_slash_command() {
+    let (service, _repo, containers, _announcer) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::Compact,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("compaction should reach the running agent");
+
+    assert_eq!(
+        prompts(&container.agent()),
+        [
+            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from(
+                agent_runtime_protocol::domain::action::COMPACT_COMMAND
+            )],
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_prompt_through_control_resumes_a_disconnected_session() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("wake up"),
+            actor: Some(sender()),
+        },
+    );
+    let drive_resume = async {
+        loop {
+            if containers.resumed() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed.agent().wait_for_requests(3).await;
+        resumed
+    };
+    let (result, resumed) = tokio::join!(prompted, drive_resume);
+    result.expect("a prompt must not be silently dropped when nothing is attached");
+
+    assert_eq!(containers.resumed(), 1, "the container is brought back");
+    assert_eq!(
+        prompts(&resumed.agent()),
+        [vec![ContentBlock::from("wake up")]]
+    );
 }

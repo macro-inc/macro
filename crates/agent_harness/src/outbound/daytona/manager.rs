@@ -324,6 +324,27 @@ impl ContainerManager for DaytonaContainerManager {
             }
         }
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn teardown(&self, session: AgentSessionId) -> Result<()> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            // Nothing to destroy. Already the state the caller asked for.
+            return Ok(());
+        };
+
+        // Drop it from the registry first, so the idle reaper cannot pick it
+        // up half-deleted and log a spurious stop failure.
+        self.managed.containers.remove(&id);
+        self.client.delete(id.as_str()).await.map_err(unavailable)?;
+        tracing::info!(sandbox_id = %id.as_str(), session = %session, "sandbox deleted");
+        Ok(())
+    }
 }
 
 async fn reap_idle_containers(client: DaytonaClient, managed: Arc<DaytonaContainerManagerState>) {

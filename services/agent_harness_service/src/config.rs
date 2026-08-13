@@ -27,20 +27,13 @@ pub struct Config {
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
     /// API key the Daytona client authenticates with.
-    ///
-    /// Defaults to empty so a local stack can run this service without
-    /// Daytona credentials: the service starts, and opening a session fails
-    /// with a clear error instead. `main` warns on the empty default.
-    #[macro_config_default(String::new())]
     pub daytona_api_key: String,
     /// Name of the prebuilt Daytona snapshot to create sandboxes from. The
     /// image is expected to be built and pushed as a snapshot out of band,
     /// keeping image builds off the first-prompt critical path.
     #[macro_config_default(String::from("macro-agent-harness"))]
     pub daytona_snapshot: String,
-    /// Token with read access to the repo cloned into sandboxes. Empty on the
-    /// same terms as `daytona_api_key`.
-    #[macro_config_default(String::new())]
+    /// Token with read access to the repo cloned into sandboxes.
     pub github_token: String,
     /// The bot this deployment answers for.
     ///
@@ -60,6 +53,9 @@ pub struct Config {
     pub harness_repo_url: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
+    /// Port the control routes are served on.
+    #[macro_config_default(8101)]
+    pub port: u16,
 }
 
 impl Config {

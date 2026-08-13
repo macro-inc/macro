@@ -149,6 +149,13 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Lexical has the same host-vs-container split. The plain
+        // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
+        // which only reads the `OVERRIDE_` form.
+        env.insert(
+            "OVERRIDE_LEXICAL_SERVICE_URL".into(),
+            "http://lexical-service:8096".into(),
+        );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
         // token fetches (email-service → `/internal/google_access_token`)
@@ -246,10 +253,8 @@ impl MailEnv {
 /// credentials.
 ///
 /// The bot id and snapshot name are deterministic (the bot is seeded by
-/// migration). The two secrets are seeded EMPTY so the keys exist for the
-/// process-env overlay - `DAYTONA_API_KEY=... just run_local` - because that
-/// overlay only overrides keys already present. With no key the service still
-/// starts; it just fails (with a clear error) when a session is opened.
+/// migration). The two secrets are seeded empty so the process-env overlay can
+/// replace them; the harness refuses to start unless both are supplied.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,

@@ -13,6 +13,12 @@ const chip = {
 const chipMarkdown =
   '<m-magic-chip>{"agentSessionId":"session-1","channelId":"channel-1","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>';
 
+const channelLessChip = {
+  agentSessionId: 'session-2',
+  promptedMessage: { turn: 0, author: 'user' },
+  status: 'booting',
+} as const;
+
 describe('quoteMarkdown', () => {
   it('prefixes every line with a quote marker', () => {
     expect(quoteMarkdown('first line\nsecond line')).toBe(
@@ -47,6 +53,17 @@ describe('composeAgentSessionAnnouncement', () => {
     expect(
       composeAgentSessionAnnouncement({ promptMarkdown: '   ', chip })
     ).toBe(chipMarkdown);
+  });
+
+  it('composes a session chip without a legacy dedicated channel', () => {
+    expect(
+      composeAgentSessionAnnouncement({
+        promptMarkdown: 'please look at this',
+        chip: channelLessChip,
+      })
+    ).toBe(
+      '> please look at this\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
+    );
   });
 
   it('produces markdown the editor parses back into a quote and a chip', () => {

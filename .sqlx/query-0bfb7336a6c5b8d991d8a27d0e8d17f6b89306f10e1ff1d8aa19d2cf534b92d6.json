@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                message.id,\n                message.channel_id,\n                message.thread_id,\n                message.sender_id,\n                message.triggered_by_user_id,\n                message.content AS \"content!\",\n                message.created_at,\n                message.updated_at,\n                message.edited_at::timestamptz AS \"edited_at?\",\n                message.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages AS message\n            WHERE message.id = $1 AND message.channel_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "triggered_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "edited_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "deleted_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "0bfb7336a6c5b8d991d8a27d0e8d17f6b89306f10e1ff1d8aa19d2cf534b92d6"
+}

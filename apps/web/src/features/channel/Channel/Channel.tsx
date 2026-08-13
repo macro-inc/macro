@@ -98,7 +98,6 @@ import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelKeyboardHandler } from './create-channel-keyboard-handler';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
-import { createFoldedMessagesScope } from './create-folded-messages-scope';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import {
@@ -106,7 +105,6 @@ import {
   createTargetMessageController,
   type TargetMessageController,
 } from './create-target-message-controller';
-import { duplicatePromptRowIds } from './hide-duplicate-prompts';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import { createStickyScrollEffect } from './sticky-scroll';
@@ -231,33 +229,8 @@ export function Channel(props: ChannelProps) {
     () => messagesQuery.data as ChannelMessagesData | undefined
   );
 
-  // The dumb agent viewer: for an agent channel, fetch the session's protocol
-  // log, fold it, and hand a message-id lookup down the message tree so
-  // placeholder rows (null content + agent_session_message) render their
-  // folded side. See `FoldedMessagesScope` for what wrapping the tree in
-  // `foldedMessages.Provider` below does.
-  const foldedMessages = createFoldedMessagesScope(() => props.channelId);
-
-  // A prompt typed into an agent channel arrives twice - posted, and folded
-  // out of the ACP frame it became. Hidden here rather than never rendered,
-  // because the copy to keep depends on whether the other one exists: a
-  // session opened from a mention elsewhere has only the folded one. See
-  // `hide-duplicate-prompts`, which is a stopgap.
-  //
-  // Read through `readyLookup` rather than the fold's `Provider`: this memo is
-  // the whole channel's message list, and suspending it on the fold would mean
-  // an unresolved fold empties the list instead of just leaving prompts
-  // unhidden until it lands.
-  const hiddenPromptRows = createMemo(() =>
-    duplicatePromptRowIds([...messageIndex.items], foldedMessages.readyLookup())
-  );
-  const messages = createMemo(() =>
-    messageIndex.items.filter((message) => !hiddenPromptRows().has(message.id))
-  );
-  // The list renders from keys, so the same decision has to reach them too.
-  const visibleMessageKeys = createMemo(() =>
-    messageIndex.keys.filter((key) => !hiddenPromptRows().has(key))
-  );
+  const messages = () => messageIndex.items;
+  const messageKeys = () => messageIndex.keys;
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
@@ -715,7 +688,8 @@ export function Channel(props: ChannelProps) {
       <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
-          <foldedMessages.Provider>
+          {/* biome-ignore lint/complexity/noUselessFragments: preserves the removed provider's JSX boundary */}
+          <>
             <MaybeMessageActionDrawerManager>
               <ChannelDropZone dragState={dragState}>
                 <div
@@ -744,7 +718,7 @@ export function Channel(props: ChannelProps) {
                       >
                         <ThreadList
                           channelId={props.channelId}
-                          keys={visibleMessageKeys}
+                          keys={messageKeys}
                           initialScrollTarget={threadListInitialScrollTarget()}
                           initialScrollHandledByTargetElement={
                             targetMessageController.pendingScrollTargetId() !==
@@ -978,7 +952,7 @@ export function Channel(props: ChannelProps) {
                 </DebugSuspense>
               </ChannelDropZone>
             </MaybeMessageActionDrawerManager>
-          </foldedMessages.Provider>
+          </>
         </SearchHighlightTermsProvider>
       </StaticMarkdownContext>
     </DebugSuspense>

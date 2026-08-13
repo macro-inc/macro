@@ -1,140 +1,38 @@
 use super::*;
-use crate::domain::model::{Message, TurnId};
+use crate::domain::model::Message;
 use crate::domain::ports::NoOpRealtime;
-use crate::testing::{
-    InMemoryAgentSessionRepo, RecordingComms, RecordingRealtime, test_agent_session,
-};
+use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 use agent_fold::domain::fold::fold;
-use agent_fold::domain::model::{Author, AuthorKind, FoldedMessage, MessageId, MessagePart};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use macro_uuid::Uuid;
-use non_empty::NonEmpty;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
-/// A bare folded message for `turn`, authored by `author`. Only its key and
-/// author matter here - the service reads nothing else.
-fn folded(turn: u32, author: Author) -> FoldedMessage {
-    FoldedMessage {
-        id: TurnId(turn),
-        author,
-        parts: NonEmpty::new(vec![MessagePart::Text("x".to_owned())])
-            .expect("one part is not empty"),
-        stop: None,
-    }
-}
-
-/// A [`FoldedMessageRepo`] answering from a preset table, standing in for the
-/// fold.
-#[derive(Debug, Clone, Default)]
-struct StaticMessages {
-    messages: Arc<Mutex<HashMap<AgentSessionId, Vec<FoldedMessage>>>>,
-}
-
-impl StaticMessages {
-    /// Set the session's messages to both sides of each given turn, which is
-    /// what a completed turn folds to.
-    fn set(&self, session: AgentSessionId, turns: impl IntoIterator<Item = u32>) {
-        let messages = turns
-            .into_iter()
-            .flat_map(|turn| {
-                [
-                    folded(turn, Author::User(None)),
-                    folded(turn, Author::Agent),
-                ]
-            })
-            .collect();
-        self.messages
-            .lock()
-            .expect("message table is not poisoned")
-            .insert(session, messages);
-    }
-}
-
-impl FoldedMessageRepo for StaticMessages {
-    async fn messages(
-        &self,
-        session: AgentSessionId,
-    ) -> Result<Vec<FoldedMessage>, rootcause::Report> {
-        Ok(self
-            .messages
-            .lock()
-            .expect("message table is not poisoned")
-            .get(&session)
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    async fn next_turn_id(&self, session: AgentSessionId) -> Result<TurnId, rootcause::Report> {
-        Ok(TurnId(
-            self.messages
-                .lock()
-                .expect("message table is not poisoned")
-                .get(&session)
-                .and_then(|messages| messages.last())
-                .map_or(0, |message| message.id.0 + 1),
-        ))
-    }
-}
-
-/// Both placeholder keys a completed turn produces, in fold order.
-fn both_sides(channel: Uuid, turn: u32) -> Vec<(Uuid, MessageId)> {
-    vec![
-        (
-            channel,
-            MessageId {
-                turn: TurnId(turn),
-                author: AuthorKind::User,
-            },
-        ),
-        (
-            channel,
-            MessageId {
-                turn: TurnId(turn),
-                author: AuthorKind::Agent,
-            },
-        ),
-    ]
-}
 
 struct Fixture {
     service: AgentSessionServiceImpl<
         InMemoryAgentSessionRepo,
-        StaticMessages,
-        RecordingComms,
+        FoldedMessageService<InMemoryAgentSessionRepo>,
         NoOpRealtime,
     >,
     repo: InMemoryAgentSessionRepo,
-    turns: StaticMessages,
-    comms: RecordingComms,
     session: AgentSessionId,
-    channel: Uuid,
 }
 
 fn fixture() -> Fixture {
     let repo = InMemoryAgentSessionRepo::new();
-    let turns = StaticMessages::default();
-    let comms = RecordingComms::new();
     let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(session, channel));
+    repo.insert_session(test_agent_session(session));
 
     Fixture {
-        // Nothing here is about streaming: `append_event` is the path for a
-        // session with no live actor, so there are no viewers to publish to.
+        // Nothing here is about streaming, so there are no viewers to publish
+        // to.
         service: AgentSessionServiceImpl::new(
             repo.clone(),
-            turns.clone(),
-            comms.clone(),
+            FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
         ),
         repo,
-        turns,
-        comms,
         session,
-        channel,
     }
 }
 
@@ -150,32 +48,39 @@ fn any_event(session: AgentSessionId) -> AgentSessionLog {
     }
 }
 
-/// An append that derives messages comms has not seen writes one placeholder
-/// each - both sides of the turn, separately keyed.
-#[tokio::test]
-async fn appending_a_new_turn_creates_a_placeholder_per_side() {
-    let fx = fixture();
-    fx.turns.set(fx.session, [0]);
+// A live session's frames go into `LiveSessionLogWriter`, which the actor
+// owns. These pin that path.
 
-    fx.service
-        .append_event(any_event(fx.session))
-        .await
-        .expect("append succeeds");
-
-    assert_eq!(fx.comms.created(), both_sides(fx.channel, 0));
+/// A `LiveSessionLogWriter` over the given store, as `register_transport`
+/// builds one for a connection - with nobody watching its channel.
+fn connection(
+    repo: InMemoryAgentSessionRepo,
+) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, NoOpRealtime> {
+    streaming_connection(repo, NoOpRealtime)
 }
 
-/// The event is persisted to the log whether or not it opens a turn.
+/// The same connection, publishing its frames somewhere a test can read them.
+fn streaming_connection<Rt>(
+    repo: InMemoryAgentSessionRepo,
+    realtime: Rt,
+) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, Rt>
+where
+    Rt: AgentSessionRealtime + Send + Sync + 'static,
+{
+    LiveSessionLogWriter::new(repo, realtime)
+}
+
+/// Every frame handed to a connection is stored, whether or not it derives
+/// anything.
 #[tokio::test]
 async fn appending_persists_the_event() {
     let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
 
-    fx.service
-        .append_event(any_event(fx.session))
+    AgentSessionLogWriter::append(&mut logs, any_event(fx.session))
         .await
         .expect("append succeeds");
-    fx.service
-        .append_event(any_event(fx.session))
+    AgentSessionLogWriter::append(&mut logs, any_event(fx.session))
         .await
         .expect("append succeeds");
 
@@ -183,208 +88,6 @@ async fn appending_persists_the_event() {
         .await
         .expect("in-memory repo cannot fail");
     assert_eq!(log.len(), 2);
-    assert_eq!(fx.comms.created(), vec![], "no messages, no placeholders");
-}
-
-/// A message that already has a placeholder is not written again; only the
-/// newly derived ones are.
-#[tokio::test]
-async fn only_unseen_messages_get_placeholders() {
-    let fx = fixture();
-    fx.turns.set(fx.session, [0]);
-    fx.service
-        .append_event(any_event(fx.session))
-        .await
-        .expect("append succeeds");
-
-    // The next event closes turn 0 and opens turn 1: the fold now derives
-    // both, but only turn 1 is missing a placeholder.
-    fx.turns.set(fx.session, [0, 1]);
-    fx.service
-        .append_event(any_event(fx.session))
-        .await
-        .expect("append succeeds");
-
-    let mut expected = both_sides(fx.channel, 0);
-    expected.extend(both_sides(fx.channel, 1));
-    assert_eq!(
-        fx.comms.created(),
-        expected,
-        "each message gets exactly one placeholder, in order"
-    );
-}
-
-/// Appends land on the appended session's channel, not anyone else's.
-#[tokio::test]
-async fn placeholders_are_scoped_to_the_session() {
-    let fx = fixture();
-    let other = AgentSessionId::new_from_uuid(Uuid::from_u128(2));
-    let other_channel = Uuid::from_u128(0xc4a3);
-    fx.repo
-        .insert_session(test_agent_session(other, other_channel));
-
-    fx.turns.set(fx.session, [0]);
-    fx.turns.set(other, [0]);
-
-    fx.service
-        .append_event(any_event(other))
-        .await
-        .expect("append succeeds");
-
-    assert_eq!(
-        fx.comms.created(),
-        both_sides(other_channel, 0),
-        "only the appended session's channel is written to"
-    );
-}
-
-/// The whole loop, on a real recording: the service appends each protocol
-/// frame, `agent_fold` refolds the log, and a comms placeholder appears for
-/// each side as the fold derives it - the user's when the prompt opens the
-/// turn, the agent's once it has content - and never twice.
-#[tokio::test]
-async fn appends_place_one_comms_placeholder_per_folded_message() {
-    let store = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    store.insert_session(test_agent_session(test_session(), channel));
-
-    let comms = RecordingComms::new();
-    let service = AgentSessionServiceImpl::new(
-        store.clone(),
-        FoldedMessageService::new(store.clone()),
-        comms.clone(),
-        NoOpRealtime,
-    );
-
-    let mut prompt_seen = false;
-    for entry in parse_log_as(test_session(), TURN) {
-        // The fixture attributes exactly the prompt frames to a user.
-        prompt_seen |= entry.user_id.is_some();
-
-        service.append_event(entry).await.expect("append succeeds");
-
-        let created = comms.created();
-        assert!(
-            created.len() <= 2,
-            "one turn folds to at most two messages, got {created:?}"
-        );
-        assert!(
-            created.iter().all(|(written, _)| *written == channel),
-            "placeholders land on the session's channel"
-        );
-        let unique: std::collections::HashSet<_> = created.iter().collect();
-        assert_eq!(unique.len(), created.len(), "no placeholder written twice");
-        if !prompt_seen {
-            assert!(created.is_empty(), "nothing renders before the prompt");
-        }
-    }
-    assert!(prompt_seen, "fixture contains a prompt");
-    assert_eq!(
-        comms.created(),
-        both_sides(channel, 0),
-        "the completed turn ends with both sides placed"
-    );
-}
-
-// A live connection's frames do not come through `append_event` - the actor
-// writes them into `LiveSessionLogWriter`, which folds incrementally rather
-// than asking what the whole log derives. These pin that path.
-
-/// A `LiveSessionLogWriter` over the given store, as `register_transport`
-/// builds one for a connection - with nobody watching its channel.
-fn connection<C: Comms + Clone + Send + Sync + 'static>(
-    repo: InMemoryAgentSessionRepo,
-    comms: C,
-) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, C, NoOpRealtime> {
-    streaming_connection(repo, comms, NoOpRealtime)
-}
-
-/// The same connection, publishing its frames somewhere a test can read them.
-fn streaming_connection<C, Rt>(
-    repo: InMemoryAgentSessionRepo,
-    comms: C,
-    realtime: Rt,
-) -> LiveSessionLogWriter<InMemoryAgentSessionRepo, C, Rt>
-where
-    C: Comms + Clone + Send + Sync + 'static,
-    Rt: AgentSessionRealtime + Send + Sync + 'static,
-{
-    LiveSessionLogWriter::new(repo, comms, realtime)
-}
-
-/// A [`Comms`] that refuses the first `n` placeholder writes, so a test can
-/// see what happens to a message the fold has already announced.
-#[derive(Clone)]
-struct FlakyComms {
-    inner: RecordingComms,
-    refusals: Arc<Mutex<usize>>,
-}
-
-impl FlakyComms {
-    fn refusing(n: usize) -> Self {
-        Self {
-            inner: RecordingComms::new(),
-            refusals: Arc::new(Mutex::new(n)),
-        }
-    }
-
-    /// Refusals still owed. Zero means every one budgeted has been spent, so
-    /// a test can tell "refused" from "never asked".
-    fn refusals_left(&self) -> usize {
-        *self.refusals.lock().expect("not poisoned")
-    }
-}
-
-impl Comms for FlakyComms {
-    async fn messages_with_placeholders(
-        &self,
-        session: &AgentSession,
-    ) -> Result<std::collections::HashSet<MessageId>, rootcause::Report> {
-        self.inner.messages_with_placeholders(session).await
-    }
-
-    async fn create_message_placeholder(
-        &self,
-        session: &AgentSession,
-        id: MessageId,
-        author: &Author,
-    ) -> Result<(), rootcause::Report> {
-        let refuse = {
-            let mut left = self.refusals.lock().expect("not poisoned");
-            let refuse = *left > 0;
-            *left = left.saturating_sub(1);
-            refuse
-        };
-        if refuse {
-            return Err(rootcause::report!("comms is down"));
-        }
-        self.inner
-            .create_message_placeholder(session, id, author)
-            .await
-    }
-}
-
-/// The live path, on a real recording: the same placeholders as the refolding
-/// path, one per folded message and never twice.
-#[tokio::test]
-async fn a_connections_frames_place_one_placeholder_per_folded_message() {
-    let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = RecordingComms::new();
-    let mut logs = connection(repo.clone(), comms.clone());
-
-    for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogWriter::append(&mut logs, entry)
-            .await
-            .expect("append succeeds");
-
-        let created = comms.created();
-        let unique: std::collections::HashSet<_> = created.iter().collect();
-        assert_eq!(unique.len(), created.len(), "no placeholder written twice");
-    }
-
-    assert_eq!(comms.created(), both_sides(channel, 0));
 }
 
 /// The point of the rework: a connection folds its session once, when it
@@ -395,9 +98,8 @@ async fn a_connections_frames_place_one_placeholder_per_folded_message() {
 #[tokio::test]
 async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let mut logs = connection(repo.clone(), RecordingComms::new());
+    repo.insert_session(test_agent_session(test_session()));
+    let mut logs = connection(repo.clone());
 
     let log = parse_log_as(test_session(), TURN);
     let frames = log.len();
@@ -416,182 +118,8 @@ async fn a_connection_reads_the_log_once_however_many_frames_arrive() {
     );
 }
 
-/// The agent's placeholder is written while its turn is still running, not
-/// held back until the turn stops - so a channel has somewhere to render the
-/// reply as it streams.
-#[tokio::test]
-async fn the_agents_placeholder_appears_before_its_turn_ends() {
-    let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = RecordingComms::new();
-    let mut logs = connection(repo.clone(), comms.clone());
-
-    let log = parse_log_as(test_session(), TURN);
-    let frames = log.len();
-    let agent_side = (
-        channel,
-        MessageId {
-            turn: TurnId(0),
-            author: AuthorKind::Agent,
-        },
-    );
-
-    let mut placed_at = None;
-    for (index, entry) in log.into_iter().enumerate() {
-        AgentSessionLogWriter::append(&mut logs, entry)
-            .await
-            .expect("append succeeds");
-        if placed_at.is_none() && comms.created().contains(&agent_side) {
-            placed_at = Some(index);
-        }
-    }
-
-    let placed_at = placed_at.expect("the agent's placeholder was written");
-    assert!(
-        placed_at < frames - 1,
-        "placed at frame {placed_at} of {frames}, not once the turn had ended"
-    );
-}
-
-/// Re-attaching to a session that is already rendered leaves the channel
-/// alone.
-///
-/// The reconnected fold catches up on the stored log and so re-derives every
-/// message the first connection did. Nothing filters those out - they are
-/// offered to comms again and the unique index absorbs them, which is the
-/// trade this path makes: one redundant write per message per connection
-/// instead of a query per connection to find out they exist.
-#[tokio::test]
-async fn re_attaching_does_not_place_a_message_twice() {
-    let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = RecordingComms::new();
-
-    // A first connection folds the whole recording.
-    let mut first = connection(repo.clone(), comms.clone());
-    for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogWriter::append(&mut first, entry)
-            .await
-            .expect("append succeeds");
-    }
-    let after_first = comms.created();
-    assert_eq!(after_first, both_sides(channel, 0));
-
-    // A second connection over the same log, as an attach would build.
-    let offered_before = comms.offered();
-    let mut second = connection(repo.clone(), comms.clone());
-    AgentSessionLogWriter::append(&mut second, any_event(test_session()))
-        .await
-        .expect("append succeeds");
-
-    assert_eq!(
-        comms.created(),
-        after_first,
-        "a re-attached connection re-derives the log but adds no rows"
-    );
-    assert_eq!(
-        comms.offered() - offered_before,
-        after_first.len(),
-        "and gets there by re-offering them, not by checking first"
-    );
-}
-
-/// A message the fold announced but comms refused is not lost. The fold names
-/// a message once, so the connection has to remember it and try again.
-#[tokio::test]
-async fn a_refused_placeholder_is_retried_on_the_next_frame() {
-    let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = FlakyComms::refusing(1);
-    let mut logs = connection(repo.clone(), comms.clone());
-
-    // Drive up to and including the prompt - the fixture opens with handshake
-    // traffic, and the prompt is the first frame that derives anything.
-    let mut log = parse_log_as(test_session(), TURN).into_iter();
-    for entry in log.by_ref() {
-        let is_prompt = entry.user_id.is_some();
-        AgentSessionLogWriter::append(&mut logs, entry)
-            .await
-            .expect("a refused placeholder does not fail the append");
-        if is_prompt {
-            break;
-        }
-    }
-    assert_eq!(
-        comms.refusals_left(),
-        0,
-        "the prompt's placeholder was offered, and refused"
-    );
-    assert_eq!(comms.inner.created(), vec![], "so nothing was written");
-
-    // Everything the fixture derives still lands, the refused message
-    // included.
-    for entry in log {
-        AgentSessionLogWriter::append(&mut logs, entry)
-            .await
-            .expect("append succeeds");
-    }
-    assert_eq!(
-        comms.inner.created(),
-        both_sides(channel, 0),
-        "the refused message was retried, and in fold order"
-    );
-}
-
-/// One more prompt, to see what turn a reconnected session gives it.
-const SECOND_PROMPT: &str = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p2","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"and again"}]}}}"#;
-
-/// What catching up is actually for: a connection that inherits a log keeps
-/// counting turns from where the log left off.
-///
-/// A fold starting empty would call this prompt `TurnId(0)`, key it to the
-/// placeholder turn 0 already owns, and have it swallowed as a duplicate - so
-/// it would render nowhere, while a channel load folding the whole log went
-/// on deriving it as turn 1. No unique index catches that; the ids are simply
-/// wrong.
-#[tokio::test]
-async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
-    let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = RecordingComms::new();
-
-    let mut first = connection(repo.clone(), comms.clone());
-    for entry in parse_log_as(test_session(), TURN) {
-        AgentSessionLogWriter::append(&mut first, entry)
-            .await
-            .expect("append succeeds");
-    }
-    assert_eq!(comms.created(), both_sides(channel, 0));
-
-    // A second connection over the same log, then a fresh prompt.
-    let mut second = connection(repo.clone(), comms.clone());
-    for entry in parse_log_as(test_session(), SECOND_PROMPT) {
-        AgentSessionLogWriter::append(&mut second, entry)
-            .await
-            .expect("append succeeds");
-    }
-
-    let mut expected = both_sides(channel, 0);
-    expected.push((
-        channel,
-        MessageId {
-            turn: TurnId(1),
-            author: AuthorKind::User,
-        },
-    ));
-    assert_eq!(
-        comms.created(),
-        expected,
-        "the prompt after a re-attach is turn 1, not turn 0 over again"
-    );
-}
-
-// Streaming: the same writer that keeps the channel's placeholders in step
-// pushes each frame at whoever is watching the channel right now.
+// Streaming: the writer every frame of a connected session passes through
+// pushes each one at whoever is watching the channel right now.
 
 /// Every frame a connection writes goes out once, addressed at the session's
 /// channel and carrying the frame verbatim - a viewer folds what it is sent
@@ -600,10 +128,9 @@ async fn a_re_attached_connection_keeps_counting_turns_from_the_log() {
 #[tokio::test]
 async fn a_connections_frames_are_published_to_its_channel() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
+    repo.insert_session(test_agent_session(test_session()));
     let realtime = RecordingRealtime::new();
-    let mut logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime.clone());
+    let mut logs = streaming_connection(repo.clone(), realtime.clone());
 
     let log = parse_log_as(test_session(), TURN);
     for entry in log.clone() {
@@ -617,8 +144,22 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert!(
         published
             .iter()
-            .all(|event| event.channel_id == channel && event.agent_session_id == test_session()),
-        "every event names the session's channel and the session"
+            .all(|event| event.agent_session_id == test_session()),
+        "every event names the session"
+    );
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .expect("stored log can be read");
+    assert_eq!(
+        published
+            .iter()
+            .map(|event| event.entry.created_at)
+            .collect::<Vec<_>>(),
+        stored
+            .iter()
+            .map(|entry| entry.created_at)
+            .collect::<Vec<_>>(),
+        "published timestamps are the timestamps assigned by persistence"
     );
     // Compared as the JSON they are published as: the client folds these
     // bytes with the same code it folds the fetched log with.
@@ -631,7 +172,7 @@ async fn a_connections_frames_are_published_to_its_channel() {
     assert_eq!(
         published
             .into_iter()
-            .map(|event| frame(event.entry))
+            .map(|event| frame(event.entry.entry))
             .collect::<Vec<_>>(),
         log.into_iter().map(frame).collect::<Vec<_>>(),
         "the frames go out as they were logged"
@@ -640,11 +181,8 @@ async fn a_connections_frames_are_published_to_its_channel() {
 
 /// Streaming costs the connection one session lookup, not one per frame.
 ///
-/// A frame names only its session and streaming addresses a channel, so the
-/// obvious implementation reads the session every time - and most frames are
-/// stream chunks that otherwise cost nothing but the log insert. The writer
-/// remembers the channel instead, and takes it from the read `place` was
-/// making anyway when there is one.
+/// Most frames are stream chunks that otherwise cost nothing but the log
+/// insert, so the audience lookup must not be per frame.
 #[tokio::test]
 async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
     /// Replay the fixture through a connection publishing to `realtime`, and
@@ -654,8 +192,8 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
         Rt: AgentSessionRealtime + Send + Sync + 'static,
     {
         let repo = InMemoryAgentSessionRepo::new();
-        repo.insert_session(test_agent_session(test_session(), Uuid::from_u128(0xc4a2)));
-        let mut logs = streaming_connection(repo.clone(), RecordingComms::new(), realtime);
+        repo.insert_session(test_agent_session(test_session()));
+        let mut logs = streaming_connection(repo.clone(), realtime);
 
         let log = parse_log_as(test_session(), TURN);
         let frames = log.len();
@@ -679,14 +217,12 @@ async fn streaming_costs_one_session_lookup_for_the_whole_connection() {
 }
 
 /// A publisher that is down costs a viewer some liveness and nothing else:
-/// the append succeeds, the log is written, and the channel is still placed.
+/// the append succeeds and the log is written.
 #[tokio::test]
 async fn a_failed_publish_does_not_fail_the_append() {
     let repo = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    repo.insert_session(test_agent_session(test_session(), channel));
-    let comms = RecordingComms::new();
-    let mut logs = streaming_connection(repo.clone(), comms.clone(), RecordingRealtime::down());
+    repo.insert_session(test_agent_session(test_session()));
+    let mut logs = streaming_connection(repo.clone(), RecordingRealtime::down());
 
     let log = parse_log_as(test_session(), TURN);
     let frames = log.len();
@@ -700,46 +236,38 @@ async fn a_failed_publish_does_not_fail_the_append() {
         .await
         .expect("in-memory repo cannot fail");
     assert_eq!(stored.len(), frames, "every frame is still durable");
-    assert_eq!(
-        comms.created(),
-        both_sides(channel, 0),
-        "and the channel is still placed"
-    );
 }
 
-/// `channel_log` resolves a dedicated channel to its session and hands back
-/// the log unfolded, in order.
+/// `session_log` hands back the log unfolded, in order, with the agent that
+/// wrote it.
 #[tokio::test]
-async fn channel_log_returns_the_sessions_frames_in_order() {
+async fn session_log_returns_the_sessions_frames_in_order() {
     let store = InMemoryAgentSessionRepo::new();
-    let channel = Uuid::from_u128(0xc4a2);
-    store.insert_session(test_agent_session(test_session(), channel));
+    store.insert_session(test_agent_session(test_session()));
     let recorded = parse_log_as(test_session(), TURN);
     store.extend_log(recorded.clone());
 
     let service = AgentSessionServiceImpl::new(
         store.clone(),
         FoldedMessageService::new(store.clone()),
-        RecordingComms::new(),
         NoOpRealtime,
     );
 
     let log = service
-        .channel_log(channel)
+        .session_log(test_session())
         .await
-        .expect("lookup succeeds")
-        .expect("the channel belongs to a session");
+        .expect("lookup succeeds");
 
-    assert_eq!(log.agent_session_id, test_session());
     assert_eq!(
         log.entries.len(),
         recorded.len(),
         "every frame is served, none folded away"
     );
+    assert!(!log.bot.name.is_empty(), "the response names the agent");
 
     // The order is the contract: folding is a left fold from the first frame,
     // so a reordered log derives different turn numbering.
-    let served = fold(log.entries);
+    let served = fold(log.entries.into_iter().map(|stored| stored.entry));
     assert_eq!(
         served,
         fold(recorded),
@@ -747,17 +275,13 @@ async fn channel_log_returns_the_sessions_frames_in_order() {
     );
 }
 
-/// A channel no session owns yields `None`, not an error - same as the folded
-/// endpoint.
+/// A session that never existed is an error: the response has to name the
+/// session's agent, and there is none to name.
 #[tokio::test]
-async fn channel_log_without_a_session_is_none() {
+async fn session_log_of_an_unknown_session_errors() {
     let fx = fixture();
 
-    let log = fx
-        .service
-        .channel_log(Uuid::from_u128(0xffff))
-        .await
-        .expect("lookup succeeds");
+    let log = fx.service.session_log(AgentSessionId::TEST_A).await;
 
-    assert!(log.is_none());
+    assert!(log.is_err());
 }

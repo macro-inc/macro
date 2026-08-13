@@ -120,6 +120,12 @@ impl ContainerManager for NamespaceContainerManager {
     async fn resume(&self, _session: AgentSessionId) -> Result<Self::Transport> {
         todo!("resuming Namespace instances is not implemented yet")
     }
+
+    async fn teardown(&self, _session: AgentSessionId) -> Result<()> {
+        // Tearing down needs the instance id for a session, which is the same
+        // lookup `resume` is waiting on.
+        todo!("tearing down Namespace instances is not implemented yet")
+    }
 }
 
 /// One Namespace instance and its live sidecar transport.

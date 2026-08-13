@@ -559,3 +559,86 @@ fn request_ids_never_repeat_across_the_connection() {
         [request_id(0), request_id(1), request_id(2), request_id(3)]
     );
 }
+
+fn stop(token: u32) -> Input<u32> {
+    Input::Command {
+        from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
+        action: AgentAction::Stop,
+        token,
+    }
+}
+
+#[test]
+fn a_stop_while_booting_drops_the_queued_prompts_instead_of_sending_them() {
+    let mut machine = machine();
+
+    // Queued, because nothing can be sent before the handshake finishes.
+    assert!(machine.handle(command("start the work", 1)).is_empty());
+    assert_eq!(machine.pending_count(), 1);
+
+    let effects = machine.handle(stop(2));
+
+    // The queued prompt resolves as accepted rather than failed: it was
+    // superseded, and a `Disconnected` here would have the harness resume and
+    // resend the very prompt this stop dropped.
+    assert!(
+        matches!(
+            effects[0],
+            Effect::Complete {
+                token: 1,
+                result: Ok(())
+            }
+        ),
+        "the queued prompt is completed, got {effects:?}"
+    );
+    // Only the stop is left to send once the session opens.
+    assert_eq!(machine.pending_count(), 1);
+
+    begin_opening(&mut machine);
+    let effects = machine.handle(session_opened("acp-1"));
+
+    let methods: Vec<_> = effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(n))),
+                ..
+            } => Some(n.method.to_string()),
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(r))),
+                ..
+            } => Some(r.method.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !methods.iter().any(|method| method == "session/prompt"),
+        "the dropped prompt must never reach the agent, sent {methods:?}"
+    );
+    assert!(
+        methods.iter().any(|method| method == "session/cancel"),
+        "the stop itself is still delivered, sent {methods:?}"
+    );
+}
+
+#[test]
+fn a_model_change_does_not_disturb_the_queue() {
+    let mut machine = machine();
+
+    assert!(machine.handle(command("start the work", 1)).is_empty());
+    let effects = machine.handle(Input::Command {
+        from: None,
+        action: AgentAction::set_model("opus"),
+        token: 2,
+    });
+
+    assert!(
+        effects.is_empty(),
+        "nothing completes early, got {effects:?}"
+    );
+    assert_eq!(
+        machine.pending_count(),
+        2,
+        "both are still queued, in order"
+    );
+}

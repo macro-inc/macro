@@ -24,6 +24,7 @@ const serviceToCrate: Record<string, string> = {
 	"connection-gateway": "connection_gateway",
 	"contacts-service": "contacts_service",
 	"unfurl-service": "unfurl_service",
+	"agent-harness": "agent_harness_service",
 	"email-service": "email_service",
 	"search-service": "search_service",
 	"scheduled-action": "scheduled_action"

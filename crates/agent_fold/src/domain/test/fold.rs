@@ -2,8 +2,8 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
-    TurnId,
+    Author, Control, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail,
+    ToolStatus, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -147,6 +147,39 @@ fn folds_an_interrupted_turn() {
         PermissionOutcome::Pending,
         "still awaiting an answer"
     );
+}
+
+#[test]
+fn folds_session_controls_as_typed_parts() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"/compact"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Control(Control::SetModel {
+            model: "opus".to_owned()
+        })]
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Control(Control::Compact)]
+    );
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control(Control::Stop)]
+    );
+    assert_eq!(messages[0].id, TurnId(0));
+    assert_eq!(messages[1].id, TurnId(1));
+    assert_eq!(messages[2].id, TurnId(2));
 }
 
 /// Every ACP tool kind this fold has a bespoke rendering for, plus a call

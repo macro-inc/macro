@@ -57,8 +57,10 @@ struct MentionsResponse {
 pub struct AgentAnnouncementChip {
     /// Agent session the chip anchors.
     pub agent_session_id: String,
-    /// Dedicated channel of the agent session.
-    pub channel_id: String,
+    /// Dedicated channel of the agent session, for chips old enough to
+    /// predate sessions standing alone. New chips carry only the session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message: MessageId,
     /// Persisted chip status (e.g. `booting`).

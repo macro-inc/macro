@@ -12,7 +12,7 @@ import type {
   FoldedMessage,
   FoldedMessageChange,
 } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
+import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
 /**
  * One live session's fold, held open between frames.

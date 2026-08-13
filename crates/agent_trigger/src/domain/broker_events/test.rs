@@ -49,7 +49,6 @@ fn serializes_an_existing_channel_event() {
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
-            kind: ChannelKind::DedicatedChannel,
             message: message(),
         },
     ));

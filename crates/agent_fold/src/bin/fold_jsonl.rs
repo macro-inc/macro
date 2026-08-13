@@ -12,8 +12,8 @@
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, FoldedMessage, MessagePart, Permission, PermissionOutcome, StopReason, ToolDetail,
-    ToolUse,
+    Author, Control, FoldedMessage, MessagePart, Permission, PermissionOutcome, PlanEntryStatus,
+    StopReason, ToolDetail, ToolUse,
 };
 use agent_fold::domain::ports::LogRepo;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -209,6 +209,25 @@ fn render_message(message: &FoldedMessage) -> String {
             }
             MessagePart::ToolUse(tool) => out.push_str(&render_tool(tool)),
             MessagePart::Permission(permission) => out.push_str(&render_permission(permission)),
+            MessagePart::Control(control) => {
+                let label = match control {
+                    Control::SetModel { model } => format!("model changed to {model}"),
+                    Control::Compact => "context compacted".to_owned(),
+                    Control::Stop => "stop requested".to_owned(),
+                };
+                let _ = writeln!(out, "[{label}]");
+            }
+            MessagePart::Plan(plan) => {
+                let _ = writeln!(out, "[plan]");
+                for entry in &plan.entries {
+                    let mark = match entry.status {
+                        PlanEntryStatus::Pending => " ",
+                        PlanEntryStatus::InProgress => "~",
+                        PlanEntryStatus::Completed => "x",
+                    };
+                    let _ = writeln!(out, "{}", indent(&format!("[{mark}] {}", entry.content)));
+                }
+            }
         }
         out.push('\n');
     }

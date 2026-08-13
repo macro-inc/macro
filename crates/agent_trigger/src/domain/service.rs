@@ -13,7 +13,9 @@ use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::AgentSessionMacroEvent;
-use crate::domain::yield_event::{AgentSessionEventDecision, NoEventReason, yield_event};
+use crate::domain::yield_event::{
+    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
+};
 
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
@@ -80,7 +82,7 @@ where
     ) -> Result<Option<AgentSessionMacroEvent>> {
         let existing = self
             .sessions
-            .find_for_channel(posted.channel_id, posted.thread_id, mentioned_bot)
+            .find_for_channel(posted.thread_id, mentioned_bot)
             .await?;
         if let Some(session_id) = session_id(&existing)
             && !seen_sessions.insert(session_id)
@@ -93,17 +95,20 @@ where
             return Ok(None);
         }
         let bot = match &existing {
-            ChannelSession::InDedicatedChannel(session)
-            | ChannelSession::CreatedFromThread(session) => Some(session.bot_id),
+            ChannelSession::CreatedFromThread(session) => Some(session.bot_id),
             ChannelSession::None => mentioned_bot,
-            ChannelSession::ThreadInDedicatedChannel { .. } => None,
         };
         let has_agent = match bot {
             Some(bot_id) => self.bots.has_agent(bot_id).await?,
             None => false,
         };
 
-        match yield_event(posted, &existing, mentioned_bot, has_agent) {
+        let message = PotentialTriggerEvent::Channel {
+            posted,
+            existing: &existing,
+            mentioned_bot,
+        };
+        match yield_event(&message, has_agent) {
             AgentSessionEventDecision::Event(event) => Ok(Some(event)),
             AgentSessionEventDecision::NoEvent(reason) => {
                 log_no_event(posted, mentioned_bot, reason);
@@ -128,8 +133,7 @@ fn log_no_event(
 
 fn session_id(session: &ChannelSession) -> Option<AgentSessionId> {
     match session {
-        ChannelSession::InDedicatedChannel(session)
-        | ChannelSession::CreatedFromThread(session) => Some(session.id),
-        ChannelSession::None | ChannelSession::ThreadInDedicatedChannel { .. } => None,
+        ChannelSession::CreatedFromThread(session) => Some(session.id),
+        ChannelSession::None => None,
     }
 }

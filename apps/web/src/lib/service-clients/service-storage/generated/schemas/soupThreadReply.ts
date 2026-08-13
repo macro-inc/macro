@@ -8,7 +8,6 @@
 import type { SoupCountedReaction } from './soupCountedReaction';
 import type { SoupMessageAttachment } from './soupMessageAttachment';
 import type { SoupMessageSender } from './soupMessageSender';
-import type { SoupThreadReplyContent } from './soupThreadReplyContent';
 import type { SoupThreadReplyEditedAt } from './soupThreadReplyEditedAt';
 
 /**
@@ -17,8 +16,8 @@ import type { SoupThreadReplyEditedAt } from './soupThreadReplyEditedAt';
 export interface SoupThreadReply {
   /** Attachments on this reply. */
   attachments: SoupMessageAttachment[];
-  /** Reply content. `None` on agent-turn placeholder messages. */
-  content?: SoupThreadReplyContent;
+  /** Reply content. */
+  content: string;
   /** Creation timestamp. */
   created_at: string;
   /** Edit timestamp. */

@@ -311,8 +311,10 @@ services:
       - services
 
   # ============================================================================
-  # agent_harness_service (portless local worker)
-  # Agent session trigger events -> sandboxed coding agent sessions.
+  # agent_harness_service (Port 8101)
+  # Agent session trigger events -> sandboxed coding agent sessions, plus the
+  # session control routes, which have to be served from the process that owns
+  # the live transports they act on.
   # Starts credential-less (and warns); arm it with
   # `DAYTONA_API_KEY=... GITHUB_TOKEN=... just run_local`.
   # ============================================================================
@@ -320,6 +322,8 @@ services:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]
     restart: on-failure
+    ports:
+      - "8101:8101"
     environment:
       # In-network gateway address; the local default (http://localhost:8082)
       # would point at this container itself.

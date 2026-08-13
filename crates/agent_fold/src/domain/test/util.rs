@@ -2,8 +2,8 @@
 //! lets a test assert on what the fold logged.
 
 pub use crate::testing::{
-    InMemoryLog, LONG_MULTI_RESUME, REAL_MULTI_TURN, REAL_SINGLE_TURN, RESUMED_AND_CONTINUED,
-    RESUMED_NO_PROMPT, TURN, parse_log, parse_log_as, test_session,
+    InMemoryLog, LONG_MULTI_RESUME, PLAN_TODO, REAL_MULTI_TURN, REAL_SINGLE_TURN,
+    RESUMED_AND_CONTINUED, RESUMED_NO_PROMPT, TURN, parse_log, parse_log_as, test_session,
 };
 
 use std::collections::HashMap;

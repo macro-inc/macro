@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiChannelContextMessageAgentSessionMessage } from './apiChannelContextMessageAgentSessionMessage';
-import type { ApiChannelContextMessageContent } from './apiChannelContextMessageContent';
 import type { ApiChannelContextMessageDeletedAt } from './apiChannelContextMessageDeletedAt';
 import type { ApiChannelContextMessageEditedAt } from './apiChannelContextMessageEditedAt';
 import type { ApiChannelContextMessageThreadId } from './apiChannelContextMessageThreadId';
@@ -15,11 +13,10 @@ import type { ApiMessageSender } from './apiMessageSender';
  * A channel message returned by the message-context endpoint.
  */
 export interface ApiChannelContextMessage {
-  agent_session_message?: ApiChannelContextMessageAgentSessionMessage;
   /** Channel id. */
   channel_id: string;
-  /** Message content. `None` on agent-turn placeholder messages. */
-  content?: ApiChannelContextMessageContent;
+  /** Message content. */
+  content: string;
   /** When the message was created. */
   created_at: string;
   /** When the message was soft-deleted. */

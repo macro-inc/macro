@@ -3428,4 +3428,22 @@ expression: messages
         },
         stop: None,
     },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User(
+            None,
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control(
+                    SetModel {
+                        model: "opus[1m]",
+                    },
+                ),
+            ],
+        },
+        stop: None,
+    },
 ]

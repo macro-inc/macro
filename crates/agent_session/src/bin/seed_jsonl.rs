@@ -6,16 +6,10 @@
 //! transcript in front of the UI without running a container.
 //!
 //! Frames go in through [`LiveSessionLogWriter`] rather than the log repo,
-//! because appending is not just an insert: a frame that derives a message the
-//! channel has not seen also needs a placeholder comms message. Writing to the
-//! repo directly stores the log but leaves the channel empty, so the session
-//! renders as nothing.
-//!
-//! That is the same writer a live session's actor uses, which is the point: it
-//! carries an `agent_fold` machine from frame to frame instead of asking what
-//! the whole log derives on each one. Seeding a recording of n frames folds n
-//! entries rather than n^2 of them, and a long recording was where that
-//! difference stopped being academic.
+//! because that is the writer a live session's actor uses: it carries an
+//! `agent_fold` machine from frame to frame instead of refolding the stored
+//! log on each one, so a recording of n frames folds n entries rather than
+//! n^2 of them.
 //!
 //! Recordings are the ones written by the `agent_session_recorder` example to
 //! `~/.agent_runtime_sessions/<session-id>.jsonl`: one JSON object per line,
@@ -259,14 +253,13 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     // so append order is what makes the recording replay as recorded.
     //
     // One writer for the whole recording, so its fold is built once and
-    // advanced a frame at a time. Rebuilding it per frame - or going through
-    // `append_event`, which folds the stored log afresh every call - is what
-    // made long recordings crawl.
+    // advanced a frame at a time. Rebuilding it per frame is what made long
+    // recordings crawl.
     //
     // Nothing streams: a recording has no viewers to be live for, and pushing
     // its thousands of frames at a channel would only make the gateway replay
     // a session nobody is watching.
-    let mut logs = LiveSessionLogWriter::new(repo.clone(), repo.clone(), NoOpRealtime);
+    let mut logs = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
 
     let total = log.len();
     let started = Instant::now();
@@ -288,7 +281,6 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     }
 
     println!("session:  {}", session.id);
-    println!("channel:  {}", session.channel_id);
     println!("entries:  {total}");
     Ok(())
 }

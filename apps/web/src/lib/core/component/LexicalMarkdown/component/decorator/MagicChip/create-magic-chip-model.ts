@@ -1,12 +1,10 @@
-import { type MessageId, withAuthor } from '@core/agent-fold/message-id';
 import type { MagicChipDecoratorProps } from '@macro-inc/lexical-core';
-import { subscribeAgentSessionLog } from '@queries/channel/agent-session-stream';
 import {
-  createFoldedMessages,
-  type FoldedMessageLookup,
-} from '@queries/channel/folded-messages';
+  acquireAgentSessionFold,
+  subscribeAgentSessionLog,
+} from '@queries/agent-session/session-fold';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-storage/generated/schemas/agentSessionLogEntryDto';
+import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
@@ -20,35 +18,14 @@ function systemEvent(entry: AgentSessionLogEntryDto): string | undefined {
     : undefined;
 }
 
-function responseFromPrompt(
-  lookup: FoldedMessageLookup | undefined,
-  sessionId: string,
-  prompt: MessageId
-): FoldedMessage | undefined {
-  if (!lookup || prompt.author !== 'user') return undefined;
-  return lookup(sessionId, withAuthor(prompt, 'agent'));
-}
-
-/** Own the live fold and lifecycle subscriptions behind one Magic Chip. */
+/** Observe the session lifecycle and the chip's anchored folded turn. */
 export function createMagicChipModel(props: MagicChipDecoratorProps): {
   presentation: Accessor<MagicChipPresentation>;
 } {
   const [latestEvent, setLatestEvent] = createSignal<string>();
-  const observeEntries = (entries: AgentSessionLogEntryDto[]) => {
-    // A live event is newer than the fetched snapshot that was in flight.
-    if (latestEvent()) return;
-    for (const entry of entries) {
-      const event = systemEvent(entry);
-      if (event) setLatestEvent(event);
-    }
-  };
-  // Always on: a chip that exists in a document has to render its session
-  // regardless of whether the channel surfaces the fold.
-  const foldedMessages = createFoldedMessages(
-    () => props.channelId,
-    () => true,
-    { observeEntries }
-  );
+  const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+  let active = true;
+  let release: (() => void) | undefined;
   const unsubscribe = subscribeAgentSessionLog(
     props.agentSessionId,
     (event) => {
@@ -56,22 +33,57 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       if (name) setLatestEvent(name);
     }
   );
-  onCleanup(unsubscribe);
 
-  // Unlike a direct resource read, this does not suspend the initial status.
-  const lookup = () =>
-    foldedMessages.state === 'ready' ? foldedMessages() : undefined;
-  const presentation = () =>
-    deriveMagicChipPresentation({
+  void acquireAgentSessionFold({
+    agentSessionId: props.agentSessionId,
+    onChange: (changed) => {
+      setMessages((current) =>
+        changed.reduce(
+          (next, message) => [
+            ...next.filter(
+              (existing) =>
+                existing.turn !== message.turn ||
+                existing.author.kind !== message.author.kind
+            ),
+            message,
+          ],
+          current
+        )
+      );
+    },
+  })
+    .then((acquired) => {
+      if (!active) {
+        acquired.release();
+        return;
+      }
+      release = acquired.release;
+      setMessages(acquired.messages);
+    })
+    .catch((error: unknown) => {
+      console.error('[magic-chip] session log could not be folded', error);
+    });
+
+  onCleanup(() => {
+    active = false;
+    unsubscribe();
+    release?.();
+  });
+
+  const presentation = () => {
+    const turn = props.promptedMessage.turn;
+    const messagesForTurn = messages().filter(
+      (message) => message.turn === turn
+    );
+    return deriveMagicChipPresentation({
       persistedStatus: props.status,
       latestEvent: latestEvent(),
-      prompt: lookup()?.(props.agentSessionId, props.promptedMessage),
-      response: responseFromPrompt(
-        lookup(),
-        props.agentSessionId,
-        props.promptedMessage
+      prompt: messagesForTurn.find((message) => message.author.kind === 'user'),
+      response: messagesForTurn.find(
+        (message) => message.author.kind === 'agent'
       ),
     });
+  };
 
   return { presentation };
 }
