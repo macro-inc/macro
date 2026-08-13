@@ -60,9 +60,9 @@ VALUES ('dddddddd-dddd-dddd-dddd-100000000001', 'a0000000-0000-0000-0000-0000000
 ------------------------------------------------------------
 -- Thread permissions (via EmailThreadPermission + SharePermission)
 ------------------------------------------------------------
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "linkShare", "linkShareAccessLevel")
-VALUES ('sp-thread-1', false, NULL, NULL, NULL),
-       ('sp-thread-2', false, NULL, NULL, NULL);
+INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
+VALUES ('sp-thread-1', NULL, NULL),
+       ('sp-thread-2', NULL, NULL);
 
 INSERT INTO public."EmailThreadPermission" ("threadId", "sharePermissionId", "userId")
 VALUES ('a0000000-0000-0000-0000-000000000010', 'sp-thread-1', 'user-thread-access'),

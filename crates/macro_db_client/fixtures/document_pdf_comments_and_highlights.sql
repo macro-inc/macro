@@ -81,8 +81,6 @@ VALUES
 INSERT INTO
     public."SharePermission" (
         "id",
-        "isPublic",
-        "publicAccessLevel",
         "linkShare",
         "linkShareAccessLevel",
         "createdAt",
@@ -91,8 +89,6 @@ INSERT INTO
 VALUES
     (
         'sp-comments',
-        false,
-        NULL,
         NULL,
         NULL,
         '2022-01-01 00:00:00',
