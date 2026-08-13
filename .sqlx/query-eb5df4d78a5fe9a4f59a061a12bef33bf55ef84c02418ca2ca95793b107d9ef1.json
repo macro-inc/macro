@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'chat'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: chat link share permission\n            SELECT\n                sp.\"linkShareAccessLevel\"::text AS access_level\n            FROM \"SharePermission\" sp\n            JOIN \"ChatPermission\" cp ON cp.\"sharePermissionId\" = sp.id\n            WHERE cp.\"chatId\" = $3\n              AND sp.\"linkShareAccessLevel\" IS NOT NULL\n              AND (\n                  sp.\"linkShare\" = 'PUBLIC'\n                  OR (\n                      sp.\"linkShare\" = 'TEAM'\n                      AND EXISTS (\n                          SELECT 1\n                          FROM \"Chat\" c\n                          JOIN team_user owner_tu ON owner_tu.user_id = c.\"userId\"\n                          WHERE c.id = $3\n                            AND owner_tu.team_id::text = ANY($2)\n                      )\n                  )\n              )\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "eb5df4d78a5fe9a4f59a061a12bef33bf55ef84c02418ca2ca95793b107d9ef1"
+}

@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
-use async_graphql::{Context, EmptySubscription, Object, Request, Schema, SimpleObject, value};
+use async_graphql::{
+    Context, EmptySubscription, MaybeUndefined, Object, Request, Schema, SimpleObject, value,
+};
 use entity_mutation::{
     EntityMutationActor, EntityMutationEffect, UnavailableEntityMutationService,
 };
+use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
+use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
 
 /// Minimal composed Soup edge object used by the isolated mutation schema.
 #[derive(Clone, SimpleObject)]
@@ -187,15 +191,53 @@ fn batch_validation_rejects_oversized_and_duplicate_requests() {
 }
 
 #[test]
+fn share_policy_input_preserves_nullable_link_updates() {
+    let enabled = super::EntitySharePolicyInput {
+        link_share: MaybeUndefined::Value(super::GraphqlLinkShare::Team),
+        link_share_access_level: MaybeUndefined::Value(GraphqlEntityAccessLevel::Edit),
+        channel_share_permissions: None,
+    }
+    .into_model();
+    assert_eq!(enabled.link_share, Some(Some(LinkShare::Team)));
+    assert_eq!(
+        enabled.link_share_access_level,
+        Some(Some(AccessLevel::Edit))
+    );
+
+    let disabled = super::EntitySharePolicyInput {
+        link_share: MaybeUndefined::Null,
+        link_share_access_level: MaybeUndefined::Undefined,
+        channel_share_permissions: None,
+    }
+    .into_model();
+    assert_eq!(disabled.link_share, Some(None));
+    assert_eq!(disabled.link_share_access_level, None);
+}
+
+#[test]
 fn share_policy_validation_requires_access_levels_for_grants() {
-    let inputs = [super::UpdateEntitySharePolicyInput {
+    let link_inputs = [super::UpdateEntitySharePolicyInput {
         entity: super::EntityRefInput {
             entity_type: graphql_common::GraphqlEntityType::Document,
             id: "document-1".into(),
         },
         policy: super::EntitySharePolicyInput {
-            is_public: None,
-            public_access_level: None,
+            link_share: MaybeUndefined::Value(super::GraphqlLinkShare::Public),
+            link_share_access_level: MaybeUndefined::Undefined,
+            channel_share_permissions: None,
+        },
+    }];
+    let error = super::validate_share_policy_inputs(&link_inputs).unwrap_err();
+    assert!(error.message.contains("linkShareAccessLevel is required"));
+
+    let channel_inputs = [super::UpdateEntitySharePolicyInput {
+        entity: super::EntityRefInput {
+            entity_type: graphql_common::GraphqlEntityType::Document,
+            id: "document-1".into(),
+        },
+        policy: super::EntitySharePolicyInput {
+            link_share: MaybeUndefined::Undefined,
+            link_share_access_level: MaybeUndefined::Undefined,
             channel_share_permissions: Some(vec![super::ChannelSharePolicyInput {
                 operation: super::GraphqlSharePolicyOperation::Add,
                 channel_id: "channel-1".into(),
@@ -203,7 +245,6 @@ fn share_policy_validation_requires_access_levels_for_grants() {
             }]),
         },
     }];
-
-    let error = super::validate_share_policy_inputs(&inputs).unwrap_err();
+    let error = super::validate_share_policy_inputs(&channel_inputs).unwrap_err();
     assert!(error.message.contains("accessLevel is required"));
 }

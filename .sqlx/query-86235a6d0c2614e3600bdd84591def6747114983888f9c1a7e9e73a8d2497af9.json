@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"SharePermission\"\n        SET\n            \"linkShare\" = CASE WHEN $2 THEN $3 ELSE \"linkShare\" END,\n            \"linkShareAccessLevel\" = CASE\n                WHEN $2 AND $3 IS NULL THEN NULL\n                WHEN $2 THEN COALESCE($5, 'view')\n                WHEN $4 AND \"linkShare\" IS NOT NULL THEN COALESCE($5, 'view')\n                WHEN $4 THEN NULL\n                ELSE \"linkShareAccessLevel\"\n            END,\n            \"isPublic\" = CASE\n                WHEN $2 THEN COALESCE($3 = 'PUBLIC', false)\n                ELSE \"isPublic\"\n            END,\n            \"publicAccessLevel\" = CASE\n                WHEN $2 AND $3 IS NULL THEN NULL\n                WHEN $2 THEN COALESCE($5, 'view')\n                WHEN $4 AND \"linkShare\" IS NOT NULL THEN COALESCE($5, 'view')\n                WHEN $4 THEN NULL\n                ELSE \"publicAccessLevel\"\n            END,\n            \"updatedAt\" = NOW()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86235a6d0c2614e3600bdd84591def6747114983888f9c1a7e9e73a8d2497af9"
+}
