@@ -23,8 +23,6 @@ const DELETED_ID: &str = "10000000-0000-0000-0000-000000000009";
 struct StoredSharePermission {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
-    legacy_is_public: bool,
-    legacy_public_access_level: Option<String>,
 }
 
 async fn project_share_permission_columns(
@@ -36,9 +34,7 @@ async fn project_share_permission_columns(
         r#"
         SELECT
             permission."linkShare" AS "link_share?",
-            permission."linkShareAccessLevel" AS "link_share_access_level?",
-            permission."isPublic" AS legacy_is_public,
-            permission."publicAccessLevel" AS "legacy_public_access_level?"
+            permission."linkShareAccessLevel" AS "link_share_access_level?"
         FROM "SharePermission" permission
         JOIN "ProjectPermission" project_permission
             ON project_permission."sharePermissionId" = permission.id
@@ -179,16 +175,6 @@ async fn preview_preserves_found_and_missing_input_entries(
 async fn reads_share_permissions_and_bumps_modified_timestamp(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"
-        UPDATE "SharePermission"
-        SET "isPublic" = false, "publicAccessLevel" = 'view'
-        WHERE id = 'share-root'
-        "#,
-    )
-    .execute(&pool)
-    .await?;
-
     let repo = PgProjectRepo::new(pool);
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
     assert_eq!(permission.id, "share-root");
@@ -251,8 +237,6 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
-            legacy_is_public: false,
-            legacy_public_access_level: None,
         }
     );
 
@@ -279,9 +263,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
-async fn create_defaults_enabled_link_share_to_view_and_dual_writes(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
     let mut permission = SharePermissionV2::new_project_share_permission();
     permission.link_share = Some(LinkShare::Team);
@@ -300,8 +282,6 @@ async fn create_defaults_enabled_link_share_to_view_and_dual_writes(
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("view".to_owned()),
-            legacy_is_public: false,
-            legacy_public_access_level: Some("view".to_owned()),
         }
     );
     let permission = repo.get_project_share_permission(&project.id).await?;
@@ -360,8 +340,6 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("view".to_owned()),
-            legacy_is_public: false,
-            legacy_public_access_level: Some("view".to_owned()),
         }
     );
 
@@ -382,8 +360,6 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("comment".to_owned()),
-            legacy_is_public: false,
-            legacy_public_access_level: Some("comment".to_owned()),
         }
     );
 
@@ -405,8 +381,6 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("PUBLIC".to_owned()),
             link_share_access_level: Some("edit".to_owned()),
-            legacy_is_public: true,
-            legacy_public_access_level: Some("edit".to_owned()),
         }
     );
 
@@ -444,8 +418,6 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
-            legacy_is_public: false,
-            legacy_public_access_level: None,
         }
     );
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
@@ -685,7 +657,7 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         .iter()
         .map(|document| document.document_id.clone())
         .collect::<Vec<_>>();
-    let mirrored_permissions = sqlx::query_scalar!(
+    let created_permissions = sqlx::query_scalar!(
         r#"
         WITH created_permission_ids AS (
             SELECT "sharePermissionId" AS id
@@ -701,15 +673,13 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         WHERE permission.id IN (SELECT id FROM created_permission_ids)
           AND permission."linkShare" = 'TEAM'
           AND permission."linkShareAccessLevel" = 'view'
-          AND NOT permission."isPublic"
-          AND permission."publicAccessLevel" = 'view'
         "#,
         &result.project_ids,
         &document_ids,
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(mirrored_permissions, 4);
+    assert_eq!(created_permissions, 4);
 
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;

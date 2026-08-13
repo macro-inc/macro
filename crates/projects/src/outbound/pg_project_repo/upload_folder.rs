@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, FileTypeExt};
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
 use model::project::Project;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
+use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::{MarkedUploadedTree, UploadFolderRepoArgs};
@@ -267,7 +267,6 @@ async fn create_document_share_permission(
     let link_share = permission.link_share;
     let link_share_access_level =
         share::normalize_link_share_access_level(link_share, permission.link_share_access_level);
-    let legacy_is_public = link_share == Some(LinkShare::Public);
     let link_share = link_share.map(|value| value.to_string());
     let link_share_access_level = link_share_access_level.map(|level| level.to_string());
 
@@ -276,17 +275,14 @@ async fn create_document_share_permission(
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
-            "isPublic",
-            "publicAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, $3, $2, NOW(), NOW())
+        VALUES ($1, $2, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level,
-        legacy_is_public,
     )
     .fetch_one(transaction.as_mut())
     .await?;

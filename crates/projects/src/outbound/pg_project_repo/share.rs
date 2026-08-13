@@ -93,7 +93,6 @@ pub(super) async fn create_project_share_permission(
     let link_share = permission.link_share;
     let link_share_access_level =
         normalize_link_share_access_level(link_share, permission.link_share_access_level);
-    let legacy_is_public = link_share == Some(LinkShare::Public);
     let link_share = link_share.map(|value| value.to_string());
     let link_share_access_level = link_share_access_level.map(|level| level.to_string());
 
@@ -102,17 +101,14 @@ pub(super) async fn create_project_share_permission(
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
-            "isPublic",
-            "publicAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, $3, $2, NOW(), NOW())
+        VALUES ($1, $2, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level,
-        legacy_is_public,
     )
     .fetch_one(transaction.as_mut())
     .await?;
@@ -186,17 +182,6 @@ pub(super) async fn edit_project_share_permission(
                 WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5, 'view')
                 WHEN $4 THEN NULL
                 ELSE "linkShareAccessLevel"
-            END,
-            "isPublic" = CASE
-                WHEN $2 THEN COALESCE($3 = 'PUBLIC', false)
-                ELSE "isPublic"
-            END,
-            "publicAccessLevel" = CASE
-                WHEN $2 AND $3 IS NULL THEN NULL
-                WHEN $2 THEN COALESCE($5, 'view')
-                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5, 'view')
-                WHEN $4 THEN NULL
-                ELSE "publicAccessLevel"
             END,
             "updatedAt" = NOW()
         WHERE id = $1
