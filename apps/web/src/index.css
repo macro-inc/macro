@@ -142,7 +142,7 @@ body.tauri-ios {
 
   --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(0.15 0 0 / 0.04);
-  --color-overlay:         oklch(0 0 0 / 0.05);
+  --color-overlay:         oklch(0 0 0 / 0.25);
 
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
