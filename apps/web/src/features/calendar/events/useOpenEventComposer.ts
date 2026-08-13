@@ -45,7 +45,7 @@ export function useOpenEventComposer() {
                 {
                   title: 'You still have remaining changes',
                   body: 'Closing this event will discard your changes.',
-                  confirmLabel: 'Discard changes',
+                  confirmLabel: 'Discard',
                   cancelLabel: 'Keep editing',
                   tone: 'danger',
                 },
