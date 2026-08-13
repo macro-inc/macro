@@ -78,17 +78,6 @@ async fn edit_share_permission(
                 WHEN $4 THEN NULL
                 ELSE "linkShareAccessLevel"
             END,
-            "isPublic" = CASE
-                WHEN $2 THEN COALESCE($3 = 'PUBLIC', false)
-                ELSE "isPublic"
-            END,
-            "publicAccessLevel" = CASE
-                WHEN $2 AND $3 IS NULL THEN NULL
-                WHEN $2 THEN COALESCE($5, 'view')
-                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5, 'view')
-                WHEN $4 THEN NULL
-                ELSE "publicAccessLevel"
-            END,
             "updatedAt" = NOW()
         WHERE id = $1
         "#,

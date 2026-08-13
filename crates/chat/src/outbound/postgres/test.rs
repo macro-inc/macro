@@ -19,8 +19,6 @@ struct StoredSharePermission {
     id: String,
     link_share: Option<String>,
     link_share_access_level: Option<String>,
-    legacy_is_public: bool,
-    legacy_public_access_level: Option<String>,
 }
 
 async fn get_stored_share_permission(
@@ -32,9 +30,7 @@ async fn get_stored_share_permission(
         SELECT
             sp.id,
             sp."linkShare" AS "link_share?",
-            sp."linkShareAccessLevel" AS "link_share_access_level?",
-            sp."isPublic" AS legacy_is_public,
-            sp."publicAccessLevel" AS "legacy_public_access_level?"
+            sp."linkShareAccessLevel" AS "link_share_access_level?"
         FROM "ChatPermission" cp
         JOIN "SharePermission" sp ON cp."sharePermissionId" = sp.id
         WHERE cp."chatId" = $1
@@ -49,8 +45,6 @@ async fn get_stored_share_permission(
         id: row.id,
         link_share: row.link_share,
         link_share_access_level: row.link_share_access_level,
-        legacy_is_public: row.legacy_is_public,
-        legacy_public_access_level: row.legacy_public_access_level,
     }
 }
 
@@ -339,11 +333,6 @@ async fn create_chat_creates_public_view_permission(pool: Pool<Postgres>) {
     assert!(!permission.id.is_empty());
     assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
-    assert!(permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
-        Some("view")
-    );
 }
 
 #[sqlx::test(
@@ -967,11 +956,6 @@ async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(poo
     let permission = get_stored_share_permission(&pool, &chat_id).await;
     assert_eq!(permission.link_share.as_deref(), Some("TEAM"));
     assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
-    assert!(!permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
-        Some("view")
-    );
 }
 
 #[sqlx::test(
@@ -1006,11 +990,6 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
     let permission = get_stored_share_permission(&pool, &chat_id).await;
     assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
-    assert!(permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
-        Some("view")
-    );
 }
 
 #[sqlx::test(
@@ -1035,8 +1014,6 @@ async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Post
     let permission = get_stored_share_permission(&pool, &chat_id).await;
     assert_eq!(permission.link_share, None);
     assert_eq!(permission.link_share_access_level, None);
-    assert!(!permission.legacy_is_public);
-    assert_eq!(permission.legacy_public_access_level, None);
 }
 
 #[sqlx::test(
@@ -1056,9 +1033,7 @@ async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
         UPDATE "SharePermission" sp
         SET
             "linkShare" = 'TEAM',
-            "linkShareAccessLevel" = 'edit',
-            "isPublic" = true,
-            "publicAccessLevel" = 'view'
+            "linkShareAccessLevel" = 'edit'
         FROM "ChatPermission" cp
         WHERE cp."sharePermissionId" = sp.id AND cp."chatId" = $1
         "#,
