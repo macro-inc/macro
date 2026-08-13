@@ -47,7 +47,7 @@ type CompleteMutationRoot {
 	"""
 	moveEntities(inputs: [MoveEntityInput!]!): EntityMutationPayload!
 	"""
-	Update public and channel share policies across supported entity kinds.
+	Update link and channel share policies across supported entity kinds.
 	"""
 	updateEntitySharePolicies(inputs: [UpdateEntitySharePolicyInput!]!): EntityMutationPayload!
 	"""
@@ -151,17 +151,17 @@ input EntityRefInput {
 }
 
 """
-Shared public/channel share-policy update.
+Shared link/channel share-policy update.
 """
 input EntitySharePolicyInput {
 	"""
-	Whether public access should be enabled.
+	Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
 	"""
-	isPublic: Boolean
+	linkShare: GraphqlLinkShare
 	"""
-	Public access level when public access is enabled.
+	Link access level. Omit to leave unchanged or pass null to clear it.
 	"""
-	publicAccessLevel: GraphqlEntityAccessLevel
+	linkShareAccessLevel: GraphqlEntityAccessLevel
 	"""
 	Channel access entries to add, remove, or replace.
 	"""
@@ -2405,6 +2405,20 @@ type GraphqlLinkPropertyValue {
 	The stored URLs.
 	"""
 	urls: [String!]!
+}
+
+"""
+Audience allowed to access an entity through its share link.
+"""
+enum GraphqlLinkShare {
+	"""
+	Anyone with the link can access the entity.
+	"""
+	PUBLIC
+	"""
+	Members of the owner's team with the link can access the entity.
+	"""
+	TEAM
 }
 
 """
@@ -5185,7 +5199,7 @@ input UpdateEntitySharePolicyInput {
 	"""
 	entity: EntityRefInput!
 	"""
-	New public/channel policy values.
+	New link/channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
 }

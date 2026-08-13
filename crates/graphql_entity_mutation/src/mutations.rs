@@ -262,7 +262,7 @@ impl EntitySharePolicyInput {
 pub struct UpdateEntitySharePolicyInput {
     /// Entity whose share policy should change.
     pub entity: EntityRefInput,
-    /// New public/channel policy values.
+    /// New link/channel policy values.
     pub policy: EntitySharePolicyInput,
 }
 
@@ -525,7 +525,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
         ))
     }
 
-    /// Update public and channel share policies across supported entity kinds.
+    /// Update link and channel share policies across supported entity kinds.
     async fn update_entity_share_policies(
         &self,
         ctx: &Context<'_>,
