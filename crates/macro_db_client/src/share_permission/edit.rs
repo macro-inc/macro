@@ -1,5 +1,5 @@
 use model_entity::EntityType;
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 
 use super::channel_permission::edit::edit_channel_share_permission;
@@ -31,17 +31,11 @@ pub async fn edit_share_permission(
             query
                 .push(r#", "linkShare" = "#)
                 .push_bind(link_share.to_string())
-                .push(r#", "isPublic" = "#)
-                .push_bind(link_share == LinkShare::Public)
                 .push(r#", "linkShareAccessLevel" = "#)
-                .push_bind(access_level.to_string())
-                .push(r#", "publicAccessLevel" = "#)
                 .push_bind(access_level.to_string());
         }
         Some(None) => {
-            query.push(
-                r#", "linkShare" = NULL, "isPublic" = false, "linkShareAccessLevel" = NULL, "publicAccessLevel" = NULL"#,
-            );
+            query.push(r#", "linkShare" = NULL, "linkShareAccessLevel" = NULL"#);
         }
         None => match share_permission.link_share_access_level {
             Some(Some(access_level)) => {
@@ -50,25 +44,14 @@ pub async fn edit_share_permission(
                         r#", "linkShareAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
                     )
                     .push_bind(access_level.to_string())
-                    .push(" END")
-                    .push(
-                        r#", "publicAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
-                    )
-                    .push_bind(access_level.to_string())
                     .push(" END");
             }
             Some(None) => {
-                let access_level = link_share_access_level_or_default(None).to_string();
                 query
                     .push(
                         r#", "linkShareAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
                     )
-                    .push_bind(access_level.clone())
-                    .push(" END")
-                    .push(
-                        r#", "publicAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
-                    )
-                    .push_bind(access_level)
+                    .push_bind(link_share_access_level_or_default(None).to_string())
                     .push(" END");
             }
             None => {}

@@ -11,8 +11,6 @@ use crate::share_permission::create::create_share_permission;
 
 #[derive(Debug, PartialEq)]
 struct StoredSharePermission {
-    is_public: bool,
-    public_access_level: Option<String>,
     link_share: Option<String>,
     link_share_access_level: Option<String>,
 }
@@ -36,8 +34,6 @@ async fn get_stored_share_permission(
         StoredSharePermission,
         r#"
         SELECT
-            "isPublic" as is_public,
-            "publicAccessLevel" as public_access_level,
             "linkShare" as link_share,
             "linkShareAccessLevel" as link_share_access_level
         FROM "SharePermission"
@@ -85,8 +81,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: true,
-            public_access_level: Some("edit".to_string()),
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("edit".to_string()),
         }
@@ -101,8 +95,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: true,
-            public_access_level: Some("view".to_string()),
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("view".to_string()),
         }
@@ -117,8 +109,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: true,
-            public_access_level: Some("comment".to_string()),
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("comment".to_string()),
         }
@@ -133,8 +123,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: Some("edit".to_string()),
             link_share: Some("TEAM".to_string()),
             link_share_access_level: Some("edit".to_string()),
         }
@@ -149,8 +137,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: true,
-            public_access_level: Some("view".to_string()),
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("view".to_string()),
         }
@@ -165,8 +151,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: None,
             link_share: None,
             link_share_access_level: None,
         }
@@ -181,8 +165,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: None,
             link_share: None,
             link_share_access_level: None,
         }
@@ -197,8 +179,6 @@ async fn edit_share_permission_preserves_update_field_semantics(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: Some("view".to_string()),
             link_share: Some("TEAM".to_string()),
             link_share_access_level: Some("view".to_string()),
         }

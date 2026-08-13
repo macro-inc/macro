@@ -34,26 +34,22 @@ pub async fn create_share_permission(
     let link_share = share_permission.link_share;
     let link_share_access_level =
         normalize_link_share_access_level(link_share, share_permission.link_share_access_level);
-    let legacy_is_public = link_share == Some(LinkShare::Public);
     let link_share_value = link_share.map(|value| value.to_string());
     let link_share_access_level_value = link_share_access_level.map(|value| value.to_string());
 
     let id = sqlx::query_scalar!(
         r#"
             INSERT INTO "SharePermission" (
-                "isPublic",
-                "publicAccessLevel",
                 "linkShare",
                 "linkShareAccessLevel",
                 "createdAt",
                 "updatedAt"
             )
-            VALUES ($1, $2, $3, $2, NOW(), NOW())
+            VALUES ($1, $2, NOW(), NOW())
             RETURNING id;
         "#,
-        legacy_is_public,
-        link_share_access_level_value,
         link_share_value,
+        link_share_access_level_value,
     )
     .fetch_one(transaction.as_mut())
     .await?;

@@ -7,8 +7,6 @@ use super::*;
 
 #[derive(Debug, PartialEq)]
 struct StoredSharePermission {
-    is_public: bool,
-    public_access_level: Option<String>,
     link_share: Option<String>,
     link_share_access_level: Option<String>,
 }
@@ -34,8 +32,6 @@ async fn get_stored_share_permission(
         StoredSharePermission,
         r#"
         SELECT
-            "isPublic" as is_public,
-            "publicAccessLevel" as public_access_level,
             "linkShare" as link_share,
             "linkShareAccessLevel" as link_share_access_level
         FROM "SharePermission"
@@ -48,9 +44,7 @@ async fn get_stored_share_permission(
 }
 
 #[sqlx::test]
-async fn create_share_permission_writes_link_and_legacy_columns(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn create_share_permission_writes_link_columns(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let mut transaction = pool.begin().await?;
 
     let public_permission = SharePermissionV2 {
@@ -69,8 +63,6 @@ async fn create_share_permission_writes_link_and_legacy_columns(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &public_result.id).await?,
         StoredSharePermission {
-            is_public: true,
-            public_access_level: Some("edit".to_string()),
             link_share: Some("PUBLIC".to_string()),
             link_share_access_level: Some("edit".to_string()),
         }
@@ -85,8 +77,6 @@ async fn create_share_permission_writes_link_and_legacy_columns(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &team_result.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: Some("comment".to_string()),
             link_share: Some("TEAM".to_string()),
             link_share_access_level: Some("comment".to_string()),
         }
@@ -102,8 +92,6 @@ async fn create_share_permission_writes_link_and_legacy_columns(
     assert_eq!(
         get_stored_share_permission(&mut transaction, &disabled_result.id).await?,
         StoredSharePermission {
-            is_public: false,
-            public_access_level: None,
             link_share: None,
             link_share_access_level: None,
         }
@@ -127,8 +115,6 @@ async fn create_share_permission_defaults_enabled_links_to_view(
         assert_eq!(
             get_stored_share_permission(&mut transaction, &result.id).await?,
             StoredSharePermission {
-                is_public: link_share == LinkShare::Public,
-                public_access_level: Some("view".to_string()),
                 link_share: Some(link_share.to_string()),
                 link_share_access_level: Some("view".to_string()),
             }
