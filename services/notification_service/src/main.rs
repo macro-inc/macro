@@ -6,7 +6,9 @@ use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::fanout_notification_realtime::FanoutNotificationRealtimePublisher;
 use ::notification::outbound::fanout_realtime::FanoutRealtimeSender;
+use ::notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher;
 use ::notification::outbound::kafka_realtime::KafkaRealtimeSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
@@ -158,18 +160,29 @@ pub async fn main() -> anyhow::Result<()> {
         fcm_platform_arn: config.sns_fcm_platform_arn.as_ref().to_string(),
         apns_voip_platform_arn: config.sns_apns_voip_platform_arn().to_string(),
     };
-    let reader_realtime_adapter = WebSocketGatewayAdapter {
-        gateway: ConnectionGatewayClient::new(
-            config.internal_api_key.as_ref().to_string(),
-            connection_gateway_url.clone(),
-        ),
-    };
-    let notification_events_realtime_adapter = WebSocketGatewayAdapter {
-        gateway: ConnectionGatewayClient::new(
-            config.internal_api_key.as_ref().to_string(),
-            connection_gateway_url.clone(),
-        ),
-    };
+    let realtime_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create Kafka realtime notification publisher")?,
+        GlobalSpawner,
+    );
+    let reader_realtime_adapter = FanoutNotificationRealtimePublisher::new(
+        WebSocketGatewayAdapter {
+            gateway: ConnectionGatewayClient::new(
+                config.internal_api_key.as_ref().to_string(),
+                connection_gateway_url.clone(),
+            ),
+        },
+        KafkaNotificationRealtimePublisher::new(realtime_event_broker.clone()),
+    );
+    let notification_events_realtime_adapter = FanoutNotificationRealtimePublisher::new(
+        WebSocketGatewayAdapter {
+            gateway: ConnectionGatewayClient::new(
+                config.internal_api_key.as_ref().to_string(),
+                connection_gateway_url.clone(),
+            ),
+        },
+        KafkaNotificationRealtimePublisher::new(realtime_event_broker.clone()),
+    );
     let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
     let mut notification_events_listener = NotificationEventsListener::new(
         notification_events_receiver,
@@ -205,11 +218,7 @@ pub async fn main() -> anyhow::Result<()> {
                 connection_gateway_url,
             ),
         },
-        KafkaRealtimeSender::new(MacroEventBrokerService::new(
-            KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-                .context("failed to create Kafka realtime notification publisher")?,
-            GlobalSpawner,
-        )),
+        KafkaRealtimeSender::new(realtime_event_broker),
     );
 
     let mobile_adapter = MobilePushAdapter {
