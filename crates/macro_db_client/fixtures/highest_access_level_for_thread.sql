@@ -21,25 +21,27 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-000000000001', 'Grandparent Project', 'user-1',
        ('aaaaaaaa-aaaa-aaaa-aaaa-000000000002', 'Parent Project', 'user-1', 'aaaaaaaa-aaaa-aaaa-aaaa-000000000001');
 
 -- Create placeholder SharePermission records. These are needed for the FK constraint in EmailThreadPermission.
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
+INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "linkShare", "linkShareAccessLevel")
 VALUES
     -- For the nested thread
-    ('sp-thread-nested', false, NULL), -- this permission itself isn't used, just the link
+    ('sp-thread-nested', false, NULL, NULL, NULL), -- this permission itself isn't used, just the link
     -- For the standalone thread
-    ('sp-thread-standalone', false, NULL),
+    ('sp-thread-standalone', false, NULL, NULL, NULL),
     -- For the private thread
-    ('sp-thread-private', false, NULL),
+    ('sp-thread-private', false, NULL, NULL, NULL),
     -- Public permissions that will be linked to projects
-    ('sp-public-edit-thread', true, 'edit'),
-    ('sp-public-view-thread', true, 'view'),
+    ('sp-public-edit-thread', true, 'edit', 'PUBLIC', 'edit'),
+    ('sp-public-view-thread', true, 'view', 'PUBLIC', 'view'),
     -- A *private* 'owner' permission to test the `isPublic` filter.
-    ('sp-private-owner-thread', false, 'owner');
+    ('sp-private-owner-thread', false, 'owner', NULL, 'owner');
 
 
 -- Link the private 'owner' permission directly to the nested thread.
 UPDATE public."SharePermission"
-SET "isPublic"          = false,
-    "publicAccessLevel" = 'owner'
+SET "isPublic"            = false,
+    "publicAccessLevel"   = 'owner',
+    "linkShare"           = NULL,
+    "linkShareAccessLevel" = 'owner'
 WHERE "id" = 'sp-thread-nested';
 
 -- Link public permissions to the project hierarchy.

@@ -34,14 +34,14 @@ VALUES ('dddddddd-dddd-dddd-dddd-000000000001', 'Nested Document', 'user-1', 'aa
        ('dddddddd-dddd-dddd-dddd-000000000003', 'Private Document', 'user-1', NULL);
 
 -- Add SharePermission records. This is the new data for testing public access.
-INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel")
+INSERT INTO public."SharePermission" ("id", "isPublic", "publicAccessLevel", "linkShare", "linkShareAccessLevel")
 VALUES
     -- A public 'edit' permission. We'll attach this to the grandparent project.
-    ('sp-public-edit', true, 'edit'),
+    ('sp-public-edit', true, 'edit', 'PUBLIC', 'edit'),
     -- A public 'view' permission. We'll attach this to the parent project.
-    ('sp-public-view', true, 'view'),
+    ('sp-public-view', true, 'view', 'PUBLIC', 'view'),
     -- A *private* 'owner' permission. This MUST be ignored by the query.
-    ('sp-private-owner', false, 'owner');
+    ('sp-private-owner', false, 'owner', NULL, 'owner');
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")

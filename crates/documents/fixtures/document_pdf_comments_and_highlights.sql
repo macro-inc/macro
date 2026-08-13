@@ -83,6 +83,8 @@ INSERT INTO
         "id",
         "isPublic",
         "publicAccessLevel",
+        "linkShare",
+        "linkShareAccessLevel",
         "createdAt",
         "updatedAt"
     )
@@ -90,6 +92,8 @@ VALUES
     (
         'sp-comments',
         false,
+        NULL,
+        NULL,
         NULL,
         '2022-01-01 00:00:00',
         '2022-01-01 00:00:00'
