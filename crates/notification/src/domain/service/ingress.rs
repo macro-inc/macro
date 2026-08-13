@@ -87,15 +87,14 @@ pub trait NotificationReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
     /// Get a user's active notifications for multiple entities, grouped by requested entity.
-    fn get_entity_notifications_batch(
+    ///
+    /// Metadata is deserialized from the event-type-tagged notification representation.
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
+        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
     > + Send;
 
     /// Get a single user notification by ID.
@@ -688,15 +687,29 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_entity_notifications_batch(
+    async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
+    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report> {
         self.repository
             .get_entity_notifications_batch(user_id, entity_refs)
-            .await
+            .await?
+            .into_iter()
+            .map(|(entity_ref, notifications)| {
+                let notifications = notifications
+                    .into_iter()
+                    .map(|notification| {
+                        notification
+                            .into_tagged()
+                            .deserialize_metadata::<T>()
+                            .map_err(|error| rootcause::report!(error).into_dynamic())
+                    })
+                    .collect::<Result<Vec<_>, Report>>()?;
+
+                Ok((entity_ref, notifications))
+            })
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self))]

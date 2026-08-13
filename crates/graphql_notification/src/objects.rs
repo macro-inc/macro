@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_graphql::{Context, ID, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
 use model_notifications::NotifEvent;
@@ -12,20 +14,28 @@ use crate::{
 };
 
 /// GraphQL notification attached to a Soup entity.
-pub struct GraphqlNotification(UserNotificationRow<NotifEvent>);
+pub struct GraphqlNotification(Arc<UserNotificationRow<NotifEvent>>);
+
+impl From<UserNotificationRow<NotifEvent>> for GraphqlNotification {
+    fn from(value: UserNotificationRow<NotifEvent>) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
+impl From<Arc<UserNotificationRow<NotifEvent>>> for GraphqlNotification {
+    fn from(value: Arc<UserNotificationRow<NotifEvent>>) -> Self {
+        Self(value)
+    }
+}
 
 impl TryFrom<UserNotificationRow<serde_json::Value>> for GraphqlNotification {
     type Error = serde_json::Error;
 
     fn try_from(value: UserNotificationRow<serde_json::Value>) -> Result<Self, Self::Error> {
-        value.into_tagged().deserialize_metadata().map(Self)
-    }
-}
-
-impl GraphqlNotification {
-    /// Converts a realtime notification row into the shared notification GraphQL type.
-    pub(crate) fn from_realtime(value: UserNotificationRow<NotifEvent>) -> Self {
-        Self(value)
+        value
+            .into_tagged()
+            .deserialize_metadata()
+            .map(GraphqlNotification::from)
     }
 }
 
@@ -106,17 +116,13 @@ where
     let notifications = loader
         .load_one(model_entity::OwnedEntity::from(entity))
         .await
-        .map_err(|err| async_graphql::Error::new(err.to_string()))?
-        .unwrap_or_default();
-    notifications
-        .into_iter()
-        .map(GraphqlNotification::try_from)
-        .collect::<Result<Vec<_>, _>>()
         .map_err(|error| {
-            tracing::error!(
-                error = ?error,
-                "failed to deserialize notification metadata"
-            );
-            async_graphql::Error::new("notification metadata is unavailable")
-        })
+            tracing::error!(error = ?error, "failed to load entity notifications");
+            async_graphql::Error::new("notifications are unavailable")
+        })?
+        .unwrap_or_default();
+    Ok(notifications
+        .into_iter()
+        .map(GraphqlNotification::from)
+        .collect())
 }

@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod test;
 
-use std::sync::Arc;
-
 use async_graphql::{Context, Subscription};
 use graphql_common::require_authenticated_user;
 use model_notifications::NotifEvent;
@@ -29,8 +27,7 @@ where
 
     Ok(async_stream::stream! {
         while let Some(notification) = subscription.recv().await {
-            let notification = Arc::unwrap_or_clone(notification);
-            yield Ok(GraphqlNotification::from_realtime(notification));
+            yield Ok(GraphqlNotification::from(notification));
         }
 
         match subscription.exit_reason().await {
