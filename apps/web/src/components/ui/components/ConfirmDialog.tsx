@@ -1,6 +1,7 @@
 import type { JSX } from 'solid-js';
+import { cn } from '../utils/classname';
 import { Button } from './Button';
-import { Dialog } from './Dialog';
+import { Dialog, type DialogProps } from './Dialog';
 import {
   type DialogHandle,
   type ManagedDialogProps,
@@ -19,6 +20,8 @@ export type ConfirmDialogDisplayProps = {
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
   tone?: 'default' | 'danger';
+  position?: DialogProps['position'];
+  class?: string;
 };
 
 export type ConfirmDialogProps = ManagedDialogProps &
@@ -32,37 +35,38 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      position="center"
-      class="w-[90%] max-w-120"
+      position={props.position}
+      class={cn('w-[90%] max-w-120', props.class)}
+      visibleScrim
     >
       <Surface depth={2} class="rounded-xl text-ink">
-        <div class="shrink-0 flex items-center border-b border-edge-muted px-5 py-3">
-          <Dialog.Title class="text-sm font-semibold">
+        <div class="flex flex-col gap-1 px-5 py-4">
+          <Dialog.Title class="text-base font-semibold">
             {props.title}
           </Dialog.Title>
-        </div>
-        <div class="flex flex-col gap-4 p-5">
           <Dialog.Description as="div" class="text-sm leading-5 text-ink-muted">
             {props.body ?? props.children}
           </Dialog.Description>
-          <div class="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => props.onOpenChange(false)}
-            >
-              {props.cancelLabel ?? 'Cancel'}
-            </Button>
-            <Button
-              type="button"
-              variant={props.tone === 'danger' ? 'danger' : 'active'}
-              size="sm"
-              onClick={props.onConfirm}
-            >
-              {props.confirmLabel ?? 'Confirm'}
-            </Button>
-          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 px-5 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            depth={2}
+            class="rounded-lg"
+            onClick={() => props.onOpenChange(false)}
+          >
+            {props.cancelLabel ?? 'Cancel'}
+          </Button>
+          <Button
+            type="button"
+            variant={props.tone === 'danger' ? 'danger' : 'active'}
+            depth={2}
+            class="rounded-lg"
+            onClick={props.onConfirm}
+          >
+            {props.confirmLabel ?? 'Confirm'}
+          </Button>
         </div>
       </Surface>
     </Dialog>
