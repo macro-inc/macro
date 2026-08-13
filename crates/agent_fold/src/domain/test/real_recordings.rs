@@ -68,8 +68,10 @@ fn resumed_no_prompt_still_derives_the_agents_reply() {
     assert!(
         !messages
             .iter()
-            .any(|message| message.author.kind() == crate::domain::model::AuthorKind::User),
-        "this recording carries no session/prompt, so it should derive no user message"
+            .filter(|message| message.author.kind() == crate::domain::model::AuthorKind::User)
+            .flat_map(|message| message.parts.iter())
+            .any(|part| matches!(part, crate::domain::model::MessagePart::Text(_))),
+        "this recording carries no session/prompt, so it should derive no user text"
     );
 }
 

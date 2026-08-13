@@ -55,9 +55,9 @@ use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
-    AnsiText, Author, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart, Permission,
-    PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail, ToolStatus,
-    ToolUse, ToolUseId, TurnId,
+    AnsiText, Author, Control, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart,
+    Permission, PermissionOption, PermissionOptionKind, PermissionOutcome, StopReason, ToolDetail,
+    ToolStatus, ToolUse, ToolUseId, TurnId,
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 use agent_client_protocol::schema::v1::{
@@ -67,6 +67,7 @@ use agent_client_protocol::schema::v1::{
     ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
@@ -268,23 +269,45 @@ impl FoldState {
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
-            Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
-                // A user's prompt opens a turn.
-                RawJsonRpcMessage::Request(request)
-                    if PromptRequest::matches_method(&request.method) =>
-                {
-                    self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+                if let Some(action) = AgentAction::control_from_runtime(message) {
+                    return match action {
+                        AgentAction::SetModel(action) => self.record_control(
+                            Control::SetModel {
+                                model: action.model,
+                            },
+                            entry.user_id.clone(),
+                        ),
+                        AgentAction::Compact => match &acp.0 {
+                            RawJsonRpcMessage::Request(request) => {
+                                self.begin_compact(&request.id, entry.user_id.clone())
+                            }
+                            _ => None,
+                        },
+                        AgentAction::Stop => {
+                            self.record_control(Control::Stop, entry.user_id.clone())
+                        }
+                        AgentAction::Prompt(_) => None,
+                    };
                 }
-                // The user's answer to a permission request.
-                RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                    self.resolve_permission(id, Some(result))
+                match &acp.0 {
+                    // A user's prompt opens a turn.
+                    RawJsonRpcMessage::Request(request)
+                        if PromptRequest::matches_method(&request.method) =>
+                    {
+                        self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                    }
+                    // The user's answer to a permission request.
+                    RawJsonRpcMessage::Response(Response::Result { id, result }) => {
+                        self.resolve_permission(id, Some(result))
+                    }
+                    RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
+                        self.resolve_permission(id, None)
+                    }
+                    // Handshake and configuration traffic: nothing to render.
+                    RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
                 }
-                RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
-                    self.resolve_permission(id, None)
-                }
-                // Handshake and configuration traffic: nothing to render.
-                RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
-            },
+            }
 
             Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
                 // The bulk of the log: streamed content and tool activity.
@@ -375,6 +398,49 @@ impl FoldState {
         });
 
         changed
+    }
+
+    fn begin_compact(
+        &mut self,
+        prompt_id: &RequestId,
+        user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Option<Changed> {
+        let closed = self.close_turn(None);
+        debug_assert!(closed.is_none());
+        let id = TurnId(self.turns_opened);
+        self.turns_opened += 1;
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id,
+            author: Author::User(user_id),
+            parts: NonEmpty::one(MessagePart::Control(Control::Compact)),
+            stop: None,
+        });
+        self.turn = Some(Turn {
+            id,
+            prompt_id: Some(prompt_id.clone()),
+            agent: None,
+            tool_positions: HashMap::new(),
+            permission_positions: HashMap::new(),
+        });
+        Some(Changed::new(message))
+    }
+
+    fn record_control(
+        &mut self,
+        control: Control,
+        user_id: Option<MacroUserIdStr<'static>>,
+    ) -> Option<Changed> {
+        let id = TurnId(self.turns_opened);
+        self.turns_opened += 1;
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id,
+            author: Author::User(user_id),
+            parts: NonEmpty::one(MessagePart::Control(control)),
+            stop: None,
+        });
+        Some(Changed::new(message))
     }
 
     /// Handle the response to `session/prompt`: close the turn.

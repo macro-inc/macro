@@ -5,6 +5,7 @@ import Brain from '@phosphor/brain.svg';
 import FileText from '@phosphor/file-text.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
+import Stop from '@phosphor/stop.svg';
 import Terminal from '@phosphor/terminal.svg';
 import Wrench from '@phosphor/wrench.svg';
 import type {
@@ -127,6 +128,39 @@ function FoldedPart(props: { part: FoldedMessagePart }): JSX.Element {
             }
           >
             <span>Permission requested</span>
+          </Tool.Row>
+        </Tool.Root>
+      );
+    })
+    .with({ kind: 'control' }, (part) => {
+      const presentation = match(part.control)
+        .with({ kind: 'set_model' }, (control) => ({
+          icon: Wrench,
+          label: 'Model changed',
+          trailing: control.model,
+        }))
+        .with({ kind: 'compact' }, () => ({
+          icon: Brain,
+          label: 'Context compacted',
+          trailing: undefined,
+        }))
+        .with({ kind: 'stop' }, () => ({
+          icon: Stop,
+          label: 'Stop requested',
+          trailing: undefined,
+        }))
+        .exhaustive();
+      return (
+        <Tool.Root>
+          <Tool.Row
+            icon={presentation.icon}
+            trailing={
+              presentation.trailing ? (
+                <span class="text-ink">{presentation.trailing}</span>
+              ) : undefined
+            }
+          >
+            <span>{presentation.label}</span>
           </Tool.Row>
         </Tool.Root>
       );

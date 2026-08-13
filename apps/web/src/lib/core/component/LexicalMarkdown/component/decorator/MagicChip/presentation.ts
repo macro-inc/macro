@@ -103,6 +103,19 @@ function partActivity(part: FoldedMessagePart): MagicChipActivity {
       label: 'Permission needed',
       busy: false,
     }))
+    .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
+      label: 'Model changed',
+      detail: part.control.model,
+      busy: false,
+    }))
+    .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
+      label: 'Context compacted',
+      busy: false,
+    }))
+    .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
+      label: 'Stop requested',
+      busy: false,
+    }))
     .exhaustive();
 }
 

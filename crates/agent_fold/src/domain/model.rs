@@ -186,6 +186,22 @@ pub enum MessagePart {
     ToolUse(ToolUse),
     /// The agent asking to proceed.
     Permission(Permission),
+    /// A user-issued control operation on the session.
+    Control(Control),
+}
+
+/// A session control operation shown in the conversation timeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Control {
+    /// The runtime was asked to switch models.
+    SetModel {
+        /// The model slug requested by the caller.
+        model: String,
+    },
+    /// The runtime was asked to compact its context.
+    Compact,
+    /// The runtime was asked to stop its current work.
+    Stop,
 }
 
 /// A tool invocation and whatever is known about it so far.

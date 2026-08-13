@@ -729,6 +729,24 @@ expression: messages
             2,
         ),
         author: User(
+            None,
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control(
+                    SetModel {
+                        model: "opus[1m]",
+                    },
+                ),
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            3,
+        ),
+        author: User(
             Some(
                 macro|eric@example.com,
             ),
@@ -744,7 +762,7 @@ expression: messages
     },
     FoldedMessage {
         id: TurnId(
-            2,
+            3,
         ),
         author: Agent,
         parts: NonEmpty {

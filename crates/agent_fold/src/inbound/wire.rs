@@ -17,8 +17,9 @@
 
 use crate::domain::log::AgentSessionId;
 use crate::domain::model::{
-    Author, FileDiff as ModelFileDiff, FoldedMessage as ModelFoldedMessage, IncrementalFoldResult,
-    MessagePart, Permission, PermissionOption as ModelPermissionOption, PermissionOptionKind,
+    Author, Control as ModelControl, FileDiff as ModelFileDiff,
+    FoldedMessage as ModelFoldedMessage, IncrementalFoldResult, MessagePart, Permission,
+    PermissionOption as ModelPermissionOption, PermissionOptionKind,
     PermissionOutcome as ModelPermissionOutcome, StopReason as ModelStopReason,
     ToolDetail as ModelToolDetail, ToolStatus as ModelToolStatus, ToolUse,
 };
@@ -153,6 +154,8 @@ enum FoldedMessagePart {
         /// [`permission_outcome`].
         outcome: Option<PermissionOutcome>,
     },
+    /// A user-issued control operation on the session.
+    Control { control: Control },
 }
 
 impl From<MessagePart> for FoldedMessagePart {
@@ -180,6 +183,28 @@ impl From<MessagePart> for FoldedMessagePart {
                 options: options.into_iter().map(Into::into).collect(),
                 outcome: permission_outcome(outcome),
             },
+            MessagePart::Control(control) => Self::Control {
+                control: control.into(),
+            },
+        }
+    }
+}
+
+/// A control operation shown in the session timeline.
+#[derive(Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum Control {
+    SetModel { model: String },
+    Compact,
+    Stop,
+}
+
+impl From<ModelControl> for Control {
+    fn from(control: ModelControl) -> Self {
+        match control {
+            ModelControl::SetModel { model } => Self::SetModel { model },
+            ModelControl::Compact => Self::Compact,
+            ModelControl::Stop => Self::Stop,
         }
     }
 }
