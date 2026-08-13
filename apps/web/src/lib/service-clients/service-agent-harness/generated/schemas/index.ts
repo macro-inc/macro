@@ -12,6 +12,8 @@ export * from './agentActionOneOfAllOfType';
 export * from './agentActionOneOfFour';
 export * from './agentActionOneOfFourAllOf';
 export * from './agentActionOneOfFourAllOfType';
+export * from './agentActionOneOfNine';
+export * from './agentActionOneOfNineType';
 export * from './agentActionOneOfSeven';
 export * from './agentActionOneOfSevenType';
 export * from './agentPromptAction';

@@ -7,7 +7,7 @@
 import type { AgentActionOneOfSevenType } from './agentActionOneOfSevenType';
 
 /**
- * Interrupt whatever the agent is doing.
+ * Compact the agent's current context.
  */
 export type AgentActionOneOfSeven = {
   type: AgentActionOneOfSevenType;

@@ -6,6 +6,7 @@
  */
 import type { AgentActionOneOf } from './agentActionOneOf';
 import type { AgentActionOneOfFour } from './agentActionOneOfFour';
+import type { AgentActionOneOfNine } from './agentActionOneOfNine';
 import type { AgentActionOneOfSeven } from './agentActionOneOfSeven';
 
 /**
@@ -14,4 +15,5 @@ import type { AgentActionOneOfSeven } from './agentActionOneOfSeven';
 export type AgentAction =
   | AgentActionOneOf
   | AgentActionOneOfFour
-  | AgentActionOneOfSeven;
+  | AgentActionOneOfSeven
+  | AgentActionOneOfNine;

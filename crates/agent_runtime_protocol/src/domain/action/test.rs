@@ -31,7 +31,7 @@ fn a_prompt_becomes_a_session_prompt_request_for_the_acp_session() {
 }
 
 #[test]
-fn set_model_becomes_a_set_model_request_naming_the_acp_session() {
+fn set_model_becomes_a_model_config_option_request() {
     let session_id = SessionId::new("acp-abc");
     let translated = AgentAction::set_model("opus")
         .to_runtime(&session_id, RequestId::Str("harness:model:0".to_owned()))
@@ -41,13 +41,16 @@ fn set_model_becomes_a_set_model_request_naming_the_acp_session() {
         panic!("a model change translates to an ACP request");
     };
 
-    assert_eq!(request.method.as_ref(), "session/set_model");
     assert_eq!(request.id, RequestId::Str("harness:model:0".to_owned()));
 
-    // Hand-built params, so assert on the wire shape rather than a typed parse.
-    let params = serde_json::to_value(&request.params).unwrap();
-    assert_eq!(params["sessionId"], serde_json::json!("acp-abc"));
-    assert_eq!(params["modelId"], serde_json::json!("opus"));
+    let parsed: ClientRequest =
+        ClientRequest::parse_message(&request.method, &request.params).unwrap();
+    let ClientRequest::SetSessionConfigOptionRequest(parsed) = parsed else {
+        panic!("a model change translates to SetSessionConfigOptionRequest");
+    };
+    assert_eq!(parsed.session_id, session_id);
+    assert_eq!(parsed.config_id.to_string(), MODEL_CONFIG_ID);
+    assert_eq!(parsed.value.as_value_id().unwrap().to_string(), "opus");
 
     let message = ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)));
     let (parsed_session_id, parsed) = AgentSetModelAction::from_runtime(&message).unwrap();
@@ -57,6 +60,10 @@ fn set_model_becomes_a_set_model_request_naming_the_acp_session() {
         AgentSetModelAction {
             model: "opus".into()
         }
+    );
+    assert_eq!(
+        AgentAction::control_from_runtime(&message),
+        Some(AgentAction::set_model("opus"))
     );
 }
 
@@ -78,6 +85,37 @@ fn stop_becomes_a_cancel_notification_with_no_request_id() {
     assert_eq!(notification.method.as_ref(), "session/cancel");
     let params = serde_json::to_value(&notification.params).unwrap();
     assert_eq!(params["sessionId"], serde_json::json!("acp-abc"));
+    let message = ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(notification)));
+    assert_eq!(
+        AgentAction::control_from_runtime(&message),
+        Some(AgentAction::Stop)
+    );
+}
+
+#[test]
+fn compact_becomes_opencodes_compact_prompt() {
+    let session_id = SessionId::new("acp-abc");
+    let translated = AgentAction::Compact
+        .to_runtime(&session_id, RequestId::Str("harness:compact:0".to_owned()))
+        .unwrap();
+
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = translated else {
+        panic!("compact translates to an ACP request");
+    };
+    let parsed: ClientRequest =
+        ClientRequest::parse_message(&request.method, &request.params).unwrap();
+    let ClientRequest::PromptRequest(parsed) = parsed else {
+        panic!("compact translates to PromptRequest, got {parsed:?}");
+    };
+    assert_eq!(parsed.session_id, session_id);
+    assert_eq!(parsed.prompt, vec![ContentBlock::from(COMPACT_COMMAND)]);
+    let message = AgentAction::Compact
+        .to_runtime(&session_id, RequestId::Str("compact:1".to_owned()))
+        .unwrap();
+    assert_eq!(
+        AgentAction::control_from_runtime(&message),
+        Some(AgentAction::Compact)
+    );
 }
 
 #[test]
@@ -85,13 +123,5 @@ fn only_stop_supersedes_what_is_already_queued() {
     assert!(AgentAction::Stop.supersedes_queued());
     assert!(!AgentAction::prompt("keep going").supersedes_queued());
     assert!(!AgentAction::set_model("opus").supersedes_queued());
-}
-
-#[test]
-fn only_a_prompt_is_worth_reconnecting_for() {
-    // A prompt is work nobody has done yet; the others are already satisfied
-    // by the disconnection or by their durable half.
-    assert!(AgentAction::prompt("do the thing").must_reach_agent());
-    assert!(!AgentAction::Stop.must_reach_agent());
-    assert!(!AgentAction::set_model("opus").must_reach_agent());
+    assert!(!AgentAction::Compact.supersedes_queued());
 }

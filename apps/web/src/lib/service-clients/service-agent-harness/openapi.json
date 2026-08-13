@@ -173,6 +173,17 @@
           },
           {
             "type": "object",
+            "description": "Compact the agent's current context.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["compact"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Interrupt whatever the agent is doing.",
             "required": ["type"],
             "properties": {

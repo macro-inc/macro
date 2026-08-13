@@ -78,6 +78,9 @@ export function AgentSessionDebugControls(props: { channelId: string }) {
             <button type="button" onClick={() => send({ type: 'stop' })}>
               stop
             </button>
+            <button type="button" onClick={() => send({ type: 'compact' })}>
+              compact
+            </button>
             <button
               type="button"
               onClick={() => send({ type: 'setModel', model: OPUS_MODEL })}

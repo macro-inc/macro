@@ -3,7 +3,10 @@
 //! An action can be accepted and queued before there is any way to express it
 //! as ACP, since that needs the [`SessionId`] the handshake produces.
 
-use agent_client_protocol::schema::v1::{CancelNotification, PromptRequest, RequestId, SessionId};
+use agent_client_protocol::schema::v1::{
+    CancelNotification, ClientRequest, PromptRequest, RequestId, SessionId,
+    SetSessionConfigOptionRequest,
+};
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +14,12 @@ use crate::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
 
 #[cfg(test)]
 mod test;
+
+/// ACP session config option used to select the agent's model.
+pub const MODEL_CONFIG_ID: &str = "model";
+
+/// Slash command agents use to compact the current session context.
+pub const COMPACT_COMMAND: &str = "/compact";
 
 /// A failure while translating an action onto the wire.
 #[derive(Debug, thiserror::Error)]
@@ -39,34 +48,24 @@ pub struct AgentSetModelAction {
     pub model: String,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SetModelRequest {
-    session_id: SessionId,
-    model_id: String,
-}
-
 impl AgentSetModelAction {
     /// Read a model change back from the ACP request produced for it.
     ///
-    /// ACP's pinned schema does not yet expose this runtime extension as a
-    /// typed request, so this keeps its method and parameter shape centralized
-    /// with the code that writes the frame.
+    /// Models are the standard `model` session config option.
     pub fn from_runtime(message: &ToRuntimeMessage) -> Option<(SessionId, Self)> {
         let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
             return None;
         };
-        if request.method.as_ref() != "session/set_model" {
+        let ClientRequest::SetSessionConfigOptionRequest(request) =
+            ClientRequest::parse_message(&request.method, &request.params).ok()?
+        else {
+            return None;
+        };
+        if request.config_id.to_string() != MODEL_CONFIG_ID {
             return None;
         }
-        let params = request.params.clone()?.into_value();
-        let params: SetModelRequest = serde_json::from_value(params).ok()?;
-        Some((
-            params.session_id,
-            Self {
-                model: params.model_id,
-            },
-        ))
+        let model = request.value.as_value_id()?.to_string();
+        Some((request.session_id, Self { model }))
     }
 }
 
@@ -79,9 +78,10 @@ pub enum AgentAction {
     Prompt(AgentPromptAction),
     /// Switch the model the agent runs on.
     SetModel(AgentSetModelAction),
+    /// Compact the agent's current context.
+    Compact,
     /// Interrupt whatever the agent is doing.
     Stop,
-    // compact, etc.
 }
 
 impl AgentAction {
@@ -99,6 +99,44 @@ impl AgentAction {
         })
     }
 
+    /// Recognize a control action from its translated runtime frame.
+    ///
+    /// Ordinary prompts are deliberately excluded: callers need their full
+    /// content, while this identifies the protocol-only controls that would
+    /// otherwise require each consumer to know their wire representation.
+    pub fn control_from_runtime(message: &ToRuntimeMessage) -> Option<Self> {
+        if let Some((_, action)) = AgentSetModelAction::from_runtime(message) {
+            return Some(Self::SetModel(action));
+        }
+
+        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message;
+        match frame {
+            RawJsonRpcMessage::Request(request)
+                if PromptRequest::matches_method(&request.method) =>
+            {
+                let params = request.params.clone()?.into_value();
+                let request: PromptRequest = serde_json::from_value(params).ok()?;
+                let text = request
+                    .prompt
+                    .into_iter()
+                    .filter_map(|content| match content {
+                        agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                            Some(text.text)
+                        }
+                        _ => None,
+                    })
+                    .collect::<String>();
+                (text.trim() == COMPACT_COMMAND).then_some(Self::Compact)
+            }
+            RawJsonRpcMessage::Notification(notification)
+                if CancelNotification::matches_method(&notification.method) =>
+            {
+                Some(Self::Stop)
+            }
+            _ => None,
+        }
+    }
+
     /// Whether accepting this action voids the actions queued ahead of it.
     ///
     /// A stop means "not the work you are about to start either", so the
@@ -107,21 +145,7 @@ impl AgentAction {
     pub fn supersedes_queued(&self) -> bool {
         match self {
             Self::Stop => true,
-            Self::Prompt(_) | Self::SetModel(_) => false,
-        }
-    }
-
-    /// Whether a disconnected session must be reconnected to deliver this.
-    ///
-    /// A prompt is work the agent has not done yet, so a session with nothing
-    /// attached has to be brought back up rather than told "fine". The others
-    /// are already satisfied by the disconnection: a stop is asking for a
-    /// state a dead session is in, and a model change only applies to a live
-    /// runtime.
-    pub fn must_reach_agent(&self) -> bool {
-        match self {
-            Self::Prompt(_) => true,
-            Self::Stop | Self::SetModel(_) => false,
+            Self::Prompt(_) | Self::SetModel(_) | Self::Compact => false,
         }
     }
 
@@ -142,19 +166,27 @@ impl AgentAction {
                         .map_err(|error| ActionError::Acp(error.to_string()))?;
                 Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
             }
-            // No typed request for this one: the pinned ACP schema stops at
-            // `session/set_mode` and `session/set_config_option`, so the frame
-            // is built by hand against the method the runtime accepts. Field
-            // names follow `SetSessionModeRequest`, which is the same shape
-            // with `modeId` in place of `modelId`.
             Self::SetModel(action) => {
-                let params = serde_json::to_value(SetModelRequest {
-                    session_id: session_id.clone(),
-                    model_id: action.model.clone(),
-                })
-                .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let payload = SetSessionConfigOptionRequest::new(
+                    session_id.clone(),
+                    MODEL_CONFIG_ID,
+                    action.model.as_str(),
+                );
+                let params = serde_json::to_value(&payload)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
                 let frame =
-                    RawJsonRpcMessage::request("session/set_model".to_owned(), params, request_id)
+                    RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
+                        .map_err(|error| ActionError::Acp(error.to_string()))?;
+                Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
+            }
+            // Manual compaction is exposed as the `/compact` slash command
+            // through the standard ACP prompt method.
+            Self::Compact => {
+                let payload = PromptRequest::new(session_id.clone(), vec![COMPACT_COMMAND.into()]);
+                let params = serde_json::to_value(&payload)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let frame =
+                    RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
                         .map_err(|error| ActionError::Acp(error.to_string()))?;
                 Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
             }
