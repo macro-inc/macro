@@ -88,7 +88,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_UNDONE",
         "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
-        "notificationUpdates: GraphqlNotification!",
+        "notificationUpdates: GraphqlNotificationPatch!",
+        "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {

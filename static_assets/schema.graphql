@@ -99,7 +99,7 @@ type CompleteSubscriptionRoot {
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
-	notificationUpdates: GraphqlNotification!
+	notificationUpdates: GraphqlNotificationPatch!
 }
 
 """
@@ -2597,6 +2597,11 @@ enum GraphqlNotificationDocumentSubType {
 	"""
 	SKILL
 }
+
+"""
+Realtime notification patch represented as either an update or cache deletion.
+"""
+union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion
 
 """
 A numeric property value.

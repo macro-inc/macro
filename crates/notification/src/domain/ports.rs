@@ -359,23 +359,17 @@ impl<T> WebSocketNotificationSubscription<T> {
     }
 }
 
-/// Provides user-scoped subscriptions to received WebSocket notifications decoded as `T`.
+/// Provides user-scoped subscriptions to received WebSocket notification updates of type `T`.
 pub trait WebSocketNotificationSubscriptionService<T>: Send + Sync + 'static {
-    /// Subscribes to WebSocket notifications addressed to `user_id`.
-    fn subscribe(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>>;
+    /// Subscribes to WebSocket notification updates addressed to `user_id`.
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T>;
 }
 
 impl<S, T> WebSocketNotificationSubscriptionService<T> for std::sync::Arc<S>
 where
     S: WebSocketNotificationSubscriptionService<T>,
 {
-    fn subscribe(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>> {
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
         self.as_ref().subscribe(user_id)
     }
 }
@@ -384,13 +378,10 @@ where
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopWebSocketNotificationSubscriptionService;
 
-impl<T: Send + Sync + 'static> WebSocketNotificationSubscriptionService<T>
+impl<T: Send + 'static> WebSocketNotificationSubscriptionService<T>
     for NoopWebSocketNotificationSubscriptionService
 {
-    fn subscribe(
-        &self,
-        _user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<std::sync::Arc<T>> {
+    fn subscribe(&self, _user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         let (exit_reason_sender, exit_reason) = tokio::sync::oneshot::channel();
         let _ = exit_reason_sender.send(WebSocketNotificationSubscriptionExit::Closed);

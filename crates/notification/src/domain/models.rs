@@ -74,6 +74,15 @@ pub enum PatchDelete<I, T> {
     },
 }
 
+/// A user-scoped notification update delivered to realtime subscribers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotificationSubscriptionUpdate<T> {
+    /// A notification was created or updated.
+    Updated(Arc<UserNotificationRow<T>>),
+    /// A notification should be removed from the normalized cache.
+    Deleted(Uuid),
+}
+
 /// Realtime payload emitted when notification seen/done state changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

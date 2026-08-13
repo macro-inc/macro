@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -99,13 +100,82 @@ async fn distributes_notifications_to_owner_subscriptions() {
         2 + MAX_RECEIVE_ATTEMPTS,
         "a successful notification resets the receive retry strategy"
     );
-    let one_first = one_first.recv().await.expect("first subscriber receives");
-    let one_second = one_second.recv().await.expect("second subscriber receives");
-    let two = two_receiver.recv().await.expect("other user receives");
+    let NotificationSubscriptionUpdate::Updated(one_first) =
+        one_first.recv().await.expect("first subscriber receives")
+    else {
+        panic!("expected notification update");
+    };
+    let NotificationSubscriptionUpdate::Updated(one_second) =
+        one_second.recv().await.expect("second subscriber receives")
+    else {
+        panic!("expected notification update");
+    };
+    let NotificationSubscriptionUpdate::Updated(two) =
+        two_receiver.recv().await.expect("other user receives")
+    else {
+        panic!("expected notification update");
+    };
     assert_eq!(one_first.notification_metadata.kind, "channel_mention");
     assert_eq!(two.notification_metadata.kind, "channel_mention");
     assert!(Arc::ptr_eq(&one_first, &one_second));
     assert!(!Arc::ptr_eq(&one_first, &two));
+}
+
+#[tokio::test(start_paused = true)]
+async fn distributes_status_updates_to_their_owners() {
+    let one = user("one");
+    let two = user("two");
+    let shared_delete_id = Uuid::from_u128(1);
+    let user_delete_id = Uuid::from_u128(2);
+    let consumer = FakeConsumer {
+        messages: Mutex::new(VecDeque::from([
+            Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers {
+                users: vec![one.clone(), two.clone()],
+                update: Box::new(PatchDelete::Delete {
+                    id: shared_delete_id,
+                }),
+            }),
+            Ok(NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+                user: one.clone(),
+                updates: vec![
+                    PatchDelete::Patch {
+                        diff: Cow::Owned(notification(one.clone(), "status_changed")),
+                    },
+                    PatchDelete::Delete { id: user_delete_id },
+                ],
+            }),
+        ])),
+        calls: Arc::new(AtomicUsize::new(0)),
+    };
+    let service = Arc::new(WebSocketNotificationConsumerService::new(consumer));
+    let mut one_receiver = service.subscribe(one);
+    let mut two_receiver = service.subscribe(two);
+
+    let _ = tokio::spawn({
+        let service = Arc::clone(&service);
+        async move { service.run().await }
+    })
+    .await
+    .expect("consumer task joins")
+    .expect_err("fake consumer eventually stops");
+
+    assert_eq!(
+        one_receiver.recv().await,
+        Some(NotificationSubscriptionUpdate::Deleted(shared_delete_id))
+    );
+    let Some(NotificationSubscriptionUpdate::Updated(notification)) = one_receiver.recv().await
+    else {
+        panic!("expected patched notification");
+    };
+    assert_eq!(notification.notification_metadata.kind, "status_changed");
+    assert_eq!(
+        one_receiver.recv().await,
+        Some(NotificationSubscriptionUpdate::Deleted(user_delete_id))
+    );
+    assert_eq!(
+        two_receiver.recv().await,
+        Some(NotificationSubscriptionUpdate::Deleted(shared_delete_id))
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -119,10 +189,13 @@ async fn reports_slow_consumer_subscription_exit() {
     let subscription = service.subscribe(subscribed.clone());
 
     for index in 0..=SUBSCRIBER_BUFFER_CAPACITY.get() {
-        let notification = Arc::new(notification(subscribed.clone(), &index.to_string()));
+        let update = NotificationSubscriptionUpdate::Updated(Arc::new(notification(
+            subscribed.clone(),
+            &index.to_string(),
+        )));
         service
             .broadcasts
-            .publish(&subscribed, notification)
+            .publish(&subscribed, update)
             .expect("subscriber remains until its buffer fills");
         tokio::task::yield_now().await;
     }
@@ -154,13 +227,10 @@ async fn ignores_notifications_without_subscribers() {
     .expect("consumer task joins")
     .expect_err("fake consumer eventually stops");
 
-    assert_eq!(
-        receiver
-            .recv()
-            .await
-            .expect("subscriber receives")
-            .notification_metadata
-            .kind,
-        "test"
-    );
+    let NotificationSubscriptionUpdate::Updated(notification) =
+        receiver.recv().await.expect("subscriber receives")
+    else {
+        panic!("expected notification update");
+    };
+    assert_eq!(notification.notification_metadata.kind, "test");
 }
