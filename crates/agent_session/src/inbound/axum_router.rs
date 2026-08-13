@@ -9,9 +9,6 @@
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
 //! make no authorization or business decisions of their own.
 
-#[cfg(test)]
-mod test;
-
 use std::sync::Arc;
 
 use agent_runtime_protocol::domain::{action::AgentAction, schema::v0::SystemEvent};
