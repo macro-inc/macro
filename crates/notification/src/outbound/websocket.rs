@@ -9,9 +9,9 @@ use rootcause::Report;
 use serde::Serialize;
 
 use crate::domain::models::{NotificationStatusUpdate, UserNotificationStatusUpdate};
-use crate::domain::ports::{NotificationRealtimePublisher, WebSocketSender};
+use crate::domain::ports::{NotificationRealtimePublisher, RealtimeSender};
 
-/// WebSocket gateway implementation of the WebSocket sender port.
+/// WebSocket gateway implementation of the realtime sender port.
 ///
 /// This adapter sends notifications to users via WebSocket connections
 /// through the connection gateway service.
@@ -196,9 +196,7 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
     }
 }
 
-impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
-    for WebSocketGatewayAdapter<W>
-{
+impl<W: WebSocketGatewayOps + Send + Sync + 'static> RealtimeSender for WebSocketGatewayAdapter<W> {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         recipients: &[MacroUserIdStr<'a>],

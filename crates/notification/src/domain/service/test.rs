@@ -18,7 +18,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
-    SnsEndpointManager, WebSocketSender,
+    RealtimeSender, SnsEndpointManager,
 };
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
@@ -1236,10 +1236,10 @@ async fn test_no_apns_collapse_key_when_apns_not_enabled() {
 // Egress Service Tests
 // ============================================================================
 
-/// Mock WebSocket sender that always succeeds.
-struct MockWebSocketSender;
+/// Mock realtime sender that always succeeds.
+struct MockRealtimeSender;
 
-impl WebSocketSender for MockWebSocketSender {
+impl RealtimeSender for MockRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
@@ -1396,7 +1396,7 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
 ) -> NotificationEgressService<
     MockQueue,
     MockRepository,
-    MockWebSocketSender,
+    MockRealtimeSender,
     MockMobileSender,
     MockEmailSender,
     R,
@@ -1406,7 +1406,7 @@ fn create_egress_service<R: rate_limit::RateLimitService>(
     NotificationEgressService {
         queue: MockQueue::new(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter,
@@ -1886,7 +1886,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let service = NotificationEgressService {
         queue: MockQueue::new(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: mobile_sender.clone(),
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2022,7 +2022,7 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2077,7 +2077,7 @@ async fn test_poll_email_digests_skips_when_all_notifications_ineligible() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_digest_eligible_notification_ids([]),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2145,7 +2145,7 @@ async fn test_poll_email_digests_filters_ineligible_notifications_before_renderi
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_digest_eligible_notification_ids([eligible_id]),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2215,10 +2215,10 @@ impl NotificationQueue for EgressTestQueue {
     }
 }
 
-/// WebSocket sender that hangs indefinitely (simulates a stuck connection).
-struct HangingWebSocketSender;
+/// Realtime sender that hangs indefinitely (simulates a stuck connection).
+struct HangingRealtimeSender;
 
-impl WebSocketSender for HangingWebSocketSender {
+impl RealtimeSender for HangingRealtimeSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
@@ -2272,7 +2272,7 @@ async fn test_poll_and_deliver_deletes_rate_limited_message() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: exceeding_rate_limiter(),
@@ -2317,7 +2317,7 @@ async fn test_poll_and_deliver_times_out_slow_delivery() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: HangingWebSocketSender,
+        realtime: HangingRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2385,7 +2385,7 @@ async fn test_poll_and_deliver_deletes_message_when_all_ios_failures() {
     let service = NotificationEgressService {
         queue,
         repository: MockRepository::new(),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: FailingMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2603,7 +2603,7 @@ async fn test_poll_email_digests_skips_publish_when_user_disabled_type() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_type_disabled_user(user),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),
@@ -2665,7 +2665,7 @@ async fn test_poll_email_digests_publishes_when_user_has_not_disabled_type() {
     let service = NotificationEgressService {
         queue: queue.clone(),
         repository: MockRepository::new().with_type_disabled_user(other_user),
-        websocket: MockWebSocketSender,
+        realtime: MockRealtimeSender,
         mobile: MockMobileSender,
         email: MockEmailSender,
         rate_limiter: allowing_rate_limiter(),

@@ -10,7 +10,7 @@ struct RecordingSender {
     fail: bool,
 }
 
-impl WebSocketSender for RecordingSender {
+impl RealtimeSender for RecordingSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
@@ -39,7 +39,7 @@ async fn sends_through_both_adapters_and_combines_receipts() {
     let second_calls = Arc::new(Mutex::new(Vec::new()));
     let first_user = user("macro|first@example.com");
     let second_user = user("macro|second@example.com");
-    let sender = FanoutWebSocketSender::new(
+    let sender = FanoutRealtimeSender::new(
         RecordingSender {
             calls: first_calls.clone(),
             delivered: vec![first_user.clone()],
@@ -75,7 +75,7 @@ async fn sends_through_both_adapters_and_combines_receipts() {
 async fn attempts_both_adapters_when_one_fails() {
     let first_calls = Arc::new(Mutex::new(Vec::new()));
     let second_calls = Arc::new(Mutex::new(Vec::new()));
-    let sender = FanoutWebSocketSender::new(
+    let sender = FanoutRealtimeSender::new(
         RecordingSender {
             calls: first_calls.clone(),
             delivered: Vec::new(),

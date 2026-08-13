@@ -62,7 +62,7 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 #[tokio::test]
 async fn publishes_one_event_per_call_with_all_recipients() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+    let sender = KafkaRealtimeSender::new(MacroEventBrokerService::new(
         RecordingPublisher {
             records: records.clone(),
             fail: false,
@@ -122,7 +122,7 @@ async fn publishes_one_event_per_call_with_all_recipients() {
 #[tokio::test]
 async fn empty_recipients_still_publishes_one_event() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+    let sender = KafkaRealtimeSender::new(MacroEventBrokerService::new(
         RecordingPublisher {
             records: records.clone(),
             fail: false,
@@ -144,7 +144,7 @@ async fn empty_recipients_still_publishes_one_event() {
 
 #[tokio::test]
 async fn propagates_publish_failures() {
-    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+    let sender = KafkaRealtimeSender::new(MacroEventBrokerService::new(
         RecordingPublisher {
             records: Arc::new(Mutex::new(Vec::new())),
             fail: true,
@@ -175,7 +175,7 @@ impl Serialize for SerializationFailure {
 #[tokio::test]
 async fn propagates_serialization_failures_without_publishing() {
     let records = Arc::new(Mutex::new(Vec::new()));
-    let sender = KafkaWebSocketSender::new(MacroEventBrokerService::new(
+    let sender = KafkaRealtimeSender::new(MacroEventBrokerService::new(
         RecordingPublisher {
             records: records.clone(),
             fail: false,

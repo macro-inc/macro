@@ -288,9 +288,9 @@ impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
     }
 }
 
-/// Port for WebSocket delivery via connection gateway.
-pub trait WebSocketSender: Send + Sync + 'static {
-    /// Send notifications to users via WebSocket.
+/// Port for realtime notification delivery.
+pub trait RealtimeSender: Send + Sync + 'static {
+    /// Send notifications to users in realtime.
     ///
     /// Returns the set of users who successfully received the notification
     /// (i.e., they were online and the message was delivered).

@@ -6,8 +6,8 @@ use ::notification::domain::service::NotificationEgressService;
 use ::notification::inbound::notification_events_listener::NotificationEventsListener;
 use ::notification::inbound::worker::NotificationWorker;
 use ::notification::outbound::email::EmailAdapter;
-use ::notification::outbound::fanout_websocket::FanoutWebSocketSender;
-use ::notification::outbound::kafka_websocket::KafkaWebSocketSender;
+use ::notification::outbound::fanout_realtime::FanoutRealtimeSender;
+use ::notification::outbound::kafka_realtime::KafkaRealtimeSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
@@ -198,16 +198,16 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let websocket_adapter = FanoutWebSocketSender::new(
+    let realtime_adapter = FanoutRealtimeSender::new(
         WebSocketGatewayAdapter {
             gateway: ConnectionGatewayClient::new(
                 config.internal_api_key.as_ref().to_string(),
                 connection_gateway_url,
             ),
         },
-        KafkaWebSocketSender::new(MacroEventBrokerService::new(
+        KafkaRealtimeSender::new(MacroEventBrokerService::new(
             KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-                .context("failed to create Kafka WebSocket notification publisher")?,
+                .context("failed to create Kafka realtime notification publisher")?,
             GlobalSpawner,
         )),
     );
@@ -249,7 +249,7 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_service = NotificationEgressService {
         queue: notification_queue,
         repository: egress_repository,
-        websocket: websocket_adapter,
+        realtime: realtime_adapter,
         mobile: mobile_adapter,
         email: email_adapter,
         rate_limiter: rate_limit_adapter,
