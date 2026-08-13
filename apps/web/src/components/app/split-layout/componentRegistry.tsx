@@ -540,7 +540,7 @@ registerComponent('calendar-event-compose', (params) => {
           | ((calendarId: string, color: string) => void)
           | undefined
       }
-      onClose={params?.onClose as (() => void) | undefined}
+      onSaveSuccess={params?.onSaveSuccess as (() => void) | undefined}
     />
   );
 });

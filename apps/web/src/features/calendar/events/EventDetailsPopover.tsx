@@ -1,5 +1,4 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
@@ -14,6 +13,7 @@ import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { EventAttendeesSection, EventDetails } from './EventDetails';
 import { EventRsvpSection } from './EventRsvpSection';
 import type { CalendarEvent, CalendarTimeFormat } from './types';
+import { useOpenEventComposer } from './useOpenEventComposer';
 
 interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;
@@ -96,15 +96,11 @@ interface EventDetailsOverlayProps {
 }
 
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
-  const { popoverSplit } = useSplitLayout();
+  const openEventComposer = useOpenEventComposer();
   const [deleteOpen, setDeleteOpen] = createSignal(false);
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
-    popoverSplit({
-      type: 'component',
-      id: 'calendar-event-compose',
-      params: { event: props.event },
-    });
+    openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
 
@@ -320,15 +316,11 @@ function DeleteEventDialog(props: {
 
 /** Anchors event details and actions to a rendered calendar event. */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
-  const { popoverSplit } = useSplitLayout();
+  const openEventComposer = useOpenEventComposer();
   const [deleteOpen, setDeleteOpen] = createSignal(false);
   const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
   const openEditor = () => {
-    popoverSplit({
-      type: 'component',
-      id: 'calendar-event-compose',
-      params: { event: props.event },
-    });
+    openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
 

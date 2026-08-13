@@ -28,7 +28,7 @@ export type OpenDialogOptions = {
    * Capture this owner while the calling component is being created; event
    * handlers generally run without an owner.
    */
-  owner?: Owner;
+  owner?: Owner | null;
 };
 
 /** Why an imperative dialog was closed. */
@@ -139,7 +139,7 @@ export function openDialog<P extends ManagedDialogProps>(
     id,
     component: component as ManagedDialogComponent,
     props: props as PropsSource<Record<string, unknown>>,
-    owner: options.owner,
+    owner: options.owner ?? undefined,
     isOpen,
     setOpen,
     finalized: false,

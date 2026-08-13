@@ -4,7 +4,6 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -42,6 +41,7 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
+import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
 import './calendar.css';
 
@@ -175,7 +175,7 @@ function CalendarWorkspace() {
   const calendarPager = useCalendarPager();
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
-  const { popoverSplit } = useSplitLayout();
+  const openEventComposer = useOpenEventComposer();
   const initialDate = new Date();
   const today = createLocalToday();
 
@@ -266,12 +266,7 @@ function CalendarWorkspace() {
                 size="sm"
                 class="rounded-lg px-2"
                 label="New event"
-                onClick={() =>
-                  popoverSplit({
-                    type: 'component',
-                    id: 'calendar-event-compose',
-                  })
-                }
+                onClick={() => openEventComposer()}
               >
                 <PlusIcon class="size-3.5" />
                 New event

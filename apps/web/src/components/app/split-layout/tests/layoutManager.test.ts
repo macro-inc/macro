@@ -1553,4 +1553,42 @@ describe('layoutManager', () => {
       });
     });
   });
+
+  describe('popover splits', () => {
+    it('lets an onClose handler decide when a popover finishes closing', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), []);
+        const onClose = vi.fn();
+        const popover = manager.createPopoverSplit({
+          content: { type: 'component', id: 'composer' },
+          onClose,
+        });
+
+        popover.close();
+
+        expect(onClose).toHaveBeenCalledOnce();
+        expect(popover.isOpen()).toBe(true);
+
+        const finishClose = onClose.mock.calls[0][0];
+        finishClose();
+        expect(popover.isOpen()).toBe(false);
+
+        dispose();
+      });
+    });
+
+    it('closes immediately when no onClose handler is provided', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), []);
+        const popover = manager.createPopoverSplit({
+          content: { type: 'component', id: 'composer' },
+        });
+
+        popover.close();
+
+        expect(popover.isOpen()).toBe(false);
+        dispose();
+      });
+    });
+  });
 });

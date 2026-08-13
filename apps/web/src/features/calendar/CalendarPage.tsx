@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
@@ -58,6 +57,7 @@ import {
 } from './events/event-interaction';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import type { CalendarTimeFormat } from './events/types';
+import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -323,7 +323,7 @@ function createCalendarPageData(
 export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
-  const { popoverSplit } = useSplitLayout();
+  const openEventComposer = useOpenEventComposer();
   const calendarsQuery = useVisibleCalendarsQuery();
   const firstWritableCalendar = createMemo(() =>
     calendarsQuery.data?.find((calendar) => calendar.isWritable)
@@ -378,20 +378,16 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
     if (!isActive()) return;
     const calendar = firstWritableCalendar();
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
-    popoverSplit({
-      type: 'component',
-      id: 'calendar-event-compose',
-      params: {
-        initialValues: {
-          ...calendarSelectionToEditorInitialValues(selection),
-          ...(calendar ? { calendarId: calendar.id } : {}),
-        },
-        onCalendarChange: (_calendarId: string, color: string) =>
-          setSelectionColor(color),
-        onClose: () => {
-          selection.view.calendar.unselect();
-          setSelectionColor(undefined);
-        },
+    openEventComposer({
+      initialValues: {
+        ...calendarSelectionToEditorInitialValues(selection),
+        ...(calendar ? { calendarId: calendar.id } : {}),
+      },
+      onCalendarChange: (_calendarId: string, color: string) =>
+        setSelectionColor(color),
+      onClose: () => {
+        selection.view.calendar.unselect();
+        setSelectionColor(undefined);
       },
     });
   };
