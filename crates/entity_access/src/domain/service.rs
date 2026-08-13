@@ -485,7 +485,8 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::CalendarEvent => {
+            | EntityType::CalendarEvent
+            | EntityType::AgentSession => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
