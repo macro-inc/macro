@@ -4,6 +4,7 @@ import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
   OpenWithSplitOptions,
+  PopoverSplitOptions,
   ReferredFrom,
   SplitContent,
 } from './layoutManager';
@@ -78,13 +79,16 @@ export function useSplitLayout() {
     });
   }
 
-  function popoverSplit(content: SplitContent) {
+  function popoverSplit(
+    content: SplitContent,
+    options: Omit<PopoverSplitOptions, 'content'> = {}
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('no split manager found');
       return;
     }
-    return splitManager.createPopoverSplit({ content: content });
+    return splitManager.createPopoverSplit({ ...options, content });
   }
 
   function replaceAllSplits(

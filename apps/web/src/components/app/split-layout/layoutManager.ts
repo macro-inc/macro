@@ -148,7 +148,8 @@ export type SplitMount = BlockMount | ComponentMount;
 
 export type PopoverSplitOptions = {
   content: SplitContent;
-  onClose?: () => void;
+  /** Handles a close request. Call `close` to finish closing the popover. */
+  onClose?: (close: () => void) => void;
 };
 
 export type PopoverSplitHandle = {
@@ -1771,30 +1772,42 @@ export function createSplitLayout(
     focusLock.acquire();
 
     const mount = createPinnedMount(orchestrator, options.content);
+    let closed = false;
+
+    const close = () => {
+      if (closed) return;
+      closed = true;
+
+      // Release focus lock to return focus to previously focused element
+      focusLock.release();
+
+      setState('popovers', (prev) => {
+        const newMap = new Map(prev);
+        const popover = newMap.get(id);
+        if (popover) {
+          newMap.set(id, { ...popover, isOpen: false });
+          // Schedule cleanup after a brief delay to allow for animations
+          setTimeout(() => {
+            setState('popovers', (prev) => {
+              const cleanupMap = new Map(prev);
+              cleanupMap.delete(id);
+              return cleanupMap;
+            });
+          }, 300);
+        }
+        return newMap;
+      });
+    };
 
     const handle: PopoverSplitHandle = {
       id,
       close: () => {
-        // Release focus lock to return focus to previously focused element
-        focusLock.release();
-
-        setState('popovers', (prev) => {
-          const newMap = new Map(prev);
-          const popover = newMap.get(id);
-          if (popover) {
-            newMap.set(id, { ...popover, isOpen: false });
-            // Schedule cleanup after a brief delay to allow for animations
-            setTimeout(() => {
-              setState('popovers', (prev) => {
-                const cleanupMap = new Map(prev);
-                cleanupMap.delete(id);
-                return cleanupMap;
-              });
-            }, 300);
-          }
-          return newMap;
-        });
-        options.onClose?.();
+        if (closed) return;
+        if (options.onClose) {
+          options.onClose(close);
+          return;
+        }
+        close();
       },
       isOpen: () => {
         const popover = state.popovers.get(id);
