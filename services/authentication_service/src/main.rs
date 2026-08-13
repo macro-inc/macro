@@ -92,6 +92,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let microsoft_credentials = config
+        .microsoft_credentials()
+        .context("invalid Microsoft OAuth configuration")?;
 
     let internal_api_key = config.internal_api_key.clone();
 
@@ -176,6 +179,14 @@ async fn main() -> anyhow::Result<()> {
         google_client_secret,
     )
     .with_public_url(fusionauth_public_url);
+    let auth_client = match microsoft_credentials {
+        Some(credentials) => auth_client.with_microsoft_credentials(
+            credentials.client_id,
+            credentials.client_secret,
+            credentials.tenant_id,
+        ),
+        None => auth_client,
+    };
     tracing::trace!("initialized auth client");
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
