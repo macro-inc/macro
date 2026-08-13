@@ -1,9 +1,18 @@
 import { isPlatform } from '@core/util/platform';
+import { makePersisted } from '@solid-primitives/storage';
 import { Button, Dialog, Surface } from '@ui';
 import { createResource, createSignal, Show } from 'solid-js';
 import { isIpad } from './isIpad';
 
 const DEBUG_FORCE_OPEN = false;
+
+/**
+ * Survives relaunches, so the notice is shown once per device and never again.
+ * Module scope so the stored value is read once rather than on every mount.
+ */
+const [dismissed, setDismissed] = makePersisted(createSignal(false), {
+  name: 'ipad-unsupported-notice-dismissed',
+});
 
 /**
  * Soft notice shown to iPad users of the native app.
@@ -13,16 +22,17 @@ const DEBUG_FORCE_OPEN = false;
  * inside an iPhone-tuned shell. This sets expectations rather than blocking
  * anything.
  *
- * Dismissal is deliberately not persisted — it shows once per cold launch.
+ * Shown once per device: dismissal is persisted to localStorage, so it never
+ * returns after the user acknowledges it. `DEBUG_FORCE_OPEN` bypasses the
+ * stored flag so the dialog can still be re-tested after dismissing it.
  */
 export function IpadUnsupportedDialog() {
   if (!isPlatform('ios') && !DEBUG_FORCE_OPEN) return null;
 
   const [onIpad] = createResource(isIpad);
-  const [dismissed, setDismissed] = createSignal(false);
 
   return (
-    <Show when={(DEBUG_FORCE_OPEN || onIpad()) && !dismissed()}>
+    <Show when={DEBUG_FORCE_OPEN || (onIpad() && !dismissed())}>
       <Dialog
         open
         onOpenChange={(open) => {
