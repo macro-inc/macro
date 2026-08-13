@@ -71,7 +71,7 @@ fn update(
 }
 
 #[tokio::test]
-async fn publishes_one_typed_event_per_user_scoped_update() {
+async fn publishes_one_typed_event_per_call() {
     let records = Arc::new(Mutex::new(Vec::new()));
     let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
         RecordingPublisher {
@@ -82,52 +82,51 @@ async fn publishes_one_typed_event_per_user_scoped_update() {
     ));
     let first_user = user("macro|first@example.com");
     let second_user = user("macro|second@example.com");
-    let first_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
-        .expect("valid notification ID");
-    let second_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e78")
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
         .expect("valid notification ID");
     let updates = [
-        update(first_user.clone(), first_id),
-        update(second_user.clone(), second_id),
+        update(first_user.clone(), notification_id),
+        update(second_user.clone(), notification_id),
     ];
 
     publisher
         .publish_updates(&updates)
         .await
-        .expect("publishes succeed");
+        .expect("publish succeeds");
 
-    let mut records = records.lock().expect("records lock");
-    records.sort_by(|left, right| left.key.cmp(&right.key));
-    assert_eq!(records.len(), 2);
+    let records = records.lock().expect("records lock");
+    assert_eq!(records.len(), 1);
 
-    for (record, expected_user) in records.iter().zip([first_user, second_user]) {
-        assert_eq!(record.topic, "macro.notifications");
-        assert_eq!(record.key, expected_user.as_ref());
+    let record = &records[0];
+    assert_eq!(record.topic, "macro.notifications");
+    let payload: serde_json::Value =
+        serde_json::from_slice(&record.payload).expect("payload is valid JSON");
+    assert_eq!(
+        record.key,
+        payload["event_id"].as_str().expect("event ID is a string")
+    );
+    assert_eq!(payload["schema_version"], 1);
+    assert_eq!(payload["event_type"], "notification.status_updated");
+    assert_eq!(
+        payload["metadata"]["users"],
+        serde_json::json!([first_user.as_ref(), second_user.as_ref()])
+    );
+    assert_eq!(payload["metadata"]["updates"].as_array().unwrap().len(), 1);
 
-        let payload: serde_json::Value =
-            serde_json::from_slice(&record.payload).expect("payload is valid JSON");
-        assert_eq!(payload["schema_version"], 1);
-        assert_eq!(payload["event_type"], "notification.status_updated");
-        assert_eq!(payload["metadata"]["user"], expected_user.as_ref());
-        assert_eq!(payload["metadata"]["updates"].as_array().unwrap().len(), 1);
-
-        let decoded = NotificationMacroEvent::<serde_json::Value>::decode(
-            record.key.clone(),
-            &record.payload,
-        )
-        .expect("event round-trips");
-        let NotificationTopicEvent::NotificationStatusUpdated { user, updates } =
-            decoded.into_topic_event()
-        else {
-            panic!("expected notification status update event");
-        };
-        assert_eq!(user.as_ref(), expected_user.as_ref());
-        assert_eq!(updates.len(), 1);
-        assert_eq!(
-            serde_json::to_value(updates).unwrap(),
-            payload["metadata"]["updates"]
-        );
-    }
+    let decoded =
+        NotificationMacroEvent::<serde_json::Value>::decode(record.key.clone(), &record.payload)
+            .expect("event round-trips");
+    let NotificationTopicEvent::NotificationStatusUpdated { users, updates } =
+        decoded.into_topic_event()
+    else {
+        panic!("expected notification status update event");
+    };
+    assert_eq!(users, vec![first_user, second_user]);
+    assert_eq!(updates.len(), 1);
+    assert_eq!(
+        serde_json::to_value(updates).unwrap(),
+        payload["metadata"]["updates"]
+    );
 }
 
 #[tokio::test]
