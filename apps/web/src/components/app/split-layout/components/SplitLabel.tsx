@@ -10,6 +10,7 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -39,7 +40,6 @@ import {
 } from '../context';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function StaticSplitLabel(props: {
   label: string;

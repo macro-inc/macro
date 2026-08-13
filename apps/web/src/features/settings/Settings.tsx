@@ -19,6 +19,7 @@ import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
@@ -46,7 +47,6 @@ import { MobileApp } from './MobileApp';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { Team } from './Team';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
