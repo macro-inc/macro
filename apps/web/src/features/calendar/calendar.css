@@ -237,6 +237,42 @@
 		opacity 120ms ease-out;
 }
 
+.calendar-view .fc .fc-event.fc-event-draggable {
+	cursor: grab;
+}
+
+.calendar-view .fc .fc-event.fc-event-dragging {
+	cursor: grabbing;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content-selected)
+	.fc-event-resizer {
+	display: block;
+}
+
+.calendar-view .fc .fc-event-resizer::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	border-radius: 9999px;
+	background: var(--fc-event-border-color);
+	box-shadow: 0 0 0 1px var(--color-surface);
+	content: "";
+	transform: translate(-50%, -50%);
+}
+
+.calendar-view .fc .fc-h-event .fc-event-resizer::after {
+	width: 2px;
+	height: 0.625rem;
+}
+
+.calendar-view .fc .fc-v-event .fc-event-resizer::after {
+	width: 1rem;
+	height: 2px;
+}
+
 .calendar-view .fc .fc-event-mirror,
 .calendar-view .fc .fc-highlight {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
@@ -271,6 +307,11 @@
 
 .calendar-view .fc .fc-event-mirror .fc-event-main {
 	color: inherit;
+}
+
+/* Drag and resize mirrors use a filled accent background. */
+.calendar-view .fc .fc-event-mirror .calendar-event-content {
+	color: var(--color-surface);
 }
 
 .calendar-view .fc .fc-event-mirror .calendar-event-selection-preview {

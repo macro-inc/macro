@@ -129,7 +129,7 @@ function CalendarPages() {
                 !(
                   event.target instanceof Element &&
                   event.target.closest(
-                    'button, input, select, textarea, [role="button"]'
+                    'button, input, select, textarea, [role="button"], .fc-event'
                   )
                 )
               }

@@ -1,13 +1,19 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
+import type {
+  DateSelectArg,
+  DatesSetArg,
+  EventInput,
+} from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -44,6 +50,12 @@ import {
 } from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
 import { calendarSelectionToEditorInitialValues } from './events/EventEditorForm';
+import {
+  type CalendarEventTimeChange,
+  calendarEventRenderId,
+  calendarEventTimeFromFullCalendar,
+  canEditCalendarEventTime,
+} from './events/event-interaction';
 import { mapCalendarEventToFullCalendar } from './events/event-mapper';
 import type { CalendarTimeFormat } from './events/types';
 import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
@@ -326,6 +338,33 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const useNarrowWeekdayHeaders = () =>
     calendarView.useNarrowDayHeaders() && !isMobile();
   const data = createCalendarPageData(range, isActive);
+  const updateEventTime = useUpdateCalendarEventMutation();
+  // FullCalendar owns temporary drag/resize state imperatively. Replacing its
+  // event inputs mid-interaction clears that state and turns the pointer drag
+  // into a date-selection mirror, so hold a stable query snapshot until stop.
+  const [eventInteractionActive, setEventInteractionActive] =
+    createSignal(false);
+  const renderedFullCalendarEvents = createMemo<EventInput[]>(
+    (current) =>
+      eventInteractionActive() ? current : data.fullCalendarEvents(),
+    data.fullCalendarEvents()
+  );
+  let interactionEventsById: ReturnType<typeof data.eventsById> | undefined;
+
+  const eventByRenderId = (id: string) =>
+    interactionEventsById?.get(id) ?? data.eventsById().get(id);
+  const handleEventInteractionStart = () => {
+    interactionEventsById = data.eventsById();
+    setEventInteractionActive(true);
+  };
+  const handleEventInteractionStop = () => {
+    // FullCalendar emits drop/resize immediately after stop, so defer clearing
+    // the snapshot until those callbacks have consumed it.
+    queueMicrotask(() => {
+      interactionEventsById = undefined;
+      setEventInteractionActive(false);
+    });
+  };
 
   // Rendered chip elements by view-model id, so a deep link can anchor the
   // details popover to the real chip. The signal bumps on every mount
@@ -371,6 +410,37 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
     setRange(nextRange);
   };
 
+  const handleEventTimeChange = (change: CalendarEventTimeChange) => {
+    const event = eventByRenderId(calendarEventRenderId(change.event));
+    if (
+      !isActive() ||
+      updateEventTime.isPending ||
+      !event ||
+      !canEditCalendarEventTime(event)
+    ) {
+      change.revert();
+      return;
+    }
+
+    const time = calendarEventTimeFromFullCalendar(change.event, event);
+    if (!time) {
+      change.revert();
+      return;
+    }
+
+    updateEventTime.mutate(
+      { eventId: event.eventId, patch: { time } },
+      {
+        onError: (error) => {
+          change.revert();
+          toast.failure('Failed to update event', {
+            subtext: error.message,
+          });
+        },
+      }
+    );
+  };
+
   return (
     <FullCalendar.Root
       plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
@@ -393,7 +463,15 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       eventTimeFormat={
         CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
       }
-      events={data.fullCalendarEvents()}
+      events={renderedFullCalendarEvents()}
+      eventAllow={() => !updateEventTime.isPending}
+      eventResizableFromStart
+      eventDragStart={handleEventInteractionStart}
+      eventDragStop={handleEventInteractionStop}
+      eventDrop={handleEventTimeChange}
+      eventResizeStart={handleEventInteractionStart}
+      eventResizeStop={handleEventInteractionStop}
+      eventResize={handleEventTimeChange}
       selectable={!isMobile()}
       unselectAuto={false}
       selectMirror
@@ -402,33 +480,36 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       eventClick={({ el, event, jsEvent }) => {
         jsEvent.preventDefault();
         if (!isActive()) return;
-        const selectedEvent = data.eventsById().get(event.id);
+        const selectedEvent = eventByRenderId(calendarEventRenderId(event));
         if (selectedEvent) calendarView.selectEvent(selectedEvent, el);
       }}
-      eventDidMount={({ el, event }) => {
-        const calendarEvent = data.eventsById().get(event.id);
+      eventDidMount={({ el, event, isMirror }) => {
+        const eventId = calendarEventRenderId(event);
+        const calendarEvent = eventByRenderId(eventId);
         if (calendarEvent) {
           el.style.setProperty(
             '--event-calendar-color',
             calendarEvent.calendar.color
           );
         }
-        eventElements.set(event.id, el);
+        if (isMirror) return;
+
+        eventElements.set(eventId, el);
         // A re-render (query settling, live refresh) replaces chip elements.
         // Re-anchor an open details popover to the remounted chip — its old
         // anchor is a disconnected node the popover can't position against.
-        if (
-          isActive() &&
-          calendarView.eventState.selectedEventId === event.id
-        ) {
-          const selected = data.eventsById().get(event.id);
+        if (isActive() && calendarView.eventState.selectedEventId === eventId) {
+          const selected = eventByRenderId(eventId);
           if (selected) calendarView.selectEvent(selected, el);
         }
         notifyChipMount();
       }}
-      eventWillUnmount={({ el, event }) => {
-        if (eventElements.get(event.id) === el) {
-          eventElements.delete(event.id);
+      eventWillUnmount={({ el, event, isMirror }) => {
+        if (isMirror) return;
+
+        const eventId = calendarEventRenderId(event);
+        if (eventElements.get(eventId) === el) {
+          eventElements.delete(eventId);
         }
       }}
       datesSet={handleDatesSet}
@@ -485,8 +566,15 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
 
       <FullCalendar.EventContent>
         {(renderProps) => {
-          const event = data.eventsById().get(renderProps.event.id);
-          if (!event && renderProps.isMirror) {
+          const event = eventByRenderId(
+            calendarEventRenderId(renderProps.event)
+          );
+          if (
+            !event &&
+            renderProps.isMirror &&
+            !renderProps.isDragging &&
+            !renderProps.isResizing
+          ) {
             return (
               <div class="calendar-event-selection-preview flex h-full min-w-0 flex-col overflow-hidden px-1 py-0.5 text-xs leading-tight">
                 <span class="truncate font-semibold">New event</span>
