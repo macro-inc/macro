@@ -1,4 +1,5 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
 import { EventComposerForm } from './EventComposerForm';
 import type { EventEditorInitialValues } from './EventEditorForm';
@@ -13,6 +14,7 @@ export function EventComposer(props: {
   onSaveSuccess?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
   const editor = useEventEditor({
     event: () => props.event,
@@ -29,7 +31,10 @@ export function EventComposer(props: {
   );
 
   return (
-    <div class="portal-scope flex h-full min-h-0 flex-col p-4 text-ink">
+    <div
+      ref={attachHotkeys}
+      class="portal-scope flex h-full min-h-0 flex-col p-4 text-ink"
+    >
       <EventComposerForm
         initialValues={editor.initialValues() ?? props.initialValues}
         isEdit={isEdit()}
