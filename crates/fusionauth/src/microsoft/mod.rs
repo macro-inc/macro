@@ -83,17 +83,40 @@ impl FusionAuthClient {
         .await
     }
 
-    /// Decodes and validates the identity claims in a Microsoft ID token.
+    /// Verifies a Microsoft ID token against the tenant's OIDC signing keys and extracts the
+    /// identity claims. The signature, issuer, audience, tenant, expiration, and not-before
+    /// claims are all validated before any claim is trusted.
     #[tracing::instrument(skip(self, id_token), err)]
-    pub fn parse_microsoft_id_token(&self, id_token: &str) -> Result<oauth::MicrosoftUserInfo> {
+    pub async fn parse_microsoft_id_token(
+        &self,
+        id_token: &str,
+    ) -> Result<oauth::MicrosoftUserInfo> {
         let credentials = self.microsoft_credentials()?;
-        oauth::decode_microsoft_id_token(id_token, &credentials.client_id, &credentials.tenant_id)
-            .map_err(|error| {
-                tracing::error!(error=?error, "unable to parse Microsoft ID token");
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: error.to_string(),
-                })
+        let signing_keys = oauth::fetch_microsoft_signing_keys(
+            &self.unauth_client,
+            oauth::MICROSOFT_LOGIN_BASE_URL,
+            &credentials.tenant_id,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(error=?error, "unable to fetch Microsoft OIDC signing keys");
+            FusionAuthClientError::Generic(GenericErrorResponse {
+                message: error.to_string(),
             })
+        })?;
+
+        oauth::decode_microsoft_id_token(
+            id_token,
+            &signing_keys,
+            &credentials.client_id,
+            &credentials.tenant_id,
+        )
+        .map_err(|error| {
+            tracing::error!(error=?error, "unable to parse Microsoft ID token");
+            FusionAuthClientError::Generic(GenericErrorResponse {
+                message: error.to_string(),
+            })
+        })
     }
 
     fn microsoft_credentials(&self) -> Result<&MicrosoftOAuthCredentials> {

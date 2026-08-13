@@ -131,6 +131,7 @@ async fn link_user(
     let user_info = ctx
         .auth_client
         .parse_microsoft_id_token(&token_response.id_token)
+        .await
         .map_err(|error| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

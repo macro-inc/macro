@@ -5903,6 +5903,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "jsonwebtoken 10.3.0",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -5911,6 +5912,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "wiremock",
  "workspace-hack",
 ]
 

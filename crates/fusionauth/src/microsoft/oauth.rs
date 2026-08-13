@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use reqwest::Url;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
-const MICROSOFT_LOGIN_BASE_URL: &str = "https://login.microsoftonline.com/";
+pub(crate) const MICROSOFT_LOGIN_BASE_URL: &str = "https://login.microsoftonline.com/";
 const MICROSOFT_SCOPES: &str = "openid email offline_access profile Mail.ReadWrite Mail.Send";
 
 #[derive(serde::Serialize)]
@@ -37,11 +37,36 @@ pub struct MicrosoftExchangeTokenResponse {
 
 #[derive(serde::Deserialize)]
 struct MicrosoftIdTokenClaims {
-    aud: String,
     tid: String,
     sub: String,
     email: Option<String>,
     preferred_username: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct MicrosoftOpenIdConfiguration {
+    issuer: String,
+    jwks_uri: String,
+}
+
+#[derive(serde::Deserialize)]
+struct MicrosoftJsonWebKeySet {
+    keys: Vec<MicrosoftJsonWebKey>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct MicrosoftJsonWebKey {
+    pub(crate) kid: String,
+    pub(crate) kty: String,
+    pub(crate) n: String,
+    pub(crate) e: String,
+}
+
+/// The tenant's OIDC issuer and current signing keys, resolved through Microsoft OIDC discovery.
+#[derive(Debug)]
+pub(crate) struct MicrosoftSigningKeys {
+    pub(crate) issuer: String,
+    pub(crate) keys: Vec<MicrosoftJsonWebKey>,
 }
 
 /// Validated identity details extracted from a Microsoft ID token.
@@ -143,28 +168,87 @@ pub(crate) async fn exchange_code_for_tokens(
     })
 }
 
+pub(crate) async fn fetch_microsoft_signing_keys(
+    client: &UnauthedClient,
+    login_base_url: &str,
+    tenant_id: &str,
+) -> anyhow::Result<MicrosoftSigningKeys> {
+    let discovery_url = discovery_url(login_base_url, tenant_id)?;
+    let configuration: MicrosoftOpenIdConfiguration =
+        fetch_json(client, discovery_url, "OpenID configuration").await?;
+
+    let jwks_uri = Url::parse(&configuration.jwks_uri)
+        .context("Microsoft OpenID configuration contains an invalid JWKS URI")?;
+    let jwks: MicrosoftJsonWebKeySet = fetch_json(client, jwks_uri, "JWKS").await?;
+    if jwks.keys.is_empty() {
+        anyhow::bail!("Microsoft JWKS response did not contain any signing keys");
+    }
+
+    Ok(MicrosoftSigningKeys {
+        issuer: configuration.issuer,
+        keys: jwks.keys,
+    })
+}
+
+async fn fetch_json<T: serde::de::DeserializeOwned>(
+    client: &UnauthedClient,
+    url: Url,
+    resource: &str,
+) -> anyhow::Result<T> {
+    let response = client
+        .client()
+        .get(url)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await
+        .with_context(|| format!("failed to fetch Microsoft {resource}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        anyhow::bail!("Microsoft {resource} request failed with status {status}");
+    }
+
+    response
+        .json::<T>()
+        .await
+        .with_context(|| format!("failed to parse Microsoft {resource} response"))
+}
+
 pub(crate) fn decode_microsoft_id_token(
     id_token: &str,
+    signing_keys: &MicrosoftSigningKeys,
     expected_audience: &str,
     expected_tenant_id: &str,
 ) -> anyhow::Result<MicrosoftUserInfo> {
-    let mut token_parts = id_token.split('.');
-    let _header = token_parts.next();
-    let payload = token_parts.next().context("invalid JWT format")?;
-    let _signature = token_parts.next().context("invalid JWT format")?;
-    if token_parts.next().is_some() {
-        anyhow::bail!("invalid JWT format");
+    let header = jsonwebtoken::decode_header(id_token)
+        .context("failed to decode Microsoft ID-token header")?;
+    if header.alg != Algorithm::RS256 {
+        anyhow::bail!("Microsoft ID token is not signed with an approved algorithm");
+    }
+    let kid = header
+        .kid
+        .context("Microsoft ID-token header does not contain a key ID")?;
+    let signing_key = signing_keys
+        .keys
+        .iter()
+        .find(|key| key.kid == kid)
+        .context("Microsoft ID token is not signed with a known signing key")?;
+    if signing_key.kty != "RSA" {
+        anyhow::bail!("Microsoft ID-token signing key is not an RSA key");
     }
 
-    let decoded_payload = URL_SAFE_NO_PAD
-        .decode(payload)
-        .context("failed to decode Microsoft ID-token claims")?;
-    let claims: MicrosoftIdTokenClaims = serde_json::from_slice(&decoded_payload)
-        .context("failed to deserialize Microsoft ID-token claims")?;
+    let decoding_key = DecodingKey::from_rsa_components(&signing_key.n, &signing_key.e)
+        .context("failed to construct a decoding key from the Microsoft signing key")?;
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_required_spec_claims(&["exp", "nbf", "aud", "iss"]);
+    validation.validate_nbf = true;
+    validation.set_audience(&[expected_audience]);
+    validation.set_issuer(&[&signing_keys.issuer]);
 
-    if claims.aud != expected_audience {
-        anyhow::bail!("Microsoft ID-token audience does not match the configured client");
-    }
+    let claims =
+        jsonwebtoken::decode::<MicrosoftIdTokenClaims>(id_token, &decoding_key, &validation)
+            .context("Microsoft ID token failed signature or claims validation")?
+            .claims;
+
     if claims.tid != expected_tenant_id {
         anyhow::bail!("Microsoft ID-token tenant does not match the configured tenant");
     }
@@ -195,6 +279,15 @@ fn endpoint_url(tenant_id: &str, endpoint: &str) -> anyhow::Result<Url> {
         .expect("Microsoft OAuth base URL must support path segments")
         .pop_if_empty()
         .extend([tenant_id, "oauth2", "v2.0", endpoint]);
+    Ok(url)
+}
+
+fn discovery_url(login_base_url: &str, tenant_id: &str) -> anyhow::Result<Url> {
+    let mut url = Url::parse(login_base_url).context("invalid Microsoft OAuth base URL")?;
+    url.path_segments_mut()
+        .map_err(|()| anyhow::anyhow!("Microsoft OAuth base URL must support path segments"))?
+        .pop_if_empty()
+        .extend([tenant_id, "v2.0", ".well-known", "openid-configuration"]);
     Ok(url)
 }
 
