@@ -1,6 +1,7 @@
 //! Create a share permission and link it to a chat.
 
-use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use sqlx::{Postgres, Transaction};
 
 /// Create a share permission row and associate it with the given chat.
@@ -10,17 +11,34 @@ pub(crate) async fn create_chat_permission(
     chat_id: &str,
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<()> {
+    let link_share = share_permission.link_share;
+    let link_share_access_level = match link_share {
+        Some(_) => Some(share_permission.link_share_access_level.unwrap_or_else(|| {
+            tracing::warn!("link sharing was enabled without an access level, defaulting to view");
+            AccessLevel::View
+        })),
+        None => None,
+    };
+    let legacy_is_public = link_share == Some(LinkShare::Public);
+    let link_share = link_share.map(|value| value.to_string());
+    let link_share_access_level = link_share_access_level.map(|level| level.to_string());
+
     let permission_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-        VALUES ($1, $2, NOW(), NOW())
+        INSERT INTO "SharePermission" (
+            "linkShare",
+            "linkShareAccessLevel",
+            "isPublic",
+            "publicAccessLevel",
+            "createdAt",
+            "updatedAt"
+        )
+        VALUES ($1, $2, $3, $2, NOW(), NOW())
         RETURNING id
         "#,
-        share_permission.is_public,
-        share_permission
-            .public_access_level
-            .as_ref()
-            .map(|s| s.to_string()),
+        link_share,
+        link_share_access_level,
+        legacy_is_public,
     )
     .fetch_one(tx.as_mut())
     .await?;

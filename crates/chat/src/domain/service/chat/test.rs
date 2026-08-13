@@ -383,8 +383,10 @@ fn build_service_with_tools(
 fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
     let share_permission = share_permission_updated.then_some(
         models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-            is_public: Some(true),
-            public_access_level: None,
+            link_share: Some(Some(
+                models_permissions::share_permission::LinkShare::Public,
+            )),
+            link_share_access_level: None,
             channel_share_permissions: None,
         },
     );
