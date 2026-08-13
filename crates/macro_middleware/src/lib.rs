@@ -27,9 +27,9 @@ pub async fn connection_drop_prevention_handler(req: Request, next: Next) -> Res
                 Ok(response) => response,
                 Err(err) => {
                     if err.is_panic() {
-                        tracing::error!("Request handler panicked: {:?}", err);
+                        tracing::error!(error=?err, "request handler panicked");
                     } else {
-                        tracing::error!("Request handler task was cancelled: {:?}", err);
+                        tracing::error!(error=?err, "request handler task was cancelled");
                     }
                     Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
