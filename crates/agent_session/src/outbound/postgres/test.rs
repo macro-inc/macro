@@ -1,7 +1,5 @@
 use super::*;
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::RequestId;
-use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
 use bots::domain::ports::BotRepo;
@@ -163,12 +161,6 @@ fn acp_notification() -> AcpMessage {
     )
 }
 
-fn set_model_message(session_id: &SessionId, model: &str) -> ToRuntimeMessage {
-    AgentAction::set_model(model)
-        .to_runtime(session_id, RequestId::Str("model-change".to_owned()))
-        .expect("translate model change")
-}
-
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_and_get_round_trips(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
@@ -214,29 +206,23 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn set_model_log_entry_projects_the_session_model(pool: PgPool) {
+async fn set_model_updates_only_the_model(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let id = create_session(&repo, new_session(bot_id, None, None))
         .await
         .id;
-    let acp_session_id = SessionId::from("acp-session-1");
-    repo.set_acp_session_id(id, acp_session_id.clone())
-        .await
-        .expect("persist ACP session id");
 
-    let _ = AgentSessionLogRepo::create(
-        &repo,
-        AgentSessionLog {
-            agent_session_id: id,
-            user_id: None,
-            content: Message::ToRuntime(set_model_message(&acp_session_id, "opus")),
-        },
-    )
-    .await
-    .expect("append model change log entry");
-
+    repo.set_model(id, "opus").await.expect("persist model");
     assert_eq!(repo.get(id).await.expect("get session").model, "opus");
+
+    // Idempotent: restating the same model succeeds and changes nothing.
+    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    repo.set_model(id, "opus").await.expect("restate model");
+    assert_eq!(
+        repo.get(id).await.expect("get session").modified_at,
+        modified_at
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

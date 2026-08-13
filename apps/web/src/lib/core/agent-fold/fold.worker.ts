@@ -15,7 +15,7 @@
  * a `push` concurrently would fold frames out of order.
  */
 
-import type { FoldedMessageChange } from '@service-agent-fold/generated/types';
+import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import type { FoldRequest, FoldResponse } from './protocol';
 import { type FoldStream, loadAgentFoldWasm } from './wasm-module';
 
@@ -64,10 +64,9 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       // a log folds a session that never happened, and a caller that has lost
       // its machine needs to refetch, not to keep pushing.
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
-      const changes: FoldedMessageChange[] = [];
+      const changes: FoldedStreamEvent[] = [];
       for (const entry of request.entries) {
-        const change = stream.push(entry);
-        if (change) changes.push(change);
+        changes.push(...stream.push(entry));
       }
       return { id, kind, ok: true, changes };
     }

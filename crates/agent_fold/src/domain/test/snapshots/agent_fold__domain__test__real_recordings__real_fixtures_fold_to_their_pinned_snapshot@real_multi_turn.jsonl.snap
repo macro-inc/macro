@@ -1,6 +1,8 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 262
 expression: messages
+input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
 ---
 [
     FoldedMessage {

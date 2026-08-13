@@ -160,11 +160,12 @@ async function push(
   state: SessionState,
   entries: AgentSessionLogEntryDto[]
 ): Promise<void> {
-  const changes = await pushSessionEntries(state.agentSessionId, entries);
-  if (sessions.get(state.agentSessionId) !== state || changes.length === 0) {
-    return;
-  }
-  const messages = changes.map((change) => change.message);
+  const events = await pushSessionEntries(state.agentSessionId, entries);
+  if (sessions.get(state.agentSessionId) !== state) return;
+  const messages = events.flatMap((event) =>
+    event.kind === 'metadata' ? [] : [event.message]
+  );
+  if (messages.length === 0) return;
   for (const sink of state.foldedSinks) sink(messages);
 }
 

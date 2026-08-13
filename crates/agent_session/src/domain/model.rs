@@ -10,7 +10,7 @@ use macro_uuid::Uuid;
 // Re-exported here because this is where callers expect session types.
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 pub use agent_fold::domain::model::{
-    Author, AuthorKind, IncrementalFoldResult, MessageId, OwnedIncrementalFoldResult, TurnId,
+    Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]

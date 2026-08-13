@@ -10,7 +10,7 @@
 
 import type {
   FoldedMessage,
-  FoldedMessageChange,
+  FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
@@ -34,12 +34,12 @@ export interface FoldStream {
    */
   extend: (entries: AgentSessionLogEntryDto[]) => FoldedMessage[];
   /**
-   * Fold one more frame, reporting the message it changed.
+   * Fold one more frame, reporting the changes it implied.
    *
-   * `null` for the frames that change nothing renderable — handshakes, token
+   * Empty for the frames that change nothing renderable — handshakes, token
    * accounting — which is most of them.
    */
-  push: (entry: AgentSessionLogEntryDto) => FoldedMessageChange | null;
+  push: (entry: AgentSessionLogEntryDto) => FoldedStreamEvent[];
   /** Every message folded so far, oldest first. */
   messages: () => FoldedMessage[];
   /** Releases the machine's wasm memory. */

@@ -14,7 +14,7 @@
 
 import type {
   FoldedMessage,
-  FoldedMessageChange,
+  FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
@@ -84,6 +84,6 @@ export type FoldResponse =
       kind: 'open' | 'once' | 'messages';
       messages: FoldedMessage[];
     }
-  | { id: number; ok: true; kind: 'push'; changes: FoldedMessageChange[] }
+  | { id: number; ok: true; kind: 'push'; changes: FoldedStreamEvent[] }
   | { id: number; ok: true; kind: 'close' }
   | { id: number; ok: false; error: string };

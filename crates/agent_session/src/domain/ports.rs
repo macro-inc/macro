@@ -67,6 +67,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         acp_session_id: SessionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the model the session is running on. Idempotent.
+    fn set_model(&self, id: AgentSessionId, model: &str)
+    -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }

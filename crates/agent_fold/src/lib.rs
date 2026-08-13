@@ -51,31 +51,6 @@
 //! # Ok(())
 //! # }
 //! ```
-//!
-//! Following one instead, a frame at a time:
-//!
-//! ```no_run
-//! use agent_fold::domain::fold::FoldMachineImpl;
-//! use agent_fold::domain::log::AgentSessionLog;
-//! use agent_fold::domain::model::IncrementalFoldResult;
-//! use agent_fold::domain::ports::FoldMachine;
-//!
-//! # fn run(frames: impl Iterator<Item = AgentSessionLog>) {
-//! let mut machine = FoldMachineImpl::new();
-//! for frame in frames {
-//!     match machine.push(frame) {
-//!         IncrementalFoldResult::NewMessage(message) => {
-//!             println!("new {:?}", message.id());
-//!         }
-//!         IncrementalFoldResult::MessageUpdate(message) => {
-//!             println!("redraw {:?}", message.id());
-//!         }
-//!         // Most frames are handshake or bookkeeping traffic.
-//!         IncrementalFoldResult::Unchanged => {}
-//!     }
-//! }
-//! # }
-//! ```
 
 /// Domain models, the fold, and the query port.
 pub mod domain;

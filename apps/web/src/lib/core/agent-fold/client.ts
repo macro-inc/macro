@@ -8,7 +8,7 @@
 
 import type {
   FoldedMessage,
-  FoldedMessageChange,
+  FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { FoldRequest, FoldResponse } from './protocol';
@@ -122,7 +122,7 @@ export async function openSession(
 export async function pushSessionEntries(
   sessionId: string,
   entries: AgentSessionLogEntryDto[]
-): Promise<FoldedMessageChange[]> {
+): Promise<FoldedStreamEvent[]> {
   const response = await request((id) => ({
     id,
     kind: 'push',

@@ -17,11 +17,12 @@
 
 use crate::domain::log::AgentSessionId;
 use crate::domain::model::{
-    Author, Control as ModelControl, FileDiff as ModelFileDiff,
-    FoldedMessage as ModelFoldedMessage, IncrementalFoldResult, MessagePart, Permission,
-    PermissionOption as ModelPermissionOption, PermissionOptionKind,
-    PermissionOutcome as ModelPermissionOutcome, Plan as ModelPlan, PlanEntry as ModelPlanEntry,
-    PlanEntryPriority, PlanEntryStatus, StopReason as ModelStopReason,
+    Author, AvailableCommand as ModelAvailableCommand, Control as ModelControl,
+    FileDiff as ModelFileDiff, FoldEvent, FoldedMessage as ModelFoldedMessage, MessagePart,
+    ModelOption as ModelModelOption, Permission, PermissionOption as ModelPermissionOption,
+    PermissionOptionKind, PermissionOutcome as ModelPermissionOutcome, Plan as ModelPlan,
+    PlanEntry as ModelPlanEntry, PlanEntryPriority, PlanEntryStatus,
+    SessionMetadata as ModelSessionMetadata, StopReason as ModelStopReason,
     ToolDetail as ModelToolDetail, ToolStatus as ModelToolStatus, ToolUse,
 };
 use serde::Serialize;
@@ -63,35 +64,124 @@ impl FoldedMessage {
     }
 }
 
-/// What one pushed frame changed, mirroring [`IncrementalFoldResult`].
+/// One change a pushed frame implied, mirroring [`FoldEvent`].
 ///
-/// The message is carried whole rather than as a delta, so a reader applies
-/// either kind the same way - replace whatever it holds under this session,
-/// turn, and author. `kind` is what tells it whether a row for that id
-/// exists yet: a session streaming into a channel has no placeholder message
-/// for a turn until the fold first derives it, and `new` is the one moment
-/// the client can create one.
+/// Payloads are carried whole rather than as deltas: a reader replaces the
+/// message it holds under this session, turn, and author (`new` is the one
+/// moment it creates a row), or replaces its metadata outright.
 #[derive(Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct FoldedMessageChange {
-    /// `"new"` the first time a message is reported, `"update"` after.
-    kind: &'static str,
-    message: FoldedMessage,
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FoldedStreamEvent {
+    /// A message derived for the first time.
+    New {
+        /// The message as it now stands.
+        message: FoldedMessage,
+    },
+    /// A previously reported message, changed.
+    Update {
+        /// The message as it now stands.
+        message: FoldedMessage,
+    },
+    /// The session's metadata changed; here it is in full.
+    Metadata {
+        /// The metadata as it now stands.
+        metadata: SessionMetadata,
+    },
 }
 
-impl FoldedMessageChange {
-    /// `None` for [`IncrementalFoldResult::Unchanged`] - nothing to report.
+impl FoldedStreamEvent {
+    /// Build the wire form of `event`, keyed to `session`.
     #[must_use]
-    pub fn new(session: AgentSessionId, result: IncrementalFoldResult<'_>) -> Option<Self> {
-        let (kind, message) = match result {
-            IncrementalFoldResult::NewMessage(message) => ("new", message),
-            IncrementalFoldResult::MessageUpdate(message) => ("update", message),
-            IncrementalFoldResult::Unchanged => return None,
-        };
-        Some(Self {
-            kind,
-            message: FoldedMessage::new(session, message.into_owned()),
-        })
+    pub fn new(session: AgentSessionId, event: FoldEvent<'_>) -> Self {
+        match event {
+            FoldEvent::NewMessage(message) => Self::New {
+                message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MessageUpdate(message) => Self::Update {
+                message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MetadataUpdated(metadata) => Self::Metadata {
+                metadata: metadata.into_owned().into(),
+            },
+        }
+    }
+}
+
+/// Session-level state, mirroring [`crate::domain::model::SessionMetadata`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMetadata {
+    /// Current model, as the runtime last reported it.
+    model: Option<String>,
+    /// The models the runtime offers, in the order it listed them.
+    supported_models: Vec<ModelOption>,
+    /// Session title, when the harness reports one.
+    title: Option<String>,
+    /// The slash commands the harness most recently advertised.
+    available_commands: Vec<AvailableCommand>,
+}
+
+impl From<ModelSessionMetadata> for SessionMetadata {
+    fn from(metadata: ModelSessionMetadata) -> Self {
+        Self {
+            model: metadata.model,
+            supported_models: metadata
+                .supported_models
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            title: metadata.title,
+            available_commands: metadata
+                .available_commands
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+/// One advertised slash command, mirroring
+/// [`crate::domain::model::AvailableCommand`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+struct AvailableCommand {
+    /// Bare name as advertised, no leading slash.
+    name: String,
+    /// Human-readable description, verbatim from the harness.
+    description: String,
+    /// Placeholder text for the command's input, when it takes any.
+    input_hint: Option<String>,
+}
+
+impl From<ModelAvailableCommand> for AvailableCommand {
+    fn from(command: ModelAvailableCommand) -> Self {
+        Self {
+            name: command.name,
+            description: command.description,
+            input_hint: command.input_hint,
+        }
+    }
+}
+
+/// One model the runtime offers, mirroring [`crate::domain::model::ModelOption`].
+#[derive(Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+struct ModelOption {
+    /// The value to send back to select this model.
+    id: String,
+    /// Human-readable label.
+    name: String,
+    /// Descriptive copy - pricing, context size, and the like.
+    description: Option<String>,
+}
+
+impl From<ModelModelOption> for ModelOption {
+    fn from(option: ModelModelOption) -> Self {
+        Self {
+            id: option.id,
+            name: option.name,
+            description: option.description,
+        }
     }
 }
 

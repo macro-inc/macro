@@ -1,10 +1,7 @@
 //! What the domain tests share: the recorded fixtures, and the capture that
 //! lets a test assert on what the fold logged.
 
-pub use crate::testing::{
-    InMemoryLog, LONG_MULTI_RESUME, PLAN_TODO, REAL_MULTI_TURN, REAL_SINGLE_TURN,
-    RESUMED_AND_CONTINUED, RESUMED_NO_PROMPT, TURN, parse_log, parse_log_as, test_session,
-};
+pub use crate::testing::{InMemoryLog, TURN, parse_log, parse_log_as, test_session};
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};

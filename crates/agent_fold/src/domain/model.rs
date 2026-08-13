@@ -492,62 +492,92 @@ pub enum StopReason {
     Other(String),
 }
 
-/// What pushing one log frame into a
-/// [`FoldMachine`](crate::domain::ports::FoldMachine) changed.
+/// Session-level state derived from the log, latest-wins and carried whole.
+/// Fields start absent and fill in as the log reveals them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionMetadata {
+    /// Current model per the runtime's own `configOptions` responses, so a
+    /// rejected model change never moves it.
+    pub model: Option<String>,
+    /// The models the runtime offers, in the order it listed them.
+    pub supported_models: Vec<ModelOption>,
+    /// Session title, when the harness reports one.
+    pub title: Option<String>,
+    /// The slash commands the harness most recently advertised, in the order
+    /// it listed them. Empty until the first `available_commands_update`,
+    /// which arrives right after session setup, before any turn.
+    pub available_commands: Vec<AvailableCommand>,
+}
+
+/// One slash command the harness advertises.
 ///
-/// Most frames change nothing - handshakes, token accounting, an unmodelled
-/// update - and [`Self::Unchanged`] is what a push reports for them, rather
-/// than an `Option` a caller has to unwrap before it can even ask what
-/// happened. A frame changes at most one message: the only push that touches
-/// two messages is a prompt arriving while a previous turn is still open, and
-/// closing that turn is a no-op because its agent message is already emitted
-/// with the `stop: None` it will keep.
+/// Mirrors ACP's `AvailableCommand`, flattened: the only input shape ACP
+/// defines today is "unstructured text after the name," so the hint is
+/// carried directly rather than through a nested enum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AvailableCommand {
+    /// Bare name as advertised (`"qc"`, `"honeycomb:query-patterns"`) - no
+    /// leading slash, which is client syntax rather than part of the name.
+    pub name: String,
+    /// Human-readable description, verbatim from the harness.
+    pub description: String,
+    /// Placeholder text for the command's input, when it takes any.
+    pub input_hint: Option<String>,
+}
+
+/// One model the runtime offers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelOption {
+    /// The value to send back to select this model.
+    pub id: String,
+    /// Human-readable label.
+    pub name: String,
+    /// Descriptive copy - pricing, context size, and the like.
+    pub description: Option<String>,
+}
+
+/// One change a pushed log frame implied. A push reports every change in
+/// order; most frames report none.
 ///
-/// The message is borrowed from the machine rather than cloned. Folding a
-/// whole log discards every result, so cloning here would make the batch path
-/// pay for the streaming one; a caller that needs to keep a message - to
-/// serialize it across a WASM boundary, or to write a comms placeholder -
-/// clones only the ones it uses.
-///
-/// [`Self::NewMessage`] and [`Self::MessageUpdate`] carry the whole message as
-/// it now stands rather than a delta, so a consumer applies an update by
-/// replacing whatever it holds under the same [`FoldedMessage::id`].
+/// Payloads are borrowed from the machine and carried whole rather than as
+/// deltas: a consumer replaces what it holds under the same
+/// [`FoldedMessage::id`], or replaces its metadata outright.
 #[derive(Debug, Clone, PartialEq)]
-pub enum IncrementalFoldResult<'a> {
+pub enum FoldEvent<'a> {
     /// A message the machine had not derived before. Reported exactly once
     /// per message, before any update to it.
     NewMessage(Cow<'a, FoldedMessage>),
     /// A message the machine had already reported, whose content changed.
     MessageUpdate(Cow<'a, FoldedMessage>),
-    /// The frame changed nothing renderable - a handshake, bookkeeping, or an
-    /// update this fold does not model.
-    Unchanged,
+    /// The metadata changed - restating identical metadata reports nothing.
+    MetadataUpdated(Cow<'a, SessionMetadata>),
 }
 
-/// An incremental fold result that owns any message it carries.
-pub type OwnedIncrementalFoldResult = IncrementalFoldResult<'static>;
+/// A fold event that owns whatever it carries.
+pub type OwnedFoldEvent = FoldEvent<'static>;
 
-impl IncrementalFoldResult<'_> {
-    /// The message that changed, or `None` for [`Self::Unchanged`].
+impl FoldEvent<'_> {
+    /// The message that changed, or `None` when this event is not about a
+    /// message.
     #[must_use]
     pub fn message(&self) -> Option<&FoldedMessage> {
         match self {
             Self::NewMessage(message) | Self::MessageUpdate(message) => Some(message.as_ref()),
-            Self::Unchanged => None,
+            Self::MetadataUpdated(_) => None,
         }
     }
 
-    /// Own the changed message so this result can cross a task boundary.
+    /// Own the payload so this event can cross a task boundary.
     #[must_use]
-    pub fn into_owned(self) -> OwnedIncrementalFoldResult {
+    pub fn into_owned(self) -> OwnedFoldEvent {
         match self {
-            Self::NewMessage(message) => {
-                IncrementalFoldResult::NewMessage(Cow::Owned(message.into_owned()))
-            }
+            Self::NewMessage(message) => FoldEvent::NewMessage(Cow::Owned(message.into_owned())),
             Self::MessageUpdate(message) => {
-                IncrementalFoldResult::MessageUpdate(Cow::Owned(message.into_owned()))
+                FoldEvent::MessageUpdate(Cow::Owned(message.into_owned()))
             }
-            Self::Unchanged => IncrementalFoldResult::Unchanged,
+            Self::MetadataUpdated(metadata) => {
+                FoldEvent::MetadataUpdated(Cow::Owned(metadata.into_owned()))
+            }
         }
     }
 }

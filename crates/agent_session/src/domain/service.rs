@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
+use agent_fold::domain::model::FoldEvent;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::AgentAction;
 use dashmap::DashMap;
@@ -323,19 +324,44 @@ where
         // session history is not.
         let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
 
-        if let Some(fold) = &mut self.fold {
-            let _ = fold.push(log.clone());
+        let model = if let Some(fold) = &mut self.fold {
+            let metadata_changed = fold
+                .push(log.clone())
+                .iter()
+                .any(|event| matches!(event, FoldEvent::MetadataUpdated(_)));
+            metadata_changed
+                .then(|| fold.metadata().model.clone())
+                .flatten()
         } else {
             match self.catch_up(session).await {
-                Ok(fold) => self.fold = Some(fold),
+                Ok(fold) => {
+                    // Projected on every catch-up so a refold heals a stale
+                    // or wrong column.
+                    let model = fold.metadata().model.clone();
+                    self.fold = Some(fold);
+                    model
+                }
                 Err(error) => {
                     tracing::error!(
                         error = ?error,
                         %session,
                         "failed to fold agent session frame"
                     );
+                    None
                 }
             }
+        };
+
+        // Best-effort like the stream below: the projection is rebuildable
+        // from the log, so a failed write must not fail the append.
+        if let Some(model) = model
+            && let Err(error) = self.repo.set_model(session, &model).await
+        {
+            tracing::error!(
+                error = ?error,
+                %session,
+                "failed to project agent session model"
+            );
         }
 
         // Best-effort once the durable append has succeeded: the port drops
@@ -389,6 +415,10 @@ where
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        self.repo.set_model(id, model).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

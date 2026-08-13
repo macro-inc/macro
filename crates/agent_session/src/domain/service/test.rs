@@ -285,3 +285,34 @@ async fn session_log_of_an_unknown_session_errors() {
 
     assert!(log.is_err());
 }
+
+/// A config-bearing response moves the fold's model, and the writer projects
+/// it onto the session row; an error response projects nothing.
+#[tokio::test]
+async fn appending_a_config_response_projects_the_model() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    let frames = parse_log_as(
+        fx.session,
+        concat!(
+            r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"n","method":"session/new","params":{"cwd":"/w","mcpServers":[]}}}"#,
+            "\n",
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"n","result":{"sessionId":"s1","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"sonnet","options":[{"value":"sonnet","name":"Sonnet"},{"value":"opus","name":"Opus"}]}]}}}"#,
+            "\n",
+            r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/set_config_option","params":{"sessionId":"s1","configId":"model","value":"claude-fable-5"}}}"#,
+            "\n",
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
+        ),
+    );
+    for frame in frames {
+        AgentSessionLogWriter::append(&mut logs, frame)
+            .await
+            .expect("append succeeds");
+    }
+
+    let session = AgentSessionRepo::get(&fx.repo, fx.session)
+        .await
+        .expect("get session");
+    assert_eq!(session.model, "sonnet", "the rejected change moved nothing");
+}

@@ -55,25 +55,29 @@ use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
-    AnsiText, Author, Control, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart,
-    Permission, PermissionOption, PermissionOptionKind, PermissionOutcome, Plan, PlanEntry,
-    PlanEntryPriority, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUse, ToolUseId,
-    TurnId,
+    AnsiText, Author, AvailableCommand, Control, FileDiff, FoldEvent, FoldedMessage, MessagePart,
+    ModelOption, Permission, PermissionOption, PermissionOptionKind, PermissionOutcome, Plan,
+    PlanEntry, PlanEntryPriority, PlanEntryStatus, SessionMetadata, StopReason, ToolDetail,
+    ToolStatus, ToolUse, ToolUseId, TurnId,
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
+use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
-    Content, ContentBlock, Meta, Plan as AcpPlan, PromptRequest, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
-    ToolCallStatus, ToolCallUpdate, ToolKind,
+    AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate, Content,
+    ContentBlock, LoadSessionRequest, Meta, NewSessionRequest, Plan as AcpPlan, PromptRequest,
+    RequestId, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    Response, ResumeSessionRequest, SessionConfigKind, SessionConfigOption,
+    SessionConfigSelectOptions, SessionInfoUpdate, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, ToolCall, ToolCallContent, ToolCallLocation, ToolCallStatus,
+    ToolCallUpdate, ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
-use agent_runtime_protocol::domain::action::AgentAction;
-use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::action::{AgentAction, MODEL_CONFIG_ID};
+use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// Collapse a session's protocol log into renderable messages.
@@ -103,7 +107,7 @@ fn fold_machine(log: impl IntoIterator<Item = AgentSessionLog>) -> FoldMachineIm
 ///
 /// Holds the fold's whole [`State`], including every message derived so far,
 /// which is what makes it both the incremental fold and the store the
-/// [`IncrementalFoldResult`]s borrow from. See the module docs for why the
+/// [`FoldEvent`]s borrow from. See the module docs for why the
 /// machine rather than a batch fold.
 ///
 /// Frames must be pushed in log order. A machine only ever grows, so a caller
@@ -142,19 +146,31 @@ impl FoldMachineImpl {
     pub fn next_turn_id(&self) -> TurnId {
         TurnId(self.state.turns_opened)
     }
+
+    /// Session-level state derived so far, for callers that want state
+    /// rather than [`FoldEvent::MetadataUpdated`] changes.
+    #[must_use]
+    pub fn metadata(&self) -> &SessionMetadata {
+        &self.state.metadata
+    }
 }
 
 impl FoldMachine for FoldMachineImpl {
-    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_> {
-        let Some(changed) = self.state.step(log) else {
-            return IncrementalFoldResult::Unchanged;
-        };
-        let Some(message) = self.state.messages.get(changed.message) else {
-            return IncrementalFoldResult::Unchanged;
-        };
-        match changed.kind {
-            Change::New => IncrementalFoldResult::NewMessage(Cow::Borrowed(message)),
-            Change::Updated => IncrementalFoldResult::MessageUpdate(Cow::Borrowed(message)),
+    fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
+        match self.state.step(log) {
+            Some(StepChange::Message(changed)) => {
+                let Some(message) = self.state.messages.get(changed.message) else {
+                    return Vec::new();
+                };
+                vec![match changed.kind {
+                    Change::New => FoldEvent::NewMessage(Cow::Borrowed(message)),
+                    Change::Updated => FoldEvent::MessageUpdate(Cow::Borrowed(message)),
+                }]
+            }
+            Some(StepChange::Metadata) => vec![FoldEvent::MetadataUpdated(Cow::Borrowed(
+                &self.state.metadata,
+            ))],
+            None => Vec::new(),
         }
     }
 }
@@ -190,6 +206,14 @@ impl Changed {
 enum Change {
     New,
     Updated,
+}
+
+/// What one step changed. No frame changes both today; a frame that someday
+/// does will widen this, not the events it maps to.
+#[derive(Debug, Clone, Copy)]
+enum StepChange {
+    Message(Changed),
+    Metadata,
 }
 
 impl<T: LogRepo + Sync> FoldSession for T {
@@ -228,6 +252,13 @@ struct FoldState {
     turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
     pending_permissions: HashMap<RequestId, ToolUseId>,
+    /// Session-level state derived so far. Handlers mutate it freely; the
+    /// machine diffs it against what it last reported.
+    metadata: SessionMetadata,
+    /// Requests whose responses carry config options. The response body is
+    /// authoritative - a rejected change answers with an error and moves
+    /// nothing.
+    pending_config_requests: HashSet<RequestId>,
 }
 
 /// A turn under construction.
@@ -265,15 +296,18 @@ struct Turn {
 impl FoldState {
     /// Advance by one log entry, returning the message it changed.
     ///
-    /// One entry changes at most one message - see [`IncrementalFoldResult`]
+    /// One entry changes at most one message - see [`FoldEvent`]
     /// for why the prompt-interrupts-a-turn case is not an exception.
-    fn step(&mut self, entry: AgentSessionLog) -> Option<Changed> {
+    fn step(&mut self, entry: AgentSessionLog) -> Option<StepChange> {
         self.session = Some(entry.agent_session_id);
 
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
             Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+                // Before the control dispatch, which returns early for the
+                // set-model request whose response this correlates.
+                self.note_config_request(&acp.0);
                 if let Some(action) = AgentAction::control_from_runtime(message) {
                     return match action {
                         AgentAction::SetModel(action) => self.record_control(
@@ -292,7 +326,8 @@ impl FoldState {
                             self.record_control(Control::Stop, entry.user_id.clone())
                         }
                         AgentAction::Prompt(_) => None,
-                    };
+                    }
+                    .map(StepChange::Message);
                 }
                 match &acp.0 {
                     // A user's prompt opens a turn.
@@ -300,13 +335,14 @@ impl FoldState {
                         if PromptRequest::matches_method(&request.method) =>
                     {
                         self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                            .map(StepChange::Message)
                     }
                     // The user's answer to a permission request.
-                    RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                        self.resolve_permission(id, Some(result))
-                    }
+                    RawJsonRpcMessage::Response(Response::Result { id, result }) => self
+                        .resolve_permission(id, Some(result))
+                        .map(StepChange::Message),
                     RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
-                        self.resolve_permission(id, None)
+                        self.resolve_permission(id, None).map(StepChange::Message)
                     }
                     // Handshake and configuration traffic: nothing to render.
                     RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
@@ -325,17 +361,39 @@ impl FoldState {
                     if RequestPermissionRequest::matches_method(&request.method) =>
                 {
                     self.request_permission(&request.id, request.params.as_ref())
+                        .map(StepChange::Message)
                 }
-                // The response to `session/prompt` closes the turn.
+                // The response to `session/prompt` closes the turn; a
+                // config-bearing response updates the metadata instead.
                 RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                    self.end_turn(id, Some(result))
+                    if self.pending_config_requests.remove(id) {
+                        self.apply_config_response(result)
+                            .then_some(StepChange::Metadata)
+                    } else {
+                        self.end_turn(id, Some(result)).map(StepChange::Message)
+                    }
                 }
-                RawJsonRpcMessage::Response(Response::Error { id, .. }) => self.end_turn(id, None),
+                RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
+                    if self.pending_config_requests.remove(id) {
+                        None
+                    } else {
+                        self.end_turn(id, None).map(StepChange::Message)
+                    }
+                }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
             },
 
-            // Runtime lifecycle events carry no conversation content. The one
-            // the service acts on, `acp_ready`, is a handshake signal.
+            // Runtime lifecycle events carry no conversation content, but
+            // `acp_ready` marks a connection boundary: request ids restart
+            // per connection, so nothing pending can be answered past one -
+            // a stale entry would misattribute a new connection's reused id.
+            Message::ToServer(ToServerMessage::Event {
+                event: SystemEvent::AcpReady,
+            }) => {
+                self.pending_config_requests.clear();
+                self.pending_permissions.clear();
+                None
+            }
             Message::ToServer(ToServerMessage::Event { .. }) => None,
 
             // The wrapped protocol enums are `#[non_exhaustive]`.
@@ -486,7 +544,7 @@ impl FoldState {
     }
 
     /// Handle a `session/update`.
-    fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) -> Option<Changed> {
+    fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) -> Option<StepChange> {
         // Only the `update` field is folded; the rest of the notification
         // (session id, meta) carries nothing renderable. Borrowed out of the
         // params rather than cloning them - `session/update` is the bulk of
@@ -514,28 +572,35 @@ impl FoldState {
         match update {
             // Prose from the agent. Chunks are appended to the open text part
             // rather than each becoming a part of its own.
-            SessionUpdate::AgentMessageChunk(chunk) => {
-                content_block_text(chunk.content).and_then(|text| self.append_text(text))
-            }
+            SessionUpdate::AgentMessageChunk(chunk) => content_block_text(chunk.content)
+                .and_then(|text| self.append_text(text))
+                .map(StepChange::Message),
             // Reasoning, kept separate so a reader can collapse it.
-            SessionUpdate::AgentThoughtChunk(chunk) => {
-                content_block_text(chunk.content).and_then(|text| self.append_thought(text))
-            }
+            SessionUpdate::AgentThoughtChunk(chunk) => content_block_text(chunk.content)
+                .and_then(|text| self.append_thought(text))
+                .map(StepChange::Message),
             // The agent replaying the user's own message. The prompt frame is
             // the authoritative copy, so this is dropped.
             SessionUpdate::UserMessageChunk(_) => None,
-            SessionUpdate::ToolCall(call) => self.open_tool_call(call),
-            SessionUpdate::ToolCallUpdate(update) => self.patch_tool_call(update),
+            SessionUpdate::ToolCall(call) => self.open_tool_call(call).map(StepChange::Message),
+            SessionUpdate::ToolCallUpdate(update) => {
+                self.patch_tool_call(update).map(StepChange::Message)
+            }
+            SessionUpdate::SessionInfoUpdate(update) => self
+                .apply_session_info(&update)
+                .then_some(StepChange::Metadata),
+            SessionUpdate::ConfigOptionUpdate(update) => self
+                .apply_config_options(update.config_options)
+                .then_some(StepChange::Metadata),
+            SessionUpdate::AvailableCommandsUpdate(update) => self
+                .apply_available_commands(update)
+                .then_some(StepChange::Metadata),
             // Deliberately dropped: token accounting and session bookkeeping,
             // none of which a reader wants in a channel. `usage_update` alone
             // is 81 of ~450 frames in a recorded session.
-            SessionUpdate::UsageUpdate(_)
-            | SessionUpdate::SessionInfoUpdate(_)
-            | SessionUpdate::AvailableCommandsUpdate(_)
-            | SessionUpdate::CurrentModeUpdate(_)
-            | SessionUpdate::ConfigOptionUpdate(_) => None,
+            SessionUpdate::UsageUpdate(_) | SessionUpdate::CurrentModeUpdate(_) => None,
             // The agent's todo list, carried whole each time.
-            SessionUpdate::Plan(plan) => self.apply_plan(plan),
+            SessionUpdate::Plan(plan) => self.apply_plan(plan).map(StepChange::Message),
             _ => {
                 self.warn(FoldError::Unknown { kind: wire_kind });
                 None
@@ -661,6 +726,107 @@ impl FoldState {
         let (changed, position) = self.push_agent_part(MessagePart::Plan(plan))?;
         self.open_turn().plan_position = Some(position);
         Some(changed)
+    }
+
+    /// Remember a request whose response will carry config options.
+    fn note_config_request(&mut self, frame: &RawJsonRpcMessage) {
+        let RawJsonRpcMessage::Request(request) = frame else {
+            return;
+        };
+        let method = &request.method;
+        if NewSessionRequest::matches_method(method)
+            || LoadSessionRequest::matches_method(method)
+            || ResumeSessionRequest::matches_method(method)
+            || SetSessionConfigOptionRequest::matches_method(method)
+        {
+            self.pending_config_requests.insert(request.id.clone());
+        }
+    }
+
+    /// Read the config options out of a correlated response, whichever
+    /// response shape carried them.
+    fn apply_config_response(&mut self, result: &serde_json::Value) -> bool {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ConfigCarrier {
+            #[serde(default)]
+            config_options: Vec<SessionConfigOption>,
+        }
+        match serde_json::from_value::<ConfigCarrier>(result.clone()) {
+            Ok(carrier) => self.apply_config_options(carrier.config_options),
+            Err(_) => false,
+        }
+    }
+
+    /// Update the metadata's model fields from a fresh config-options list.
+    fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) -> bool {
+        let model = options
+            .into_iter()
+            .find(|option| option.id.to_string() == MODEL_CONFIG_ID);
+        let Some(SessionConfigOption {
+            kind: SessionConfigKind::Select(select),
+            ..
+        }) = model
+        else {
+            return false;
+        };
+
+        let model = Some(select.current_value.to_string());
+        let supported: Vec<ModelOption> = match select.options {
+            SessionConfigSelectOptions::Ungrouped(options) => options,
+            SessionConfigSelectOptions::Grouped(groups) => {
+                groups.into_iter().flat_map(|group| group.options).collect()
+            }
+            _ => return false,
+        }
+        .into_iter()
+        .map(|option| ModelOption {
+            id: option.value.to_string(),
+            name: option.name,
+            description: option.description,
+        })
+        .collect();
+
+        let changed = self.metadata.model != model || self.metadata.supported_models != supported;
+        self.metadata.model = model;
+        self.metadata.supported_models = supported;
+        changed
+    }
+
+    /// Handle an `available_commands_update`: the advertised slash commands,
+    /// carried whole each time, latest wins.
+    fn apply_available_commands(&mut self, update: AcpAvailableCommandsUpdate) -> bool {
+        let commands: Vec<AvailableCommand> = update
+            .available_commands
+            .into_iter()
+            .map(|command| AvailableCommand {
+                name: command.name,
+                description: command.description,
+                input_hint: command.input.and_then(|input| match input {
+                    AvailableCommandInput::Unstructured(input) => Some(input.hint),
+                    // `#[non_exhaustive]`; unstructured text is the only
+                    // input ACP defines, so an unknown shape carries no hint
+                    // this fold can show.
+                    _ => None,
+                }),
+            })
+            .collect();
+        let changed = self.metadata.available_commands != commands;
+        self.metadata.available_commands = commands;
+        changed
+    }
+
+    /// Handle a `session_info_update`: take the title, minding the
+    /// absent/null/value distinction - absent means unchanged.
+    fn apply_session_info(&mut self, update: &SessionInfoUpdate) -> bool {
+        let title = match &update.title {
+            MaybeUndefined::Undefined => return false,
+            MaybeUndefined::Null => None,
+            MaybeUndefined::Value(title) => Some(title.clone()),
+        };
+        let changed = self.metadata.title != title;
+        self.metadata.title = title;
+        changed
     }
 
     /// Handle a `session/request_permission`: add a permission part and record

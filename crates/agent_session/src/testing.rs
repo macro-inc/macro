@@ -174,6 +174,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.model = model.to_owned();
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.sessions
             .lock()

@@ -6,7 +6,7 @@
 //! cargo run -p agent_fold --bin export_types
 //! ```
 
-use agent_fold::inbound::wire::{FoldedMessage, FoldedMessageChange};
+use agent_fold::inbound::wire::{FoldedMessage, FoldedStreamEvent, SessionMetadata};
 use specta::Types;
 use specta_typescript::Typescript;
 use std::fs;
@@ -15,7 +15,8 @@ use std::path::Path;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let types = Types::default()
         .register::<FoldedMessage>()
-        .register::<FoldedMessageChange>();
+        .register::<FoldedStreamEvent>()
+        .register::<SessionMetadata>();
     let output = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts");
 
