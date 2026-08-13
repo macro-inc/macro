@@ -5,7 +5,7 @@ import {
   createEntityActivityQuery,
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
@@ -42,20 +42,27 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
   return (
     <Show when={query.isEnabled()}>
       <SidePanel.Section id="activity" title="Activity" order={props.order}>
-        <Suspense fallback={<SidePanel.Loading />}>
+        {/* The urql store never suspends, so loading/error need explicit
+            branches or they'd render as a false "No activity yet". */}
+        <Show when={!query.result.isLoading} fallback={<SidePanel.Loading />}>
           <Show
-            when={events().length > 0}
-            fallback={<SidePanel.EmptyPill label="No activity yet" />}
+            when={!query.result.isError}
+            fallback={<SidePanel.EmptyPill label="Activity is unavailable" />}
           >
-            <div class="text-xs">
-              <SidePanel.Card>
-                <For each={events()}>
-                  {(event) => <ActivityRow event={event} />}
-                </For>
-              </SidePanel.Card>
-            </div>
+            <Show
+              when={events().length > 0}
+              fallback={<SidePanel.EmptyPill label="No activity yet" />}
+            >
+              <div class="text-xs">
+                <SidePanel.Card>
+                  <For each={events()}>
+                    {(event) => <ActivityRow event={event} />}
+                  </For>
+                </SidePanel.Card>
+              </div>
+            </Show>
           </Show>
-        </Suspense>
+        </Show>
       </SidePanel.Section>
     </Show>
   );
