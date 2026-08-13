@@ -211,8 +211,6 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
-            legacy_is_public: false,
-            legacy_public_access_level: None,
         }
     );
 
@@ -2085,8 +2083,6 @@ const SP_ARCHIVED: &str = "00000000-0000-0000-0000-00000000sp02";
 struct StoredSharePermission {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
-    legacy_is_public: bool,
-    legacy_public_access_level: Option<String>,
 }
 
 async fn get_stored_share_permission(
@@ -2098,9 +2094,7 @@ async fn get_stored_share_permission(
         r#"
         SELECT
             "linkShare" AS "link_share?",
-            "linkShareAccessLevel" AS "link_share_access_level?",
-            "isPublic" AS "legacy_is_public!",
-            "publicAccessLevel" AS "legacy_public_access_level?"
+            "linkShareAccessLevel" AS "link_share_access_level?"
         FROM "SharePermission"
         WHERE id = $1
         "#,
@@ -2118,11 +2112,7 @@ async fn set_stored_share_permission(
     sqlx::query!(
         r#"
         UPDATE "SharePermission"
-        SET
-            "linkShare" = $2,
-            "linkShareAccessLevel" = $3,
-            "isPublic" = COALESCE($2 = 'PUBLIC', false),
-            "publicAccessLevel" = $3
+        SET "linkShare" = $2, "linkShareAccessLevel" = $3
         WHERE id = $1
         "#,
         SP_ARCHIVED,
@@ -2160,11 +2150,6 @@ async fn patch_call_record_sets_public_link_and_defaults_level_to_view(
     let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
     assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(permission.link_share_access_level.as_deref(), Some("view"));
-    assert!(permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
-        Some("view")
-    );
     Ok(())
 }
 
@@ -2194,11 +2179,6 @@ async fn patch_call_record_sets_team_link_and_explicit_level(
     let permission = get_stored_share_permission(&pool, SP_ARCHIVED).await?;
     assert_eq!(permission.link_share.as_deref(), Some("TEAM"));
     assert_eq!(permission.link_share_access_level.as_deref(), Some("edit"));
-    assert!(!permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
-        Some("edit")
-    );
     Ok(())
 }
 
@@ -2232,8 +2212,6 @@ async fn patch_call_record_explicit_null_disables_link_sharing(
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
-            legacy_is_public: false,
-            legacy_public_access_level: None,
         }
     );
     Ok(())
@@ -2243,7 +2221,7 @@ async fn patch_call_record_explicit_null_disables_link_sharing(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn patch_call_record_level_only_update_keeps_columns_synchronized(
+async fn patch_call_record_level_only_update_updates_link_share_access_level(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
@@ -2267,11 +2245,6 @@ async fn patch_call_record_level_only_update_keeps_columns_synchronized(
     assert_eq!(permission.link_share.as_deref(), Some("PUBLIC"));
     assert_eq!(
         permission.link_share_access_level.as_deref(),
-        Some("comment")
-    );
-    assert!(permission.legacy_is_public);
-    assert_eq!(
-        permission.legacy_public_access_level.as_deref(),
         Some("comment")
     );
     Ok(())

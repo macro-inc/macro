@@ -16,8 +16,8 @@ use item_filters::{
     ast::{LiteralTree, call::CallLiteral, properties::PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -323,7 +323,6 @@ impl CallRepository for PgCallRepo {
         let link_share_access_level = share_permission
             .link_share_access_level
             .map(|value| value.to_string());
-        let legacy_is_public = share_permission.link_share == Some(LinkShare::Public);
 
         let mut tx = self.pool.begin().await?;
 
@@ -334,17 +333,14 @@ impl CallRepository for PgCallRepo {
                 "id",
                 "linkShare",
                 "linkShareAccessLevel",
-                "isPublic",
-                "publicAccessLevel",
                 "createdAt",
                 "updatedAt"
             )
-            VALUES ($1, $2, $3, $4, $3, NOW(), NOW())
+            VALUES ($1, $2, $3, NOW(), NOW())
             "#,
             share_permission.id,
             link_share,
             link_share_access_level,
-            legacy_is_public,
         )
         .execute(tx.as_mut())
         .await?;
