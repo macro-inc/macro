@@ -93,12 +93,9 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
-use notification::domain::{
-    models::queue_message::RealtimeNotif,
-    service::{
-        NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
-        WebSocketNotificationConsumerService,
-    },
+use notification::domain::service::{
+    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+    WebSocketNotificationConsumerService,
 };
 use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
@@ -965,7 +962,7 @@ async fn main() -> anyhow::Result<()> {
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
-            NotificationTopicConsumer::<RealtimeNotif<model_notifications::NotifEvent>>::from_env(
+            NotificationTopicConsumer::<model_notifications::NotifEvent>::from_env(
                 config.kafka_brokers.as_ref(),
             )
             .map_err(|error| {

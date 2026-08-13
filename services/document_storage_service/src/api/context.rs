@@ -168,11 +168,9 @@ pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicCo
 pub(crate) type DssNotificationRealtimeService =
     notification::domain::service::WebSocketNotificationConsumerService<
         notification::outbound::notification_consumer::NotificationTopicConsumer<
-            notification::domain::models::queue_message::RealtimeNotif<
-                model_notifications::NotifEvent,
-            >,
+            model_notifications::NotifEvent,
         >,
-        notification::domain::models::queue_message::RealtimeNotif<model_notifications::NotifEvent>,
+        model_notifications::NotifEvent,
     >;
 
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state

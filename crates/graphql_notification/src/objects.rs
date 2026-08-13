@@ -23,38 +23,9 @@ impl TryFrom<UserNotificationRow<serde_json::Value>> for GraphqlNotification {
 }
 
 impl GraphqlNotification {
-    /// Converts a recipient-scoped realtime payload into the shared notification GraphQL type.
-    pub(crate) fn from_realtime(
-        owner_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        value: notification::domain::models::queue_message::RealtimeNotif<NotifEvent>,
-    ) -> Self {
-        let notification::domain::models::queue_message::RealtimeNotif {
-            notification_id,
-            notification_event_type,
-            entity,
-            sent,
-            done,
-            created_at,
-            viewed_at,
-            updated_at,
-            deleted_at,
-            notification_metadata,
-            sender_id,
-        } = value;
-        Self(UserNotificationRow {
-            owner_id,
-            notification_id,
-            notification_event_type,
-            entity,
-            sent,
-            done,
-            created_at,
-            viewed_at,
-            updated_at,
-            deleted_at,
-            notification_metadata,
-            sender_id,
-        })
+    /// Converts a realtime notification row into the shared notification GraphQL type.
+    pub(crate) fn from_realtime(value: UserNotificationRow<NotifEvent>) -> Self {
+        Self(value)
     }
 }
 

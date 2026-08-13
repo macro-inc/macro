@@ -517,7 +517,6 @@ where
             let updates = changed
                 .iter()
                 .map(|notification| PatchDelete::Patch {
-                    id: notification.notification_id,
                     diff: Cow::Borrowed(notification),
                 })
                 .collect();

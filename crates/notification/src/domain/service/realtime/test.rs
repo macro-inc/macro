@@ -2,22 +2,26 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use chrono::Utc;
+use model_entity::EntityType;
+use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::*;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TestNotification {
     kind: String,
 }
 
 struct FakeConsumer {
-    messages: Mutex<VecDeque<Result<WebSocketNotificationMetadata<TestNotification>, Report>>>,
+    messages: Mutex<VecDeque<Result<NotificationTopicEvent<'static, TestNotification>, Report>>>,
     calls: Arc<AtomicUsize>,
 }
 
-impl WebSocketNotificationConsumer<TestNotification> for FakeConsumer {
-    async fn recv(&self) -> Result<WebSocketNotificationMetadata<TestNotification>, Report> {
+impl NotificationTopicEventConsumer<TestNotification> for FakeConsumer {
+    async fn recv(&self) -> Result<NotificationTopicEvent<'static, TestNotification>, Report> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.messages
             .lock()
@@ -31,21 +35,48 @@ fn user(local: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{local}@example.com")).expect("valid user ID")
 }
 
+fn notification(
+    owner_id: MacroUserIdStr<'static>,
+    kind: &str,
+) -> UserNotificationRow<TestNotification> {
+    UserNotificationRow {
+        owner_id,
+        notification_id: Uuid::nil(),
+        notification_event_type: kind.to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: TestNotification {
+            kind: kind.to_string(),
+        },
+        sender_id: None,
+    }
+}
+
+fn websocket_event(
+    notifications: Vec<UserNotificationRow<TestNotification>>,
+) -> NotificationTopicEvent<'static, TestNotification> {
+    NotificationTopicEvent::WebSocketDeliveryRequested(WebSocketNotificationMetadata {
+        notifications,
+    })
+}
+
 #[tokio::test(start_paused = true)]
-async fn distributes_notifications_to_every_recipient_subscription() {
+async fn distributes_notifications_to_owner_subscriptions() {
     let one = user("one");
     let two = user("two");
-    let notification = TestNotification {
-        kind: "channel_mention".to_string(),
-    };
     let receive_calls = Arc::new(AtomicUsize::new(0));
     let consumer = FakeConsumer {
         messages: Mutex::new(VecDeque::from([
             Err(rootcause::report!("transient receive failure")),
-            Ok(WebSocketNotificationMetadata {
-                recipients: vec![one.clone(), two.clone()],
-                notification,
-            }),
+            Ok(websocket_event(vec![
+                notification(one.clone(), "channel_mention"),
+                notification(two.clone(), "channel_mention"),
+            ])),
         ])),
         calls: Arc::clone(&receive_calls),
     };
@@ -71,9 +102,10 @@ async fn distributes_notifications_to_every_recipient_subscription() {
     let one_first = one_first.recv().await.expect("first subscriber receives");
     let one_second = one_second.recv().await.expect("second subscriber receives");
     let two = two_receiver.recv().await.expect("other user receives");
-    assert_eq!(one_first.kind, "channel_mention");
+    assert_eq!(one_first.notification_metadata.kind, "channel_mention");
+    assert_eq!(two.notification_metadata.kind, "channel_mention");
     assert!(Arc::ptr_eq(&one_first, &one_second));
-    assert!(Arc::ptr_eq(&one_first, &two));
+    assert!(!Arc::ptr_eq(&one_first, &two));
 }
 
 #[tokio::test(start_paused = true)]
@@ -87,9 +119,7 @@ async fn reports_slow_consumer_subscription_exit() {
     let subscription = service.subscribe(subscribed.clone());
 
     for index in 0..=SUBSCRIBER_BUFFER_CAPACITY.get() {
-        let notification = Arc::new(TestNotification {
-            kind: index.to_string(),
-        });
+        let notification = Arc::new(notification(subscribed.clone(), &index.to_string()));
         service
             .broadcasts
             .publish(&subscribed, notification)
@@ -104,15 +134,13 @@ async fn reports_slow_consumer_subscription_exit() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn ignores_recipients_without_subscribers() {
+async fn ignores_notifications_without_subscribers() {
     let subscribed = user("subscribed");
     let consumer = FakeConsumer {
-        messages: Mutex::new(VecDeque::from([Ok(WebSocketNotificationMetadata {
-            recipients: vec![user("unsubscribed"), subscribed.clone()],
-            notification: TestNotification {
-                kind: "test".to_string(),
-            },
-        })])),
+        messages: Mutex::new(VecDeque::from([Ok(websocket_event(vec![
+            notification(user("unsubscribed"), "ignored"),
+            notification(subscribed.clone(), "test"),
+        ]))])),
         calls: Arc::new(AtomicUsize::new(0)),
     };
     let service = Arc::new(WebSocketNotificationConsumerService::new(consumer));
@@ -127,7 +155,12 @@ async fn ignores_recipients_without_subscribers() {
     .expect_err("fake consumer eventually stops");
 
     assert_eq!(
-        receiver.recv().await.expect("subscriber receives").kind,
+        receiver
+            .recv()
+            .await
+            .expect("subscriber receives")
+            .notification_metadata
+            .kind,
         "test"
     );
 }

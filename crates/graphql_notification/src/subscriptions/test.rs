@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{NotifEvent, TaskAssignedMetadata};
 use notification::domain::{
-    models::queue_message::RealtimeNotif,
+    models::UserNotificationRow,
     ports::{
         WebSocketNotificationSubscription, WebSocketNotificationSubscriptionExit,
         WebSocketNotificationSubscriptionService,
@@ -26,16 +26,16 @@ impl Query {
 
 struct TestSubscriptionService {
     subscriptions:
-        Mutex<VecDeque<WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>>>>,
+        Mutex<VecDeque<WebSocketNotificationSubscription<Arc<UserNotificationRow<NotifEvent>>>>>,
 }
 
-impl WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>
+impl WebSocketNotificationSubscriptionService<UserNotificationRow<NotifEvent>>
     for TestSubscriptionService
 {
     fn subscribe(
         &self,
         _user_id: MacroUserIdStr<'static>,
-    ) -> WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>> {
+    ) -> WebSocketNotificationSubscription<Arc<UserNotificationRow<NotifEvent>>> {
         self.subscriptions
             .lock()
             .expect("subscription lock")
@@ -47,8 +47,8 @@ impl WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>
 fn subscription(
     exit: WebSocketNotificationSubscriptionExit,
 ) -> (
-    tokio::sync::mpsc::Sender<Arc<RealtimeNotif<NotifEvent>>>,
-    WebSocketNotificationSubscription<Arc<RealtimeNotif<NotifEvent>>>,
+    tokio::sync::mpsc::Sender<Arc<UserNotificationRow<NotifEvent>>>,
+    WebSocketNotificationSubscription<Arc<UserNotificationRow<NotifEvent>>>,
 ) {
     let (sender, receiver) = tokio::sync::mpsc::channel(1);
     let (exit_sender, exit_receiver) = tokio::sync::oneshot::channel();
@@ -76,12 +76,13 @@ async fn notification_updates_streams_realtime_notifications() {
         async_graphql::Request::new(
             "subscription { notificationUpdates { id eventType entityType entityId metadata { __typename ... on GraphqlTaskAssignedMetadata { taskId taskName assignedBy } } } }",
         )
-        .data(user_id),
+        .data(user_id.clone()),
     ));
 
     let notification_id = uuid::Uuid::from_u128(42);
     sender
-        .send(Arc::new(RealtimeNotif {
+        .send(Arc::new(UserNotificationRow {
+            owner_id: user_id,
             notification_id,
             notification_event_type: "task_assigned".to_string(),
             entity: EntityType::Document.with_entity_string("task-1".to_string()),

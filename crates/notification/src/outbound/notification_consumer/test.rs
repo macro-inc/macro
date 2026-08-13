@@ -1,8 +1,18 @@
+use std::borrow::Cow;
+
+use chrono::Utc;
 use macro_event_broker::{
     EventBrokerError, MacroEventCollection as _, MessageParts, MessageWrapper,
 };
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
+use uuid::Uuid;
 
-use super::DeclaredMacroEvent;
+use super::{DeclaredMacroEvent, decode_typed_event};
+use crate::domain::models::websocket_notification_event::{
+    NotificationTopicEvent, WebSocketNotificationMetadata,
+};
+use crate::domain::models::{PatchDelete, UserNotificationRow};
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -35,8 +45,7 @@ fn declared_topic_decoder_rejects_unsupported_schema_versions() {
             "schema_version": 2,
             "event_type": "notification.websocket_delivery_requested",
             "metadata": {
-                "recipients": [],
-                "notification": {}
+                "notifications": []
             }
         }))
         .expect("serializable event"),
@@ -49,5 +58,65 @@ fn declared_topic_decoder_rejects_unsupported_schema_versions() {
             actual: 2,
             ..
         })
+    ));
+}
+
+fn row() -> UserNotificationRow<serde_json::Value> {
+    UserNotificationRow {
+        owner_id: MacroUserIdStr::try_from("macro|recipient@example.com".to_string())
+            .expect("valid user ID"),
+        notification_id: Uuid::nil(),
+        notification_event_type: "test".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({ "kind": "test" }),
+        sender_id: None,
+    }
+}
+
+#[test]
+fn typed_decoder_returns_every_variant_with_notification_rows() {
+    let row = row();
+    let user = row.owner_id.clone();
+    let events = [
+        NotificationTopicEvent::WebSocketDeliveryRequested(WebSocketNotificationMetadata {
+            notifications: vec![row.clone()],
+        }),
+        NotificationTopicEvent::NotificationStatusUpdatedForUsers {
+            users: vec![user.clone()],
+            update: Box::new(PatchDelete::Patch {
+                diff: Cow::Owned(row.clone()),
+            }),
+        },
+        NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+            user,
+            updates: vec![PatchDelete::Patch {
+                diff: Cow::Owned(row),
+            }],
+        },
+    ];
+
+    let decoded = events
+        .into_iter()
+        .map(decode_typed_event::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("all variants decode as notification rows");
+
+    assert!(matches!(
+        decoded[0],
+        NotificationTopicEvent::WebSocketDeliveryRequested(_)
+    ));
+    assert!(matches!(
+        decoded[1],
+        NotificationTopicEvent::NotificationStatusUpdatedForUsers { .. }
+    ));
+    assert!(matches!(
+        decoded[2],
+        NotificationTopicEvent::NotificationStatusesUpdatedForUser { .. }
     ));
 }

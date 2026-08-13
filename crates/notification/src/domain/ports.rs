@@ -301,14 +301,14 @@ pub trait RealtimeSender: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
-/// Receives WebSocket notification delivery requests with payloads decoded as `T`.
-pub trait WebSocketNotificationConsumer<T>: Send + Sync + 'static {
-    /// Waits for and returns the next WebSocket notification delivery request.
+/// Receives events from the notifications topic with notification metadata decoded as `T`.
+pub trait NotificationTopicEventConsumer<T: Clone + 'static>: Send + Sync + 'static {
+    /// Waits for and returns the next notification topic event.
     fn recv(
         &self,
     ) -> impl Future<
         Output = Result<
-            crate::domain::models::websocket_notification_event::WebSocketNotificationMetadata<T>,
+            crate::domain::models::websocket_notification_event::NotificationTopicEvent<'static, T>,
             Report,
         >,
     > + Send;

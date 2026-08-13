@@ -63,9 +63,7 @@ pub struct NotificationStatusPatch {
 pub enum PatchDelete<I, T> {
     /// The value with id I should be patched with data T.
     Patch {
-        /// The id to patch.
-        id: I,
-        /// The data to patch.
+        /// The data to patch, including its identifier.
         #[serde(flatten)]
         diff: T,
     },

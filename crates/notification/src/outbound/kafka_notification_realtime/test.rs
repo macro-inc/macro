@@ -1,12 +1,16 @@
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 
+use chrono::Utc;
 use macro_event_broker::{
     EventBrokerError, EventPublisher, MacroEvent, MacroEventBrokerService, Spawner,
 };
 use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 
 use super::*;
+use crate::domain::models::UserNotificationRow;
 use crate::domain::models::websocket_notification_event::NotificationTopicEvent;
 
 #[derive(Debug)]
@@ -55,6 +59,26 @@ impl Spawner for TokioSpawner {
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user ID")
+}
+
+fn row(
+    owner_id: MacroUserIdStr<'static>,
+    notification_id: uuid::Uuid,
+) -> UserNotificationRow<serde_json::Value> {
+    UserNotificationRow {
+        owner_id,
+        notification_id,
+        notification_event_type: "test".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({ "kind": "test" }),
+        sender_id: None,
+    }
 }
 
 fn publisher(
@@ -135,10 +159,13 @@ async fn publishes_many_notifications_for_one_user_event() {
         .expect("valid notification ID");
     let second_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e78")
         .expect("valid notification ID");
+    let first_row = row(recipient.clone(), first_id);
     let payload = NotificationStatusPayload::UserNotifications {
         user: recipient.clone(),
         updates: vec![
-            PatchDelete::Delete { id: first_id },
+            PatchDelete::Patch {
+                diff: Cow::Borrowed(&first_row),
+            },
             PatchDelete::Delete { id: second_id },
         ],
     };
@@ -167,7 +194,9 @@ async fn publishes_many_notifications_for_one_user_event() {
     assert_eq!(
         updates,
         vec![
-            PatchDelete::Delete { id: first_id },
+            PatchDelete::Patch {
+                diff: Cow::Owned(first_row),
+            },
             PatchDelete::Delete { id: second_id },
         ]
     );

@@ -10,16 +10,17 @@ use uuid::Uuid;
 
 use crate::domain::models::{PatchDelete, UserNotificationRow};
 
-/// Recipients and payload for one WebSocket notification delivery request.
+/// User-scoped notification rows for WebSocket delivery.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSocketNotificationMetadata<T> {
-    /// Users who should receive the notification.
-    pub recipients: Vec<MacroUserIdStr<'static>>,
-    /// Notification payload forwarded to each recipient.
-    pub notification: T,
+    /// Notification rows to deliver to their respective owners.
+    pub notifications: Vec<UserNotificationRow<T>>,
 }
 
 /// Events published to [`MacroNotificationsTopic`].
+///
+/// `T` is the notification metadata type carried inside each [`UserNotificationRow`], typically
+/// `NotifEvent` in application code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum NotificationTopicEvent<'a, T: Clone> {
@@ -52,7 +53,7 @@ impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent
     const SCHEMA_VERSION: u8 = 1;
 }
 
-/// Publishable realtime notification event.
+/// Publishable realtime notification event carrying notification metadata of type `T`.
 pub struct NotificationMacroEvent<'a, T: Clone> {
     key: String,
     event: Event<NotificationTopicEvent<'a, T>>,
@@ -103,11 +104,8 @@ impl<T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static>
     NotificationMacroEvent<'static, T>
 {
     /// Creates a WebSocket delivery event keyed by its generated event ID.
-    pub fn new(recipients: Vec<MacroUserIdStr<'static>>, notification: T) -> Self {
-        let metadata = WebSocketNotificationMetadata {
-            recipients,
-            notification,
-        };
+    pub fn new(notifications: Vec<UserNotificationRow<T>>) -> Self {
+        let metadata = WebSocketNotificationMetadata { notifications };
         let event = Event::new(NotificationTopicEvent::WebSocketDeliveryRequested(metadata));
         let key = event.event_id.to_string();
 

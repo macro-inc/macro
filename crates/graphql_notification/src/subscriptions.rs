@@ -7,7 +7,7 @@ use async_graphql::{Context, Subscription};
 use graphql_common::require_authenticated_user;
 use model_notifications::NotifEvent;
 use notification::domain::{
-    models::queue_message::RealtimeNotif,
+    models::UserNotificationRow,
     ports::{WebSocketNotificationSubscriptionExit, WebSocketNotificationSubscriptionService},
 };
 use tokio_stream::Stream;
@@ -22,7 +22,7 @@ pub fn subscribe_to_notifications<S>(
     impl Stream<Item = async_graphql::Result<GraphqlNotification>> + Send + 'static,
 >
 where
-    S: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    S: WebSocketNotificationSubscriptionService<UserNotificationRow<NotifEvent>>,
 {
     let user_id = require_authenticated_user(ctx)?;
     let mut subscription = service.subscribe(user_id.clone());
@@ -30,7 +30,7 @@ where
     Ok(async_stream::stream! {
         while let Some(notification) = subscription.recv().await {
             let notification = Arc::unwrap_or_clone(notification);
-            yield Ok(GraphqlNotification::from_realtime(user_id.clone(), notification));
+            yield Ok(GraphqlNotification::from_realtime(notification));
         }
 
         match subscription.exit_reason().await {
@@ -65,7 +65,7 @@ impl<S> NotificationSubscriptionRoot<S> {
 #[Subscription]
 impl<S> NotificationSubscriptionRoot<S>
 where
-    S: WebSocketNotificationSubscriptionService<RealtimeNotif<NotifEvent>>,
+    S: WebSocketNotificationSubscriptionService<UserNotificationRow<NotifEvent>>,
 {
     /// Subscribe to realtime notifications for the authenticated user.
     async fn notification_updates(

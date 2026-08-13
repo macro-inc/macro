@@ -12,12 +12,14 @@ use rootcause::Report;
 use rootcause::prelude::ResultExt as _;
 use serde::Serialize;
 
+use crate::domain::models::UserNotificationRow;
+use crate::domain::models::queue_message::RealtimeNotif;
 use crate::domain::models::websocket_notification_event::NotificationMacroEvent;
 use crate::domain::ports::RealtimeSender;
 
 /// Kafka-backed implementation of the realtime sender port.
 ///
-/// Each call publishes one message containing the full recipient list and notification payload.
+/// Each call publishes one message containing a user-scoped notification row per recipient.
 pub struct KafkaRealtimeSender<B> {
     broker: B,
 }
@@ -40,15 +42,23 @@ impl<B: MacroEventBroker> RealtimeSender for KafkaRealtimeSender<B> {
         recipients: &[MacroUserIdStr<'a>],
         notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        let notification = serde_json::to_value(notification)
-            .context("failed to serialize realtime notification for Kafka")?;
-        let event = NotificationMacroEvent::new(
+        let notifications = if recipients.is_empty() {
+            Vec::new()
+        } else {
+            let notification: RealtimeNotif<serde_json::Value> = serde_json::from_value(
+                serde_json::to_value(notification)
+                    .context("failed to serialize realtime notification for Kafka")?,
+            )
+            .context("failed to decode realtime notification for Kafka")?;
+
             recipients
                 .iter()
-                .map(|recipient| recipient.clone().into_owned())
-                .collect(),
-            notification,
-        );
+                .map(|recipient| {
+                    user_notification_row(recipient.clone().into_owned(), &notification)
+                })
+                .collect()
+        };
+        let event = NotificationMacroEvent::new(notifications);
 
         let publish = self
             .broker
@@ -61,5 +71,25 @@ impl<B: MacroEventBroker> RealtimeSender for KafkaRealtimeSender<B> {
 
         // Kafka acknowledges durable publication, not delivery to an active WebSocket connection.
         Ok(HashSet::new())
+    }
+}
+
+fn user_notification_row(
+    owner_id: MacroUserIdStr<'static>,
+    notification: &RealtimeNotif<serde_json::Value>,
+) -> UserNotificationRow<serde_json::Value> {
+    UserNotificationRow {
+        owner_id,
+        notification_id: notification.notification_id,
+        notification_event_type: notification.notification_event_type.clone(),
+        entity: notification.entity.clone(),
+        sent: notification.sent,
+        done: notification.done,
+        created_at: notification.created_at,
+        viewed_at: notification.viewed_at,
+        updated_at: notification.updated_at,
+        deleted_at: notification.deleted_at,
+        notification_metadata: notification.notification_metadata.clone(),
+        sender_id: notification.sender_id.clone(),
     }
 }

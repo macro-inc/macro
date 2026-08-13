@@ -67,8 +67,7 @@ fn borrow_update<'a>(
 ) -> PatchDelete<uuid::Uuid, Cow<'a, crate::domain::models::UserNotificationRow<serde_json::Value>>>
 {
     match update {
-        PatchDelete::Patch { id, diff } => PatchDelete::Patch {
-            id: *id,
+        PatchDelete::Patch { diff } => PatchDelete::Patch {
             diff: Cow::Borrowed(diff.as_ref()),
         },
         PatchDelete::Delete { id } => PatchDelete::Delete { id: *id },
