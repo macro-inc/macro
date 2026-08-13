@@ -194,9 +194,7 @@ export const MobileFilterDrawer = () => {
   const toggleAssignee = (id: string) => {
     const current = assigneeFilter();
     handleAssigneeChange(
-      current.includes(id)
-        ? current.filter((a) => a !== id)
-        : [...current, id]
+      current.includes(id) ? current.filter((a) => a !== id) : [...current, id]
     );
   };
 
