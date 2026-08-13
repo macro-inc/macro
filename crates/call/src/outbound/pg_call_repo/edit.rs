@@ -2,8 +2,8 @@
 
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
 use model_entity::EntityType;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
@@ -223,78 +223,87 @@ pub(super) async fn set_custom_speakers(
     Ok(())
 }
 
-/// Update the SharePermission row (isPublic, publicAccessLevel).
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
+/// Update the SharePermission row and its legacy mirrors.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the optional fields require a dynamic SET clause; identifiers are trusted and values are bound"
+)]
 async fn update_share_permission_row(
     transaction: &mut Transaction<'_, Postgres>,
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> Result<(), sqlx::Error> {
+    enum Parameter {
+        Bool(bool),
+        String(Option<String>),
+    }
+
     let mut set_parts = Vec::new();
-    let mut str_params: Vec<Option<String>> = Vec::new();
-    let mut bool_params: Vec<bool> = Vec::new();
+    let mut parameters = Vec::new();
 
-    // Track parameter indices (starting at 2 since $1 is the share_permission_id)
-    let mut param_idx = 2u32;
-    enum ParamType {
-        Bool(usize),
-        Str(usize),
-    }
-    let mut param_order: Vec<ParamType> = Vec::new();
+    let mut push_parameter = |column: &str, parameter: Parameter| {
+        let parameter_index = parameters.len() + 2;
+        set_parts.push(format!("\"{column}\" = ${parameter_index}"));
+        parameters.push(parameter);
+    };
 
-    let mut ignore_public_access_level = false;
-    if let Some(is_public) = share_permission.is_public {
-        set_parts.push(format!("\"isPublic\" = ${param_idx}"));
-        param_idx += 1;
-        bool_params.push(is_public);
-        param_order.push(ParamType::Bool(bool_params.len() - 1));
+    if let Some(link_share) = share_permission.link_share {
+        push_parameter(
+            "linkShare",
+            Parameter::String(link_share.map(|value| value.to_string())),
+        );
+        push_parameter(
+            "isPublic",
+            Parameter::Bool(link_share == Some(LinkShare::Public)),
+        );
 
-        if is_public && share_permission.public_access_level.is_none() {
-            set_parts.push(format!("\"publicAccessLevel\" = ${param_idx}"));
-            param_idx += 1;
-            str_params.push(Some("view".to_string()));
-            param_order.push(ParamType::Str(str_params.len() - 1));
+        let access_level = link_share.map(|_| {
+            share_permission
+                .link_share_access_level
+                .flatten()
+                .unwrap_or(models_permissions::share_permission::access_level::AccessLevel::View)
+                .to_string()
+        });
+        push_parameter(
+            "linkShareAccessLevel",
+            Parameter::String(access_level.clone()),
+        );
+        push_parameter("publicAccessLevel", Parameter::String(access_level));
+    } else if let Some(access_level) = share_permission.link_share_access_level {
+        let access_level = access_level
+            .unwrap_or(models_permissions::share_permission::access_level::AccessLevel::View)
+            .to_string();
+
+        for column in ["linkShareAccessLevel", "publicAccessLevel"] {
+            let parameter_index = parameters.len() + 2;
+            set_parts.push(format!(
+                "\"{column}\" = CASE WHEN \"linkShare\" IS NULL THEN NULL ELSE ${parameter_index} END"
+            ));
+            parameters.push(Parameter::String(Some(access_level.clone())));
         }
-
-        if !is_public {
-            ignore_public_access_level = true;
-            set_parts.push("\"publicAccessLevel\" = NULL".to_string());
-        }
-    }
-
-    if let Some(public_access_level) = share_permission.public_access_level
-        && !ignore_public_access_level
-    {
-        set_parts.push(format!("\"publicAccessLevel\" = ${param_idx}"));
-        str_params.push(Some(public_access_level.to_string()));
-        param_order.push(ParamType::Str(str_params.len() - 1));
     }
 
     if set_parts.is_empty() {
-        sqlx::query(r#"UPDATE "SharePermission" SET "updatedAt" = NOW() WHERE id = $1"#)
-            .bind(share_permission_id)
-            .execute(transaction.as_mut())
-            .await?;
+        sqlx::query!(
+            r#"UPDATE "SharePermission" SET "updatedAt" = NOW() WHERE id = $1"#,
+            share_permission_id,
+        )
+        .execute(transaction.as_mut())
+        .await?;
         return Ok(());
     }
 
-    let query_str = format!(
+    let query = format!(
         r#"UPDATE "SharePermission" SET {}, "updatedAt" = NOW() WHERE id = $1"#,
         set_parts.join(", ")
     );
+    let mut query = sqlx::query(&query).bind(share_permission_id);
 
-    let mut query = sqlx::query(&query_str);
-    query = query.bind(share_permission_id.to_string());
-
-    for param_type in &param_order {
-        match param_type {
-            ParamType::Bool(idx) => {
-                query = query.bind(bool_params[*idx]);
-            }
-            ParamType::Str(idx) => {
-                query = query.bind(str_params[*idx].clone());
-            }
-        }
+    for parameter in parameters {
+        query = match parameter {
+            Parameter::Bool(value) => query.bind(value),
+            Parameter::String(value) => query.bind(value),
+        };
     }
 
     query.execute(transaction.as_mut()).await?;
