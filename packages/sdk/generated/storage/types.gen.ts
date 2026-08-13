@@ -258,27 +258,6 @@ export type ApiActivity = {
 };
 
 /**
- * Identifies the folded agent-session message a placeholder message renders.
- *
- * Nested rather than three sibling fields, because the three only ever make
- * sense together: a message either names a folded message or has a body.
- */
-export type ApiAgentSessionMessageIdentifier = {
-    /**
-     * Agent session whose folded message this renders.
-     */
-    agent_session_id: string;
-    /**
-     * Which side of the turn produced the message.
-     */
-    author: AuthorKind;
-    /**
-     * Turn within that session, assigned in log order from zero.
-     */
-    turn: number;
-};
-
-/**
  * A reference to an attachment entity from a channel message.
  */
 export type ApiAttachmentChannelReference = {
@@ -295,10 +274,9 @@ export type ApiAttachmentChannelReference = {
      */
     channel_name?: string | null;
     /**
-     * Full message content (might be used for preview/snippet). `None` on
-     * agent-turn placeholder messages.
+     * Full message content (might be used for preview/snippet).
      */
-    message_content?: string | null;
+    message_content: string;
     /**
      * When the message itself was created.
      */
@@ -416,15 +394,14 @@ export type ApiChannelAttachmentsPage = {
  * A channel message returned by the message-context endpoint.
  */
 export type ApiChannelContextMessage = {
-    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Channel id.
      */
     channel_id: string;
     /**
-     * Message content. `None` on agent-turn placeholder messages.
+     * Message content.
      */
-    content?: string | null;
+    content: string;
     /**
      * When the message was created.
      */
@@ -498,9 +475,9 @@ export type ApiChannelKind = 'normal' | 'agent';
  */
 export type ApiChannelListMessage = {
     /**
-     * Message content. `None` on agent-turn placeholder messages.
+     * Message content.
      */
-    content?: string | null;
+    content: string;
     /**
      * Creation timestamp.
      */
@@ -580,7 +557,6 @@ export type ApiChannelListType = 'public' | 'private' | 'direct_message' | 'team
  * A top-level channel message with thread info.
  */
 export type ApiChannelMessage = {
-    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Attachments on this message.
      */
@@ -590,10 +566,9 @@ export type ApiChannelMessage = {
      */
     channel_id: string;
     /**
-     * Message content. `None` on agent-turn placeholder messages, whose body
-     * is folded from the agent session log and joined in by the client.
+     * Message content.
      */
-    content?: string | null;
+    content: string;
     /**
      * When the message was created.
      */
@@ -1008,15 +983,14 @@ export type ApiThreadInfo = {
  * A thread reply shown in preview.
  */
 export type ApiThreadReply = {
-    agent_session_message?: null | ApiAgentSessionMessageIdentifier;
     /**
      * Attachments on this reply.
      */
     attachments: Array<ApiMessageAttachment>;
     /**
-     * Reply content. `None` on agent-turn placeholder messages.
+     * Reply content.
      */
-    content?: string | null;
+    content: string;
     /**
      * When the reply was created.
      */
@@ -1051,18 +1025,6 @@ export type ApiThreadReply = {
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
-
-/**
- * Which side of the conversation produced a message.
- *
- * The identity-free discriminant of [`Author`], usable in a key where
- * [`Author`] itself carries a payload.
- *
- * The wire names a [`MessageId`] is written with and parsed back from are
- * the strum-derived `snake_case` variant names - one source of truth for
- * both directions.
- */
-export type AuthorKind = 'user' | 'agent';
 
 export type BTreeMap = {
     [key: string]: string;

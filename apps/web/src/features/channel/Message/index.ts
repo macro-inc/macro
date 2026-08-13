@@ -1,8 +1,6 @@
 import {
-  FoldedMessagesProvider,
   MessageActionsProvider,
   SearchHighlightTermsProvider,
-  useFoldedMessageLookup,
   useMessage,
   useMessageActions,
   useSearchHighlightTermsLookup,
@@ -27,10 +25,8 @@ export type {
   MessageData,
 } from './types';
 export {
-  FoldedMessagesProvider,
   MessageActionsProvider,
   SearchHighlightTermsProvider,
-  useFoldedMessageLookup,
   useMessage,
   useMessageActions,
   useSearchHighlightTermsLookup,

@@ -33,6 +33,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
+import type { AgentSessionLogResponse } from './generated/schemas/agentSessionLogResponse';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -411,6 +412,13 @@ export const storageServiceClient = {
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data
+    );
+  },
+
+  async getAgentSessionLog(args: { agent_session_id: string }) {
+    return await dssFetch<AgentSessionLogResponse>(
+      `/agent-sessions/${encodeURIComponent(args.agent_session_id)}/log`,
+      { method: 'GET' }
     );
   },
 

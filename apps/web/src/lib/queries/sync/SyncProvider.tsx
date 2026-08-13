@@ -1,8 +1,8 @@
 import {
   AGENT_SESSION_LOG_EVENT,
   type AgentSessionLogEvent,
-} from '@core/agent-fold/stream-protocol';
-import { handleAgentSessionLog } from '@queries/channel/agent-session-stream';
+} from '@queries/agent-session/realtime-protocol';
+import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import {
   handleCommsAttachment,
   handleCommsMessage,

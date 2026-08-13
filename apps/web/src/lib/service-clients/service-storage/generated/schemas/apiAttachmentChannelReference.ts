@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ApiAttachmentChannelReferenceChannelName } from './apiAttachmentChannelReferenceChannelName';
-import type { ApiAttachmentChannelReferenceMessageContent } from './apiAttachmentChannelReferenceMessageContent';
 import type { ApiAttachmentChannelReferenceThreadId } from './apiAttachmentChannelReferenceThreadId';
 
 /**
@@ -18,9 +17,8 @@ export interface ApiAttachmentChannelReference {
   channel_id: string;
   /** Optional channel name (DMs do not have a name). */
   channel_name?: ApiAttachmentChannelReferenceChannelName;
-  /** Full message content (might be used for preview/snippet). `None` on
-agent-turn placeholder messages. */
-  message_content?: ApiAttachmentChannelReferenceMessageContent;
+  /** Full message content (might be used for preview/snippet). */
+  message_content: string;
   /** When the message itself was created. */
   message_created_at: string;
   /** Message that contains the attachment reference. */

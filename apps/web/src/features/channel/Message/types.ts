@@ -1,17 +1,10 @@
-import type { ApiAgentSessionMessageIdentifier } from '@service-storage/generated/schemas/apiAgentSessionMessageIdentifier';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 
 export type MessageData = {
   id: string;
-  /** `null`/absent on agent-session placeholder messages. */
   content?: string | null;
-  /**
-   * The folded agent-session message this row renders. Set only on
-   * placeholders; carrying it is what makes a row one.
-   */
-  agent_session_message?: ApiAgentSessionMessageIdentifier | null;
   sender_id: string;
   /** Structured sender identity; carries bot name/avatar for bot senders. */
   sender?: ApiMessageSender;
