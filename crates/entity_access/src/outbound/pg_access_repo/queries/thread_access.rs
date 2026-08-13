@@ -94,10 +94,10 @@ pub async fn get_thread_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                "publicAccessLevel" as "access_level!"
+                "linkShareAccessLevel" as "access_level!"
             FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
+            WHERE "linkShare" = 'PUBLIC'
+            AND "linkShareAccessLevel" IS NOT NULL
             AND id IN (
                 SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
             )
@@ -128,13 +128,26 @@ pub async fn get_thread_access(
             AND source_id = ANY($2)
 
             UNION ALL
-            -- Source 2: items share permission
+            -- Source 2: item share permission
             SELECT
-                "publicAccessLevel"::text AS access_level
-            FROM "SharePermission"
-            WHERE "isPublic" = true
-            AND "publicAccessLevel" IS NOT NULL
-            AND id IN (
+                sp."linkShareAccessLevel"::text AS access_level
+            FROM "SharePermission" sp
+            WHERE sp."linkShareAccessLevel" IS NOT NULL
+            AND (
+                sp."linkShare" = 'PUBLIC'
+                OR (
+                    sp."linkShare" = 'TEAM'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM email_threads t
+                        JOIN email_links l ON l.id = t.link_id
+                        JOIN team_user owner_tu ON owner_tu.user_id = l.macro_id
+                        WHERE t.id = $1::uuid
+                          AND owner_tu.team_id::text = ANY($2)
+                    )
+                )
+            )
+            AND sp.id IN (
                 SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $3
             )
 
