@@ -4,7 +4,6 @@ import {
   type Component,
   createContext,
   createSignal,
-  getOwner,
   Show,
   useContext,
 } from 'solid-js';
@@ -12,10 +11,11 @@ import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dialog } from './Dialog';
 import {
-  type DialogHandle,
+  type ImperativeDialogController,
   ImperativeDialogHost,
   type ManagedDialogProps,
   openDialog,
+  useImperativeDialog,
 } from './ImperativeDialog';
 
 function ManagedTestDialog(
@@ -65,6 +65,16 @@ function typeAssertions() {
   });
 }
 void typeAssertions;
+
+function hookTypeAssertions() {
+  const dialog = useImperativeDialog(ManagedTestDialog);
+  dialog.open({ label: 'valid' });
+  dialog.open(() => ({ label: 'reactive' }));
+
+  // @ts-expect-error label is required by the supplied dialog component.
+  dialog.open({});
+}
+void hookTypeAssertions;
 
 beforeEach(() => {
   window.scrollTo = vi.fn();
@@ -141,56 +151,60 @@ describe('openDialog', () => {
     });
   });
 
-  it('inherits caller context and closes when the supplied owner is disposed', async () => {
+  it('uses one owner-scoped slot and replaces its current dialog', async () => {
     const LocalContext = createContext('host');
     const [showOwner, setShowOwner] = createSignal(true);
-    let handle!: DialogHandle;
+    let controller!: ImperativeDialogController<
+      ManagedDialogProps & { label: string }
+    >;
 
-    const ContextDialog: Component<ManagedDialogProps> = () => (
-      <div>{useContext(LocalContext)}</div>
+    const ContextDialog: Component<ManagedDialogProps & { label: string }> = (
+      props
+    ) => (
+      <div>
+        {useContext(LocalContext)} {props.label}
+      </div>
     );
 
-    function OwnerScopedOpener() {
-      const owner = getOwner();
-      return (
-        <button
-          type="button"
-          onClick={() => {
-            handle = openDialog(
-              ContextDialog,
-              {},
-              { owner: owner ?? undefined }
-            );
-          }}
-        >
-          Open owned dialog
-        </button>
-      );
+    function OwnerScopedController() {
+      controller = useImperativeDialog(ContextDialog);
+      return null;
     }
 
     render(() => (
       <>
         <Show when={showOwner()}>
           <LocalContext.Provider value="caller-local">
-            <OwnerScopedOpener />
+            <OwnerScopedController />
           </LocalContext.Provider>
         </Show>
         <ImperativeDialogHost />
       </>
     ));
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Open owned dialog' })
-    );
-    expect(await screen.findByText('caller-local')).toBeTruthy();
+    const first = controller.open({ label: 'first' });
+    expect(await screen.findByText('caller-local first')).toBeTruthy();
 
+    const second = controller.open({ label: 'second' });
+    await expect(first.closed).resolves.toMatchObject({ reason: 'replaced' });
+    expect(controller.handle()).toBe(second);
+    expect(controller.isOpen()).toBe(true);
+    expect(await screen.findByText('caller-local second')).toBeTruthy();
+
+    expect(controller.close()).toBe(true);
+    await expect(second.closed).resolves.toMatchObject({
+      reason: 'programmatic',
+    });
+    expect(controller.handle()).toBeUndefined();
+    expect(controller.isOpen()).toBe(false);
+
+    const third = controller.open({ label: 'third' });
+    expect(await screen.findByText('caller-local third')).toBeTruthy();
     setShowOwner(false);
-    await expect(handle.closed).resolves.toEqual({
-      id: handle.id,
+    await expect(third.closed).resolves.toMatchObject({
       reason: 'owner-disposed',
     });
-    expect(screen.queryByText('caller-local')).toBeNull();
-    expect(handle.close()).toBe(false);
+    expect(screen.queryByText('caller-local third')).toBeNull();
   });
 
   it('returns focus only after the final managed dialog closes', async () => {

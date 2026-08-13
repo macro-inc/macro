@@ -35,6 +35,7 @@ export type OpenDialogOptions = {
 export type DialogCloseReason =
   | 'dismissed'
   | 'programmatic'
+  | 'replaced'
   | 'owner-disposed'
   | 'host-disposed';
 
@@ -55,11 +56,24 @@ export type DialogHandle = {
 };
 
 type ManagedDialogComponent = Component<any>;
-type ManagedDialogInput<P extends ManagedDialogProps> = Omit<
+/** Props callers provide when opening a managed dialog. */
+export type ManagedDialogInput<P extends ManagedDialogProps> = Omit<
   P,
   keyof ManagedDialogProps
 > &
   Partial<Record<keyof ManagedDialogProps, never>>;
+
+/** Controls the single active dialog owned by `useImperativeDialog`. */
+export type ImperativeDialogController<P extends ManagedDialogProps> = {
+  /** Opens this dialog, replacing the controller's current entry. */
+  open: (props: PropsSource<ManagedDialogInput<P>>) => DialogHandle;
+  /** Closes the current entry. Returns false when none is open. */
+  close: () => boolean;
+  /** Whether this controller currently owns an open entry. */
+  readonly isOpen: Accessor<boolean>;
+  /** The current entry-specific handle. */
+  readonly handle: Accessor<DialogHandle | undefined>;
+};
 
 type DialogEntry = {
   id: string;
@@ -145,6 +159,51 @@ export function openDialog<P extends ManagedDialogProps>(
     isOpen,
     close: () => finalizeDialog(id, 'programmatic'),
     closed,
+  };
+}
+
+/**
+ * Creates a single-slot dialog controller bound to the current Solid owner.
+ * Opening again replaces only the entry created by this controller.
+ */
+export function useImperativeDialog<P extends ManagedDialogProps>(
+  component: Component<P>
+): ImperativeDialogController<P> {
+  const owner = getOwner();
+  if (!owner) {
+    throw new Error('useImperativeDialog must be called within a Solid owner');
+  }
+
+  const [handle, setHandle] = createSignal<DialogHandle>();
+
+  const open = (props: PropsSource<ManagedDialogInput<P>>) => {
+    const previous = handle();
+    if (previous?.isOpen()) {
+      finalizeDialog(previous.id, 'replaced');
+    }
+
+    const next = openDialog(component, props, { owner });
+    setHandle(next);
+    void next.closed.then(() => {
+      if (handle() === next) setHandle(undefined);
+    });
+    return next;
+  };
+
+  const close = () => {
+    const current = handle();
+    if (!current) return false;
+
+    const didClose = current.close();
+    if (didClose) setHandle(undefined);
+    return didClose;
+  };
+
+  return {
+    open,
+    close,
+    isOpen: () => handle()?.isOpen() ?? false,
+    handle,
   };
 }
 

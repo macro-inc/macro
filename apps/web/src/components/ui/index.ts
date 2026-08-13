@@ -61,6 +61,8 @@ export type {
   DialogClosedEvent,
   DialogCloseReason,
   DialogHandle,
+  ImperativeDialogController,
+  ManagedDialogInput,
   ManagedDialogProps,
   OpenDialogOptions,
   PropsSource,
@@ -68,6 +70,7 @@ export type {
 export {
   ImperativeDialogHost,
   openDialog,
+  useImperativeDialog,
 } from './components/ImperativeDialog';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
