@@ -16,7 +16,7 @@ use crate::{
 
 static MAX_WAIT_TIME_SECONDS: u64 = 30;
 
-fn is_docx_key(key: &str) -> bool {
+pub(super) fn is_docx_key(key: &str) -> bool {
     key.to_ascii_lowercase().ends_with(".docx")
 }
 
@@ -128,23 +128,6 @@ pub async fn process_message(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::is_docx_key;
-
-    #[test]
-    fn docx_detection_accepts_mixed_case_extensions() {
-        assert!(is_docx_key("uploads/report.DOCX"));
-        assert!(is_docx_key("uploads/report.DoCx"));
-    }
-
-    #[test]
-    fn docx_detection_requires_the_final_extension() {
-        assert!(!is_docx_key("uploads/report.docx.tmp"));
-        assert!(!is_docx_key("uploads/docx"));
-    }
 }
 
 pub async fn convert(
