@@ -112,7 +112,7 @@ impl<Participants> ConnectionGatewayAgentSessionRealtime<Participants> {
 /// Asked by session rather than by channel: a session created since they
 /// stopped owning a channel has no membership list to consult. The answer is
 /// the same either way for older sessions, whose channel only ever had one
-/// participant - the initiator, written by `create`.
+/// participant - the owner, written by `create`.
 pub trait SessionAudience: Send + Sync + 'static {
     /// The users who should see this session's frames.
     fn viewers(

@@ -1,3 +1,5 @@
+use super::error::Result;
+use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::ports::Transport;
@@ -5,11 +7,6 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use serde::Deserialize;
-use utoipa::ToSchema;
-
-use super::error::Result;
-use super::model::*;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -29,12 +26,12 @@ impl<T> AgentConnector for T where
 pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist a new agent session, together with its access grants.
     ///
-    /// Part of the contract, not an implementation detail: the initiator is
+    /// Part of the contract, not an implementation detail: the owner is
     /// granted owner access, and - when the session was opened by a mention -
     /// the channel that mention was posted in is granted editor access,
     /// resolved from `originating_message_id` rather than trusted from the
     /// caller. The session and its grants land atomically, so a session
-    /// cannot exist that nobody, not even its initiator, could open.
+    /// cannot exist that nobody, not even its owner, could open.
     fn create(
         &self,
         params: CreateAgentSessionParams,
@@ -62,10 +59,6 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// answers for one rather than failing - a session's history should not
     /// stop rendering because its agent was removed.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
-
-    /// Persist a session's model without replacing other session fields.
-    fn set_model(&self, id: AgentSessionId, model: &str)
-    -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the agent-assigned ACP session id without replacing other session fields.
     fn set_acp_session_id(
@@ -132,46 +125,11 @@ impl AgentSessionRealtime for NoOpRealtime {
     }
 }
 
-/// A control operation a caller may ask for on a live session.
-///
-/// The transport vocabulary for [`AgentAction`], which it converts into: it
-/// names the operations a caller is allowed to ask for, in the shape a request
-/// body spells them, and nothing else.
-///
-/// Not `#[non_exhaustive]`, unlike [`AgentAction`]: a new control operation
-/// should fail to compile everywhere that has to decide what it means.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum ControlEventKind {
-    /// Give the agent something to work on.
-    Prompt {
-        /// What to tell the agent.
-        content: String,
-    },
-    /// Switch the model the agent runs on.
-    ChangeModel {
-        /// The model slug to switch to.
-        model: String,
-    },
-    /// Interrupt whatever the agent is doing.
-    Stop,
-}
-
-impl From<ControlEventKind> for AgentAction {
-    fn from(kind: ControlEventKind) -> Self {
-        match kind {
-            ControlEventKind::Prompt { content } => Self::prompt(content),
-            ControlEventKind::ChangeModel { model } => Self::set_model(model),
-            ControlEventKind::Stop => Self::Stop,
-        }
-    }
-}
-
 /// One control operation, and who is responsible for it.
 #[derive(Debug, Clone)]
 pub struct ControlEvent {
-    /// What was asked for.
-    pub kind: ControlEventKind,
+    /// What the agent was asked to do.
+    pub action: AgentAction,
     /// The user responsible, absent when a bot acted on nobody's behalf.
     ///
     /// `None` means "no user is responsible", not "unknown" - a bot's own

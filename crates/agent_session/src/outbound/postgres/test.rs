@@ -1,5 +1,7 @@
 use super::*;
 use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::RequestId;
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
 use bots::domain::ports::BotRepo;
@@ -10,11 +12,11 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
-/// The fixed initiator every [`new_session`] fixture uses.
-const INITIATOR: &str = "macro|agent-session-initiator@example.com";
+/// The fixed owner every [`new_session`] fixture uses.
+const OWNER: &str = "macro|agent-session-owner@example.com";
 
 /// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
-/// `agent_session.initiator_user_id`'s foreign key.
+/// `agent_session.owner_id`'s foreign key.
 async fn insert_user(pool: &PgPool, user_id: &str) {
     let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
     // The no-op update makes the existing row's id come back when the user
@@ -50,10 +52,10 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 }
 
 async fn create_test_bot(pool: &PgPool) -> BotId {
-    // Every session fixture is initiated by the same user, and
-    // `agent_session.initiator_user_id` references `"User"(id)` - so seed the
+    // Every session fixture is owned by the same user, and
+    // `agent_session.owner_id` references `"User"(id)` - so seed the
     // row here, where every session-creating test already passes through.
-    insert_user(pool, INITIATOR).await;
+    insert_user(pool, OWNER).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
         .create_owned_bot(
@@ -81,7 +83,7 @@ fn new_session(
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         id: AgentSessionId::new(),
-        initiator_user_id: user_id(INITIATOR),
+        owner_id: user_id(OWNER),
         bot_id,
         thread_id,
         originating_message_id,
@@ -161,6 +163,12 @@ fn acp_notification() -> AcpMessage {
     )
 }
 
+fn set_model_message(session_id: &SessionId, model: &str) -> ToRuntimeMessage {
+    AgentAction::set_model(model)
+        .to_runtime(session_id, RequestId::Str("model-change".to_owned()))
+        .expect("translate model change")
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_and_get_round_trips(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
@@ -177,8 +185,8 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(session.id, id);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(
-        session.initiator_user_id.to_string(),
-        "macro|agent-session-initiator@example.com"
+        session.owner_id.to_string(),
+        "macro|agent-session-owner@example.com"
     );
     assert_eq!(session.thread_id, None);
     assert!(matches!(session.status, SessionStatus::NoMessages));
@@ -212,6 +220,32 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         updated.status,
         SessionStatus::Event(SystemEvent::AcpReady)
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_model_log_entry_projects_the_session_model(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+    let acp_session_id = SessionId::from("acp-session-1");
+    repo.set_acp_session_id(id, acp_session_id.clone())
+        .await
+        .expect("persist ACP session id");
+
+    AgentSessionLogRepo::create(
+        &repo,
+        AgentSessionLog {
+            agent_session_id: id,
+            user_id: None,
+            content: Message::ToRuntime(set_model_message(&acp_session_id, "opus")),
+        },
+    )
+    .await
+    .expect("append model change log entry");
+
+    assert_eq!(repo.get(id).await.expect("get session").model, "opus");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -384,7 +418,7 @@ async fn thread_and_bot_belong_to_only_one_session(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_sessions_audience_is_its_initiator(pool: PgPool) {
+async fn a_sessions_audience_is_its_owner(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
@@ -399,8 +433,8 @@ async fn a_sessions_audience_is_its_initiator(pool: PgPool) {
 
     assert_eq!(
         audience,
-        vec!["macro|agent-session-initiator@example.com".to_string()],
-        "frames stream to whoever started the session"
+        vec!["macro|agent-session-owner@example.com".to_string()],
+        "frames stream to the session owner"
     );
 }
 
@@ -416,11 +450,11 @@ async fn an_unknown_session_has_no_audience(pool: PgPool) {
     assert!(audience.is_empty());
 }
 
-/// The grants a session is born with: the initiator owns it, and the channel
+/// The grants a session is born with: the owner owns it, and the channel
 /// the bot was mentioned in can steer it. Both are written in the same
 /// transaction as the session, so a session can never exist unreachable.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_grants_the_initiator_and_the_originating_channel(pool: PgPool) {
+async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let (origin_channel_id, thread_id, originating_message_id) =
@@ -448,11 +482,7 @@ async fn create_grants_the_initiator_and_the_originating_channel(pool: PgPool) {
     grants.sort();
 
     let mut expected = vec![
-        (
-            INITIATOR.to_string(),
-            "user".to_string(),
-            "owner".to_string(),
-        ),
+        (OWNER.to_string(), "user".to_string(), "owner".to_string()),
         (
             origin_channel_id.to_string(),
             "channel".to_string(),
@@ -465,9 +495,9 @@ async fn create_grants_the_initiator_and_the_originating_channel(pool: PgPool) {
 }
 
 /// A session created without a mention has no channel to inherit an audience
-/// from, so it is the initiator's alone.
+/// from, so it is the owner's alone.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_without_a_mention_grants_only_the_initiator(pool: PgPool) {
+async fn create_without_a_mention_grants_only_the_owner(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
 
@@ -488,7 +518,7 @@ async fn create_without_a_mention_grants_only_the_initiator(pool: PgPool) {
     .expect("read the session's grants");
 
     assert_eq!(grants.len(), 1);
-    assert_eq!(grants[0].source_id, INITIATOR);
+    assert_eq!(grants[0].source_id, OWNER);
     assert_eq!(grants[0].access_level, "owner");
 }
 

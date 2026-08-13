@@ -131,29 +131,19 @@ fn an_entry_is_a_recording_line_plus_attribution() {
     );
 }
 
-/// The control body's wire shape: the operation's tag sits at the top level
-/// beside its fields, not nested under a `kind` object.
+/// The control body's wire shape: the action's tag sits at the top level
+/// beside its fields, not nested under an `action` object.
 #[test]
 fn a_control_request_reads_the_operation_from_the_top_level() {
-    let stop: ControlRequest = serde_json::from_str(r#"{"kind":"stop"}"#).expect("a stop decodes");
-    assert_eq!(stop.kind, ControlEventKind::Stop);
+    let stop: ControlRequest = serde_json::from_str(r#"{"type":"stop"}"#).expect("a stop decodes");
+    assert_eq!(stop.action, AgentAction::Stop);
 
-    let change: ControlRequest = serde_json::from_str(r#"{"kind":"change_model","model":"opus"}"#)
+    let change: ControlRequest = serde_json::from_str(r#"{"type":"setModel","model":"opus"}"#)
         .expect("a model change decodes");
-    assert_eq!(
-        change.kind,
-        ControlEventKind::ChangeModel {
-            model: "opus".to_owned()
-        }
-    );
+    assert_eq!(change.action, AgentAction::set_model("opus"));
 
     let prompt: ControlRequest =
-        serde_json::from_str(r#"{"kind":"prompt","content":"do the thing"}"#)
+        serde_json::from_str(r#"{"type":"prompt","prompt":"do the thing"}"#)
             .expect("a prompt decodes");
-    assert_eq!(
-        prompt.kind,
-        ControlEventKind::Prompt {
-            content: "do the thing".to_owned()
-        }
-    );
+    assert_eq!(prompt.action, AgentAction::prompt("do the thing"));
 }

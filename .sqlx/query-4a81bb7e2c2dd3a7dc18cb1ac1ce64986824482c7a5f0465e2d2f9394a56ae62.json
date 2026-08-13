@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, initiator_user_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, acp_session_id, status, status_event_name,\n                created_at, modified_at\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, acp_session_id, status, status_event_name,\n                created_at, modified_at\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "initiator_user_id",
+        "name": "owner_id",
         "type_info": "Text"
       },
       {
@@ -91,5 +91,5 @@
       false
     ]
   },
-  "hash": "b495575c9a8c108c300b709485f8dc52607c2a50f3af5e994ad58b20837edec6"
+  "hash": "4a81bb7e2c2dd3a7dc18cb1ac1ce64986824482c7a5f0465e2d2f9394a56ae62"
 }

@@ -68,10 +68,6 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Delete an agent session by id.
     fn delete_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist a session's model without replacing its other fields.
-    fn set_model(&self, id: AgentSessionId, model: &str)
-    -> impl Future<Output = Result<()>> + Send;
-
     /// Release this session's live transport, if it has one.
     ///
     /// The actor observes its command channel closing and winds itself down
@@ -227,10 +223,6 @@ where
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
-    }
-
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        self.repo.set_model(id, model).await
     }
 
     async fn close_session(&self, id: AgentSessionId) -> Result<()> {
@@ -389,10 +381,6 @@ where
         bot_id: Option<bots::domain::models::BotId>,
     ) -> Result<super::model::ChannelSession> {
         self.repo.find_for_channel(thread_id, bot_id).await
-    }
-
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        self.repo.set_model(id, model).await
     }
 
     async fn set_acp_session_id(

@@ -100,7 +100,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let now = chrono::Utc::now();
         let session = AgentSession {
             id: params.id,
-            initiator_user_id: params.initiator_user_id,
+            owner_id: params.owner_id,
             thread_id: params.thread_id,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
@@ -157,19 +157,6 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         })
     }
 
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        let mut sessions = self
-            .sessions
-            .lock()
-            .expect("in-memory session store is not poisoned");
-        let session = sessions.get_mut(&id).ok_or_else(|| {
-            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
-        })?;
-        session.model = model.to_owned();
-        session.modified_at = chrono::Utc::now();
-        Ok(())
-    }
-
     async fn set_acp_session_id(
         &self,
         id: AgentSessionId,
@@ -202,6 +189,12 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<()> {
+        let model_change = match &log.content {
+            crate::domain::model::Message::ToRuntime(message) => {
+                agent_runtime_protocol::domain::action::AgentSetModelAction::from_runtime(message)
+            }
+            _ => None,
+        };
         let event = match &log.content {
             crate::domain::model::Message::ToServer(ToServerMessage::Event { event }) => {
                 Some(event.clone())
@@ -218,6 +211,17 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .get_mut(&session_id)
         {
             session.status = SessionStatus::Event(event);
+            session.modified_at = chrono::Utc::now();
+        }
+        if let Some((acp_session_id, change)) = model_change
+            && let Some(session) = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get_mut(&session_id)
+            && session.acp_session_id.as_deref() == Some(acp_session_id.to_string().as_str())
+        {
+            session.model = change.model;
             session.modified_at = chrono::Utc::now();
         }
         Ok(())
@@ -261,10 +265,8 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
         id,
-        initiator_user_id: macro_user_id::user_id::MacroUserIdStr::try_from_email(
-            "initiator@example.com",
-        )
-        .expect("valid macro user id"),
+        owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+            .expect("valid macro user id"),
         thread_id: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),

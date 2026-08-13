@@ -101,7 +101,7 @@ impl EntityType {
             // Skill refs are access-checked against the underlying document
             // (system skills are visible to everyone).
             EntityType::Skill => false,
-            // Agent sessions hold `entity_access` rows - the initiator as
+            // Agent sessions hold `entity_access` rows - the owner with
             // owner, the channel the bot was mentioned in as editor - but
             // are not something you file into a project.
             EntityType::AgentSession => false,

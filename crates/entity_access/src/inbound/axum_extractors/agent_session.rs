@@ -1,7 +1,7 @@
 //! Agent session access extractor.
 //!
 //! A session's permissions are entirely its own `entity_access` rows: the
-//! initiator as owner, and - when the session was opened by a mention - the
+//! owner with owner access, and - when the session was opened by a mention - the
 //! channel that mention was posted in as editor. The dedicated channel a
 //! session owns is deliberately not consulted; who participates in it says
 //! nothing about who may act on the session.

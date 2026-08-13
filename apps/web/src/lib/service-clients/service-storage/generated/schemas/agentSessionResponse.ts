@@ -23,14 +23,14 @@ export interface AgentSessionResponse {
   harness: string;
   /** The session id. */
   id: string;
-  /** The user who started the session. */
-  initiatorUserId: string;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */
   modifiedAt: string;
   /** The exact message that invoked the bot, if any. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
+  /** The user who created and owns the session. */
+  ownerId: string;
   /** The repository the session works with. */
   repoUrl: string;
   /** The session's status. */

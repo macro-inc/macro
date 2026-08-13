@@ -25,7 +25,7 @@ fn owner() -> MacroUserIdStr<'static> {
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         id,
-        initiator_user_id: owner(),
+        owner_id: owner(),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         thread_id: None,
         originating_message_id: None,

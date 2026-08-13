@@ -30,8 +30,8 @@ pub enum SessionStatus {
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who started the session.
-    pub initiator_user_id: MacroUserIdStr<'static>,
+    /// User who created and owns the session.
+    pub owner_id: MacroUserIdStr<'static>,
     /// Bot running the agent.
     pub bot_id: BotId,
     /// Root message identifying the originating thread, if any.
@@ -51,8 +51,8 @@ pub struct CreateAgentSessionParams {
 pub struct AgentSession {
     /// id of the agent session
     pub id: AgentSessionId,
-    /// The user who started the session. Immutable for the session's life.
-    pub initiator_user_id: MacroUserIdStr<'static>,
+    /// The user who created and owns the session. Immutable for its life.
+    pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that originally invoked the bot, if any.

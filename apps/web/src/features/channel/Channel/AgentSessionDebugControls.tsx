@@ -75,12 +75,12 @@ export function AgentSessionDebugControls(props: { channelId: string }) {
               border: '1px solid black',
             }}
           >
-            <button type="button" onClick={() => send({ kind: 'stop' })}>
+            <button type="button" onClick={() => send({ type: 'stop' })}>
               stop
             </button>
             <button
               type="button"
-              onClick={() => send({ kind: 'change_model', model: OPUS_MODEL })}
+              onClick={() => send({ type: 'setModel', model: OPUS_MODEL })}
             >
               switch to opus
             </button>
@@ -88,7 +88,7 @@ export function AgentSessionDebugControls(props: { channelId: string }) {
               type="button"
               onClick={() => {
                 const content = prompt('prompt the agent with:');
-                if (content) send({ kind: 'prompt', content });
+                if (content) send({ type: 'prompt', prompt: content });
               }}
             >
               prompt…

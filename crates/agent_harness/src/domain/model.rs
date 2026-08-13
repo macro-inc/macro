@@ -95,7 +95,7 @@ impl From<ControlEvent> for DeliverAction {
     /// looking at the session already.
     fn from(event: ControlEvent) -> Self {
         Self {
-            action: event.kind.into(),
+            action: event.action,
             actor: event.actor,
             announce: None,
         }

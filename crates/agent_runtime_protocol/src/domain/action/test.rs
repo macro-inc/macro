@@ -48,6 +48,16 @@ fn set_model_becomes_a_set_model_request_naming_the_acp_session() {
     let params = serde_json::to_value(&request.params).unwrap();
     assert_eq!(params["sessionId"], serde_json::json!("acp-abc"));
     assert_eq!(params["modelId"], serde_json::json!("opus"));
+
+    let message = ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)));
+    let (parsed_session_id, parsed) = AgentSetModelAction::from_runtime(&message).unwrap();
+    assert_eq!(parsed_session_id, session_id);
+    assert_eq!(
+        parsed,
+        AgentSetModelAction {
+            model: "opus".into()
+        }
+    );
 }
 
 #[test]

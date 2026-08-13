@@ -131,56 +131,86 @@
   },
   "components": {
     "schemas": {
-      "ControlEventKind": {
+      "AgentAction": {
         "oneOf": [
           {
-            "type": "object",
-            "description": "Give the agent something to work on.",
-            "required": ["content", "kind"],
-            "properties": {
-              "content": {
-                "type": "string",
-                "description": "What to tell the agent."
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPromptAction",
+                "description": "Send the agent a prompt."
               },
-              "kind": {
-                "type": "string",
-                "enum": ["prompt"]
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["prompt"]
+                  }
+                }
               }
-            }
+            ],
+            "description": "Send the agent a prompt."
           },
           {
-            "type": "object",
-            "description": "Switch the model the agent runs on.",
-            "required": ["model", "kind"],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["change_model"]
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSetModelAction",
+                "description": "Switch the model the agent runs on."
               },
-              "model": {
-                "type": "string",
-                "description": "The model slug to switch to."
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["setModel"]
+                  }
+                }
               }
-            }
+            ],
+            "description": "Switch the model the agent runs on."
           },
           {
             "type": "object",
             "description": "Interrupt whatever the agent is doing.",
-            "required": ["kind"],
+            "required": ["type"],
             "properties": {
-              "kind": {
+              "type": {
                 "type": "string",
                 "enum": ["stop"]
               }
             }
           }
         ],
-        "description": "A control operation a caller may ask for on a live session.\n\nThe transport vocabulary for [`AgentAction`], which it converts into: it\nnames the operations a caller is allowed to ask for, in the shape a request\nbody spells them, and nothing else.\n\nNot `#[non_exhaustive]`, unlike [`AgentAction`]: a new control operation\nshould fail to compile everywhere that has to decide what it means."
+        "description": "One thing a caller wants an agent to do."
+      },
+      "AgentPromptAction": {
+        "type": "object",
+        "description": "Ask the agent to work on something.",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "What to tell the agent."
+          }
+        }
+      },
+      "AgentSetModelAction": {
+        "type": "object",
+        "description": "Ask the agent to run on a different model from here on.",
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model slug the agent should switch to."
+          }
+        }
       },
       "ControlRequest": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/ControlEventKind",
+            "$ref": "#/components/schemas/AgentAction",
             "description": "The operation to perform."
           }
         ],

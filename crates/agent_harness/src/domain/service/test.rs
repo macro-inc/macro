@@ -9,12 +9,15 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
-use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
+use agent_runtime_protocol::domain::{
+    action::AgentAction,
+    schema::v0::{AcpMessage, ToRuntimeMessage},
+};
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
-    ControlEvent, ControlEventKind, NoOpRealtime,
+    ControlEvent, NoOpRealtime,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::InMemoryAgentSessionRepo;
@@ -149,7 +152,7 @@ async fn disconnected_session(
         repo,
         CreateAgentSessionParams {
             id,
-            initiator_user_id: origin.sender,
+            owner_id: origin.sender,
             bot_id,
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
@@ -578,9 +581,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
         .control_event(
             id,
             ControlEvent {
-                kind: ControlEventKind::ChangeModel {
-                    model: "opus".to_owned(),
-                },
+                action: AgentAction::set_model("opus"),
                 actor: Some(sender()),
             },
         )
@@ -604,7 +605,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
 }
 
 #[tokio::test]
-async fn changing_the_model_of_a_disconnected_session_still_persists_it() {
+async fn changing_the_model_of_a_disconnected_session_is_a_no_op() {
     let (service, repo, containers, _announcer) = harness();
     let id = disconnected_session(&repo, &containers).await;
 
@@ -612,9 +613,7 @@ async fn changing_the_model_of_a_disconnected_session_still_persists_it() {
         .control_event(
             id,
             ControlEvent {
-                kind: ControlEventKind::ChangeModel {
-                    model: "opus".to_owned(),
-                },
+                action: AgentAction::set_model("opus"),
                 actor: None,
             },
         )
@@ -623,8 +622,8 @@ async fn changing_the_model_of_a_disconnected_session_still_persists_it() {
 
     assert_eq!(
         repo.get(id).await.expect("the session exists").model,
-        "opus",
-        "the next resume has to run on the new model"
+        "claude",
+        "without a live runtime there is no model change to project"
     );
 }
 
@@ -637,7 +636,7 @@ async fn stopping_a_disconnected_session_succeeds_with_nothing_to_do() {
         .control_event(
             id,
             ControlEvent {
-                kind: ControlEventKind::Stop,
+                action: AgentAction::Stop,
                 actor: Some(sender()),
             },
         )
@@ -674,9 +673,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
         .control_event(
             id,
             ControlEvent {
-                kind: ControlEventKind::Prompt {
-                    content: "and now the docs".to_owned(),
-                },
+                action: AgentAction::prompt("and now the docs"),
                 actor: Some(sender()),
             },
         )
@@ -703,9 +700,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
     let prompted = service.control_event(
         id,
         ControlEvent {
-            kind: ControlEventKind::Prompt {
-                content: "wake up".to_owned(),
-            },
+            action: AgentAction::prompt("wake up"),
             actor: Some(sender()),
         },
     );

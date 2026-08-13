@@ -13,6 +13,7 @@ use crate::domain::model::{
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
+use agent_runtime_protocol::domain::action::AgentSetModelAction;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
@@ -89,7 +90,7 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
 
 struct AgentSessionRow {
     id: Uuid,
-    initiator_user_id: String,
+    owner_id: String,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
@@ -110,8 +111,8 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         let status = parse_status(&row.status, row.status_event_name)?;
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
-            initiator_user_id: MacroUserIdStr::try_from(row.initiator_user_id)
-                .context("agent session has an unparseable initiator")?,
+            owner_id: MacroUserIdStr::try_from(row.owner_id)
+                .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
@@ -130,7 +131,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
             id,
-            initiator_user_id,
+            owner_id,
             bot_id,
             thread_id,
             originating_message_id,
@@ -140,7 +141,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
 
         // The session row and its access grants land together: a crash between
-        // the two would leave a session nobody - not even its initiator -
+        // the two would leave a session nobody - not even its owner -
         // could open.
         let mut transaction = self
             .pool
@@ -153,17 +154,17 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             INSERT INTO agent_session (
-                id, initiator_user_id, thread_id, originating_message_id, bot_id, model,
+                id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, acp_session_id, status, status_event_name
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING
-                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
                 created_at, modified_at
             "#,
             id.as_uuid(),
-            initiator_user_id.as_ref(),
+            owner_id.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -182,12 +183,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             &mut transaction,
             &id.as_uuid(),
             EntityType::AgentSession,
-            initiator_user_id.as_ref(),
+            owner_id.as_ref(),
             EntityAccessSourceType::User,
             AccessLevel::Owner,
         )
         .await
-        .context("failed to grant the initiator access to the agent session")?;
+        .context("failed to grant the owner access to the agent session")?;
 
         // The channel the bot was mentioned in can steer the session: the
         // invocation was public there, so that audience is. Read from the
@@ -231,7 +232,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
                 created_at, modified_at
             FROM agent_session
@@ -262,7 +263,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, initiator_user_id, thread_id, originating_message_id, bot_id,
+                id, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, acp_session_id, status, status_event_name,
                 created_at, modified_at
             FROM agent_session
@@ -308,27 +309,6 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 avatar_url: None,
             },
         })
-    }
-
-    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        let result = sqlx::query!(
-            r#"
-            UPDATE agent_session
-            SET model = $2,
-                modified_at = NOW()
-            WHERE id = $1
-            "#,
-            id.as_uuid(),
-            model,
-        )
-        .execute(&self.pool)
-        .await
-        .context("failed to persist agent session model")?;
-
-        if result.rows_affected() == 0 {
-            return Err(anyhow::anyhow!("agent session not found").into());
-        }
-        Ok(())
     }
 
     async fn set_acp_session_id(
@@ -419,6 +399,10 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<()> {
+        let model_change = match &log.content {
+            Message::ToRuntime(message) => AgentSetModelAction::from_runtime(message),
+            _ => None,
+        };
         let event_status = match &log.content {
             Message::ToServer(ToServerMessage::Event { event }) => {
                 Some(SessionStatus::Event(event.clone()))
@@ -463,6 +447,24 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .execute(&mut *transaction)
             .await
             .context("failed to update agent session status from log entry")?;
+        }
+
+        if let Some((acp_session_id, change)) = model_change {
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET model = $3,
+                    modified_at = now()
+                WHERE id = $1
+                  AND acp_session_id = $2
+                "#,
+                log.agent_session_id.as_uuid(),
+                acp_session_id.to_string(),
+                change.model,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to project agent session model from log entry")?;
         }
 
         transaction
@@ -527,13 +529,13 @@ impl SessionAudience for PgAgentSessionRepo {
         &self,
         agent_session_id: AgentSessionId,
     ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        // The initiator, which is who the dedicated channel's participant
+        // The owner, which is who the dedicated channel's participant
         // list used to resolve to: `create` only ever wrote the one owner
         // row. Widens to a real grant lookup when sessions grow shared
         // access.
         let viewers = sqlx::query_scalar!(
             r#"
-            SELECT initiator_user_id AS "initiator_user_id: MacroUserIdStr"
+            SELECT owner_id AS "owner_id: MacroUserIdStr"
             FROM agent_session
             WHERE id = $1
             "#,

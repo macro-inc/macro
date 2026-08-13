@@ -15,6 +15,7 @@ path = "src/openapi.rs"
 [dependencies]
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
+agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger" }
 aws-sdk-sqs = { workspace = true }

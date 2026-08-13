@@ -31,7 +31,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -136,10 +136,6 @@ export type AgentSessionResponse = {
      */
     id: string;
     /**
-     * The user who started the session.
-     */
-    initiatorUserId: string;
-    /**
      * Model slug.
      */
     model: string;
@@ -151,6 +147,10 @@ export type AgentSessionResponse = {
      * The exact message that invoked the bot, if any.
      */
     originatingMessageId?: string | null;
+    /**
+     * The user who created and owns the session.
+     */
+    ownerId: string;
     /**
      * The repository the session works with.
      */
@@ -3020,7 +3020,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * When and how often the reminder fires.
      */
@@ -4725,7 +4725,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4747,7 +4747,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -6368,7 +6368,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * Reminder id.
      */
@@ -7758,7 +7758,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -11677,7 +11677,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * The id of the favorited entity.
          */
@@ -12503,7 +12503,7 @@ export type ListRemindersData = {
         /**
          * The type of an entity in Macro
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill';
+        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
         /**
          * Restrict to reminders attached to this entity id. Requires `entityType`.
          */

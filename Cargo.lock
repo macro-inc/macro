@@ -223,6 +223,7 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_harness",
+ "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
  "anyhow",
@@ -279,6 +280,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tracing",
+ "utoipa",
 ]
 
 [[package]]

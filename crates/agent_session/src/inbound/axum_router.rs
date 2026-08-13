@@ -4,7 +4,7 @@
 //! [`AgentSessionAccessLevelExtractor`], checked before the handler body
 //! runs: viewing a session or its log needs `View`, controlling or deleting
 //! one needs `Owner`. Permission comes from the session's own `entity_access`
-//! rows - the initiator as owner, the mention's channel as editor - never
+//! rows - the owner with owner access, the mention's channel as editor - never
 //! from any channel the session was once rendered in. Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
 //! make no authorization or business decisions of their own.
@@ -14,7 +14,7 @@ mod test;
 
 use std::sync::Arc;
 
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use agent_runtime_protocol::domain::{action::AgentAction, schema::v0::SystemEvent};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -38,7 +38,7 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent, ControlEventKind};
+use crate::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
 use crate::domain::service::AgentSessionService;
 
 /// Shared state for the agent session router: the agent session service plus
@@ -264,7 +264,7 @@ impl From<SessionStatusDto> for SessionStatus {
 pub struct ControlRequest {
     /// The operation to perform.
     #[serde(flatten)]
-    pub kind: ControlEventKind,
+    pub action: AgentAction,
 }
 
 /// Response body describing an agent session.
@@ -273,8 +273,8 @@ pub struct ControlRequest {
 pub struct AgentSessionResponse {
     /// The session id.
     pub id: Uuid,
-    /// The user who started the session.
-    pub initiator_user_id: String,
+    /// The user who created and owns the session.
+    pub owner_id: String,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
@@ -301,7 +301,7 @@ impl From<AgentSession> for AgentSessionResponse {
     fn from(session: AgentSession) -> Self {
         Self {
             id: session.id.as_uuid(),
-            initiator_user_id: session.initiator_user_id.to_string(),
+            owner_id: session.owner_id.to_string(),
             thread_id: session.thread_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
@@ -389,7 +389,7 @@ pub async fn control_agent_session_handler<
         .control_event(
             AgentSessionId::new_from_uuid(session_id),
             ControlEvent {
-                kind: req.kind,
+                action: req.action,
                 actor,
             },
         )

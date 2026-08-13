@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 /// Get the highest access level a user has for an agent session.
 ///
-/// A session's grants are written when it is created: the initiator as
+/// A session's grants are written when it is created: the owner with
 /// owner, and - when the session was opened by a mention - the channel that
 /// mention was posted in as editor. Channel membership is not copied into
 /// `entity_access`; it arrives here through `source_ids`, so adding someone

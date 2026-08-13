@@ -45,8 +45,7 @@ fn message(mentions: Vec<SimpleMention>) -> ChannelMessagePostedMetadata {
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
         id,
-        initiator_user_id: MacroUserIdStr::try_from_email("initiator@example.com")
-            .expect("valid macro user id"),
+        owner_id: MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         thread_id: None,
         originating_message_id: None,
         bot_id,

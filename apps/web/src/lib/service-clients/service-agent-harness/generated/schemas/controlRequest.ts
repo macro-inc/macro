@@ -4,7 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ControlEventKind } from './controlEventKind';
+import type { AgentAction } from './agentAction';
 
 /**
  * Request body for a control operation on a live session.
@@ -14,4 +14,4 @@ which are about the request rather than the operation have somewhere to go.
 The acting user is deliberately not one of them: it comes from the caller's
 credentials, so that a caller cannot attribute an operation to someone else.
  */
-export type ControlRequest = ControlEventKind;
+export type ControlRequest = AgentAction;

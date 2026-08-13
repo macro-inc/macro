@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ControlEventKindOneOfFiveKind =
-  (typeof ControlEventKindOneOfFiveKind)[keyof typeof ControlEventKindOneOfFiveKind];
+export type AgentActionOneOfAllOfType =
+  (typeof AgentActionOneOfAllOfType)[keyof typeof AgentActionOneOfAllOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ControlEventKindOneOfFiveKind = {
-  stop: 'stop',
+export const AgentActionOneOfAllOfType = {
+  prompt: 'prompt',
 } as const;

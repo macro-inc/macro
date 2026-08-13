@@ -8053,7 +8053,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -9867,7 +9868,8 @@
                 "crm_company",
                 "crm_contact",
                 "reminder",
-                "skill"
+                "skill",
+                "agent_session"
               ]
             }
           },
@@ -11248,7 +11250,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -11333,7 +11336,7 @@
         "description": "Response body describing an agent session.",
         "required": [
           "id",
-          "initiatorUserId",
+          "ownerId",
           "botId",
           "model",
           "harness",
@@ -11366,10 +11369,6 @@
             "format": "uuid",
             "description": "The session id."
           },
-          "initiatorUserId": {
-            "type": "string",
-            "description": "The user who started the session."
-          },
           "model": {
             "type": "string",
             "description": "Model slug."
@@ -11383,6 +11382,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The exact message that invoked the bot, if any."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who created and owns the session."
           },
           "repoUrl": {
             "type": "string",
@@ -15523,7 +15526,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -18135,7 +18139,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -18182,7 +18187,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -21521,7 +21527,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],
@@ -23594,7 +23601,8 @@
                   "crm_company",
                   "crm_contact",
                   "reminder",
-                  "skill"
+                  "skill",
+                  "agent_session"
                 ]
               }
             ],

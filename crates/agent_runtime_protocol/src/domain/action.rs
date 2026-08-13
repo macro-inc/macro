@@ -23,6 +23,7 @@ pub enum ActionError {
 
 /// Ask the agent to work on something.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPromptAction {
     /// What to tell the agent.
@@ -31,16 +32,48 @@ pub struct AgentPromptAction {
 
 /// Ask the agent to run on a different model from here on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSetModelAction {
     /// The model slug the agent should switch to.
     pub model: String,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetModelRequest {
+    session_id: SessionId,
+    model_id: String,
+}
+
+impl AgentSetModelAction {
+    /// Read a model change back from the ACP request produced for it.
+    ///
+    /// ACP's pinned schema does not yet expose this runtime extension as a
+    /// typed request, so this keeps its method and parameter shape centralized
+    /// with the code that writes the frame.
+    pub fn from_runtime(message: &ToRuntimeMessage) -> Option<(SessionId, Self)> {
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
+            return None;
+        };
+        if request.method.as_ref() != "session/set_model" {
+            return None;
+        }
+        let params = request.params.clone()?.into_value();
+        let params: SetModelRequest = serde_json::from_value(params).ok()?;
+        Some((
+            params.session_id,
+            Self {
+                model: params.model_id,
+            },
+        ))
+    }
+}
+
 /// One thing a caller wants an agent to do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
-#[non_exhaustive]
 pub enum AgentAction {
     /// Send the agent a prompt.
     Prompt(AgentPromptAction),
@@ -82,9 +115,9 @@ impl AgentAction {
     ///
     /// A prompt is work the agent has not done yet, so a session with nothing
     /// attached has to be brought back up rather than told "fine". The others
-    /// are already satisfied by the disconnection or by their durable half: a
-    /// stop is asking for a state a dead session is in, and a model change is
-    /// persisted before it is sent, so the next connection runs on it.
+    /// are already satisfied by the disconnection: a stop is asking for a
+    /// state a dead session is in, and a model change only applies to a live
+    /// runtime.
     pub fn must_reach_agent(&self) -> bool {
         match self {
             Self::Prompt(_) => true,
@@ -115,10 +148,11 @@ impl AgentAction {
             // names follow `SetSessionModeRequest`, which is the same shape
             // with `modeId` in place of `modelId`.
             Self::SetModel(action) => {
-                let params = serde_json::json!({
-                    "sessionId": session_id,
-                    "modelId": action.model,
-                });
+                let params = serde_json::to_value(SetModelRequest {
+                    session_id: session_id.clone(),
+                    model_id: action.model.clone(),
+                })
+                .map_err(|error| ActionError::Acp(error.to_string()))?;
                 let frame =
                     RawJsonRpcMessage::request("session/set_model".to_owned(), params, request_id)
                         .map_err(|error| ActionError::Acp(error.to_string()))?;

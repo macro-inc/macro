@@ -200,7 +200,7 @@ where
         self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
-                initiator_user_id: origin.sender.clone(),
+                owner_id: origin.sender.clone(),
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
@@ -251,16 +251,6 @@ where
             actor,
             announce,
         } = command;
-
-        // The durable half, for the actions that have one. It happens even
-        // when nothing is attached, so the next connection runs on it.
-        //
-        // A catch-all because `AgentAction` is `#[non_exhaustive]` across
-        // crates: a future action needing a durable write will land here
-        // silently rather than failing to compile.
-        if let AgentAction::SetModel(set) = &action {
-            self.sessions.set_model(session_id, &set.model).await?;
-        }
 
         let announcement = self
             .announcement(session_id, &action, actor.as_ref(), announce)
