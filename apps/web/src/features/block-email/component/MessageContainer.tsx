@@ -12,7 +12,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Telemetry } from '@macro-inc/observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
@@ -50,7 +50,7 @@ export function MessageContainer(props: MessageContainerProps) {
     context.messages.replyingToMessageId() === props.message.db_id;
 
   const showInlineReplyInput = createMemo(() => {
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
     if (!props.isLastMessage) return showReply() || !!draftChild();
     return context.messages.bottomReplyOpen() || !!draftChild();
   });
@@ -59,7 +59,7 @@ export function MessageContainer(props: MessageContainerProps) {
     () =>
       props.isLastMessage &&
       !!props.message.db_id &&
-      !isMobile() &&
+      !isTouchDevice() &&
       context.drafts.initialDraftsSettled()
   );
 
@@ -352,7 +352,7 @@ export function MessageContainer(props: MessageContainerProps) {
             </div>
             <Show when={showInlineReplyArea()}>
               <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
-                <Show when={props.isLastMessage && !isMobile()}>
+                <Show when={props.isLastMessage && !isTouchDevice()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}
                     loadingText="Loading messages"
@@ -371,7 +371,7 @@ export function MessageContainer(props: MessageContainerProps) {
                         unframed
                       />
                     </Match>
-                    <Match when={props.isLastMessage && !isMobile()}>
+                    <Match when={props.isLastMessage && !isTouchDevice()}>
                       <BottomReplyButtons lastMessage={props.message} />
                     </Match>
                   </Switch>

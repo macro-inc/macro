@@ -46,6 +46,7 @@ import { MobileApp } from './MobileApp';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { Team } from './Team';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -100,8 +101,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
-  const compact = () => !isMobile() && panelWidth() < COMPACT_WIDTH;
-  const narrow = () => !isMobile() && panelWidth() < NARROW_WIDTH;
+  const compact = () => !isTouchDevice() && panelWidth() < COMPACT_WIDTH;
+  const narrow = () => !isTouchDevice() && panelWidth() < NARROW_WIDTH;
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -300,7 +301,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       <div class="flex grow min-h-1 overflow-hidden">
         {/* Inline sidebar — hidden once the panel gets too narrow. */}
-        <Show when={!isMobile() && !compact()}>
+        <Show when={!isTouchDevice() && !compact()}>
           <SideNav
             class={cn(
               'w-[clamp(208px,20%,248px)] gap-3',
@@ -358,7 +359,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           }}
         >
           <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
+            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu touch:rounded-none touch:border-0 touch:bg-transparent">
               {/* Compact full-screen chrome: no split header to host the tabs,
                   so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its

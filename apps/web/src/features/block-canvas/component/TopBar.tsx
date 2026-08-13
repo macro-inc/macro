@@ -162,7 +162,7 @@ export function TopBar() {
       </SplitHeaderLeft>
       <SplitHeaderRight>
         {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 mobile:hidden">
+        <div class="-order-1 touch:hidden">
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>

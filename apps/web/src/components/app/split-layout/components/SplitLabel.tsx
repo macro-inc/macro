@@ -10,7 +10,6 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
-import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -40,6 +39,7 @@ import {
 } from '../context';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -54,7 +54,7 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
@@ -126,7 +126,7 @@ export function SplitLabel(props: {
   };
 
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
@@ -212,7 +212,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   const openTitleFileMenu = (e: MouseEvent) => {
-    if (!isMobile()) return;
+    if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
     if (!trigger) return;
     e.preventDefault();
