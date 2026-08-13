@@ -113,10 +113,12 @@ async fn publishes_one_event_per_call_with_all_recipients() {
 
     let decoded = NotificationMacroEvent::decode(record.key.clone(), &record.payload)
         .expect("event round-trips");
-    assert_eq!(
-        decoded.event().event,
-        NotificationTopicEvent::WebSocketDeliveryRequested(expected_metadata)
-    );
+    let NotificationTopicEvent::WebSocketDeliveryRequested(actual_metadata) =
+        decoded.into_topic_event()
+    else {
+        panic!("expected WebSocket delivery event");
+    };
+    assert_eq!(actual_metadata, expected_metadata);
 }
 
 #[tokio::test]

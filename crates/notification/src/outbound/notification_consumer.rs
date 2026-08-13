@@ -19,7 +19,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::domain::{
     models::websocket_notification_event::{
-        JsonNotificationMacroEvent, WebSocketNotificationMetadata,
+        JsonNotificationMacroEvent, NotificationTopicEvent, WebSocketNotificationMetadata,
     },
     ports::WebSocketNotificationConsumer,
 };
@@ -72,8 +72,8 @@ where
 
     /// Receives and decodes the next typed WebSocket notification event.
     ///
-    /// This operation is cancel-safe. Unsupported schema versions are poison records and are
-    /// skipped. Other missing or malformed payload data is returned as an error.
+    /// This operation is cancel-safe. Notification status update events and unsupported schema
+    /// versions are skipped. Other missing or malformed payload data is returned as an error.
     pub async fn recv(&self) -> Result<WebSocketNotificationMetadata<T>, Report> {
         loop {
             let message = self
@@ -108,10 +108,15 @@ where
 
             return match event {
                 DeclaredMacroEvent::JsonNotificationMacroEvent(event) => {
-                    let WebSocketNotificationMetadata {
-                        recipients,
-                        notification,
-                    } = event.into_message();
+                    let NotificationTopicEvent::WebSocketDeliveryRequested(
+                        WebSocketNotificationMetadata {
+                            recipients,
+                            notification,
+                        },
+                    ) = event.into_topic_event()
+                    else {
+                        continue;
+                    };
                     let notification = serde_json::from_value(notification)
                         .context("failed to decode WebSocket notification payload")?;
                     Ok(WebSocketNotificationMetadata {

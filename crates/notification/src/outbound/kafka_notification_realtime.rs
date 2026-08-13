@@ -3,19 +3,20 @@
 #[cfg(test)]
 mod test;
 
+use std::borrow::Cow;
+
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike as _;
 use rootcause::Report;
 use rootcause::prelude::ResultExt as _;
 
-use crate::domain::models::UserNotificationStatusUpdate;
 use crate::domain::models::websocket_notification_event::NotificationMacroEvent;
+use crate::domain::models::{PatchDelete, UserNotificationStatusUpdate};
 use crate::domain::ports::NotificationRealtimePublisher;
 
 /// Kafka-backed notification realtime publisher.
 ///
-/// Each user-scoped update is published as its own delivery request on the
-/// `macro.notifications` topic.
+/// Each call publishes one user-scoped status update event on the `macro.notifications` topic.
 pub struct KafkaNotificationRealtimePublisher<B> {
     broker: B,
 }
@@ -37,33 +38,41 @@ impl<B: MacroEventBroker> NotificationRealtimePublisher for KafkaNotificationRea
         &self,
         updates: &[UserNotificationStatusUpdate<'_>],
     ) -> Result<(), Report> {
-        let events = updates
+        let Some(first) = updates.first() else {
+            return Ok(());
+        };
+
+        if updates
             .iter()
-            .map(|update| {
-                let notification = serde_json::to_value(&update.update)
-                    .context("failed to serialize notification status update for Kafka")?;
-                Ok(NotificationMacroEvent::new(
-                    vec![update.user.clone().into_owned()],
-                    notification,
-                ))
+            .any(|update| update.user.as_ref() != first.user.as_ref())
+        {
+            rootcause::bail!("notification realtime update batch contains multiple users");
+        }
+
+        let notification_updates = updates
+            .iter()
+            .flat_map(|update| &update.update.updates)
+            .map(|update| match update {
+                PatchDelete::Patch { id, diff } => PatchDelete::Patch {
+                    id: *id,
+                    diff: Cow::Owned(diff.as_ref().clone()),
+                },
+                PatchDelete::Delete { id } => PatchDelete::Delete { id: *id },
             })
-            .collect::<Result<Vec<_>, Report>>()?;
+            .collect();
+        let event = NotificationMacroEvent::status_updated(
+            first.user.clone().into_owned(),
+            notification_updates,
+        );
 
-        let mut publishes = Vec::with_capacity(events.len());
-        for event in &events {
-            publishes.push(
-                self.broker
-                    .send_event(event)
-                    .context("failed to dispatch notification status update Kafka event")?,
-            );
-        }
-
-        let publish_results = futures::future::join_all(publishes).await;
-        for result in publish_results {
-            result
-                .context("notification status update Kafka publish task failed")?
-                .context("failed to publish notification status update to Kafka")?;
-        }
+        let publish = self
+            .broker
+            .send_event(&event)
+            .context("failed to dispatch notification status update Kafka event")?;
+        publish
+            .await
+            .context("notification status update Kafka publish task failed")?
+            .context("failed to publish notification status update to Kafka")?;
 
         Ok(())
     }

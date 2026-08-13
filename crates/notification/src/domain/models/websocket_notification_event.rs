@@ -1,9 +1,14 @@
-//! Broker event models for WebSocket notification delivery.
+//! Broker event models for realtime notification delivery.
+
+use std::borrow::Cow;
 
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroNotificationsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use uuid::Uuid;
+
+use crate::domain::models::{PatchDelete, UserNotificationRow};
 
 /// Recipients and payload for one WebSocket notification delivery request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,26 +22,36 @@ pub struct WebSocketNotificationMetadata<T> {
 /// Events published to [`MacroNotificationsTopic`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
-pub enum NotificationTopicEvent<T> {
+pub enum NotificationTopicEvent<'a, T: Clone + 'a> {
     /// A notification should be delivered to active WebSocket connections.
     #[serde(rename = "notification.websocket_delivery_requested")]
     WebSocketDeliveryRequested(WebSocketNotificationMetadata<T>),
+    /// Notification rows were patched or deleted for one user.
+    #[serde(rename = "notification.status_updated")]
+    NotificationStatusUpdated {
+        /// User who owns every notification update in this event.
+        user: MacroUserIdStr<'static>,
+        /// Notification row patches and deletes.
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+    },
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Sync> TopicEvent for NotificationTopicEvent<T> {
+impl<T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static> TopicEvent
+    for NotificationTopicEvent<'static, T>
+{
     type Topic = MacroNotificationsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
 }
 
-/// Publishable WebSocket notification event.
-pub struct NotificationMacroEvent<T> {
+/// Publishable realtime notification event.
+pub struct NotificationMacroEvent<T: Clone + 'static> {
     key: String,
-    event: Event<NotificationTopicEvent<T>>,
+    event: Event<NotificationTopicEvent<'static, T>>,
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Sync> NotificationMacroEvent<T> {
-    /// Creates a delivery event keyed by its generated event ID.
+impl<T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static> NotificationMacroEvent<T> {
+    /// Creates a WebSocket delivery event keyed by its generated event ID.
     pub fn new(recipients: Vec<MacroUserIdStr<'static>>, notification: T) -> Self {
         let metadata = WebSocketNotificationMetadata {
             recipients,
@@ -48,24 +63,38 @@ impl<T: Serialize + DeserializeOwned + Send + Sync> NotificationMacroEvent<T> {
         Self::with_event(key, event)
     }
 
+    /// Creates a notification status update event keyed by its user ID.
+    pub fn status_updated(
+        user: MacroUserIdStr<'static>,
+        updates: Vec<PatchDelete<Uuid, Cow<'static, UserNotificationRow<T>>>>,
+    ) -> Self {
+        let key = user.to_string();
+        let event = Event::new(NotificationTopicEvent::NotificationStatusUpdated { user, updates });
+
+        Self::with_event(key, event)
+    }
+
     /// Builds an event from its Kafka key and pre-built envelope.
-    pub fn with_event(key: impl Into<String>, event: Event<NotificationTopicEvent<T>>) -> Self {
+    pub fn with_event(
+        key: impl Into<String>,
+        event: Event<NotificationTopicEvent<'static, T>>,
+    ) -> Self {
         Self {
             key: key.into(),
             event,
         }
     }
 
-    /// Returns the WebSocket delivery request carried by this event.
-    pub fn into_message(self) -> WebSocketNotificationMetadata<T> {
-        match self.event.event {
-            NotificationTopicEvent::WebSocketDeliveryRequested(metadata) => metadata,
-        }
+    /// Returns the topic event carried by this event.
+    pub fn into_topic_event(self) -> NotificationTopicEvent<'static, T> {
+        self.event.event
     }
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Sync> MacroEvent for NotificationMacroEvent<T> {
-    type EventPayload = NotificationTopicEvent<T>;
+impl<T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static> MacroEvent
+    for NotificationMacroEvent<T>
+{
+    type EventPayload = NotificationTopicEvent<'static, T>;
 
     fn key(&self) -> &str {
         &self.key
@@ -80,5 +109,5 @@ impl<T: Serialize + DeserializeOwned + Send + Sync> MacroEvent for NotificationM
     }
 }
 
-/// WebSocket notification event decoded with an arbitrary JSON payload.
+/// Realtime notification event decoded with arbitrary JSON notification metadata.
 pub type JsonNotificationMacroEvent = NotificationMacroEvent<serde_json::Value>;

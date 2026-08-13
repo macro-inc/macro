@@ -58,7 +58,7 @@ pub struct NotificationStatusPatch {
 }
 
 /// A patch-or-delete update for an entity identified by `I`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "c")]
 pub enum PatchDelete<I, T> {
     /// The value with id I should be patched with data T.
@@ -116,7 +116,7 @@ impl<'a> NotificationStatusUpdate<'a> {
 ///
 /// The metadata field is generic so callers can deserialize it into
 /// whatever type they need without this crate depending on the caller's models.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
     pub owner_id: MacroUserIdStr<'static>,

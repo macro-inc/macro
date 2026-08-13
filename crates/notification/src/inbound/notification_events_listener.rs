@@ -1,5 +1,8 @@
 //! Listener for notification database events.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use macro_user_id::cowlike::CowLike;
@@ -78,8 +81,14 @@ where
                     })
                     .collect::<Vec<_>>();
 
-                if let Err(err) = self.realtime.publish_updates(&updates).await {
-                    tracing::warn!(error = ?err, "failed to publish notification delete realtime update");
+                for update in &updates {
+                    if let Err(err) = self
+                        .realtime
+                        .publish_updates(std::slice::from_ref(update))
+                        .await
+                    {
+                        tracing::warn!(error = ?err, "failed to publish notification delete realtime update");
+                    }
                 }
             }
         }

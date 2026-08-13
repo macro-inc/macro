@@ -7,7 +7,7 @@ use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
-use crate::domain::models::websocket_notification_event::WebSocketNotificationMetadata;
+use crate::domain::models::websocket_notification_event::NotificationTopicEvent;
 use crate::domain::models::{NotificationStatusUpdate, PatchDelete};
 
 #[derive(Debug)]
@@ -71,7 +71,7 @@ fn update(
 }
 
 #[tokio::test]
-async fn publishes_one_user_scoped_event_per_update() {
+async fn publishes_one_event_per_call_for_one_user() {
     let records = Arc::new(Mutex::new(Vec::new()));
     let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
         RecordingPublisher {
@@ -80,50 +80,71 @@ async fn publishes_one_user_scoped_event_per_update() {
         },
         TokioSpawner,
     ));
+    let recipient = user("macro|recipient@example.com");
     let first_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77")
         .expect("valid notification ID");
     let second_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e78")
         .expect("valid notification ID");
     let updates = [
-        update(user("macro|first@example.com"), first_id),
-        update(user("macro|second@example.com"), second_id),
+        update(recipient.clone(), first_id),
+        update(recipient.clone(), second_id),
     ];
 
     publisher
         .publish_updates(&updates)
         .await
-        .expect("publishes succeed");
+        .expect("publish succeeds");
 
     let records = records.lock().expect("records lock");
-    assert_eq!(records.len(), 2);
+    assert_eq!(records.len(), 1);
 
-    let mut messages = records
-        .iter()
-        .map(|record| {
-            assert_eq!(record.topic, "macro.notifications");
-            let decoded = NotificationMacroEvent::decode(record.key.clone(), &record.payload)
-                .expect("event decodes");
-            decoded.into_message()
-        })
-        .collect::<Vec<WebSocketNotificationMetadata<serde_json::Value>>>();
-    messages.sort_by_key(|message| message.recipients[0].to_string());
+    let record = &records[0];
+    assert_eq!(record.topic, "macro.notifications");
+    let payload: serde_json::Value =
+        serde_json::from_slice(&record.payload).expect("payload is valid JSON");
+    assert_eq!(record.key, recipient.as_ref());
+    assert_eq!(payload["schema_version"], 1);
+    assert_eq!(payload["event_type"], "notification.status_updated");
+    assert_eq!(payload["metadata"]["user"], recipient.as_ref());
+    assert_eq!(payload["metadata"]["updates"].as_array().unwrap().len(), 2);
 
+    let decoded =
+        NotificationMacroEvent::<serde_json::Value>::decode(record.key.clone(), &record.payload)
+            .expect("event round-trips");
+    let NotificationTopicEvent::NotificationStatusUpdated { user, updates } =
+        decoded.into_topic_event()
+    else {
+        panic!("expected notification status update event");
+    };
+    assert_eq!(user.as_ref(), recipient.as_ref());
+    assert_eq!(updates.len(), 2);
     assert_eq!(
-        messages[0].recipients,
-        vec![user("macro|first@example.com")]
+        serde_json::to_value(updates).unwrap(),
+        payload["metadata"]["updates"]
     );
-    assert_eq!(
-        messages[0].notification,
-        serde_json::to_value(&updates[0].update).unwrap()
-    );
-    assert_eq!(
-        messages[1].recipients,
-        vec![user("macro|second@example.com")]
-    );
-    assert_eq!(
-        messages[1].notification,
-        serde_json::to_value(&updates[1].update).unwrap()
-    );
+}
+
+#[tokio::test]
+async fn rejects_updates_for_multiple_users_without_publishing() {
+    let records = Arc::new(Mutex::new(Vec::new()));
+    let publisher = KafkaNotificationRealtimePublisher::new(MacroEventBrokerService::new(
+        RecordingPublisher {
+            records: Arc::clone(&records),
+            fail: false,
+        },
+        TokioSpawner,
+    ));
+    let updates = [
+        update(user("macro|first@example.com"), uuid::Uuid::nil()),
+        update(user("macro|second@example.com"), uuid::Uuid::nil()),
+    ];
+
+    publisher
+        .publish_updates(&updates)
+        .await
+        .expect_err("mixed-user update batch is rejected");
+
+    assert!(records.lock().expect("records lock").is_empty());
 }
 
 #[tokio::test]
