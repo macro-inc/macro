@@ -154,7 +154,7 @@ impl<R> Loader<model_entity::OwnedEntity> for EntityNotificationsLoader<R>
 where
     R: SoupNotificationEdgeReader,
 {
-    type Value = Vec<Arc<UserNotificationRow<NotifEvent>>>;
+    type Value = Vec<UserNotificationRow<NotifEvent>>;
     type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
@@ -175,12 +175,7 @@ where
             .iter()
             .cloned()
             .map(|key| {
-                let notifications = loaded
-                    .remove(key.as_entity())
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(Arc::new)
-                    .collect();
+                let notifications = loaded.remove(key.as_entity()).unwrap_or_default();
                 (key, notifications)
             })
             .collect())

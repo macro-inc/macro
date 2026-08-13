@@ -49,6 +49,8 @@ async fn metadata_is_the_typed_notification_union() {
     let notification =
         GraphqlNotification::try_from(raw_notification(serde_json::to_value(metadata).unwrap()))
             .unwrap();
+    assert!(matches!(&notification, GraphqlNotification::Owned(_)));
+
     let schema = Schema::new(Query { notification }, EmptyMutation, EmptySubscription);
 
     let response = schema
