@@ -8,7 +8,9 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::{NotificationStatusPayload, NotificationStatusUpdate};
+use crate::domain::models::{
+    NotificationDelete, NotificationStatusPayload, NotificationStatusUpdate, PatchDelete,
+};
 use crate::domain::ports::{NotificationRealtimePublisher, RealtimeSender};
 
 /// WebSocket gateway implementation of the realtime sender port.
@@ -210,8 +212,9 @@ impl NotificationRealtimePublisher for WebSocketGatewayAdapter<ConnectionGateway
     async fn publish_updates(&self, payload: &NotificationStatusPayload<'_>) -> Result<(), Report> {
         let messages = match payload {
             NotificationStatusPayload::NotificationForUsers { users, update } => {
+                let NotificationDelete::Delete { id } = **update;
                 let message_content = serde_json::to_value(NotificationStatusUpdate::new(vec![
-                    update.as_ref().clone(),
+                    PatchDelete::Delete { id },
                 ]))?;
                 users
                     .iter()

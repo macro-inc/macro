@@ -74,6 +74,17 @@ pub enum PatchDelete<I, T> {
     },
 }
 
+/// A deletion update for an entity identified by `I`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "t", content = "c")]
+pub enum NotificationDelete<I> {
+    /// The value with id `I` should be deleted.
+    Delete {
+        /// The id to delete.
+        id: I,
+    },
+}
+
 /// A user-scoped notification update delivered to realtime subscribers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotificationSubscriptionUpdate<T> {
@@ -97,12 +108,12 @@ pub struct NotificationStatusUpdate<'a> {
 /// A realtime notification status update with explicit user/notification cardinality.
 #[derive(Debug, Clone)]
 pub enum NotificationStatusPayload<'a> {
-    /// One notification update applied to many users.
+    /// One notification deletion applied to many users.
     NotificationForUsers {
-        /// Users who should receive the update.
+        /// Users who should receive the deletion.
         users: Vec<MacroUserIdStr<'a>>,
-        /// The notification patch or deletion shared by the users.
-        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+        /// The notification deletion shared by the users.
+        update: Box<NotificationDelete<Uuid>>,
     },
     /// Many notification updates applied to one user.
     UserNotifications {

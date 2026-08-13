@@ -12,7 +12,7 @@ use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
 use crate::domain::{
     models::{
-        NotificationSubscriptionUpdate, PatchDelete, UserNotificationRow,
+        NotificationDelete, NotificationSubscriptionUpdate, PatchDelete, UserNotificationRow,
         websocket_notification_event::{NotificationTopicEvent, WebSocketNotificationMetadata},
     },
     ports::{
@@ -148,9 +148,9 @@ where
                     }
                 }
                 NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } => {
-                    let update = Self::subscription_update(*update);
+                    let NotificationDelete::Delete { id } = *update;
                     for user_id in users {
-                        self.publish_update(&user_id, update.clone());
+                        self.publish_update(&user_id, NotificationSubscriptionUpdate::Deleted(id));
                     }
                 }
                 NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } => {

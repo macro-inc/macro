@@ -118,15 +118,12 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
-    fn get_entity_notifications_batch(
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
+        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
     > + Send {
         async { unreachable!("should not be called") }
     }
@@ -600,15 +597,12 @@ impl NotificationReader for PresignedTestService {
         async { unreachable!() }
     }
 
-    fn get_entity_notifications_batch(
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
+        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
     > + Send {
         async { unreachable!() }
     }

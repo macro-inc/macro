@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::domain::models::{PatchDelete, UserNotificationRow};
+use crate::domain::models::{NotificationDelete, PatchDelete, UserNotificationRow};
 
 /// User-scoped notification rows for WebSocket delivery.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,13 +27,13 @@ pub enum NotificationTopicEvent<'a, T: Clone> {
     /// A notification should be delivered to active WebSocket connections.
     #[serde(rename = "notification.websocket_delivery_requested")]
     WebSocketDeliveryRequested(WebSocketNotificationMetadata<T>),
-    /// One notification was patched or deleted for a set of users.
+    /// One notification was deleted for a set of users.
     #[serde(rename = "notification.status_updated_for_users")]
     NotificationStatusUpdatedForUsers {
-        /// Users who own the notification update.
+        /// Users who own the notification deletion.
         users: Vec<MacroUserIdStr<'a>>,
-        /// Notification row patch or deletion shared by the users.
-        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+        /// Notification deletion shared by the users.
+        update: Box<NotificationDelete<Uuid>>,
     },
     /// Several notifications were patched or deleted for one user.
     #[serde(rename = "notification.statuses_updated_for_user")]
@@ -60,10 +60,10 @@ pub struct NotificationMacroEvent<'a, T: Clone> {
 }
 
 impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> NotificationMacroEvent<'a, T> {
-    /// Creates an event for one notification status update shared by several users.
+    /// Creates an event for one notification deletion shared by several users.
     pub fn status_updated_for_users(
         users: Vec<MacroUserIdStr<'a>>,
-        update: Box<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
+        update: Box<NotificationDelete<Uuid>>,
     ) -> Self {
         let event =
             Event::new(NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update });

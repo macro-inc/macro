@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::domain::models::{NotificationStatusPayload, PatchDelete};
+use crate::domain::models::{NotificationDelete, NotificationStatusPayload};
 use crate::domain::ports::{NotificationEventsReceiver, NotificationRealtimePublisher};
 
 /// Worker that listens for notification database events and forwards them to realtime clients.
@@ -70,7 +70,7 @@ where
 
                 let payload = NotificationStatusPayload::NotificationForUsers {
                     users: user_ids.iter().map(|user| user.copied()).collect(),
-                    update: Box::new(PatchDelete::Delete {
+                    update: Box::new(NotificationDelete::Delete {
                         id: notification_id,
                     }),
                 };

@@ -1526,6 +1526,48 @@ async fn test_egress_conn_gateway_not_rate_limited() {
 // ============================================================================
 
 #[tokio::test]
+async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {
+    let user = test_user_id("alice@example.com");
+    let entity_ref = NotificationEntityRef {
+        entity_type: NotificationItemType::Document,
+        id: "doc-1".to_string(),
+    };
+    let now = Utc::now();
+    let valid_id = Uuid::now_v7();
+    let invalid_id = Uuid::now_v7();
+    let mut valid = updated_notification(user.clone(), valid_id, false, None, now);
+    valid.notification_metadata = json!({ "message": "hello" });
+    let mut invalid = updated_notification(user.clone(), invalid_id, false, None, now);
+    invalid.notification_metadata = json!({ "unexpected": true });
+
+    let service = NotificationReaderService {
+        repository: Arc::new(
+            MockRepository::new()
+                .with_entity_notifications(entity_ref.clone(), vec![invalid, valid]),
+        ),
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+
+    let notifications = service
+        .get_entity_notifications_batch::<TestNotifEvent>(user, vec![entity_ref.clone()])
+        .await
+        .expect("invalid metadata does not fail the batch");
+
+    assert_eq!(notifications[&entity_ref].len(), 1);
+    let notification = &notifications[&entity_ref][0];
+    assert_eq!(notification.notification_id, valid_id);
+    assert_eq!(
+        notification.notification_metadata,
+        TestNotifEvent::TestNotification(TestNotification {
+            message: "hello".to_string(),
+        })
+    );
+}
+
+#[tokio::test]
 async fn test_get_entity_notifications_batch_deserializes_tagged_metadata() {
     let user = test_user_id("alice@example.com");
     let entity_ref = NotificationEntityRef {

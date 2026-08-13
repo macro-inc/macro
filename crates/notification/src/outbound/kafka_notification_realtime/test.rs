@@ -10,8 +10,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 
 use super::*;
-use crate::domain::models::UserNotificationRow;
 use crate::domain::models::websocket_notification_event::NotificationTopicEvent;
+use crate::domain::models::{NotificationDelete, UserNotificationRow};
 
 #[derive(Debug)]
 struct PublishedRecord {
@@ -114,7 +114,7 @@ async fn publishes_one_notification_for_many_users_event() {
         .expect("valid notification ID");
     let payload = NotificationStatusPayload::NotificationForUsers {
         users: vec![first_user.clone(), second_user.clone()],
-        update: Box::new(PatchDelete::Delete {
+        update: Box::new(NotificationDelete::Delete {
             id: notification_id,
         }),
     };
@@ -144,8 +144,8 @@ async fn publishes_one_notification_for_many_users_event() {
     assert_eq!(users, vec![first_user, second_user]);
     assert_eq!(
         *update,
-        PatchDelete::Delete {
-            id: notification_id
+        NotificationDelete::Delete {
+            id: notification_id,
         }
     );
 }

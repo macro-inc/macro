@@ -139,10 +139,7 @@ where
             },
         )),
         NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } => {
-            Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers {
-                users,
-                update: Box::new(decode_update(*update)?),
-            })
+            Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update })
         }
         NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } => {
             Ok(NotificationTopicEvent::NotificationStatusesUpdatedForUser {
@@ -167,6 +164,18 @@ where
     })?)
 }
 
+fn decode_status_notification_row<T>(
+    row: UserNotificationRow<serde_json::Value>,
+) -> Result<UserNotificationRow<T>, Report>
+where
+    T: DeserializeOwned,
+{
+    Ok(row
+        .into_tagged()
+        .deserialize_metadata::<T>()
+        .context("failed to decode tagged notification status metadata")?)
+}
+
 fn decode_update<T>(
     update: PatchDelete<uuid::Uuid, Cow<'static, UserNotificationRow<serde_json::Value>>>,
 ) -> Result<PatchDelete<uuid::Uuid, Cow<'static, UserNotificationRow<T>>>, Report>
@@ -175,7 +184,7 @@ where
 {
     match update {
         PatchDelete::Patch { diff } => Ok(PatchDelete::Patch {
-            diff: Cow::Owned(decode_notification_row(diff.into_owned())?),
+            diff: Cow::Owned(decode_status_notification_row(diff.into_owned())?),
         }),
         PatchDelete::Delete { id } => Ok(PatchDelete::Delete { id }),
     }

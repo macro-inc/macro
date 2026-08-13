@@ -131,7 +131,7 @@ async fn distributes_status_updates_to_their_owners() {
         messages: Mutex::new(VecDeque::from([
             Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers {
                 users: vec![one.clone(), two.clone()],
-                update: Box::new(PatchDelete::Delete {
+                update: Box::new(NotificationDelete::Delete {
                     id: shared_delete_id,
                 }),
             }),

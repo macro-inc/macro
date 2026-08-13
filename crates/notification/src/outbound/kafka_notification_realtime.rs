@@ -35,7 +35,7 @@ impl<B: MacroEventBroker> NotificationRealtimePublisher for KafkaNotificationRea
             NotificationStatusPayload::NotificationForUsers { users, update } => {
                 NotificationMacroEvent::status_updated_for_users(
                     users.iter().map(|user| user.copied()).collect(),
-                    Box::new(borrow_update(update)),
+                    update.clone(),
                 )
             }
             NotificationStatusPayload::UserNotifications { user, updates } => {

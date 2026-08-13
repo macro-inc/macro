@@ -692,24 +692,37 @@ where
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report> {
-        self.repository
+        Ok(self
+            .repository
             .get_entity_notifications_batch(user_id, entity_refs)
             .await?
             .into_iter()
             .map(|(entity_ref, notifications)| {
                 let notifications = notifications
                     .into_iter()
-                    .map(|notification| {
-                        notification
-                            .into_tagged()
-                            .deserialize_metadata::<T>()
-                            .map_err(|error| rootcause::report!(error).into_dynamic())
+                    .filter_map(|notification| {
+                        let notification_id = notification.notification_id;
+                        let notification_event_type = notification.notification_event_type.clone();
+                        match notification.into_tagged().deserialize_metadata::<T>() {
+                            Ok(notification) => Some(notification),
+                            Err(error) => {
+                                tracing::warn!(
+                                    error = ?error,
+                                    %notification_id,
+                                    notification_event_type,
+                                    entity_type = ?entity_ref.entity_type,
+                                    entity_id = %entity_ref.id,
+                                    "skipping notification with invalid metadata"
+                                );
+                                None
+                            }
+                        }
                     })
-                    .collect::<Result<Vec<_>, Report>>()?;
+                    .collect();
 
-                Ok((entity_ref, notifications))
+                (entity_ref, notifications)
             })
-            .collect()
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
