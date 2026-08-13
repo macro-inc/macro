@@ -274,11 +274,17 @@
 }
 
 .calendar-view .fc .fc-event-mirror,
-.calendar-view .fc .fc-highlight {
+.calendar-view .fc .fc-highlight,
+.calendar-view .fc .calendar-multi-day-selection-preview-event {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
 	border-radius: 0.375rem;
 	background: var(--calendar-selection-color, var(--color-accent));
 	box-shadow: none;
+}
+
+.calendar-view .fc .calendar-multi-day-selection-preview-event {
+	color: var(--calendar-selection-color, var(--color-accent));
+	pointer-events: none;
 }
 
 .calendar-view .fc .fc-highlight {
@@ -305,7 +311,8 @@
 	color: var(--calendar-selection-color, var(--color-accent));
 }
 
-.calendar-view .fc .fc-event-mirror .fc-event-main {
+.calendar-view .fc .fc-event-mirror .fc-event-main,
+.calendar-view .fc .calendar-multi-day-selection-preview-event .fc-event-main {
 	color: inherit;
 }
 
@@ -314,7 +321,11 @@
 	color: var(--color-surface);
 }
 
-.calendar-view .fc .fc-event-mirror .calendar-event-selection-preview {
+.calendar-view .fc .fc-event-mirror .calendar-event-selection-preview,
+.calendar-view
+	.fc
+	.calendar-multi-day-selection-preview-event
+	.calendar-event-selection-preview {
 	filter: invert(1) grayscale(1) contrast(100);
 }
 
