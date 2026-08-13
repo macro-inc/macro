@@ -6,6 +6,7 @@ use axum::{
 pub(in crate::api) mod create_in_progress_link;
 pub(in crate::api) mod github;
 pub(in crate::api) mod gmail;
+pub(in crate::api) mod outlook;
 
 /// Routes for authenticated account-link operations.
 pub fn router() -> Router<ApiContext> {
@@ -19,4 +20,5 @@ pub fn router() -> Router<ApiContext> {
         )
         .route("/gmail", post(gmail::init_gmail_link_handler))
         .route("/gmail/status", get(gmail::check_gmail_link_status_handler))
+        .route("/outlook", post(outlook::init_outlook_link_handler))
 }
