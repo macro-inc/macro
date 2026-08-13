@@ -3003,7 +3003,6 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
- "agent_fold",
  "ai_toolset",
  "anyhow",
  "async-trait",

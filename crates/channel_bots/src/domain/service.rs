@@ -63,10 +63,9 @@ struct PromptLine {
     is_trigger: bool,
 }
 
-/// Trimmed message content; `None` when the message has no stored body
-/// (agent-turn placeholders) or the body is blank.
-fn trimmed_content(content: Option<&str>) -> Option<String> {
-    let trimmed = content?.trim();
+/// Trimmed message content; `None` when the body is blank.
+fn trimmed_content(content: &str) -> Option<String> {
+    let trimmed = content.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
@@ -75,7 +74,7 @@ fn trimmed_content(content: Option<&str>) -> Option<String> {
 fn trigger_line(event: &BotEvent) -> PromptLine {
     PromptLine {
         sender: sender_label(event.requesting_user.as_ref()),
-        content: trimmed_content(event.message.content.as_deref()).unwrap_or_default(),
+        content: trimmed_content(&event.message.content).unwrap_or_default(),
         is_trigger: true,
     }
 }
@@ -145,7 +144,7 @@ where
             .find(|message| message.id == parent_id);
         if let Some(parent) = parent
             && parent.deleted_at.is_none()
-            && let Some(content) = trimmed_content(parent.content.as_deref())
+            && let Some(content) = trimmed_content(&parent.content)
         {
             lines.push(PromptLine {
                 sender: sender_label(&parent.sender_id),
@@ -162,7 +161,7 @@ where
             .unwrap_or_default();
         for reply in replies {
             thread_ids.insert(reply.id);
-            let Some(content) = trimmed_content(reply.content.as_deref()) else {
+            let Some(content) = trimmed_content(&reply.content) else {
                 continue;
             };
             lines.push(PromptLine {
@@ -219,7 +218,7 @@ where
                 .filter_map(|message| {
                     Some(PromptLine {
                         sender: sender_label(&message.sender_id),
-                        content: trimmed_content(message.content.as_deref())?,
+                        content: trimmed_content(&message.content)?,
                         is_trigger: false,
                     })
                 })
@@ -238,7 +237,7 @@ where
                 .filter_map(|message| {
                     Some(PromptLine {
                         sender: sender_label(&message.sender_id),
-                        content: trimmed_content(message.content.as_deref())?,
+                        content: trimmed_content(&message.content)?,
                         is_trigger: message.id == trigger_id,
                     })
                 })

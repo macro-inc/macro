@@ -457,8 +457,8 @@ pub struct ApiChannelListMessage {
     pub thread_id: Option<Uuid>,
     /// Sender user id.
     pub sender_id: String,
-    /// Message content. `None` on agent-turn placeholder messages.
-    pub content: Option<String>,
+    /// Message content.
+    pub content: String,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
