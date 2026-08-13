@@ -27,7 +27,14 @@ impl<T> AgentConnector for T where
 /// and a repo whose futures are not `Send` cannot be used there.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionRepo: Send + Sync + 'static {
-    /// Persist a new agent session.
+    /// Persist a new agent session, together with its access grants.
+    ///
+    /// Part of the contract, not an implementation detail: the initiator is
+    /// granted owner access, and - when the session was opened by a mention -
+    /// the channel that mention was posted in is granted editor access,
+    /// resolved from `originating_message_id` rather than trusted from the
+    /// caller. The session and its grants land atomically, so a session
+    /// cannot exist that nobody, not even its initiator, could open.
     fn create(
         &self,
         params: CreateAgentSessionParams,

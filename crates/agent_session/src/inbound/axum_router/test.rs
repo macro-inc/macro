@@ -130,3 +130,30 @@ fn an_entry_is_a_recording_line_plus_attribution() {
         "the envelope is the ACP frame verbatim"
     );
 }
+
+/// The control body's wire shape: the operation's tag sits at the top level
+/// beside its fields, not nested under a `kind` object.
+#[test]
+fn a_control_request_reads_the_operation_from_the_top_level() {
+    let stop: ControlRequest = serde_json::from_str(r#"{"kind":"stop"}"#).expect("a stop decodes");
+    assert_eq!(stop.kind, ControlEventKind::Stop);
+
+    let change: ControlRequest = serde_json::from_str(r#"{"kind":"change_model","model":"opus"}"#)
+        .expect("a model change decodes");
+    assert_eq!(
+        change.kind,
+        ControlEventKind::ChangeModel {
+            model: "opus".to_owned()
+        }
+    );
+
+    let prompt: ControlRequest =
+        serde_json::from_str(r#"{"kind":"prompt","content":"do the thing"}"#)
+            .expect("a prompt decodes");
+    assert_eq!(
+        prompt.kind,
+        ControlEventKind::Prompt {
+            content: "do the thing".to_owned()
+        }
+    );
+}
