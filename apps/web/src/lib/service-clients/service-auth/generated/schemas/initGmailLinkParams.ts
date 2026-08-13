@@ -11,7 +11,7 @@ export type InitGmailLinkParams = {
    */
   original_url: string;
   /**
-   * **OPTIONAL**. Also request the Google Calendar scope. Only honored when the deployment allows calendar scope requests; pass it from calendar entry points only, since the extra scope changes the Google consent screen.
+   * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
    */
-  include_calendar?: boolean;
+  scopes?: string;
 };

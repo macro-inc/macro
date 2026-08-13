@@ -6,6 +6,7 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
@@ -215,9 +216,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
  *
- * `includeCalendar` adds the Google Calendar scope to the consent request and
- * must only be passed from calendar entry points — plain Gmail connects must
- * not ask for calendar access.
+ * `scopes` selects which permissions the consent screen asks for. Only calendar
+ * entry points may request calendar access, and they pass `calendar` for an
+ * inbox that is already connected so the user isn't shown mailbox permissions
+ * they have already granted.
  *
  * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
  * the Tauri auth plugin (the app never navigates away), and the link is
@@ -254,10 +256,10 @@ export function useAddInboxFlow() {
     );
   };
 
-  const startNativeFlow = async (includeCalendar: boolean) => {
+  const startNativeFlow = async (scopes: ConsentScopes) => {
     const result = await initGmailLink.mutateAsync({
       originalUrl: 'macro://inbox-link-callback',
-      includeCalendar,
+      scopes,
     });
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
@@ -297,17 +299,17 @@ export function useAddInboxFlow() {
     await completeNativeLink(result.value.link_id, false);
   };
 
-  return async (options?: { includeCalendar?: boolean }) => {
-    const includeCalendar = options?.includeCalendar ?? false;
+  return async (options?: { scopes?: ConsentScopes }) => {
+    const scopes = options?.scopes ?? 'gmail';
     if (getNativeMobilePlatform() === 'ios') {
-      await startNativeFlow(includeCalendar);
+      await startNativeFlow(scopes);
       return;
     }
 
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
     const result = await initGmailLink.mutateAsync({
       originalUrl: callbackUrl,
-      includeCalendar,
+      scopes,
     });
     if (result.isOk()) {
       window.location.href = result.value.authorization_url;

@@ -13,8 +13,9 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * re-shows Google consent for the linked account and applies the upgraded
  * grant to the existing link, which kicks off the calendar backfill.
  *
- * Inboxes that also need a full reconnect are skipped: the reconnect prompt
- * covers them, and reconnecting records the calendar grant anyway.
+ * Inboxes that also need a full reconnect are skipped so the two prompts don't
+ * stack. Reconnecting restores the mailbox without calendar access, which
+ * leaves `needs_calendar_permission` set and brings this prompt back.
  *
  * Gated per form factor: `enable-calendar-prompt-web` on desktop/web and
  * `enable-calendar-prompt-mobile` on phones, where the toast layout can't
@@ -46,7 +47,7 @@ export function CalendarPermissionPrompt() {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
             dismiss();
-            startAddInbox({ includeCalendar: true });
+            startAddInbox({ scopes: 'calendar' });
           },
         },
       ],

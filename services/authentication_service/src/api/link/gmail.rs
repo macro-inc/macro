@@ -27,7 +27,27 @@ mod test;
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
+/// The identity scopes every consent needs: the callback resolves the account
+/// that consented from the `sub` and `email` claims on Google's id_token, and
+/// Google only mints one when `openid` is requested.
+const IDENTITY_SCOPES: &str = "openid email";
 const FREE_INBOX_LIMIT: i64 = 2;
+
+/// Which capabilities a consent request covers. Calendar surfaces ask for
+/// [`ConsentScopes::Calendar`] when the mailbox is already connected, so the
+/// consent screen lists the calendar permissions alone; Google's incremental
+/// authorization carries the mailbox grant forward untouched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ConsentScopes {
+    /// Connecting or reconnecting a mailbox.
+    #[default]
+    Gmail,
+    /// Connecting a first mailbox from a calendar surface.
+    GmailAndCalendar,
+    /// Adding calendar access to a mailbox that is already connected.
+    Calendar,
+}
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGmailLinkResponse {
@@ -81,7 +101,7 @@ pub(crate) struct InitGmailLinkQueryParams {
     /// `Option<Url>`
     original_url: Option<UrlEncoded<Url>>,
     #[serde(default)]
-    include_calendar: bool,
+    scopes: ConsentScopes,
 }
 
 /// Initiates a Gmail link for a user
@@ -91,7 +111,7 @@ pub(crate) struct InitGmailLinkQueryParams {
         path = "/link/gmail",
         params(
             ("original_url" = String, Query, description = "**OPTIONAL**. The original url to redirect to."),
-            ("include_calendar" = Option<bool>, Query, description = "**OPTIONAL**. Also request the Google Calendar scope. Only honored when the deployment allows calendar scope requests; pass it from calendar entry points only, since the extra scope changes the Google consent screen.")
+            ("scopes" = Option<String>, Query, description = "**OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.")
         ),
         responses(
             (status = 200, body=InitGmailLinkResponse),
@@ -111,7 +131,7 @@ pub async fn init_gmail_link_handler(
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams {
         original_url,
-        include_calendar,
+        scopes,
     }) = query;
     let authorization = &db_permissions.authorization;
 
@@ -134,8 +154,7 @@ pub async fn init_gmail_link_handler(
         return Err(InitGmailLinkError::TooManyInProgressLinks);
     }
 
-    let authorization_scopes =
-        gmail_authorization_scopes(ctx.calendar_scope_enabled, include_calendar);
+    let authorization_scopes = gmail_authorization_scopes(ctx.calendar_scope_enabled, scopes);
     let requested_google_scopes: Vec<String> = authorization_scopes
         .split_ascii_whitespace()
         .map(ToOwned::to_owned)
@@ -176,14 +195,21 @@ pub async fn init_gmail_link_handler(
     }))
 }
 
-/// The calendar scope must never ride along on plain Gmail connects: it is
-/// requested only when the caller explicitly opts in, and never when the
-/// deployment-level `CALENDAR_SCOPE_ENABLED` kill switch is off.
-fn gmail_authorization_scopes(calendar_scope_enabled: bool, include_calendar: bool) -> String {
-    if calendar_scope_enabled && include_calendar {
-        format!("{GMAIL_SCOPES} {}", google_calendar_scope_parameter())
-    } else {
-        GMAIL_SCOPES.to_string()
+/// The calendar scopes must never ride along on plain Gmail connects: they are
+/// requested only when the caller explicitly asks, and never when the
+/// deployment-level `CALENDAR_SCOPE_ENABLED` kill switch is off. A caller whose
+/// calendar request is vetoed by the kill switch falls back to the mailbox
+/// consent, which is what it would have gotten before calendar existed.
+fn gmail_authorization_scopes(calendar_scope_enabled: bool, scopes: ConsentScopes) -> String {
+    let calendar = google_calendar_scope_parameter();
+    match scopes {
+        ConsentScopes::Calendar if calendar_scope_enabled => {
+            format!("{IDENTITY_SCOPES} {calendar}")
+        }
+        ConsentScopes::GmailAndCalendar if calendar_scope_enabled => {
+            format!("{GMAIL_SCOPES} {calendar}")
+        }
+        _ => GMAIL_SCOPES.to_string(),
     }
 }
 
