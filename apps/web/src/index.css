@@ -321,16 +321,13 @@ body.tauri-ios {
 /* scuffed: might wan to use signals for this */
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 
-/*@custom-variant mobile {
+@custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
     @media (max-width: 639px) {
       @slot;
     }
   }
-}*/
-
-@custom-variant mobile (&:where(html[data-touch-device="true"] *));
-
+}
 
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));

@@ -135,7 +135,7 @@ export type ChannelProps = {
   lastViewedAt?: DateValue | null;
   initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
-  /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
+  /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
 };
 
