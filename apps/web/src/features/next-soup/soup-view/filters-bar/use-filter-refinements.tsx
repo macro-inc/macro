@@ -963,5 +963,6 @@ export function useFilterRefinements() {
     resetToTabDefaults,
     currentView,
     consolidatedFiltersList,
+    handleAssigneeChange,
   };
 }
