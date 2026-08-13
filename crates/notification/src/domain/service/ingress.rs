@@ -19,8 +19,8 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusPatch, NotificationStatusUpdate, NotificationTypeName, PatchDelete,
-    UserNotificationRow, UserNotificationStatusUpdate,
+    NotificationStatusUpdate, NotificationTypeName, PatchDelete, UserNotificationRow,
+    UserNotificationStatusUpdate,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -35,6 +35,7 @@ use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -518,11 +519,7 @@ where
                 .iter()
                 .map(|notification| PatchDelete::Patch {
                     id: notification.notification_id,
-                    diff: NotificationStatusPatch {
-                        done: notification.done,
-                        viewed_at: notification.viewed_at,
-                        updated_at: notification.updated_at,
-                    },
+                    diff: Cow::Borrowed(notification),
                 })
                 .collect();
             let update = UserNotificationStatusUpdate {

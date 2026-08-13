@@ -79,30 +79,32 @@ pub enum PatchDelete<I, T> {
 /// Realtime payload emitted when notification seen/done state changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NotificationStatusUpdate {
+pub struct NotificationStatusUpdate<'a> {
     /// Constant event discriminator for frontend consumers.
     #[serde(rename = "type")]
     pub event_type: String,
     /// The changed notification rows.
-    pub updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>,
+    pub updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
 }
 
 /// A realtime notification status update scoped to one user.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserNotificationStatusUpdate<'a> {
     /// The user who should receive the update.
     pub user: MacroUserIdStr<'a>,
     /// The status update payload for that user.
-    pub update: NotificationStatusUpdate,
+    pub update: NotificationStatusUpdate<'a>,
 }
 
-impl NotificationStatusUpdate {
+impl<'a> NotificationStatusUpdate<'a> {
     /// The connection-gateway message type for notification status changes.
     pub const MESSAGE_TYPE: &'static str = "notification_status_updated";
 
     /// Build a realtime status update payload.
-    pub fn new(updates: Vec<PatchDelete<Uuid, NotificationStatusPatch>>) -> Self {
+    pub fn new(
+        updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<serde_json::Value>>>>,
+    ) -> Self {
         Self {
             event_type: Self::MESSAGE_TYPE.to_string(),
             updates,
