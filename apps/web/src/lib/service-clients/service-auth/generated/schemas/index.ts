@@ -69,6 +69,8 @@ export * from './initGithubLinkParams';
 export * from './initGithubLinkResponse';
 export * from './initGmailLinkParams';
 export * from './initGmailLinkResponse';
+export * from './initOutlookLinkParams';
+export * from './initOutlookLinkResponse';
 export * from './inviteEntry';
 export * from './inviteToTeamRequest';
 export * from './macroApiTokenParams';
