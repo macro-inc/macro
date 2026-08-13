@@ -465,10 +465,9 @@ impl SeedDb {
 
         sqlx::query!(
             r#"INSERT INTO "SharePermission" (
-                   id, "isPublic", "publicAccessLevel", "linkShare", "linkShareAccessLevel",
-                   "createdAt", "updatedAt"
+                   id, "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt"
                )
-               VALUES ($1, false, NULL, NULL, NULL, NOW(), NOW())"#,
+               VALUES ($1, NULL, NULL, NOW(), NOW())"#,
             args.share_permission_id,
         )
         .execute(transaction.as_mut())

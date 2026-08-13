@@ -79,12 +79,10 @@ mod test {
                 id,
                 "linkShare",
                 "linkShareAccessLevel",
-                "isPublic",
-                "publicAccessLevel",
                 "createdAt",
                 "updatedAt"
             )
-            VALUES ($1, NULL, NULL, FALSE, NULL, NOW(), NOW())
+            VALUES ($1, NULL, NULL, NOW(), NOW())
             "#,
             id,
         )

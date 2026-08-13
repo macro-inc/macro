@@ -167,12 +167,10 @@ pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> a
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
-            "isPublic",
-            "publicAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES (NULL, NULL, false, NULL, NOW(), NOW())
+        VALUES (NULL, NULL, NOW(), NOW())
         RETURNING id as "id!"
         "#,
     )
