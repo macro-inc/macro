@@ -109,7 +109,6 @@ export function EventRsvpSection(props: {
                 size={props.buttonSize ?? 'sm'}
                 depth={3}
                 class="rounded-lg px-3"
-                label={option.label}
                 onClick={() => respond(option.response)}
               >
                 {option.label}
@@ -151,17 +150,11 @@ export function EventRsvpSection(props: {
               <Button
                 variant="ghost"
                 class="rounded-lg"
-                label="Cancel"
                 onClick={() => setPendingResponse(undefined)}
               >
                 Cancel
               </Button>
-              <Button
-                variant="active"
-                class="rounded-lg"
-                label="OK"
-                onClick={confirm}
-              >
+              <Button variant="active" class="rounded-lg" onClick={confirm}>
                 OK
               </Button>
             </div>

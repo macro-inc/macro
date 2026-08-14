@@ -258,7 +258,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
           variant="ghost"
           class="rounded-lg"
           disabled={props.pending}
-          label="Cancel"
           onClick={props.onCancel}
         >
           Cancel
@@ -269,7 +268,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
           depth={3}
           class="rounded-lg border-0"
           disabled={!canSave() || props.pending}
-          label={isEdit() ? 'Save' : 'Create event'}
+          aria-label={isEdit() ? 'Save' : 'Create event'}
         >
           <Show
             when={props.pending}

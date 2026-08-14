@@ -269,7 +269,6 @@ function CalendarWorkspace() {
                 variant="ghost"
                 size="sm"
                 class="rounded-lg px-2"
-                label="New event"
                 onClick={() => openEventComposer()}
               >
                 <PlusIcon class="size-3.5" />
