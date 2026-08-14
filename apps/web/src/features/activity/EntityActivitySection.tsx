@@ -1,14 +1,19 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import {
   type ActivityEvent,
   createEntityActivityQuery,
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, Show } from 'solid-js';
+import { cn } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
+
+/** Rows shown before the section collapses behind a "Show all" toggle. */
+const COLLAPSED_ROW_LIMIT = 10;
 
 export interface EntityActivitySectionProps {
   entityId: string;
@@ -39,6 +44,13 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
   });
   const events = () => query.result.data ?? [];
 
+  // Collapsed to the newest rows, expandable like the History pane's
+  // "Show activity" toggle, so a busy entity doesn't swallow the side panel.
+  const [expanded, setExpanded] = createSignal(false);
+  const visibleEvents = () =>
+    expanded() ? events() : events().slice(0, COLLAPSED_ROW_LIMIT);
+  const hasOverflow = () => events().length > COLLAPSED_ROW_LIMIT;
+
   return (
     <Show when={query.isEnabled()}>
       <SidePanel.Section id="activity" title="Activity" order={props.order}>
@@ -55,10 +67,30 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
             >
               <div class="text-xs">
                 <SidePanel.Card>
-                  <For each={events()}>
+                  <For each={visibleEvents()}>
                     {(event) => <ActivityRow event={event} />}
                   </For>
                 </SidePanel.Card>
+                <Show when={hasOverflow()}>
+                  <button
+                    type="button"
+                    aria-expanded={expanded()}
+                    class="mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    onClick={() => setExpanded((current) => !current)}
+                  >
+                    <CaretRightIcon
+                      class={cn(
+                        'size-3 shrink-0 transition-transform duration-90',
+                        expanded() && 'rotate-90'
+                      )}
+                    />
+                    <span>
+                      {expanded()
+                        ? 'Show less'
+                        : `Show all (${events().length})`}
+                    </span>
+                  </button>
+                </Show>
               </div>
             </Show>
           </Show>
