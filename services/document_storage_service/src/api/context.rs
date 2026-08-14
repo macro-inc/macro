@@ -63,6 +63,11 @@ use favorites::{
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
+    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
+    outbound::surface_init::LexicalSyncSurfaceInitializer,
+};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -439,6 +444,14 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the collab-surface service.
+pub(crate) type CollabSurfaceServiceType =
+    CollabSurfaceServiceImpl<PgCollabSurfaceRepo, LexicalSyncSurfaceInitializer>;
+
+/// Type alias for the collab-surface router state.
+pub(crate) type DssCollabSurfaceState =
+    CollabSurfaceRouterState<CollabSurfaceServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -490,6 +503,7 @@ pub(crate) struct ApiContext {
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub reminders_state: DssRemindersState,
+    pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
