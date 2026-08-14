@@ -77,7 +77,13 @@ async fn edit_share_permission_preserves_update_field_semantics(
     )
     .await?;
 
-    edit(&mut transaction, &permission.id, update_request(None, None)).await?;
+    let serialized_omitted_request = serde_json::to_value(update_request(None, None))?;
+    let omitted_request: UpdateSharePermissionRequestV2 =
+        serde_json::from_value(serialized_omitted_request)?;
+    assert_eq!(omitted_request.link_share, None);
+    assert_eq!(omitted_request.link_share_access_level, None);
+
+    edit(&mut transaction, &permission.id, omitted_request).await?;
     assert_eq!(
         get_stored_share_permission(&mut transaction, &permission.id).await?,
         StoredSharePermission {

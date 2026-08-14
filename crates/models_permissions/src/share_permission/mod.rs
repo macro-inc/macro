@@ -75,11 +75,19 @@ where
 pub struct UpdateSharePermissionRequestV2 {
     /// Who can access the item through its share link. Omit to leave unchanged or pass `null` to
     /// disable link sharing.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub link_share: Option<Option<LinkShare>>,
     /// The link access level. Omit to leave unchanged or pass `null` to reset it to the default
     /// level when a link share exists.
-    #[serde(default, deserialize_with = "double_option")]
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub link_share_access_level: Option<Option<AccessLevel>>,
     /// Any channel share permissions to be created/updated/removed
     pub channel_share_permissions: Option<Vec<UpdateChannelSharePermission>>,

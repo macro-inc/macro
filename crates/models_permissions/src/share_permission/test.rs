@@ -58,6 +58,23 @@ fn project_constructor_disables_link_sharing() {
 }
 
 #[test]
+fn update_request_round_trip_preserves_omitted_fields() {
+    let request = UpdateSharePermissionRequestV2 {
+        link_share: None,
+        link_share_access_level: None,
+        channel_share_permissions: None,
+    };
+
+    let serialized = serde_json::to_value(&request).unwrap();
+    assert!(serialized.get("linkShare").is_none());
+    assert!(serialized.get("linkShareAccessLevel").is_none());
+
+    let deserialized: UpdateSharePermissionRequestV2 = serde_json::from_value(serialized).unwrap();
+    assert_eq!(deserialized.link_share, None);
+    assert_eq!(deserialized.link_share_access_level, None);
+}
+
+#[test]
 fn update_request_distinguishes_omitted_null_and_present_values() {
     let omitted: UpdateSharePermissionRequestV2 = serde_json::from_value(json!({})).unwrap();
     assert_eq!(omitted.link_share, None);
