@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT snapshot, snapshot_seq FROM sync_document WHERE document_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "snapshot_seq",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4c85c4bf2e172e7ae5b24e379ce0fdfd210ec3db2e831985979e6b54d135f64e"
+}

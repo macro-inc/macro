@@ -61,6 +61,32 @@ services:
   # connection_gateway (Port 8082)
   # WebSocket gateway - Redis only
   # ============================================================================
+  sync_router:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/sync_router"]
+    environment:
+      - SYNC_SERVICE_URL=http://sync-service:8787
+      # off | all | prefix:<p> — which documents bypass the Durable Object for
+      # the native in-process sync machines (e.g. SYNC_NATIVE_MODE=all just run_local).
+      - SYNC_NATIVE_MODE=${SYNC_NATIVE_MODE:-off}
+      # Native mode validates document-permission tokens itself (the DO does
+      # this on the DO path). MACRO_DB_URL, DOCUMENT_STORAGE_SERVICE_URL,
+      # DOCUMENT_STORAGE_SERVICE_AUTH_KEY, and INTERNAL_API_KEY arrive via the
+      # shared env file.
+      - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT}
+      # Lifecycle reporting pokes the search reindex, like the DO's SPS_URL.
+      - SEARCH_PROCESSING_SERVICE_URL=http://search-processing-service:8080
+      # The native path's per-document breadcrumbs are debug-level; e.g.
+      # RUST_LOG=sync_router=debug just run_local
+      - RUST_LOG=${RUST_LOG:-info}
+    depends_on:
+      - redis
+      - sync_service
+      - postgres
+    networks:
+      databases:
+      services:
+
   connection_gateway:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/connection_gateway_service"]

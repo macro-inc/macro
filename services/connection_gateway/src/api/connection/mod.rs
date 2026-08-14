@@ -97,6 +97,8 @@ async fn handle_websocket_connection(
         connection_id: &connection_id,
     };
 
+    crate::service::fanout::connected(&connection_context, &macro_user_id).await;
+
     let receiver_task = handle_websocket_stream(connection_context, stream, sender.clone()).fuse();
 
     tokio::select! {
@@ -127,6 +129,10 @@ async fn handle_websocket_connection(
             );
         })
         .ok();
+
+    // After remove_connection, so consumers never see "gone" while the
+    // gateway can still route to the socket.
+    crate::service::fanout::disconnected(&connection_context).await;
     drop(last_online_guard);
 }
 

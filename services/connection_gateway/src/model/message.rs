@@ -26,6 +26,9 @@ impl TryFrom<StreamEvent> for Message {
 pub enum OutgoingMessage {
     Pong,
     Message(Message),
+    /// A raw binary frame (sync-protocol traffic from the fanout's consumers),
+    /// sent to the client as a binary websocket message, unparsed.
+    Binary(Vec<u8>),
 }
 
 impl TryFrom<Message> for axum::extract::ws::Message {
@@ -44,6 +47,7 @@ impl TryFrom<OutgoingMessage> for axum::extract::ws::Message {
         match msg {
             OutgoingMessage::Pong => Ok(axum::extract::ws::Message::Text("pong".into())),
             OutgoingMessage::Message(message) => message.try_into(),
+            OutgoingMessage::Binary(bytes) => Ok(axum::extract::ws::Message::Binary(bytes.into())),
         }
     }
 }

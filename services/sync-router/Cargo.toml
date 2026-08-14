@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "sync_router"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+bebop = { workspace = true }
+connection_gateway_models = { path = "../../crates/connection_gateway_models" }
+dashmap = { workspace = true }
+macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+sync_machine = { path = "../../crates/sync_machine", features = ["loro"] }
+futures = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+opentelemetry = { workspace = true }
+postcard = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+sync_service_bebop_schema = { path = "../sync-service/bebop-schema", features = ["bebop-owned-all"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+mockall = { workspace = true }

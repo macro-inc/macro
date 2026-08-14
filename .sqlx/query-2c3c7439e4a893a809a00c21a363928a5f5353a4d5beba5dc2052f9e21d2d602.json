@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sync_peer_user (document_id, peer_id, user_id)\n               VALUES ($1, $2, $3)\n               ON CONFLICT (document_id, peer_id) DO UPDATE SET user_id = EXCLUDED.user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c3c7439e4a893a809a00c21a363928a5f5353a4d5beba5dc2052f9e21d2d602"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM sync_document_op WHERE document_id = $1 AND seq <= $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d3272fa8c2c156648ebb760cafee7d025e0dbd858bdb5685dff2aaabec0fed9"
+}

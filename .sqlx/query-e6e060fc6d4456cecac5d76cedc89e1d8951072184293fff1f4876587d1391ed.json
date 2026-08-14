@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sync_blame (document_id, lexical_node_id, peer_id, edited_at)\n                   VALUES ($1, $2, $3, now())\n                   ON CONFLICT (document_id, lexical_node_id) DO UPDATE SET\n                      peer_id = EXCLUDED.peer_id, edited_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6e060fc6d4456cecac5d76cedc89e1d8951072184293fff1f4876587d1391ed"
+}
