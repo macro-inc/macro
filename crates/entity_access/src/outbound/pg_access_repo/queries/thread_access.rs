@@ -94,7 +94,7 @@ pub async fn get_thread_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                "linkShareAccessLevel" as "access_level!"
+                "linkShareAccessLevel" as "access_level!: AccessLevel"
             FROM "SharePermission"
             WHERE "linkShare" = 'PUBLIC'
             AND "linkShareAccessLevel" IS NOT NULL
@@ -108,7 +108,7 @@ pub async fn get_thread_access(
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     // Owner is handled above and short-circuits. The remaining sources —

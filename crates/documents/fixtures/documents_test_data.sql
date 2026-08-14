@@ -107,7 +107,7 @@ INSERT INTO public.entity_access (entity_id, entity_type, source_id, source_type
 
 -- Share permissions for document-one
 INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
-    (SELECT 'sp-doc-one', 'PUBLIC', 'read', NOW(), NOW());
+    (SELECT 'sp-doc-one', 'PUBLIC', 'view', NOW(), NOW());
 
 INSERT INTO public."DocumentPermission" ("documentId", "sharePermissionId")
     (SELECT 'd0000000-0000-0000-0000-000000000001', 'sp-doc-one');

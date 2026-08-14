@@ -61,7 +61,7 @@ async fn insert_link_share(
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, $2, $3)
+        VALUES ($1, $2, $3::text::"AccessLevel")
         "#,
         share_permission_id,
         link_share,

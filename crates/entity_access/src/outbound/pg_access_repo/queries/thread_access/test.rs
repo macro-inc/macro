@@ -139,7 +139,7 @@ async fn insert_thread_share_permission(
 
     sqlx::query!(
         r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
-           VALUES ($1, $2, $3)"#,
+           VALUES ($1, $2, $3::text::"AccessLevel")"#,
         share_permission_id,
         link_share,
         access_level,

@@ -19,7 +19,7 @@ pub async fn get_call_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                share_permission."linkShareAccessLevel" AS "access_level!"
+                share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
             FROM "SharePermission" share_permission
             JOIN (
                 SELECT share_permission_id
@@ -41,7 +41,7 @@ pub async fn get_call_access(
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(

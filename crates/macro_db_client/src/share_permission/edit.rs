@@ -32,7 +32,7 @@ pub async fn edit_share_permission(
                 .push(r#", "linkShare" = "#)
                 .push_bind(link_share.to_string())
                 .push(r#", "linkShareAccessLevel" = "#)
-                .push_bind(access_level.to_string());
+                .push_bind(access_level);
         }
         Some(None) => {
             query.push(r#", "linkShare" = NULL, "linkShareAccessLevel" = NULL"#);
@@ -43,7 +43,7 @@ pub async fn edit_share_permission(
                     .push(
                         r#", "linkShareAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
                     )
-                    .push_bind(access_level.to_string())
+                    .push_bind(access_level)
                     .push(" END");
             }
             Some(None) => {
@@ -51,7 +51,7 @@ pub async fn edit_share_permission(
                     .push(
                         r#", "linkShareAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#,
                     )
-                    .push_bind(link_share_access_level_or_default(None).to_string())
+                    .push_bind(link_share_access_level_or_default(None))
                     .push(" END");
             }
             None => {}

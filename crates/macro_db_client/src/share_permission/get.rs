@@ -8,7 +8,7 @@ use std::str::FromStr;
 fn parse_share_permission(
     id: String,
     link_share: Option<String>,
-    link_share_access_level: Option<String>,
+    link_share_access_level: Option<AccessLevel>,
     owner: String,
     channel_share_permissions: Option<serde_json::Value>,
 ) -> anyhow::Result<SharePermissionV2> {
@@ -16,12 +16,6 @@ fn parse_share_permission(
         .map(|value| {
             LinkShare::from_str(&value)
                 .with_context(|| format!("invalid link share value {value:?}"))
-        })
-        .transpose()?;
-    let link_share_access_level = link_share_access_level
-        .map(|value| {
-            AccessLevel::from_str(&value)
-                .with_context(|| format!("invalid link share access level {value:?}"))
         })
         .transpose()?;
     let channel_share_permissions = channel_share_permissions
@@ -147,7 +141,7 @@ pub async fn get_document_share_permission(
             SELECT
                 sp.id as id,
                 sp."linkShare" as "link_share?",
-                sp."linkShareAccessLevel" as "link_share_access_level?",
+                sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
                 d."owner" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -190,7 +184,7 @@ pub async fn get_chat_share_permission(
             SELECT
                 sp.id as id,
                 sp."linkShare" as "link_share?",
-                sp."linkShareAccessLevel" as "link_share_access_level?",
+                sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
                 c."userId" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -233,7 +227,7 @@ pub async fn get_macro_share_permission(
         SELECT
                 sp.id as id,
                 sp."linkShare" as "link_share?",
-                sp."linkShareAccessLevel" as "link_share_access_level?",
+                sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
                 m."user_id" as owner,
                 COALESCE(
                     json_agg(json_build_object(

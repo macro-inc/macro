@@ -20,7 +20,6 @@ pub(crate) async fn create_chat_permission(
         None => None,
     };
     let link_share = link_share.map(|value| value.to_string());
-    let link_share_access_level = link_share_access_level.map(|level| level.to_string());
 
     let permission_id = sqlx::query_scalar!(
         r#"
@@ -34,7 +33,7 @@ pub(crate) async fn create_chat_permission(
         RETURNING id
         "#,
         link_share,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .fetch_one(tx.as_mut())
     .await?;

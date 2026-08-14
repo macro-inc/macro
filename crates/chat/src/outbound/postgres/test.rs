@@ -30,7 +30,7 @@ async fn get_stored_share_permission(
         SELECT
             sp.id,
             sp."linkShare" AS "link_share?",
-            sp."linkShareAccessLevel" AS "link_share_access_level?"
+            sp."linkShareAccessLevel"::text AS "link_share_access_level?"
         FROM "ChatPermission" cp
         JOIN "SharePermission" sp ON cp."sharePermissionId" = sp.id
         WHERE cp."chatId" = $1

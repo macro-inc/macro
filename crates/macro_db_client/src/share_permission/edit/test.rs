@@ -35,7 +35,7 @@ async fn get_stored_share_permission(
         r#"
         SELECT
             "linkShare" as link_share,
-            "linkShareAccessLevel" as link_share_access_level
+            "linkShareAccessLevel"::text as link_share_access_level
         FROM "SharePermission"
         WHERE id = $1
         "#,

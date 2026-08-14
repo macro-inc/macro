@@ -268,7 +268,6 @@ async fn create_document_share_permission(
     let link_share_access_level =
         share::normalize_link_share_access_level(link_share, permission.link_share_access_level);
     let link_share = link_share.map(|value| value.to_string());
-    let link_share_access_level = link_share_access_level.map(|level| level.to_string());
 
     let permission_id = sqlx::query_scalar!(
         r#"
@@ -282,7 +281,7 @@ async fn create_document_share_permission(
         RETURNING id
         "#,
         link_share,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

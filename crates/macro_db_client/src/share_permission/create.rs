@@ -35,7 +35,6 @@ pub async fn create_share_permission(
     let link_share_access_level =
         normalize_link_share_access_level(link_share, share_permission.link_share_access_level);
     let link_share_value = link_share.map(|value| value.to_string());
-    let link_share_access_level_value = link_share_access_level.map(|value| value.to_string());
 
     let id = sqlx::query_scalar!(
         r#"
@@ -49,7 +48,7 @@ pub async fn create_share_permission(
             RETURNING id;
         "#,
         link_share_value,
-        link_share_access_level_value,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

@@ -116,7 +116,7 @@ async fn share_permission_columns(
         r#"
         SELECT
             sp."linkShare" as "link_share?",
-            sp."linkShareAccessLevel" as "link_share_access_level?"
+            sp."linkShareAccessLevel"::text as "link_share_access_level?"
         FROM "SharePermission" sp
         JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
         WHERE dp."documentId" = $1

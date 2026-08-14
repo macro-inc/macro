@@ -19,7 +19,7 @@ pub async fn get_project_access(
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
-                sp."linkShareAccessLevel" AS "access_level!"
+                sp."linkShareAccessLevel" AS "access_level!: AccessLevel"
             FROM "SharePermission" sp
             WHERE sp."linkShare" = 'PUBLIC'
             AND sp."linkShareAccessLevel" IS NOT NULL
@@ -33,7 +33,7 @@ pub async fn get_project_access(
         .fetch_optional(pool)
         .await?;
 
-        return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
+        return Ok(access_level);
     }
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(

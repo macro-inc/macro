@@ -4,7 +4,7 @@ use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
 use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::CustomSpeakerAssignment;
@@ -233,58 +233,36 @@ async fn update_share_permission_row(
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> Result<(), sqlx::Error> {
-    let mut set_parts = Vec::new();
-    let mut parameters = Vec::new();
-
-    let mut push_parameter = |column: &str, parameter: Option<String>| {
-        let parameter_index = parameters.len() + 2;
-        set_parts.push(format!("\"{column}\" = ${parameter_index}"));
-        parameters.push(parameter);
-    };
+    let mut query =
+        QueryBuilder::<Postgres>::new(r#"UPDATE "SharePermission" SET "updatedAt" = NOW()"#);
 
     if let Some(link_share) = share_permission.link_share {
-        push_parameter("linkShare", link_share.map(|value| value.to_string()));
-
         let access_level = link_share.map(|_| {
             share_permission
                 .link_share_access_level
                 .flatten()
-                .unwrap_or(models_permissions::share_permission::access_level::AccessLevel::View)
-                .to_string()
+                .unwrap_or(AccessLevel::View)
         });
-        push_parameter("linkShareAccessLevel", access_level);
+
+        query
+            .push(r#", "linkShare" = "#)
+            .push_bind(link_share.map(|value| value.to_string()))
+            .push(r#", "linkShareAccessLevel" = "#)
+            .push_bind(access_level);
     } else if let Some(access_level) = share_permission.link_share_access_level {
-        let access_level = access_level
-            .unwrap_or(models_permissions::share_permission::access_level::AccessLevel::View)
-            .to_string();
-        let parameter_index = parameters.len() + 2;
-        set_parts.push(format!(
-            "\"linkShareAccessLevel\" = CASE WHEN \"linkShare\" IS NULL THEN NULL ELSE ${parameter_index} END"
-        ));
-        parameters.push(Some(access_level));
+        query
+            .push(r#", "linkShareAccessLevel" = CASE WHEN "linkShare" IS NULL THEN NULL ELSE "#)
+            .push_bind(access_level.unwrap_or(AccessLevel::View))
+            .push(" END");
     }
 
-    if set_parts.is_empty() {
-        sqlx::query!(
-            r#"UPDATE "SharePermission" SET "updatedAt" = NOW() WHERE id = $1"#,
-            share_permission_id,
-        )
+    query
+        .push(" WHERE id = ")
+        .push_bind(share_permission_id)
+        .build()
         .execute(transaction.as_mut())
         .await?;
-        return Ok(());
-    }
 
-    let query = format!(
-        r#"UPDATE "SharePermission" SET {}, "updatedAt" = NOW() WHERE id = $1"#,
-        set_parts.join(", ")
-    );
-    let mut query = sqlx::query(&query).bind(share_permission_id);
-
-    for parameter in parameters {
-        query = query.bind(parameter);
-    }
-
-    query.execute(transaction.as_mut()).await?;
     Ok(())
 }
 

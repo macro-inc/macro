@@ -57,24 +57,18 @@ async fn get_document_share_permission_reads_link_fields(
         Some(AccessLevel::Comment)
     );
 
-    sqlx::query!(
+    let error = sqlx::query!(
         r#"
         UPDATE "SharePermission"
-        SET "linkShareAccessLevel" = 'invalid'
+        SET "linkShareAccessLevel" = $1::text::"AccessLevel"
         WHERE id = 'sp-d2'
         "#,
+        "invalid",
     )
     .execute(&pool)
-    .await?;
-
-    let error = get_document_share_permission(&pool, "d2")
-        .await
-        .expect_err("invalid access levels must return an error");
-    assert!(
-        error
-            .to_string()
-            .contains("invalid link share access level")
-    );
+    .await
+    .expect_err("the database must reject invalid access levels");
+    assert!(error.to_string().contains("invalid input value for enum"));
 
     Ok(())
 }

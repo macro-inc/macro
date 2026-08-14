@@ -52,7 +52,7 @@ pub async fn get_highest_access_level_for_chats(
             -- Source 2: Direct chat link permissions
             SELECT
                 c.id as chat_id,
-                sp."linkShareAccessLevel" as access_level
+                sp."linkShareAccessLevel"::text as access_level
             FROM "Chat" c
             JOIN "ChatPermission" cp ON cp."chatId" = c.id
             JOIN "SharePermission" sp ON sp.id = cp."sharePermissionId"

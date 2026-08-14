@@ -34,7 +34,7 @@ async fn project_share_permission_columns(
         r#"
         SELECT
             permission."linkShare" AS "link_share?",
-            permission."linkShareAccessLevel" AS "link_share_access_level?"
+            permission."linkShareAccessLevel"::text AS "link_share_access_level?"
         FROM "SharePermission" permission
         JOIN "ProjectPermission" project_permission
             ON project_permission."sharePermissionId" = permission.id

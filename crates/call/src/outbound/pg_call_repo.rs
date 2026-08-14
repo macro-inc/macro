@@ -320,9 +320,7 @@ impl CallRepository for PgCallRepo {
             }]),
         };
         let link_share = share_permission.link_share.map(|value| value.to_string());
-        let link_share_access_level = share_permission
-            .link_share_access_level
-            .map(|value| value.to_string());
+        let link_share_access_level = share_permission.link_share_access_level;
 
         let mut tx = self.pool.begin().await?;
 
@@ -340,7 +338,7 @@ impl CallRepository for PgCallRepo {
             "#,
             share_permission.id,
             link_share,
-            link_share_access_level,
+            link_share_access_level as _,
         )
         .execute(tx.as_mut())
         .await?;

@@ -34,7 +34,7 @@ pub(super) async fn get_project_share_permission(
         SELECT
             permission.id,
             permission."linkShare" AS "link_share?",
-            permission."linkShareAccessLevel" AS "link_share_access_level?",
+            permission."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
             project."userId" AS owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -69,17 +69,10 @@ pub(super) async fn get_project_share_permission(
             LinkShare::from_str(&value).map_err(|error| sqlx::Error::Decode(Box::new(error)))
         })
         .transpose()?;
-    let link_share_access_level = row
-        .link_share_access_level
-        .map(|level| {
-            AccessLevel::from_str(&level).map_err(|error| sqlx::Error::Decode(Box::new(error)))
-        })
-        .transpose()?;
-
     Ok(SharePermissionV2 {
         id: row.id,
         link_share,
-        link_share_access_level,
+        link_share_access_level: row.link_share_access_level,
         owner: row.owner,
         channel_share_permissions,
     })
@@ -94,7 +87,6 @@ pub(super) async fn create_project_share_permission(
     let link_share_access_level =
         normalize_link_share_access_level(link_share, permission.link_share_access_level);
     let link_share = link_share.map(|value| value.to_string());
-    let link_share_access_level = link_share_access_level.map(|level| level.to_string());
 
     let row = sqlx::query!(
         r#"
@@ -108,7 +100,7 @@ pub(super) async fn create_project_share_permission(
         RETURNING id
         "#,
         link_share,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;
@@ -168,8 +160,6 @@ pub(super) async fn edit_project_share_permission(
         ),
     };
     let link_share = link_share.map(|value| value.to_string());
-    let link_share_access_level =
-        link_share_access_level.map(|access_level| access_level.to_string());
 
     sqlx::query!(
         r#"
@@ -178,8 +168,8 @@ pub(super) async fn edit_project_share_permission(
             "linkShare" = CASE WHEN $2 THEN $3 ELSE "linkShare" END,
             "linkShareAccessLevel" = CASE
                 WHEN $2 AND $3 IS NULL THEN NULL
-                WHEN $2 THEN COALESCE($5, 'view')
-                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5, 'view')
+                WHEN $2 THEN COALESCE($5::"AccessLevel", 'view')
+                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5::"AccessLevel", 'view')
                 WHEN $4 THEN NULL
                 ELSE "linkShareAccessLevel"
             END,
@@ -190,7 +180,7 @@ pub(super) async fn edit_project_share_permission(
         update_link_share,
         link_share,
         update_link_share_access_level,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .execute(transaction.as_mut())
     .await?;

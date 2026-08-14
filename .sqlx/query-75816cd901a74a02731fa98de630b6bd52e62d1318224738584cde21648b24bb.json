@@ -12,7 +12,19 @@
     "parameters": {
       "Left": [
         "Text",
-        "Text"
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": [

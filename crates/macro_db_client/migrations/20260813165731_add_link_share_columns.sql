@@ -4,14 +4,14 @@
 -- single-statement backfill with a batched migration.
 ALTER TABLE "SharePermission"
     ADD COLUMN "linkShare" TEXT,
-    ADD COLUMN "linkShareAccessLevel" TEXT,
+    ADD COLUMN "linkShareAccessLevel" "AccessLevel",
     ADD CONSTRAINT "SharePermission_linkShare_check"
         CHECK ("linkShare" IN ('PUBLIC', 'TEAM')),
     ALTER COLUMN "isPublic" SET DEFAULT false;
 
 UPDATE "SharePermission"
 SET "linkShare" = CASE WHEN "isPublic" THEN 'PUBLIC' END,
-    "linkShareAccessLevel" = "publicAccessLevel";
+    "linkShareAccessLevel" = "publicAccessLevel"::"AccessLevel";
 
 CREATE INDEX "SharePermission_linkShare_idx"
     ON "SharePermission" ("linkShare")

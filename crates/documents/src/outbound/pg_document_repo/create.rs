@@ -161,9 +161,7 @@ pub async fn set_share_permission(
     // Create share permission
     let share_permission = SharePermissionV2::new_document_share_permission(file_type);
     let link_share = share_permission.link_share.map(|value| value.to_string());
-    let link_share_access_level = share_permission
-        .link_share_access_level
-        .map(|value| value.to_string());
+    let link_share_access_level = share_permission.link_share_access_level;
 
     let share_permission_row = sqlx::query!(
         r#"
@@ -177,7 +175,7 @@ pub async fn set_share_permission(
         RETURNING id
         "#,
         link_share,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

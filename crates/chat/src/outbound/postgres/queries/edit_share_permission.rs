@@ -63,8 +63,6 @@ async fn edit_share_permission(
         };
 
     let link_share = link_share.map(|value| value.to_string());
-    let link_share_access_level =
-        link_share_access_level.map(|access_level| access_level.to_string());
 
     sqlx::query!(
         r#"
@@ -73,8 +71,8 @@ async fn edit_share_permission(
             "linkShare" = CASE WHEN $2 THEN $3 ELSE "linkShare" END,
             "linkShareAccessLevel" = CASE
                 WHEN $2 AND $3 IS NULL THEN NULL
-                WHEN $2 THEN COALESCE($5, 'view')
-                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5, 'view')
+                WHEN $2 THEN COALESCE($5::"AccessLevel", 'view')
+                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5::"AccessLevel", 'view')
                 WHEN $4 THEN NULL
                 ELSE "linkShareAccessLevel"
             END,
@@ -85,7 +83,7 @@ async fn edit_share_permission(
         update_link_share,
         link_share,
         update_link_share_access_level,
-        link_share_access_level,
+        link_share_access_level as _,
     )
     .execute(tx.as_mut())
     .await?;

@@ -2094,7 +2094,7 @@ async fn get_stored_share_permission(
         r#"
         SELECT
             "linkShare" AS "link_share?",
-            "linkShareAccessLevel" AS "link_share_access_level?"
+            "linkShareAccessLevel"::text AS "link_share_access_level?"
         FROM "SharePermission"
         WHERE id = $1
         "#,
@@ -2112,7 +2112,7 @@ async fn set_stored_share_permission(
     sqlx::query!(
         r#"
         UPDATE "SharePermission"
-        SET "linkShare" = $2, "linkShareAccessLevel" = $3
+        SET "linkShare" = $2, "linkShareAccessLevel" = $3::text::"AccessLevel"
         WHERE id = $1
         "#,
         SP_ARCHIVED,
