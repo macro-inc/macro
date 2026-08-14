@@ -94,7 +94,11 @@ async fn insert_call_record(
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, $2, 'view')
+        VALUES (
+            $1,
+            $2::text,
+            CASE WHEN $2::text IS NULL THEN NULL ELSE 'view'::"AccessLevel" END
+        )
         "#,
         share_permission_id,
         link_share,

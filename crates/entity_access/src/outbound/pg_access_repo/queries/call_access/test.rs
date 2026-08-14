@@ -34,7 +34,7 @@ struct LinkAccessCase {
 const LINK_ACCESS_CASES: [LinkAccessCase; 4] = [
     LinkAccessCase {
         link_share: None,
-        link_access_level: Some("view"),
+        link_access_level: None,
         anonymous: None,
         other_team: None,
         same_team: None,
@@ -352,8 +352,7 @@ async fn preserves_user_channel_and_team_entity_access(pool: PgPool) -> anyhow::
 
     for call_table in CallTable::ALL {
         let call_id =
-            insert_link_shared_call(&pool, call_table, OWNER_WITHOUT_TEAM, None, Some("owner"))
-                .await?;
+            insert_link_shared_call(&pool, call_table, OWNER_WITHOUT_TEAM, None, None).await?;
 
         for (source_id, source_type, access_level) in grants {
             insert_entity_access(&pool, call_id, source_id, source_type, access_level).await?;

@@ -32,15 +32,8 @@ VALUES
     -- Public permissions that will be linked to projects
     ('sp-public-edit-thread', 'PUBLIC', 'edit'),
     ('sp-public-view-thread', 'PUBLIC', 'view'),
-    -- A *private* 'owner' permission to test the NULL link share filter.
-    ('sp-private-owner-thread', NULL, 'owner');
-
-
--- Link the private 'owner' permission directly to the nested thread.
-UPDATE public."SharePermission"
-SET "linkShare" = NULL,
-    "linkShareAccessLevel" = 'owner'
-WHERE "id" = 'sp-thread-nested';
+    -- A private permission with no link-level access.
+    ('sp-private-owner-thread', NULL, NULL);
 
 -- Link public permissions to the project hierarchy.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")

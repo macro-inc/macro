@@ -18,14 +18,14 @@ INSERT INTO public."User" ("id","email","stripeCustomerId", "organizationId","ma
 INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
 (SELECT 'p1', 'a', 'macro|user@user.com', '2019-10-16 00:00:00', '2019-10-16 00:00:00');
 INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt")
-(SELECT 'sp-project1', NULL, 'view', '2019-10-16 00:00:00', '2019-10-16 01:00:00');
+(SELECT 'sp-project1', NULL, NULL, '2019-10-16 00:00:00', '2019-10-16 01:00:00');
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 (SELECT 'p1', 'sp-project1');
 
 INSERT INTO public."Project" ("id", "name", "userId", "parentId", "createdAt", "updatedAt")
 (SELECT 'p2', 'a1', 'macro|user2@user.com', 'p1', '2019-10-16 00:00:00', '2019-10-16 01:00:00');
 INSERT INTO public."SharePermission" ("id", "linkShare", "linkShareAccessLevel")
-(SELECT 'sp-project2', NULL, 'view');
+(SELECT 'sp-project2', NULL, NULL);
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 (SELECT 'p2', 'sp-project2');
 

@@ -166,7 +166,7 @@ async fn setup_project(pool: &PgPool, link_share: Option<&str>) -> anyhow::Resul
     let project_id = Uuid::new_v4();
     insert_user(pool, OWNER).await?;
     insert_project(pool, project_id, OWNER).await?;
-    insert_link_share(pool, project_id, link_share, Some("comment")).await?;
+    insert_link_share(pool, project_id, link_share, link_share.map(|_| "comment")).await?;
     Ok(project_id)
 }
 

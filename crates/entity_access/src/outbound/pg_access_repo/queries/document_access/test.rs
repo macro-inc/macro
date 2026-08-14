@@ -153,8 +153,7 @@ async fn public_link_allows_anonymous_access(pool: PgPool) -> anyhow::Result<()>
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn null_link_denies_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
-    let document_id =
-        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, Some("edit")).await?;
+    let document_id = insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, None).await?;
     let source_ids = SourceIds(vec!["macro|requester@team.test".to_string()]);
 
     let access = get_document_access(&pool, &document_id, &source_ids).await?;

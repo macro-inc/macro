@@ -28,8 +28,8 @@ VALUES
     ('sp-public-edit-proj', 'PUBLIC', 'edit'),
     -- A public 'view' permission. We'll attach this to the parent project.
     ('sp-public-view-proj', 'PUBLIC', 'view'),
-    -- A *private* 'owner' permission. This MUST be ignored by the query.
-    ('sp-private-owner-proj', NULL, 'owner');
+    -- A private permission with no link-level access.
+    ('sp-private-owner-proj', NULL, NULL);
 
 -- Link share permissions to projects.
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")

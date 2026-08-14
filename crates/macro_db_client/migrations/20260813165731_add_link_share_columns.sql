@@ -7,12 +7,13 @@ ALTER TABLE "SharePermission"
     ADD COLUMN "linkShareAccessLevel" "AccessLevel",
     ADD CONSTRAINT "SharePermission_linkShare_check"
         CHECK ("linkShare" IN ('PUBLIC', 'TEAM')),
+    ADD CONSTRAINT "SharePermission_linkShareAccessLevel_check"
+        CHECK ("linkShare" IS NOT NULL OR "linkShareAccessLevel" IS NULL),
     ALTER COLUMN "isPublic" SET DEFAULT false;
 
 UPDATE "SharePermission"
 SET "linkShare" = CASE WHEN "isPublic" THEN 'PUBLIC' END,
-    "linkShareAccessLevel" = "publicAccessLevel"::"AccessLevel";
+    "linkShareAccessLevel" = CASE
+        WHEN "isPublic" THEN "publicAccessLevel"::"AccessLevel"
+    END;
 
-CREATE INDEX "SharePermission_linkShare_idx"
-    ON "SharePermission" ("linkShare")
-    WHERE "linkShare" IS NOT NULL;
