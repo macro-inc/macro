@@ -12,13 +12,10 @@ pub(crate) async fn create_chat_permission(
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<()> {
     let link_share = share_permission.link_share;
-    let link_share_access_level = match link_share {
-        Some(_) => Some(share_permission.link_share_access_level.unwrap_or_else(|| {
+    let link_share_access_level = link_share.map(|_| share_permission.link_share_access_level.unwrap_or_else(|| {
             tracing::warn!("link sharing was enabled without an access level, defaulting to view");
             AccessLevel::View
-        })),
-        None => None,
-    };
+        }));
     let link_share = link_share.map(|value| value.to_string());
 
     let permission_id = sqlx::query_scalar!(
