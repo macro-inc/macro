@@ -9,12 +9,13 @@
 //! cargo run -p agent_fold --bin fold_jsonl -- ~/.agent_runtime_sessions/<id>.jsonl
 //! ```
 
-use agent_fold::domain::fold::fold;
+use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, Control, FoldedMessage, MessagePart, PermissionOption, PermissionOutcome,
-    PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
+    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOption,
+    PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
 };
+use agent_fold::domain::ports::FoldMachine;
 use agent_fold::domain::ports::LogRepo;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use clap::Parser;
@@ -160,12 +161,30 @@ async fn main() -> ExitCode {
         .expect("in-memory repo cannot fail");
 
     let started = Instant::now();
-    let folded = fold(log);
+    let mut machine = FoldMachineImpl::new();
+    for entry in log {
+        let _ = machine.push(entry);
+    }
     let fold_time = started.elapsed();
+    let metadata = machine.metadata().clone();
+    let folded = machine.into_messages();
 
     for message in &folded {
         print!("{}", render_message(message));
     }
+    println!("── metadata ──");
+    println!("model:    {}", metadata.model.as_deref().unwrap_or("-"));
+    println!("title:    {}", metadata.title.as_deref().unwrap_or("-"));
+    println!(
+        "models:   {}",
+        metadata
+            .supported_models
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!("commands: {}", metadata.available_commands.len());
     println!("── stats ──");
     println!("acp messages:    {acp_messages}");
     println!("folded messages: {}", folded.len());
@@ -218,13 +237,18 @@ fn render_message(message: &FoldedMessage) -> String {
                 options,
                 outcome,
             } => out.push_str(&render_permission(tool_call, options, outcome)),
-            MessagePart::Control { control } => {
+            MessagePart::Control { control, outcome } => {
                 let label = match control {
                     Control::SetModel { model } => format!("model changed to {model}"),
                     Control::Compact => "context compacted".to_owned(),
                     Control::Stop => "stop requested".to_owned(),
                 };
-                let _ = writeln!(out, "[{label}]");
+                let disposition = match outcome {
+                    ControlOutcome::Pending => " (pending)",
+                    ControlOutcome::Accepted => "",
+                    ControlOutcome::Rejected { .. } => " (rejected)",
+                };
+                let _ = writeln!(out, "[{label}{disposition}]");
             }
             MessagePart::Plan { entries } => {
                 let _ = writeln!(out, "[plan]");

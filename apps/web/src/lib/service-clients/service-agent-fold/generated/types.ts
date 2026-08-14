@@ -56,6 +56,23 @@ export type Control =
   /**  The runtime was asked to stop its current work. */
   | { kind: 'stop' };
 
+/**
+ *  How the runtime disposed of a [`Control`], like [`PermissionOutcome`] for
+ *  permission requests. Pending is a legitimate final state: a control the
+ *  session died before answering stays pending.
+ */
+export type ControlOutcome =
+  /**  No response yet. */
+  | { kind: 'pending' }
+  /**  Acknowledged - immediately so for a stop, which nothing can answer. */
+  | { kind: 'accepted' }
+  /**  Answered with a JSON-RPC error. */
+  | {
+      kind: 'rejected';
+      /**  The error's message, verbatim. */
+      message: string;
+    };
+
 /**  A file modification a tool reported. */
 export type FileDiff = {
   /**  The file that changed. */
@@ -74,6 +91,12 @@ export type FoldedMessage = {
   turn: number;
   /**  Who produced the message. */
   author: Author;
+  /**
+   *  The id the control endpoint returned for the action that derived this
+   *  message, for correlation. Absent on agent messages and on frames the
+   *  control plane did not mint.
+   */
+  requestId: string | null;
   /**  Ordered renderable content. Never empty. */
   parts: MessagePart[];
   /**  How the turn ended, absent while it remains in flight. */
@@ -148,6 +171,8 @@ export type MessagePart =
       kind: 'control';
       /**  The requested operation. */
       control: Control;
+      /**  How the runtime disposed of it so far. */
+      outcome: ControlOutcome;
     }
   /**  The agent's working todo list for the turn. */
   | {

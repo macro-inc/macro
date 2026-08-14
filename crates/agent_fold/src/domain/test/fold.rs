@@ -2,8 +2,8 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, Control, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail,
-    ToolStatus, TurnId,
+    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome, StopReason,
+    ToolDetail, ToolStatus, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -192,24 +192,69 @@ fn folds_session_controls_as_typed_parts() {
         &[MessagePart::Control {
             control: Control::SetModel {
                 model: "opus".to_owned()
-            }
+            },
+            // The set-model request never got a response in this log.
+            outcome: ControlOutcome::Pending,
         }]
     );
     assert_eq!(
         messages[1].parts.as_slice(),
         &[MessagePart::Control {
-            control: Control::Compact
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
         }]
     );
     assert_eq!(
         messages[2].parts.as_slice(),
         &[MessagePart::Control {
-            control: Control::Stop
+            control: Control::Stop,
+            outcome: ControlOutcome::Accepted,
         }]
     );
     assert_eq!(messages[0].id, TurnId(0));
     assert_eq!(messages[1].id, TurnId(1));
     assert_eq!(messages[2].id, TurnId(2));
+}
+
+#[test]
+fn a_rejected_control_reports_the_runtime_error() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].request_id.as_ref().map(|id| id.as_str()),
+        Some("agent_session:m1"),
+        "a control-plane id is surfaced for correlation"
+    );
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(
+        *outcome,
+        ControlOutcome::Rejected {
+            message: "Invalid params: model not found: claude-fable-5".to_owned()
+        }
+    );
+}
+
+#[test]
+fn an_accepted_control_resolves_and_the_same_frame_moves_the_metadata() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
+    ));
+
+    let messages = fold(log);
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(*outcome, ControlOutcome::Accepted);
 }
 
 /// Every ACP tool kind this fold has a bespoke rendering for, plus a call

@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
 ---
@@ -11,12 +12,14 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
         author: User {
             user_id: None,
         },
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Control {
                     control: SetModel {
                         model: "opus[1m]",
                     },
+                    outcome: Accepted,
                 },
             ],
         },
@@ -31,6 +34,7 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                 macro|eric@example.com,
             ),
         },
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -45,6 +49,7 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
             1,
         ),
         author: Agent,
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 ToolUse {

@@ -4,7 +4,7 @@ use agent_client_protocol::schema::v1::{
     ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
 };
 use agent_fold::domain::service::FoldedMessageService;
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
@@ -79,7 +79,12 @@ async fn container_session_runs_and_logs_end_to_end() {
         let sessions = sessions.clone();
         async move {
             sessions
-                .send_action(id, Some(owner()), AgentAction::prompt("fix the flaky test"))
+                .send_action(
+                    id,
+                    Some(owner()),
+                    AgentAction::prompt("fix the flaky test"),
+                    AgentActionId::mint(),
+                )
                 .await
         }
     });
@@ -108,7 +113,12 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert_eq!(logs[5].entry.user_id, Some(owner()));
 
     sessions
-        .send_action(id, Some(owner()), AgentAction::prompt("and run clippy"))
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("and run clippy"),
+            AgentActionId::mint(),
+        )
         .await
         .unwrap();
     assert_eq!(containers.spawned(), 1);

@@ -8,6 +8,7 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
     let message = ModelFoldedMessage {
         id: TurnId(3),
         author: Author::Agent,
+        request_id: None,
         parts: NonEmpty::one(MessagePart::ToolUse {
             id: ToolUseId("tool-1".to_owned()),
             label: "Bash".to_owned(),
@@ -28,6 +29,7 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
             "agentSessionId": session.to_string(),
             "turn": 3,
             "author": { "kind": "agent" },
+            "requestId": null,
             "parts": [{
                 "kind": "tool_use",
                 "id": "tool-1",

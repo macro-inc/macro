@@ -271,6 +271,7 @@ dependencies = [
  "agent-client-protocol",
  "axum",
  "futures",
+ "macro_uuid",
  "serde",
  "serde_json",
  "specta",

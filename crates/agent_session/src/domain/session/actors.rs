@@ -16,7 +16,7 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::TransportError;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -35,6 +35,7 @@ const INBOUND_BUFFER: usize = 1028;
 pub(crate) struct SessionCommand {
     pub(crate) user_id: Option<MacroUserIdStr<'static>>,
     pub(crate) action: AgentAction,
+    pub(crate) action_id: AgentActionId,
     pub(crate) completed: oneshot::Sender<Result<()>>,
 }
 
@@ -114,9 +115,10 @@ where
     pub(crate) async fn step(&mut self) -> Stepped {
         let input = tokio::select! {
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, completed }) => Input::Command {
+                Some(SessionCommand { user_id, action, action_id, completed }) => Input::Command {
                     from: user_id,
                     action,
+                    action_id,
                     token: completed,
                 },
                 // The service dropped every handle; nobody can reach us.

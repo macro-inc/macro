@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
 ---
@@ -9,6 +10,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
             0,
         ),
         author: Agent,
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -234,6 +236,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -248,6 +251,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
             1,
         ),
         author: Agent,
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -268,6 +272,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -282,6 +287,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
             2,
         ),
         author: Agent,
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -350,6 +356,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {
@@ -364,6 +371,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
             3,
         ),
         author: Agent,
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {

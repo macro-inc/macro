@@ -30,6 +30,10 @@ pub struct FoldedMessage {
     turn: u32,
     /// Who produced the message.
     author: Author,
+    /// The id the control endpoint returned for the action that derived this
+    /// message, for correlation. Absent on agent messages and on frames the
+    /// control plane did not mint.
+    request_id: Option<String>,
     /// Ordered renderable content. Never empty.
     parts: Vec<MessagePart>,
     /// How the turn ended, absent while it remains in flight.
@@ -44,6 +48,7 @@ impl FoldedMessage {
             agent_session_id: session.to_string(),
             turn: message.id.0,
             author: message.author,
+            request_id: message.request_id.map(|id| id.to_string()),
             parts: message.parts.into_inner(),
             stop: message.stop,
         }

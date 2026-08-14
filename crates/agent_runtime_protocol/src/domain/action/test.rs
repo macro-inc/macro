@@ -119,6 +119,30 @@ fn compact_becomes_opencodes_compact_prompt() {
 }
 
 #[test]
+fn action_ids_survive_the_trip_through_a_request_id() {
+    let id = AgentActionId::mint();
+    assert_eq!(
+        AgentActionId::from_request_id(&id.to_request_id()),
+        Some(id)
+    );
+}
+
+#[test]
+fn foreign_request_ids_are_not_action_ids() {
+    // Zed's bare uuids, the harness's own counters, numeric ids: none of
+    // them were minted by the control plane.
+    let foreign = RequestId::Str("813ea7f3-b8e1-4af3-b2f4-44f4f445637a".to_owned());
+    assert_eq!(AgentActionId::from_request_id(&foreign), None);
+}
+
+#[test]
+fn action_ids_serialize_as_their_bare_string() {
+    let id = AgentActionId::mint();
+    let json = serde_json::to_string(&id).unwrap();
+    assert_eq!(json, format!("\"{id}\""));
+}
+
+#[test]
 fn only_stop_supersedes_what_is_already_queued() {
     assert!(AgentAction::Stop.supersedes_queued());
     assert!(!AgentAction::prompt("keep going").supersedes_queued());

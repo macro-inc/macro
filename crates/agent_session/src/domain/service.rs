@@ -31,7 +31,7 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::model::FoldEvent;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -86,12 +86,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
     where
         Connector: AgentConnector + Clone;
 
-    /// Deliver an action through the session's active transport.
+    /// Deliver an action through the session's active transport, under the
+    /// action id it will carry onto the wire.
     fn send_action(
         &self,
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
@@ -176,6 +178,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> Result<()> {
         let commands = self
             .active
@@ -188,6 +191,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             .send(SessionCommand {
                 user_id,
                 action,
+                action_id,
                 completed,
             })
             .await
@@ -255,8 +259,9 @@ where
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> Result<()> {
-        self.deliver_action(id, user_id, action).await
+        self.deliver_action(id, user_id, action, action_id).await
     }
 
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {

@@ -12,6 +12,7 @@
 //! recognize as the story of the session: what they asked, what the agent
 //! said, what it ran, and what it wanted permission to do.
 
+use agent_runtime_protocol::domain::action::AgentActionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use serde::Serialize;
@@ -138,6 +139,11 @@ pub struct FoldedMessage {
     pub id: TurnId,
     /// Who produced it.
     pub author: Author,
+    /// The ACP request id of the frame that derived this message - the same
+    /// string the control endpoint returned, for correlation. `None` on agent
+    /// messages and on frames the control plane did not mint (other clients'
+    /// requests, notifications).
+    pub request_id: Option<AgentActionId>,
     /// Ordered content. Never empty - the fold drops messages with no parts.
     pub parts: NonEmpty<Vec<MessagePart>>,
     /// How the turn ended, on the agent message that closed it.
@@ -226,6 +232,8 @@ pub enum MessagePart {
     Control {
         /// The requested operation.
         control: Control,
+        /// How the runtime disposed of it so far.
+        outcome: ControlOutcome,
     },
     /// The agent's working todo list for the turn.
     Plan {
@@ -284,6 +292,23 @@ pub enum Control {
     Compact,
     /// The runtime was asked to stop its current work.
     Stop,
+}
+
+/// How the runtime disposed of a [`Control`], like [`PermissionOutcome`] for
+/// permission requests. Pending is a legitimate final state: a control the
+/// session died before answering stays pending.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ControlOutcome {
+    /// No response yet.
+    Pending,
+    /// Acknowledged - immediately so for a stop, which nothing can answer.
+    Accepted,
+    /// Answered with a JSON-RPC error.
+    Rejected {
+        /// The error's message, verbatim.
+        message: String,
+    },
 }
 
 /// How far a tool call progressed.

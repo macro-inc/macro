@@ -1,6 +1,6 @@
 //! OpenAPI document for the agent harness service's session routes.
 
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::SessionBot;
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionResponse, ControlRequest,
@@ -20,6 +20,7 @@ use utoipa::OpenApi;
     components(schemas(
         ControlRequest,
         AgentAction,
+        AgentActionId,
         AgentSessionResponse,
         SessionStatusDto,
         AgentSessionLogResponse,
