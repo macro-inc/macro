@@ -1,4 +1,5 @@
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
+import { match } from 'ts-pattern';
 
 type ActivityAction = ActivityEvent['action'];
 
@@ -23,32 +24,30 @@ export function actionAsPropertyChange(
  * row.
  */
 export function describeAction(action: ActivityAction): string {
-  switch (action.__typename) {
-    case 'GraphqlActivityCreated':
-      return 'created this';
-    case 'GraphqlActivityEdited':
-      return 'made an edit';
-    case 'GraphqlActivityOpened':
-      return 'opened this';
-    case 'GraphqlActivityDeleted':
-      return 'deleted this';
-    case 'GraphqlActivityMessaged':
-      return 'sent a message';
-    case 'GraphqlActivitySent':
-      return 'sent an email';
-    case 'GraphqlActivityPropertyChanged':
-      return 'changed a property';
-    case 'GraphqlActivityParticipantAdded':
-      return 'added a participant';
-    case 'GraphqlActivityParticipantRemoved':
-      return 'removed a participant';
-    case 'GraphqlActivityCallStarted':
-      return 'started a call';
-    case 'GraphqlActivityUnknownAction':
-      return action.tag.replaceAll('_', ' ');
-    default:
-      return assertNever(action);
-  }
+  return match(action)
+    .with({ __typename: 'GraphqlActivityCreated' }, () => 'created this')
+    .with({ __typename: 'GraphqlActivityEdited' }, () => 'made an edit')
+    .with({ __typename: 'GraphqlActivityOpened' }, () => 'opened this')
+    .with({ __typename: 'GraphqlActivityDeleted' }, () => 'deleted this')
+    .with({ __typename: 'GraphqlActivityMessaged' }, () => 'sent a message')
+    .with({ __typename: 'GraphqlActivitySent' }, () => 'sent an email')
+    .with(
+      { __typename: 'GraphqlActivityPropertyChanged' },
+      () => 'changed a property'
+    )
+    .with(
+      { __typename: 'GraphqlActivityParticipantAdded' },
+      () => 'added a participant'
+    )
+    .with(
+      { __typename: 'GraphqlActivityParticipantRemoved' },
+      () => 'removed a participant'
+    )
+    .with({ __typename: 'GraphqlActivityCallStarted' }, () => 'started a call')
+    .with({ __typename: 'GraphqlActivityUnknownAction' }, (unknown) =>
+      unknown.tag.replaceAll('_', ' ')
+    )
+    .exhaustive();
 }
 
 /**
@@ -61,38 +60,46 @@ export function describeActionForEntity(action: ActivityAction): {
   verb: string;
   connector?: string;
 } {
-  switch (action.__typename) {
-    case 'GraphqlActivityCreated':
-      return { verb: 'created' };
-    case 'GraphqlActivityEdited':
-      return { verb: 'edited' };
-    case 'GraphqlActivityOpened':
-      return { verb: 'opened' };
-    case 'GraphqlActivityDeleted':
-      return { verb: 'deleted' };
-    case 'GraphqlActivityMessaged':
-      return { verb: 'sent a message', connector: 'in' };
-    case 'GraphqlActivitySent':
-      return { verb: 'sent an email', connector: 'in' };
-    case 'GraphqlActivityPropertyChanged':
+  return (
+    match(action)
+      .with({ __typename: 'GraphqlActivityCreated' }, () => ({
+        verb: 'created',
+      }))
+      .with({ __typename: 'GraphqlActivityEdited' }, () => ({ verb: 'edited' }))
+      .with({ __typename: 'GraphqlActivityOpened' }, () => ({ verb: 'opened' }))
+      .with({ __typename: 'GraphqlActivityDeleted' }, () => ({
+        verb: 'deleted',
+      }))
+      .with({ __typename: 'GraphqlActivityMessaged' }, () => ({
+        verb: 'sent a message',
+        connector: 'in',
+      }))
+      .with({ __typename: 'GraphqlActivitySent' }, () => ({
+        verb: 'sent an email',
+        connector: 'in',
+      }))
       // The caller renders the full transition phrase; only the connector
-      // is needed here.
-      return { verb: 'changed a property', connector: 'on' };
-    case 'GraphqlActivityParticipantAdded':
-      return { verb: 'added a participant', connector: 'to' };
-    case 'GraphqlActivityParticipantRemoved':
-      return { verb: 'removed a participant', connector: 'from' };
-    case 'GraphqlActivityCallStarted':
-      return { verb: 'started a call', connector: 'in' };
-    case 'GraphqlActivityUnknownAction':
-      return { verb: action.tag.replaceAll('_', ' '), connector: 'on' };
-    default:
-      return { verb: assertNever(action) };
-  }
-}
-
-/** Compile-time exhaustiveness: a new action member fails typecheck here. */
-function assertNever(action: never): string {
-  console.warn('Unhandled activity action', action);
-  return 'did something';
+      // is needed for property changes.
+      .with({ __typename: 'GraphqlActivityPropertyChanged' }, () => ({
+        verb: 'changed a property',
+        connector: 'on',
+      }))
+      .with({ __typename: 'GraphqlActivityParticipantAdded' }, () => ({
+        verb: 'added a participant',
+        connector: 'to',
+      }))
+      .with({ __typename: 'GraphqlActivityParticipantRemoved' }, () => ({
+        verb: 'removed a participant',
+        connector: 'from',
+      }))
+      .with({ __typename: 'GraphqlActivityCallStarted' }, () => ({
+        verb: 'started a call',
+        connector: 'in',
+      }))
+      .with({ __typename: 'GraphqlActivityUnknownAction' }, (unknown) => ({
+        verb: unknown.tag.replaceAll('_', ' '),
+        connector: 'on',
+      }))
+      .exhaustive()
+  );
 }

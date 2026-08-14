@@ -2,7 +2,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 /**
  * An activity row's entity reference rendered as a real document mention —
@@ -21,7 +21,7 @@ export function EntityMention(props: {
     () => props.entityType
   );
 
-  const mentionMarkdown = createMemo(() => {
+  const mentionMarkdown = () => {
     const blockName = display.blockOrFileType();
     if (!blockName) return undefined;
     return `<m-document-mention>${JSON.stringify({
@@ -29,7 +29,7 @@ export function EntityMention(props: {
       documentName: display.name(),
       blockName,
     })}</m-document-mention>`;
-  });
+  };
 
   return (
     <Show
