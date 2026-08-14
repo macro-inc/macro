@@ -75,8 +75,6 @@ async fn insert_call_record(
     let call_id = Uuid::new_v4();
     let channel_id = Uuid::new_v4();
     let share_permission_id = Uuid::new_v4().to_string();
-    let legacy_is_public = link_share != Some("PUBLIC");
-    let legacy_access_level = legacy_is_public.then_some("owner");
 
     sqlx::query!(
         r#"
@@ -89,21 +87,16 @@ async fn insert_call_record(
     .execute(pool)
     .await?;
 
-    // Conflicting legacy values ensure listing authorization reads the link fields.
     sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             id,
-            "isPublic",
-            "publicAccessLevel",
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, $2, $3, $4, 'view')
+        VALUES ($1, $2, 'view')
         "#,
         share_permission_id,
-        legacy_is_public,
-        legacy_access_level,
         link_share,
     )
     .execute(pool)

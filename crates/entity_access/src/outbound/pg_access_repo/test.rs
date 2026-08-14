@@ -635,7 +635,6 @@ async fn insert_pg_link_shared_document(
     let document_id = document_id.to_string();
     let permission_id = Uuid::new_v4().to_string();
     let access_level = access_level.to_string();
-    let is_public = link_share == "PUBLIC";
 
     sqlx::query!(
         r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Link Shared Document', $2)"#,
@@ -648,17 +647,14 @@ async fn insert_pg_link_shared_document(
         r#"
         INSERT INTO "SharePermission" (
             id,
-            "isPublic",
-            "publicAccessLevel",
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, $2, $3, $4, $3)
+        VALUES ($1, $2, $3)
         "#,
         permission_id,
-        is_public,
-        access_level,
         link_share,
+        access_level,
     )
     .execute(pool)
     .await?;

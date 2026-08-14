@@ -135,17 +135,14 @@ async fn insert_share_permission(
 ) -> anyhow::Result<String> {
     let share_permission_id = Uuid::new_v4().to_string();
 
-    // The conflicting legacy values ensure authorization reads only link sharing.
     sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             id,
-            "isPublic",
-            "publicAccessLevel",
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, true, 'owner', $2, $3)
+        VALUES ($1, $2, $3)
         "#,
         share_permission_id,
         link_share,

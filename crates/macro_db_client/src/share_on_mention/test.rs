@@ -75,9 +75,7 @@ async fn shares_team_link_document_with_off_team_mentioned_user(
     sqlx::query!(
         r#"
         UPDATE "SharePermission"
-        SET "isPublic" = false,
-            "publicAccessLevel" = 'view',
-            "linkShare" = 'TEAM',
+        SET "linkShare" = 'TEAM',
             "linkShareAccessLevel" = 'view'
         WHERE id = 'sp-public'
         "#,

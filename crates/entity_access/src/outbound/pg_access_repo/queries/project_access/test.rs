@@ -53,23 +53,19 @@ async fn insert_link_share(
     access_level: Option<&str>,
 ) -> anyhow::Result<()> {
     let share_permission_id = Uuid::new_v4().to_string();
-    let legacy_is_public = link_share == Some("PUBLIC");
 
     sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             id,
-            "isPublic",
-            "publicAccessLevel",
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, $2, $3, $4, $3)
+        VALUES ($1, $2, $3)
         "#,
         share_permission_id,
-        legacy_is_public,
-        access_level,
         link_share,
+        access_level,
     )
     .execute(pool)
     .await?;

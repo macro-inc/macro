@@ -80,18 +80,14 @@ async fn insert_link_shared_document(
     .execute(pool)
     .await?;
 
-    // Deliberately conflict with the legacy columns so these tests verify that
-    // authorization reads only the new link-sharing policy.
     sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             id,
-            "isPublic",
-            "publicAccessLevel",
             "linkShare",
             "linkShareAccessLevel"
         )
-        VALUES ($1, true, 'owner', $2, $3)
+        VALUES ($1, $2, $3)
         "#,
         share_permission_id,
         link_share,

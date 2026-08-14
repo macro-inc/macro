@@ -42,8 +42,6 @@ async fn get_document_share_permission_reads_link_fields(
         r#"
         UPDATE "SharePermission"
         SET
-            "isPublic" = true,
-            "publicAccessLevel" = 'owner',
             "linkShare" = 'TEAM',
             "linkShareAccessLevel" = 'comment'
         WHERE id = 'sp-d2'
