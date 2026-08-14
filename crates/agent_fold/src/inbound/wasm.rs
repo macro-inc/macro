@@ -25,9 +25,9 @@
 
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::FoldedMessage as ModelFoldedMessage;
+use crate::domain::model::{FoldedMessage as ModelFoldedMessage, SessionMetadata};
 use crate::domain::ports::FoldMachine;
-use crate::inbound::wire::{FoldedMessage, FoldedStreamEvent, SessionMetadata};
+use crate::inbound::wire::{FoldedMessage, FoldedStreamEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;

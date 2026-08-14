@@ -14,7 +14,9 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
-use std::{borrow::Cow, path::PathBuf};
+use serde::Serialize;
+use specta::Type;
+use std::{borrow::Cow, path::PathBuf, str::FromStr};
 
 /// One prompt-to-stop cycle within a session.
 ///
@@ -30,7 +32,9 @@ use std::{borrow::Cow, path::PathBuf};
 pub struct TurnId(pub u32);
 
 /// A tool call within a turn, identified by its ACP `toolCallId`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(transparent)]
+#[specta(transparent)]
 pub struct ToolUseId(pub String);
 
 /// The natural key of a [`FoldedMessage`] within its session.
@@ -126,9 +130,11 @@ impl AuthorKind {
 /// reply. Both carry their content as an ordered part list, so a reader can
 /// collapse runs of tool activity or interleave text and tools however it
 /// likes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FoldedMessage {
     /// the id of this message
+    #[serde(rename = "turn")]
     pub id: TurnId,
     /// Who produced it.
     pub author: Author,
@@ -153,13 +159,19 @@ impl FoldedMessage {
 }
 
 /// Who produced a [`FoldedMessage`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Author {
     /// A person, via `session/prompt`.
     ///
     /// The id comes from the log row rather than the ACP payload, and is
     /// absent when the prompt was not attributed to a user.
-    User(Option<MacroUserIdStr<'static>>),
+    User {
+        /// The attributed user's id.
+        #[serde(rename = "userId")]
+        #[specta(type = Option<String>)]
+        user_id: Option<MacroUserIdStr<'static>>,
+    },
     /// The agent.
     Agent,
 }
@@ -169,42 +181,62 @@ impl Author {
     #[must_use]
     pub fn kind(&self) -> AuthorKind {
         match self {
-            Self::User(_) => AuthorKind::User,
+            Self::User { .. } => AuthorKind::User,
             Self::Agent => AuthorKind::Agent,
         }
     }
 }
 
 /// A unit of renderable content.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MessagePart {
     /// Prose from the user or the agent.
-    Text(String),
+    Text {
+        /// The prose.
+        text: String,
+    },
     /// The agent's reasoning, which a reader may want to hide by default.
-    Thought(String),
+    Thought {
+        /// The reasoning.
+        text: String,
+    },
     /// A tool the agent invoked.
-    ToolUse(ToolUse),
+    ToolUse {
+        /// The ACP `toolCallId`.
+        id: ToolUseId,
+        /// What to show as the tool's name.
+        label: String,
+        /// Where the call got to.
+        status: ToolStatus,
+        /// What the tool did, as far as the log reveals.
+        detail: ToolDetail,
+    },
     /// The agent asking to proceed.
-    Permission(Permission),
+    Permission {
+        /// The tool call permission was requested for.
+        #[serde(rename = "toolCall")]
+        tool_call: ToolUseId,
+        /// The choices offered, in the order ACP listed them.
+        options: Vec<PermissionOption>,
+        /// How the request has resolved so far.
+        outcome: PermissionOutcome,
+    },
     /// A user-issued control operation on the session.
-    Control(Control),
+    Control {
+        /// The requested operation.
+        control: Control,
+    },
     /// The agent's working todo list for the turn.
-    Plan(Plan),
+    Plan {
+        /// The tasks, in the order the agent listed them.
+        entries: Vec<PlanEntry>,
+    },
 }
 
-/// The agent's todo list, as it last stood.
-///
-/// Each `plan` session update carries the complete list with current
-/// statuses, and the fold replaces the whole part with it - so a turn shows
-/// one plan, always in its latest state, rather than a trail of revisions.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Plan {
-    /// The tasks, in the order the agent listed them.
-    pub entries: Vec<PlanEntry>,
-}
-
-/// One task on a [`Plan`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One task on an agent plan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct PlanEntry {
     /// What this task aims to accomplish.
     pub content: String,
@@ -216,7 +248,8 @@ pub struct PlanEntry {
 
 /// A [`PlanEntry`]'s relative importance, mirroring ACP's
 /// `PlanEntryPriority`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
 pub enum PlanEntryPriority {
     /// Critical to the overall goal.
     High,
@@ -227,7 +260,8 @@ pub enum PlanEntryPriority {
 }
 
 /// Where a [`PlanEntry`] got to, mirroring ACP's `PlanEntryStatus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
 pub enum PlanEntryStatus {
     /// Not started yet.
     Pending,
@@ -238,7 +272,8 @@ pub enum PlanEntryStatus {
 }
 
 /// A session control operation shown in the conversation timeline.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Control {
     /// The runtime was asked to switch models.
     SetModel {
@@ -251,35 +286,25 @@ pub enum Control {
     Stop,
 }
 
-/// A tool invocation and whatever is known about it so far.
-///
-/// Every field past the id is optional or defaulted, because ACP opens a tool
-/// call before it knows much: the `Write` tool arrives as
-/// `{"rawInput":{},"title":"Write","content":[],"locations":[]}` and is filled
-/// in by later patches. A partially-known call still renders.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ToolUse {
-    /// The ACP `toolCallId`.
-    pub id: ToolUseId,
-    /// What to show as the tool's name.
-    ///
-    /// Prefers the harness's own tool name (`Bash`, `Read`, `Write`) over
-    /// ACP's coarse `kind`, since that is what a reader recognizes. Falls
-    /// back to the ACP title when the harness reports nothing.
-    pub label: String,
-    /// Where the call got to.
-    pub status: ToolStatus,
-    /// What the tool did, as far as the log reveals.
-    pub detail: ToolDetail,
-}
-
 /// How far a tool call progressed.
 ///
 /// [`ToolStatus::Pending`] and [`ToolStatus::Running`] are legitimate final
 /// states, not errors: a live session's newest calls have not finished, and a
 /// session that dies mid-call leaves one behind permanently.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, strum::Display, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    strum::Display,
+    strum::IntoStaticStr,
+    Serialize,
+    Type,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ToolStatus {
     /// Not started - either still streaming input or awaiting permission.
     #[default]
@@ -302,7 +327,8 @@ pub enum ToolStatus {
 /// has a variant here, so the fold never falls back to [`Self::Other`] for a
 /// kind ACP defines - only for `switch_mode` (nothing a reader would want
 /// rendered) and a kind this fold does not yet know about.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolDetail {
     /// A shell command. ACP's `execute`.
     Terminal {
@@ -311,6 +337,7 @@ pub enum ToolDetail {
         /// Captured output, ANSI escapes intact. See [`AnsiText`].
         output: Option<AnsiText>,
         /// Process exit code, when the harness reported one.
+        #[serde(rename = "exitCode")]
         exit_code: Option<i32>,
     },
     /// One or more file modifications. ACP's `edit`.
@@ -362,16 +389,19 @@ pub enum ToolDetail {
     /// for.
     Other {
         /// ACP's tool kind, as its wire string.
+        #[serde(rename = "acpKind")]
         kind: String,
         /// Text the call reported, when any.
         output: Option<String>,
         /// The tool's input, when reported.
+        #[specta(type = specta_typescript::Unknown)]
         input: Option<serde_json::Value>,
     },
 }
 
 /// A file modification a tool reported.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct FileDiff {
     /// The file that changed.
     pub path: PathBuf,
@@ -386,7 +416,9 @@ pub struct FileDiff {
 /// Stripping here would be lossy and irreversible, and the escapes carry real
 /// information - the recordings are full of colorized `ls` and `grep` output.
 /// Rendering decides whether to interpret, strip, or ignore them.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(transparent)]
+#[specta(transparent)]
 pub struct AnsiText(pub String);
 
 impl AnsiText {
@@ -397,19 +429,9 @@ impl AnsiText {
     }
 }
 
-/// The agent asking permission to proceed with a tool call.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Permission {
-    /// The tool call permission was requested for.
-    pub tool_call: ToolUseId,
-    /// The choices offered, in the order ACP listed them.
-    pub options: Vec<PermissionOption>,
-    /// How the request has resolved so far.
-    pub outcome: PermissionOutcome,
-}
-
-/// One choice offered for a [`Permission`] request.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One choice offered for a permission request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct PermissionOption {
     /// The id to report back when this option is chosen.
     pub id: String,
@@ -429,7 +451,8 @@ pub struct PermissionOption {
 /// was written would have failed that deserialize already - so an unmatched
 /// kind here cannot happen in practice, not "happens and is rendered
 /// unlabeled."
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
 pub enum PermissionOptionKind {
     /// Allow this operation only this time.
     AllowOnce,
@@ -441,20 +464,22 @@ pub enum PermissionOptionKind {
     RejectAlways,
 }
 
-/// How a [`Permission`] request has resolved so far.
+/// How a permission request has resolved so far.
 ///
 /// Not just "chosen or not": nothing chosen has more than one cause, and a
 /// reader deciding whether to still show the options needs to tell them
 /// apart. [`Self::Pending`] may still resolve; [`Self::Errored`] and
 /// [`Self::Unrecognized`] have already resolved, just not into anything this
 /// fold can show as a choice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PermissionOutcome {
     /// No response has arrived yet - the request is still outstanding.
     Pending,
     /// An option was chosen.
     Selected {
         /// The chosen option's id.
+        #[serde(rename = "optionId")]
         option_id: String,
     },
     /// The request was cancelled without a choice.
@@ -470,12 +495,11 @@ pub enum PermissionOutcome {
 
 /// Why a turn stopped.
 ///
-/// Parsed straight off ACP's `stopReason` wire string by the strum-derived
-/// [`FromStr`](std::str::FromStr): the `snake_case` variant names are the
-/// wire names, and anything unmodelled falls through to [`Self::Other`], so
-/// parsing never fails.
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumString)]
-#[strum(serialize_all = "snake_case")]
+/// Parsed straight off ACP's `stopReason` wire string by [`FromStr`]: the
+/// `snake_case` variant names are the wire names, and anything unmodelled
+/// falls through to [`Self::Other`], so parsing never fails.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StopReason {
     /// The agent finished its turn.
     EndTurn,
@@ -488,13 +512,33 @@ pub enum StopReason {
     /// The turn was cancelled.
     Cancelled,
     /// A stop reason this fold does not model, as its wire string.
-    #[strum(default)]
-    Other(String),
+    Other {
+        /// The unrecognized wire value.
+        reason: String,
+    },
+}
+
+impl FromStr for StopReason {
+    type Err = std::convert::Infallible;
+
+    fn from_str(reason: &str) -> Result<Self, Self::Err> {
+        Ok(match reason {
+            "end_turn" => Self::EndTurn,
+            "max_tokens" => Self::MaxTokens,
+            "max_turn_requests" => Self::MaxTurnRequests,
+            "refusal" => Self::Refusal,
+            "cancelled" => Self::Cancelled,
+            reason => Self::Other {
+                reason: reason.to_owned(),
+            },
+        })
+    }
 }
 
 /// Session-level state derived from the log, latest-wins and carried whole.
 /// Fields start absent and fill in as the log reveals them.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionMetadata {
     /// Current model per the runtime's own `configOptions` responses, so a
     /// rejected model change never moves it.
@@ -514,7 +558,8 @@ pub struct SessionMetadata {
 /// Mirrors ACP's `AvailableCommand`, flattened: the only input shape ACP
 /// defines today is "unstructured text after the name," so the hint is
 /// carried directly rather than through a nested enum.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct AvailableCommand {
     /// Bare name as advertised (`"qc"`, `"honeycomb:query-patterns"`) - no
     /// leading slash, which is client syntax rather than part of the name.
@@ -526,7 +571,8 @@ pub struct AvailableCommand {
 }
 
 /// One model the runtime offers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelOption {
     /// The value to send back to select this model.
     pub id: String,

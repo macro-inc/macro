@@ -1,7 +1,7 @@
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
-  FoldedMessagePart,
+  MessagePart,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
 
@@ -37,7 +37,7 @@ export type MagicChipPresentationInput = {
 };
 
 function toolActivity(
-  part: Extract<FoldedMessagePart, { kind: 'tool_use' }>
+  part: Extract<MessagePart, { kind: 'tool_use' }>
 ): MagicChipActivity {
   const busy = part.status === 'pending' || part.status === 'running';
   const failed = part.status === 'failed';
@@ -82,7 +82,7 @@ function toolActivity(
     .exhaustive();
 }
 
-function partActivity(part: FoldedMessagePart): MagicChipActivity {
+function partActivity(part: MessagePart): MagicChipActivity {
   return match(part)
     .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: true }))
     .with({ kind: 'thought' }, ({ text }) => ({
@@ -99,8 +99,16 @@ function partActivity(part: FoldedMessagePart): MagicChipActivity {
       label: 'Resuming work',
       busy: true,
     }))
-    .with({ kind: 'permission' }, () => ({
+    .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
       label: 'Permission needed',
+      busy: false,
+    }))
+    .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
+      label: 'Permission failed',
+      busy: false,
+    }))
+    .with({ kind: 'permission', outcome: { kind: 'unrecognized' } }, () => ({
+      label: 'Permission unavailable',
       busy: false,
     }))
     .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
@@ -170,7 +178,11 @@ function turnInFlightActivity(
 ): MagicChipActivity | undefined {
   if (!response) return undefined;
   const blocked = response.parts.findLast(
-    (part) => part.kind === 'permission' && !part.outcome
+    (part) =>
+      part.kind === 'permission' &&
+      (part.outcome.kind === 'pending' ||
+        part.outcome.kind === 'errored' ||
+        part.outcome.kind === 'unrecognized')
   );
   const runningTool = response.parts.findLast(
     (part) =>
@@ -219,7 +231,7 @@ function answerMarkdown(response: FoldedMessage | undefined): string {
   return (
     response?.parts
       .filter(
-        (part): part is Extract<FoldedMessagePart, { kind: 'text' }> =>
+        (part): part is Extract<MessagePart, { kind: 'text' }> =>
           part.kind === 'text' && Boolean(part.text.trim())
       )
       .map((part) => part.text)

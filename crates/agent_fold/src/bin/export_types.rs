@@ -6,7 +6,8 @@
 //! cargo run -p agent_fold --bin export_types
 //! ```
 
-use agent_fold::inbound::wire::{FoldedMessage, FoldedStreamEvent, SessionMetadata};
+use agent_fold::domain::model::SessionMetadata;
+use agent_fold::inbound::wire::{FoldedMessage, FoldedStreamEvent};
 use specta::Types;
 use specta_typescript::Typescript;
 use std::fs;

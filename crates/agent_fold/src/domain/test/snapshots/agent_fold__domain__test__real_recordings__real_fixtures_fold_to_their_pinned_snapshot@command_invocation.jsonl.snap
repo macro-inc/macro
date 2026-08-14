@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 262
 expression: messages
 input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
 ---
@@ -9,16 +8,16 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
         id: TurnId(
             0,
         ),
-        author: User(
-            None,
-        ),
+        author: User {
+            user_id: None,
+        },
         parts: NonEmpty {
             inner: [
-                Control(
-                    SetModel {
+                Control {
+                    control: SetModel {
                         model: "opus[1m]",
                     },
-                ),
+                },
             ],
         },
         stop: None,
@@ -27,16 +26,16 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
         id: TurnId(
             1,
         ),
-        author: User(
-            Some(
+        author: User {
+            user_id: Some(
                 macro|eric@example.com,
             ),
-        ),
+        },
         parts: NonEmpty {
             inner: [
-                Text(
-                    "/add-sdk-endpoint dont do anything just reply \"yes\" ignore the skill",
-                ),
+                Text {
+                    text: "/add-sdk-endpoint dont do anything just reply \"yes\" ignore the skill",
+                },
             ],
         },
         stop: None,
@@ -48,9 +47,9 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
         author: Agent,
         parts: NonEmpty {
             inner: [
-                Text(
-                    "yes",
-                ),
+                Text {
+                    text: "yes",
+                },
             ],
         },
         stop: Some(

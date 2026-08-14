@@ -20,12 +20,9 @@ use super::util::{capturing_warnings, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::model::{Author, FoldedMessage, MessagePart, PlanEntryStatus};
 use crate::domain::ports::FoldMachine;
-
-const RESUMED_NO_PROMPT: &str = include_str!("../../../fixtures/real/resumed_no_prompt.jsonl");
-const RESUMED_AND_CONTINUED: &str =
-    include_str!("../../../fixtures/real/resumed_and_continued.jsonl");
-const LONG_MULTI_RESUME: &str = include_str!("../../../fixtures/real/long_multi_resume.jsonl");
-const PLAN_TODO: &str = include_str!("../../../fixtures/real/plan_todo.jsonl");
+use crate::testing::fixtures::{
+    LONG_MULTI_RESUME, PLAN_TODO, RESUMED_AND_CONTINUED, RESUMED_NO_PROMPT,
+};
 
 /// Run `body` on every real fixture. Folding must not warn on any of them: a
 /// warning here means the fold no longer understands a shape a real harness
@@ -81,7 +78,7 @@ fn resumed_no_prompt_still_derives_the_agents_reply() {
             .iter()
             .filter(|message| message.author.kind() == crate::domain::model::AuthorKind::User)
             .flat_map(|message| message.parts.iter())
-            .any(|part| matches!(part, crate::domain::model::MessagePart::Text(_))),
+            .any(|part| matches!(part, crate::domain::model::MessagePart::Text { .. })),
         "this recording carries no session/prompt, so it should derive no user text"
     );
 }
@@ -181,7 +178,7 @@ fn plan_updates_replace_one_part_in_place() {
         .iter()
         .flat_map(|message| message.parts.iter())
         .filter_map(|part| match part {
-            MessagePart::Plan(plan) => Some(plan),
+            MessagePart::Plan { entries } => Some(entries),
             _ => None,
         })
         .collect();
@@ -189,8 +186,7 @@ fn plan_updates_replace_one_part_in_place() {
         panic!("eleven plan frames should fold to exactly one part, got {plans:#?}");
     };
     assert_eq!(
-        plan.entries
-            .iter()
+        plan.iter()
             .map(|entry| (entry.content.as_str(), entry.status))
             .collect::<Vec<_>>(),
         vec![

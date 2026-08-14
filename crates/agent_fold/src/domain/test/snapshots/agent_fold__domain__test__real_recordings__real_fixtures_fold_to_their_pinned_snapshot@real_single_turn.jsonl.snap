@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 262
 expression: messages
 input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
 ---
@@ -9,16 +8,16 @@ input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
         id: TurnId(
             0,
         ),
-        author: User(
-            Some(
+        author: User {
+            user_id: Some(
                 macro|eric@example.com,
             ),
-        ),
+        },
         parts: NonEmpty {
             inner: [
-                Text(
-                    "hi",
-                ),
+                Text {
+                    text: "hi",
+                },
             ],
         },
         stop: None,
@@ -30,9 +29,9 @@ input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
         author: Agent,
         parts: NonEmpty {
             inner: [
-                Text(
-                    "Hey! What are we working on today?",
-                ),
+                Text {
+                    text: "Hey! What are we working on today?",
+                },
             ],
         },
         stop: Some(

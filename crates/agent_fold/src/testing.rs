@@ -1,7 +1,7 @@
-//! In-memory port implementations and recorded fixtures for tests.
+//! In-memory port implementations for tests.
 //!
 //! Lets this crate's own tests - and crates that consume this one, like
-//! `agent_session` - fold real recorded protocol traffic without a database.
+//! `agent_session` - exercise the fold without a database.
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::ports::LogRepo;
@@ -12,6 +12,13 @@ use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+
+/// Recorded and hand-shaped protocol logs shared by tests.
+pub mod fixtures;
+
+/// The compact complete-turn fixture, retained at its original path for
+/// downstream tests.
+pub use fixtures::TURN;
 
 /// An in-memory [`LogRepo`].
 ///
@@ -63,14 +70,6 @@ impl LogRepo for InMemoryLog {
             .into())
     }
 }
-
-/// The hermetic fixture: one complete turn with prose, a permission-gated
-/// terminal command, a patched-in edit, and a clean stop.
-///
-/// Hand-shaped, unlike the real recordings under `fixtures/real/`, which the
-/// sweep tests in `domain::test::real_recordings` discover by glob - see
-/// `fixtures/real/README.md` for what each of those proves.
-pub const TURN: &str = include_str!("../fixtures/turn.jsonl");
 
 /// The session id fixture logs are parsed into by default.
 #[must_use]

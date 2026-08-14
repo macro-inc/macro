@@ -75,6 +75,46 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it.each([
+    ['pending', 'Permission needed'],
+    ['errored', 'Permission failed'],
+    ['unrecognized', 'Permission unavailable'],
+  ] as const)(
+    'prioritizes %s permission state over its pending tool',
+    (kind, label) => {
+      const presentation = deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        response: response({
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'tool',
+              label: 'Terminal',
+              status: 'pending',
+              detail: {
+                kind: 'terminal',
+                command: 'cargo test',
+                output: null,
+                exitCode: null,
+              },
+            },
+            {
+              kind: 'permission',
+              toolCall: 'tool',
+              options: [],
+              outcome: { kind },
+            },
+          ],
+        }),
+      });
+
+      expect(presentation).toMatchObject({
+        kind: 'working',
+        activity: { label, busy: false },
+      });
+    }
+  );
+
   it('shows the answer as it is written, before the turn ends', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',

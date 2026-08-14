@@ -12,8 +12,8 @@
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, Control, FoldedMessage, MessagePart, Permission, PermissionOutcome, PlanEntryStatus,
-    StopReason, ToolDetail, ToolUse,
+    Author, Control, FoldedMessage, MessagePart, PermissionOption, PermissionOutcome,
+    PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
 };
 use agent_fold::domain::ports::LogRepo;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -189,8 +189,8 @@ fn fail(path: &std::path::Path, error: &dyn std::error::Error) -> ExitCode {
 fn render_message(message: &FoldedMessage) -> String {
     let mut out = String::new();
     let author = match &message.author {
-        Author::User(Some(id)) => format!("user {id}"),
-        Author::User(None) => "user".to_owned(),
+        Author::User { user_id: Some(id) } => format!("user {id}"),
+        Author::User { user_id: None } => "user".to_owned(),
         Author::Agent => "agent".to_owned(),
     };
     let stop = message
@@ -201,15 +201,24 @@ fn render_message(message: &FoldedMessage) -> String {
     let _ = writeln!(out, "── turn {} · {author}{stop} ──", message.id.0);
     for part in message.parts.iter() {
         match part {
-            MessagePart::Text(text) => {
+            MessagePart::Text { text } => {
                 let _ = writeln!(out, "{}", text.trim_end());
             }
-            MessagePart::Thought(text) => {
+            MessagePart::Thought { text } => {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }
-            MessagePart::ToolUse(tool) => out.push_str(&render_tool(tool)),
-            MessagePart::Permission(permission) => out.push_str(&render_permission(permission)),
-            MessagePart::Control(control) => {
+            MessagePart::ToolUse {
+                label,
+                status,
+                detail,
+                ..
+            } => out.push_str(&render_tool(label, *status, detail)),
+            MessagePart::Permission {
+                tool_call,
+                options,
+                outcome,
+            } => out.push_str(&render_permission(tool_call, options, outcome)),
+            MessagePart::Control { control } => {
                 let label = match control {
                     Control::SetModel { model } => format!("model changed to {model}"),
                     Control::Compact => "context compacted".to_owned(),
@@ -217,9 +226,9 @@ fn render_message(message: &FoldedMessage) -> String {
                 };
                 let _ = writeln!(out, "[{label}]");
             }
-            MessagePart::Plan(plan) => {
+            MessagePart::Plan { entries } => {
                 let _ = writeln!(out, "[plan]");
-                for entry in &plan.entries {
+                for entry in entries {
                     let mark = match entry.status {
                         PlanEntryStatus::Pending => " ",
                         PlanEntryStatus::InProgress => "~",
@@ -235,10 +244,10 @@ fn render_message(message: &FoldedMessage) -> String {
 }
 
 /// A tool call: `[label · status]` then whatever detail the fold recovered.
-fn render_tool(tool: &ToolUse) -> String {
+fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "[{} · {}]", tool.label, tool.status);
-    match &tool.detail {
+    let _ = writeln!(out, "[{label} · {status}]");
+    match detail {
         ToolDetail::Terminal {
             command,
             output,
@@ -308,20 +317,23 @@ fn render_tool(tool: &ToolUse) -> String {
 }
 
 /// A permission request: what was asked, what was offered, what was chosen.
-fn render_permission(permission: &Permission) -> String {
+fn render_permission(
+    tool_call: &ToolUseId,
+    options: &[PermissionOption],
+    outcome: &PermissionOutcome,
+) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "[permission · for {}]", permission.tool_call.0);
-    for option in &permission.options {
+    let _ = writeln!(out, "[permission · for {}]", tool_call.0);
+    for option in options {
         let _ = writeln!(
             out,
             "{}",
             indent(&format!("- {} ({:?})", option.name, option.kind))
         );
     }
-    let outcome = match &permission.outcome {
+    let outcome = match outcome {
         PermissionOutcome::Selected { option_id } => {
-            let name = permission
-                .options
+            let name = options
                 .iter()
                 .find(|option| option.id == *option_id)
                 .map_or(option_id.as_str(), |option| option.name.as_str());
@@ -343,7 +355,7 @@ fn render_stop(stop: &StopReason) -> String {
         StopReason::MaxTurnRequests => "hit max turn requests".to_owned(),
         StopReason::Refusal => "refused".to_owned(),
         StopReason::Cancelled => "cancelled".to_owned(),
-        StopReason::Other(reason) => format!("stopped: {reason}"),
+        StopReason::Other { reason } => format!("stopped: {reason}"),
     }
 }
 

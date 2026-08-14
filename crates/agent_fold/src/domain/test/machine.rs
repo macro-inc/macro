@@ -236,7 +236,9 @@ fn an_interrupting_prompt_reports_only_its_own_message() {
     let abandoned = &consumer.messages[1];
     assert_eq!(
         *abandoned.parts,
-        vec![MessagePart::Text("half an answ".to_owned())]
+        vec![MessagePart::Text {
+            text: "half an answ".to_owned()
+        }]
     );
     assert_eq!(abandoned.stop, None, "no response ever closed it");
 }
@@ -291,7 +293,9 @@ fn content_without_a_prompt_still_folds() {
     let agent = &consumer.messages[0];
     assert_eq!(
         *agent.parts,
-        vec![MessagePart::Text("picking up where we left off".to_owned())]
+        vec![MessagePart::Text {
+            text: "picking up where we left off".to_owned()
+        }]
     );
     assert_eq!(
         agent.stop,
@@ -314,7 +318,7 @@ fn a_tool_call_without_a_prompt_opens_a_turn() {
     let agent = &consumer.messages[0];
     assert_eq!(agent.id, TurnId(0));
     assert!(
-        matches!(&agent.parts[0], MessagePart::ToolUse(tool) if tool.label == "Bash"),
+        matches!(&agent.parts[0], MessagePart::ToolUse { label, .. } if label == "Bash"),
         "and the call is its first part: {:?}",
         agent.parts[0]
     );
