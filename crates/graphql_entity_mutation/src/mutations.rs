@@ -229,7 +229,8 @@ impl GraphqlLinkShare {
 pub struct EntitySharePolicyInput {
     /// Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
     pub link_share: MaybeUndefined<GraphqlLinkShare>,
-    /// Link access level. Omit to leave unchanged or pass null to clear it.
+    /// Link access level. Omit to leave unchanged or pass null to reset it to the default level
+    /// when a link share exists.
     pub link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
     /// Channel access entries to add, remove, or replace.
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,

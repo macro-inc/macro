@@ -77,7 +77,8 @@ pub struct UpdateSharePermissionRequestV2 {
     /// disable link sharing.
     #[serde(default, deserialize_with = "double_option")]
     pub link_share: Option<Option<LinkShare>>,
-    /// The link access level. Omit to leave unchanged or pass `null` to clear it.
+    /// The link access level. Omit to leave unchanged or pass `null` to reset it to the default
+    /// level when a link share exists.
     #[serde(default, deserialize_with = "double_option")]
     pub link_share_access_level: Option<Option<AccessLevel>>,
     /// Any channel share permissions to be created/updated/removed
