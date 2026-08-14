@@ -4214,7 +4214,7 @@
               },
               {
                 "$ref": "#/components/schemas/AccessLevel",
-                "description": "The link access level. Omit to leave unchanged or pass `null` to clear it."
+                "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
               }
             ]
           }
