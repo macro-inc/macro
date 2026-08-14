@@ -3,11 +3,7 @@
 /// A hand-shaped complete turn with prose, tools, permission, and a clean stop.
 pub const TURN: &str = include_str!("../../fixtures/turn.jsonl");
 
-/// A sanitized real session with one prompt and one reply.
-pub const REAL_SINGLE_TURN: &str = include_str!("../../fixtures/real/real_single_turn.jsonl");
 
-/// A sanitized real session with three ordinary turns.
-pub const REAL_MULTI_TURN: &str = include_str!("../../fixtures/real/real_multi_turn.jsonl");
 
 /// A sanitized real resumed session followed by fresh prompts.
 pub const RESUMED_AND_CONTINUED: &str =
