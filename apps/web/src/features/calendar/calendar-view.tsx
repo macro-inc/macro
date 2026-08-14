@@ -40,6 +40,7 @@ import {
   CalendarViewContextProvider,
   useCalendarView,
 } from './CalendarViewContext';
+import { calendarPeriodLabel } from './calendar-label';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
@@ -191,6 +192,9 @@ function CalendarWorkspace() {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
   const dateTitle = createMemo(() => formatMonthTitle(currentDate()));
+  const periodLabel = createMemo(() =>
+    calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
+  );
   const visibleRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
@@ -277,7 +281,7 @@ function CalendarWorkspace() {
                   variant="ghost"
                   size="icon-sm"
                   class="rounded-lg"
-                  label="Previous period"
+                  label={`Previous ${periodLabel()}`}
                   hotkey={TOKENS.calendar.period.previous}
                   onClick={() => void pager.previous()}
                 >
@@ -287,7 +291,7 @@ function CalendarWorkspace() {
                   variant="ghost"
                   size="icon-sm"
                   class="rounded-lg"
-                  label="Next period"
+                  label={`Next ${periodLabel()}`}
                   hotkey={TOKENS.calendar.period.next}
                   onClick={() => void pager.next()}
                 >

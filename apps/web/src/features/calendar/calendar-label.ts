@@ -1,4 +1,16 @@
 import type { VisibleCalendar } from '@queries/calendar/calendars';
+import type { CalendarPeriodView } from './events/types';
+
+const CALENDAR_PERIOD_LABELS = {
+  dayGridMonth: 'Month',
+  timeGridWeek: 'Week',
+  timeGridDay: 'Day',
+} satisfies Record<CalendarPeriodView, string>;
+
+/** Human-readable label for a calendar period view. */
+export function calendarPeriodLabel(view: CalendarPeriodView): string {
+  return CALENDAR_PERIOD_LABELS[view];
+}
 
 /**
  * Display label for a calendar in pickers and filters. Google names primary

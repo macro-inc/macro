@@ -608,15 +608,8 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       </FullCalendar.EventContent>
 
       <FullCalendar.NowIndicatorContent>
-        {({ isAxis, view }) => {
-          if (isAxis) {
-            return view.type === 'timeGridWeek' ? (
-              <span
-                aria-hidden="true"
-                class="calendar-now-axis-indicator calendar-now-axis-indicator-gutter"
-              />
-            ) : null;
-          }
+        {({ isAxis }) => {
+          if (isAxis) return null;
 
           return (
             <CurrentTimeAxisIndicator
