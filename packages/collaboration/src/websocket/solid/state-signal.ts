@@ -3,6 +3,14 @@ import type { Websocket } from '../core/websocket';
 import { WebsocketConnectionState } from '../core/websocket-connection-state';
 import { WebsocketEvent } from '../core/websocket-event';
 
+/** The slice of {@link Websocket} the signal needs — satisfied by the
+ * concrete websocket and by virtual sockets (e.g. the gateway sync
+ * transport's per-document sockets). */
+export type StateSignalSocket = Pick<
+  Websocket<any, any>,
+  'connectionState' | 'addEventListener' | 'removeEventListener'
+>;
+
 /**
  * Creates a reactive signal that tracks the connection state of a websocket.
  *
@@ -10,7 +18,7 @@ import { WebsocketEvent } from '../core/websocket-event';
  * @returns A reactive signal that tracks the connection state of the websocket.
  */
 export function createWebsocketStateSignal(
-  ws: Websocket<any, any>
+  ws: StateSignalSocket
 ): Accessor<WebsocketConnectionState> {
   const [state, setState] = createSignal(ws.connectionState);
 

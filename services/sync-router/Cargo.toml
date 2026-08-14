@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "sync_router"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+bebop = { workspace = true }
+connection_gateway_models = { path = "../../crates/connection_gateway_models" }
+futures = { workspace = true }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+opentelemetry = { workspace = true }
+postcard = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
+sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+mockall = { workspace = true }

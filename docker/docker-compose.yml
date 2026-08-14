@@ -61,6 +61,18 @@ services:
   # connection_gateway (Port 8082)
   # WebSocket gateway - Redis only
   # ============================================================================
+  sync_router:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/sync_router"]
+    environment:
+      - SYNC_SERVICE_URL=http://sync-service:8787
+    depends_on:
+      - redis
+      - sync_service
+    networks:
+      databases:
+      services:
+
   connection_gateway:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/connection_gateway_service"]
