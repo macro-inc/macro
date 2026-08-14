@@ -55,25 +55,29 @@ use crate::domain::error::FoldError;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::meta::{claude_code, command_from_raw_input};
 use crate::domain::model::{
-    AnsiText, Author, Control, FileDiff, FoldedMessage, IncrementalFoldResult, MessagePart,
-    Permission, PermissionOption, PermissionOptionKind, PermissionOutcome, Plan, PlanEntry,
-    PlanEntryPriority, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUse, ToolUseId,
-    TurnId,
+    AnsiText, Author, AvailableCommand, Control, ControlOutcome, FileDiff, FoldEvent,
+    FoldedMessage, MessagePart, ModelOption, PermissionOption, PermissionOptionKind,
+    PermissionOutcome, PlanEntry, PlanEntryPriority, PlanEntryStatus, SessionMetadata, StopReason,
+    ToolDetail, ToolStatus, ToolUseId, TurnId,
 };
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
+use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
-    Content, ContentBlock, Meta, Plan as AcpPlan, PromptRequest, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
-    ToolCallStatus, ToolCallUpdate, ToolKind,
+    AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate, Content,
+    ContentBlock, LoadSessionRequest, Meta, NewSessionRequest, Plan as AcpPlan, PromptRequest,
+    RequestId, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    Response, ResumeSessionRequest, SessionConfigKind, SessionConfigOption,
+    SessionConfigSelectOptions, SessionInfoUpdate, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, ToolCall, ToolCallContent, ToolCallLocation, ToolCallStatus,
+    ToolCallUpdate, ToolKind,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
-use agent_runtime_protocol::domain::action::AgentAction;
-use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, MODEL_CONFIG_ID};
+use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// Collapse a session's protocol log into renderable messages.
@@ -103,7 +107,7 @@ fn fold_machine(log: impl IntoIterator<Item = AgentSessionLog>) -> FoldMachineIm
 ///
 /// Holds the fold's whole [`State`], including every message derived so far,
 /// which is what makes it both the incremental fold and the store the
-/// [`IncrementalFoldResult`]s borrow from. See the module docs for why the
+/// [`FoldEvent`]s borrow from. See the module docs for why the
 /// machine rather than a batch fold.
 ///
 /// Frames must be pushed in log order. A machine only ever grows, so a caller
@@ -142,20 +146,35 @@ impl FoldMachineImpl {
     pub fn next_turn_id(&self) -> TurnId {
         TurnId(self.state.turns_opened)
     }
+
+    /// Session-level state derived so far, for callers that want state
+    /// rather than [`FoldEvent::MetadataUpdated`] changes.
+    #[must_use]
+    pub fn metadata(&self) -> &SessionMetadata {
+        &self.state.metadata
+    }
 }
 
 impl FoldMachine for FoldMachineImpl {
-    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_> {
-        let Some(changed) = self.state.step(log) else {
-            return IncrementalFoldResult::Unchanged;
-        };
-        let Some(message) = self.state.messages.get(changed.message) else {
-            return IncrementalFoldResult::Unchanged;
-        };
-        match changed.kind {
-            Change::New => IncrementalFoldResult::NewMessage(Cow::Borrowed(message)),
-            Change::Updated => IncrementalFoldResult::MessageUpdate(Cow::Borrowed(message)),
-        }
+    fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
+        let changes = self.state.step(log);
+        changes
+            .into_iter()
+            .filter_map(|change| match change {
+                StepChange::Message(changed) => {
+                    self.state
+                        .messages
+                        .get(changed.message)
+                        .map(|message| match changed.kind {
+                            Change::New => FoldEvent::NewMessage(Cow::Borrowed(message)),
+                            Change::Updated => FoldEvent::MessageUpdate(Cow::Borrowed(message)),
+                        })
+                }
+                StepChange::Metadata => Some(FoldEvent::MetadataUpdated(Cow::Borrowed(
+                    &self.state.metadata,
+                ))),
+            })
+            .collect()
     }
 }
 
@@ -190,6 +209,27 @@ impl Changed {
 enum Change {
     New,
     Updated,
+}
+
+/// One change a step implied. A step returns however many it implied, in
+/// emission order - most frames imply none, and the set-model response
+/// implies two (its control's outcome, and the config it restates).
+#[derive(Debug, Clone, Copy)]
+enum StepChange {
+    Message(Changed),
+    Metadata,
+}
+
+impl StepChange {
+    /// The changes for a handler that touched at most one message.
+    fn message(changed: Option<Changed>) -> Vec<Self> {
+        changed.map(Self::Message).into_iter().collect()
+    }
+
+    /// The changes for a handler that reported whether the metadata moved.
+    fn metadata(changed: bool) -> Vec<Self> {
+        changed.then_some(Self::Metadata).into_iter().collect()
+    }
 }
 
 impl<T: LogRepo + Sync> FoldSession for T {
@@ -228,6 +268,16 @@ struct FoldState {
     turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
     pending_permissions: HashMap<RequestId, ToolUseId>,
+    /// Session-level state derived so far. Handlers mutate it freely; the
+    /// machine diffs it against what it last reported.
+    metadata: SessionMetadata,
+    /// Requests whose responses carry config options. The response body is
+    /// authoritative - a rejected change answers with an error and moves
+    /// nothing.
+    pending_config_requests: HashSet<RequestId>,
+    /// Controls awaiting a response, by request id: where the control part
+    /// sits (message, part), so the response can resolve its outcome.
+    pending_controls: HashMap<RequestId, (usize, usize)>,
 }
 
 /// A turn under construction.
@@ -263,38 +313,50 @@ struct Turn {
 }
 
 impl FoldState {
-    /// Advance by one log entry, returning the message it changed.
+    /// Advance by one log entry, returning what it changed in emission order.
     ///
-    /// One entry changes at most one message - see [`IncrementalFoldResult`]
+    /// One entry changes at most one message today - see [`FoldEvent`]
     /// for why the prompt-interrupts-a-turn case is not an exception.
-    fn step(&mut self, entry: AgentSessionLog) -> Option<Changed> {
+    fn step(&mut self, entry: AgentSessionLog) -> Vec<StepChange> {
         self.session = Some(entry.agent_session_id);
 
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
             Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+                // Before the control dispatch, which returns early for the
+                // set-model request whose response this correlates.
+                self.note_config_request(&acp.0);
                 if let Some(action) = AgentAction::control_from_runtime(message) {
-                    return match action {
-                        AgentAction::SetModel(action) => self.record_control(
-                            Control::SetModel {
-                                model: action.model,
-                            },
-                            entry.user_id.clone(),
-                        ),
+                    return StepChange::message(match action {
+                        AgentAction::SetModel(action) => {
+                            let request_id = match &acp.0 {
+                                RawJsonRpcMessage::Request(request) => Some(&request.id),
+                                _ => None,
+                            };
+                            self.record_control(
+                                Control::SetModel {
+                                    model: action.model,
+                                },
+                                request_id,
+                                entry.user_id.clone(),
+                            )
+                        }
                         AgentAction::Compact => match &acp.0 {
                             RawJsonRpcMessage::Request(request) => {
                                 self.begin_compact(&request.id, entry.user_id.clone())
                             }
                             _ => None,
                         },
+                        // A stop is a notification: nothing can answer it, so
+                        // it is accepted the moment it is sent.
                         AgentAction::Stop => {
-                            self.record_control(Control::Stop, entry.user_id.clone())
+                            self.record_control(Control::Stop, None, entry.user_id.clone())
                         }
                         AgentAction::Prompt(_) => None,
-                    };
+                    });
                 }
-                match &acp.0 {
+                StepChange::message(match &acp.0 {
                     // A user's prompt opens a turn.
                     RawJsonRpcMessage::Request(request)
                         if PromptRequest::matches_method(&request.method) =>
@@ -310,7 +372,7 @@ impl FoldState {
                     }
                     // Handshake and configuration traffic: nothing to render.
                     RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
-                }
+                })
             }
 
             Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
@@ -324,22 +386,60 @@ impl FoldState {
                 RawJsonRpcMessage::Request(request)
                     if RequestPermissionRequest::matches_method(&request.method) =>
                 {
-                    self.request_permission(&request.id, request.params.as_ref())
+                    StepChange::message(
+                        self.request_permission(&request.id, request.params.as_ref()),
+                    )
                 }
-                // The response to `session/prompt` closes the turn.
+                // The response to `session/prompt` closes the turn; a
+                // config-bearing response updates the metadata; a control's
+                // response resolves its outcome. Set-model is both of the
+                // latter at once.
                 RawJsonRpcMessage::Response(Response::Result { id, result }) => {
-                    self.end_turn(id, Some(result))
+                    let control = self.resolve_control(id, None);
+                    if self.pending_config_requests.remove(id) {
+                        let mut changes = StepChange::message(control);
+                        changes.extend(StepChange::metadata(self.apply_config_response(result)));
+                        changes
+                    } else if control.is_some() {
+                        StepChange::message(control)
+                    } else {
+                        StepChange::message(self.end_turn(id, Some(result)))
+                    }
                 }
-                RawJsonRpcMessage::Response(Response::Error { id, .. }) => self.end_turn(id, None),
-                RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => None,
+                RawJsonRpcMessage::Response(Response::Error { id, error }) => {
+                    let control = self.resolve_control(id, Some(&error.message));
+                    // An error response moves no metadata, so a config-bearing
+                    // request's failure changes at most its control part.
+                    if self.pending_config_requests.remove(id) || control.is_some() {
+                        StepChange::message(control)
+                    } else {
+                        StepChange::message(self.end_turn(id, None))
+                    }
+                }
+                RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),
             },
 
-            // Runtime lifecycle events carry no conversation content. The one
-            // the service acts on, `acp_ready`, is a handshake signal.
-            Message::ToServer(ToServerMessage::Event { .. }) => None,
+            // Runtime lifecycle events carry no conversation content, but
+            // they are the session's status, and `acp_ready` marks a
+            // connection boundary: request ids restart per connection, so
+            // nothing pending can be answered past one - a stale entry would
+            // misattribute a new connection's reused id.
+            Message::ToServer(ToServerMessage::Event { event }) => {
+                if matches!(event, SystemEvent::AcpReady) {
+                    self.pending_config_requests.clear();
+                    self.pending_permissions.clear();
+                    self.pending_controls.clear();
+                }
+                let status = Some(event.as_str().to_owned());
+                let changed = self.metadata.status != status;
+                if changed {
+                    self.metadata.status = status;
+                }
+                StepChange::metadata(changed)
+            }
 
             // The wrapped protocol enums are `#[non_exhaustive]`.
-            Message::ToServer(_) | Message::ToRuntime(_) => None,
+            Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
         }
     }
 
@@ -386,8 +486,9 @@ impl FoldState {
             let message = self.messages.len();
             self.messages.push(FoldedMessage {
                 id,
-                author: Author::User(user_id),
-                parts: NonEmpty::one(MessagePart::Text(text)),
+                author: Author::User { user_id },
+                request_id: AgentActionId::from_request_id(prompt_id),
+                parts: NonEmpty::one(MessagePart::Text { text }),
                 stop: None,
             });
             Changed::new(message)
@@ -405,6 +506,9 @@ impl FoldState {
         changed
     }
 
+    /// Open a turn for a compact: the invocation renders as a control part,
+    /// and how it went is the turn's own reply and stop reason, not an
+    /// outcome to track separately.
     fn begin_compact(
         &mut self,
         prompt_id: &RequestId,
@@ -417,8 +521,12 @@ impl FoldState {
         let message = self.messages.len();
         self.messages.push(FoldedMessage {
             id,
-            author: Author::User(user_id),
-            parts: NonEmpty::one(MessagePart::Control(Control::Compact)),
+            author: Author::User { user_id },
+            request_id: AgentActionId::from_request_id(prompt_id),
+            parts: NonEmpty::one(MessagePart::Control {
+                control: Control::Compact,
+                outcome: ControlOutcome::Accepted,
+            }),
             stop: None,
         });
         self.turn = Some(Turn {
@@ -432,21 +540,52 @@ impl FoldState {
         Some(Changed::new(message))
     }
 
+    /// Emit a standalone control message. A request-backed control starts
+    /// pending and is resolved by its response; one with no request to answer
+    /// (a stop notification) is accepted outright.
     fn record_control(
         &mut self,
         control: Control,
+        request_id: Option<&RequestId>,
         user_id: Option<MacroUserIdStr<'static>>,
     ) -> Option<Changed> {
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();
+        let outcome = match request_id {
+            Some(_) => ControlOutcome::Pending,
+            None => ControlOutcome::Accepted,
+        };
+        if let Some(request_id) = request_id {
+            self.pending_controls
+                .insert(request_id.clone(), (message, 0));
+        }
         self.messages.push(FoldedMessage {
             id,
-            author: Author::User(user_id),
-            parts: NonEmpty::one(MessagePart::Control(control)),
+            author: Author::User { user_id },
+            request_id: request_id.and_then(AgentActionId::from_request_id),
+            parts: NonEmpty::one(MessagePart::Control { control, outcome }),
             stop: None,
         });
         Some(Changed::new(message))
+    }
+
+    /// Resolve a pending control from its response. `None` when the id
+    /// matches no control.
+    fn resolve_control(&mut self, response_id: &RequestId, error: Option<&str>) -> Option<Changed> {
+        let (message, part) = self.pending_controls.remove(response_id)?;
+        let Some(MessagePart::Control { outcome, .. }) =
+            self.messages.get_mut(message)?.parts.get_mut(part)
+        else {
+            return None;
+        };
+        *outcome = match error {
+            Some(message) => ControlOutcome::Rejected {
+                message: message.to_owned(),
+            },
+            None => ControlOutcome::Accepted,
+        };
+        Some(Changed::updated(message))
     }
 
     /// Handle the response to `session/prompt`: close the turn.
@@ -486,7 +625,7 @@ impl FoldState {
     }
 
     /// Handle a `session/update`.
-    fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) -> Option<Changed> {
+    fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) -> Vec<StepChange> {
         // Only the `update` field is folded; the rest of the notification
         // (session id, meta) carries nothing renderable. Borrowed out of the
         // params rather than cloning them - `session/update` is the bulk of
@@ -495,7 +634,7 @@ impl FoldState {
             self.warn(FoldError::Unknown {
                 kind: "<missing params>".to_owned(),
             });
-            return None;
+            return Vec::new();
         };
 
         // Keep the wire name before decoding, so an unmodelled variant can be
@@ -508,37 +647,44 @@ impl FoldState {
 
         let Ok(update) = SessionUpdate::deserialize(update_value) else {
             self.warn(FoldError::Unknown { kind: wire_kind });
-            return None;
+            return Vec::new();
         };
 
         match update {
             // Prose from the agent. Chunks are appended to the open text part
             // rather than each becoming a part of its own.
-            SessionUpdate::AgentMessageChunk(chunk) => {
-                content_block_text(chunk.content).and_then(|text| self.append_text(text))
-            }
+            SessionUpdate::AgentMessageChunk(chunk) => StepChange::message(
+                content_block_text(chunk.content).and_then(|text| self.append_text(text)),
+            ),
             // Reasoning, kept separate so a reader can collapse it.
-            SessionUpdate::AgentThoughtChunk(chunk) => {
-                content_block_text(chunk.content).and_then(|text| self.append_thought(text))
-            }
+            SessionUpdate::AgentThoughtChunk(chunk) => StepChange::message(
+                content_block_text(chunk.content).and_then(|text| self.append_thought(text)),
+            ),
             // The agent replaying the user's own message. The prompt frame is
             // the authoritative copy, so this is dropped.
-            SessionUpdate::UserMessageChunk(_) => None,
-            SessionUpdate::ToolCall(call) => self.open_tool_call(call),
-            SessionUpdate::ToolCallUpdate(update) => self.patch_tool_call(update),
+            SessionUpdate::UserMessageChunk(_) => Vec::new(),
+            SessionUpdate::ToolCall(call) => StepChange::message(self.open_tool_call(call)),
+            SessionUpdate::ToolCallUpdate(update) => {
+                StepChange::message(self.patch_tool_call(update))
+            }
+            SessionUpdate::SessionInfoUpdate(update) => {
+                StepChange::metadata(self.apply_session_info(&update))
+            }
+            SessionUpdate::ConfigOptionUpdate(update) => {
+                StepChange::metadata(self.apply_config_options(update.config_options))
+            }
+            SessionUpdate::AvailableCommandsUpdate(update) => {
+                StepChange::metadata(self.apply_available_commands(update))
+            }
             // Deliberately dropped: token accounting and session bookkeeping,
             // none of which a reader wants in a channel. `usage_update` alone
             // is 81 of ~450 frames in a recorded session.
-            SessionUpdate::UsageUpdate(_)
-            | SessionUpdate::SessionInfoUpdate(_)
-            | SessionUpdate::AvailableCommandsUpdate(_)
-            | SessionUpdate::CurrentModeUpdate(_)
-            | SessionUpdate::ConfigOptionUpdate(_) => None,
+            SessionUpdate::UsageUpdate(_) | SessionUpdate::CurrentModeUpdate(_) => Vec::new(),
             // The agent's todo list, carried whole each time.
-            SessionUpdate::Plan(plan) => self.apply_plan(plan),
+            SessionUpdate::Plan(plan) => StepChange::message(self.apply_plan(plan)),
             _ => {
                 self.warn(FoldError::Unknown { kind: wire_kind });
-                None
+                Vec::new()
             }
         }
     }
@@ -549,7 +695,7 @@ impl FoldState {
         let label =
             claude_code::tool_name(call.meta.as_ref()).unwrap_or_else(|| call.title.clone());
 
-        let tool = ToolUse {
+        let tool = MessagePart::ToolUse {
             id: id.clone(),
             label,
             status: tool_status(call.status),
@@ -572,13 +718,13 @@ impl FoldState {
             .and_then(|turn| turn.tool_positions.get(&id).copied());
         if let Some(position) = opened {
             let (message, parts) = self.agent_parts_mut()?;
-            if let Some(MessagePart::ToolUse(existing)) = parts.get_mut(position) {
+            if let Some(existing @ MessagePart::ToolUse { .. }) = parts.get_mut(position) {
                 *existing = tool;
             }
             return Some(Changed::updated(message));
         }
 
-        let (changed, position) = self.push_agent_part(MessagePart::ToolUse(tool))?;
+        let (changed, position) = self.push_agent_part(tool)?;
         self.open_turn().tool_positions.insert(id, position);
         Some(changed)
     }
@@ -597,28 +743,34 @@ impl FoldState {
             return None;
         };
         let (message, parts) = self.agent_parts_mut()?;
-        let Some(MessagePart::ToolUse(tool)) = parts.get_mut(position) else {
+        let Some(MessagePart::ToolUse {
+            label,
+            status,
+            detail,
+            ..
+        }) = parts.get_mut(position)
+        else {
             return None;
         };
 
         let fields = update.fields;
 
-        if let Some(status) = fields.status {
-            tool.status = tool_status(status);
+        if let Some(new_status) = fields.status {
+            *status = tool_status(new_status);
         }
         if let Some(title) = fields.title {
             // A harness-supplied name outranks any ACP title, so only take
             // the title when nothing better is already set.
-            if claude_code::tool_name(update.meta.as_ref()).is_none() && tool.label.is_empty() {
-                tool.label = title;
+            if claude_code::tool_name(update.meta.as_ref()).is_none() && label.is_empty() {
+                *label = title;
             }
         }
         if let Some(name) = claude_code::tool_name(update.meta.as_ref()) {
-            tool.label = name;
+            *label = name;
         }
 
         patch_detail(
-            &mut tool.detail,
+            detail,
             fields.raw_input.as_ref(),
             fields.content.as_deref(),
             fields.locations.as_deref(),
@@ -636,17 +788,15 @@ impl FoldState {
     /// update identical to what the part already holds changes nothing - the
     /// harness re-emits the list more often than it changes it.
     fn apply_plan(&mut self, update: AcpPlan) -> Option<Changed> {
-        let plan = Plan {
-            entries: update.entries.into_iter().map(plan_entry).collect(),
-        };
+        let entries: Vec<PlanEntry> = update.entries.into_iter().map(plan_entry).collect();
 
         if let Some(position) = self.turn.as_ref().and_then(|turn| turn.plan_position) {
             let (message, parts) = self.agent_parts_mut()?;
-            if let Some(MessagePart::Plan(existing)) = parts.get_mut(position) {
-                if *existing == plan {
+            if let Some(MessagePart::Plan { entries: existing }) = parts.get_mut(position) {
+                if *existing == entries {
                     return None;
                 }
-                *existing = plan;
+                *existing = entries;
             }
             return Some(Changed::updated(message));
         }
@@ -654,13 +804,114 @@ impl FoldState {
         // An empty list derives nothing to render, so no part is created for
         // one; the turn's first non-empty update creates it. A list that
         // *becomes* empty is a replacement like any other, handled above.
-        if plan.entries.is_empty() {
+        if entries.is_empty() {
             return None;
         }
 
-        let (changed, position) = self.push_agent_part(MessagePart::Plan(plan))?;
+        let (changed, position) = self.push_agent_part(MessagePart::Plan { entries })?;
         self.open_turn().plan_position = Some(position);
         Some(changed)
+    }
+
+    /// Remember a request whose response will carry config options.
+    fn note_config_request(&mut self, frame: &RawJsonRpcMessage) {
+        let RawJsonRpcMessage::Request(request) = frame else {
+            return;
+        };
+        let method = &request.method;
+        if NewSessionRequest::matches_method(method)
+            || LoadSessionRequest::matches_method(method)
+            || ResumeSessionRequest::matches_method(method)
+            || SetSessionConfigOptionRequest::matches_method(method)
+        {
+            self.pending_config_requests.insert(request.id.clone());
+        }
+    }
+
+    /// Read the config options out of a correlated response, whichever
+    /// response shape carried them.
+    fn apply_config_response(&mut self, result: &serde_json::Value) -> bool {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ConfigCarrier {
+            #[serde(default)]
+            config_options: Vec<SessionConfigOption>,
+        }
+        match serde_json::from_value::<ConfigCarrier>(result.clone()) {
+            Ok(carrier) => self.apply_config_options(carrier.config_options),
+            Err(_) => false,
+        }
+    }
+
+    /// Update the metadata's model fields from a fresh config-options list.
+    fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) -> bool {
+        let model = options
+            .into_iter()
+            .find(|option| option.id.to_string() == MODEL_CONFIG_ID);
+        let Some(SessionConfigOption {
+            kind: SessionConfigKind::Select(select),
+            ..
+        }) = model
+        else {
+            return false;
+        };
+
+        let model = Some(select.current_value.to_string());
+        let supported: Vec<ModelOption> = match select.options {
+            SessionConfigSelectOptions::Ungrouped(options) => options,
+            SessionConfigSelectOptions::Grouped(groups) => {
+                groups.into_iter().flat_map(|group| group.options).collect()
+            }
+            _ => return false,
+        }
+        .into_iter()
+        .map(|option| ModelOption {
+            id: option.value.to_string(),
+            name: option.name,
+            description: option.description,
+        })
+        .collect();
+
+        let changed = self.metadata.model != model || self.metadata.supported_models != supported;
+        self.metadata.model = model;
+        self.metadata.supported_models = supported;
+        changed
+    }
+
+    /// Handle an `available_commands_update`: the advertised slash commands,
+    /// carried whole each time, latest wins.
+    fn apply_available_commands(&mut self, update: AcpAvailableCommandsUpdate) -> bool {
+        let commands: Vec<AvailableCommand> = update
+            .available_commands
+            .into_iter()
+            .map(|command| AvailableCommand {
+                name: command.name,
+                description: command.description,
+                input_hint: command.input.and_then(|input| match input {
+                    AvailableCommandInput::Unstructured(input) => Some(input.hint),
+                    // `#[non_exhaustive]`; unstructured text is the only
+                    // input ACP defines, so an unknown shape carries no hint
+                    // this fold can show.
+                    _ => None,
+                }),
+            })
+            .collect();
+        let changed = self.metadata.available_commands != commands;
+        self.metadata.available_commands = commands;
+        changed
+    }
+
+    /// Handle a `session_info_update`: take the title, minding the
+    /// absent/null/value distinction - absent means unchanged.
+    fn apply_session_info(&mut self, update: &SessionInfoUpdate) -> bool {
+        let title = match &update.title {
+            MaybeUndefined::Undefined => return false,
+            MaybeUndefined::Null => None,
+            MaybeUndefined::Value(title) => Some(title.clone()),
+        };
+        let changed = self.metadata.title != title;
+        self.metadata.title = title;
+        changed
     }
 
     /// Handle a `session/request_permission`: add a permission part and record
@@ -687,11 +938,11 @@ impl FoldState {
         self.pending_permissions
             .insert(request_id.clone(), tool_call.clone());
 
-        let (changed, position) = self.push_agent_part(MessagePart::Permission(Permission {
+        let (changed, position) = self.push_agent_part(MessagePart::Permission {
             tool_call: tool_call.clone(),
             options,
             outcome: PermissionOutcome::Pending,
-        }))?;
+        })?;
         self.open_turn()
             .permission_positions
             .insert(tool_call, position);
@@ -731,8 +982,11 @@ impl FoldState {
 
         let position = *self.turn.as_ref()?.permission_positions.get(&tool_call)?;
         let (message, parts) = self.agent_parts_mut()?;
-        if let Some(MessagePart::Permission(permission)) = parts.get_mut(position) {
-            permission.outcome = outcome;
+        if let Some(MessagePart::Permission {
+            outcome: existing, ..
+        }) = parts.get_mut(position)
+        {
+            *existing = outcome;
         }
         Some(Changed::updated(message))
     }
@@ -740,12 +994,12 @@ impl FoldState {
     /// Append agent prose, extending the trailing text part when there is one.
     fn append_text(&mut self, text: String) -> Option<Changed> {
         if let Some((message, parts)) = self.agent_parts_mut()
-            && let MessagePart::Text(existing) = parts.last_mut()
+            && let MessagePart::Text { text: existing } = parts.last_mut()
         {
             existing.push_str(&text);
             return Some(Changed::updated(message));
         }
-        self.push_agent_part(MessagePart::Text(text))
+        self.push_agent_part(MessagePart::Text { text })
             .map(|(changed, _)| changed)
     }
 
@@ -753,12 +1007,12 @@ impl FoldState {
     /// is one.
     fn append_thought(&mut self, text: String) -> Option<Changed> {
         if let Some((message, parts)) = self.agent_parts_mut()
-            && let MessagePart::Thought(existing) = parts.last_mut()
+            && let MessagePart::Thought { text: existing } = parts.last_mut()
         {
             existing.push_str(&text);
             return Some(Changed::updated(message));
         }
-        self.push_agent_part(MessagePart::Thought(text))
+        self.push_agent_part(MessagePart::Thought { text })
             .map(|(changed, _)| changed)
     }
 
@@ -794,6 +1048,7 @@ impl FoldState {
             self.messages.push(FoldedMessage {
                 id: turn_id,
                 author: Author::Agent,
+                request_id: None,
                 parts: NonEmpty::one(part),
                 stop: None,
             });

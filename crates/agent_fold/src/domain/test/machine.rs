@@ -9,16 +9,15 @@ use super::util::{TURN, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
-    Author, AuthorKind, FoldedMessage, IncrementalFoldResult, MessageId, MessagePart, StopReason,
-    TurnId,
+    Author, AuthorKind, FoldEvent, FoldedMessage, MessageId, MessagePart, StopReason, TurnId,
 };
 use crate::domain::ports::FoldMachine;
 
 const EMPTY_PROMPT: &str = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p0","method":"session/prompt","params":{"sessionId":"s","prompt":[]}}}"#;
 
 /// A consumer that knows nothing but what the machine told it: it holds a
-/// message list, appends on [`IncrementalFoldResult::NewMessage`] and replaces
-/// by key on [`IncrementalFoldResult::MessageUpdate`].
+/// message list, appends on [`FoldEvent::NewMessage`] and replaces by key on
+/// [`FoldEvent::MessageUpdate`].
 ///
 /// This is the frontend's job, written out - a channel applying a stream of
 /// updates to what it is already rendering.
@@ -41,11 +40,11 @@ fn an_empty_prompt_still_reserves_its_turn_id() {
 }
 
 impl Consumer {
-    fn apply(&mut self, result: IncrementalFoldResult<'_>) {
-        let (is_new, message) = match result {
-            IncrementalFoldResult::NewMessage(message) => (true, message.into_owned()),
-            IncrementalFoldResult::MessageUpdate(message) => (false, message.into_owned()),
-            IncrementalFoldResult::Unchanged => return,
+    fn apply(&mut self, event: FoldEvent<'_>) {
+        let (is_new, message) = match event {
+            FoldEvent::NewMessage(message) => (true, message.into_owned()),
+            FoldEvent::MessageUpdate(message) => (false, message.into_owned()),
+            FoldEvent::MetadataUpdated(_) => return,
         };
         let id = message.id();
         self.reports.push((is_new, id));
@@ -71,7 +70,9 @@ impl Consumer {
         let mut machine = FoldMachineImpl::new();
         let mut consumer = Self::default();
         for entry in log {
-            consumer.apply(machine.push(entry));
+            for event in machine.push(entry) {
+                consumer.apply(event);
+            }
         }
         consumer
     }
@@ -133,10 +134,12 @@ fn the_agent_message_is_announced_before_its_turn_ends() {
     let mut machine = FoldMachineImpl::new();
     let mut announced_at = None;
     for (index, entry) in log.into_iter().enumerate() {
-        if let IncrementalFoldResult::NewMessage(message) = machine.push(entry)
-            && message.author == Author::Agent
-        {
-            announced_at = Some((index, message.into_owned()));
+        for event in machine.push(entry) {
+            if let FoldEvent::NewMessage(message) = event
+                && message.author == Author::Agent
+            {
+                announced_at = Some((index, message.into_owned()));
+            }
         }
     }
 
@@ -173,9 +176,8 @@ fn frames_that_change_nothing_report_nothing() {
 
     let mut machine = FoldMachineImpl::new();
     for entry in quiet {
-        assert_eq!(
-            machine.push(entry),
-            IncrementalFoldResult::Unchanged,
+        assert!(
+            machine.push(entry).is_empty(),
             "a frame with nothing renderable reported a change"
         );
     }
@@ -234,7 +236,9 @@ fn an_interrupting_prompt_reports_only_its_own_message() {
     let abandoned = &consumer.messages[1];
     assert_eq!(
         *abandoned.parts,
-        vec![MessagePart::Text("half an answ".to_owned())]
+        vec![MessagePart::Text {
+            text: "half an answ".to_owned()
+        }]
     );
     assert_eq!(abandoned.stop, None, "no response ever closed it");
 }
@@ -268,7 +272,10 @@ fn content_without_a_prompt_still_folds() {
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"picking up where we left off"}}}}}"#,
         "\n",
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"l","result":{"stopReason":"end_turn"}}}"#,
+        // Closed by a response to the prompt that lives in the resumed
+        // session's own log - not by the load response, which carries config
+        // options rather than a stop reason.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
     ));
     let consumer = Consumer::drive(resumed);
 
@@ -286,7 +293,9 @@ fn content_without_a_prompt_still_folds() {
     let agent = &consumer.messages[0];
     assert_eq!(
         *agent.parts,
-        vec![MessagePart::Text("picking up where we left off".to_owned())]
+        vec![MessagePart::Text {
+            text: "picking up where we left off".to_owned()
+        }]
     );
     assert_eq!(
         agent.stop,
@@ -309,7 +318,7 @@ fn a_tool_call_without_a_prompt_opens_a_turn() {
     let agent = &consumer.messages[0];
     assert_eq!(agent.id, TurnId(0));
     assert!(
-        matches!(&agent.parts[0], MessagePart::ToolUse(tool) if tool.label == "Bash"),
+        matches!(&agent.parts[0], MessagePart::ToolUse { label, .. } if label == "Bash"),
         "and the call is its first part: {:?}",
         agent.parts[0]
     );

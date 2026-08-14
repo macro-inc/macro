@@ -25,9 +25,9 @@
 
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::FoldedMessage as ModelFoldedMessage;
+use crate::domain::model::{FoldedMessage as ModelFoldedMessage, SessionMetadata};
 use crate::domain::ports::FoldMachine;
-use crate::inbound::wire::{FoldedMessage, FoldedMessageChange};
+use crate::inbound::wire::{FoldedMessage, FoldedStreamEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -101,12 +101,10 @@ impl FoldStream {
         self.messages()
     }
 
-    /// Fold one more frame, reporting the message it changed as
-    /// `{kind: "new" | "update", message}`.
-    ///
-    /// `null` for a frame that changes nothing renderable - a handshake, a
-    /// token-usage report, an update this fold does not model - which is most
-    /// of them.
+    /// Fold one more frame, reporting the changes it implied as an array of
+    /// `{kind: "new" | "update", message}` and `{kind: "metadata", metadata}`
+    /// events - empty for a frame that changes nothing, which is most of
+    /// them.
     ///
     /// # Errors
     ///
@@ -115,13 +113,28 @@ impl FoldStream {
         let entry: LogEntry = serde_wasm_bindgen::from_value(entry)
             .map_err(|error| JsValue::from_str(&format!("log entry is not readable: {error}")))?;
 
-        let result = self.machine.push(entry.into_log(self.session));
-        let Some(change) = FoldedMessageChange::new(self.session, result) else {
-            return Ok(JsValue::NULL);
-        };
+        let events: Vec<FoldedStreamEvent> = self
+            .machine
+            .push(entry.into_log(self.session))
+            .into_iter()
+            .map(|event| FoldedStreamEvent::new(self.session, event))
+            .collect();
 
-        serde_wasm_bindgen::to_value(&change).map_err(|error| {
-            JsValue::from_str(&format!("folded message is not encodable: {error}"))
+        serde_wasm_bindgen::to_value(&events)
+            .map_err(|error| JsValue::from_str(&format!("fold events are not encodable: {error}")))
+    }
+
+    /// The session metadata as it now stands - what the latest
+    /// `{kind: "metadata"}` event carried, for a caller that caught up with
+    /// [`Self::extend`] and saw no events.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string describing what could not be encoded.
+    pub fn metadata(&self) -> Result<JsValue, JsValue> {
+        let metadata: SessionMetadata = self.machine.metadata().clone().into();
+        serde_wasm_bindgen::to_value(&metadata).map_err(|error| {
+            JsValue::from_str(&format!("session metadata is not encodable: {error}"))
         })
     }
 

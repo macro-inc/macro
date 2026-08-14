@@ -18,6 +18,63 @@ mod test;
 /// ACP session config option used to select the agent's model.
 pub const MODEL_CONFIG_ID: &str = "model";
 
+/// Identifies one accepted [`AgentAction`] end to end: returned by the
+/// control endpoint, written as the JSON-RPC request id on the action's wire
+/// frame, and read back off that frame as `request_id` on the folded message
+/// it derives. Correlation is string equality; the value is opaque.
+///
+/// Minted only by the server at accept time, as `agent_session:{uuid}` - the
+/// prefix is what lets [`Self::from_request_id`] tell our ids from ones other
+/// clients picked.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct AgentActionId(String);
+
+impl AgentActionId {
+    /// What every id this side mints starts with.
+    const PREFIX: &'static str = "agent_session:";
+
+    /// Mint a fresh id for an action being accepted. v7 so ids sort by mint
+    /// time.
+    #[must_use]
+    pub fn mint() -> Self {
+        Self(format!(
+            "{}{}",
+            Self::PREFIX,
+            macro_uuid::generate_uuid_v7()
+        ))
+    }
+
+    /// The same string as the transport's request id type.
+    #[must_use]
+    pub fn to_request_id(&self) -> RequestId {
+        RequestId::Str(self.0.clone())
+    }
+
+    /// Read an id back off a logged frame. `None` for ids this side did not
+    /// mint.
+    #[must_use]
+    pub fn from_request_id(id: &RequestId) -> Option<Self> {
+        match id {
+            RequestId::Str(id) if id.starts_with(Self::PREFIX) => Some(Self(id.to_string())),
+            _ => None,
+        }
+    }
+
+    /// The id as the string a caller correlates with.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for AgentActionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Slash command agents use to compact the current session context.
 pub const COMPACT_COMMAND: &str = "/compact";
 

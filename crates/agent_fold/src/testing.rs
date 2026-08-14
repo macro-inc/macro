@@ -1,7 +1,7 @@
-//! In-memory port implementations and recorded fixtures for tests.
+//! In-memory port implementations for tests.
 //!
 //! Lets this crate's own tests - and crates that consume this one, like
-//! `agent_session` - fold real recorded protocol traffic without a database.
+//! `agent_session` - exercise the fold without a database.
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::ports::LogRepo;
@@ -12,6 +12,13 @@ use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+
+/// Recorded and hand-shaped protocol logs shared by tests.
+pub mod fixtures;
+
+/// The compact complete-turn fixture, retained at its original path for
+/// downstream tests.
+pub use fixtures::TURN;
 
 /// An in-memory [`LogRepo`].
 ///
@@ -63,55 +70,6 @@ impl LogRepo for InMemoryLog {
             .into())
     }
 }
-
-/// The hermetic fixture: one complete turn with prose, a permission-gated
-/// terminal command, a patched-in edit, and a clean stop.
-pub const TURN: &str = include_str!("../fixtures/turn.jsonl");
-
-/// A real recording, sanitized: the smallest complete real session, one
-/// prompt and one reply, opened with `session/new`.
-///
-/// Recordings under `~/.agent_runtime_sessions` are real ACP traffic, so
-/// unlike [`TURN`] this was not hand-shaped to exercise anything in
-/// particular - it is what a harness actually sends. Run through
-/// `scripts/sanitize_recording.py` before being committed; see that script's
-/// docs for what "sanitized" means here.
-pub const REAL_SINGLE_TURN: &str = include_str!("../fixtures/real_single_turn.jsonl");
-
-/// A real recording: three prompts in one session, opened with
-/// `session/new` - ordinary multi-turn traffic, no resume involved.
-pub const REAL_MULTI_TURN: &str = include_str!("../fixtures/real_multi_turn.jsonl");
-
-/// A real recording: opens with `session/load` and then takes three more
-/// prompts in the same log. Covers the mixed case a pure resume or a pure
-/// fresh session does not: turn numbering has to pick up cleanly after a
-/// resumed turn that never had a prompt of its own in this log.
-pub const RESUMED_AND_CONTINUED: &str = include_str!("../fixtures/resumed_and_continued.jsonl");
-
-/// A real recording that opens with `session/load` and carries no
-/// `session/prompt` at all - the agent's reply is the only thing in the log,
-/// answering a prompt that lives in the log of the session it resumed.
-///
-/// This is the regression fixture for the fold once dropping this content
-/// outright: with no prompt to open a turn, every frame here used to have
-/// nowhere to go, and the whole log folded to nothing. See
-/// [`crate::domain::fold::State::begin_turn_without_prompt`].
-pub const RESUMED_NO_PROMPT: &str = include_str!("../fixtures/resumed_no_prompt.jsonl");
-
-/// A real recording: 6565 frames, 106 prompts, and three separate
-/// `session/load` resumes in the same log - the longest and most-resumed
-/// real session available. Where the other real fixtures each isolate one
-/// shape, this is what a session actually looks like after running for a
-/// while: many turns, and the fold picking back up cleanly every time the
-/// connection dropped and reattached.
-pub const LONG_MULTI_RESUME: &str = include_str!("../fixtures/long_multi_resume.jsonl");
-
-/// A real recording: one turn in which the agent builds a three-item todo
-/// list and checks the items off one by one, emitting a `plan` session
-/// update - the complete list, statuses included - on every change (and,
-/// as real harnesses do, re-emitting it unchanged in between). The only
-/// fixture carrying `plan` frames.
-pub const PLAN_TODO: &str = include_str!("../fixtures/plan_todo.jsonl");
 
 /// The session id fixture logs are parsed into by default.
 #[must_use]

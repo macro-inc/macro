@@ -9,7 +9,7 @@ use agent_client_protocol::schema::v1::{
     ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -91,8 +91,9 @@ impl<Token> SessionMachine<Token> {
             Input::Command {
                 from,
                 action,
+                action_id,
                 token,
-            } => self.on_command(from, action, token),
+            } => self.on_command(from, action, action_id, token),
             Input::Inbound(message) => self.on_inbound(message),
             Input::Closed(reason) => self.on_closed(reason),
         }
@@ -102,6 +103,7 @@ impl<Token> SessionMachine<Token> {
         &mut self,
         from: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
         token: Token,
     ) -> Vec<Effect<Token>> {
         let mut effects = Vec::new();
@@ -119,6 +121,7 @@ impl<Token> SessionMachine<Token> {
                 self.pending.push_back(PendingAction {
                     from,
                     action,
+                    action_id,
                     token,
                 });
                 return effects;
@@ -139,6 +142,7 @@ impl<Token> SessionMachine<Token> {
         self.pending.push_back(PendingAction {
             from,
             action,
+            action_id,
             token,
         });
         self.flush(&session_id, &mut effects);
@@ -441,7 +445,7 @@ impl<Token> SessionMachine<Token> {
     /// expressed as ACP fails alone, without taking the connection down.
     fn flush(&mut self, session_id: &SessionId, effects: &mut Vec<Effect<Token>>) {
         while let Some(queued) = self.pending.pop_front() {
-            let request_id = self.next_id();
+            let request_id = queued.action_id.to_request_id();
             match queued.action.to_runtime(session_id, request_id) {
                 Ok(message) => {
                     effects.push(Effect::Send {

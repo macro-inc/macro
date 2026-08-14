@@ -30,7 +30,7 @@ use std::sync::Arc;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -85,12 +85,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
     where
         Connector: AgentConnector + Clone;
 
-    /// Deliver an action through the session's active transport.
+    /// Deliver an action through the session's active transport, under the
+    /// action id it will carry onto the wire.
     fn send_action(
         &self,
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
@@ -175,6 +177,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> Result<()> {
         let commands = self
             .active
@@ -187,6 +190,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             .send(SessionCommand {
                 user_id,
                 action,
+                action_id,
                 completed,
             })
             .await
@@ -254,8 +258,9 @@ where
         id: AgentSessionId,
         user_id: Option<MacroUserIdStr<'static>>,
         action: AgentAction,
+        action_id: AgentActionId,
     ) -> Result<()> {
-        self.deliver_action(id, user_id, action).await
+        self.deliver_action(id, user_id, action, action_id).await
     }
 
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
@@ -338,6 +343,22 @@ where
             }
         }
 
+        // Projected on every frame - idempotent, rebuildable from the log,
+        // and best-effort like the stream below, so a failed write must not
+        // fail the append. Batch if the write rate ever matters.
+        if let Some(model) = self
+            .fold
+            .as_ref()
+            .and_then(|fold| fold.metadata().model.clone())
+            && let Err(error) = self.repo.set_model(session, &model).await
+        {
+            tracing::error!(
+                error = ?error,
+                %session,
+                "failed to project agent session model"
+            );
+        }
+
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
@@ -389,6 +410,10 @@ where
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        self.repo.set_model(id, model).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

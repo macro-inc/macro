@@ -13,7 +13,6 @@ use crate::domain::model::{
 use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::action::AgentSetModelAction;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
@@ -337,6 +336,24 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET model = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND model IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            model,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session model")?;
+        Ok(())
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         let mut transaction = self
             .pool
@@ -399,10 +416,6 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let model_change = match &log.content {
-            Message::ToRuntime(message) => AgentSetModelAction::from_runtime(message),
-            _ => None,
-        };
         let event_status = match &log.content {
             Message::ToServer(ToServerMessage::Event { event }) => {
                 Some(SessionStatus::Event(event.clone()))
@@ -448,24 +461,6 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .execute(&mut *transaction)
             .await
             .context("failed to update agent session status from log entry")?;
-        }
-
-        if let Some((acp_session_id, change)) = model_change {
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET model = $3,
-                    modified_at = now()
-                WHERE id = $1
-                  AND acp_session_id = $2
-                "#,
-                log.agent_session_id.as_uuid(),
-                acp_session_id.to_string(),
-                change.model,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to project agent session model from log entry")?;
         }
 
         transaction

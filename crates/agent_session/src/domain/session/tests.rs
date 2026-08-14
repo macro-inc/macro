@@ -8,7 +8,7 @@ use agent_client_protocol::schema::v1::{
     SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -25,9 +25,14 @@ fn machine() -> SessionMachine<u32> {
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
+    command_with_id(text, AgentActionId::mint(), token)
+}
+
+fn command_with_id(text: &str, action_id: AgentActionId, token: u32) -> Input<u32> {
     Input::Command {
         from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
         action: AgentAction::prompt(text),
+        action_id,
         token,
     }
 }
@@ -541,22 +546,32 @@ fn every_inbound_is_logged_first() {
 }
 
 #[test]
-fn request_ids_never_repeat_across_the_connection() {
+fn actions_go_out_under_the_ids_they_were_accepted_with() {
+    let queued_id = AgentActionId::mint();
+    let live_id = AgentActionId::mint();
+
     let mut machine = machine();
-    machine.handle(command("queued", 1));
+    machine.handle(command_with_id("queued", queued_id.clone(), 1));
     let initialize = machine.handle(acp_ready());
     let open = machine.handle(initialized());
     let flushed = machine.handle(session_opened("acp-42"));
-    let live = machine.handle(command("live", 2));
+    let live = machine.handle(command_with_id("live", live_id.clone(), 2));
 
     let mut ids = Vec::new();
     for effects in [&initialize, &open, &flushed, &live] {
         ids.extend(sent_request_ids(effects));
     }
 
+    // Handshake requests keep the machine's own counter; each action carries
+    // the id it was accepted with, even one that waited in the queue.
     assert_eq!(
         ids,
-        [request_id(0), request_id(1), request_id(2), request_id(3)]
+        [
+            request_id(0),
+            request_id(1),
+            queued_id.to_request_id(),
+            live_id.to_request_id()
+        ]
     );
 }
 
@@ -564,6 +579,7 @@ fn stop(token: u32) -> Input<u32> {
     Input::Command {
         from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
         action: AgentAction::Stop,
+        action_id: AgentActionId::mint(),
         token,
     }
 }
@@ -629,6 +645,7 @@ fn a_model_change_does_not_disturb_the_queue() {
     let effects = machine.handle(Input::Command {
         from: None,
         action: AgentAction::set_model("opus"),
+        action_id: AgentActionId::mint(),
         token: 2,
     });
 

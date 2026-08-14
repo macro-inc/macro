@@ -3,7 +3,7 @@ mod test;
 
 use std::sync::Arc;
 
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{
     AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
@@ -142,10 +142,15 @@ where
         &self,
         id: AgentSessionId,
         event: ControlEvent,
-    ) -> agent_session::domain::error::Result<()> {
-        self.execute(id, HarnessCommand::Deliver(event.into()))
-            .await
-            .map_err(into_session_error)
+    ) -> agent_session::domain::error::Result<AgentActionId> {
+        let action_id = AgentActionId::mint();
+        self.execute(
+            id,
+            HarnessCommand::Deliver(DeliverAction::control(action_id.clone(), event)),
+        )
+        .await
+        .map_err(into_session_error)?;
+        Ok(action_id)
     }
 }
 
@@ -234,6 +239,7 @@ where
                 session_id,
                 Some(origin.sender),
                 AgentAction::prompt(origin.content),
+                AgentActionId::mint(),
             )
             .await?;
         Ok(())
@@ -247,6 +253,7 @@ where
     #[tracing::instrument(err, skip(self, command), fields(%session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
+            id,
             action,
             actor,
             announce,
@@ -258,16 +265,19 @@ where
 
         match self
             .sessions
-            .send_action(session_id, actor.clone(), action.clone())
+            .send_action(session_id, actor.clone(), action.clone(), id.clone())
             .await
         {
             Ok(()) => {}
             // Nothing is attached, so bring the container back and retry the
-            // action against the new connection.
+            // action against the new connection. Same id: the first attempt
+            // never reached the wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let container = self.containers.resume(session_id).await?;
                 self.sessions.attach_session(session_id, container).await?;
-                self.sessions.send_action(session_id, actor, action).await?;
+                self.sessions
+                    .send_action(session_id, actor, action, id)
+                    .await?;
             }
             Err(error) => return Err(error.into()),
         }

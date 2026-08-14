@@ -2,8 +2,8 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, Control, FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail,
-    ToolStatus, TurnId,
+    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome, StopReason,
+    ToolDetail, ToolStatus, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -26,12 +26,14 @@ fn folds_a_complete_turn() {
 
     let user = &messages[0];
     assert_eq!(user.id, TurnId(0));
-    assert!(matches!(&user.author, Author::User(Some(id)) if id.to_string().contains("eric")));
+    assert!(
+        matches!(&user.author, Author::User { user_id: Some(id) } if id.to_string().contains("eric"))
+    );
     assert_eq!(
         *user.parts,
-        vec![MessagePart::Text(
-            "list the examples and write a file".to_owned()
-        )]
+        vec![MessagePart::Text {
+            text: "list the examples and write a file".to_owned()
+        }]
     );
     assert_eq!(user.stop, None, "user messages carry no stop reason");
 
@@ -48,23 +50,29 @@ fn folds_a_complete_turn() {
         "text, tool, permission, tool, text: {parts:#?}"
     );
 
-    let MessagePart::Text(opening) = &parts[0] else {
+    let MessagePart::Text { text: opening } = &parts[0] else {
         panic!("first part is prose: {:?}", parts[0]);
     };
     assert_eq!(opening, "Sure, one moment.", "chunks join into one part");
 
-    let MessagePart::ToolUse(run) = &parts[1] else {
+    let MessagePart::ToolUse {
+        id: run_id,
+        label: run_label,
+        status: run_status,
+        detail: run_detail,
+    } = &parts[1]
+    else {
         panic!("second part is the terminal call: {:?}", parts[1]);
     };
-    assert_eq!(run.label, "Bash", "harness tool name outranks ACP title");
-    assert_eq!(run.status, ToolStatus::Completed);
+    assert_eq!(run_label, "Bash", "harness tool name outranks ACP title");
+    assert_eq!(*run_status, ToolStatus::Completed);
     let ToolDetail::Terminal {
         command,
         output,
         exit_code,
-    } = &run.detail
+    } = run_detail
     else {
-        panic!("execute folds to a terminal: {:?}", run.detail);
+        panic!("execute folds to a terminal: {run_detail:?}");
     };
     assert_eq!(command.as_deref(), Some("ls examples"));
     assert_eq!(*exit_code, Some(0));
@@ -79,25 +87,36 @@ fn folds_a_complete_turn() {
         "later updates replace earlier output snapshots"
     );
 
-    let MessagePart::Permission(permission) = &parts[2] else {
+    let MessagePart::Permission {
+        tool_call,
+        options,
+        outcome,
+    } = &parts[2]
+    else {
         panic!("third part is the permission prompt: {:?}", parts[2]);
     };
-    assert_eq!(permission.tool_call, run.id);
-    assert_eq!(permission.options.len(), 2);
+    assert_eq!(tool_call, run_id);
+    assert_eq!(options.len(), 2);
     assert_eq!(
-        permission.outcome,
+        *outcome,
         PermissionOutcome::Selected {
             option_id: "allow".to_owned()
         }
     );
 
-    let MessagePart::ToolUse(write) = &parts[3] else {
+    let MessagePart::ToolUse {
+        label,
+        status,
+        detail,
+        ..
+    } = &parts[3]
+    else {
         panic!("fourth part is the edit: {:?}", parts[3]);
     };
-    assert_eq!(write.label, "Write");
-    assert_eq!(write.status, ToolStatus::Completed);
-    let ToolDetail::Edit { diffs } = &write.detail else {
-        panic!("edit folds to diffs: {:?}", write.detail);
+    assert_eq!(label, "Write");
+    assert_eq!(*status, ToolStatus::Completed);
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("edit folds to diffs: {detail:?}");
     };
     // The opening frame carried nothing; the diff arrived by patch.
     assert_eq!(diffs.len(), 1);
@@ -105,7 +124,12 @@ fn folds_a_complete_turn() {
     assert_eq!(diffs[0].old_text, None);
     assert_eq!(diffs[0].new_text, "fn main() {}");
 
-    assert_eq!(parts[4], MessagePart::Text("Done.".to_owned()));
+    assert_eq!(
+        parts[4],
+        MessagePart::Text {
+            text: "Done.".to_owned()
+        }
+    );
 }
 
 /// Cutting the log mid-turn - a live session, or one that died - still yields
@@ -134,16 +158,16 @@ fn folds_an_interrupted_turn() {
     let agent = &messages[1];
     let parts = agent.parts.as_slice();
 
-    let MessagePart::ToolUse(run) = &parts[1] else {
+    let MessagePart::ToolUse { status, .. } = &parts[1] else {
         panic!("tool call is present: {:?}", parts[1]);
     };
-    assert_eq!(run.status, ToolStatus::Pending, "no update ever arrived");
+    assert_eq!(*status, ToolStatus::Pending, "no update ever arrived");
 
-    let MessagePart::Permission(permission) = &parts[2] else {
+    let MessagePart::Permission { outcome, .. } = &parts[2] else {
         panic!("permission is present: {:?}", parts[2]);
     };
     assert_eq!(
-        permission.outcome,
+        *outcome,
         PermissionOutcome::Pending,
         "still awaiting an answer"
     );
@@ -165,21 +189,72 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages.len(), 3);
     assert_eq!(
         messages[0].parts.as_slice(),
-        &[MessagePart::Control(Control::SetModel {
-            model: "opus".to_owned()
-        })]
+        &[MessagePart::Control {
+            control: Control::SetModel {
+                model: "opus".to_owned()
+            },
+            // The set-model request never got a response in this log.
+            outcome: ControlOutcome::Pending,
+        }]
     );
     assert_eq!(
         messages[1].parts.as_slice(),
-        &[MessagePart::Control(Control::Compact)]
+        &[MessagePart::Control {
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
+        }]
     );
     assert_eq!(
         messages[2].parts.as_slice(),
-        &[MessagePart::Control(Control::Stop)]
+        &[MessagePart::Control {
+            control: Control::Stop,
+            outcome: ControlOutcome::Accepted,
+        }]
     );
     assert_eq!(messages[0].id, TurnId(0));
     assert_eq!(messages[1].id, TurnId(1));
     assert_eq!(messages[2].id, TurnId(2));
+}
+
+#[test]
+fn a_rejected_control_reports_the_runtime_error() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].request_id.as_ref().map(|id| id.as_str()),
+        Some("agent_session:m1"),
+        "a control-plane id is surfaced for correlation"
+    );
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(
+        *outcome,
+        ControlOutcome::Rejected {
+            message: "Invalid params: model not found: claude-fable-5".to_owned()
+        }
+    );
+}
+
+#[test]
+fn an_accepted_control_resolves_and_the_same_frame_moves_the_metadata() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
+    ));
+
+    let messages = fold(log);
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(*outcome, ControlOutcome::Accepted);
 }
 
 /// Every ACP tool kind this fold has a bespoke rendering for, plus a call
@@ -263,7 +338,9 @@ fn reports_a_patch_before_open() {
     assert_eq!(messages.len(), 2);
     assert_eq!(
         *messages[1].parts,
-        vec![MessagePart::Text("hello".to_owned())]
+        vec![MessagePart::Text {
+            text: "hello".to_owned()
+        }]
     );
 }
 

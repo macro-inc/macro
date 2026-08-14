@@ -16,6 +16,7 @@ utoipa = ["dep:utoipa"]
 
 [dependencies]
 agent-client-protocol = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
 axum = { workspace = true, features = ["ws"], optional = true }
 futures = { workspace = true, optional = true }
 serde = { workspace = true }

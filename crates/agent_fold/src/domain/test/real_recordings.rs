@@ -1,39 +1,46 @@
 //! The fold against real, sanitized recordings, not just hand-shaped fixtures.
 //!
 //! [`fold.rs`](super::fold) and [`machine.rs`](super::machine) pin behavior
-//! against [`TURN`], which is hand-shaped to exercise one of everything in a
-//! small space. That is precise but it is not evidence the fold survives
-//! contact with a real harness: real traffic streams chunks unevenly,
-//! interleaves tool calls, and - as `resumed_no_prompt` exists to prove -
-//! sometimes has no prompt in it at all. These fixtures are real ACP traffic
-//! (sanitized; see `scripts/sanitize_recording.py`), committed so that
-//! evidence lives in CI rather than only on whoever's machine happened to
-//! record a session.
+//! against [`TURN`](super::util::TURN), which is hand-shaped to exercise one
+//! of everything in a small space. That is precise but it is not evidence the
+//! fold survives contact with a real harness: real traffic streams chunks
+//! unevenly, interleaves tool calls, and - as `resumed_no_prompt` exists to
+//! prove - sometimes has no prompt in it at all. These fixtures are real ACP
+//! traffic (sanitized; see `scripts/sanitize_recording.py`), committed so
+//! that evidence lives in CI rather than only on whoever's machine happened
+//! to record a session.
+//!
+//! The sweep tests discover their inputs with [`insta::glob!`] over
+//! `fixtures/real/`, so adding a fixture means dropping a sanitized `.jsonl`
+//! there - no registration anywhere. What each fixture uniquely proves is
+//! documented in `fixtures/real/README.md`; the tests below that pin a
+//! specific fixture's shape name it by `include_str!`.
 
-use super::util::{
-    LONG_MULTI_RESUME, PLAN_TODO, REAL_MULTI_TURN, REAL_SINGLE_TURN, RESUMED_AND_CONTINUED,
-    RESUMED_NO_PROMPT, capturing_warnings, parse_log,
-};
+use super::util::{capturing_warnings, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::model::{Author, FoldedMessage, MessagePart, PlanEntryStatus};
 use crate::domain::ports::FoldMachine;
+use crate::testing::fixtures::{
+    LONG_MULTI_RESUME, PLAN_TODO, RESUMED_AND_CONTINUED, RESUMED_NO_PROMPT,
+};
 
-/// Every real fixture, alongside how many of its messages are expected to be
-/// unauthored by a user - the count `resumed_no_prompt` exists to make
-/// nonzero. Folding must not warn on any of them: a warning here means the
-/// fold no longer understands a shape a real harness actually sent.
-const REAL_FIXTURES: &[(&str, &str)] = &[
-    ("real_single_turn", REAL_SINGLE_TURN),
-    ("real_multi_turn", REAL_MULTI_TURN),
-    ("resumed_and_continued", RESUMED_AND_CONTINUED),
-    ("resumed_no_prompt", RESUMED_NO_PROMPT),
-    ("long_multi_resume", LONG_MULTI_RESUME),
-    ("plan_todo", PLAN_TODO),
-];
+/// Run `body` on every real fixture. Folding must not warn on any of them: a
+/// warning here means the fold no longer understands a shape a real harness
+/// actually sent.
+fn for_each_real_fixture(body: impl Fn(&str, &str)) {
+    insta::glob!("../../../fixtures/real", "*.jsonl", |path| {
+        let recording = std::fs::read_to_string(path).expect("fixture is readable");
+        let name = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .expect("fixture has a utf-8 name");
+        body(name, &recording);
+    });
+}
 
 #[test]
 fn every_real_fixture_folds_without_warnings() {
-    for (name, recording) in REAL_FIXTURES {
+    for_each_real_fixture(|name, recording| {
         let (messages, warnings) = capturing_warnings(|| fold(parse_log(recording)));
         assert_eq!(warnings, vec![], "{name} folded with a warning");
         assert!(!messages.is_empty(), "{name} folded to nothing");
@@ -43,7 +50,7 @@ fn every_real_fixture_folds_without_warnings() {
                 "{name} folded an empty message: {message:?}"
             );
         }
-    }
+    });
 }
 
 /// The regression pin: a log that opens with `session/load` and carries no
@@ -71,7 +78,7 @@ fn resumed_no_prompt_still_derives_the_agents_reply() {
             .iter()
             .filter(|message| message.author.kind() == crate::domain::model::AuthorKind::User)
             .flat_map(|message| message.parts.iter())
-            .any(|part| matches!(part, crate::domain::model::MessagePart::Text(_))),
+            .any(|part| matches!(part, crate::domain::model::MessagePart::Text { .. })),
         "this recording carries no session/prompt, so it should derive no user text"
     );
 }
@@ -108,7 +115,7 @@ fn resumed_and_continued_derives_both_the_resumed_and_the_fresh_turns() {
 /// equivalence matters most.
 #[test]
 fn streaming_a_real_recording_matches_folding_it() {
-    for (name, recording) in REAL_FIXTURES {
+    for_each_real_fixture(|name, recording| {
         let log = parse_log(recording);
         let (batch, _) = capturing_warnings(|| fold(log.clone()));
 
@@ -125,7 +132,7 @@ fn streaming_a_real_recording_matches_folding_it() {
             streamed, batch,
             "{name}: streaming frame by frame diverged from folding in one go"
         );
-    }
+    });
 }
 
 /// What only `long_multi_resume` can prove: turn numbering stays unique
@@ -171,7 +178,7 @@ fn plan_updates_replace_one_part_in_place() {
         .iter()
         .flat_map(|message| message.parts.iter())
         .filter_map(|part| match part {
-            MessagePart::Plan(plan) => Some(plan),
+            MessagePart::Plan { entries } => Some(entries),
             _ => None,
         })
         .collect();
@@ -179,8 +186,7 @@ fn plan_updates_replace_one_part_in_place() {
         panic!("eleven plan frames should fold to exactly one part, got {plans:#?}");
     };
     assert_eq!(
-        plan.entries
-            .iter()
+        plan.iter()
             .map(|entry| (entry.content.as_str(), entry.status))
             .collect::<Vec<_>>(),
         vec![
@@ -194,15 +200,10 @@ fn plan_updates_replace_one_part_in_place() {
 
 /// The harness re-emits the plan unchanged between real changes: every one
 /// of `plan_todo`'s six distinct plan states arrives twice, back to back. A
-/// re-emit that changes nothing must report
-/// [`IncrementalFoldResult::Unchanged`] rather than a message update, so the
-/// streaming path does not fan a no-op out to every follower.
-///
-/// [`IncrementalFoldResult::Unchanged`]: crate::domain::model::IncrementalFoldResult::Unchanged
+/// re-emit that changes nothing must report nothing, so the streaming path
+/// does not fan a no-op out to every follower.
 #[test]
 fn identical_plan_re_emits_report_unchanged() {
-    use crate::domain::model::IncrementalFoldResult;
-
     // Which log entries are plan frames, read off the raw lines - parse_log
     // maps non-empty lines to entries one to one.
     let is_plan: Vec<bool> = PLAN_TODO
@@ -222,11 +223,12 @@ fn identical_plan_re_emits_report_unchanged() {
     let mut changed = 0;
     let mut unchanged = 0;
     for (entry, is_plan) in log.into_iter().zip(is_plan) {
-        let result = machine.push(entry);
+        let events = machine.push(entry);
         if is_plan {
-            match result {
-                IncrementalFoldResult::Unchanged => unchanged += 1,
-                _ => changed += 1,
+            if events.is_empty() {
+                unchanged += 1;
+            } else {
+                changed += 1;
             }
         }
     }
@@ -247,12 +249,24 @@ fn identical_plan_re_emits_report_unchanged() {
 /// and the tests above already cover what it uniquely proves.
 #[test]
 fn real_fixtures_fold_to_their_pinned_snapshot() {
-    for (name, recording) in REAL_FIXTURES {
-        if *name == "long_multi_resume" {
-            continue;
+    for_each_real_fixture(|name, recording| {
+        if name == "long_multi_resume" {
+            return;
         }
         let (messages, warnings) = capturing_warnings(|| fold(parse_log(recording)));
         assert_eq!(warnings, vec![], "{name} folded with a warning");
-        insta::assert_debug_snapshot!(*name, messages);
-    }
+        insta::assert_debug_snapshot!(messages);
+    });
+}
+
+/// The metadata each real fixture derives, pinned whole like the messages.
+#[test]
+fn real_fixtures_derive_their_pinned_metadata() {
+    for_each_real_fixture(|_, recording| {
+        let mut machine = FoldMachineImpl::new();
+        for entry in parse_log(recording) {
+            let _ = machine.push(entry);
+        }
+        insta::assert_debug_snapshot!(machine.metadata());
+    });
 }

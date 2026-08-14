@@ -11,7 +11,10 @@
 
 use std::sync::Arc;
 
-use agent_runtime_protocol::domain::{action::AgentAction, schema::v0::SystemEvent};
+use agent_runtime_protocol::domain::{
+    action::{AgentAction, AgentActionId},
+    schema::v0::SystemEvent,
+};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -352,7 +355,11 @@ pub async fn get_agent_session_handler<
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
     request_body = ControlRequest,
     responses(
-        (status = 200),
+        (
+            status = 200,
+            body = AgentActionId,
+            description = "Accepted; matches `requestId` on the folded message this action derives"
+        ),
         (status = 401, body = String),
         (status = 403, body = String),
         (status = 500, body = String),
@@ -374,13 +381,13 @@ pub async fn control_agent_session_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<ControlRequest>,
-) -> Result<StatusCode, AgentSessionApiError> {
+) -> Result<Json<AgentActionId>, AgentSessionApiError> {
     let actor = caller
         .authorization
         .acting_user()
         .map(|user| user.macro_user_id.clone());
 
-    state
+    let action_id = state
         .recipient
         .control_event(
             AgentSessionId::new_from_uuid(session_id),
@@ -391,7 +398,7 @@ pub async fn control_agent_session_handler<
         )
         .await?;
 
-    Ok(StatusCode::OK)
+    Ok(Json(action_id))
 }
 
 #[utoipa::path(

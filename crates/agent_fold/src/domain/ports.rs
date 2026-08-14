@@ -24,7 +24,7 @@
 //! [`FoldSession`].
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog};
-use crate::domain::model::{FoldedMessage, IncrementalFoldResult, TurnId};
+use crate::domain::model::{FoldEvent, FoldedMessage, TurnId};
 use std::collections::VecDeque;
 
 /// Read a session's raw protocol log.
@@ -66,15 +66,15 @@ pub trait FoldSession {
 /// caller streaming a live session learns which message to redraw without
 /// diffing anything.
 ///
-/// The machine is also the store: it keeps every message it has derived, and
-/// [`IncrementalFoldResult`] borrows from it. Ask
+/// The machine is also the store: it keeps every message it has derived plus
+/// the session's metadata, and [`FoldEvent`] borrows from it. Ask
 /// [`FoldMachineImpl`](crate::domain::fold::FoldMachineImpl) for the whole
-/// list when a caller wants it all rather than the changes.
+/// message list or the current metadata when a caller wants state rather
+/// than changes.
 pub trait FoldMachine {
-    /// Advance the machine by one log entry, reporting what it changed -
-    /// [`IncrementalFoldResult::Unchanged`] when the frame changes nothing
-    /// renderable.
-    fn push(&mut self, log: AgentSessionLog) -> IncrementalFoldResult<'_>;
+    /// Advance the machine by one log entry, reporting every change it
+    /// implied in order - empty for a frame that changes nothing.
+    fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>>;
 }
 
 /// Query a session's messages as if they were stored.

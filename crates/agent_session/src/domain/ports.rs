@@ -1,7 +1,7 @@
 use super::error::Result;
 use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
@@ -66,6 +66,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         id: AgentSessionId,
         acp_session_id: SessionId,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist the model the session is running on. Idempotent.
+    fn set_model(&self, id: AgentSessionId, model: &str)
+    -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -152,10 +156,11 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// The session is going away: release its live resources and delete it.
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
-    /// A control operation the live connection has to be told about.
+    /// A control operation the live connection has to be told about. Returns
+    /// the action id the caller correlates against the fold stream.
     fn control_event(
         &self,
         id: AgentSessionId,
         event: ControlEvent,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<AgentActionId>> + Send;
 }

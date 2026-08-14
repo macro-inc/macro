@@ -4,6 +4,7 @@
 mod fold;
 mod machine;
 mod meta;
+mod metadata;
 mod real_recordings;
 mod service;
 mod util;

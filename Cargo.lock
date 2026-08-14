@@ -271,6 +271,7 @@ dependencies = [
  "agent-client-protocol",
  "axum",
  "futures",
+ "macro_uuid",
  "serde",
  "serde_json",
  "specta",
@@ -6508,6 +6509,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
+name = "globset"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e47d37d2ae4464254884b60ab7071be2b876a9c35b696bd018ddcc76847309cd"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "gmail_client"
 version = "0.1.0"
 dependencies = [
@@ -7885,9 +7899,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86f0f8fee8c926415c58d6ae43a08523a26faccb2323f5e6b644fe7dd4ef6b82"
 dependencies = [
  "console 0.16.3",
+ "globset",
  "once_cell",
  "similar",
  "tempfile",
+ "walkdir",
 ]
 
 [[package]]

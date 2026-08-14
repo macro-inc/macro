@@ -1,6 +1,6 @@
 //! Commands and values used by the harness domain.
 
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
@@ -44,6 +44,9 @@ pub struct AnnounceOrigin {
 /// Do something in a session that already exists.
 #[derive(Debug, Clone)]
 pub struct DeliverAction {
+    /// The id the action carries onto the wire, minted when it was accepted.
+    /// A reconnect-and-retry resends under the same id.
+    pub id: AgentActionId,
     /// What the agent is being asked to do.
     pub action: AgentAction,
     /// The user responsible, absent when nobody in particular is.
@@ -83,18 +86,18 @@ impl DeliverAction {
         announce: Option<AnnounceOrigin>,
     ) -> Self {
         Self {
+            id: AgentActionId::mint(),
             action: AgentAction::prompt(content),
             actor,
             announce,
         }
     }
-}
 
-impl From<ControlEvent> for DeliverAction {
-    /// A control request names no origin: whoever called the endpoint is
-    /// looking at the session already.
-    fn from(event: ControlEvent) -> Self {
+    /// A control request under a caller-visible id. Names no origin: whoever
+    /// called the endpoint is looking at the session already.
+    pub fn control(id: AgentActionId, event: ControlEvent) -> Self {
         Self {
+            id,
             action: event.action,
             actor: event.actor,
             announce: None,
