@@ -1,7 +1,7 @@
--- Deployment prerequisite: check the production row count with
--- `SELECT count(*) FROM "SharePermission";` before applying this migration.
--- If the table has more than approximately 10 million rows, replace this
--- single-statement backfill with a batched migration.
+-- Deployment prerequisite: check the number of public rows with
+-- `SELECT count(*) FROM "SharePermission" WHERE "isPublic";` before applying
+-- this migration. If there are more than approximately 10 million public rows,
+-- replace this single-statement backfill with a batched migration.
 ALTER TABLE "SharePermission"
     ADD COLUMN "linkShare" TEXT,
     ADD COLUMN "linkShareAccessLevel" "AccessLevel",
@@ -12,8 +12,10 @@ ALTER TABLE "SharePermission"
     ALTER COLUMN "isPublic" SET DEFAULT false;
 
 UPDATE "SharePermission"
-SET "linkShare" = CASE WHEN "isPublic" THEN 'PUBLIC' END,
-    "linkShareAccessLevel" = CASE
-        WHEN "isPublic" THEN "publicAccessLevel"::"AccessLevel"
-    END;
+SET "linkShare" = 'PUBLIC',
+    "linkShareAccessLevel" = COALESCE(
+        "publicAccessLevel"::"AccessLevel",
+        'view'::"AccessLevel"
+    )
+WHERE "isPublic";
 
