@@ -73,14 +73,13 @@ function scrollAccordionItemToTop(
 }
 
 export const MobileFilterDrawer = () => {
-  const { consolidatedFiltersList, resetToTabDefaults } =
+  const { consolidatedFiltersList, resetToTabDefaults, handleAssigneeChange } =
     useFilterRefinements();
 
   const {
     soup,
     queryFilters,
     assigneeFilter,
-    setAssigneeFilter,
     activeTab,
     inboxFilter,
     setInboxFilter,
@@ -219,13 +218,14 @@ export const MobileFilterDrawer = () => {
     }
   };
 
+  // Routes through handleAssigneeChange so the assignee predicate and the
+  // server-side property query stay in sync with the selection — setting the
+  // signal alone updates the badge but never filters the list.
   const toggleAssignee = (id: string) => {
     const current = assigneeFilter();
-    if (current.includes(id)) {
-      setAssigneeFilter(current.filter((a) => a !== id));
-    } else {
-      setAssigneeFilter([...current, id]);
-    }
+    handleAssigneeChange(
+      current.includes(id) ? current.filter((a) => a !== id) : [...current, id]
+    );
   };
 
   const assigneeOptions = createMemo(() => {
