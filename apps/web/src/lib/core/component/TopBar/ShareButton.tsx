@@ -897,7 +897,7 @@ export function ShareModal(props: ShareModalProps) {
           ? 'Anyone with the link'
           : "Members of the owner's team with the link";
       toast.success(`Updated ${getLinkShareScopeCopy(scope).title} sharing`, {
-        subtext: `${audience} can ${effectiveAccessLevel} this ${entityLabel}`,
+        subtext: `${audience} can ${accessLevelText(effectiveAccessLevel).toLowerCase()} this ${entityLabel}`,
       });
 
       analytics.track('share_entity', {
