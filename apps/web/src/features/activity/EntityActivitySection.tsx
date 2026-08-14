@@ -7,7 +7,7 @@ import {
 } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
 import { useEntityActivityFlag } from './use-entity-activity-flag';
@@ -54,47 +54,52 @@ function EntityActivitySection(props: EntityActivitySectionProps) {
   return (
     <Show when={query.isEnabled()}>
       <SidePanel.Section id="activity" title="Activity" order={props.order}>
-        {/* The urql store never suspends, so loading/error need explicit
-            branches or they'd render as a false "No activity yet". */}
-        <Show when={!query.result.isLoading} fallback={<SidePanel.Loading />}>
-          <Show
-            when={!query.result.isError}
-            fallback={<SidePanel.EmptyPill label="Activity is unavailable" />}
-          >
+        {/* Two loading layers: the urql store never suspends, so the query's
+            own fetch/error need explicit branches (or they'd render as a
+            false "No activity yet"), while the Suspense boundary scopes
+            resource reads inside the rows (display names, property
+            definitions) to this section instead of an ancestor boundary. */}
+        <Suspense fallback={<SidePanel.Loading />}>
+          <Show when={!query.result.isLoading} fallback={<SidePanel.Loading />}>
             <Show
-              when={events().length > 0}
-              fallback={<SidePanel.EmptyPill label="No activity yet" />}
+              when={!query.result.isError}
+              fallback={<SidePanel.EmptyPill label="Activity is unavailable" />}
             >
-              <div class="text-xs">
-                <SidePanel.Card>
-                  <For each={visibleEvents()}>
-                    {(event) => <ActivityRow event={event} />}
-                  </For>
-                </SidePanel.Card>
-                <Show when={hasOverflow()}>
-                  <button
-                    type="button"
-                    aria-expanded={expanded()}
-                    class="mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                    onClick={() => setExpanded((current) => !current)}
-                  >
-                    <CaretRightIcon
-                      class={cn(
-                        'size-3 shrink-0 transition-transform duration-90',
-                        expanded() && 'rotate-90'
-                      )}
-                    />
-                    <span>
-                      {expanded()
-                        ? 'Show less'
-                        : `Show all (${events().length})`}
-                    </span>
-                  </button>
-                </Show>
-              </div>
+              <Show
+                when={events().length > 0}
+                fallback={<SidePanel.EmptyPill label="No activity yet" />}
+              >
+                <div class="text-xs">
+                  <SidePanel.Card>
+                    <For each={visibleEvents()}>
+                      {(event) => <ActivityRow event={event} />}
+                    </For>
+                  </SidePanel.Card>
+                  <Show when={hasOverflow()}>
+                    <button
+                      type="button"
+                      aria-expanded={expanded()}
+                      class="mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      onClick={() => setExpanded((current) => !current)}
+                    >
+                      <CaretRightIcon
+                        class={cn(
+                          'size-3 shrink-0 transition-transform duration-90',
+                          expanded() && 'rotate-90'
+                        )}
+                      />
+                      <span>
+                        {expanded()
+                          ? 'Show less'
+                          : `Show all (${events().length})`}
+                      </span>
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </Show>
           </Show>
-        </Show>
+        </Suspense>
       </SidePanel.Section>
     </Show>
   );
