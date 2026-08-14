@@ -42,7 +42,10 @@ export type EntitySharePolicyInput = {
   channelSharePermissions?: Array<ChannelSharePolicyInput> | null | undefined;
   /** Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing. */
   linkShare?: GraphqlLinkShare | null | undefined;
-  /** Link access level. Omit to leave unchanged or pass null to clear it. */
+  /**
+   * Link access level. Omit to leave unchanged or pass null to reset it to the default level
+   * when a link share exists.
+   */
   linkShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
 };
 

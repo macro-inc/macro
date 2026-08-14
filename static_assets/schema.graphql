@@ -159,7 +159,8 @@ input EntitySharePolicyInput {
 	"""
 	linkShare: GraphqlLinkShare
 	"""
-	Link access level. Omit to leave unchanged or pass null to clear it.
+	Link access level. Omit to leave unchanged or pass null to reset it to the default level
+	when a link share exists.
 	"""
 	linkShareAccessLevel: GraphqlEntityAccessLevel
 	"""
