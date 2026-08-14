@@ -704,6 +704,12 @@ export function useFilterRefinements() {
             const previousDocumentTypeIds = isDocumentTypeFilter
               ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
               : undefined;
+            const nextPresetAndIds = group.showTabDefaults
+              ? []
+              : group.presetAndOptionIds;
+            const nextPresetOrIds = group.showTabDefaults
+              ? []
+              : group.presetOrOptionIds;
 
             batch(() => {
               soup.predicates.set(({ andIds, orIds }) => ({
@@ -711,13 +717,13 @@ export function useFilterRefinements() {
                   ...andIds.filter(
                     (id) => !categoryOptionIds.has(id as FilterID)
                   ),
-                  ...group.presetAndOptionIds,
+                  ...nextPresetAndIds,
                 ],
                 or: [
                   ...orIds.filter(
                     (id) => !categoryOptionIds.has(id as FilterID)
                   ),
-                  ...group.presetOrOptionIds,
+                  ...nextPresetOrIds,
                 ],
               }));
 
