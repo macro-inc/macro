@@ -29,7 +29,6 @@ use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
-use agent_fold::domain::model::FoldEvent;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use dashmap::DashMap;
@@ -329,37 +328,28 @@ where
         // session history is not.
         let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
 
-        let model = if let Some(fold) = &mut self.fold {
-            let metadata_changed = fold
-                .push(log.clone())
-                .iter()
-                .any(|event| matches!(event, FoldEvent::MetadataUpdated(_)));
-            metadata_changed
-                .then(|| fold.metadata().model.clone())
-                .flatten()
+        if let Some(fold) = &mut self.fold {
+            let _ = fold.push(log.clone());
         } else {
             match self.catch_up(session).await {
-                Ok(fold) => {
-                    // Projected on every catch-up so a refold heals a stale
-                    // or wrong column.
-                    let model = fold.metadata().model.clone();
-                    self.fold = Some(fold);
-                    model
-                }
+                Ok(fold) => self.fold = Some(fold),
                 Err(error) => {
                     tracing::error!(
                         error = ?error,
                         %session,
                         "failed to fold agent session frame"
                     );
-                    None
                 }
             }
-        };
+        }
 
-        // Best-effort like the stream below: the projection is rebuildable
-        // from the log, so a failed write must not fail the append.
-        if let Some(model) = model
+        // Projected on every frame - idempotent, rebuildable from the log,
+        // and best-effort like the stream below, so a failed write must not
+        // fail the append. Batch if the write rate ever matters.
+        if let Some(model) = self
+            .fold
+            .as_ref()
+            .and_then(|fold| fold.metadata().model.clone())
             && let Err(error) = self.repo.set_model(session, &model).await
         {
             tracing::error!(
