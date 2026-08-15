@@ -10,6 +10,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
+import { useRecentTouchedEntities } from '@app/features/next-soup/use-recent-touched-entities';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -173,6 +174,27 @@ registerComponent(
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
+        disableLocalSearch
+      />
+    );
+  })
+);
+
+registerComponent(
+  'flow',
+  withAuth(() => {
+    usePageViewTracking('flow');
+    const preset = getViewPreset('flow');
+    // The Recent half rides in as extra entities; the main query is the
+    // inbox Signal set. baseEntities dedupes the overlap and the default
+    // updated_at client sort interleaves the merged feed by recency.
+    const recentEntities = useRecentTouchedEntities();
+    return (
+      <SoupView
+        viewName="Flow"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        additionalEntities={recentEntities}
         disableLocalSearch
       />
     );

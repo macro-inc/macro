@@ -159,7 +159,7 @@ const getInboxNoiseFilters = () =>
  * their NIL exclusions; the touched query has no candidates of those types
  * and ignores their trees.
  */
-const getRecentFilters = () =>
+export const getRecentFilters = () =>
   defineQueryFilters(
     { exclude: getDisabledSnippetSubtypeExclude() },
     { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] }
@@ -176,6 +176,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: getRecentFilters(),
         clientFilters: { and: ['explicit-noise'] },
         sortMethod: 'touched_by_me',
+      }),
+    },
+  },
+  // Flow = everything in the inbox's Signal tab plus everything in Recent.
+  // The preset carries the signal half; the Recent half rides in through
+  // the view's `additionalEntities` (its own touched-by-me query), and the
+  // default updated_at client sort interleaves the merged feed by recency.
+  flow: {
+    default: 'all',
+    tabs: {
+      all: () => ({
+        filters: getInboxSignalFilters(),
+        // Not the `inbox` predicate: it requires an undone notification,
+        // which would strip the Recent half from the merged rows.
+        clientFilters: { and: ['explicit-noise'] },
       }),
     },
   },

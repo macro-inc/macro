@@ -385,6 +385,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   // No refinements yet: the touched-by-me query rejects channel/email
   // filter trees, so the inbox categories can't be offered wholesale.
   recent: [],
+  // Flow merges two queries; per-type refinements would only apply to the
+  // signal half and read as broken. None until refinements span both.
+  flow: [],
   agents: [],
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,

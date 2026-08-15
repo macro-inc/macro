@@ -81,6 +81,7 @@ import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedHomeIcon } from '@icon/wide-home';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
+import { AnimatedSignalIcon } from '@icon/wide-signal';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -191,6 +192,16 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
+  },
+  {
+    id: 'flow',
+    label: 'Flow',
+    href: LIST_VIEW_PATHS.flow,
+    icon: AnimatedSignalIcon,
+    // `f` is Files, `l` is Calls, `o` is Customers; `w` is the only letter
+    // of "flow" that is not already a sidebar destination.
+    hotkey: 'w',
+    hotkeyToken: TOKENS.sidebar.goTo.flow,
   },
   {
     id: 'search',
@@ -1374,7 +1385,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'recent', 'activity', 'reminders']
+    [
+      'home',
+      'getting-started',
+      'inbox',
+      'flow',
+      'recent',
+      'activity',
+      'reminders',
+    ]
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

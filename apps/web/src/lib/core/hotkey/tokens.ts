@@ -114,6 +114,7 @@ export const TOKENS = {
       gettingStarted: 'sidebar.goTo.gettingStarted',
       inbox: 'sidebar.goTo.inbox',
       recent: 'sidebar.goTo.recent',
+      flow: 'sidebar.goTo.flow',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',

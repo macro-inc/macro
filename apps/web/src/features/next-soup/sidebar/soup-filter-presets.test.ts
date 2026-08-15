@@ -262,3 +262,23 @@ describe('recent view preset', () => {
     expect(ast.cthf).toBeDefined();
   });
 });
+
+describe('flow view preset', () => {
+  it('carries the inbox signal filters for the main query', () => {
+    const flow = getViewPreset('flow')?.filters;
+    const signal = getViewPreset('inbox', 'signal')?.filters;
+    expect(compileToAst(queryStateFrom(flow!))).toEqual(
+      compileToAst(queryStateFrom(signal!))
+    );
+  });
+
+  it('does not use the inbox predicate, which would strip the recent half', () => {
+    const preset = getViewPreset('flow');
+    expect(preset?.clientFilters.and).not.toContain('inbox');
+    expect(preset?.clientFilters.and).toContain('explicit-noise');
+  });
+
+  it('leaves the server sort alone so recency interleaving is client-side', () => {
+    expect(getViewPreset('flow')?.sortMethod).toBeUndefined();
+  });
+});
