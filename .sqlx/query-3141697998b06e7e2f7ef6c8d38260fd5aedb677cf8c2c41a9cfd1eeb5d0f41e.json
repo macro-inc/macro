@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT link_id, message_id, send_time, sent, processing\n        FROM email_scheduled_messages\n        WHERE message_id = $1 and sent = false\n        ",
+  "query": "\n        SELECT link_id, message_id, send_time, sent, processing, actor_id\n        FROM email_scheduled_messages\n        WHERE message_id = ANY($1) AND sent = false\n        ",
   "describe": {
     "columns": [
       {
@@ -27,11 +27,16 @@
         "ordinal": 4,
         "name": "processing",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -39,8 +44,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "5a45cbeeb6fa756b256688f6c4e05be4abae89c4eb3c5532a96b91f3d07e232f"
+  "hash": "3141697998b06e7e2f7ef6c8d38260fd5aedb677cf8c2c41a9cfd1eeb5d0f41e"
 }
