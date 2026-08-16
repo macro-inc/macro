@@ -6,6 +6,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import {
+  ActivityUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
@@ -84,12 +85,15 @@ describe('GraphQL Soup websocket retry policy', () => {
 });
 
 describe('GraphQL Soup subscription lifecycle', () => {
-  it('subscribes to Soup and notification updates, cleans up replacements, and skips disabled hosts', () => {
+  it('subscribes to Soup, notification, and activity updates, cleans up replacements, and skips disabled hosts', () => {
     const firstSoupUnsubscribe = vi.fn();
     const firstNotificationUnsubscribe = vi.fn();
+    const firstActivityUnsubscribe = vi.fn();
     const secondSoupUnsubscribe = vi.fn();
     const secondNotificationUnsubscribe = vi.fn();
+    const secondActivityUnsubscribe = vi.fn();
     const firstClient = {
+      query: vi.fn(),
       subscription: vi
         .fn()
         .mockReturnValueOnce({
@@ -99,9 +103,13 @@ describe('GraphQL Soup subscription lifecycle', () => {
           subscribe: vi.fn(() => ({
             unsubscribe: firstNotificationUnsubscribe,
           })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({ unsubscribe: firstActivityUnsubscribe })),
         }),
     };
     const secondClient = {
+      query: vi.fn(),
       subscription: vi
         .fn()
         .mockReturnValueOnce({
@@ -111,6 +119,9 @@ describe('GraphQL Soup subscription lifecycle', () => {
           subscribe: vi.fn(() => ({
             unsubscribe: secondNotificationUnsubscribe,
           })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({ unsubscribe: secondActivityUnsubscribe })),
         }),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
@@ -126,26 +137,35 @@ describe('GraphQL Soup subscription lifecycle', () => {
       NotificationUpdatesDocument,
       {}
     );
+    expect(firstClient.subscription).toHaveBeenNthCalledWith(
+      3,
+      ActivityUpdatesDocument,
+      {}
+    );
 
     lifecycle.replace(secondClient as never, { disabled: false } as never);
     expect(firstSoupUnsubscribe).toHaveBeenCalledOnce();
     expect(firstNotificationUnsubscribe).toHaveBeenCalledOnce();
-    expect(secondClient.subscription).toHaveBeenCalledTimes(2);
+    expect(firstActivityUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondClient.subscription).toHaveBeenCalledTimes(3);
 
     lifecycle.replace(firstClient as never, { disabled: true } as never);
     expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
     expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
-    expect(firstClient.subscription).toHaveBeenCalledTimes(2);
+    expect(secondActivityUnsubscribe).toHaveBeenCalledOnce();
+    expect(firstClient.subscription).toHaveBeenCalledTimes(3);
 
     lifecycle.dispose();
     expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
     expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondActivityUnsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('signals a terminal subscription failure once across both subscriptions', () => {
+  it('signals a terminal subscription failure once across all subscriptions', () => {
     toastFailure.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
+      query: vi.fn(),
       subscription: vi.fn(() => ({
         subscribe: vi.fn((next) => {
           receive.push(next);
