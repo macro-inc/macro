@@ -382,6 +382,9 @@ export function buildContactLabel(
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   inbox: INBOX_FILTER_CATEGORIES,
+  // No refinements yet: the touched-by-me query rejects channel/email
+  // filter trees, so the inbox categories can't be offered wholesale.
+  recent: [],
   agents: [],
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,

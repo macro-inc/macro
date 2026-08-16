@@ -185,6 +185,9 @@ const renameDssSetData = (
   entities: EntityRenameOptimisticInfo[]
 ): SoupTransactionMap => {
   const txns: SoupTransactionMap = new Map();
+  // A rename lands server-side as an Edited activity, so it is a touch:
+  // stamping touched_at here moves the row up the Recent feed immediately.
+  const touchedAt = new Date().toISOString();
   for (const { id, itemType, newName } of entities) {
     const current = getSoupEntityById(id);
     const score = current?.frecency_score ?? 0;
@@ -195,6 +198,7 @@ const renameDssSetData = (
           tag: 'channel',
           data: { channel: { id, name: newName } },
           frecency_score: score,
+          touched_at: touchedAt,
         })
       );
     } else if (itemType === 'call') {
@@ -225,6 +229,7 @@ const renameDssSetData = (
           tag: itemType,
           data: { id, name: newName },
           frecency_score: score,
+          touched_at: touchedAt,
         })
       );
     }

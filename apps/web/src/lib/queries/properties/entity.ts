@@ -233,6 +233,9 @@ function optimisticUpdateSoupEntityProperties(
       properties: nextProperties,
     },
     frecency_score: current.frecency_score,
+    // Property changes land server-side as PropertyChanged activities, so
+    // they are touches: the stamp moves the row up the Recent feed now.
+    touched_at: new Date().toISOString(),
   });
 }
 

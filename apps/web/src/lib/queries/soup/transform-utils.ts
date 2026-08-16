@@ -971,7 +971,13 @@ export const mapApiSoupItemToEntity = (
     })
     .exhaustive();
 
-  return withRawNotifications(entity, item);
+  // Attached once for every tag: only touched_by_me pages carry the field,
+  // and the Recent feed's client sort reads it off the entity.
+  const touched = item.touched_at
+    ? { ...entity, touchedAt: item.touched_at }
+    : entity;
+
+  return withRawNotifications(touched, item);
 };
 
 const toCalendarEventTime = (

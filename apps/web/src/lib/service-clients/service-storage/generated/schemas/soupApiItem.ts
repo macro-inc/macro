@@ -9,6 +9,6 @@ import type { SoupApiItemAllOf } from './soupApiItemAllOf';
 import type { SoupItem } from './soupItem';
 
 /**
- * API representation of a soup item with its frecency score.
+ * API representation of a soup item with its per-viewer enrichments.
  */
 export type SoupApiItem = SoupItem & SoupApiItemAllOf;

@@ -178,6 +178,25 @@ registerComponent(
   })
 );
 
+registerComponent(
+  'recent',
+  withAuth(() => {
+    usePageViewTracking('recent');
+    const preset = getViewPreset('recent');
+    return (
+      <SoupView
+        viewName="Recent"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        // Rows carry the server's touched_at, so sorting on it preserves
+        // the touched-by-me order and lets optimistic bumps reorder locally.
+        initialClientSort={['touched_at']}
+        disableLocalSearch
+      />
+    );
+  })
+);
+
 const MyActivityView = lazy(() =>
   import('@app/features/activity/my-activity-view').then((module) => ({
     default: module.MyActivityView,

@@ -14,6 +14,7 @@ import {
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Params } from '@service-storage/generated/schemas/params';
 import { startOfDay, subWeeks } from 'date-fns';
 
 type SoupFiltersPreset = {
@@ -32,6 +33,15 @@ type SoupFiltersPreset = {
    * matching every feed that reads newest-first.
    */
   sortDirection?: 'asc' | 'desc';
+  /**
+   * Server sort this tab's meaning requires (e.g. `touched_by_me`), taking
+   * precedence over the client sort state. Tabs that force one usually also
+   * clear the client sort (`SoupView`'s `initialClientSort={[]}`) so the
+   * server's ordering survives to the rendered rows. Frecency is excluded:
+   * it is a different query flavor with its own client handling, not a
+   * per-tab ordering.
+   */
+  sortMethod?: Exclude<NonNullable<Params['sort_method']>, 'frecency'>;
 };
 
 // Tab preset configuration types
@@ -139,7 +149,36 @@ const getInboxNoiseFilters = () =>
     emailView: 'inbox',
   });
 
+/**
+ * Filters for the Recent view: the touched-by-me feed over everything the
+ * all view shows. Documents, chats, folders, channels, and emails stay
+ * unrestricted via `skipTargets` — the touched candidate query includes
+ * every touchable type by default, and it rejects channel/email filter
+ * trees outright (400), so even the usual NIL-id opt-in trees must not be
+ * sent for those two. Calendar/CRM/foreign/channel-thread targets keep
+ * their NIL exclusions; the touched query has no candidates of those types
+ * and ignores their trees.
+ */
+const getRecentFilters = () =>
+  defineQueryFilters(
+    { exclude: getDisabledSnippetSubtypeExclude() },
+    { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] }
+  );
+
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
+  recent: {
+    default: 'all',
+    tabs: {
+      // One tab: everything the user has touched, newest own-touch first.
+      // The server ordering is the product; the client sort is cleared by
+      // the view registration so rows render in server order.
+      all: () => ({
+        filters: getRecentFilters(),
+        clientFilters: { and: ['explicit-noise'] },
+        sortMethod: 'touched_by_me',
+      }),
+    },
+  },
   inbox: {
     default: 'signal',
     tabs: {

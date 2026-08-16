@@ -10725,9 +10725,17 @@ export const getItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -14359,9 +14367,17 @@ export const postItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -17459,9 +17475,17 @@ export const postItemsSoupAstResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            touched_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+              ),
           })
         )
-        .describe('API representation of a soup item with its frecency score.')
+        .describe(
+          'API representation of a soup item with its per-viewer enrichments.'
+        )
     ),
     next_cursor: zod.string().nullish(),
   })
@@ -20910,10 +20934,16 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(
@@ -24013,10 +24043,16 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  touched_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "The caller's latest own mutation of this entity, present only when the\npage was ordered by `touched_by_me`. Clients keep the touched feed\nordered on this value, so it can be bumped optimistically."
+                    ),
                 })
               )
               .describe(
-                'API representation of a soup item with its frecency score.'
+                'API representation of a soup item with its per-viewer enrichments.'
               )
           )
           .describe(

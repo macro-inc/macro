@@ -191,6 +191,16 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
+    id: 'recent',
+    label: 'Recent',
+    href: LIST_VIEW_PATHS.recent,
+    icon: AnimatedActivityIcon,
+    // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
+    // "recent" that is not already a sidebar destination.
+    hotkey: 'n',
+    hotkeyToken: TOKENS.sidebar.goTo.recent,
+  },
+  {
     id: 'search',
     label: 'Search',
     href: LIST_VIEW_PATHS.search,
@@ -1345,7 +1355,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
+    ['home', 'getting-started', 'inbox', 'recent', 'activity', 'reminders']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

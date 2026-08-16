@@ -131,6 +131,48 @@ export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
 }
 
 /**
+ * Optimistically stamp the viewer's own touch on a cached entity so the
+ * touched_by_me (Recent) order moves it to the top immediately, ahead of the
+ * activity consumer. Call it only from mutations whose server side records
+ * an activity (the domain `ActivitySource` impls) — bumping an unattributed
+ * action would reorder the feed only to snap back on the next refetch. No
+ * reconciliation step is needed: the server's `touched_at` field-merges over
+ * this stamp on the next touched-mode response, and non-touched responses
+ * omit the field entirely so they never clear it.
+ */
+export function bumpSoupEntityTouchedAt(
+  entityId: string
+): SoupTransaction | undefined {
+  const current = getSoupEntityById(entityId);
+  if (!current) return undefined;
+  const touched_at = new Date().toISOString();
+  const frecency_score = current.frecency_score;
+
+  if (current.tag === 'channel') {
+    return optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: current.data.channel.id } },
+      frecency_score,
+      touched_at,
+    });
+  }
+  if (current.tag === 'call') {
+    return optimisticUpdateSoupEntity({
+      tag: 'call',
+      data: { callId: current.data.callId },
+      frecency_score,
+      touched_at,
+    });
+  }
+  return optimisticUpdateSoupEntity({
+    tag: current.tag,
+    data: { id: current.data.id },
+    frecency_score,
+    touched_at,
+  } as SoupEntityPartial);
+}
+
+/**
  * Mark stale only the soup queries containing a specific entity.
  * Prefer this over `invalidateAllSoup` when you know the affected entity ID.
  */
