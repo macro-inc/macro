@@ -65,6 +65,25 @@ pub struct ActivityRange {
     pub truncated: bool,
 }
 
+/// Announces durably recorded activities to realtime subscribers.
+///
+/// Fire-and-forget: implementations log failures instead of returning them,
+/// because delivery is best-effort by design — a missed push is recovered by
+/// the source event replaying (uncommitted offset) or by the client's next
+/// fetch, and the write path must not fail on announcement problems.
+pub trait ActivityRealtimePublisher: Send + Sync {
+    /// Announces recorded activities, grouped per subject by the adapter.
+    fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+}
+
+/// Publisher that announces nothing.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoOpActivityRealtimePublisher;
+
+impl ActivityRealtimePublisher for NoOpActivityRealtimePublisher {
+    async fn publish_recorded(&self, _activities: &[Activity]) {}
+}
+
 /// Persists activities.
 pub trait ActivityRepo {
     /// The adapter's error type.
