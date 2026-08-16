@@ -1,0 +1,16 @@
+# Realtime activity pushed to the subject over the soup GraphQL websocket.
+# Recorded events arrive whole (they normalize as GraphqlActivityEvent
+# records); deletions arrive as cache-deletion instructions for future
+# retention purges.
+subscription ActivityUpdates {
+  activityUpdates {
+    __typename
+    ... on GraphqlActivityEvent {
+      ...ActivityEventFields
+    }
+    ... on GraphqlCacheDeletion {
+      graphqlTypeName
+      entityId
+    }
+  }
+}

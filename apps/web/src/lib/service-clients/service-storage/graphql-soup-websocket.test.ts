@@ -6,6 +6,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import {
+  ActivityUpdatesDocument,
   NotificationUpdatesDocument,
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
@@ -15,15 +16,17 @@ import {
   createGraphqlSoupWebSocketUrlResolver,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
-  subscribeToGraphqlNotificationPatches,
 } from './graphql-soup-websocket';
 
 describe('GraphQL Soup websocket auth', () => {
   it('maps HTTP protocols and appends encoded bearer auth', () => {
     expect(
-      buildGraphqlSoupWebSocketUrl('https://gateway.macro.com/dss', 'token+/=')
+      buildGraphqlSoupWebSocketUrl(
+        'https://cloud-storage.macro.com',
+        'token+/='
+      )
     ).toBe(
-      'wss://gateway.macro.com/dss/items/soup/graphql/ws?macro-api-token=token%2B%2F%3D'
+      'wss://cloud-storage.macro.com/items/soup/graphql/ws?macro-api-token=token%2B%2F%3D'
     );
     expect(buildGraphqlSoupWebSocketUrl('http://localhost:8086')).toBe(
       'ws://localhost:8086/items/soup/graphql/ws'
@@ -34,14 +37,14 @@ describe('GraphQL Soup websocket auth', () => {
     const refreshCookieAuth = vi.fn().mockResolvedValue(undefined);
     const getApiToken = vi.fn();
     const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
-      dssHost: 'https://gateway.macro.com/dss',
+      dssHost: 'https://cloud-storage.macro.com',
       bearerTokenAuth: false,
       getApiToken,
       refreshCookieAuth,
     });
 
     await expect(resolveUrl()).resolves.toBe(
-      'wss://gateway.macro.com/dss/items/soup/graphql/ws'
+      'wss://cloud-storage.macro.com/items/soup/graphql/ws'
     );
     expect(refreshCookieAuth).toHaveBeenCalledOnce();
     expect(getApiToken).not.toHaveBeenCalled();
@@ -54,7 +57,7 @@ describe('GraphQL Soup websocket auth', () => {
       .mockResolvedValueOnce('second');
     const refreshCookieAuth = vi.fn();
     const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
-      dssHost: 'https://gateway.macro.com/dss',
+      dssHost: 'https://cloud-storage.macro.com',
       bearerTokenAuth: true,
       getApiToken,
       refreshCookieAuth,
@@ -82,13 +85,15 @@ describe('GraphQL Soup websocket retry policy', () => {
 });
 
 describe('GraphQL Soup subscription lifecycle', () => {
-  it('keeps notification patches active without a cache host and cleans up replacements', () => {
+  it('subscribes to Soup, notification, and activity updates, cleans up replacements, and skips disabled hosts', () => {
     const firstSoupUnsubscribe = vi.fn();
     const firstNotificationUnsubscribe = vi.fn();
-    const uncachedNotificationUnsubscribe = vi.fn();
+    const firstActivityUnsubscribe = vi.fn();
     const secondSoupUnsubscribe = vi.fn();
     const secondNotificationUnsubscribe = vi.fn();
+    const secondActivityUnsubscribe = vi.fn();
     const firstClient = {
+      query: vi.fn(),
       subscription: vi
         .fn()
         .mockReturnValueOnce({
@@ -100,12 +105,11 @@ describe('GraphQL Soup subscription lifecycle', () => {
           })),
         })
         .mockReturnValueOnce({
-          subscribe: vi.fn(() => ({
-            unsubscribe: uncachedNotificationUnsubscribe,
-          })),
+          subscribe: vi.fn(() => ({ unsubscribe: firstActivityUnsubscribe })),
         }),
     };
     const secondClient = {
+      query: vi.fn(),
       subscription: vi
         .fn()
         .mockReturnValueOnce({
@@ -115,6 +119,9 @@ describe('GraphQL Soup subscription lifecycle', () => {
           subscribe: vi.fn(() => ({
             unsubscribe: secondNotificationUnsubscribe,
           })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({ unsubscribe: secondActivityUnsubscribe })),
         }),
     };
     const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
@@ -130,60 +137,35 @@ describe('GraphQL Soup subscription lifecycle', () => {
       NotificationUpdatesDocument,
       {}
     );
+    expect(firstClient.subscription).toHaveBeenNthCalledWith(
+      3,
+      ActivityUpdatesDocument,
+      {}
+    );
 
     lifecycle.replace(secondClient as never, { disabled: false } as never);
     expect(firstSoupUnsubscribe).toHaveBeenCalledOnce();
     expect(firstNotificationUnsubscribe).toHaveBeenCalledOnce();
-    expect(secondClient.subscription).toHaveBeenCalledTimes(2);
+    expect(firstActivityUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondClient.subscription).toHaveBeenCalledTimes(3);
 
     lifecycle.replace(firstClient as never, { disabled: true } as never);
     expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
     expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondActivityUnsubscribe).toHaveBeenCalledOnce();
     expect(firstClient.subscription).toHaveBeenCalledTimes(3);
-    expect(firstClient.subscription).toHaveBeenNthCalledWith(
-      3,
-      NotificationUpdatesDocument,
-      {}
-    );
 
     lifecycle.dispose();
-    expect(uncachedNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondActivityUnsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('publishes typed notification patches to frontend listeners', () => {
-    const receive: Array<(result: { data?: unknown }) => void> = [];
-    const client = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn((next) => {
-          receive.push(next);
-          return { unsubscribe: vi.fn() };
-        }),
-      })),
-    };
-    const listener = vi.fn();
-    const unsubscribe = subscribeToGraphqlNotificationPatches(listener);
-    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
-    lifecycle.replace(client as never, { disabled: false } as never);
-
-    receive[0]?.({ data: { soupUpdates: [] } });
-    expect(listener).not.toHaveBeenCalled();
-
-    const patch = {
-      __typename: 'GraphqlNewNotification',
-      notification: { id: 'notification-id' },
-    };
-    receive[1]?.({ data: { notificationUpdates: patch } });
-    expect(listener).toHaveBeenCalledOnce();
-    expect(listener).toHaveBeenCalledWith(patch);
-
-    unsubscribe();
-    lifecycle.dispose();
-  });
-
-  it('signals a terminal subscription failure once across both subscriptions', () => {
+  it('signals a terminal subscription failure once across all subscriptions', () => {
     toastFailure.mockClear();
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
+      query: vi.fn(),
       subscription: vi.fn(() => ({
         subscribe: vi.fn((next) => {
           receive.push(next);
@@ -199,7 +181,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
 
     expect(toastFailure).toHaveBeenCalledOnce();
     expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {
-      subtext: 'Refresh to reconnect.',
+      subtext: 'Refresh the app to reconnect.',
     });
     lifecycle.dispose();
   });
