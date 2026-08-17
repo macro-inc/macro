@@ -9,12 +9,12 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
+import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '../constants';
 
 /** One activity event as both activity queries return it. */
 export type ActivityEvent = ActivityEventFieldsFragment;
 
-/** Rows requested for a side-panel activity preview. */
-export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
+export { ENTITY_ACTIVITY_PREVIEW_LIMIT };
 
 type EntityActivityQueryOptions = {
   entityType: Accessor<EntityType>;

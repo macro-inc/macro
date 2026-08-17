@@ -1,5 +1,6 @@
 import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
 import type { Client, OperationResult } from '@urql/core';
 import {
   type ActivityUpdatesSubscription,
@@ -131,11 +132,20 @@ async function revalidateActivityQueries(args: {
   );
   for (const variant of entityVariants) {
     if (!variantTargetsEntity(variant.variables, entityIds)) continue;
+    // Variant recovery only inverts the selected field's own arguments, so
+    // `$limit` — an argument of the deeper `activity(limit:)` edge — never
+    // comes back. Refetching without it would write under a different
+    // `activity(limit: null)` field key and the panel's variant would stay
+    // stale, so restore the one limit the app queries with.
+    const variables: EntityActivityQueryVariables = {
+      input: variant.variables.input,
+      limit: variant.variables.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
+    };
     refetches.push(
       client
         .query<EntityActivityQuery, EntityActivityQueryVariables>(
           EntityActivityDocument,
-          variant.variables,
+          variables,
           { requestPolicy: 'network-only' }
         )
         .toPromise()

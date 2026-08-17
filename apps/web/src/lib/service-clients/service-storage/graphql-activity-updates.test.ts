@@ -1,3 +1,4 @@
+import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIVITY_PUSH_DEBOUNCE_MS,
@@ -59,11 +60,12 @@ describe('createActivityUpdatesHandler', () => {
         { variables: { input: { limit: 50, cursor: null } } },
         { variables: { input: { limit: 50, cursor: 'deeper-page' } } },
       ],
+      // Recovered variants carry only the soup field's own arguments — the
+      // deeper `activity(limit:)` argument is never inverted back.
       EntityActivity: [
         {
           variables: {
             input: { filters: { documentFilter: { literal: { id: DOC_ID } } } },
-            limit: 20,
           },
         },
         {
@@ -71,7 +73,6 @@ describe('createActivityUpdatesHandler', () => {
             input: {
               filters: { documentFilter: { literal: { id: OTHER_ID } } },
             },
-            limit: 20,
           },
         },
       ],
@@ -97,6 +98,11 @@ describe('createActivityUpdatesHandler', () => {
       calls.every(([, , context]) => context.requestPolicy === 'network-only')
     ).toBe(true);
     expect(JSON.stringify(calls[1]?.[1])).toContain(DOC_ID);
+    // The refetch restores the preview limit the panel's variant reads;
+    // without it the response writes under `activity(limit: null)`.
+    expect(calls[1]?.[1]).toMatchObject({
+      limit: ENTITY_ACTIVITY_PREVIEW_LIMIT,
+    });
     expect(JSON.stringify(calls.map(([, vars]) => vars))).not.toContain(
       'deeper-page'
     );
