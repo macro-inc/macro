@@ -559,13 +559,11 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
       </FullCalendar.DayHeaderContent>
 
       <FullCalendar.SlotLabelContent>
-        {({ date, text }) =>
-          calendarView.useNarrowDayHeaders()
-            ? formatCompactCalendarTime(
-                date,
-                calendarView.displaySettings.timeFormat
-              )
-            : text
+        {({ date }) =>
+          formatCompactCalendarTime(
+            date,
+            calendarView.displaySettings.timeFormat
+          )
         }
       </FullCalendar.SlotLabelContent>
 
