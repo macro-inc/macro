@@ -4,6 +4,7 @@ import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn } from '@ui/utils/classname';
 import { createMemo, Show } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
+import { messageSnippet } from '../util/messageSnippet';
 import { formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
@@ -32,20 +33,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     return { email: props.message.from?.email ?? '', photoUrl };
   });
 
-  const snippet = createMemo(() => {
-    if (props.message.body_text) {
-      return props.message.body_text.replace(/\s+/g, ' ').trim();
-    }
-    if (props.message.body_html_sanitized) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(
-        props.message.body_html_sanitized,
-        'text/html'
-      );
-      return doc.body.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-    }
-    return '';
-  });
+  const snippet = createMemo(() => messageSnippet(props.message));
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
