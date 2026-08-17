@@ -62,3 +62,34 @@ fn serializes_an_existing_channel_event() {
         json!(AgentSessionId::TEST_A)
     );
 }
+
+#[test]
+fn event_names_match_the_wire() {
+    use strum::IntoEnumIterator as _;
+
+    // Subscribers filter on these names, so the serde tag is the contract and
+    // `AgentTriggerEventName` must agree with it variant for variant.
+    let wire_names: Vec<String> = [
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+            AgentBotMentionedEvent {
+                bot_id: BotId::TEST_A,
+                message: message(),
+            },
+        )),
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+            ChannelEventMetadata {
+                bot_id: BotId::TEST_A,
+                session_id: AgentSessionId::TEST_A,
+                message: message(),
+            },
+        )),
+    ]
+    .into_iter()
+    .map(|event| serde_json::to_value(event).expect("serialize event")["event_type"].to_string())
+    .collect();
+    let names: Vec<String> = AgentTriggerEventName::iter()
+        .map(|name| serde_json::Value::String(name.to_string()).to_string())
+        .collect();
+
+    assert_eq!(names, wire_names);
+}
