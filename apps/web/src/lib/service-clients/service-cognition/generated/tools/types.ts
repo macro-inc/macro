@@ -393,9 +393,32 @@ export type SortBy =
   | 'recently_updated'
   | 'recently_created';
 /**
+ * Canonical entity types accepted by the notification-listing tool.
+ *
+ * This mirrors [`EntityType`] because the shared model intentionally does not
+ * depend on `schemars`, while AI tool inputs require [`JsonSchema`].
+ */
+export type NotificationEntityType =
+  | 'user'
+  | 'chat'
+  | 'channel'
+  | 'channel_message'
+  | 'document'
+  | 'project'
+  | 'email_thread'
+  | 'calendar_event'
+  | 'team'
+  | 'call'
+  | 'foreign_entity'
+  | 'static_file'
+  | 'crm_company'
+  | 'crm_contact'
+  | 'reminder'
+  | 'skill';
+/**
  * User-facing notification categories used for list filtering.
  */
-export type NotificationItemType =
+export type NotificationCategory =
   | 'email'
   | 'message'
   | 'channel'
@@ -2326,13 +2349,13 @@ export interface ListNotifications {
    */
   done?: boolean | null;
   /**
-   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
+   * Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread.
    */
-  entities?: NotificationEntityRef[] | null;
+  entities?: NotificationEntityFilter[] | null;
   /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
-  includeTypes?: NotificationItemType[] | null;
+  includeTypes?: NotificationCategory[] | null;
   /**
    * Maximum number of notifications to return. Defaults to 20, max 50.
    */
@@ -2345,10 +2368,10 @@ export interface ListNotifications {
 /**
  * User-facing reference to one specific entity to filter notifications by.
  */
-export interface NotificationEntityRef {
-  entityType: NotificationItemType;
+export interface NotificationEntityFilter {
+  entityType: NotificationEntityType;
   /**
-   * Entity id. For `email`, this is the email thread id. For `message`, this is the channel message id.
+   * Canonical entity identifier.
    */
   id: string;
 }

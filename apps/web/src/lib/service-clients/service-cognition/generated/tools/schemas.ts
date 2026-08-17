@@ -1693,17 +1693,22 @@ export const ListNotifications = z.object({
       z.array(
         z.object({
           entityType: z.enum([
-            'email',
-            'message',
+            'user',
+            'chat',
             'channel',
+            'channel_message',
             'document',
             'project',
-            'chat',
+            'email_thread',
+            'calendar_event',
+            'team',
             'call',
-            'task',
-            'github',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
             'reminder',
-            'calendar',
+            'skill',
           ]),
           id: z.string(),
         })
