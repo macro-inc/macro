@@ -322,8 +322,8 @@ services:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]
     restart: on-failure
-    ports:
-      - "8101:8101"
+    # No host port: everything reaches this through the proxy, and a second
+    # local instance would collide on a fixed publish.
     environment:
       # In-network gateway address; the local default (http://localhost:8082)
       # would point at this container itself.

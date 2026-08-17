@@ -44,6 +44,15 @@ fn workers_are_portless() {
 }
 
 #[test]
+fn agent_harness_has_an_instance_port() {
+    let svc = RUST_SERVICES
+        .iter()
+        .find(|svc| svc.compose_name == "agent_harness_service")
+        .unwrap();
+    assert_eq!(svc.host_port, Some(Port::AgentHarness));
+}
+
+#[test]
 fn dev_mode_excludes_workers_and_optin() {
     let dev: Vec<&str> = services_for_mode(Mode::Dev)
         .map(|s| s.compose_name)

@@ -839,6 +839,33 @@ fn teardown_commands(instance: &Instance) {
             "0",
         ])
         .output();
+    // `docker compose down` needs the generated override to discover this
+    // project. Remove by Compose's project label as well so failed partial
+    // starts cannot retain host-port reservations for the next run.
+    let container_ids = Command::new("docker")
+        .args([
+            "container",
+            "ls",
+            "--all",
+            "--quiet",
+            "--filter",
+            &format!("label=com.docker.compose.project={project}"),
+        ])
+        .output()
+        .ok()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !container_ids.is_empty() {
+        let _ = Command::new("docker")
+            .args(["container", "rm", "--force"])
+            .args(&container_ids)
+            .output();
+    }
     for vol in instance_volumes(instance) {
         let _ = Command::new("docker")
             .args(["volume", "rm", "-f", &vol])
