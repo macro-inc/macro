@@ -1,8 +1,4 @@
-import {
-  inspect,
-  inspectVariants,
-  selectAll,
-} from '@graphql-cache/exchange/inspection';
+import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
 import type { Client, OperationResult } from '@urql/core';
@@ -35,9 +31,9 @@ export const ACTIVITY_PUSH_JITTER_MS = 700;
  * host has no push-side link-patch surface (link patches exist only inside
  * optimistic-mutation transactions), so list membership is recovered the
  * blunt-but-correct way: re-execute the canonical list queries against the
- * network. Events are debounced into one coalesced pass, and pushes are
- * addressed — the acting subject plus the touched entities' accessors — so
- * the network cost stays at "a page-0 fetch per burst you can see".
+ * network. Pushes are per-subject and rare, and events are debounced into
+ * one coalesced pass, so the network cost stays at "a page-0 fetch per burst
+ * of your own actions".
  */
 export function createActivityUpdatesHandler(context: {
   client: Pick<Client, 'query'>;
@@ -45,7 +41,6 @@ export function createActivityUpdatesHandler(context: {
 }): (result: OperationResult<ActivityUpdatesSubscription>) => void {
   const { client, host } = context;
   let pendingEntityIds = new Set<string>();
-  let pendingSubjectIds = new Set<string>();
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
   let awaitingVisibility = false;
 
@@ -69,17 +64,12 @@ export function createActivityUpdatesHandler(context: {
       return;
     }
     const entityIds = pendingEntityIds;
-    const subjectIds = pendingSubjectIds;
     pendingEntityIds = new Set();
-    pendingSubjectIds = new Set();
-    void revalidateActivityQueries({
-      client,
-      host,
-      entityIds,
-      subjectIds,
-    }).catch((error) => {
-      console.warn('activity push revalidation failed', error);
-    });
+    void revalidateActivityQueries({ client, host, entityIds }).catch(
+      (error) => {
+        console.warn('activity push revalidation failed', error);
+      }
+    );
   };
 
   const scheduleFlush = () => {
@@ -97,7 +87,6 @@ export function createActivityUpdatesHandler(context: {
     if (patch?.__typename !== 'GraphqlActivityEvent') return;
 
     pendingEntityIds.add(patch.entityId);
-    pendingSubjectIds.add(patch.subjectId);
     scheduleFlush();
   };
 }
@@ -112,32 +101,25 @@ async function revalidateActivityQueries(args: {
   client: Pick<Client, 'query'>;
   host: CacheHost;
   entityIds: ReadonlySet<string>;
-  subjectIds: ReadonlySet<string>;
 }): Promise<void> {
-  const { client, host, entityIds, subjectIds } = args;
+  const { client, host, entityIds } = args;
   if (host.disabled) return;
 
   const refetches: Array<Promise<unknown>> = [];
 
-  const feedInstances = await inspect(
+  const feedVariants = await inspectVariants(
     host,
-    selectAll(MyActivityDocument).field('user')
+    selectAll(MyActivityDocument).field('user').field('activity')
   );
-  for (const instance of feedInstances) {
+  for (const variant of feedVariants) {
     // Deeper pages are anchored strictly before their cursor, so a new
     // (newest) row can only ever belong to the first page.
-    if (instance.variables.input.cursor != null) continue;
-    // The feed holds only the viewer's own rows, and the cached result says
-    // who the viewer is — a push about someone else (an entity-audience
-    // delivery) cannot change the feed. An unreadable id (partial cache)
-    // refetches conservatively.
-    const viewerId = instance.value?.id;
-    if (viewerId !== undefined && !subjectIds.has(viewerId)) continue;
+    if (variant.variables.input.cursor != null) continue;
     refetches.push(
       client
         .query<MyActivityQuery, MyActivityQueryVariables>(
           MyActivityDocument,
-          instance.variables,
+          variant.variables,
           { requestPolicy: 'network-only' }
         )
         .toPromise()
