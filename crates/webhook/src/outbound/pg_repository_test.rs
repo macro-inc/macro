@@ -32,6 +32,7 @@ fn create_request() -> CreateWebhookRequest {
 
 fn create_request_with_namespace(namespace: &str) -> CreateWebhookRequest {
     CreateWebhookRequest {
+        bot_feed: false,
         scope: WebhookScope::User,
         namespace: namespace.to_string(),
         name: "Build events".to_string(),
@@ -127,6 +128,7 @@ async fn try_create_webhook(
     repo.create_webhook(
         user_id(),
         workspace_id.to_string(),
+        None,
         request,
         "signing-secret".to_string(),
         json!({ "X-Test": "true" }),
@@ -284,6 +286,12 @@ async fn object_shaped_filters_are_rejected_by_check_constraint(
     Ok(())
 }
 
+// EXPLAIN output is planner text rather than application data, so the SQLx
+// macros have no types to check here.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "EXPLAIN output is planner text; the macros have nothing to validate"
+)]
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn containment_query_uses_filters_gin_index(pool: PgPool) -> anyhow::Result<()> {
     let mut connection = pool.acquire().await?;
@@ -703,5 +711,106 @@ async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> any
         repo.get_user_team_workspace_id(user_id()).await?,
         Some(TEAM_ID.to_string())
     );
+    Ok(())
+}
+
+/// Insert a bot-owned webhook, bypassing the API the way a provisioner would.
+async fn insert_bot_webhook(
+    pool: &PgPool,
+    id: &str,
+    bot_id: &str,
+    filters: Vec<WebhookFilter>,
+) -> anyhow::Result<()> {
+    insert_webhook_for_matching(
+        pool,
+        id,
+        "workspace_bot_tests",
+        filters,
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    sqlx::query!(
+        "UPDATE webhook SET owner_bot_id = $1 WHERE id = $2",
+        bot_id,
+        id
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_matching_returns_only_that_bots_webhooks(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    let trigger_filter = vec![WebhookFilter {
+        events: vec!["agent_trigger.new".to_string()],
+        ids: None,
+    }];
+    insert_bot_webhook(&pool, "wh_bot_a", "bot-a", trigger_filter.clone()).await?;
+    insert_bot_webhook(&pool, "wh_bot_b", "bot-b", trigger_filter.clone()).await?;
+
+    let matched = repo
+        .list_active_webhooks_for_bot("bot-a".to_string(), "agent_trigger.new".to_string())
+        .await?;
+
+    let ids: Vec<_> = matched.iter().map(|webhook| webhook.id.as_str()).collect();
+    assert_eq!(ids, ["wh_bot_a"]);
+    assert_eq!(matched[0].owner_bot_id.as_deref(), Some("bot-a"));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_matching_respects_event_filters_and_eligibility(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    insert_bot_webhook(
+        &pool,
+        "wh_bot_other_event",
+        "bot-a",
+        vec![WebhookFilter {
+            events: vec!["agent_trigger.existing".to_string()],
+            ids: None,
+        }],
+    )
+    .await?;
+
+    let matched = repo
+        .list_active_webhooks_for_bot("bot-a".to_string(), "agent_trigger.new".to_string())
+        .await?;
+
+    assert!(matched.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn workspace_matching_never_selects_bot_owned_webhooks(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool).await?;
+    let repo = PgRepository::new(pool.clone());
+    // A bot-owned webhook subscribed to an ordinary event name: even a
+    // perfectly matching workspace fan-out must not deliver to it, or every
+    // channel event in the workspace would leak into the agent runtime.
+    insert_bot_webhook(
+        &pool,
+        "wh_bot_greedy",
+        "bot-a",
+        vec![WebhookFilter {
+            events: vec!["document.created".to_string()],
+            ids: None,
+        }],
+    )
+    .await?;
+
+    let matched = repo
+        .list_active_webhooks_matching_event(
+            vec!["workspace_bot_tests".to_string()],
+            "document.created".to_string(),
+            "doc-1".to_string(),
+        )
+        .await?;
+
+    assert!(matched.is_empty());
     Ok(())
 }

@@ -363,6 +363,7 @@ where
     async fn create_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
+        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
         validate_create_request(&request, self.endpoint_scheme_policy)?;
@@ -381,7 +382,14 @@ where
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = match self
             .repo
-            .create_webhook(caller, workspace_id, request, signing_secret, headers)
+            .create_webhook(
+                caller,
+                workspace_id,
+                owner_bot_id,
+                request,
+                signing_secret,
+                headers,
+            )
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?
         {

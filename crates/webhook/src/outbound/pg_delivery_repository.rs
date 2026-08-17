@@ -99,6 +99,9 @@ fn row_to_prepared_delivery(
         webhook: Webhook {
             id: row.webhook_id,
             workspace_id: row.workspace_id,
+            // Deliveries do not route by ownership; the matched webhook is
+            // already chosen, so its bot is irrelevant here.
+            owner_bot_id: None,
             namespace: row.namespace,
             name: row.name,
             endpoint_url: row.endpoint_url,

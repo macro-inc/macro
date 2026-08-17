@@ -25,6 +25,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         workspace_id: String,
+        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
         signing_secret: String,
         headers: serde_json::Value,
@@ -49,6 +50,18 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     ///
     /// Delivery-eligible webhooks are active, valid, and not soft-deleted. A filter without
     /// `ids` matches every entity id.
+    /// List active, valid webhooks owned by `bot_id` whose filters match
+    /// `event`. The only path that selects bot-owned webhooks: their bot's
+    /// identity is the routing rule, not workspace access.
+    fn list_active_webhooks_for_bot(
+        &self,
+        bot_id: String,
+        event: String,
+    ) -> impl Future<Output = Result<Vec<Webhook>, Self::Err>> + Send;
+
+    /// List active, valid, non-bot-owned webhooks in the given workspaces
+    /// whose filters match `event` (and `entity_id`, when a filter names
+    /// ids).
     fn list_active_webhooks_matching_event(
         &self,
         workspace_ids: Vec<String>,
@@ -229,10 +242,12 @@ pub trait WebhookValidationClient: Clone + Send + Sync + 'static {
 
 /// Webhook service.
 pub trait WebhookService: Clone + Send + Sync + 'static {
-    /// Create a webhook.
+    /// Create a webhook. `owner_bot_id` marks it as that bot's trigger
+    /// feed; transports resolve it from the caller's credentials.
     fn create_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
+        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
     ) -> impl Future<Output = Result<Webhook, WebhookError>> + Send;
 

@@ -200,6 +200,7 @@ struct MockRepositoryState {
     fail_matching: bool,
     workspace_calls: Vec<Vec<MacroUserIdStr<'static>>>,
     match_calls: Vec<MatchCall>,
+    bot_match_calls: Vec<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -217,6 +218,7 @@ impl MockRepository {
                 fail_matching: false,
                 workspace_calls: Vec::new(),
                 match_calls: Vec::new(),
+                bot_match_calls: Vec::new(),
             })),
         }
     }
@@ -245,6 +247,7 @@ impl WebhookRepo for MockRepository {
         &self,
         _created_by_user_id: MacroUserIdStr<'static>,
         _workspace_id: String,
+        _owner_bot_id: Option<String>,
         _request: CreateWebhookRequest,
         _signing_secret: String,
         _headers: Value,
@@ -275,6 +278,19 @@ impl WebhookRepo for MockRepository {
             event_name,
             entity_id,
         });
+        if state.fail_matching {
+            anyhow::bail!("webhook repository unavailable");
+        }
+        Ok(state.matching_webhooks.clone())
+    }
+
+    async fn list_active_webhooks_for_bot(
+        &self,
+        bot_id: String,
+        event: String,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        let mut state = lock(&self.state);
+        state.bot_match_calls.push((bot_id, event));
         if state.fail_matching {
             anyhow::bail!("webhook repository unavailable");
         }
@@ -363,6 +379,7 @@ fn webhook(id: &str, workspace_id: &str) -> Webhook {
     Webhook {
         id: id.to_string(),
         workspace_id: workspace_id.to_string(),
+        owner_bot_id: None,
         namespace: id.to_string(),
         name: id.to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
@@ -1300,4 +1317,73 @@ async fn entity_access_internal_error_is_transient() {
         WebhookEventIngestionError::EntityAccess(AccessError::Internal)
     ));
     assert!(error.is_transient());
+}
+
+fn agent_trigger_event() -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    use channels::domain::broker_events::ChannelMessagePostedMetadata;
+    use channels::domain::models::ChannelType;
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "fix the flaky test".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+#[tokio::test]
+async fn agent_trigger_events_route_by_bot_ownership_alone() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_bot_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_trigger_event();
+
+    service
+        .ingest_agent_trigger_event(event.clone())
+        .await
+        .expect("agent trigger events are ingested");
+
+    // Routed by the bot, never through entity access or workspace fan-out.
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert!(repository_state.match_calls.is_empty());
+    assert!(repository_state.workspace_calls.is_empty());
+    let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)).to_string();
+    assert_eq!(
+        repository_state.bot_match_calls.as_slice(),
+        &[(bot_id.clone(), "agent_trigger.new".to_string())],
+    );
+    drop(repository_state);
+
+    // The delivered body is the broker envelope, verbatim: exactly what the
+    // daemon on the other end decodes.
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let normalized = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(normalized.event_name, "agent_trigger.new");
+    assert_eq!(normalized.entity_type, "bot");
+    assert_eq!(normalized.entity_id, bot_id);
+    assert_eq!(normalized.ordering_key, bot_id);
+    assert_eq!(
+        normalized.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
+    );
 }

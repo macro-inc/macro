@@ -13,6 +13,7 @@ use crate::domain::{
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
+use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
@@ -97,6 +98,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_webhook_event(
         &self,
         event: Event<WebhookTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.agent_sessions` event envelope.
+    fn ingest_agent_trigger_event(
+        &self,
+        event: Event<AgentTriggerTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -197,7 +204,14 @@ where
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         tracing::Span::current().record("match_count", webhooks.len());
+        self.enqueue_all(webhooks, event).await
+    }
 
+    async fn enqueue_all(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+        event: NormalizedWebhookEvent,
+    ) -> Result<(), WebhookEventIngestionError> {
         let enqueue_results = join_all(webhooks.into_iter().map(|webhook| {
             let enqueuer = self.enqueuer.clone();
             let webhook_id = webhook.id;
@@ -362,6 +376,50 @@ fn normalized_event(
     }
 }
 
+/// Normalize one agent-trigger event.
+///
+/// The entity - and the ordering key, mirroring the broker's partitioning -
+/// is the bot: a bot's runtime consumes its bot's whole trigger stream, in
+/// order, and nothing else's.
+fn normalized_agent_trigger_event(
+    event: &Event<AgentTriggerTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
+    use agent_trigger::domain::broker_events::{
+        AgentTriggerEventName, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    };
+
+    let bot_id = match &event.event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+            mentioned.bot_id
+        }
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
+            metadata.bot_id
+        }
+        // Both trigger enums are non-exhaustive on purpose; an unknown shape
+        // has no bot to route to. Permanent, so the consumer skips it.
+        _ => {
+            return Err(WebhookEventIngestionError::InvalidEntityId {
+                entity_type: "bot",
+                entity_id: "unrecognized agent-trigger event shape".to_owned(),
+            });
+        }
+    };
+    let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
+    let broker_envelope = serde_json::to_value(event)?;
+    let bot_id = bot_id.to_string();
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            "bot",
+            &bot_id,
+            broker_envelope,
+        ),
+        bot_id,
+    ))
+}
+
 impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
 where
     A: EntityAccessService,
@@ -397,5 +455,21 @@ where
     ) -> Result<(), WebhookEventIngestionError> {
         let (event, workspace_id) = normalized_webhook_event(&event)?;
         self.match_and_enqueue(event, vec![workspace_id]).await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_agent_trigger_event(
+        &self,
+        event: Event<AgentTriggerTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (event, bot_id) = normalized_agent_trigger_event(&event)?;
+        // Routed by bot ownership, never by workspace access: the audience
+        // of a trigger event is exactly the runtime serving that bot.
+        let webhooks = self
+            .repository
+            .list_active_webhooks_for_bot(bot_id, event.event_name.clone())
+            .await
+            .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
+        self.enqueue_all(webhooks, event).await
     }
 }

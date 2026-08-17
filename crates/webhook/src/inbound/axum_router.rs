@@ -233,8 +233,26 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
+    // A trigger feed belongs to the bot that asked for it: the id comes
+    // from the caller's verified credentials, never from the body.
+    let owner_bot_id = if request.bot_feed {
+        match &authorization.authorization.principal {
+            macro_authorization::MacroAuthorization::Bot(bot) => Some(bot.bot_id.to_string()),
+            _ => {
+                return Err(WebhookHandlerError::from(WebhookError::BadRequest(
+                    "botFeed requires bot credentials".to_owned(),
+                )));
+            }
+        }
+    } else {
+        None
+    };
     let webhook = service
-        .create_webhook(authorization.authorization.user.macro_user_id, request)
+        .create_webhook(
+            authorization.authorization.user.macro_user_id,
+            owner_bot_id,
+            request,
+        )
         .await?;
     Ok((StatusCode::CREATED, Json(webhook.into())))
 }

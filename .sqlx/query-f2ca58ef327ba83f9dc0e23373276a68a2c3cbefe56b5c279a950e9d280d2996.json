@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO webhook (\n                id, workspace_id, owner_bot_id, namespace, name, endpoint_url, signing_secret,\n                headers, filters, status, is_valid, created_by_user_id\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)\n            ON CONFLICT (workspace_id, namespace) WHERE deleted_at IS NULL DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f2ca58ef327ba83f9dc0e23373276a68a2c3cbefe56b5c279a950e9d280d2996"
+}

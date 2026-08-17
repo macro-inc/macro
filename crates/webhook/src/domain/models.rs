@@ -318,7 +318,10 @@ impl std::str::FromStr for WebhookStatus {
 }
 
 /// Scope that owns a newly-created webhook.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+///
+/// A two-way wire contract: it is part of [`CreateWebhookRequest`], which API
+/// clients serialize, so both derives are load-bearing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum WebhookScope {
@@ -351,11 +354,22 @@ impl WebhookEndpointSchemePolicy {
 }
 
 /// Request to create a webhook.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
+/// daemon, which registers its own trigger feed at boot) serialize this type
+/// to build the request the server deserializes, so both derives are
+/// load-bearing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookRequest {
     /// Scope that owns the webhook.
     pub scope: WebhookScope,
+    /// Make this webhook the calling bot's trigger feed: it will receive
+    /// that bot's `agent_trigger.*` events and nothing else, and is excluded
+    /// from workspace event fan-out. Only a bot principal may set it; the
+    /// owning bot is taken from the caller's credentials, never the body.
+    #[serde(default)]
+    pub bot_feed: bool,
     /// Caller-chosen namespace, unique among the owning workspace's webhooks.
     /// Set at creation time only; it cannot be changed afterwards.
     pub namespace: String,
@@ -397,6 +411,9 @@ pub enum CreateWebhookOutcome {
 }
 
 /// Webhook row returned by application APIs.
+///
+/// A two-way wire contract: API clients deserialize this type from the
+/// response the server serializes, so both derives are load-bearing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Webhook {
@@ -404,6 +421,11 @@ pub struct Webhook {
     pub id: WebhookId,
     /// Owning workspace id.
     pub workspace_id: String,
+    /// The agent bot this webhook belongs to, when it is a bot's trigger
+    /// feed. Bot-owned webhooks receive only their own bot's agent-trigger
+    /// events, and workspace matching never selects them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_bot_id: Option<String>,
     /// Caller-chosen namespace, unique among the owning workspace's webhooks.
     /// Set at creation time only; it cannot be changed afterwards.
     pub namespace: String,
@@ -434,6 +456,9 @@ pub struct Webhook {
 }
 
 /// Webhook returned after creation, including its signing secret.
+///
+/// A two-way wire contract: API clients deserialize this type from the
+/// response the server serializes, so both derives are load-bearing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookResponse {
@@ -456,6 +481,9 @@ pub struct CreateWebhookResponse {
     pub status: WebhookStatus,
     /// Whether the current endpoint configuration has passed validation.
     pub is_valid: bool,
+    /// The agent bot this webhook is the trigger feed of, when it is one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_bot_id: Option<String>,
     /// User that created the webhook.
     pub created_by_user_id: String,
     /// Creation timestamp.
@@ -480,6 +508,7 @@ impl From<Webhook> for CreateWebhookResponse {
             headers: webhook.headers,
             status: webhook.status,
             is_valid: webhook.is_valid,
+            owner_bot_id: webhook.owner_bot_id,
             created_by_user_id: webhook.created_by_user_id,
             created_at: webhook.created_at,
             updated_at: webhook.updated_at,
@@ -490,6 +519,9 @@ impl From<Webhook> for CreateWebhookResponse {
 }
 
 /// Webhooks visible to the caller across their personal and team workspaces.
+///
+/// A two-way wire contract: API clients deserialize this type from the
+/// response the server serializes, so both derives are load-bearing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ListWebhooksResponse {

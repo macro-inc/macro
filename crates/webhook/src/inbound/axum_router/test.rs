@@ -35,7 +35,11 @@ struct FakeService {
 
 #[derive(Debug)]
 enum ServiceCall {
-    Create(MacroUserIdStr<'static>, CreateWebhookRequest),
+    Create(
+        MacroUserIdStr<'static>,
+        Option<String>,
+        CreateWebhookRequest,
+    ),
     Get(MacroUserIdStr<'static>, WebhookId),
     List(MacroUserIdStr<'static>),
     Patch(MacroUserIdStr<'static>, WebhookId, PatchWebhookRequest),
@@ -43,6 +47,10 @@ enum ServiceCall {
     Delete(MacroUserIdStr<'static>, WebhookId),
 }
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "a test fake's canned answers; boxing would only obscure them"
+)]
 enum ServiceResponse {
     Webhook(Webhook),
     List(ListWebhooksResponse),
@@ -62,7 +70,9 @@ impl FakeService {
 impl Clone for ServiceCall {
     fn clone(&self) -> Self {
         match self {
-            Self::Create(user, request) => Self::Create(user.clone(), request.clone()),
+            Self::Create(user, bot, request) => {
+                Self::Create(user.clone(), bot.clone(), request.clone())
+            }
             Self::Get(user, id) => Self::Get(user.clone(), id.clone()),
             Self::List(user) => Self::List(user.clone()),
             Self::Patch(user, id, request) => {
@@ -98,6 +108,30 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         })
     }
 
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: macro_authorization::BotScope,
+        acting_user: Option<macro_authorization::BotActingUserClaims>,
+    ) -> Result<macro_authorization::BotAuthentication, Report<MacroAuthorizationError>> {
+        if bot_token != "mbot_feed_test" {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        let acting_user = acting_user
+            .and_then(|claims| claims.user_id)
+            .map(|user_id| macro_authorization::MacroUserAuthentication {
+                macro_user_id: MacroUserIdStr::try_from(user_id).unwrap(),
+                user_context: UserContext::default(),
+            });
+        Ok(macro_authorization::BotAuthentication {
+            bot_id: bot_id::BotId::TEST_A,
+            token_id: uuid::Uuid::new_v4(),
+            bot_scope,
+            team_id: None,
+            acting_user,
+        })
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -120,12 +154,13 @@ impl WebhookService for FakeService {
     async fn create_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
+        owner_bot_id: Option<String>,
         request: CreateWebhookRequest,
     ) -> Result<Webhook, WebhookError> {
         self.calls
             .lock()
             .unwrap()
-            .push(ServiceCall::Create(caller, request));
+            .push(ServiceCall::Create(caller, owner_bot_id, request));
         match self
             .response
             .lock()
@@ -300,7 +335,7 @@ async fn create_passes_authenticated_user_and_body_to_service() {
     assert_eq!(body["signing_secret"], "whsec_test");
     assert_eq!(body["namespace"], "events-hook");
     match &service.calls()[0] {
-        ServiceCall::Create(user, request) => {
+        ServiceCall::Create(user, _owner_bot_id, request) => {
             assert_eq!(user.as_ref(), user_id());
             assert_eq!(request.name, "Events");
             assert_eq!(request.namespace, "events-hook");
@@ -674,4 +709,63 @@ fn webhook() -> Webhook {
 
 fn user_id() -> &'static str {
     "macro|webhook-test@example.com"
+}
+
+#[tokio::test]
+async fn a_bot_feed_create_stamps_the_calling_bot() {
+    let service = FakeService::default();
+    let mut body = create_body();
+    body["bot_feed"] = json!(true);
+    let authorization_state =
+        MacroAuthorizationState::new(Arc::new(FakeAuthorizationService::default()));
+    let router = webhook_router::<_, _, _, ()>(WebhookRouterState::new(
+        service.clone(),
+        FakeRateLimiter::default(),
+        authorization_state,
+    ));
+
+    let response = router
+        .oneshot(
+            Request::post("/webhooks")
+                .header("content-type", "application/json")
+                .header("x-macro-bot-token", "mbot_feed_test")
+                .header("x-macro-bot-scope", "user")
+                .header("x-macro-bot-for-macro-user-id", user_id())
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    match &service.calls()[0] {
+        ServiceCall::Create(user, owner_bot_id, request) => {
+            assert_eq!(user.as_ref(), user_id());
+            assert_eq!(
+                owner_bot_id.as_deref(),
+                Some(bot_id::BotId::TEST_A.to_string().as_str())
+            );
+            assert!(request.bot_feed);
+        }
+        other => panic!("unexpected call: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_bot_feed_create_without_bot_credentials_is_rejected() {
+    let service = FakeService::default();
+    let mut body = create_body();
+    body["bot_feed"] = json!(true);
+
+    let response = send(
+        service.clone(),
+        FakeRateLimiter::default(),
+        "POST",
+        "/webhooks",
+        body,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(service.calls().is_empty());
 }
