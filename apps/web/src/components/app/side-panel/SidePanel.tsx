@@ -464,7 +464,7 @@ function EmptyPill(props: { label?: JSX.Element } = {}) {
 function Loading() {
   return (
     <div class="flex items-center justify-center p-2">
-      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-edge-muted/50"></div>
+      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-skeleton"></div>
     </div>
   );
 }

@@ -12,8 +12,7 @@ export type ThemeAssignment =
       space?: 'oklch' | 'srgb';
     };
 
-const ALPHA_WRAPPER =
-  /^color-mix\(in oklch, (.+) ([\d.]+)%, transparent\)$/;
+const ALPHA_WRAPPER = /^color-mix\(in oklch, (.+) ([\d.]+)%, transparent\)$/;
 const LINK = /^var\(--color-([a-z0-9-]+)\)$/;
 const MIX =
   /^color-mix\(in (oklch|srgb), var\(--color-([a-z0-9-]+)\) ([\d.]+)%, var\(--color-([a-z0-9-]+)\)\)$/;

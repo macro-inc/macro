@@ -1,4 +1,9 @@
-import { type ComponentProps, Show, splitProps, type ValidComponent } from 'solid-js';
+import {
+  type ComponentProps,
+  Show,
+  splitProps,
+  type ValidComponent,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn } from '@ui';

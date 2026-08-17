@@ -23,7 +23,9 @@ const THEME_V2_TOKEN_KEYS: ReadonlyArray<keyof ThemeV2Tokens> = [
   'c4',
 ];
 
-function isTokenValue(val: unknown): val is { l: number; c: number; h: number } {
+function isTokenValue(
+  val: unknown
+): val is { l: number; c: number; h: number } {
   if (typeof val !== 'object' || val === null) return false;
   const obj = val as Record<string, unknown>;
   return (

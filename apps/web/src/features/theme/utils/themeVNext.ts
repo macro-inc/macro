@@ -24,7 +24,8 @@ export const PALETTE_HUES = {
 } as const satisfies Record<string, number>;
 
 const roundToEightDecimals = (value: number) => {
-  const rounded = Math.round((value + Number.EPSILON) * 100_000_000) / 100_000_000;
+  const rounded =
+    Math.round((value + Number.EPSILON) * 100_000_000) / 100_000_000;
   return Object.is(rounded, -0) ? 0 : rounded;
 };
 
@@ -163,7 +164,8 @@ export function legacyThemeToVNextTokens(
   // Preserve the old custom semantic overrides during conversion.
   const overrides = 'overrides' in theme ? theme.overrides : undefined;
   for (const override of overrides ?? []) {
-    if (override.token in defaults) result[override.token] = oklch(override.value);
+    if (override.token in defaults)
+      result[override.token] = oklch(override.value);
   }
 
   return result;

@@ -125,9 +125,9 @@ export type ThemeColorTokens = Record<string, string>;
 export type ThemeColorMode = 'light' | 'dark';
 
 type TokenColor = {
-  token: SemanticToken,
-  value: { l: number; c: number; h: number }
-}
+  token: SemanticToken;
+  value: { l: number; c: number; h: number };
+};
 
 export type ThemeV2 = {
   id: string;

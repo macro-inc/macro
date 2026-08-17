@@ -159,7 +159,9 @@ export default function ThemeEdit3() {
             optionValue="id"
             optionTextValue="name"
             gutter={6}
-            itemComponent={(itemProps: { item: CollectionNode<SystemTheme> }) => (
+            itemComponent={(itemProps: {
+              item: CollectionNode<SystemTheme>;
+            }) => (
               <Select.Item
                 item={itemProps.item}
                 class="flex items-center gap-2 rounded-sm px-2 py-2 text-sm text-ink outline-none data-highlighted:bg-hover"

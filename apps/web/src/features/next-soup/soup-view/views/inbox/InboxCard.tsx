@@ -43,10 +43,11 @@ function Root(props: RootProps): JSX.Element {
         'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-9',
 
         {
-          'bg-accent/8': props.selected,
-          'bg-accent/16': props.selected && props.highlighted,
-          'bg-hover': props.highlighted && !props.selected && !isTouchDevice(),
-          'hover:bg-hover/65':
+          'bg-list-selected': props.selected,
+          'bg-list-selected-highlighted': props.selected && props.highlighted,
+          'bg-list-highlighted':
+            props.highlighted && !props.selected && !isTouchDevice(),
+          'hover:bg-list-hover':
             !props.highlighted && !props.selected && !isTouchDevice(),
         },
         props.class

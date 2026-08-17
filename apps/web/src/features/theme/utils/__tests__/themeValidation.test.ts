@@ -5,10 +5,7 @@ import {
   parseThemeV2Json,
   parseThemeV3Json,
 } from '@theme/utils/themeValidation';
-import {
-  inputColorTokens,
-  semanticTokens,
-} from '@theme/types/themeTypes';
+import { inputColorTokens, semanticTokens } from '@theme/types/themeTypes';
 import { DEFAULT_THEMES } from '@theme/constants';
 
 const validThemeJson = JSON.stringify({
@@ -193,7 +190,9 @@ describe('token-only ThemeV3 validation', () => {
 
   it('accepts a complete V3 theme without legacy tokens or depth', () => {
     expect(isThemeV3(validV3Theme)).toBe(true);
-    expect(parseThemeV3Json(JSON.stringify(validV3Theme))).toEqual(validV3Theme);
+    expect(parseThemeV3Json(JSON.stringify(validV3Theme))).toEqual(
+      validV3Theme
+    );
   });
 
   it('requires an explicit light or dark mode', () => {

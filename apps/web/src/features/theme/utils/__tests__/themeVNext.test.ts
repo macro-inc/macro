@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  semanticTokens,
-  type ThemeV2Tokens,
-} from '../../types/themeTypes';
+import { semanticTokens, type ThemeV2Tokens } from '../../types/themeTypes';
 import {
   parseThemeAssignment,
   serializeThemeAssignment,
@@ -72,10 +69,7 @@ describe('legacyThemeToVNextTokens', () => {
   });
 
   it('builds the final input and semantic registry', () => {
-    const result = legacyThemeToVNextTokens(
-      { tokens: legacyTokens },
-      'dark'
-    );
+    const result = legacyThemeToVNextTokens({ tokens: legacyTokens }, 'dark');
 
     expect(result['surface-0']).toBe('oklch(0.1 0 0deg)');
     expect(result['surface-4']).toBe('oklch(0.5 0 0deg)');

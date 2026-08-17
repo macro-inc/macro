@@ -178,13 +178,7 @@ function ColorControl(props: {
     setC(safe.c);
     setH(safe.h);
     setAlpha(safe.alpha);
-    lastWritten = convertOklchTo(
-      safe.l,
-      safe.c,
-      safe.h,
-      'oklch',
-      safe.alpha
-    );
+    lastWritten = convertOklchTo(safe.l, safe.c, safe.h, 'oklch', safe.alpha);
     props.onChange(lastWritten);
   };
 
@@ -337,10 +331,7 @@ function AssignmentControls(props: { token: string; value: string }) {
   const commit = (next: ThemeAssignment) =>
     updateLiveThemeColorToken(props.token, serializeThemeAssignment(next));
   const preview = (next: ThemeAssignment) =>
-    previewLiveThemeColorToken(
-      props.token,
-      serializeThemeAssignment(next)
-    );
+    previewLiveThemeColorToken(props.token, serializeThemeAssignment(next));
   const makeCustom = () =>
     commit({ kind: 'custom', value: resolvedColor(props.token) });
 
@@ -662,9 +653,7 @@ function TokenRow(props: { token: string }) {
         <ColorControl
           token={props.token}
           value={value()}
-          onChange={(next) =>
-            updateLiveThemeColorToken(props.token, next)
-          }
+          onChange={(next) => updateLiveThemeColorToken(props.token, next)}
         />
         <div class="min-w-0">
           <div class="truncate text-sm text-ink">{tokenLabel(props.token)}</div>
@@ -685,7 +674,10 @@ function TokenSection(props: {
   ramp?: boolean;
 }) {
   return (
-    <Collapsible defaultOpen={props.defaultOpen} class="border-b border-edge-muted last:border-b-0">
+    <Collapsible
+      defaultOpen={props.defaultOpen}
+      class="border-b border-edge-muted last:border-b-0"
+    >
       <Collapsible.Trigger class="group flex w-full items-center gap-2 bg-surface px-4 py-3 text-left text-sm text-ink-muted outline-none hover:bg-hover hover:text-ink">
         <span>{props.title}</span>
         <span class="rounded border border-edge-muted bg-inset px-1.5 py-0.5 font-mono text-[10px] text-ink-extra-muted">
@@ -698,9 +690,7 @@ function TokenSection(props: {
           <Show when={props.ramp}>
             <RampEditor tokens={props.tokens} />
           </Show>
-          <For each={props.tokens}>
-            {(token) => <TokenRow token={token} />}
-          </For>
+          <For each={props.tokens}>{(token) => <TokenRow token={token} />}</For>
         </div>
       </Collapsible.Content>
     </Collapsible>

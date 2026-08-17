@@ -232,7 +232,7 @@ function HistorySkeleton() {
       aria-hidden="true"
       class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
     >
-      <div class="skeleton-shimmer h-12 w-full rounded-md bg-ink/3" />
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
     </div>
   );
 }

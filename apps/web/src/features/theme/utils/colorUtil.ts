@@ -23,10 +23,7 @@ export function sanitizeOklch(
     l: Math.max(0, Math.min(1, finiteNumber(color.l, fallback.l))),
     c: Math.max(0, finiteNumber(color.c, fallback.c)),
     h: Math.max(0, Math.min(360, finiteNumber(color.h, fallback.h))),
-    alpha: Math.max(
-      0,
-      Math.min(1, finiteNumber(color.alpha, fallback.alpha))
-    ),
+    alpha: Math.max(0, Math.min(1, finiteNumber(color.alpha, fallback.alpha))),
   };
 }
 

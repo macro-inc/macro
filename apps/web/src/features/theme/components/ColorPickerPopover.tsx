@@ -235,9 +235,9 @@ export function ColorPickerPopover(props: {
 
   const color = () => new Color(oklch());
   const rgb = createMemo(() => {
-    const [r, g, b] = color().to('srgb').coords.map((channel) =>
-      clamp(Number(channel) || 0, 0, 1)
-    );
+    const [r, g, b] = color()
+      .to('srgb')
+      .coords.map((channel) => clamp(Number(channel) || 0, 0, 1));
     return { r: r * 255, g: g * 255, b: b * 255 };
   });
   const convertedHsl = createMemo(() => {
@@ -282,11 +282,7 @@ export function ColorPickerPopover(props: {
   const setRgbChannel = (channel: 'r' | 'g' | 'b', value: number) => {
     const next = { ...rgb(), [channel]: value };
     applyColor(
-      new Color(
-        'srgb',
-        [next.r / 255, next.g / 255, next.b / 255],
-        alpha()
-      )
+      new Color('srgb', [next.r / 255, next.g / 255, next.b / 255], alpha())
     );
   };
 
@@ -417,7 +413,10 @@ export function ColorPickerPopover(props: {
                   }}
                 >
                   <Slider.Fill class="absolute h-full rounded-full bg-transparent" />
-                  <Slider.Thumb class="top-1/2 size-4 -translate-y-1/2 rounded-full border-2 border-[white] bg-[var(--picker-color)] shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none" style={{ '--picker-color': oklch() }}>
+                  <Slider.Thumb
+                    class="top-1/2 size-4 -translate-y-1/2 rounded-full border-2 border-[white] bg-[var(--picker-color)] shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
+                    style={{ '--picker-color': oklch() }}
+                  >
                     <Slider.Input />
                   </Slider.Thumb>
                 </Slider.Track>

@@ -10,7 +10,12 @@ import {
 describe('OKLCH runtime safety', () => {
   it('replaces missing and non-finite channels with finite defaults', () => {
     expect(
-      sanitizeOklch({ l: undefined, c: Number.NaN, h: undefined, alpha: Infinity })
+      sanitizeOklch({
+        l: undefined,
+        c: Number.NaN,
+        h: undefined,
+        alpha: Infinity,
+      })
     ).toEqual({ l: 0, c: 0, h: 0, alpha: 1 });
   });
 

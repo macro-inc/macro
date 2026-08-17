@@ -157,8 +157,8 @@ export function GithubPullRequestDetailsRows(props: {
             when={props.enrichment.authorLogin}
             fallback={
               <>
-                <span class="skeleton-shimmer size-3.5 rounded-full bg-ink/10" />
-                <span class="skeleton-shimmer h-3 w-16 rounded-full bg-ink/10" />
+                <span class="skeleton-shimmer size-3.5 rounded-full bg-skeleton" />
+                <span class="skeleton-shimmer h-3 w-16 rounded-full bg-skeleton" />
               </>
             }
           >

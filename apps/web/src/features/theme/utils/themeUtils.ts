@@ -1,5 +1,28 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, liveThemeMode, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setLiveThemeMode, setThemeColorTokens, setThemeMode, setUserThemes, systemMode, themeColorTokens, themeMode, themes, userThemes} from '../signals/themeSignals';
-import type { ThemeColorTokens, ThemeV2Tokens, ThemeV3 } from '../types/themeTypes';
+import {
+  currentThemeId,
+  darkModeTheme,
+  lightModeTheme,
+  liveThemeMode,
+  setCurrentThemeId,
+  setDarkModeTheme,
+  setHtmlColor,
+  setIsThemeSaved,
+  setLightModeTheme,
+  setLiveThemeMode,
+  setThemeColorTokens,
+  setThemeMode,
+  setUserThemes,
+  systemMode,
+  themeColorTokens,
+  themeMode,
+  themes,
+  userThemes,
+} from '../signals/themeSignals';
+import type {
+  ThemeColorTokens,
+  ThemeV2Tokens,
+  ThemeV3,
+} from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
@@ -9,13 +32,13 @@ import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';
 import { normalizeThemeColorTokens } from './themeVNext';
 
-export function exportTheme(themeId?: string){
+export function exportTheme(themeId?: string) {
   const id = themeId ?? currentThemeId();
   const theme = JSON.stringify(themes().find((t) => t.id === id));
   navigator.clipboard.writeText(theme);
 }
 
-async function _importTheme(): Promise<void>{
+async function _importTheme(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
     const parsed: unknown = JSON.parse(text);
@@ -24,7 +47,7 @@ async function _importTheme(): Promise<void>{
       : isThemeV2(parsed)
         ? convertThemev2v3(parsed)
         : null;
-    if(!imported){
+    if (!imported) {
       toast.alert('Clipboard does not contain a valid theme.');
       return;
     }
@@ -34,11 +57,14 @@ async function _importTheme(): Promise<void>{
       name: imported.name,
       version: 3,
       mode: imported.mode,
-      colorTokens: normalizeThemeColorTokens(imported.colorTokens, imported.mode),
+      colorTokens: normalizeThemeColorTokens(
+        imported.colorTokens,
+        imported.mode
+      ),
     };
     setUserThemes([...userThemes(), newTheme]);
     applyTheme(id);
-  } catch(e) {
+  } catch (e) {
     console.error('Failed to import theme:', e);
     toast.alert('Failed to import theme from clipboard.');
   }
@@ -66,7 +92,9 @@ const LEGACY_TOKEN_MAP = {
   c4: 'content-4',
 } as const satisfies Record<keyof ThemeV2Tokens, string>;
 
-function resolvedTokenOklch(token: string): { l: number; c: number; h: number } | null {
+function resolvedTokenOklch(
+  token: string
+): { l: number; c: number; h: number } | null {
   const authored = themeColorTokens()[token];
   if (authored) {
     try {
@@ -176,9 +204,9 @@ let previewSnapshot: {
   mode: 'light' | 'dark';
 } | null = null;
 
-export function applyTheme(id: string): void{
+export function applyTheme(id: string): void {
   let theme = themes().find((t) => t.id === id);
-  if(!theme){
+  if (!theme) {
     console.error(`theme not found: ${id}`);
     theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
   }
@@ -189,7 +217,8 @@ export function applyTheme(id: string): void{
 
   setLiveThemeMode(theme.mode);
   setLiveThemeColorTokens(theme.colorTokens);
-  queueMicrotask(() => {/* scuffed af */
+  queueMicrotask(() => {
+    /* scuffed af */
     setIsThemeSaved(true);
     syncHtmlColor();
   });
@@ -200,10 +229,12 @@ export function applyTheme(id: string): void{
  *  change — currentThemeId, saved-state, and the persisted first-paint color
  *  are untouched. Revert with clearThemePreview; committing via applyTheme
  *  makes the preview permanent. */
-export function previewTheme(id: string): void{
+export function previewTheme(id: string): void {
   const theme = themes().find((t) => t.id === id);
-  if(!theme){return}
-  if(!previewSnapshot){
+  if (!theme) {
+    return;
+  }
+  if (!previewSnapshot) {
     // Snapshot the live tokens (not the selected theme id) so ending the
     // preview restores unsaved in-editor edits too.
     previewSnapshot = {
@@ -217,8 +248,10 @@ export function previewTheme(id: string): void{
 
 /** Ends an active theme preview, restoring the pre-preview tokens. No-op when
  *  nothing is being previewed. */
-export function clearThemePreview(): void{
-  if(!previewSnapshot){return}
+export function clearThemePreview(): void {
+  if (!previewSnapshot) {
+    return;
+  }
   setLiveThemeMode(previewSnapshot.mode);
   setLiveThemeColorTokens(previewSnapshot.colorTokens);
   previewSnapshot = null;
@@ -228,7 +261,7 @@ export function clearThemePreview(): void{
  *  mode: the pinned light/dark theme, or — in system mode — whichever matches
  *  the OS color scheme. Read inside a reactive scope, it subscribes to the mode,
  *  the OS scheme (system mode only), and the relevant per-mode theme. */
-export function resolveActiveThemeId(): string{
+export function resolveActiveThemeId(): string {
   const resolved = themeMode() === 'system' ? systemMode() : themeMode();
   return resolved === 'dark' ? darkModeTheme() : lightModeTheme();
 }
@@ -239,24 +272,20 @@ export function resolveActiveThemeId(): string{
  *  changes — but not when the inactive mode's theme changes (that id isn't read
  *  by resolveActiveThemeId, so it isn't tracked). Call once from a reactive root
  *  (see Root.tsx). */
-export function systemThemeEffect(): void{
+export function systemThemeEffect(): void {
   createEffect(
-    on(
-      resolveActiveThemeId,
-      (id) => applyTheme(id),
-      { defer: true }
-    )
+    on(resolveActiveThemeId, (id) => applyTheme(id), { defer: true })
   );
 }
 
 /** Persists the live background color, used for the pre-hydration first paint. */
-function syncHtmlColor(): void{
+function syncHtmlColor(): void {
   const color = resolvedTokenOklch('surface-0');
   if (!color) return;
-  setHtmlColor({color: `oklch(${color.l} ${color.c} ${color.h}deg)`});
+  setHtmlColor({ color: `oklch(${color.l} ${color.c} ${color.h}deg)` });
 }
 
-export function saveTheme(name: string): void{
+export function saveTheme(name: string): void {
   const id = crypto.randomUUID();
   const newTheme: ThemeV3 = {
     id: id,
@@ -271,7 +300,7 @@ export function saveTheme(name: string): void{
 }
 
 /** Save the live V3 registry back onto an existing custom theme. */
-export function updateTheme(id: string, name: string): void{
+export function updateTheme(id: string, name: string): void {
   setUserThemes(
     userThemes().map((theme) =>
       theme.id === id
@@ -288,13 +317,17 @@ export function updateTheme(id: string, name: string): void{
   setIsThemeSaved(true);
 }
 
-export function deleteTheme(id: string): void{
+export function deleteTheme(id: string): void {
   setUserThemes(userThemes().filter((theme) => theme.id !== id));
   // A deleted theme can no longer serve as a per-mode default; fall back to the
   // built-in Macro light/dark themes.
-  if(lightModeTheme() === id){setLightModeTheme(DEFAULT_LIGHT_THEME)}
-  if(darkModeTheme() === id){setDarkModeTheme(DEFAULT_DARK_THEME)}
-  if(currentThemeId() === id){
+  if (lightModeTheme() === id) {
+    setLightModeTheme(DEFAULT_LIGHT_THEME);
+  }
+  if (darkModeTheme() === id) {
+    setDarkModeTheme(DEFAULT_DARK_THEME);
+  }
+  if (currentThemeId() === id) {
     // Keep the live tokens in place so the picker still shows this theme's
     // swatch, but mark it unsaved/unselected — it now reads as "Unsaved Theme"
     // until the user saves it again.
@@ -307,7 +340,7 @@ export function deleteTheme(id: string): void{
  *  render a swatch for the active theme even when it isn't a stored theme — e.g.
  *  after the selected theme was deleted, leaving an unsaved live theme. Reading
  *  it inside a reactive scope subscribes to the live token signals. */
-export function getLiveTheme(): ThemeV3{
+export function getLiveTheme(): ThemeV3 {
   return {
     id: '',
     name: 'Unsaved Theme',
@@ -344,10 +377,14 @@ export function applySystemTheme(): void {
 export function ensureMinimalThemeContrast() {
   const surface = resolvedTokenOklch('surface-0');
   const content = resolvedTokenOklch('content-0');
-  if(!surface || !content){return}
+  if (!surface || !content) {
+    return;
+  }
   const lowContrastTheme = Math.abs(content.l - surface.l) < 0.2;
-  if(lowContrastTheme){
+  if (lowContrastTheme) {
     applyTheme(DEFAULT_DARK_THEME);
-    toast.alert('Tried to load a theme with low contrast, applying a readable theme.');
+    toast.alert(
+      'Tried to load a theme with low contrast, applying a readable theme.'
+    );
   }
 }

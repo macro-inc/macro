@@ -307,6 +307,11 @@ body.tauri-ios {
   --color-modal-overlay: oklch(0 0 0 / 0.25);
   --color-drop-shadow: oklch(0.15 0 0 / 0.04);
   --color-rail: var(--color-channel-rail);
+  --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
+  --color-list-hover: color-mix(in oklch, var(--color-hover) 65%, transparent);
+  --color-list-highlighted: var(--color-hover);
+  --color-list-selected: var(--color-selected);
+  --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
 
   /* Temporary compatibility aliases while component classes migrate. */
   --color-ink-extra-muted: var(--color-ink-subtle);

@@ -1,8 +1,4 @@
-import type {
-  ThemeV2,
-  ThemeV2Tokens,
-  ThemeV3,
-} from '../types/themeTypes';
+import type { ThemeV2, ThemeV2Tokens, ThemeV3 } from '../types/themeTypes';
 import {
   getThemeColorMode,
   legacyThemeToVNextTokens,
