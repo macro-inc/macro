@@ -162,7 +162,7 @@ async fn disconnected_session(
             originating_message_id: Some(origin.message_id),
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
             verified_mention: true,
         },
@@ -726,6 +726,7 @@ fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         workspace: workspace.to_owned(),
+        repo_url: None,
         owner: sender(),
         thread: None,
     }

@@ -300,8 +300,9 @@ pub struct AgentSessionResponse {
     pub model: String,
     /// Harness slug.
     pub harness: String,
-    /// The repository the session works with.
-    pub repo_url: String,
+    /// The repository the session works with, when one was stated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// The ACP session id, if one exists.
@@ -669,6 +670,9 @@ pub struct CreateAgentSessionRequest {
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime.
     pub workspace: String,
+    /// Repository nominally checked out at `workspace`. Informational and
+    /// optional: having it cloned there is the runtime operator's job.
+    pub repo_url: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
     /// own their own sessions; required for bot callers without verified
     /// acting-user claims.
@@ -906,6 +910,7 @@ pub async fn create_agent_session_handler<
         .open_external_session(OpenExternalAgentSession {
             bot_id,
             workspace: request.workspace,
+            repo_url: request.repo_url,
             owner,
             thread: request.thread.map(|thread| SessionThread {
                 thread_id: thread.thread_id.unwrap_or(thread.message_id),

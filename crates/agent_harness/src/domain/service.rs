@@ -205,7 +205,7 @@ where
                 originating_message_id: request.thread.map(|thread| thread.message_id),
                 model: self.inner.defaults.model.clone(),
                 harness: self.inner.defaults.harness.clone(),
-                repo_url: self.inner.defaults.repo_url.clone(),
+                repo_url: request.repo_url,
                 workspace: request.workspace,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
@@ -272,7 +272,7 @@ where
                 originating_message_id: Some(origin.message_id),
                 model: self.defaults.model.clone(),
                 harness: self.defaults.harness.clone(),
-                repo_url: repo_url.clone(),
+                repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 // This open came from the trigger pipeline seeing the mention.

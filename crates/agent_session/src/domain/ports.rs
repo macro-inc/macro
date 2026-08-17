@@ -61,6 +61,8 @@ pub struct OpenExternalAgentSession {
     pub bot_id: BotId,
     /// Absolute directory the bot's harness runs in on its runtime.
     pub workspace: String,
+    /// Repository nominally checked out at `workspace`, when stated.
+    pub repo_url: Option<String>,
     /// The user who owns the session.
     pub owner: MacroUserIdStr<'static>,
     /// The thread whose mention triggered the session, when one did.

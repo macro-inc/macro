@@ -96,7 +96,7 @@ struct AgentSessionRow {
     bot_id: Uuid,
     model: String,
     harness: String,
-    repo_url: String,
+    repo_url: Option<String>,
     workspace: String,
     acp_session_id: Option<String>,
     status: String,

@@ -300,7 +300,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
-        repo_url: "https://github.com/example/example".to_string(),
+        repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,

@@ -74,7 +74,7 @@ impl ExternalSessionOpener for RecordingOpener {
             bot_id: request.bot_id,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/example/example".to_owned(),
+            repo_url: request.repo_url.clone(),
             workspace: request.workspace.clone(),
             acp_session_id: None,
             status: SessionStatus::NoMessages,

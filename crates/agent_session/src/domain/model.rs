@@ -42,8 +42,8 @@ pub struct CreateAgentSessionParams {
     pub model: String,
     /// Harness slug.
     pub harness: String,
-    /// Repository the agent works with.
-    pub repo_url: String,
+    /// Repository the agent works with, when one was stated.
+    pub repo_url: Option<String>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
     /// Whether `originating_message_id` came from the trigger pipeline
@@ -73,8 +73,8 @@ pub struct AgentSession {
     pub model: String,
     /// harness slug - TODO: probably a better type here
     pub harness: String,
-    /// repo we are working with
-    pub repo_url: String,
+    /// repo we are working with, when one was stated
+    pub repo_url: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,

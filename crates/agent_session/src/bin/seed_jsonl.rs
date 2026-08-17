@@ -246,7 +246,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             originating_message_id: None,
             model: args.model.clone(),
             harness: args.harness.clone(),
-            repo_url: args.repo_url.clone(),
+            repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
             verified_mention: true,
         },
