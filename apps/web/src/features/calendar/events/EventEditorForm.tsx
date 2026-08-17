@@ -979,7 +979,6 @@ export function EventEditorForm(props: EventEditorFormProps) {
           variant="ghost"
           class="rounded-lg"
           disabled={props.pending}
-          label="Cancel"
           onClick={props.onCancel}
         >
           Cancel
@@ -989,7 +988,7 @@ export function EventEditorForm(props: EventEditorFormProps) {
           variant="cta"
           class="rounded-lg"
           disabled={!canSave() || props.pending}
-          label="Save"
+          aria-label="Save"
         >
           <Show when={props.pending} fallback="Save">
             <SpinnerIcon class="size-4 animate-spin" />

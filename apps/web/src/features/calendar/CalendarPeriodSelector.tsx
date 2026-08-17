@@ -10,22 +10,23 @@ import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
+import { calendarPeriodLabel } from './calendar-label';
 import type { CalendarPeriodView } from './events/types';
 
 const CALENDAR_VIEWS = [
   {
     value: 'dayGridMonth',
-    label: 'Month',
+    label: calendarPeriodLabel('dayGridMonth'),
     hotkeyToken: TOKENS.calendar.view.month,
   },
   {
     value: 'timeGridWeek',
-    label: 'Week',
+    label: calendarPeriodLabel('timeGridWeek'),
     hotkeyToken: TOKENS.calendar.view.week,
   },
   {
     value: 'timeGridDay',
-    label: 'Day',
+    label: calendarPeriodLabel('timeGridDay'),
     hotkeyToken: TOKENS.calendar.view.day,
   },
 ] satisfies Array<{
@@ -184,7 +185,7 @@ export function CalendarPeriodSelector() {
             <Dropdown.Sub>
               <Dropdown.SubTrigger>
                 <CalendarIcon class="size-3.5 text-ink-muted" />
-                <span class="flex-1">Custom date…</span>
+                <span class="flex-1">Go to date</span>
                 <CaretRightIcon class="size-3 text-ink-muted" />
               </Dropdown.SubTrigger>
               <Dropdown.SubContent class="w-72 max-w-[calc(100vw-1rem)]">

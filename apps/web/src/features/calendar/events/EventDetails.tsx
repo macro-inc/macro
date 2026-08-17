@@ -502,7 +502,6 @@ export function EventDetails(props: {
               variant="cta"
               size="sm"
               class="h-8 rounded-lg [&_svg]:size-3.5!"
-              label={conferenceLabel()}
               onClick={() => openExternalUrl(url())}
             >
               {conferenceLabel()}

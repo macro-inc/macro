@@ -95,7 +95,7 @@ function DesktopCalendarSettings(props: {
         variant="ghost"
         size="icon-sm"
         class="shrink-0 rounded-lg"
-        label="Calendar settings"
+        aria-label="Calendar settings"
       >
         <GearIcon class="size-3.5" />
       </Dropdown.Trigger>

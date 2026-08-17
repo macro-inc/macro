@@ -531,6 +531,9 @@ registerComponent('calendar-event-compose', (params) => {
           | ((calendarId: string, color: string) => void)
           | undefined
       }
+      onDirtyChange={
+        params?.onDirtyChange as ((dirty: boolean) => void) | undefined
+      }
       onSaveSuccess={params?.onSaveSuccess as (() => void) | undefined}
     />
   );

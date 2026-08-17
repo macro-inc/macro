@@ -329,6 +329,10 @@
 	filter: invert(1) grayscale(1) contrast(100);
 }
 
+.calendar-view .fc .fc-timegrid-event .fc-event-main {
+	padding: 0;
+}
+
 .calendar-view .fc .fc-event .calendar-event-content {
 	container-type: inline-size;
 	border-radius: inherit;
@@ -445,8 +449,6 @@
 	--fc-event-border-color: var(--color-accent);
 	--fc-event-bg-color: var(--color-accent);
 	--fc-event-text-color: var(--color-surface);
-	box-shadow: 0 0 0 1px var(--color-accent);
-	border-style: solid;
 	opacity: 1;
 }
 
@@ -575,19 +577,6 @@
 	display: none;
 }
 
-.calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-now-indicator-arrow {
-	right: 0;
-	left: 0;
-	display: flex;
-	height: auto;
-	margin-top: 0;
-	justify-content: flex-end;
-	overflow: visible;
-	border: 0;
-	background: transparent;
-	transform: translateY(calc(-50% + 0.5px));
-}
-
 .calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-axis {
 	width: 4.5rem;
 }
@@ -614,14 +603,6 @@
 		height 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
 		border-radius 300ms ease-out,
 		clip-path 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.calendar-view .fc .calendar-now-axis-indicator-gutter {
-	width: 0.375rem;
-	height: 0.625rem;
-	border-radius: 0 9999px 9999px 0;
-	clip-path: none;
-	pointer-events: none;
 }
 
 .calendar-view

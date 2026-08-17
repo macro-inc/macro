@@ -3,6 +3,7 @@ import { Button, cn, Layer } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   Show,
@@ -28,6 +29,10 @@ import {
   moveAllDayRange,
   type SelectedEventEditorGuest,
 } from './EventEditorForm';
+import {
+  type EventComposerFormSnapshot,
+  isEventComposerFormDirty,
+} from './event-composer-dirty';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 export interface EventComposerFormProps {
@@ -40,6 +45,7 @@ export interface EventComposerFormProps {
   pending: boolean;
   class?: string;
   onCalendarChange?: (calendarId: string, color: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onCancel: () => void;
   onSubmit: (values: EventEditorSubmitValues) => void;
 }
@@ -58,9 +64,14 @@ export function EventComposerForm(props: EventComposerFormProps) {
     recurrenceLines: [...initialValues.recurrenceLines],
   });
 
+  const initialSelectedGuests = initialGuestOptions(
+    initialValues.guests,
+    props.guestOptions()
+  );
+  const initialGuestEmails = initialSelectedGuests.map(guestEmail);
   const [selectedGuests, setSelectedGuests] = createSignal<
     SelectedEventEditorGuest[]
-  >(initialGuestOptions(initialValues.guests, props.guestOptions()));
+  >(initialSelectedGuests);
 
   const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
     props.disabledFields?.[field] === true;
@@ -89,10 +100,40 @@ export function EventComposerForm(props: EventComposerFormProps) {
       (option) => option.id === effectiveCalendarId()
     ) ?? props.calendarOptions[0];
 
+  const initialSnapshot = (): EventComposerFormSnapshot => ({
+    title: initialValues.title,
+    allDay: initialValues.allDay,
+    start: initialValues.start,
+    end: initialValues.end,
+    recurrenceLines: initialValues.recurrenceLines,
+    calendarId: initialValues.calendarId ?? props.calendarOptions[0]?.id,
+    guestEmails: initialGuestEmails,
+    location: initialValues.location,
+    description: initialValues.description,
+  });
+  const currentSnapshot = (): EventComposerFormSnapshot => {
+    const current = state();
+    return {
+      title: current.title,
+      allDay: current.allDay,
+      start: current.start,
+      end: current.end,
+      recurrenceLines: recurrenceLines() ?? initialValues.recurrenceLines,
+      calendarId: effectiveCalendarId(),
+      guestEmails: selectedGuests().map(guestEmail),
+      location: current.location,
+      description: current.description,
+    };
+  };
+  const isDirty = createMemo(() =>
+    isEventComposerFormDirty(initialSnapshot(), currentSnapshot())
+  );
+
   createEffect(() => {
     const option = selectedCalendarOption();
     if (option) props.onCalendarChange?.(option.id, option.color);
   });
+  createEffect(() => props.onDirtyChange?.(isDirty()));
 
   const changeCalendar = (calendarId: string) =>
     setState({ ...state(), calendarId });
@@ -258,7 +299,6 @@ export function EventComposerForm(props: EventComposerFormProps) {
           variant="ghost"
           class="rounded-lg"
           disabled={props.pending}
-          label="Cancel"
           onClick={props.onCancel}
         >
           Cancel
@@ -269,7 +309,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
           depth={3}
           class="rounded-lg border-0"
           disabled={!canSave() || props.pending}
-          label={isEdit() ? 'Save' : 'Create event'}
+          aria-label={isEdit() ? 'Save' : 'Create event'}
         >
           <Show
             when={props.pending}
