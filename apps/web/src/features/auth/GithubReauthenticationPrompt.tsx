@@ -40,13 +40,7 @@ export function GithubReauthenticationPrompt() {
 
   useKeyedPersistentToasts({
     // One GitHub grant per user, so the set is empty or this one fixed key.
-    items: () => [
-      // TEMP(toast-restyle): fake expired grant so the toast always shows
-      // while restyling — except under vitest, where this component's real
-      // probe behavior is what's being tested. Remove before merge.
-      ...(import.meta.env.VITEST ? [] : ['dev-github']),
-      ...(needsReauth() ? ['github'] : []),
-    ],
+    items: () => (needsReauth() ? ['github'] : []),
     key: (item) => item,
     toast: (_item, dismiss) => ({
       title: 'Reconnect GitHub',

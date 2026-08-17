@@ -17,31 +17,18 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * is off, so re-asking every load is just nagging — Settings › Email keeps a
  * per-inbox "Enable calendar" button for whenever the user wants it.
  */
-// TEMP(toast-restyle): a fake link so the enable-calendar toast is always
-// visible while restyling, bypassing the calendar UI flag. The id is unique
-// per page load because this prompt's persistKey remembers closes in
-// localStorage — a stable id would vanish for good after one close. Stale
-// dev ids get cleaned out of storage automatically once they stop appearing.
-// Remove before merge.
-const FAKE_CALENDAR_LINKS = [
-  { id: `dev-calendar-${Date.now()}`, email_address: 'work@example.com' },
-];
-
 export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
 
   useKeyedPersistentToasts({
-    items: () => [
-      // TEMP(toast-restyle): remove before merge.
-      ...FAKE_CALENDAR_LINKS,
-      ...(calendarUiEnabled()
+    items: () =>
+      calendarUiEnabled()
         ? (linksQuery.data?.links ?? []).filter(
             (link) => link.needs_calendar_permission && !link.needs_reauth
           )
-        : []),
-    ],
+        : [],
     key: (link) => link.id,
     persistKey: 'macro:calendar-prompt:dismissed',
     // Until the flag resolves and the links land, the empty list above means
