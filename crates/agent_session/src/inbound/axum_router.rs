@@ -271,7 +271,11 @@ impl From<SessionStatusDto> for SessionStatus {
 /// which are about the request rather than the operation have somewhere to go.
 /// The acting user is deliberately not one of them: it comes from the caller's
 /// credentials, so that a caller cannot attribute an operation to someone else.
-#[derive(Debug, Deserialize, ToSchema)]
+///
+/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
+/// daemon among them) serialize this type to build the request the server
+/// deserializes, so both derives are load-bearing.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
     /// The operation to perform.
@@ -280,7 +284,10 @@ pub struct ControlRequest {
 }
 
 /// Response body describing an agent session.
-#[derive(Debug, Serialize, ToSchema)]
+///
+/// A two-way wire contract: API clients deserialize this type from the
+/// response the server serializes, so both derives are load-bearing.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionResponse {
     /// The session id.
@@ -301,7 +308,7 @@ pub struct AgentSessionResponse {
     /// Harness slug.
     pub harness: String,
     /// The repository the session works with, when one was stated.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
@@ -661,7 +668,11 @@ where
 }
 
 /// Request body for `POST /agent-sessions`.
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+///
+/// A two-way wire contract: API clients (the self-hosted `coding_agent_worker`
+/// daemon among them) serialize this type to build the request the server
+/// deserializes, so both derives are load-bearing.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. Bot callers may omit it (their own identity
@@ -688,7 +699,10 @@ pub struct CreateAgentSessionRequest {
 }
 
 /// The triggering mention on a create request.
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+///
+/// A two-way wire contract: API clients serialize this type as part of
+/// [`CreateAgentSessionRequest`], so both derives are load-bearing.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
     /// Channel the mentioning message was posted in.
@@ -704,7 +718,10 @@ pub struct CreateSessionThread {
 }
 
 /// Response body for `POST /agent-sessions`.
-#[derive(Debug, Serialize, ToSchema)]
+///
+/// A two-way wire contract: API clients deserialize this type from the
+/// response the server serializes, so both derives are load-bearing.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionResponse {
     /// The created session.
@@ -712,6 +729,27 @@ pub struct CreateAgentSessionResponse {
     /// Websocket endpoint the bot's runtime dials to serve the session,
     /// authenticated by the bot's API token.
     pub gateway_url: String,
+}
+
+/// What the 409 from `POST /agent-sessions` says when a thread already
+/// routes to a session.
+const THREAD_SESSION_EXISTS_MESSAGE: &str = "this bot already has a session for this thread";
+
+/// Body of the 409 answered by `POST /agent-sessions` when the request's
+/// thread already routes to one of this bot's sessions.
+///
+/// A two-way wire contract: API clients deserialize this to recover the
+/// existing session and resume it instead of treating the create as lost, so
+/// both derives are load-bearing.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSessionExistsResponse {
+    /// Human-readable explanation.
+    pub message: String,
+    /// The session the thread already routes to, when it could be resolved.
+    #[serde(default)]
+    #[schema(value_type = Option<String>)]
+    pub session_id: Option<AgentSessionId>,
 }
 
 /// Transport error for the create route.
@@ -778,10 +816,10 @@ impl IntoResponse for CreateSessionApiError {
             ),
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::ThreadSessionExists { session_id } => {
-                let body = serde_json::json!({
-                    "message": "this bot already has a session for this thread",
-                    "sessionId": session_id,
-                });
+                let body = ThreadSessionExistsResponse {
+                    message: THREAD_SESSION_EXISTS_MESSAGE.to_owned(),
+                    session_id,
+                };
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (

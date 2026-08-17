@@ -100,6 +100,10 @@ pub enum BotOwner {
 }
 
 /// Bot row.
+///
+/// A two-way wire contract: it is the body of `GET /bots/me`, which API
+/// clients (the self-hosted `coding_agent_worker` daemon among them)
+/// deserialize, so both derives are load-bearing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Bot {
