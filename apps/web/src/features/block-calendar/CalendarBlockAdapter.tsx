@@ -1,5 +1,4 @@
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
-import { CalendarView } from '@app/features/calendar/calendar-view';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
@@ -12,6 +11,7 @@ import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { isCalendarBlockRange } from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
+import { View } from './components/View';
 import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
 
 function targetRequestFromParams(
@@ -102,7 +102,7 @@ export function CalendarBlockAdapter(props: CalendarBlockProps) {
         </Show>
       }
     >
-      <CalendarView focusTarget={focusTarget()} />
+      <View focusTarget={focusTarget()} />
     </Show>
   );
 }

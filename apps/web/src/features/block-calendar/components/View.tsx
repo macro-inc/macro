@@ -1,3 +1,28 @@
+import { CalendarMonthDrawer } from '@app/features/calendar/CalendarMonthDrawer';
+import { CalendarPage } from '@app/features/calendar/CalendarPage';
+import {
+  CALENDAR_PAGE_IDS,
+  type CalendarPageId,
+  CalendarPagerContextProvider,
+  useCalendarPager,
+} from '@app/features/calendar/CalendarPagerContext';
+import { CalendarPeriodSelector } from '@app/features/calendar/CalendarPeriodSelector';
+import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
+import { CalendarSettingsDropdown } from '@app/features/calendar/CalendarSettingsDropdown';
+import { CalendarSetupStatus } from '@app/features/calendar/CalendarSetupStatus';
+import { CalendarSidePanelSections } from '@app/features/calendar/CalendarSidePanelSections';
+import {
+  CalendarViewContextProvider,
+  useCalendarView,
+} from '@app/features/calendar/CalendarViewContext';
+import {
+  CalendarFocusContextProvider,
+  type CalendarFocusTarget,
+} from '@app/features/calendar/calendar-focus-target';
+import { calendarPeriodLabel } from '@app/features/calendar/calendar-label';
+import { SelectedEventDetails } from '@app/features/calendar/events/EventDetailsPopover';
+import { useOpenEventComposer } from '@app/features/calendar/events/useOpenEventComposer';
+import { useCalendarHotkeys } from '@app/features/calendar/use-calendar-hotkeys';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -23,31 +48,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { CalendarMonthDrawer } from './CalendarMonthDrawer';
-import { CalendarPage } from './CalendarPage';
-import {
-  CALENDAR_PAGE_IDS,
-  type CalendarPageId,
-  CalendarPagerContextProvider,
-  useCalendarPager,
-} from './CalendarPagerContext';
-import { CalendarPeriodSelector } from './CalendarPeriodSelector';
-import { CalendarRangeUnavailableBanner } from './CalendarRangeUnavailableBanner';
-import { CalendarSettingsDropdown } from './CalendarSettingsDropdown';
-import { CalendarSetupStatus } from './CalendarSetupStatus';
-import { CalendarSidePanelSections } from './CalendarSidePanelSections';
-import {
-  CalendarViewContextProvider,
-  useCalendarView,
-} from './CalendarViewContext';
-import {
-  CalendarFocusContextProvider,
-  type CalendarFocusTarget,
-} from './calendar-focus-target';
-import { calendarPeriodLabel } from './calendar-label';
-import { SelectedEventDetails } from './events/EventDetailsPopover';
-import { useOpenEventComposer } from './events/useOpenEventComposer';
-import { useCalendarHotkeys } from './use-calendar-hotkeys';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -57,7 +57,7 @@ const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
 }).format;
 
 /** A calendar-focused workspace view backed by buffered FullCalendar pages. */
-export function CalendarView(props: { focusTarget?: CalendarFocusTarget }) {
+export function View(props: { focusTarget?: CalendarFocusTarget }) {
   return (
     <CalendarFocusContextProvider target={() => props.focusTarget}>
       <CalendarViewContextProvider>
