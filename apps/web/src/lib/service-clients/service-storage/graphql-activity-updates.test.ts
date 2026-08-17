@@ -11,15 +11,16 @@ const MAX_FLUSH_DELAY_MS = ACTIVITY_PUSH_DEBOUNCE_MS + ACTIVITY_PUSH_JITTER_MS;
 
 const DOC_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
+const VIEWER = 'macro|teo@example.com';
 
-function pushedEvent(entityId: string) {
+function pushedEvent(entityId: string, subjectId = VIEWER) {
   return {
     data: {
       activityUpdates: {
         __typename: 'GraphqlActivityEvent' as const,
         id: '33333333-3333-4333-8333-333333333333',
-        actorId: 'macro|teo@example.com',
-        subjectId: 'macro|teo@example.com',
+        actorId: subjectId,
+        subjectId,
         entityType: 'DOCUMENT' as const,
         entityId,
         occurredAt: '2026-08-15T00:00:00Z',
@@ -29,14 +30,27 @@ function pushedEvent(entityId: string) {
   } as never;
 }
 
-function fakeHost(variantsByOperation: Record<string, unknown[]>) {
+/**
+ * The handler reads the feed through `inspect` (instances with cached
+ * values, carrying the viewer's id) and the entity previews through
+ * `inspectVariants` (recovered variables only).
+ */
+function fakeHost(config: {
+  feedInstances?: unknown[];
+  entityVariants?: unknown[];
+}) {
   return {
     disabled: false,
-    inspectQueryVariants: vi.fn(
-      async ({ operationName }: { operationName: string }) =>
-        variantsByOperation[operationName] ?? []
-    ),
+    inspectQuery: vi.fn(async () => config.feedInstances ?? []),
+    inspectQueryVariants: vi.fn(async () => config.entityVariants ?? []),
   } as never;
+}
+
+function feedPageZero(viewerId = VIEWER) {
+  return {
+    variables: { input: { limit: 50, cursor: null } },
+    value: { id: viewerId },
+  };
 }
 
 function fakeClient() {
@@ -56,13 +70,16 @@ describe('createActivityUpdatesHandler', () => {
   it('coalesces a burst into one pass refetching page 0 and matching entity variants', async () => {
     const client = fakeClient();
     const host = fakeHost({
-      MyActivity: [
-        { variables: { input: { limit: 50, cursor: null } } },
-        { variables: { input: { limit: 50, cursor: 'deeper-page' } } },
+      feedInstances: [
+        feedPageZero(),
+        {
+          variables: { input: { limit: 50, cursor: 'deeper-page' } },
+          value: { id: VIEWER },
+        },
       ],
       // Recovered variants carry only the soup field's own arguments — the
       // deeper `activity(limit:)` argument is never inverted back.
-      EntityActivity: [
+      entityVariants: [
         {
           variables: {
             input: { filters: { documentFilter: { literal: { id: DOC_ID } } } },
@@ -111,6 +128,36 @@ describe('createActivityUpdatesHandler', () => {
     );
   });
 
+  it('skips the feed refetch for pushes about other subjects', async () => {
+    const client = fakeClient();
+    const host = fakeHost({
+      feedInstances: [feedPageZero()],
+      entityVariants: [
+        {
+          variables: {
+            input: { filters: { documentFilter: { literal: { id: DOC_ID } } } },
+          },
+        },
+      ],
+    });
+    const handler = createActivityUpdatesHandler({
+      client: client as never,
+      host,
+    });
+
+    // An entity-audience delivery: someone else acted on an entity this
+    // viewer watches. Their panel refreshes; their feed cannot contain it.
+    handler(pushedEvent(DOC_ID, 'macro|colleague@example.com'));
+    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
+
+    expect(client.query).toHaveBeenCalledTimes(1);
+    const [, variables] = client.query.mock.calls[0] as unknown as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(JSON.stringify(variables)).toContain(DOC_ID);
+  });
+
   it('ignores cache deletions', async () => {
     const client = fakeClient();
     const host = fakeHost({});
@@ -135,9 +182,7 @@ describe('createActivityUpdatesHandler', () => {
 
   it('defers the refetch while the tab is hidden and flushes on visibility', async () => {
     const client = fakeClient();
-    const host = fakeHost({
-      MyActivity: [{ variables: { input: { limit: 50, cursor: null } } }],
-    });
+    const host = fakeHost({ feedInstances: [feedPageZero()] });
     const handler = createActivityUpdatesHandler({
       client: client as never,
       host,
@@ -170,7 +215,11 @@ describe('createActivityUpdatesHandler', () => {
 
   it('does nothing when the cache host is disabled', async () => {
     const client = fakeClient();
-    const host = { disabled: true, inspectQueryVariants: vi.fn() } as never;
+    const host = {
+      disabled: true,
+      inspectQuery: vi.fn(),
+      inspectQueryVariants: vi.fn(),
+    } as never;
     const handler = createActivityUpdatesHandler({
       client: client as never,
       host,
