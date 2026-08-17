@@ -259,13 +259,40 @@ function unrepresentable(time?: string): CronReading {
   return { parts: fallbackParts(time), representable: false };
 }
 
+/**
+ * Whether a cron field is a single plain number in range.
+ *
+ * Ranges (`9-17`), lists (`0,30`) and steps (`*&#47;15`) are all valid to the
+ * backend and none of them are something the picker can show, so they are
+ * rejected here rather than read as whichever number happens to parse first.
+ */
+function isPlainCronNumber(field: string, min: number, max: number): boolean {
+  if (!/^\d+$/.test(field)) return false;
+  const value = Number(field);
+  return value >= min && value <= max;
+}
+
 function interpretCron(cron: string): CronReading {
   const fields = cron.trim().split(/\s+/);
   // Six fields (`sec min hour dom mon dow`), or seven with a trailing year.
   if (fields.length !== 6 && fields.length !== 7) return unrepresentable();
 
-  const [, minute, hour, dayOfMonth, month, dayOfWeek, year] = fields;
+  const [second, minute, hour, dayOfMonth, month, dayOfWeek, year] = fields;
   const time = toTimeValue(hour, minute);
+
+  // Every field the picker cannot express has to be reported, not just the
+  // obvious ones. `toTimeValue` answers with the default for anything it cannot
+  // read, so a range like `9-17` would otherwise pass as representable with the
+  // hour silently reset to 09:00 — and `normalizeCron` would then rewrite a
+  // real schedule into a different one, which is exactly what makes a genuine
+  // edit compare equal and never get sent.
+  if (!isPlainCronNumber(second, 0, 59)) return unrepresentable(time);
+  if (!isPlainCronNumber(minute, 0, 59)) return unrepresentable(time);
+  if (!isPlainCronNumber(hour, 0, 23)) return unrepresentable(time);
+
+  // Seconds are the owner's — `30 0 9 * * *` means 09:00:30 — and the picker
+  // only builds whole minutes, so anything else is not ours to rewrite.
+  if (Number(second) !== 0) return unrepresentable(time);
 
   // A year constraint is a real part of the schedule and the picker has no way
   // to show it, so an expression carrying one is not ours to rewrite.

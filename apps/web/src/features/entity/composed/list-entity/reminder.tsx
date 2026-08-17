@@ -1,4 +1,7 @@
-import { describeReminderSchedule } from '@app/features/reminders/reminder-schedule';
+import {
+  describeReminderSchedule,
+  scheduleFromRow,
+} from '@app/features/reminders/reminder-schedule';
 import {
   EntityIcon,
   reminderReferenceIconType,
@@ -29,12 +32,8 @@ export function ReminderWideContent(props: { entity: ReminderEntity }) {
   // Trails the row, after any reference badge, so the reading order is what the
   // reminder says, what it is about, then how often it repeats.
   const recurrence = () =>
-    props.entity.scheduleType === 'recurring' && props.entity.cron
-      ? describeReminderSchedule({
-          type: 'recurring',
-          cron: props.entity.cron,
-          timezone: props.entity.timezone ?? 'UTC',
-        })
+    props.entity.scheduleType === 'recurring'
+      ? describeReminderSchedule(scheduleFromRow(props.entity))
       : undefined;
 
   return (

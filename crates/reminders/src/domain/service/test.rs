@@ -952,6 +952,36 @@ async fn rejects_a_cron_that_fires_more_often_than_the_minimum() {
 }
 
 #[tokio::test]
+async fn interval_validation_does_not_depend_on_when_the_request_arrives() {
+    // Firings need not be evenly spaced. `0 0,4 9 * * *` fires at 09:00 and
+    // 09:04 daily, so the gap after `now` is four minutes before 09:00 and
+    // nearly a day after it. Measuring only the first gap accepted or rejected
+    // the same schedule depending on the hour it was submitted.
+    let clustered = ReminderSchedule::Recurring {
+        cron: ReminderCron::parse("0 0,4 9 * * *").expect("valid cron"),
+        timezone: New_York,
+    };
+
+    // `now` here is 12:00 UTC — 08:00 in New York, ahead of both firings.
+    let before = service()
+        .create_reminder(&user(USER_A), create_request(clustered.clone()), None)
+        .await;
+    assert!(matches!(before, Err(ReminderError::BadRequest(_))));
+
+    // 13:02 UTC is 09:02 in New York, between the two firings.
+    let between = RemindersServiceImpl::with_clock(
+        FakeRemindersRepo::default(),
+        FixedClock(now() + Duration::hours(1) + Duration::minutes(2)),
+    )
+    .create_reminder(&user(USER_A), create_request(clustered), None)
+    .await;
+    assert!(
+        matches!(between, Err(ReminderError::BadRequest(_))),
+        "the same schedule must be rejected whenever it is submitted"
+    );
+}
+
+#[tokio::test]
 async fn re_enabling_a_long_disabled_recurring_reminder_moves_its_firing_forward() {
     let service = service();
     let created = service

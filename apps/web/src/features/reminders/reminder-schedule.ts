@@ -104,6 +104,36 @@ export function defaultRepeatParts(now: Date = new Date()): CronParts {
   return repeatPartsFromDate(atDefaultTime(now));
 }
 
+/**
+ * The schedule a soup row is on, rebuilt as the tagged union the API speaks.
+ *
+ * A row carries the schedule flattened into `scheduleType` plus the fields that
+ * variant uses, and more than one surface needs it back in one piece — the
+ * editor to diff against, the row to describe. Shared so they cannot disagree:
+ * two call sites each picking their own fallback for an absent zone would
+ * describe the same reminder differently, and the editor's diff would read the
+ * substituted zone as a change and re-send it, moving when the reminder fires.
+ *
+ * `UTC` is the fallback rather than the viewer's zone, so the answer does not
+ * depend on who is looking. It should be unreachable: the database requires a
+ * timezone wherever a cron is set.
+ */
+export function scheduleFromRow(row: {
+  scheduleType: 'once' | 'recurring';
+  cron?: string;
+  timezone?: string;
+  nextRunAt: string | Date;
+}): ReminderSchedule {
+  if (row.scheduleType === 'recurring' && row.cron) {
+    return {
+      type: 'recurring',
+      cron: row.cron,
+      timezone: row.timezone ?? 'UTC',
+    };
+  }
+  return { type: 'once', remindAt: new Date(row.nextRunAt).toISOString() };
+}
+
 /** Whether a schedule repeats, narrowed for the caller. */
 export function isRecurring(
   schedule: ReminderSchedule

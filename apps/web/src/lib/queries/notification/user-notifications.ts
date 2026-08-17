@@ -1013,13 +1013,27 @@ export function optimisticInsertNotification(
 
       // Clear the firing this one replaces before inserting, so a daily reminder
       // shows one row rather than one per day since the user last looked.
-      const withoutSuperseded = data.pages.map((page) => {
-        const kept = page.items.filter((n) => !isSupersededReminder(n, item));
-        return kept.length === page.items.length
-          ? page
-          : { ...page, items: kept };
-      });
-      data = { ...data, pages: withoutSuperseded };
+      //
+      // Retired from `unconfirmedInserts` as well as dropped from the pages. A
+      // superseded firing that arrived over the websocket is still tracked
+      // there, and `reapplyUnconfirmedInserts` re-prepends anything it finds
+      // missing from the pages — so removing it here alone would put it back on
+      // the next query success and leave it sitting beside its replacement.
+      const superseded = data.pages.flatMap((page) =>
+        page.items.filter((n) => isSupersededReminder(n, item)).map((n) => n.id)
+      );
+      if (superseded.length > 0) {
+        retireUnconfirmedInserts(superseded);
+        const ids = new Set(superseded);
+        data = {
+          ...data,
+          pages: data.pages.map((page) =>
+            page.items.some((n) => ids.has(n.id))
+              ? { ...page, items: page.items.filter((n) => !ids.has(n.id)) }
+              : page
+          ),
+        };
+      }
 
       return {
         ...data,

@@ -362,3 +362,38 @@ describe('normalizeCron', () => {
     expect(normalizeCron('0 0 9 * * * *')).toBe('0 0 9 * * *');
   });
 });
+
+describe('normalizeCron on fields the picker cannot express', () => {
+  // Each of these is valid to the backend and none is something the picker can
+  // show. Rewriting them would change a real schedule — and worse, make a
+  // genuine edit normalize to the same string as the original, so the diff
+  // reports "unchanged" and the patch is never sent.
+  it('leaves an hour range alone', () => {
+    // `toTimeValue` cannot read `9-17` and answers with the default, so without
+    // a guard this normalized to plain 09:00 daily.
+    expect(normalizeCron('0 0 9-17 * * *')).toBe('0 0 9-17 * * *');
+  });
+
+  it('leaves a seconds offset alone', () => {
+    // `30 0 9 * * *` means 09:00:30. The picker only builds whole minutes.
+    expect(normalizeCron('30 0 9 * * *')).toBe('30 0 9 * * *');
+  });
+
+  it('leaves minute and hour lists and steps alone', () => {
+    for (const cron of ['0 0,30 9 * * *', '0 */15 9 * * *', '0 0 9,17 * * *']) {
+      expect(normalizeCron(cron)).toBe(cron);
+    }
+  });
+
+  it('keeps an hour range distinct from the time it would have collapsed to', () => {
+    // The comparison this protects: a stored range and a draft rebuilt as a
+    // single hour must not look identical.
+    expect(normalizeCron('0 0 9-17 * * *')).not.toBe(
+      normalizeCron('0 0 9 * * *')
+    );
+  });
+
+  it('still normalizes plain in-range fields', () => {
+    expect(normalizeCron('0 0 9 * * 1,2,3,4,5,6,7')).toBe('0 0 9 * * *');
+  });
+});

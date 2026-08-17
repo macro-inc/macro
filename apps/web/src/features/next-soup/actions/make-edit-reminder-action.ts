@@ -1,13 +1,14 @@
 import { openReminderEditor } from '@app/features/reminders/reminder-composer';
-import { reminderDescriptionForReference } from '@app/features/reminders/reminder-schedule';
+import {
+  reminderDescriptionForReference,
+  scheduleFromRow,
+} from '@app/features/reminders/reminder-schedule';
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
-import { getDefaultTimezone } from '@core/util/cron';
 import type { EntityData, ReminderEntity } from '@entity';
 import {
   getCachedItemPreview,
   isAccessiblePreviewItem,
 } from '@queries/preview';
-import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { SoupState } from '../create-soup-state';
 
 /**
@@ -27,27 +28,6 @@ function fallbackDescriptionFor(entity: ReminderEntity): string | undefined {
   if (!cached || !isAccessiblePreviewItem(cached)) return undefined;
 
   return reminderDescriptionForReference(cached.rawName, reference.type);
-}
-
-/**
- * The schedule a row is on, rebuilt for the composer to diff its edit against.
- *
- * A soup row carries the schedule flattened into `scheduleType` plus the fields
- * that variant uses, so this reassembles the tagged union the API speaks.
- */
-function scheduleOf(entity: ReminderEntity): ReminderSchedule {
-  if (entity.scheduleType === 'recurring' && entity.cron) {
-    return {
-      type: 'recurring',
-      cron: entity.cron,
-      // `??`, not `||`: only a genuinely absent zone falls back. Coercing a
-      // present-but-empty one would substitute the viewer's zone for the
-      // reminder's and change when it fires, which is worse than surfacing
-      // the bad data.
-      timezone: entity.timezone ?? getDefaultTimezone(),
-    };
-  }
-  return { type: 'once', remindAt: new Date(entity.nextRunAt).toISOString() };
 }
 
 /**
@@ -71,7 +51,7 @@ export const makeEditReminderAction = () => {
       id: entity.id,
       description: entity.description,
       remindAt: new Date(entity.nextRunAt),
-      schedule: scheduleOf(entity),
+      schedule: scheduleFromRow(entity),
       completed: entity.completedAt != null,
       fallbackDescription: fallbackDescriptionFor(entity),
     });

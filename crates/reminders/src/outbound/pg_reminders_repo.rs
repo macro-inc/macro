@@ -649,14 +649,14 @@ impl ReminderDispatchRepo for PgRemindersRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn due_firings(&self, now: DateTime<Utc>) -> Result<Vec<DueFiring>, Self::Err> {
-        // Driven by `reminder_due_idx`: (next_run_at) WHERE enabled AND
-        // completed_at IS NULL.
+        // Driven by `reminder_due_v2_idx`: (next_run_at) WHERE enabled AND
+        // (cron IS NOT NULL OR completed_at IS NULL).
         //
         // Both schedule kinds. A recurring reminder stops being due the moment
         // delivery rolls its `next_run_at` forward, which is why that advance
         // shares a transaction with the sent occurrence — see
-        // `complete_occurrence`. Were the two ever to come apart, the row would
-        // fall out of this query permanently rather than merely re-fan.
+        // `complete_occurrence_and_advance`. Were the two ever to come apart, the
+        // row would fall out of this query permanently rather than merely re-fan.
         //
         // Unbounded on purpose: a sweep publishes ids, so the cost of a large
         // one is a batch send per ten rows, and the ceiling is the queue's
@@ -897,28 +897,48 @@ impl ReminderDispatchRepo for PgRemindersRepo {
         // firing each notification was written for; rows without it predate
         // recurring dispatch and are older than anything being delivered now.
         //
-        // `pg_input_is_valid` guards the cast rather than trusting the column.
-        // Postgres is free to evaluate the arms of an OR in any order, so a
-        // single unparseable value anywhere in the table would otherwise fail
-        // the whole statement — and since a failed retraction is swallowed,
-        // that would show up as tidying that quietly never happened. An
-        // unreadable stamp is treated as stale, which is what it is.
-        sqlx::query!(
+        // Read the candidates, decide here, delete by id.
+        //
+        // The obvious form is one statement comparing the metadata timestamp
+        // directly, but that needs a cast, and a cast in a predicate fails the
+        // whole statement on a single malformed value — which, since a failed
+        // retraction is swallowed, would show up as tidying that quietly never
+        // happened. `pg_input_is_valid` would guard it, but that is Postgres 16
+        // and production runs 14. Parsing here costs one round trip on a cold
+        // path and cannot be defeated by a bad row or an older server.
+        let candidates = sqlx::query!(
             r#"
-            DELETE FROM notification
-            WHERE event_item_type = 'reminder'
-              AND event_item_id = $1
-              AND (
-                  metadata->>'scheduledFor' IS NULL
-                  OR NOT pg_input_is_valid(metadata->>'scheduledFor', 'timestamptz')
-                  OR (metadata->>'scheduledFor')::timestamptz < $2
-              )
+            SELECT id, metadata->>'scheduledFor' AS "scheduled_for?"
+            FROM notification
+            WHERE event_item_type = 'reminder' AND event_item_id = $1
             "#,
             reminder_id.to_string(),
-            before,
         )
-        .execute(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
+
+        let stale: Vec<Uuid> = candidates
+            .into_iter()
+            .filter(|row| match row.scheduled_for.as_deref() {
+                // No firing recorded: written before recurring dispatch, so
+                // older than anything being delivered now.
+                None => true,
+                // Unreadable is treated as stale, which is what it is.
+                Some(raw) => match DateTime::parse_from_rfc3339(raw) {
+                    Ok(at) => at.with_timezone(&Utc) < before,
+                    Err(_) => true,
+                },
+            })
+            .map(|row| row.id)
+            .collect();
+
+        if stale.is_empty() {
+            return Ok(());
+        }
+
+        sqlx::query!(r#"DELETE FROM notification WHERE id = ANY($1)"#, &stale)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

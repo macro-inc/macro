@@ -25,6 +25,14 @@ use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
 /// Only reached when rows cannot be decoded; a normal page costs one read.
 const MAX_LIST_BATCHES: usize = 5;
 
+/// How many consecutive gaps the minimum-interval check measures.
+///
+/// Enough to cover a schedule that clusters several firings and then waits —
+/// the shape a single-gap check reads differently depending on the hour the
+/// request arrives — without walking a cron that fires yearly out to its
+/// hundredth occurrence.
+const INTERVAL_SAMPLE_FIRINGS: usize = 8;
+
 /// Concrete reminders service backed by a [RemindersRepo].
 #[derive(Debug, Clone)]
 pub struct RemindersServiceImpl<R, C = SystemClock> {
@@ -102,18 +110,28 @@ fn validate_recurring_interval(
     timezone: Tz,
     now: DateTime<Utc>,
 ) -> Result<(), ReminderError> {
-    let Some(first) = cron.next_run_after(now, timezone) else {
-        return Ok(());
-    };
-    let Some(second) = cron.next_run_after(first, timezone) else {
-        return Ok(());
+    // Several gaps, not just the next one. A cron's firings need not be evenly
+    // spaced — `0 0,4 9 * * *` fires at 09:00 and 09:04 daily — so measuring
+    // only the first gap after `now` makes acceptance depend on when the
+    // request happened to arrive: rejected at 08:59, accepted at 09:02, for the
+    // same schedule.
+    let mut previous = match cron.next_run_after(now, timezone) {
+        Some(first) => first,
+        // Nothing left to fire, so nothing can fire too often.
+        None => return Ok(()),
     };
 
-    if second - first < MIN_RECURRING_INTERVAL {
-        return Err(ReminderError::BadRequest(format!(
-            "a recurring reminder must fire at most once every {} minutes",
-            MIN_RECURRING_INTERVAL.num_minutes()
-        )));
+    for _ in 0..INTERVAL_SAMPLE_FIRINGS {
+        let Some(next) = cron.next_run_after(previous, timezone) else {
+            return Ok(());
+        };
+        if next - previous < MIN_RECURRING_INTERVAL {
+            return Err(ReminderError::BadRequest(format!(
+                "a recurring reminder must fire at most once every {} minutes",
+                MIN_RECURRING_INTERVAL.num_minutes()
+            )));
+        }
+        previous = next;
     }
 
     Ok(())

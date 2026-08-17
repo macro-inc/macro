@@ -411,7 +411,20 @@ export function ReminderComposerModal() {
               <CommandMenuShell.Body>
                 <WhenList
                   query={query}
-                  current={() => editing()?.remindAt}
+                  // Withheld for a recurring reminder. `reminderEditOptions`
+                  // turns this into a "Keep current time" date row holding the
+                  // next firing — which, activated, submits that single instant
+                  // as a one-shot and collapses the series. The `keep` row
+                  // carries the recurrence instead, and two adjacent rows both
+                  // promising to preserve, one of which destroys, is worse than
+                  // either alone.
+                  current={() => {
+                    const draft = editing();
+                    if (!draft) return undefined;
+                    return isRecurring(draft.schedule)
+                      ? undefined
+                      : draft.remindAt;
+                  }}
                   currentRecurrence={() => {
                     const schedule = editing()?.schedule;
                     if (!schedule || !isRecurring(schedule)) return undefined;
