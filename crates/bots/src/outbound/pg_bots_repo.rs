@@ -264,9 +264,10 @@ impl BotRepo for PgBotsRepo {
             BotRow,
             r#"
             INSERT INTO bots (
-                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
             RETURNING
                 id,
                 kind,
@@ -290,6 +291,7 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
+            req.has_agent,
         )
         .fetch_one(&mut *tx)
         .await

@@ -264,6 +264,8 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Response containing a newly minted token.

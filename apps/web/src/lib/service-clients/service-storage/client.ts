@@ -290,6 +290,8 @@ type CreateBotRequest = {
   handle: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+  has_agent?: boolean;
 };
 
 type PatchBotRequest = {
@@ -297,6 +299,8 @@ type PatchBotRequest = {
   handle?: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Omit to leave unchanged. */
+  has_agent?: boolean;
 };
 
 type CreateBotTokenRequest = {
@@ -680,7 +684,11 @@ export const storageServiceClient = {
   },
 
   async createChannelScopedBot(
-    args: WithChannelId & CreateChannelScopedBotRequest
+    args: WithChannelId &
+      CreateChannelScopedBotRequest & {
+        /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+        has_agent?: boolean;
+      }
   ) {
     const { channel_id, ...request } = args;
     return (

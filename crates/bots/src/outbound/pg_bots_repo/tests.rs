@@ -43,6 +43,7 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
         avatar_url: None,
         token_label: Some("Webhook".to_string()),
         token_expires_at: None,
+        has_agent: None,
     }
 }
 
@@ -603,12 +604,16 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
         .create_channel_scoped_bot(
             user_id(USER_OWNER),
             channel_id,
-            create_channel_scoped_req("scoped-alerts"),
+            CreateChannelScopedBotRequest {
+                has_agent: Some(true),
+                ..create_channel_scoped_req("scoped-alerts")
+            },
         )
         .await?;
 
     assert_eq!(created.bot.kind, BotKind::Owned);
     assert_eq!(created.bot.handle, "scoped-alerts");
+    assert!(created.bot.has_agent);
     assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(created.token.bot_id, created.bot.id);
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
