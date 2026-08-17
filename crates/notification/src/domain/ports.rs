@@ -109,11 +109,11 @@ pub trait NotificationRepository: Send + Sync + 'static {
         done: bool,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
-    /// Get active user-owned notification IDs associated with a primary or secondary entity.
-    fn get_notification_ids_for_entity(
+    /// Get active user-owned notification IDs associated with any primary or secondary entity.
+    fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        entities: &[Entity<'_>],
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.

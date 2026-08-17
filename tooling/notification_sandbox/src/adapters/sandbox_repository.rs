@@ -107,13 +107,13 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
-    async fn get_notification_ids_for_entity(
+    async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        entities: &[Entity<'_>],
     ) -> Result<Vec<Uuid>, Report> {
         self.inner
-            .get_notification_ids_for_entity(user_id, entity)
+            .get_notification_ids_for_entities(user_id, entities)
             .await
     }
 

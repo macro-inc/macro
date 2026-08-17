@@ -42,16 +42,6 @@ type UserNotificationListRow = (
 );
 
 #[derive(sqlx::FromRow)]
-struct NotificationEntityMatchRow {
-    notification_id: Uuid,
-    event_item_id: String,
-    event_item_type: String,
-    secondary_event_item_id: Option<String>,
-    secondary_event_item_type: Option<String>,
-    notification_metadata: serde_json::Value,
-}
-
-#[derive(sqlx::FromRow)]
 struct EntityNotificationListRow {
     owner_id: String,
     notification_id: Uuid,
@@ -448,11 +438,11 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
     > + Send;
 
-    /// Get active user-owned notification IDs associated with a primary or secondary entity.
-    fn get_notification_ids_for_entity(
+    /// Get active user-owned notification IDs associated with any primary or secondary entity.
+    fn get_notification_ids_for_entities(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        entities: &[Entity<'_>],
     ) -> impl std::future::Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) for push clearing.
@@ -891,59 +881,56 @@ impl NotificationDbOps for PgPool {
             .collect()
     }
 
-    async fn get_notification_ids_for_entity(
+    async fn get_notification_ids_for_entities(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        entities: &[Entity<'_>],
     ) -> Result<Vec<Uuid>, Report> {
-        let rows = sqlx::query_as!(
-            NotificationEntityMatchRow,
+        let entity_types = entities
+            .iter()
+            .map(|entity| entity.entity_type.as_ref().to_owned())
+            .collect::<Vec<_>>();
+        let entity_ids = entities
+            .iter()
+            .map(|entity| entity.entity_id.to_string())
+            .collect::<Vec<_>>();
+        let notification_ids = sqlx::query_scalar!(
             r#"
-            SELECT
-                un.notification_id,
-                n.event_item_id,
-                n.event_item_type,
-                n.secondary_event_item_id,
-                n.secondary_event_item_type,
-                n.metadata as "notification_metadata: serde_json::Value"
+            WITH requested_entities AS (
+                SELECT entity_type, entity_id
+                FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)
+            )
+            SELECT un.notification_id
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
-              AND (
-                (n.event_item_type = $2 AND n.event_item_id = $3)
-                OR (
-                    n.secondary_event_item_type = $2
-                    AND n.secondary_event_item_id = $3
-                )
-                OR (
-                    $2 = 'channel_message'
-                    AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = $3
-                )
+              AND EXISTS (
+                  SELECT 1
+                  FROM requested_entities entity
+                  WHERE (
+                      n.event_item_type = entity.entity_type
+                      AND n.event_item_id = entity.entity_id
+                  )
+                  OR (
+                      n.secondary_event_item_type = entity.entity_type
+                      AND n.secondary_event_item_id = entity.entity_id
+                  )
+                  OR (
+                      entity.entity_type = 'channel_message'
+                      AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id
+                  )
               )
             ORDER BY un.created_at, un.notification_id
             "#,
             user_id.as_ref(),
-            entity.entity_type.as_ref(),
-            entity.entity_id.as_ref(),
+            &entity_types,
+            &entity_ids,
         )
         .fetch_all(self)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .filter(|row| {
-                notification_entity_matches_row(
-                    entity,
-                    &row.event_item_id,
-                    &row.event_item_type,
-                    row.secondary_event_item_id.as_deref(),
-                    row.secondary_event_item_type.as_deref(),
-                    &row.notification_metadata,
-                )
-            })
-            .map(|row| row.notification_id)
-            .collect())
+        Ok(notification_ids)
     }
 
     async fn get_basic_notifications(
@@ -1616,13 +1603,13 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
             .await
     }
 
-    async fn get_notification_ids_for_entity(
+    async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity: &Entity<'_>,
+        entities: &[Entity<'_>],
     ) -> Result<Vec<Uuid>, Report> {
         self.db
-            .get_notification_ids_for_entity(&user_id, entity)
+            .get_notification_ids_for_entities(&user_id, entities)
             .await
     }
 

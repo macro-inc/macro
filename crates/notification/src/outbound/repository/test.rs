@@ -384,7 +384,7 @@ async fn test_mark_notifications_seen_does_not_affect_other_users(pool: Pool<Pos
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_primary_and_secondary_for_user(
+async fn test_get_notification_ids_for_entities_matches_multiple_primary_and_secondary_for_user(
     pool: Pool<Postgres>,
 ) {
     let user = test_user("entity-user@test.com");
@@ -454,19 +454,25 @@ async fn test_get_notification_ids_for_entity_matches_primary_and_secondary_for_
     .await
     .unwrap();
 
-    let entity = EntityType::Document.with_entity_str("entity-1");
+    let entities = [
+        EntityType::Document.with_entity_str("entity-1"),
+        EntityType::Project.with_entity_str("entity-1"),
+    ];
     let notification_ids = pool
-        .get_notification_ids_for_entity(&user, &entity)
+        .get_notification_ids_for_entities(&user, &entities)
         .await
         .unwrap()
         .into_iter()
         .collect::<HashSet<_>>();
 
-    assert_eq!(notification_ids, HashSet::from([primary_id, secondary_id]));
+    assert_eq!(
+        notification_ids,
+        HashSet::from([primary_id, secondary_id, wrong_type_id])
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_task_entity(pool: Pool<Postgres>) {
+async fn test_get_notification_ids_for_entities_matches_task_entity(pool: Pool<Postgres>) {
     let user = test_user("task-entity-user@test.com");
     let task_id = Uuid::new_v4();
     let task_entity_id = "task-1";
@@ -489,9 +495,9 @@ async fn test_get_notification_ids_for_entity_matches_task_entity(pool: Pool<Pos
     .unwrap();
 
     let notification_ids = pool
-        .get_notification_ids_for_entity(
+        .get_notification_ids_for_entities(
             &user,
-            &EntityType::Document.with_entity_str(task_entity_id),
+            &[EntityType::Document.with_entity_str(task_entity_id)],
         )
         .await
         .unwrap();
@@ -500,7 +506,7 @@ async fn test_get_notification_ids_for_entity_matches_task_entity(pool: Pool<Pos
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_message_entity(pool: Pool<Postgres>) {
+async fn test_get_notification_ids_for_entities_matches_message_entity(pool: Pool<Postgres>) {
     let user = test_user("message-entity-user@test.com");
     let message_id = Uuid::new_v4().to_string();
     let direct_id = Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
@@ -517,9 +523,9 @@ async fn test_get_notification_ids_for_entity_matches_message_entity(pool: Pool<
     .await;
 
     let notification_ids = pool
-        .get_notification_ids_for_entity(
+        .get_notification_ids_for_entities(
             &user,
-            &EntityType::ChannelMessage.with_entity_str(&message_id),
+            &[EntityType::ChannelMessage.with_entity_str(&message_id)],
         )
         .await
         .unwrap();
@@ -528,7 +534,7 @@ async fn test_get_notification_ids_for_entity_matches_message_entity(pool: Pool<
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_foreign_entity_notifications_including_github(
+async fn test_get_notification_ids_for_entities_matches_foreign_entities_including_github(
     pool: Pool<Postgres>,
 ) {
     let user = test_user("github-entity-user@test.com");
@@ -573,9 +579,9 @@ async fn test_get_notification_ids_for_entity_matches_foreign_entity_notificatio
     .unwrap();
 
     let notification_ids = pool
-        .get_notification_ids_for_entity(
+        .get_notification_ids_for_entities(
             &user,
-            &EntityType::ForeignEntity.with_entity_str(&foreign_entity_id),
+            &[EntityType::ForeignEntity.with_entity_str(&foreign_entity_id)],
         )
         .await
         .unwrap();

@@ -672,24 +672,10 @@ where
         &self,
         req: UpdateNotificationsForEntitiesRequest<'_>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
-        let mut unique_entities = HashSet::new();
-        let entity_lookups = req
-            .entities
-            .iter()
-            .filter(|entity| unique_entities.insert((*entity).clone()))
-            .map(|entity| {
-                self.repository
-                    .get_notification_ids_for_entity(req.user_id.copied(), entity)
-            });
-        let mut seen_notification_ids = HashSet::new();
-        let notification_ids = join_all(entity_lookups)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten()
-            .filter(|notification_id| seen_notification_ids.insert(*notification_id))
-            .collect::<Vec<_>>();
+        let notification_ids = self
+            .repository
+            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities)
+            .await?;
 
         if notification_ids.is_empty() {
             return Ok(Vec::new());

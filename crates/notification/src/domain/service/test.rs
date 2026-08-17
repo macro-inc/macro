@@ -114,7 +114,7 @@ struct MockRepository {
     entity_notifications: HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
     entity_notification_ids: Vec<Uuid>,
     updated_notifications: Option<Vec<UserNotificationRow<serde_json::Value>>>,
-    entity_lookup_calls: Mutex<Vec<(String, EntityType, String)>>,
+    entity_lookup_calls: Mutex<Vec<(String, Vec<(EntityType, String)>)>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
@@ -350,15 +350,17 @@ impl NotificationRepository for MockRepository {
             .collect())
     }
 
-    async fn get_notification_ids_for_entity(
+    async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity: &model_entity::Entity<'_>,
+        entities: &[model_entity::Entity<'_>],
     ) -> Result<Vec<Uuid>, Report> {
         self.entity_lookup_calls.lock().unwrap().push((
             user_id.to_string(),
-            entity.entity_type,
-            entity.entity_id.to_string(),
+            entities
+                .iter()
+                .map(|entity| (entity.entity_type, entity.entity_id.to_string()))
+                .collect(),
         ));
         Ok(self.entity_notification_ids.clone())
     }
@@ -587,13 +589,13 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
             .await
     }
 
-    async fn get_notification_ids_for_entity(
+    async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity: &model_entity::Entity<'_>,
+        entities: &[model_entity::Entity<'_>],
     ) -> Result<Vec<Uuid>, Report> {
         (**self)
-            .get_notification_ids_for_entity(user_id, entity)
+            .get_notification_ids_for_entities(user_id, entities)
             .await
     }
 
@@ -1850,7 +1852,7 @@ async fn test_update_notifications_and_return_skips_invalid_tagged_metadata() {
 }
 
 #[tokio::test]
-async fn test_update_notifications_for_entities_deduplicates_matching_notifications() {
+async fn test_update_notifications_for_entities_uses_single_batch_lookup() {
     let user = test_user_id("entity-reader@example.com");
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
@@ -1886,18 +1888,13 @@ async fn test_update_notifications_for_entities_deduplicates_matching_notificati
     );
     assert_eq!(
         repo.entity_lookup_calls.lock().unwrap().as_slice(),
-        [
-            (
-                user.to_string(),
-                EntityType::ChannelMessage,
-                "message-1".to_string(),
-            ),
-            (
-                user.to_string(),
-                EntityType::Document,
-                "document-1".to_string(),
-            ),
-        ]
+        [(
+            user.to_string(),
+            vec![
+                (EntityType::ChannelMessage, "message-1".to_string()),
+                (EntityType::Document, "document-1".to_string()),
+            ],
+        )]
     );
     assert_eq!(
         repo.mark_seen_calls.lock().unwrap().as_slice(),
