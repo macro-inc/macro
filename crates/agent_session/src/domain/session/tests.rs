@@ -21,7 +21,7 @@ use crate::domain::model::AgentSessionId;
 use super::{CloseReason, Effect, Input, RuntimeStatus, SessionMachine, StopReason};
 
 fn machine() -> SessionMachine<u32> {
-    SessionMachine::new(AgentSessionId::TEST_A)
+    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned())
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
@@ -225,7 +225,11 @@ fn session_new_success_flushes_the_queue_positionally() {
 
 #[test]
 fn reconnect_uses_session_resume_when_the_agent_supports_it() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
@@ -257,7 +261,11 @@ fn reconnect_uses_session_resume_when_the_agent_supports_it() {
 
 #[test]
 fn reconnect_falls_back_to_session_load() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION)
         .agent_capabilities(AgentCapabilities::new().load_session(true));
@@ -269,7 +277,11 @@ fn reconnect_falls_back_to_session_load() {
 
 #[test]
 fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
-    let mut machine = SessionMachine::resume(AgentSessionId::TEST_A, "acp-42".into());
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".to_owned(),
+    );
     machine.handle(command("cannot continue", 1));
     machine.handle(acp_ready());
 
@@ -657,5 +669,58 @@ fn a_model_change_does_not_disturb_the_queue() {
         machine.pending_count(),
         2,
         "both are still queued, in order"
+    );
+}
+
+/// The `cwd` of every sent request with the given method.
+fn sent_cwds(effects: &[Effect<u32>], method: &str) -> Vec<String> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Send {
+                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+                ..
+            } if request.method.as_ref() == method => {
+                let params = request
+                    .params
+                    .clone()
+                    .expect("the request has params")
+                    .into_value();
+                Some(params["cwd"].as_str().expect("cwd is a string").to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn session_new_carries_the_sessions_workspace() {
+    let mut machine = SessionMachine::new(AgentSessionId::TEST_A, "/home/operator/code".to_owned());
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized());
+
+    // The session/new request works in the row's directory, not a constant.
+    assert_eq!(sent_cwds(&effects, "session/new"), ["/home/operator/code"]);
+}
+
+#[test]
+fn resume_carries_the_sessions_workspace() {
+    let mut machine = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/home/operator/code".to_owned(),
+    );
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    ));
+
+    assert_eq!(
+        sent_cwds(&effects, "session/resume"),
+        ["/home/operator/code"]
     );
 }

@@ -15,9 +15,9 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
+use crate::PROTOCOL_VERSION;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
-use crate::{AGENT_WORKING_DIRECTORY, PROTOCOL_VERSION};
 
 use super::types::{
     CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionOpening, SessionPhase,
@@ -36,28 +36,35 @@ pub struct SessionMachine<Token> {
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
     resume_session_id: Option<SessionId>,
+    /// Directory the agent works in, snapshotted on the session row at
+    /// creation; `session/new`, `session/resume`, and `session/load` all
+    /// carry it, so a reconnect re-enters the directory the session
+    /// actually ran in.
+    workspace: String,
 }
 
 impl<Token> SessionMachine<Token> {
     /// A fresh connection for `id`: booting, nothing queued.
-    pub fn new(id: AgentSessionId) -> Self {
+    pub fn new(id: AgentSessionId, workspace: String) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
             resume_session_id: None,
+            workspace,
         }
     }
 
     /// A fresh connection that must restore an existing ACP session.
-    pub fn resume(id: AgentSessionId, session_id: SessionId) -> Self {
+    pub fn resume(id: AgentSessionId, session_id: SessionId, workspace: String) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
             resume_session_id: Some(session_id),
+            workspace,
         }
     }
 
@@ -347,7 +354,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            ResumeSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            ResumeSessionRequest::new(session_id.clone(), self.workspace.clone()),
             SessionOpening::Resume(session_id),
         )
     }
@@ -360,7 +367,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            LoadSessionRequest::new(session_id.clone(), AGENT_WORKING_DIRECTORY),
+            LoadSessionRequest::new(session_id.clone(), self.workspace.clone()),
             SessionOpening::Load(session_id),
         )
     }
@@ -383,7 +390,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            NewSessionRequest::new(AGENT_WORKING_DIRECTORY),
+            NewSessionRequest::new(self.workspace.clone()),
             SessionOpening::New,
         )
     }

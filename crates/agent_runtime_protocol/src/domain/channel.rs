@@ -91,3 +91,54 @@ where
 
     caller
 }
+
+/// A [`Transport`] over the two halves of a [`Channel`] endpoint - the
+/// inverse of [`pump`], for a caller holding a `Channel` (an accepted
+/// WebSocket routed by hand, a test double) that needs the port instead.
+///
+/// Cheap to clone: clones share the endpoint, and `recv` is exclusive
+/// across them, matching the port's one-consumer contract.
+pub struct ChannelTransport<Tx, Rx> {
+    inner: Arc<ChannelTransportInner<Tx, Rx>>,
+}
+
+struct ChannelTransportInner<Tx, Rx> {
+    tx: UnboundedSender<Tx>,
+    rx: tokio::sync::Mutex<UnboundedReceiver<Rx>>,
+}
+
+// Manual Clone impl: deriving would wrongly bound `Tx: Clone, Rx: Clone`.
+impl<Tx, Rx> Clone for ChannelTransport<Tx, Rx> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl<Tx, Rx> From<Channel<Tx, Rx>> for ChannelTransport<Tx, Rx> {
+    fn from(channel: Channel<Tx, Rx>) -> Self {
+        Self {
+            inner: Arc::new(ChannelTransportInner {
+                tx: channel.tx,
+                rx: tokio::sync::Mutex::new(channel.rx),
+            }),
+        }
+    }
+}
+
+impl<Tx, Rx> Transport<Tx, Rx> for ChannelTransport<Tx, Rx>
+where
+    Tx: Send + Sync,
+    Rx: Send,
+{
+    async fn send(&self, message: Tx) -> Result<(), super::ports::TransportError> {
+        self.inner.tx.send(message).map_err(|_| {
+            super::ports::TransportError::Client("the connection is closed".to_owned())
+        })
+    }
+
+    async fn recv(&self) -> Result<Option<Rx>, super::ports::TransportError> {
+        Ok(self.inner.rx.lock().await.recv().await)
+    }
+}

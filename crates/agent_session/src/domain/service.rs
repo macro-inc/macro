@@ -40,7 +40,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, CreateAgentSessionParams,
-    LogAppended, MessageId, SessionLog, StoredAgentSessionLog,
+    LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -145,6 +145,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         &self,
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
+        workspace: String,
         connector: Connector,
     ) -> Result<()>
     where
@@ -167,7 +168,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
         // which costs an attach nothing until the session actually says
         // something.
         let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
-        let actor = SessionActor::new(id, acp_session_id, connector, logs, command_rx);
+        let actor = SessionActor::new(id, acp_session_id, workspace, connector, logs, command_rx);
         tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
         Ok(())
     }
@@ -249,6 +250,7 @@ where
         self.register_transport(
             session.id,
             session.acp_session_id.map(Into::into),
+            session.workspace,
             connector,
         )
     }
@@ -323,6 +325,21 @@ where
 {
     async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
         let session = log.agent_session_id;
+
+        // The wire tap: every frame of every session, both directions,
+        // crosses here exactly once. Enable with RUST_LOG=agent_session=trace.
+        if tracing::enabled!(tracing::Level::TRACE) {
+            let (direction, frame) = match &log.content {
+                Message::ToServer(message) => ("to_server", serde_json::to_string(message)),
+                Message::ToRuntime(message) => ("to_runtime", serde_json::to_string(message)),
+            };
+            tracing::trace!(
+                %session,
+                direction,
+                frame = frame.as_deref().unwrap_or("<unserializable>"),
+                "acp frame"
+            );
+        }
 
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.

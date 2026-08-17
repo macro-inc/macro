@@ -26,10 +26,15 @@ pub struct Config {
 pub struct Session {
     /// Agent session id, minted by the service that created the session.
     pub id: String,
-    /// Websocket endpoint of the harness service's runtime gateway.
+    /// The session's dial-in endpoint: the `gatewayUrl` returned by
+    /// `POST /agent-sessions`, taken verbatim.
     pub gateway_url: String,
-    /// Bearer token for the dial-in, minted alongside the session.
-    pub token: String,
+    /// The bot's API token (`mbot_...`), presented on the dial.
+    pub bot_token: String,
+    /// Bot scope the dial authorizes under; `user` unless the bot is
+    /// team-owned and should act in its team scope.
+    #[serde(default = "default_bot_scope")]
+    pub bot_scope: String,
 }
 
 /// The harness process to spawn and bridge. Generic on purpose: any binary
@@ -54,6 +59,10 @@ pub struct Workspace {
     /// Repository to make available at the harness's cwd.
     #[allow(dead_code)] // consumed by the workspace-setup TODO
     pub repo_url: String,
+}
+
+fn default_bot_scope() -> String {
+    "user".to_owned()
 }
 
 /// Why a config failed to load.

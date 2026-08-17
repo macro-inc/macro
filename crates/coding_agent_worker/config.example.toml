@@ -3,8 +3,10 @@
 
 [session]
 id = "01a00125-3b8c-76d1-97bb-4aadf145d6ec"
-gateway_url = "ws://localhost:8101/runtime"
-token = "v1-hmac-token-minted-with-the-session"
+# The gatewayUrl returned by POST /agent-sessions, verbatim.
+gateway_url = "ws://localhost:8101/runtime/01a00125-3b8c-76d1-97bb-4aadf145d6ec/ws"
+# The bot API token.
+bot_token = "mbot_0123456789ab_0123456789abcdef"
 
 [harness]
 command = "opencode"

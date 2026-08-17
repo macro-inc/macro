@@ -26,7 +26,12 @@ pub enum BridgeError {
 pub async fn bridge(harness: &Harness, channel: RuntimeChannel) -> Result<(), BridgeError> {
     let (runtime, acp) = RuntimeConnection::connect(channel);
 
-    let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()));
+    let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
+        // The wire tap: every ndjson line crossing the child's stdio, plus
+        // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
+        .with_debug(|line, direction| {
+            tracing::trace!(?direction, line, "acp line");
+        });
 
     runtime
         .system_event(SystemEvent::AcpReady)

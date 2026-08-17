@@ -15,6 +15,7 @@ use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::agent_trigger_to_harness_command;
+use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
     DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
@@ -211,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(
             session_repo.clone(),
-            FoldedMessageService::new(session_repo),
+            FoldedMessageService::new(session_repo.clone()),
             NoOpRealtime,
         ),
         entity_access.clone(),
@@ -222,11 +223,22 @@ async fn main() -> anyhow::Result<()> {
         entity_access,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
     let create_state = CreateSessionState::new(
         harness.clone(),
-        Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone()))),
-        MacroAuthorizationState::new(Arc::new(authorization_service)),
+        bots_directory.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         &macro_service_urls::AgentHarnessGatewayWebsocketUrl::new()?,
+    );
+    let gateway_state = RuntimeGatewayState::new(
+        harness.clone(),
+        Arc::new(AgentSessionServiceImpl::new(
+            session_repo.clone(),
+            FoldedMessageService::new(session_repo.clone()),
+            NoOpRealtime,
+        )),
+        bots_directory,
+        MacroAuthorizationState::new(Arc::new(authorization_service)),
     );
     let http_port = config.port;
     let http = tokio::spawn(async move {
@@ -234,6 +246,7 @@ async fn main() -> anyhow::Result<()> {
             read_state,
             control_state,
             create_state,
+            gateway_state,
             http_port,
             shutdown_signal(),
         )

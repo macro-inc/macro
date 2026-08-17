@@ -69,6 +69,7 @@ where
     pub(crate) fn new(
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
+        workspace: String,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
@@ -88,10 +89,10 @@ where
         });
 
         Self {
-            machine: acp_session_id.map_or_else(
-                || SessionMachine::new(id),
-                |session_id| SessionMachine::resume(id, session_id),
-            ),
+            machine: match acp_session_id {
+                None => SessionMachine::new(id, workspace),
+                Some(session_id) => SessionMachine::resume(id, session_id, workspace),
+            },
             connector,
             logs,
             commands,

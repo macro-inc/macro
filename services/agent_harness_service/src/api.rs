@@ -3,6 +3,9 @@
 //! This process owns the complete agent-session HTTP API: durable metadata and
 //! log reads as well as operations against the live in-memory transport.
 
+use agent_harness::inbound::runtime_gateway::{
+    RuntimeAttacher, RuntimeGatewayState, SessionBotLookup, runtime_gateway_router,
+};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, ExternalSessionOpener,
 };
@@ -22,10 +25,11 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod swagger;
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
+pub async fn setup_and_serve<T, R, Opener, Attacher, Lookup, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Attacher, Lookup, Bots, Auth>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -33,11 +37,13 @@ where
     T: AgentSessionService,
     R: AgentSessionNotificationRecipient,
     Opener: ExternalSessionOpener,
+    Attacher: RuntimeAttacher,
+    Lookup: SessionBotLookup,
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let app = api_router(read_state, control_state, create_state)
+    let app = api_router(read_state, control_state, create_state, gateway_state)
         .layer(macro_cors::cors_layer())
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
@@ -53,15 +59,18 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth>(
+fn api_router<T, R, Opener, Attacher, Lookup, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Attacher, Lookup, Bots, Auth>,
 ) -> Router
 where
     T: AgentSessionService,
     R: AgentSessionNotificationRecipient,
     Opener: ExternalSessionOpener,
+    Attacher: RuntimeAttacher,
+    Lookup: SessionBotLookup,
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -72,6 +81,7 @@ where
     Router::new()
         .route("/health", get(health))
         .nest("/agent-sessions", agent_sessions)
+        .nest("/runtime", runtime_gateway_router(gateway_state))
 }
 
 async fn health() -> &'static str {

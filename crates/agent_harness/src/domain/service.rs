@@ -274,7 +274,7 @@ where
                 harness: self.defaults.harness.clone(),
                 repo_url: repo_url.clone(),
                 // Managed sandboxes run in the path baked into their image.
-                workspace: agent_session::AGENT_WORKING_DIRECTORY.to_owned(),
+                workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 // This open came from the trigger pipeline seeing the mention.
                 verified_mention: true,
             })

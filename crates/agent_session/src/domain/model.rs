@@ -75,10 +75,10 @@ pub struct AgentSession {
     pub harness: String,
     /// repo we are working with
     pub repo_url: String,
-    /// Directory the harness runs in, snapshotted at creation so that
-    /// resume and load can re-enter the directory the session actually ran
-    /// in. Not yet consumed by the session actor, which still uses
-    /// [`crate::AGENT_WORKING_DIRECTORY`].
+    /// Directory the harness runs in, snapshotted at creation. The session
+    /// actor sends it as the working directory of `session/new`, and resume
+    /// and load re-enter it - the directory the session actually ran in,
+    /// not whatever the runtime is configured with today.
     pub workspace: String,
     /// ACP session if we have one
     pub acp_session_id: Option<String>,

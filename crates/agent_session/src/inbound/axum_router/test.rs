@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::error::AgentSessionError;
 use crate::domain::model::SessionStatus;
 use axum::body::Body;
 use axum::http::{Request, header};
