@@ -1,3 +1,4 @@
+import { FullCalendar, useFullCalendar } from '@app/lib/fullcalendar-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
@@ -61,7 +62,6 @@ import {
 } from './events/multi-day-selection-rendering';
 import type { CalendarTimeFormat } from './events/types';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
-import { FullCalendar, useFullCalendar } from './fullcalendar-solid';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
