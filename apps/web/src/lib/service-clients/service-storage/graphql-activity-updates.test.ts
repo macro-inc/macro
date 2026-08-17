@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIVITY_PUSH_DEBOUNCE_MS,
+  ACTIVITY_PUSH_JITTER_MS,
   createActivityUpdatesHandler,
 } from './graphql-activity-updates';
+
+/** Advances past the debounce plus the worst-case jitter. */
+const MAX_FLUSH_DELAY_MS = ACTIVITY_PUSH_DEBOUNCE_MS + ACTIVITY_PUSH_JITTER_MS;
 
 const DOC_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
@@ -81,7 +85,7 @@ describe('createActivityUpdatesHandler', () => {
     handler(pushedEvent(DOC_ID));
     expect(client.query).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(ACTIVITY_PUSH_DEBOUNCE_MS + 1);
+    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
 
     // One feed page-0 refetch (the deeper page is skipped) and one entity
     // refetch (the other entity's variant is untouched), network-only.
@@ -119,8 +123,43 @@ describe('createActivityUpdatesHandler', () => {
       },
     } as never);
 
-    await vi.advanceTimersByTimeAsync(ACTIVITY_PUSH_DEBOUNCE_MS + 1);
+    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
     expect(client.query).not.toHaveBeenCalled();
+  });
+
+  it('defers the refetch while the tab is hidden and flushes on visibility', async () => {
+    const client = fakeClient();
+    const host = fakeHost({
+      MyActivity: [{ variables: { input: { limit: 50, cursor: null } } }],
+    });
+    const handler = createActivityUpdatesHandler({
+      client: client as never,
+      host,
+    });
+
+    let hidden = true;
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => hidden,
+    });
+    try {
+      handler(pushedEvent(DOC_ID));
+      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
+      expect(client.query).not.toHaveBeenCalled();
+
+      // Further pushes while hidden still don't refetch.
+      handler(pushedEvent(OTHER_ID));
+      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
+      expect(client.query).not.toHaveBeenCalled();
+
+      hidden = false;
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
+      expect(client.query).toHaveBeenCalledTimes(1);
+    } finally {
+      // Restore the prototype getter so other tests see the real value.
+      Reflect.deleteProperty(document, 'hidden');
+    }
   });
 
   it('does nothing when the cache host is disabled', async () => {
@@ -132,7 +171,7 @@ describe('createActivityUpdatesHandler', () => {
     });
 
     handler(pushedEvent(DOC_ID));
-    await vi.advanceTimersByTimeAsync(ACTIVITY_PUSH_DEBOUNCE_MS + 1);
+    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
     expect(client.query).not.toHaveBeenCalled();
   });
 });
