@@ -208,6 +208,8 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to patch a bot.
@@ -222,6 +224,8 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to create a bot token.
