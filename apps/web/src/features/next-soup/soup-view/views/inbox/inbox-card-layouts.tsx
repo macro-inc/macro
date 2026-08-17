@@ -1013,7 +1013,11 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
         <Show
           when={props.item.notification}
           fallback={
-            <EntityIcon targetType={getEntityIconType(props.item.entity)} />
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
           }
         >
           <ActionBubble tag={getNotificationTag(props.item.notification)} />

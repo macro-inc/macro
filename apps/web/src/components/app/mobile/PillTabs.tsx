@@ -117,6 +117,7 @@ function PillButton<T extends string>(props: {
       type="button"
       use:pressPulse
       data-checked={props.active ? '' : undefined}
+      aria-pressed={props.active}
       aria-label={props.item.ariaLabel}
       class={cn(
         PILL_CLASS,

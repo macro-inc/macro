@@ -836,7 +836,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       const active = document.activeElement;
       if (
         active instanceof HTMLElement &&
-        active.matches('input, textarea, [contenteditable="true"]')
+        (active.isContentEditable || active.matches('input, textarea'))
       ) {
         return;
       }
