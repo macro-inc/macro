@@ -1043,6 +1043,13 @@ export type LabelListVisibility = 'LabelShow' | 'LabelShowIfUnread' | 'LabelHide
 export type LabelType = 'System' | 'User';
 
 export type Link = {
+    /**
+     * Whether the user turned calendar off for this inbox, which also removed
+     * its calendar data. `needs_calendar_permission` is true either way, so
+     * this is what separates "never granted" from "deliberately off" —
+     * unprompted calendar nags must stay quiet for the latter.
+     */
+    calendar_disabled: boolean;
     created_at: string;
     email_address: string;
     fusionauth_user_id: string;
@@ -2494,6 +2501,33 @@ export type DeleteLinkResponses = {
 };
 
 export type DeleteLinkResponse = DeleteLinkResponses[keyof DeleteLinkResponses];
+
+export type DisableLinkCalendarData = {
+    body?: never;
+    path: {
+        /**
+         * Inbox link ID.
+         */
+        link_id: string;
+    };
+    query?: never;
+    url: '/email/links/{link_id}/calendar';
+};
+
+export type DisableLinkCalendarErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DisableLinkCalendarError = DisableLinkCalendarErrors[keyof DisableLinkCalendarErrors];
+
+export type DisableLinkCalendarResponses = {
+    204: EmptyResponse;
+};
+
+export type DisableLinkCalendarResponse = DisableLinkCalendarResponses[keyof DisableLinkCalendarResponses];
 
 export type ResyncLinkData = {
     body?: never;

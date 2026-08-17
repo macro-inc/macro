@@ -16,6 +16,11 @@ const SETUP_MESSAGES = {
     description: 'Grant calendar access to show your events in Macro.',
     action: 'Grant access',
   },
+  disabled: {
+    title: 'Calendar is off',
+    description: 'Grant calendar access again to show your events in Macro.',
+    action: 'Turn on',
+  },
   reauth: {
     title: 'Reconnect calendar',
     description: 'Reconnect your Google account to resume calendar sync.',
@@ -36,7 +41,7 @@ export function CalendarSetupStatus() {
   // or delegated inbox can leave events visible without a working calendar
   // connection belonging to the current user.
   const setupState = createMemo<
-    'connect' | 'permission' | 'reauth' | undefined
+    'connect' | 'permission' | 'reauth' | 'disabled' | undefined
   >(() => {
     const activeData = calendarPager.activeData();
     const range = activeData?.range();
@@ -58,7 +63,13 @@ export function CalendarSetupStatus() {
     if (hasAvailableCalendar) return undefined;
     if (links.some((link) => link.needs_reauth)) return 'reauth';
     if (links.some((link) => link.needs_calendar_permission)) {
-      return 'permission';
+      // A calendar the user turned off is not a missing upgrade; say so, and
+      // still offer the way back since they came to the calendar view.
+      return links.every(
+        (link) => !link.needs_calendar_permission || link.calendar_disabled
+      )
+        ? 'disabled'
+        : 'permission';
     }
 
     return 'connect';

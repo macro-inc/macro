@@ -145,6 +145,7 @@ export const contactsBacklog =
 export const emailExcluded = [
   'cancelBackfillGmail',
   'deleteLink',
+  'disableLinkCalendar',
   'disableSync',
   'getBackfillGmail',
   'getBackfillGmailActive',

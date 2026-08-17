@@ -2198,6 +2198,78 @@
         }
       }
     },
+    "/email/links/{link_id}/calendar": {
+      "delete": {
+        "tags": ["Links"],
+        "summary": "Turns calendar off for a connected inbox.",
+        "description": "Removes the inbox's calendar data, drops the calendar scopes from its\nrecorded Google grant, and closes its push channels, so the inbox reads as\ncalendar-less until the user runs the calendar consent flow again. Gmail\nsync is untouched.\n\nOnly the inbox's owner may do this: a delegate can see the owner's calendar\nbut must not be able to delete the owner's data.",
+        "operationId": "disable_link_calendar",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "Inbox link ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/links/{link_id}/resync": {
       "post": {
         "tags": ["Links"],
@@ -5151,12 +5223,17 @@
           "sync_status",
           "needs_reauth",
           "needs_calendar_permission",
+          "calendar_disabled",
           "settings",
           "is_primary",
           "created_at",
           "updated_at"
         ],
         "properties": {
+          "calendar_disabled": {
+            "type": "boolean",
+            "description": "Whether the user turned calendar off for this inbox, which also removed\nits calendar data. `needs_calendar_permission` is true either way, so\nthis is what separates \"never granted\" from \"deliberately off\" —\nunprompted calendar nags must stay quiet for the latter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"

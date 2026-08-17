@@ -2,9 +2,10 @@ use super::*;
 use crate::domain::models::{
     AppliedGoogleGrant, CalendarAttendeeInput, CalendarBackfillJobKey, CalendarCreationTarget,
     CalendarEventSource, CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor,
-    CalendarSyncStatus, ConferenceChange, EventStatus, EventTransparency, EventVisibility,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
-    ProviderCalendar, StoredGoogleCalendar,
+    CalendarSyncStatus, CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar,
+    EventStatus, EventTransparency, EventVisibility, GoogleCalendarSyncSnapshot,
+    GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel, ProviderCalendar,
+    StoredGoogleCalendar,
 };
 use chrono::{Duration, TimeZone};
 use std::sync::{Arc, Mutex};
@@ -119,6 +120,8 @@ struct FakeRepo {
     persisted_event_id: Option<Uuid>,
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
     removed_sources: Arc<Mutex<Vec<(Uuid, Uuid, String)>>>,
+    disconnected: Option<DisconnectedGoogleCalendar>,
+    disconnect_requests: Arc<Mutex<Vec<(String, Uuid)>>>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -126,8 +129,21 @@ impl CalendarRepository for FakeRepo {
         &self,
         _email_link_id: Uuid,
         _scopes: crate::domain::models::GoogleScopeSet,
+        _intent: crate::domain::models::CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, rootcause::Report> {
         unreachable!()
+    }
+
+    async fn disconnect_google_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<Option<DisconnectedGoogleCalendar>, rootcause::Report> {
+        self.disconnect_requests
+            .lock()
+            .unwrap()
+            .push((requester_id.to_string(), email_link_id));
+        Ok(self.disconnected.clone())
     }
 
     async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, rootcause::Report> {
@@ -327,6 +343,23 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             .lock()
             .unwrap()
             .push(format!("delete:{provider_event_id}"));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn stop_watch_channel(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> Result<(), GoogleProviderError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("stop:{channel_id}:{resource_id}"));
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -863,4 +896,92 @@ async fn conference_changes_reach_the_provider_for_any_conference() {
         assert!(result.is_ok(), "{change:?} failed: {result:?}");
         assert_eq!(calls.lock().unwrap().as_slice(), ["update:master-id"]);
     }
+}
+
+fn disconnected(channels: &[(&str, &str)]) -> DisconnectedGoogleCalendar {
+    DisconnectedGoogleCalendar {
+        token_identity: token_identity(),
+        watch_channels: channels
+            .iter()
+            .map(|(channel_id, resource_id)| CalendarWatchRelease {
+                channel_id: (*channel_id).to_string(),
+                resource_id: (*resource_id).to_string(),
+            })
+            .collect(),
+    }
+}
+
+#[tokio::test]
+async fn disconnecting_calendar_closes_every_open_watch_channel() {
+    let link_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        disconnected: Some(disconnected(&[
+            ("channel-a", "resource-a"),
+            ("channel-b", "resource-b"),
+        ])),
+        ..FakeRepo::default()
+    };
+    let requests = repo.disconnect_requests.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+
+    service(repo, provider, FakeTokens::ok())
+        .disconnect_calendar("macro|user", link_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        requests.lock().unwrap().as_slice(),
+        [("macro|user".to_string(), link_id)]
+    );
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        [
+            "stop:channel-a:resource-a".to_string(),
+            "stop:channel-b:resource-b".to_string()
+        ]
+    );
+}
+
+/// The local removal has already committed by the time channels are closed, so
+/// a provider or token failure must not report the disconnect as failed — the
+/// stale channel resolves to no watch target and expires on its own.
+#[tokio::test]
+async fn disconnecting_calendar_survives_a_provider_that_cannot_close_channels() {
+    let repo = FakeRepo {
+        disconnected: Some(disconnected(&[("channel-a", "resource-a")])),
+        ..FakeRepo::default()
+    };
+    let provider = FakeProvider::new(FakeProviderBehavior::Fail(
+        GoogleProviderErrorKind::Transient,
+    ));
+    assert!(
+        service(repo.clone(), provider, FakeTokens::ok())
+            .disconnect_calendar("macro|user", Uuid::now_v7())
+            .await
+            .is_ok()
+    );
+
+    let unreachable_token = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = unreachable_token.calls.clone();
+    assert!(
+        service(repo, unreachable_token, FakeTokens::reauth())
+            .disconnect_calendar("macro|user", Uuid::now_v7())
+            .await
+            .is_ok()
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn disconnecting_an_inbox_the_requester_does_not_own_is_not_found() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    assert!(matches!(
+        service(FakeRepo::default(), provider, FakeTokens::ok())
+            .disconnect_calendar("macro|other", Uuid::now_v7())
+            .await,
+        Err(CalendarMutationError::NotFound)
+    ));
+    assert!(calls.lock().unwrap().is_empty());
 }

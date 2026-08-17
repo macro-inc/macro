@@ -78,6 +78,7 @@ pub async fn list_links_handler(
                 sync_status,
                 inbox.photo_url,
                 needs_calendar_permission,
+                inbox.calendar_disabled,
             )
         })
         .collect();

@@ -9,6 +9,11 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { MobileCalendarPeriodControls } from './CalendarPeriodSelector';
 import { useCalendarView } from './CalendarViewContext';
 import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
+import {
+  TurnOffCalendarDialog,
+  type TurnOffCalendarTarget,
+  useCalendarConnectedInboxes,
+} from './TurnOffCalendarDialog';
 
 const WEEK_START_OPTIONS: Array<{
   value: CalendarWeekStart;
@@ -29,6 +34,9 @@ const TIME_FORMAT_OPTIONS: Array<{
 function createCalendarSettingsControls() {
   const calendarView = useCalendarView();
   const sidePanel = useSidePanel();
+  const connectedInboxes = useCalendarConnectedInboxes();
+  const [turnOffTarget, setTurnOffTarget] =
+    createSignal<TurnOffCalendarTarget | null>(null);
 
   const showCalendarVisibility = () =>
     (sidePanel?.isNarrow() ?? false) && calendarView.sources().length > 1;
@@ -67,6 +75,25 @@ function createCalendarSettingsControls() {
     calendarView.setTimeFormat(timeFormat);
   };
 
+  // Only ever the viewer's own connected inboxes, so a delegate can never turn
+  // off (and delete) the owner's calendar from here. The address is shown only
+  // when more than one inbox could be meant.
+  const turnOffItems = createMemo(() => {
+    const inboxes = connectedInboxes();
+    return inboxes.map((link) => ({
+      target: { linkId: link.id, emailAddress: link.email_address },
+      label:
+        inboxes.length > 1
+          ? `Turn off calendar for ${link.email_address}`
+          : 'Turn off calendar',
+    }));
+  });
+
+  const startTurnOff = (target: TurnOffCalendarTarget) => {
+    calendarView.closeEventDetails();
+    setTurnOffTarget(target);
+  };
+
   return {
     calendarView,
     showCalendarVisibility,
@@ -76,6 +103,10 @@ function createCalendarSettingsControls() {
     changeShowWeekends,
     changeWeekStartsOn,
     changeTimeFormat,
+    turnOffItems,
+    turnOffTarget,
+    startTurnOff,
+    clearTurnOffTarget: () => setTurnOffTarget(null),
   };
 }
 
@@ -205,6 +236,23 @@ function DesktopCalendarSettings(props: {
             </Dropdown.SubContent>
           </Dropdown.Sub>
         </Dropdown.Group>
+
+        <Show when={controls.turnOffItems().length > 0}>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Calendar access</Dropdown.GroupLabel>
+            <For each={controls.turnOffItems()}>
+              {(item) => (
+                <Dropdown.Item
+                  closeOnSelect
+                  class="text-failure"
+                  onSelect={() => controls.startTurnOff(item.target)}
+                >
+                  <span class="min-w-0 flex-1 truncate">{item.label}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Show>
       </Dropdown.Content>
     </Dropdown>
   );
@@ -312,7 +360,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           </MobileDrawer.Section>
 
           <MobileDrawer.Label class="pt-4">Time format</MobileDrawer.Label>
-          <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
+          <MobileDrawer.Section class="flex shrink-0 flex-col">
             <For each={TIME_FORMAT_OPTIONS}>
               {(option) => (
                 <button
@@ -336,22 +384,55 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
               )}
             </For>
           </MobileDrawer.Section>
+
+          <Show when={controls.turnOffItems().length > 0}>
+            <MobileDrawer.Label class="pt-4">
+              Calendar access
+            </MobileDrawer.Label>
+            <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
+              <For each={controls.turnOffItems()}>
+                {(item) => (
+                  <button
+                    type="button"
+                    class={DRAWER_ROW_CLASS}
+                    onClick={() => {
+                      setOpen(false);
+                      controls.startTurnOff(item.target);
+                    }}
+                  >
+                    <span class="min-w-0 flex-1 truncate text-failure">
+                      {item.label}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </MobileDrawer.Section>
+          </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
   );
 }
 
-/** Responsive calendar display settings menu. */
+/**
+ * Responsive calendar display settings menu. The turn-off confirmation lives
+ * outside the menu so it survives the menu closing on select.
+ */
 export function CalendarSettingsDropdown() {
   const controls = createCalendarSettingsControls();
 
   return (
-    <Show
-      when={isMobile()}
-      fallback={<DesktopCalendarSettings controls={controls} />}
-    >
-      <MobileCalendarSettings controls={controls} />
-    </Show>
+    <>
+      <Show
+        when={isMobile()}
+        fallback={<DesktopCalendarSettings controls={controls} />}
+      >
+        <MobileCalendarSettings controls={controls} />
+      </Show>
+      <TurnOffCalendarDialog
+        target={controls.turnOffTarget()}
+        onClose={controls.clearTurnOffTarget}
+      />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT l.id as \"id!\", l.macro_id as \"macro_id!\",\n               l.fusionauth_user_id as \"fusionauth_user_id!\",\n               l.email_address as \"email_address!\",\n               l.provider as \"provider!: _\",\n               l.is_sync_active as \"is_sync_active!\",\n               l.is_primary as \"is_primary!\",\n               l.needs_reauth as \"needs_reauth!\",\n               l.last_sync_error_at,\n               l.created_at as \"created_at!\",\n               l.updated_at as \"updated_at!\",\n               s.signature_on_replies_forwards as \"signature_on_replies_forwards?\",\n               s.signature,\n               bj.status as \"latest_backfill_status?: _\",\n               c.sfs_photo_url as \"photo_url?\",\n               COALESCE(g.granted_scopes, '{}') AS \"google_granted_scopes!\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.id = mul.link_id\n            WHERE mul.primary_macro_id = $1\n        ) l\n        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id\n        LEFT JOIN email_settings s ON s.link_id = l.id\n        LEFT JOIN LATERAL (\n            SELECT status FROM email_backfill_jobs\n            WHERE link_id = l.id\n            ORDER BY created_at DESC\n            LIMIT 1\n        ) bj ON true\n        LEFT JOIN email_contacts c\n            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)\n        ORDER BY l.created_at DESC\n        ",
+  "query": "\n        SELECT l.id as \"id!\", l.macro_id as \"macro_id!\",\n               l.fusionauth_user_id as \"fusionauth_user_id!\",\n               l.email_address as \"email_address!\",\n               l.provider as \"provider!: _\",\n               l.is_sync_active as \"is_sync_active!\",\n               l.is_primary as \"is_primary!\",\n               l.needs_reauth as \"needs_reauth!\",\n               l.last_sync_error_at,\n               l.created_at as \"created_at!\",\n               l.updated_at as \"updated_at!\",\n               s.signature_on_replies_forwards as \"signature_on_replies_forwards?\",\n               s.signature,\n               bj.status as \"latest_backfill_status?: _\",\n               c.sfs_photo_url as \"photo_url?\",\n               COALESCE(g.granted_scopes, '{}') AS \"google_granted_scopes!\",\n               (g.calendar_disabled_at IS NOT NULL) AS \"calendar_disabled!\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,\n                   el.last_sync_error_at, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.id = mul.link_id\n            WHERE mul.primary_macro_id = $1\n        ) l\n        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id\n        LEFT JOIN email_settings s ON s.link_id = l.id\n        LEFT JOIN LATERAL (\n            SELECT status FROM email_backfill_jobs\n            WHERE link_id = l.id\n            ORDER BY created_at DESC\n            LIMIT 1\n        ) bj ON true\n        LEFT JOIN email_contacts c\n            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)\n        ORDER BY l.created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -104,6 +104,11 @@
         "ordinal": 15,
         "name": "google_granted_scopes!",
         "type_info": "TextArray"
+      },
+      {
+        "ordinal": 16,
+        "name": "calendar_disabled!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -127,8 +132,9 @@
       true,
       false,
       true,
+      null,
       null
     ]
   },
-  "hash": "91343113c1f5bb42291d27bb2f2b16ab9b43f63f768ea3dbc7d61c16452a9a92"
+  "hash": "9a1dd88fd623f93c9b0d94a10790bd5f860a2bd671301790e406843c18e29bcc"
 }

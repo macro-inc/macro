@@ -1,6 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
+import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
@@ -102,6 +103,81 @@ export function invalidateEmailLinks() {
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,
   });
+}
+
+type DisableCalendarContext = {
+  previousLinks: ListLinksResponse | undefined;
+};
+type DisableCalendarCallbacks = MutationCallbacks<
+  void,
+  Error,
+  string,
+  DisableCalendarContext
+>;
+
+/**
+ * Turns calendar off for one inbox: the backend deletes its calendar data and
+ * drops the calendar scopes from its Google grant. The cached link flips to
+ * `calendar_disabled` + `needs_calendar_permission` right away, which is what
+ * swaps the settings row back to "Enable calendar" and keeps the enable prompt
+ * quiet, and the emptied calendar caches are refetched.
+ */
+export function useDisableCalendarMutation(
+  callbacks?: DisableCalendarCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async (linkId: string) => {
+      await throwOnErr(() => emailClient.disableLinkCalendar({ linkId }));
+    },
+
+    ...withCallbacks<void, Error, string, DisableCalendarContext>(
+      {
+        onMutate: async (linkId) => {
+          await queryClient.cancelQueries({
+            queryKey: emailKeys.links.queryKey,
+          });
+
+          const previousLinks = queryClient.getQueryData<ListLinksResponse>(
+            emailKeys.links.queryKey
+          );
+
+          queryClient.setQueryData<ListLinksResponse>(
+            emailKeys.links.queryKey,
+            (old) =>
+              old && {
+                ...old,
+                links: old.links.map((link) =>
+                  link.id === linkId
+                    ? {
+                        ...link,
+                        calendar_disabled: true,
+                        needs_calendar_permission: true,
+                      }
+                    : link
+                ),
+              }
+          );
+
+          return { previousLinks };
+        },
+
+        onSuccess: () => {
+          invalidateEmailLinks();
+          invalidateCalendarViews();
+        },
+
+        onError: (_error, _linkId, context) => {
+          if (context?.previousLinks) {
+            queryClient.setQueryData(
+              emailKeys.links.queryKey,
+              context.previousLinks
+            );
+          }
+        },
+      },
+      callbacks
+    ),
+  }));
 }
 
 type RemoveInboxContext = { previousLinks: ListLinksResponse | undefined };

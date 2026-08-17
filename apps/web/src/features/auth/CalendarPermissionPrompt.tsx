@@ -15,7 +15,10 @@ import { useEmailLinksQuery } from '@queries/email/link';
  *
  * Inboxes that also need a full reconnect are skipped so the two prompts don't
  * stack. Reconnecting restores the mailbox without calendar access, which
- * leaves `needs_calendar_permission` set and brings this prompt back.
+ * leaves `needs_calendar_permission` set and brings this prompt back. So are
+ * inboxes whose calendar the user turned off — that reads as missing calendar
+ * permission too, and nagging someone to re-enable what they just removed is
+ * the one thing this prompt must never do.
  *
  * Gated per form factor: `enable-calendar-prompt-web` on desktop/web and
  * `enable-calendar-prompt-mobile` on phones, where the toast layout can't
@@ -31,7 +34,10 @@ export function CalendarPermissionPrompt() {
     items: () =>
       calendarUiEnabled() && promptAllowed()
         ? (linksQuery.data?.links ?? []).filter(
-            (link) => link.needs_calendar_permission && !link.needs_reauth
+            (link) =>
+              link.needs_calendar_permission &&
+              !link.needs_reauth &&
+              !link.calendar_disabled
           )
         : [],
     key: (link) => link.id,

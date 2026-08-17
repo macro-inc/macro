@@ -370,6 +370,20 @@ async fn fetch_inbox_details_reads_google_scopes_from_side_table(
     let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     assert_eq!(details[0].google_granted_scopes, granted_scopes);
+    assert!(!details[0].calendar_disabled);
+
+    sqlx::query!(
+        "UPDATE email_link_google_scopes SET calendar_disabled_at = now() WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
+    assert!(
+        details[0].calendar_disabled,
+        "an opted-out inbox reads as deliberately disabled, not merely ungranted"
+    );
 
     sqlx::query!(
         "DELETE FROM email_link_google_scopes WHERE link_id = $1",
@@ -381,6 +395,7 @@ async fn fetch_inbox_details_reads_google_scopes_from_side_table(
     let details = fetch_inbox_details_for_macro_id(&pool, &macro_id(CHILD)).await?;
     assert_eq!(details.len(), 1);
     assert!(details[0].google_granted_scopes.is_empty());
+    assert!(!details[0].calendar_disabled);
 
     Ok(())
 }

@@ -384,6 +384,24 @@ export const emailClient = {
     ).map((result) => result);
   },
 
+  /**
+   * Turns calendar off for one connected inbox: its calendar data is removed
+   * and the calendar scopes leave its Google grant, so the inbox comes back as
+   * needing calendar permission until the user grants it again. Gmail sync is
+   * unaffected.
+   */
+  async disableLinkCalendar(args: { linkId: string }) {
+    const { linkId } = args;
+    return (
+      await emailFetch<EmptyResponse>(
+        `/email/links/${encodeURIComponent(linkId)}/calendar`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
   async resyncLink(args: { linkId: string }) {
     const { linkId } = args;
     return (

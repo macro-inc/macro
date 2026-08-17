@@ -10,6 +10,11 @@ import type { SyncStatus } from './syncStatus';
 import type { UserProvider } from './userProvider';
 
 export interface Link {
+  /** Whether the user turned calendar off for this inbox, which also removed
+its calendar data. `needs_calendar_permission` is true either way, so
+this is what separates "never granted" from "deliberately off" —
+unprompted calendar nags must stay quiet for the latter. */
+  calendar_disabled: boolean;
   created_at: string;
   email_address: string;
   fusionauth_user_id: string;

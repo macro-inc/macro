@@ -12,8 +12,9 @@ use uuid::Uuid;
 use super::{
     models::{
         AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, EventReminders, EventTime, OccurrenceRange,
-        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
+        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventWrite,
@@ -285,6 +286,23 @@ where
             .await
             .map_err(internal)
     }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn disconnect_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<(), CalendarMutationError> {
+        let disconnected = self
+            .repository
+            .disconnect_google_calendar(requester_id, email_link_id)
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NotFound)?;
+        self.release_watch_channels(email_link_id, &disconnected)
+            .await;
+        Ok(())
+    }
 }
 
 impl<R, G, T> CalendarMutationServiceImpl<R, G, T>
@@ -293,6 +311,54 @@ where
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
 {
+    /// Close the push channels a disconnected calendar left open. Best-effort:
+    /// the local calendars are already gone, so a notification that still
+    /// arrives resolves to no watch target and is dropped. Stopping the
+    /// channels only spares Google the retries until they expire.
+    async fn release_watch_channels(
+        &self,
+        email_link_id: Uuid,
+        disconnected: &DisconnectedGoogleCalendar,
+    ) {
+        if disconnected.watch_channels.is_empty() {
+            return;
+        }
+        let access_token = match self
+            .tokens
+            .fetch_access_token(&disconnected.token_identity)
+            .await
+        {
+            Ok(token) => token,
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    email_link_id=%email_link_id,
+                    "no token to close the disconnected calendar's push channels"
+                );
+                return;
+            }
+        };
+        for channel in &disconnected.watch_channels {
+            self.provider
+                .stop_watch_channel(
+                    &access_token,
+                    email_link_id,
+                    &channel.channel_id,
+                    &channel.resource_id,
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error=?error,
+                        email_link_id=%email_link_id,
+                        channel_id=%channel.channel_id,
+                        "failed to close a disconnected calendar's push channel"
+                    );
+                })
+                .ok();
+        }
+    }
+
     /// Best-effort cleanup when the provider reports the event gone: the
     /// regular sync converges the projection either way.
     async fn retire_gone_source(&self, target: &CalendarEventMutationTarget) {
