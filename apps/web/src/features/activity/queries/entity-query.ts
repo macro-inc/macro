@@ -12,9 +12,10 @@ import {
   type EntityActivityResult,
   selectEntityActivity,
 } from './select-entity-activity';
+import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
 
-/** Rows requested for a side-panel activity preview. */
-export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
+
+export { ENTITY_ACTIVITY_PREVIEW_LIMIT };
 
 type EntityActivityQueryOptions = {
   entityType: Accessor<EntityType>;
