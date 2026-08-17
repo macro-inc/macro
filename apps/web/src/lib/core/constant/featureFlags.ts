@@ -487,6 +487,12 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
 const parseBooleanOverride = (value: unknown): boolean | undefined =>
   value === 'true' ? true : value === 'false' ? false : undefined;
 
+/** Controls the cache-warming GraphQL soup backfill. */
+export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
+  'ENABLE_GRAPHQL_BACKFILL',
+  true
+);
+
 /** Browser-only Turso/OPFS cache rollout. Production defaults off. */
 export const ENABLE_BROWSER_TURSO_CACHE_FLAG = 'enable-browser-turso-cache';
 const BROWSER_TURSO_CACHE_ENV = import.meta.env.VITE_ENABLE_BROWSER_TURSO_CACHE;
