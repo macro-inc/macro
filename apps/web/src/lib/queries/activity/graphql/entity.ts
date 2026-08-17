@@ -8,8 +8,9 @@ import {
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '../constants';
+import { registerEntityActivityRevalidator } from '../push-registry';
 
 /** One activity event as both activity queries return it. */
 export type ActivityEvent = ActivityEventFieldsFragment;
@@ -59,6 +60,28 @@ export function createEntityActivityQuery(options: EntityActivityQueryOptions) {
         [],
     };
   });
+
+  // Realtime: a push naming this entity re-executes the exact live variant
+  // network-only; the shared client's cache write re-emits the query above.
+  // Registering per mounted query scopes push refetches to open panels.
+  onCleanup(
+    registerEntityActivityRevalidator((entityIds) => {
+      const currentInput = input();
+      if (currentInput === undefined || !entityIds.has(options.entityId())) {
+        return;
+      }
+      void getGraphqlSoupClient()
+        .query<EntityActivityQuery, EntityActivityQueryVariables>(
+          EntityActivityDocument,
+          {
+            input: currentInput,
+            limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
+          },
+          { requestPolicy: 'network-only' }
+        )
+        .toPromise();
+    })
+  );
 
   return {
     result,

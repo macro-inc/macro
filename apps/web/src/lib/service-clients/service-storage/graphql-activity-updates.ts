@@ -1,12 +1,9 @@
 import { inspectVariants, selectAll } from '@graphql-cache/exchange/inspection';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
+import { notifyEntityActivityPush } from '@queries/activity/push-registry';
 import type { Client, OperationResult } from '@urql/core';
 import {
   type ActivityUpdatesSubscription,
-  EntityActivityDocument,
-  type EntityActivityQuery,
-  type EntityActivityQueryVariables,
   MyActivityDocument,
   type MyActivityQuery,
   type MyActivityQueryVariables,
@@ -93,9 +90,12 @@ export function createActivityUpdatesHandler(context: {
 
 /**
  * Re-executes the activity list queries a pushed event may belong to: the
- * feed's first page, and the entity-activity preview of each pushed entity.
- * Only variants proven present in the cache are touched — an uncached
- * query has nothing stale to recover.
+ * feed's first page (variants proven cached via inspection), and — through
+ * the push registry — the entity-activity query of every mounted side panel
+ * showing a pushed entity. EntityActivity is deliberately NOT inspected:
+ * `$limit` is an argument of a deeper field than the inspectable `soup`
+ * selection and the engine rejects the inspection outright, so mounted
+ * queries register their own revalidators instead.
  */
 async function revalidateActivityQueries(args: {
   client: Pick<Client, 'query'>;
@@ -104,6 +104,8 @@ async function revalidateActivityQueries(args: {
 }): Promise<void> {
   const { client, host, entityIds } = args;
   if (host.disabled) return;
+
+  notifyEntityActivityPush(entityIds);
 
   const refetches: Array<Promise<unknown>> = [];
 
@@ -126,62 +128,5 @@ async function revalidateActivityQueries(args: {
     );
   }
 
-  const entityVariants = await inspectVariants(
-    host,
-    selectAll(EntityActivityDocument).field('user').field('soup')
-  );
-  for (const variant of entityVariants) {
-    if (!variantTargetsEntity(variant.variables, entityIds)) continue;
-    // Variant recovery only inverts the selected field's own arguments, so
-    // `$limit` — an argument of the deeper `activity(limit:)` edge — never
-    // comes back. Refetching without it would write under a different
-    // `activity(limit: null)` field key and the panel's variant would stay
-    // stale, so restore the one limit the app queries with.
-    const variables: EntityActivityQueryVariables = {
-      input: variant.variables.input,
-      limit: variant.variables.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
-    };
-    refetches.push(
-      client
-        .query<EntityActivityQuery, EntityActivityQueryVariables>(
-          EntityActivityDocument,
-          variables,
-          { requestPolicy: 'network-only' }
-        )
-        .toPromise()
-    );
-  }
-
   await Promise.all(refetches);
-}
-
-/**
- * Whether a cached EntityActivity variant targets one of the pushed
- * entities. The variant's `input` is the exact-single-entity Soup filter
- * built by `buildEntityPropertiesInput`; rather than reconstructing that
- * AST per entity type, the check walks the variables for the entity id —
- * ids are UUIDs, so a false positive is negligible and costs only one
- * spurious preview refetch.
- */
-function variantTargetsEntity(
-  variables: EntityActivityQueryVariables,
-  entityIds: ReadonlySet<string>
-): boolean {
-  let found = false;
-  const visit = (value: unknown) => {
-    if (found) return;
-    if (typeof value === 'string') {
-      if (entityIds.has(value)) found = true;
-      return;
-    }
-    if (Array.isArray(value)) {
-      for (const entry of value) visit(entry);
-      return;
-    }
-    if (typeof value === 'object' && value !== null) {
-      for (const entry of Object.values(value)) visit(entry);
-    }
-  };
-  visit(variables.input);
-  return found;
 }
