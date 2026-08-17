@@ -485,6 +485,83 @@ impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
     }
 }
 
+#[derive(Clone, Default)]
+struct RecordingActivityReader {
+    edge_calls: Arc<Mutex<Vec<Vec<graphql_activity::ActivityEdgeKey>>>>,
+    feed_calls: Arc<Mutex<Vec<(String, Option<(chrono::DateTime<chrono::Utc>, Uuid)>, u32)>>>,
+    records: Arc<Mutex<Vec<activity::ActivityRecord>>>,
+}
+
+impl RecordingActivityReader {
+    fn set_records(&self, records: Vec<activity::ActivityRecord>) {
+        *self.records.lock().expect("activity records lock") = records;
+    }
+}
+
+impl graphql_activity::SoupActivityEdgeReader for RecordingActivityReader {
+    async fn entity_activity(
+        &self,
+        keys: Vec<graphql_activity::ActivityEdgeKey>,
+    ) -> HashMap<graphql_activity::ActivityEdgeKey, graphql_activity::ActivityEdgeLoad> {
+        self.edge_calls
+            .lock()
+            .expect("activity edge calls lock")
+            .push(keys.clone());
+        let records = self.records.lock().expect("activity records lock").clone();
+        keys.into_iter()
+            .map(|key| {
+                let matching = records
+                    .iter()
+                    .filter(|record| {
+                        record.entity_type == key.entity.entity_type
+                            && record.entity_id == key.entity.entity_id.as_ref()
+                    })
+                    .take(key.limit as usize)
+                    .cloned()
+                    .collect();
+                (key, graphql_activity::ActivityEdgeLoad::Found(matching))
+            })
+            .collect()
+    }
+}
+
+impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
+    async fn subject_feed(
+        &self,
+        subject_id: &str,
+        cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
+        limit: std::num::NonZeroU32,
+    ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
+        let limit = limit.get();
+        self.feed_calls
+            .lock()
+            .expect("activity feed calls lock")
+            .push((subject_id.to_owned(), cursor, limit));
+        // Emulate the repo: subject-scoped, newest-first keyset order,
+        // strictly after the cursor position, at most `limit` rows, with
+        // `next` set whenever more rows remain past the page.
+        let records = self.records.lock().expect("activity records lock").clone();
+        let mut page: Vec<activity::ActivityRecord> = records
+            .into_iter()
+            .filter(|record| record.subject_id == subject_id)
+            .filter(|record| {
+                cursor.is_none_or(|(occurred_at, id)| {
+                    (record.occurred_at, record.id) < (occurred_at, id)
+                })
+            })
+            .collect();
+        let has_more = page.len() > limit as usize;
+        page.truncate(limit as usize);
+        let next = has_more
+            .then(|| page.last().map(|record| (record.occurred_at, record.id)))
+            .flatten();
+        Ok(activity::ActivityFeedPage {
+            records: page,
+            next,
+        })
+    }
+}
+
 fn parsed_message(thread_id: Uuid) -> ParsedMessage {
     ParsedMessage {
         db_id: Uuid::from_u128(100),
@@ -770,11 +847,13 @@ struct TestHarness {
         RecordingEmailContentReader,
         graphql_favorite::NoOpEntityFavoriteEdgeReader,
         graphql_permission::NoOpEntityPermissionEdgeReader,
+        RecordingActivityReader,
     >,
     state: TestState,
     soup_service: CountingSoupService,
     email_service: CountingEmailService,
     email_content_reader: RecordingEmailContentReader,
+    activity_reader: RecordingActivityReader,
     authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
     user_label_calls: Arc<AtomicUsize>,
@@ -794,6 +873,7 @@ fn harness() -> TestHarness {
     let authorization = FakeAuthorizationService::default();
     let soup = CountingSoupService::default();
     let email_content_reader = RecordingEmailContentReader::default();
+    let activity_reader = RecordingActivityReader::default();
     let authorization_calls = Arc::clone(&authorization.authorization_calls);
     let inbox_calls = Arc::clone(&email.inbox_calls);
     let user_label_calls = Arc::clone(&email.user_label_calls);
@@ -815,6 +895,7 @@ fn harness() -> TestHarness {
         soup_service: soup,
         email_service: email,
         email_content_reader,
+        activity_reader,
         authorization_calls,
         inbox_calls,
         user_label_calls,
@@ -888,6 +969,10 @@ impl TestHarness {
                 user_id,
                 self.email_content_reader.clone(),
             ))
+            .data(self.activity_reader.clone())
+            .data(graphql_activity::entity_activity_loader(
+                self.activity_reader.clone(),
+            ))
     }
 }
 
@@ -924,6 +1009,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoOpSoupEmailContentEdgeReader,
         NoOpEntityFavoriteEdgeReader,
         NoOpEntityPermissionEdgeReader,
+        NoOpActivityReader,
     > = build_schema_with_services(
         soup_service,
         realtime,
@@ -1358,6 +1444,189 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert_eq!(items[1]["linkId"], Uuid::from_u128(952).to_string());
     assert!(items[0]["latestInboundMessageTs"].as_str().is_some());
     assert!(items[1]["latestInboundMessageTs"].is_null());
+}
+
+fn activity_record(
+    id: u128,
+    entity_type: ModelEntityType,
+    entity_id: &str,
+    action: activity::RecordedAction,
+    occurred_at_secs: i64,
+) -> activity::ActivityRecord {
+    activity::ActivityRecord {
+        id: Uuid::from_u128(id),
+        actor: activity::Actor::new_from_user(
+            MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        ),
+        subject_id: VALID_USER_ID.to_owned(),
+        entity_type,
+        entity_id: entity_id.to_owned(),
+        action,
+        occurred_at: chrono::DateTime::from_timestamp(occurred_at_secs, 0)
+            .expect("valid timestamp"),
+    }
+}
+
+#[tokio::test]
+async fn entity_activity_is_lazy_and_batches_across_entities() {
+    let harness = harness();
+    let first_id = Uuid::from_u128(61);
+    let second_id = Uuid::from_u128(62);
+    harness.soup_service.set_raw_response(vec![
+        soup_email_thread(first_id),
+        soup_email_thread(second_id),
+    ]);
+    harness.activity_reader.set_records(vec![activity_record(
+        1,
+        ModelEntityType::EmailThread,
+        &first_id.to_string(),
+        activity::RecordedAction::Known(activity::Action::Edited),
+        300,
+    )]);
+
+    let without_activity = harness
+        .execute(
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id inboxVisible } } } } }"#,
+        )
+        .await;
+    assert!(
+        without_activity.errors.is_empty(),
+        "{:?}",
+        without_activity.errors
+    );
+    assert!(
+        harness
+            .activity_reader
+            .edge_calls
+            .lock()
+            .expect("activity edge calls lock")
+            .is_empty(),
+        "unselected activity edge must not touch the reader"
+    );
+
+    let with_activity = harness
+        .execute(
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id activity { occurredAt action { __typename } } } } } } }"#,
+        )
+        .await;
+    assert!(
+        with_activity.errors.is_empty(),
+        "{:?}",
+        with_activity.errors
+    );
+
+    let calls = harness
+        .activity_reader
+        .edge_calls
+        .lock()
+        .expect("activity edge calls lock")
+        .clone();
+    assert_eq!(calls.len(), 1, "both entities load in one batched call");
+    let mut requested: Vec<(String, u32)> = calls[0]
+        .iter()
+        .map(|key| (key.entity.entity_id.to_string(), key.limit))
+        .collect();
+    requested.sort();
+    assert_eq!(
+        requested,
+        vec![(first_id.to_string(), 10), (second_id.to_string(), 10)]
+    );
+
+    let items = &with_activity.data.into_json().unwrap()["user"]["soup"]["items"];
+    assert_eq!(
+        items[0]["activity"][0]["action"]["__typename"],
+        "GraphqlActivityEdited"
+    );
+    assert!(items[0]["activity"][0]["occurredAt"].as_str().is_some());
+    assert_eq!(
+        items[1]["activity"].as_array().map(Vec::len),
+        Some(0),
+        "entity with no activity resolves an empty timeline"
+    );
+}
+
+#[tokio::test]
+async fn activity_feed_pages_by_cursor_and_carries_unknown_actions() {
+    let harness = harness();
+    let doc = Uuid::from_u128(71).to_string();
+    harness.activity_reader.set_records(vec![
+        activity_record(
+            3,
+            ModelEntityType::Document,
+            &doc,
+            activity::RecordedAction::Unknown {
+                tag: "transmogrified".to_owned(),
+                payload: None,
+            },
+            300,
+        ),
+        activity_record(
+            2,
+            ModelEntityType::Document,
+            &doc,
+            activity::RecordedAction::Known(activity::Action::Edited),
+            200,
+        ),
+        activity_record(
+            1,
+            ModelEntityType::Document,
+            &doc,
+            activity::RecordedAction::Known(activity::Action::Created),
+            100,
+        ),
+    ]);
+
+    let first_page = harness
+        .execute(
+            r#"{ user { activity(input: {limit: 2}) { items { entityId entityType action { __typename ... on GraphqlActivityUnknownAction { tag } } } nextCursor } } }"#,
+        )
+        .await;
+    assert!(first_page.errors.is_empty(), "{:?}", first_page.errors);
+    let data = first_page.data.into_json().unwrap();
+    let page = &data["user"]["activity"];
+    assert_eq!(page["items"].as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        page["items"][0]["action"]["__typename"],
+        "GraphqlActivityUnknownAction"
+    );
+    assert_eq!(page["items"][0]["action"]["tag"], "transmogrified");
+    assert_eq!(page["items"][0]["entityId"], doc);
+    assert_eq!(page["items"][0]["entityType"], "DOCUMENT");
+    assert_eq!(
+        page["items"][1]["action"]["__typename"],
+        "GraphqlActivityEdited"
+    );
+    let cursor = page["nextCursor"].as_str().expect("more rows exist");
+
+    let second_page = harness
+        .execute(&format!(
+            r#"{{ user {{ activity(input: {{limit: 2, cursor: "{cursor}"}}) {{ items {{ action {{ __typename }} }} nextCursor }} }} }}"#
+        ))
+        .await;
+    assert!(second_page.errors.is_empty(), "{:?}", second_page.errors);
+    let data = second_page.data.into_json().unwrap();
+    let page = &data["user"]["activity"];
+    assert_eq!(page["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        page["items"][0]["action"]["__typename"],
+        "GraphqlActivityCreated"
+    );
+    assert!(page["nextCursor"].is_null());
+
+    let feed_calls = harness
+        .activity_reader
+        .feed_calls
+        .lock()
+        .expect("activity feed calls lock")
+        .clone();
+    // The resolver binds the viewer's principal string as the subject and
+    // passes the client limit through; the has-more probe lives in storage.
+    assert_eq!(feed_calls.len(), 2);
+    assert_eq!(feed_calls[0].0, VALID_USER_ID);
+    assert_eq!(feed_calls[0].2, 2);
+    let (cursor_at, cursor_id) = feed_calls[1].1.expect("second page carries the cursor");
+    assert_eq!(cursor_at, chrono::DateTime::from_timestamp(200, 0).unwrap());
+    assert_eq!(cursor_id, Uuid::from_u128(2));
 }
 
 #[tokio::test]

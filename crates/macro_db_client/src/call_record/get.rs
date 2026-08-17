@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -91,8 +94,21 @@ pub async fn get_accessible_call_ids(
                 ) OR EXISTS (
                     SELECT 1 FROM "SharePermission" sp
                     WHERE sp.id = cr.share_permission_id
-                      AND sp."isPublic" = true
-                      AND sp."publicAccessLevel" IS NOT NULL
+                      AND sp."linkShareAccessLevel" IS NOT NULL
+                      AND (
+                          sp."linkShare" = 'PUBLIC'
+                          OR (
+                              sp."linkShare" = 'TEAM'
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM team_user owner_team
+                                  WHERE owner_team.user_id = cr.created_by
+                                    AND owner_team.team_id::text IN (
+                                        SELECT source_id FROM user_source_ids
+                                    )
+                              )
+                          )
+                      )
                 )
             )
         )

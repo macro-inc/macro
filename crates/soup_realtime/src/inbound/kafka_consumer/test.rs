@@ -294,6 +294,7 @@ fn task_property_updates_map_to_document_updates() {
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
         value: None,
+        previous_value: None,
         updated_at: Utc::now(),
     });
 

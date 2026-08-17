@@ -1,3 +1,4 @@
+import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
@@ -40,6 +41,11 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
       <SidePanel.Section id="sharing" title="Sharing" order={20}>
         <SharingSectionContent record={props.record} />
       </SidePanel.Section>
+      <EntityActivitySectionConditional
+        entityId={props.record().callId}
+        entityType="CALL_RECORD"
+        order={40}
+      />
       <ReferencesSectionConditional callId={blockId} />
     </>
   );

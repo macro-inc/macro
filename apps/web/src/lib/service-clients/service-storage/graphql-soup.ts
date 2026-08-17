@@ -109,6 +109,10 @@ const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
   exchanges: [fetchExchange],
   fetch: dssGraphqlFetch,
+  // urql's default ("within-url-limit") sends small documents as GET, but
+  // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
+  // executes. Every pre-activity document was too large to trigger this.
+  preferGetMethod: false,
 });
 
 /**
@@ -180,6 +184,8 @@ export function getGraphqlSoupClient(): Client {
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
+        // See graphqlSoupClient: GET serves GraphiQL on this path.
+        preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
             entityResolvers: {

@@ -1148,12 +1148,10 @@ export const storageServiceClient = {
     ).map((result) => result.data);
   },
 
-  async getPins(params?: { limit?: number; offset?: number }) {
-    return (
-      await dssFetch<{ data: UserPins }>(
-        `/pins?limit=${params?.limit ?? 10}&offset=${params?.offset ?? 0}`
-      )
-    ).map((result) => result.data);
+  async getPins() {
+    return (await dssFetch<{ data: UserPins }>('/pins')).map(
+      (result) => result.data
+    );
   },
 
   async pinItem(params: { id: string } & AddPinRequest) {

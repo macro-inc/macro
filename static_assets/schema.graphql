@@ -1,4 +1,19 @@
 """
+Page request for the authenticated user's activity feed.
+"""
+input ActivityFeedInput {
+	"""
+	Opaque cursor from the previous page's `nextCursor`; absent for the
+	first page.
+	"""
+	cursor: String
+	"""
+	Page size; defaults to 25, capped at 100.
+	"""
+	limit: Int
+}
+
+"""
 Channel activity operation exposed by GraphQL.
 """
 enum ChannelActivityType {
@@ -47,7 +62,7 @@ type CompleteMutationRoot {
 	"""
 	moveEntities(inputs: [MoveEntityInput!]!): EntityMutationPayload!
 	"""
-	Update public and channel share policies across supported entity kinds.
+	Update link and channel share policies across supported entity kinds.
 	"""
 	updateEntitySharePolicies(inputs: [UpdateEntitySharePolicyInput!]!): EntityMutationPayload!
 	"""
@@ -151,17 +166,18 @@ input EntityRefInput {
 }
 
 """
-Shared public/channel share-policy update.
+Shared link/channel share-policy update.
 """
 input EntitySharePolicyInput {
 	"""
-	Whether public access should be enabled.
+	Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
 	"""
-	isPublic: Boolean
+	linkShare: GraphqlLinkShare
 	"""
-	Public access level when public access is enabled.
+	Link access level. Omit to leave unchanged or pass null to reset it to the default level
+	when a link share exists.
 	"""
-	publicAccessLevel: GraphqlEntityAccessLevel
+	linkShareAccessLevel: GraphqlEntityAccessLevel
 	"""
 	Channel access entries to add, remove, or replace.
 	"""
@@ -176,6 +192,190 @@ type GraphqlAccessLevelPermission {
 	Effective access level held by the viewer.
 	"""
 	accessLevel: GraphqlEntityAccessLevel!
+}
+
+"""
+The typed activity-action vocabulary. One member per durable action, plus
+[`GraphqlActivityUnknownAction`]: rows written by a newer deployment (or
+with an undecodable payload) surface with their raw tag and payload
+instead of failing the page.
+"""
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityUnknownAction
+
+"""
+A call was started in the entity.
+"""
+type GraphqlActivityCallStarted {
+	"""
+	The started call.
+	"""
+	callId: ID!
+}
+
+"""
+The entity was created.
+"""
+type GraphqlActivityCreated {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+The entity was soft-deleted.
+"""
+type GraphqlActivityDeleted {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+The entity's content or metadata was edited.
+"""
+type GraphqlActivityEdited {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+One activity: a principal did something to an entity at a time.
+
+Carries an entity *reference* only (`entityType`/`entityId`) — clients
+resolve names and metadata from their normalized Soup cache.
+"""
+type GraphqlActivityEvent {
+	"""
+	The activity's stable identifier.
+	"""
+	id: ID!
+	"""
+	The principal that mechanically acted, as a prefix-parseable string
+	(`macro|<email>` for users, `bot|<uuid>` for bots).
+	"""
+	actorId: String!
+	"""
+	Whose activity this is: the delegating user when the actor acted on
+	someone's behalf, otherwise the actor itself.
+	"""
+	subjectId: String!
+	"""
+	The kind of entity acted on.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	The entity acted on.
+	"""
+	entityId: ID!
+	"""
+	What the principal did.
+	"""
+	action: GraphqlActivityAction!
+	"""
+	When it happened, in RFC 3339 format.
+	"""
+	occurredAt: String!
+}
+
+"""
+A message was sent in the entity.
+"""
+type GraphqlActivityMessaged {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+The entity was opened by its subject.
+"""
+type GraphqlActivityOpened {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+One page of the authenticated user's activity, newest first.
+"""
+type GraphqlActivityPage {
+	"""
+	The page's activity events.
+	"""
+	items: [GraphqlActivityEvent!]!
+	"""
+	Cursor for the next page; absent when this page reached the end.
+	"""
+	nextCursor: String
+}
+
+"""
+A principal was added to the entity.
+"""
+type GraphqlActivityParticipantAdded {
+	"""
+	The added principal, as a prefix-parseable string.
+	"""
+	participant: String!
+}
+
+"""
+A principal was removed from the entity.
+"""
+type GraphqlActivityParticipantRemoved {
+	"""
+	The removed principal, as a prefix-parseable string.
+	"""
+	participant: String!
+}
+
+"""
+A property value changed on the entity.
+"""
+type GraphqlActivityPropertyChanged {
+	"""
+	The property definition id.
+	"""
+	property: String!
+	"""
+	The previous value, when the source event carried it.
+	"""
+	from: JSON
+	"""
+	The new value. `null` means the value was cleared — or was literally
+	set to JSON null; the wire cannot distinguish the two.
+	"""
+	to: JSON
+}
+
+"""
+An email message was sent on the thread.
+"""
+type GraphqlActivitySent {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+An action this deployment's vocabulary doesn't know.
+"""
+type GraphqlActivityUnknownAction {
+	"""
+	The stored action tag.
+	"""
+	tag: String!
+	"""
+	The stored action payload, verbatim.
+	"""
+	payload: JSON
 }
 
 """
@@ -2408,6 +2608,20 @@ type GraphqlLinkPropertyValue {
 }
 
 """
+Audience allowed to access an entity through its share link.
+"""
+enum GraphqlLinkShare {
+	"""
+	Anyone with the link can access the entity.
+	"""
+	PUBLIC
+	"""
+	Members of the owner's team with the link can access the entity.
+	"""
+	TEAM
+}
+
+"""
 Metadata for a mention in a document comment.
 """
 type GraphqlMentionedInDocumentCommentMetadata {
@@ -3331,6 +3545,12 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 }
 
 """
@@ -3429,6 +3649,12 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -3550,6 +3776,12 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3619,6 +3851,12 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -3762,6 +4000,12 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3840,6 +4084,12 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -3917,6 +4167,12 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4412,6 +4668,12 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -4473,6 +4735,10 @@ interface GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+	"""
+	The newest activity on this entity, newest first.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 }
 
 """
@@ -4590,6 +4856,12 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	viewerPermission: GraphqlEntityPermission
 	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -4659,6 +4931,12 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4752,6 +5030,12 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	The authenticated viewer's effective permission for this entity.
 	"""
 	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -4866,6 +5150,11 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	A page of the authenticated user's own activity, newest first.
+	Delegated actions performed on the user's behalf are included.
+	"""
+	activity(input: ActivityFeedInput!): GraphqlActivityPage!
 	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
@@ -5185,7 +5474,7 @@ input UpdateEntitySharePolicyInput {
 	"""
 	entity: EntityRefInput!
 	"""
-	New public/channel policy values.
+	New link/channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
 }

@@ -77,14 +77,14 @@ INSERT INTO
 INSERT INTO
     public."SharePermission" (
         "id",
-        "isPublic",
-        "publicAccessLevel",
+        "linkShare",
+        "linkShareAccessLevel",
         "createdAt",
         "updatedAt"
     ) (
         SELECT
             'sp-1',
-            TRUE,
+            'PUBLIC',
             'view',
             '2019-10-16 00:00:00',
             '2019-10-16 00:00:00'
@@ -100,14 +100,14 @@ INSERT INTO
 INSERT INTO
     public."SharePermission" (
         "id",
-        "isPublic",
-        "publicAccessLevel",
+        "linkShare",
+        "linkShareAccessLevel",
         "createdAt",
         "updatedAt"
     ) (
         SELECT
             'sp-2',
-            false,
+            NULL,
             NULL,
             '2019-10-16 00:00:00',
             '2019-10-16 00:00:00'

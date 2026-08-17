@@ -26,6 +26,7 @@ members = [
   "crates/foreign_entity",
   "crates/generic_email_domains",
   "crates/gmail_client",
+  "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",

@@ -367,6 +367,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Whether to revoke direct non-owner user access in the edit transaction.
+    pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
     pub file_type: Option<FileTypeUpdate>,
 }
