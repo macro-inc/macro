@@ -94,7 +94,7 @@ type CompleteMutationRoot {
 	"""
 	updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!
 	"""
-	Update all notifications associated with an entity for the authenticated user.
+	Update all notifications associated with the requested entities for the authenticated user.
 	"""
 	updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!
 	"""
@@ -5275,6 +5275,20 @@ input MoveEntityInput {
 }
 
 """
+Canonical entity reference used to select notifications for updating.
+"""
+input NotificationEntityInput {
+	"""
+	Canonical entity type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical entity identifier.
+	"""
+	entityId: ID!
+}
+
+"""
 Explicit notification status operation exposed by GraphQL.
 """
 enum NotificationUpdateOperation {
@@ -5484,17 +5498,13 @@ input UpdateEntitySharePolicyInput {
 }
 
 """
-Input for updating all notifications associated with an entity.
+Input for updating all notifications associated with any requested entity.
 """
 input UpdateNotificationsForEntityInput {
 	"""
-	Canonical entity type.
+	Canonical entities whose notifications should be updated.
 	"""
-	entityType: GraphqlEntityType!
-	"""
-	Canonical entity identifier.
-	"""
-	entityId: ID!
+	entities: [NotificationEntityInput!]!
 	"""
 	Status operation applied to every matching notification.
 	"""

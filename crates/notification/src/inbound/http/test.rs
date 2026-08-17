@@ -26,7 +26,7 @@ use crate::domain::{
         DisabledNotificationType, UserNotificationRow,
         device::DeviceType,
         request::{
-            GetNotificationsByEventItemIdsRequest, UpdateNotificationsForEntityRequest,
+            GetNotificationsByEventItemIdsRequest, UpdateNotificationsForEntitiesRequest,
             UpdateNotificationsRequest,
         },
         signing::SignedUrl,
@@ -99,9 +99,9 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
-    fn update_notifications_for_entity<T: DeserializeOwned + Send>(
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
         &self,
-        _req: UpdateNotificationsForEntityRequest,
+        _req: UpdateNotificationsForEntitiesRequest,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
         async { unreachable!("should not be called") }
     }
@@ -583,9 +583,9 @@ impl NotificationReader for PresignedTestService {
         async { unreachable!() }
     }
 
-    fn update_notifications_for_entity<T: DeserializeOwned + Send>(
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
         &self,
-        _req: UpdateNotificationsForEntityRequest,
+        _req: UpdateNotificationsForEntitiesRequest,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
         async { unreachable!() }
     }

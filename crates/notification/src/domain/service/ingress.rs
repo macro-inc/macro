@@ -14,7 +14,7 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::request::{
     BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
-    NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntityRequest,
+    NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntitiesRequest,
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
@@ -69,10 +69,10 @@ pub trait NotificationReader: Send + Sync + 'static {
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
-    /// Update every active notification associated with an entity for a user.
-    fn update_notifications_for_entity<T: DeserializeOwned + Send>(
+    /// Update every active notification associated with any requested entity for a user.
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
         &self,
-        req: UpdateNotificationsForEntityRequest,
+        req: UpdateNotificationsForEntitiesRequest,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 
     /// Get a user's non-deleted notifications, paginated.
@@ -668,14 +668,28 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications_for_entity<T: DeserializeOwned + Send>(
+    async fn update_notifications_for_entities<T: DeserializeOwned + Send>(
         &self,
-        req: UpdateNotificationsForEntityRequest<'_>,
+        req: UpdateNotificationsForEntitiesRequest<'_>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
-        let notification_ids = self
-            .repository
-            .get_notification_ids_for_entity(req.user_id.copied(), &req.entity)
-            .await?;
+        let mut unique_entities = HashSet::new();
+        let entity_lookups = req
+            .entities
+            .iter()
+            .filter(|entity| unique_entities.insert((*entity).clone()))
+            .map(|entity| {
+                self.repository
+                    .get_notification_ids_for_entity(req.user_id.copied(), entity)
+            });
+        let mut seen_notification_ids = HashSet::new();
+        let notification_ids = join_all(entity_lookups)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .filter(|notification_id| seen_notification_ids.insert(*notification_id))
+            .collect::<Vec<_>>();
 
         if notification_ids.is_empty() {
             return Ok(Vec::new());

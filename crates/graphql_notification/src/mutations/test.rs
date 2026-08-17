@@ -22,7 +22,7 @@ impl QueryRoot {
 #[derive(Default)]
 struct CapturingNotificationService {
     calls: Mutex<Vec<(String, Vec<Uuid>, &'static str)>>,
-    entity_calls: Mutex<Vec<(String, EntityType, String, &'static str)>>,
+    entity_calls: Mutex<Vec<(String, Vec<(EntityType, String)>, &'static str)>>,
 }
 
 fn operation_name(status: &NotificationStatus) -> &'static str {
@@ -92,25 +92,33 @@ impl NotificationMutationService for CapturingNotificationService {
             .collect())
     }
 
-    async fn update_notifications_for_entity(
+    async fn update_notifications_for_entities(
         &self,
         user_id: MacroUserIdStr<'static>,
-        entity: Entity<'static>,
+        entities: Vec<Entity<'static>>,
         status: NotificationStatus,
     ) -> Result<Vec<UserNotificationRow<NotifEvent>>, Report> {
         let operation = operation_name(&status);
         self.entity_calls.lock().unwrap().push((
             user_id.to_string(),
-            entity.entity_type,
-            entity.entity_id.to_string(),
+            entities
+                .iter()
+                .map(|entity| (entity.entity_type, entity.entity_id.to_string()))
+                .collect(),
             operation,
         ));
-        Ok(vec![notification_row(
-            user_id,
-            Uuid::from_u128(1),
-            entity,
-            &status,
-        )])
+        Ok(entities
+            .into_iter()
+            .enumerate()
+            .map(|(index, entity)| {
+                notification_row(
+                    user_id.clone(),
+                    Uuid::from_u128(index as u128 + 1),
+                    entity,
+                    &status,
+                )
+            })
+            .collect())
     }
 }
 
@@ -174,7 +182,7 @@ async fn update_notifications_maps_operation_and_returns_normalized_rows_in_orde
 }
 
 #[tokio::test]
-async fn update_notifications_for_entity_maps_entity_and_operation() {
+async fn update_notifications_for_entity_maps_entities_and_operation() {
     let service = Arc::new(CapturingNotificationService::default());
     let user = MacroUserIdStr::try_from_email("entity-user@example.com").unwrap();
     let schema = Schema::build(
@@ -190,8 +198,10 @@ async fn update_notifications_for_entity_maps_entity_and_operation() {
         .execute(
             r#"mutation {
                 updateNotificationsForEntity(input: {
-                    entityType: DOCUMENT,
-                    entityId: "document-1",
+                    entities: [
+                        { entityType: DOCUMENT, entityId: "document-1" },
+                        { entityType: CHANNEL_MESSAGE, entityId: "message-1" }
+                    ],
                     operation: MARK_DONE
                 }) {
                     id
@@ -219,11 +229,21 @@ async fn update_notifications_for_entity_maps_entity_and_operation() {
         "document-1"
     );
     assert_eq!(
+        data["updateNotificationsForEntity"][1]["entityType"],
+        "CHANNEL_MESSAGE"
+    );
+    assert_eq!(
+        data["updateNotificationsForEntity"][1]["entityId"],
+        "message-1"
+    );
+    assert_eq!(
         service.entity_calls.lock().unwrap().as_slice(),
         [(
             "macro|entity-user@example.com".to_string(),
-            EntityType::Document,
-            "document-1".to_string(),
+            vec![
+                (EntityType::Document, "document-1".to_string()),
+                (EntityType::ChannelMessage, "message-1".to_string()),
+            ],
             "done",
         )]
     );

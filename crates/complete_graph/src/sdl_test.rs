@@ -77,6 +77,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
         "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
         "input UpdateNotificationsForEntityInput {",
+        "entities: [NotificationEntityInput!]!",
+        "input NotificationEntityInput {",
         "entityType: GraphqlEntityType!",
         "entityId: ID!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",

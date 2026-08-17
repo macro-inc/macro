@@ -9,7 +9,7 @@ use notification::domain::{
     models::{
         UserNotificationRow,
         request::{
-            NotificationStatus, UpdateNotificationsForEntityRequest, UpdateNotificationsRequest,
+            NotificationStatus, UpdateNotificationsForEntitiesRequest, UpdateNotificationsRequest,
         },
     },
     service::NotificationReader,
@@ -32,11 +32,11 @@ pub trait NotificationMutationService: Send + Sync + 'static {
         status: NotificationStatus,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<NotifEvent>>, Report>> + Send;
 
-    /// Update every user-owned notification associated with an entity.
-    fn update_notifications_for_entity(
+    /// Update every user-owned notification associated with any requested entity.
+    fn update_notifications_for_entities(
         &self,
         user_id: MacroUserIdStr<'static>,
-        entity: Entity<'static>,
+        entities: Vec<Entity<'static>>,
         status: NotificationStatus,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<NotifEvent>>, Report>> + Send;
 }
@@ -59,18 +59,18 @@ where
         .await
     }
 
-    async fn update_notifications_for_entity(
+    async fn update_notifications_for_entities(
         &self,
         user_id: MacroUserIdStr<'static>,
-        entity: Entity<'static>,
+        entities: Vec<Entity<'static>>,
         status: NotificationStatus,
     ) -> Result<Vec<UserNotificationRow<NotifEvent>>, Report> {
         // Qualify the trait call to disambiguate it from this method and avoid recursive self-calls.
-        NotificationReader::update_notifications_for_entity::<NotifEvent>(
+        NotificationReader::update_notifications_for_entities::<NotifEvent>(
             self,
-            UpdateNotificationsForEntityRequest {
+            UpdateNotificationsForEntitiesRequest {
                 user_id,
-                entity,
+                entities,
                 status,
             },
         )
@@ -94,10 +94,10 @@ impl NotificationMutationService for NoOpNotificationMutationService {
         ))
     }
 
-    async fn update_notifications_for_entity(
+    async fn update_notifications_for_entities(
         &self,
         _user_id: MacroUserIdStr<'static>,
-        _entity: Entity<'static>,
+        _entities: Vec<Entity<'static>>,
         _status: NotificationStatus,
     ) -> Result<Vec<UserNotificationRow<NotifEvent>>, Report> {
         Err(rootcause::report!(
@@ -156,13 +156,20 @@ pub struct UpdateNotificationsInput {
     pub operation: GraphqlNotificationUpdateOperation,
 }
 
-/// Input for updating all notifications associated with an entity.
+/// Canonical entity reference used to select notifications for updating.
 #[derive(InputObject)]
-pub struct UpdateNotificationsForEntityInput {
+pub struct NotificationEntityInput {
     /// Canonical entity type.
     pub entity_type: GraphqlEntityType,
     /// Canonical entity identifier.
     pub entity_id: ID,
+}
+
+/// Input for updating all notifications associated with any requested entity.
+#[derive(InputObject)]
+pub struct UpdateNotificationsForEntityInput {
+    /// Canonical entities whose notifications should be updated.
+    pub entities: Vec<NotificationEntityInput>,
     /// Status operation applied to every matching notification.
     pub operation: GraphqlNotificationUpdateOperation,
 }
@@ -194,20 +201,26 @@ where
         Ok(to_graphql_notifications(notifications))
     }
 
-    /// Update all notifications associated with an entity for the authenticated user.
+    /// Update all notifications associated with the requested entities for the authenticated user.
     async fn update_notifications_for_entity(
         &self,
         ctx: &Context<'_>,
         input: UpdateNotificationsForEntityInput,
     ) -> async_graphql::Result<Vec<GraphqlNotification>> {
         let user_id = require_authenticated_user(ctx)?;
-        let entity = input
-            .entity_type
-            .into_model()
-            .with_entity_string(input.entity_id.0);
+        let entities = input
+            .entities
+            .into_iter()
+            .map(|entity| {
+                entity
+                    .entity_type
+                    .into_model()
+                    .with_entity_string(entity.entity_id.0)
+            })
+            .collect();
         let service = ctx.data::<Arc<S>>()?;
         let notifications = service
-            .update_notifications_for_entity(user_id, entity, input.operation.into())
+            .update_notifications_for_entities(user_id, entities, input.operation.into())
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
 

@@ -285,13 +285,13 @@ pub struct UpdateNotificationsRequest<'a> {
     pub status: NotificationStatus,
 }
 
-/// Request to update every notification associated with an entity for a user.
+/// Request to update every notification associated with any of several entities for a user.
 #[derive(Debug)]
-pub struct UpdateNotificationsForEntityRequest<'a> {
+pub struct UpdateNotificationsForEntitiesRequest<'a> {
     /// The user whose notifications are being updated.
     pub user_id: MacroUserIdStr<'a>,
-    /// The primary or secondary entity whose notifications should be updated.
-    pub entity: Entity<'a>,
+    /// The primary or secondary entities whose notifications should be updated.
+    pub entities: Vec<Entity<'a>>,
     /// The status to set on matching notifications.
     pub status: NotificationStatus,
 }
