@@ -301,6 +301,7 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "mcp_client",
+ "mcp_select",
  "model",
  "model-entity",
  "model_notifications",
@@ -313,6 +314,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "notification",
+ "pipedream_mcp",
  "projects",
  "prompt",
  "properties",
@@ -4386,6 +4388,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "mcp_select",
  "memory",
  "model",
  "model-entity",
@@ -4397,6 +4400,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "pipedream_mcp",
  "prompt",
  "readonly_pool",
  "redis",
@@ -7549,7 +7553,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
- "mcp_client",
+ "mcp_select",
  "model-entity",
  "models_properties",
  "properties",
@@ -9173,6 +9177,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp_select"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "macro_user_id",
+ "mcp_client",
+ "pipedream_mcp",
+ "serde_json",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
@@ -10531,6 +10549,7 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "mcp_client",
+ "mcp_select",
  "serde",
  "serde_json",
  "sqlx",
@@ -11237,6 +11256,30 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pipedream_mcp"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "axum",
+ "futures",
+ "macro_authorization",
+ "macro_user_id",
+ "model-error-response",
+ "reqwest 0.13.4",
+ "rmcp",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
 
 [[package]]
 name = "piper"

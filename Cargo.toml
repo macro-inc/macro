@@ -47,6 +47,8 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/mcp_select",
+  "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/prompt",
   "crates/properties_service",

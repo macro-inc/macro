@@ -91,7 +91,11 @@ export const authBacklog = [
 
 export const cognitionExcluded = [
   'addMcpServer',
+  'browsePipedreamMcpCatalog',
   'callTool',
+  'completePipedreamMcpConnection',
+  'createPipedreamMcpToken',
+  'deletePipedreamMcpConnection',
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
@@ -101,6 +105,7 @@ export const cognitionExcluded = [
   'getMemoryHandler',
   'healthHandler',
   'listMcpServers',
+  'listPipedreamMcpConnections',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
@@ -113,6 +118,7 @@ export const cognitionExcluded = [
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
+  'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
   'upsertAiProjection',
