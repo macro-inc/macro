@@ -50,7 +50,7 @@ const report = (event: CacheEngineRuntimeEvent): void => {
     admissionBarrier:
       event.kind === 'request-admitted' &&
       event.request.kind === 'read' &&
-      event.request.query.includes('WP12AdmissionBarrier'),
+      event.request.query.includes('CacheAdmissionBarrier'),
     reason: event.kind === 'fatal' ? event.reason : undefined,
     fatalCode: event.kind === 'fatal' ? event.fatalCode : undefined,
     performanceMemoryAvailable:

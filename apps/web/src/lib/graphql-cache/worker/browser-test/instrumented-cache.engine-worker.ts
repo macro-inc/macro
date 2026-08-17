@@ -44,7 +44,7 @@ if (typeof WorkerConstructor === 'function') {
 
 const report = async (event: CacheEngineRuntimeEvent): Promise<void> => {
   channel ??= new BroadcastChannel(
-    `graphql-cache-wp11-measurement:${event.activation.scope}`
+    `graphql-cache-performance:${event.activation.scope}`
   );
   if (event.kind === 'activation-started') {
     activationStartedAt = performance.now();

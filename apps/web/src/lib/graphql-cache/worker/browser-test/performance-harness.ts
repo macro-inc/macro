@@ -1,5 +1,5 @@
 import { createWorkerCacheHost } from '../../host/worker-host';
-import instrumentedEngineWorkerUrl from './measurement-cache.engine-worker.ts?worker&url';
+import instrumentedEngineWorkerUrl from './instrumented-cache.engine-worker.ts?worker&url';
 
 const resultElement = document.querySelector<HTMLElement>('#result');
 if (!resultElement) throw new Error('missing result element');
@@ -68,7 +68,7 @@ type WorkerTelemetry =
       sharedArrayBufferAvailable: boolean;
     };
 
-export interface CacheWasmBrowserMeasurement {
+export interface CacheWasmPerformanceSample {
   mode: 'development' | 'production';
   activationMs: number;
   browserReadyMs: number;
@@ -109,7 +109,7 @@ const waitFor = <T>(
     );
   });
 
-const QUERY = `query Wp11Measurement($input: SoupInput!) {
+const QUERY = `query CachePerformance($input: SoupInput!) {
   user {
     id
     soup(input: $input) {
@@ -122,8 +122,8 @@ const QUERY = `query Wp11Measurement($input: SoupInput!) {
   }
 }`;
 
-async function runMeasurement(): Promise<CacheWasmBrowserMeasurement> {
-  const scope = `wp11-${crypto.randomUUID()}`;
+async function runMeasurement(): Promise<CacheWasmPerformanceSample> {
+  const scope = `cache-performance-${crypto.randomUUID()}`;
   const started = performance.now();
   let activationMs = 0;
   let sharedWorkerConstructions = 0;
@@ -143,7 +143,7 @@ async function runMeasurement(): Promise<CacheWasmBrowserMeasurement> {
     }
   };
   const telemetryChannel = new BroadcastChannel(
-    `graphql-cache-wp11-measurement:${scope}`
+    `graphql-cache-performance:${scope}`
   );
   let rejectDatabaseReady: ((error: Error) => void) | undefined;
   const databaseReady = waitFor<
@@ -174,7 +174,7 @@ async function runMeasurement(): Promise<CacheWasmBrowserMeasurement> {
   const firstReady = host.readQuery({
     opKey: 1,
     query: QUERY,
-    operationName: 'Wp11Measurement',
+    operationName: 'CachePerformance',
     variables: { input: { limit: 1 } },
   });
   const [ready] = await Promise.all([databaseReady, firstReady]);
@@ -204,6 +204,6 @@ async function runMeasurement(): Promise<CacheWasmBrowserMeasurement> {
   };
 }
 
-Object.assign(window, { runCacheWasmMeasurement: runMeasurement });
+Object.assign(window, { runCacheWasmPerformanceSample: runMeasurement });
 resultElement.dataset.status = 'idle';
 resultElement.textContent = JSON.stringify({ mode: __CACHE_WASM_BUILD_MODE__ });

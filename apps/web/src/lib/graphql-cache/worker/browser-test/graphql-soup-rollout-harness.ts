@@ -1,7 +1,7 @@
 export {};
 
 const result = document.querySelector<HTMLElement>('#result');
-if (!result) throw new Error('missing WP-12 GraphQL Soup result node');
+if (!result) throw new Error('missing Cache GraphQL Soup result node');
 
 const NativeWorker = globalThis.Worker;
 const NativeSharedWorker = globalThis.SharedWorker;
@@ -34,8 +34,8 @@ let posthogBeforeSendCalls = 0;
 async function initializeLocalPosthog() {
   const { analytics } = await import('@app/lib/analytics');
   if (!analytics.posthog.config.token) {
-    const disabledApiHost = `${location.origin}/__wp12-posthog-disabled`;
-    analytics.posthog.init('phc_wp12_local_test', {
+    const disabledApiHost = `${location.origin}/__cache-rollout-posthog-disabled`;
+    analytics.posthog.init('phc_cache_rollout_local_test', {
       api_host: disabledApiHost,
       flags_api_host: disabledApiHost,
       autocapture: false,
@@ -144,8 +144,8 @@ const api = {
     const lazyBeforeRead =
       workerUrls.length === 0 && sharedWorkerUrls.length === 0;
     const read = await host.readQuery({
-      query: 'query Wp12Selector { __typename }',
-      operationName: 'Wp12Selector',
+      query: 'query CacheRolloutSelector { __typename }',
+      operationName: 'CacheRolloutSelector',
     });
 
     overrideRolloutFlags(analytics, true);
@@ -182,10 +182,10 @@ const api = {
 
 declare global {
   interface Window {
-    wp12GraphqlSoupHarness: typeof api;
+    graphqlSoupRolloutHarness: typeof api;
   }
 }
 
-window.wp12GraphqlSoupHarness = api;
+window.graphqlSoupRolloutHarness = api;
 result.dataset.status = 'ready';
 result.textContent = JSON.stringify({ actualGraphqlSoupPath: true });

@@ -182,7 +182,7 @@ build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-t
     bunx --bun vite build --config src/lib/graphql-cache/worker/browser-test/vite.config.ts
     bun scripts/cache-wasm/cli.ts package-dist --dist src/lib/graphql-cache/worker/browser-test/.dist-production
 
-# Build the separate destructive-hook WASM used only by WP-12 recovery tests.
+# Build the separate destructive-hook WASM used only by cache recovery tests.
 # Its distinct name keeps it outside the one-production-cache-WASM deploy gate.
 [private]
 build-cache-wasm-browser-test-hooks:

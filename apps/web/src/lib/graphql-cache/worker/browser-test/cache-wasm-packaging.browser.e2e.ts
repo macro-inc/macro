@@ -1,14 +1,16 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
-import {
-  assertBrowserReport,
-  type CacheWasmBrowserReport,
-  type CacheWasmBrowserSample,
-  percentile95,
-} from '../../../../../scripts/cache-wasm/browser-report';
 import { CACHE_WASM_BUDGETS } from '../../../../../scripts/cache-wasm/budgets';
-import type { CacheWasmBrowserMeasurement } from './measurement-harness';
+import type { CacheWasmPerformanceSample } from './performance-harness';
+
+type CacheWasmBrowserSample = CacheWasmPerformanceSample & {
+  browser: 'chromium' | 'firefox';
+  wasmUrl: string;
+};
+
+const percentile95 = (values: number[]): number =>
+  [...values].sort((left, right) => left - right)[
+    Math.ceil(values.length * 0.95) - 1
+  ]!;
 
 const SAMPLE_COUNT = 5;
 const isProductionProject = (projectName: string): boolean =>
@@ -77,9 +79,9 @@ test('exact production CacheHost reaches the exact engine URL without a wrapper'
     sharedArrayBufferAvailable: false,
   });
   expect(report.engineWorkerUrl).toContain('cache.engine-worker');
-  expect(report.engineWorkerUrl).not.toContain('measurement-cache');
+  expect(report.engineWorkerUrl).not.toContain('instrumented-cache');
   expect(
-    requests.filter((url) => url.includes('measurement-cache.engine-worker'))
+    requests.filter((url) => url.includes('instrumented-cache.engine-worker'))
   ).toEqual([]);
   expect(
     requests.filter((url) => url.includes('cache.engine-worker'))
@@ -95,7 +97,6 @@ test('exact production CacheHost reaches the exact engine URL without a wrapper'
 });
 
 test('combined cache WASM stays lazy and meets fresh-scope startup budgets', async ({
-  browser,
   context,
   page,
 }, testInfo) => {
@@ -111,7 +112,7 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
     }
   });
 
-  await page.goto(harnessPath(testInfo.project.name, 'measurement.html'));
+  await page.goto(harnessPath(testInfo.project.name, 'performance.html'));
   await expect(page.locator('#result')).toHaveAttribute('data-status', 'idle');
   await page.waitForTimeout(250);
   expect(
@@ -119,7 +120,7 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
       const parsed = new URL(url);
       if (parsed.pathname.includes('cache_wasm')) return true;
       const enginePath =
-        /(?:cache[.-]engine-worker|measurement-cache\.engine-worker)/.test(
+        /(?:cache[.-]engine-worker|instrumented-cache\.engine-worker)/.test(
           parsed.pathname
         );
       // Vite dev loads a tiny `?worker&url` URL-export module eagerly; it does
@@ -135,14 +136,14 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
   const samples: CacheWasmBrowserSample[] = [];
   for (let index = 0; index < SAMPLE_COUNT; index++) {
     const responseCountBefore = wasmResponses.length;
-    let measurement: CacheWasmBrowserMeasurement;
+    let measurement: CacheWasmPerformanceSample;
     try {
       measurement = await page.evaluate(async () => {
         const run = (
           window as typeof window & {
-            runCacheWasmMeasurement(): Promise<CacheWasmBrowserMeasurement>;
+            runCacheWasmPerformanceSample(): Promise<CacheWasmPerformanceSample>;
           }
-        ).runCacheWasmMeasurement;
+        ).runCacheWasmPerformanceSample;
         return await run();
       });
     } catch (error) {
@@ -203,7 +204,7 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
       '/src/lib/graphql-cache/worker/cache.engine-worker.ts'
     );
     expect(instrumentedEngineUrls[0]).toContain(
-      '/measurement-cache.engine-worker.ts'
+      '/instrumented-cache.engine-worker.ts'
     );
   } else {
     expect(sharedWorkerUrls[0]).toMatch(
@@ -213,7 +214,7 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
       /\/app\/assets\/cache\.engine-worker-[\w-]+\.js$/
     );
     expect(instrumentedEngineUrls[0]).toMatch(
-      /\/app\/assets\/measurement-cache\.engine-worker-[\w-]+\.js$/
+      /\/app\/assets\/instrumented-cache\.engine-worker-[\w-]+\.js$/
     );
     expect(wasmUrls[0]).toMatch(/\/app\/assets\/cache_wasm_bg-[\w-]+\.wasm$/);
   }
@@ -236,7 +237,6 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
   const wasmHashes = [...new Set(samples.map((sample) => sample.wasmSha256))];
   expect(wasmHashes).toHaveLength(1);
 
-  const sourceMapUrls: string[] = [];
   if (production) {
     for (const workerUrl of [
       sharedWorkerUrls[0],
@@ -257,69 +257,6 @@ test('combined cache WASM stays lazy and meets fresh-scope startup budgets', asy
         contentType: expect.stringContaining('application/json'),
         hasSources: true,
       });
-      sourceMapUrls.push(`${workerUrl}.map`);
     }
-  }
-
-  const p95 = {
-    activationMs: percentile95(samples.map((sample) => sample.activationMs)),
-    browserReadyMs: browserReadyP95Ms,
-    hostFirstReadyMs: hostFirstReadyP95Ms,
-    workerActivationMs: percentile95(
-      samples.map((sample) => sample.workerActivationMs)
-    ),
-    linearMemoryBytes: percentile95(
-      samples.map((sample) => sample.linearMemoryBytes)
-    ),
-  };
-  const report: CacheWasmBrowserReport = {
-    schemaVersion: 1,
-    project: testInfo.project.name,
-    browser: browserName,
-    mode,
-    origin: new URL(page.url()).origin,
-    browserVersion: browser.version(),
-    executablePath:
-      (browserName === 'firefox'
-        ? process.env.PLAYWRIGHT_FIREFOX_EXECUTABLE_PATH
-        : process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) ?? '',
-    userAgent: await page.evaluate(() => navigator.userAgent),
-    freshScopeCount: SAMPLE_COUNT,
-    samples,
-    p95,
-    assetUrls: {
-      sharedWorkers: sharedWorkerUrls,
-      productionEngines: productionEngineUrls,
-      instrumentedEngines: instrumentedEngineUrls,
-      wasm: wasmUrls,
-    },
-    sourceMapUrls,
-    delivery: {
-      basePath: production ? '/app/' : '/',
-      wasmUrl: wasmUrls[0],
-      wasmContentType: 'application/wasm',
-      wasmContentEncoding: production ? 'br' : null,
-      wasmCompilationSucceeded: true,
-      wasmSha256: wasmHashes[0],
-      localPrecompressedOrigin: production,
-      liveS3CloudFrontVerified: false,
-    },
-  };
-  assertBrowserReport(report, {
-    browser: browserName,
-    mode,
-    project: testInfo.project.name,
-  });
-  console.log(`WP11_BROWSER_REPORT=${JSON.stringify(report)}`);
-  if (process.env.CACHE_WASM_WRITE_MEASUREMENTS === 'true') {
-    const directory = resolve(
-      import.meta.dirname,
-      '../../../../../measurements/generated'
-    );
-    mkdirSync(directory, { recursive: true });
-    writeFileSync(
-      resolve(directory, `cache-wasm-${browserName}-${mode}.json`),
-      `${JSON.stringify(report, null, 2)}\n`
-    );
   }
 });

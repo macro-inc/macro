@@ -27,7 +27,7 @@ globalThis.Worker = new Proxy(NativeWorker, {
   },
 });
 
-const scope = `wp11-exact-production-${crypto.randomUUID()}`;
+const scope = `cache-exact-production-${crypto.randomUUID()}`;
 const host = createWorkerCacheHost({
   scope,
   requestTimeoutMs: 15_000,
@@ -37,7 +37,7 @@ const host = createWorkerCacheHost({
 try {
   await host.readQuery({
     opKey: 1,
-    query: `query Wp11ExactProduction($input: SoupInput!) {
+    query: `query CacheExactProduction($input: SoupInput!) {
       user {
         id
         soup(input: $input) {
@@ -46,7 +46,7 @@ try {
         }
       }
     }`,
-    operationName: 'Wp11ExactProduction',
+    operationName: 'CacheExactProduction',
     variables: { input: { limit: 1 } },
   });
   resultElement.textContent = JSON.stringify({

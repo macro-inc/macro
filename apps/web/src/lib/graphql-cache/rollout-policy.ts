@@ -26,7 +26,7 @@ export type BrowserTursoCacheRolloutDecision = {
 };
 
 /**
- * Pure WP-12 policy. The emergency flag is intentionally independent from the
+ * Pure cache rollout policy. The emergency flag is intentionally independent from the
  * rollout flag and any true kill source wins. Undefined PostHog values fail
  * closed. Tauri returns before browser policy is considered.
  */

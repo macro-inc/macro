@@ -6,9 +6,9 @@ import type {
 } from './production-browser-wire';
 
 const resultElement = document.querySelector<HTMLElement>('#result');
-if (!resultElement) throw new Error('missing WP-12 internal result element');
+if (!resultElement) throw new Error('missing Cache internal result element');
 
-export const WP12_MUTATING_REQUEST_KINDS = [
+export const CACHE_MUTATING_REQUEST_KINDS = [
   'write',
   'enqueue-optimistic-mutation',
   'claim-next-mutation',
@@ -20,7 +20,7 @@ export const WP12_MUTATING_REQUEST_KINDS = [
   'clear',
 ] as const satisfies readonly CacheRequest['kind'][];
 
-type MutatingRequestKind = (typeof WP12_MUTATING_REQUEST_KINDS)[number];
+type MutatingRequestKind = (typeof CACHE_MUTATING_REQUEST_KINDS)[number];
 type RecoveryKind = 'incompatible-namespace' | 'corrupt-queue-payload';
 type CommandWithoutId = ProductionHarnessCommand extends infer Command
   ? Command extends ProductionHarnessCommand
@@ -223,14 +223,14 @@ const writeRequest = (value: string): ProductionCacheRequestWithoutId => ({
   variables: VARIABLES,
   data: {
     user: {
-      id: 'wp12-internal-user',
+      id: 'cache-recovery-user',
       soup: {
         nextCursor: null,
         items: [{ __typename: 'GraphqlSoupDocument', id: value }],
       },
     },
   },
-  identity: 'wp12-internal-identity',
+  identity: 'cache-recovery-identity',
 });
 
 const enqueueRequest = (
@@ -337,18 +337,18 @@ const isHit = (value: unknown): boolean =>
 
 const admissionBarrierRequest = (): ProductionCacheRequestWithoutId => ({
   kind: 'read',
-  query: QUERY.replace('query Soup', 'query WP12AdmissionBarrier'),
-  operationName: 'WP12AdmissionBarrier',
+  query: QUERY.replace('query Soup', 'query CacheAdmissionBarrier'),
+  operationName: 'CacheAdmissionBarrier',
   variables: VARIABLES,
 });
 
 async function runFaultKind(kind: MutatingRequestKind) {
   assert(
-    WP12_MUTATING_REQUEST_KINDS.includes(kind),
+    CACHE_MUTATING_REQUEST_KINDS.includes(kind),
     `unsupported mutating request kind ${kind}`
   );
   const session = new ProductionSession(
-    `wp12-fault-${kind}-${crypto.randomUUID()}`
+    `cache-recovery-fault-${kind}-${crypto.randomUUID()}`
   );
   try {
     await session.openTab('fault-tab');
@@ -445,7 +445,7 @@ async function runFaultKind(kind: MutatingRequestKind) {
       mutationAdmissions[0]?.requestId === blocked.requestId,
       'blocked admission proof did not identify the routed request'
     );
-    const mutatingKinds = new Set<string>(WP12_MUTATING_REQUEST_KINDS);
+    const mutatingKinds = new Set<string>(CACHE_MUTATING_REQUEST_KINDS);
     const unexpectedReplacementMutatingAdmissions = session.runtimeTelemetry
       .slice(replacementReadyIndex + 1, barrierIndex + 1)
       .filter(
@@ -543,7 +543,7 @@ async function applyStorageMutation(
 ): Promise<string> {
   const worker = new Worker(
     new URL('./production-cache.storage-control-worker.ts', import.meta.url),
-    { type: 'module', name: `wp12-storage-control:${kind}` }
+    { type: 'module', name: `cache-recovery-storage-control:${kind}` }
   );
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -576,7 +576,7 @@ async function applyStorageMutation(
 }
 
 async function runRecoveryKind(kind: RecoveryKind) {
-  const scope = `wp12-recovery-${kind}-${crypto.randomUUID()}`;
+  const scope = `cache-recovery-${kind}-${crypto.randomUUID()}`;
   const session = new ProductionSession(scope);
   try {
     await session.openTab('before-corruption');
@@ -689,21 +689,21 @@ async function runRecoveryKind(kind: RecoveryKind) {
 }
 
 const api = {
-  mutatingRequestKinds: WP12_MUTATING_REQUEST_KINDS,
+  mutatingRequestKinds: CACHE_MUTATING_REQUEST_KINDS,
   runFaultKind,
   runRecoveryKind,
 };
 
 declare global {
   interface Window {
-    wp12InternalHarness: typeof api;
+    cacheRecoveryHarness: typeof api;
   }
 }
 
-window.wp12InternalHarness = api;
+window.cacheRecoveryHarness = api;
 resultElement.dataset.status = 'ready';
 resultElement.textContent = JSON.stringify({
   productionInertHooks: true,
   publicCoordinatorProtocolUnchanged: true,
-  mutatingRequestKinds: WP12_MUTATING_REQUEST_KINDS,
+  mutatingRequestKinds: CACHE_MUTATING_REQUEST_KINDS,
 });

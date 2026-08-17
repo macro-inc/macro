@@ -9,7 +9,7 @@ export default defineConfig({
   testMatch: [
     'coordinator.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
-    'wp12.browser.e2e.ts',
+    'cache-lifecycle.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

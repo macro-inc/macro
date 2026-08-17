@@ -182,7 +182,7 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       // an opaque asset, so its internal relative `cache_wasm_bg.wasm` URL
       // would 404 in production. This `new URL` pattern is statically
       // analyzable, so vite emits exactly one lazy hashed binary. Explicit
-      // fetch/compile lets WP-12 separate download, compile, and instantiate.
+      // fetch/compile keeps download, compile, and instantiate separately observable.
       const wasmUrl = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
       const downloadStartedAt = now();
       let bytes: ArrayBuffer;
