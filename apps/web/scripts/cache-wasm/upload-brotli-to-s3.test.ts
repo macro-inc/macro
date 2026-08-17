@@ -55,7 +55,7 @@ describe('cache WASM S3 upload', () => {
       'utf8'
     );
     expect(webJustfile).toMatch(
-      /build-tauri:[\s\S]*inspect-dist --dist dist\n\s+bun scripts\/cache-wasm\/cli\.ts remove-sidecar --dist dist/
+      /build-tauri:[\s\S]*package-dist --dist dist\n\s+bun scripts\/cache-wasm\/cli\.ts remove-sidecar --dist dist/
     );
     expect(webJustfile).toContain(
       `zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br'`

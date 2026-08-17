@@ -1,17 +1,12 @@
 #!/usr/bin/env bun
 
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import {
-  assertInspection,
-  inspectCacheWasmDist,
-  inspectCacheWasmPackage,
-  removeCacheWasmBrotliSidecar,
-  writeCacheWasmBrotliSidecar,
-} from './inspection';
-
-const webRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const repoRoot = resolve(webRoot, '../..');
+  brotliCompressSync,
+  brotliDecompressSync,
+  constants as zlibConstants,
+} from 'node:zlib';
 
 function argument(name: string, fallback?: string): string {
   const index = process.argv.indexOf(name);
@@ -20,48 +15,65 @@ function argument(name: string, fallback?: string): string {
   return value;
 }
 
-const stringify = (value: unknown): string =>
-  JSON.stringify(
-    value,
-    (_key, candidate) =>
-      typeof candidate === 'bigint' ? candidate.toString() : candidate,
-    2
-  );
-
-function print(value: unknown): void {
-  process.stdout.write(`${stringify(value)}\n`);
+function walkFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? walkFiles(path) : [path];
+  });
 }
 
-const command = process.argv[2];
-switch (command) {
-  case 'inspect-package': {
-    const inspection = inspectCacheWasmPackage(repoRoot);
-    assertInspection('cache WASM package inspection', inspection);
-    print(inspection);
-    break;
+function oneMatchingFile(distPath: string, pattern: RegExp): string {
+  const matches = walkFiles(distPath).filter((path) =>
+    pattern.test(basename(path))
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected one cache WASM artifact in ${distPath}, found ${matches.length}`
+    );
   }
+  return matches[0];
+}
+
+const distPath = resolve(
+  argument('--dist', resolve(import.meta.dirname, '../../dist'))
+);
+const command = process.argv[2];
+
+switch (command) {
   case 'package-dist': {
-    const distPath = resolve(argument('--dist', resolve(webRoot, 'dist')));
-    const sidecarPath = writeCacheWasmBrotliSidecar(distPath);
-    print({ sidecarPath });
+    const wasmPath = oneMatchingFile(
+      distPath,
+      /^cache_wasm_bg(?:-[\w-]+)?\.wasm$/
+    );
+    const raw = readFileSync(wasmPath);
+    const compressed = brotliCompressSync(raw, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_GENERIC,
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.byteLength,
+      },
+    });
+    if (!brotliDecompressSync(compressed).equals(raw)) {
+      throw new Error(
+        'Brotli sidecar does not decompress to the raw cache WASM'
+      );
+    }
+    const sidecarPath = `${wasmPath}.br`;
+    writeFileSync(sidecarPath, compressed);
+    process.stdout.write(`${sidecarPath}\n`);
     break;
   }
   case 'remove-sidecar': {
-    const distPath = resolve(argument('--dist', resolve(webRoot, 'dist')));
-    const removedPath = removeCacheWasmBrotliSidecar(distPath);
-    print({ removedPath });
-    break;
-  }
-  case 'inspect-dist': {
-    const distPath = resolve(argument('--dist', resolve(webRoot, 'dist')));
-    const expectedBase = argument('--base', '/app/');
-    const inspection = inspectCacheWasmDist(repoRoot, distPath, expectedBase);
-    assertInspection('cache WASM dist inspection', inspection);
-    print(inspection);
+    const sidecarPath = oneMatchingFile(
+      distPath,
+      /^cache_wasm_bg(?:-[\w-]+)?\.wasm\.br$/
+    );
+    rmSync(sidecarPath);
+    process.stdout.write(`${sidecarPath}\n`);
     break;
   }
   default:
     throw new Error(
-      'usage: cli.ts <inspect-package|package-dist|remove-sidecar|inspect-dist> [options]'
+      'usage: cli.ts <package-dist|remove-sidecar> --dist <directory>'
     );
 }

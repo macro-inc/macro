@@ -66,17 +66,14 @@ node_heap := "--max-old-space-size=6144"
 build-dev: build-cache-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
-    bun scripts/cache-wasm/cli.ts inspect-dist --dist dist
 
 build-staging: build-cache-wasm
     MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
-    bun scripts/cache-wasm/cli.ts inspect-dist --dist dist
 
 build-prod: build-cache-wasm
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
-    bun scripts/cache-wasm/cli.ts inspect-dist --dist dist
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
@@ -84,7 +81,6 @@ build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
-    bun scripts/cache-wasm/cli.ts inspect-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
 
 # Build the bundle, zip it, and install it at
@@ -171,11 +167,6 @@ cycles-ci:
 # engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
     wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
-    bun {{ justfile_directory() }}/scripts/cache-wasm/cli.ts inspect-package
-
-# Deterministic package and production-dist structure/size inspection.
-inspect-cache-wasm: build-cache-wasm
-    if [ -d dist ]; then bun scripts/cache-wasm/cli.ts inspect-dist --dist dist; fi
 
 # Build the production browser harness served by Vite preview.
 build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-test-hooks
