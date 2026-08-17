@@ -1,4 +1,4 @@
-import { ENTITY_ACTIVITY_PREVIEW_LIMIT } from '@queries/activity/constants';
+import { registerEntityActivityRevalidator } from '@queries/activity/push-registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIVITY_PUSH_DEBOUNCE_MS,
@@ -53,62 +53,42 @@ describe('createActivityUpdatesHandler', () => {
     vi.useRealTimers();
   });
 
-  it('coalesces a burst into one pass refetching page 0 and matching entity variants', async () => {
+  it('coalesces a burst into one page-0 refetch and one registry notification', async () => {
     const client = fakeClient();
     const host = fakeHost({
       MyActivity: [
         { variables: { input: { limit: 50, cursor: null } } },
         { variables: { input: { limit: 50, cursor: 'deeper-page' } } },
       ],
-      // Recovered variants carry only the soup field's own arguments — the
-      // deeper `activity(limit:)` argument is never inverted back.
-      EntityActivity: [
-        {
-          variables: {
-            input: { filters: { documentFilter: { literal: { id: DOC_ID } } } },
-          },
-        },
-        {
-          variables: {
-            input: {
-              filters: { documentFilter: { literal: { id: OTHER_ID } } },
-            },
-          },
-        },
-      ],
     });
     const handler = createActivityUpdatesHandler({
       client: client as never,
       host,
     });
+    const revalidator = vi.fn();
+    const unregister = registerEntityActivityRevalidator(revalidator);
+    try {
+      handler(pushedEvent(DOC_ID));
+      handler(pushedEvent(DOC_ID));
+      handler(pushedEvent(OTHER_ID));
+      expect(client.query).not.toHaveBeenCalled();
+      expect(revalidator).not.toHaveBeenCalled();
 
-    handler(pushedEvent(DOC_ID));
-    handler(pushedEvent(DOC_ID));
-    expect(client.query).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
 
-    await vi.advanceTimersByTimeAsync(MAX_FLUSH_DELAY_MS + 1);
-
-    // One feed page-0 refetch (the deeper page is skipped) and one entity
-    // refetch (the other entity's variant is untouched), network-only.
-    expect(client.query).toHaveBeenCalledTimes(2);
-    const calls = client.query.mock.calls as unknown as Array<
-      [unknown, Record<string, unknown>, { requestPolicy: string }]
-    >;
-    expect(
-      calls.every(([, , context]) => context.requestPolicy === 'network-only')
-    ).toBe(true);
-    expect(JSON.stringify(calls[1]?.[1])).toContain(DOC_ID);
-    // The refetch restores the preview limit the panel's variant reads;
-    // without it the response writes under `activity(limit: null)`.
-    expect(calls[1]?.[1]).toMatchObject({
-      limit: ENTITY_ACTIVITY_PREVIEW_LIMIT,
-    });
-    expect(JSON.stringify(calls.map(([, vars]) => vars))).not.toContain(
-      'deeper-page'
-    );
-    expect(JSON.stringify(calls.map(([, vars]) => vars))).not.toContain(
-      OTHER_ID
-    );
+      // One feed page-0 refetch (the deeper page is skipped), network-only.
+      expect(client.query).toHaveBeenCalledTimes(1);
+      const calls = client.query.mock.calls as unknown as Array<
+        [unknown, Record<string, unknown>, { requestPolicy: string }]
+      >;
+      expect(calls[0]?.[2]).toMatchObject({ requestPolicy: 'network-only' });
+      expect(JSON.stringify(calls[0]?.[1])).not.toContain('deeper-page');
+      // Mounted entity panels hear about the whole burst exactly once.
+      expect(revalidator).toHaveBeenCalledTimes(1);
+      expect(revalidator).toHaveBeenCalledWith(new Set([DOC_ID, OTHER_ID]));
+    } finally {
+      unregister();
+    }
   });
 
   it('ignores cache deletions', async () => {
