@@ -1,6 +1,6 @@
+import { createEffect, createSignal, on } from 'solid-js';
 import type { ThemePrevious, ThemeReactive } from '../types/themeTypes';
 import { setThemeUpdate } from './themeSignals';
-import { createEffect, createSignal, on } from 'solid-js';
 
 export const themeReactive: ThemeReactive = {
   a0: {

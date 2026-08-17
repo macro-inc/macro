@@ -1,3 +1,6 @@
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { cn } from '@ui';
+import { createMemo, For } from 'solid-js';
 import {
   currentThemeId,
   isThemeSaved,
@@ -5,13 +8,9 @@ import {
   showLightThemes,
   themes,
 } from '../signals/themeSignals';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
 import { ThemeChips } from './ThemeChips';
 import { ThemeCrud } from './ThemeCrud';
-import { cn } from '@ui';
-
-import { createMemo, For } from 'solid-js';
 
 function ThemeList() {
   const analytics = useAnalytics();

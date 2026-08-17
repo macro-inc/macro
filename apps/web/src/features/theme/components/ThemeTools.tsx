@@ -1,10 +1,10 @@
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { saveTheme, updateTheme } from '../utils/themeUtils';
+import { isMobile } from '@core/mobile/isMobile';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
 import IconShuffle from '@phosphor-icons/core/regular/shuffle.svg?component-solid';
-import { isMobile } from '@core/mobile/isMobile';
-import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
+import { createMemo, Show } from 'solid-js';
+import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { saveTheme, updateTheme } from '../utils/themeUtils';
 
 function ThemeTools(props: {
   class?: string;

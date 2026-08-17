@@ -6,9 +6,9 @@ import {
   type Setter,
   untrack,
 } from 'solid-js';
-import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
-import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
+import type { ThemeReactiveColor } from '../types/themeTypes';
+import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import { ColorPickerPopover } from './ColorPickerPopover';
 
 const displayType = () => 'hex';

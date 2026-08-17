@@ -1,13 +1,13 @@
-import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
 import IconDotsThreeVertical from '@phosphor/dots-three-vertical.svg';
-import { deleteTheme, exportTheme } from '../utils/themeUtils';
+import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
+import { Button, Dropdown } from '@ui';
+import { createMemo, Show } from 'solid-js';
 import {
   setDarkModeTheme,
   setLightModeTheme,
   userThemes,
 } from '../signals/themeSignals';
-import { createMemo, Show } from 'solid-js';
-import { Button, Dropdown } from '@ui';
+import { deleteTheme, exportTheme } from '../utils/themeUtils';
 
 interface ThemeCrudProps {
   themeId: string;

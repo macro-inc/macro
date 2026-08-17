@@ -1,9 +1,10 @@
+import { makePersisted } from '@solid-primitives/storage';
+import { createMemo, createSignal } from 'solid-js';
 import {
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
   DEFAULT_THEMES,
 } from '../constants';
-import { createMemo, createSignal } from 'solid-js';
 import type {
   ThemeColorTokens,
   ThemeV0,
@@ -17,7 +18,6 @@ import {
 } from '../utils/themeMigrations';
 import { isThemeV2, isThemeV3 } from '../utils/themeValidation';
 import { normalizeThemeColorTokens } from '../utils/themeVNext';
-import { makePersisted } from '@solid-primitives/storage';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 

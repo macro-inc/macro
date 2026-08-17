@@ -14,6 +14,7 @@ import {
   For,
   Show,
 } from 'solid-js';
+import { themeColorTokens } from '../signals/themeSignals';
 import {
   contentTokens,
   edgeTokens,
@@ -21,7 +22,6 @@ import {
   paletteTokens,
   surfaceTokens,
 } from '../types/themeTypes';
-import { themeColorTokens } from '../signals/themeSignals';
 import {
   convertOklchTo,
   getOklch,

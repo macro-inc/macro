@@ -1,3 +1,5 @@
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import { cn } from '@ui';
 import {
   type ComponentProps,
   Show,
@@ -5,8 +7,6 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import { cn } from '@ui';
 import type { ThemeV3 } from '../types/themeTypes';
 import { ThemeChips } from './ThemeChips';
 

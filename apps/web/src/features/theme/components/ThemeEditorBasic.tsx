@@ -1,6 +1,6 @@
 import { batch, createEffect, createSignal, type JSX, untrack } from 'solid-js';
-import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
+import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import { ColorPickerPopover } from './ColorPickerPopover';
 

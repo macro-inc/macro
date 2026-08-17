@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { DEFAULT_THEMES } from '@theme/constants';
+import { inputColorTokens, semanticTokens } from '@theme/types/themeTypes';
 import {
   isThemeV2,
   isThemeV3,
   parseThemeV2Json,
   parseThemeV3Json,
 } from '@theme/utils/themeValidation';
-import { inputColorTokens, semanticTokens } from '@theme/types/themeTypes';
-import { DEFAULT_THEMES } from '@theme/constants';
+import { describe, expect, it } from 'vitest';
 
 const validThemeJson = JSON.stringify({
   id: 'test-theme-id',

@@ -1,6 +1,6 @@
-import { toast } from '@core/component/Toast/Toast';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { toast } from '@core/component/Toast/Toast';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import CaretDownIcon from '@phosphor/caret-down.svg';

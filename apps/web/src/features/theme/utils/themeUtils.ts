@@ -1,3 +1,7 @@
+import { toast } from '@core/component/Toast/Toast';
+import { batch, createEffect, on } from 'solid-js';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
+import { themeReactive } from '../signals/themeReactive';
 import {
   currentThemeId,
   darkModeTheme,
@@ -23,10 +27,6 @@ import type {
   ThemeV2Tokens,
   ThemeV3,
 } from '../types/themeTypes';
-import { themeReactive } from '../signals/themeReactive';
-import { toast } from '@core/component/Toast/Toast';
-import { batch, createEffect, on } from 'solid-js';
-import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
 import { getOklch } from './colorUtil';
 import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';

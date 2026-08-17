@@ -1,4 +1,4 @@
-import { ThemeV3 } from '../types/themeTypes';
+import type { ThemeV3 } from '../types/themeTypes';
 
 export const rainTheme: ThemeV3 = {
   id: 'Rain',
