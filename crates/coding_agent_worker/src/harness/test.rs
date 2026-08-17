@@ -2,13 +2,11 @@ use super::*;
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
-use std::path::PathBuf;
 
 fn harness(command: &str) -> Harness {
     Harness {
         command: command.to_owned(),
         args: Vec::new(),
-        cwd: PathBuf::from("."),
     }
 }
 

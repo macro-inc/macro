@@ -1,5 +1,6 @@
-//! The worker's one input: a TOML file describing the session to serve and
-//! the harness to run for it. See `config.example.toml` at the crate root.
+//! The daemon's one input: a TOML file describing the bot it serves, the
+//! webhook server it listens on, and the harness it runs per session. See
+//! `config.example.toml` at the crate root.
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -7,37 +8,74 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 mod test;
 
-/// Everything the worker needs, parsed from one TOML file.
+/// Everything the daemon needs, parsed from one TOML file.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// The session this worker serves and how to reach its gateway.
-    pub session: Session,
-    /// The harness process to spawn and bridge.
+    /// The Macro deployment this bot's sessions live in.
+    #[serde(rename = "macro")]
+    pub macro_api: MacroApi,
+    /// The webhook server this daemon listens on.
+    pub server: Server,
+    /// The harness process spawned per session.
     pub harness: Harness,
-    /// The workspace the harness runs against.
-    #[allow(dead_code)] // consumed by the workspace-setup TODO
+    /// The workspace every session runs against.
     pub workspace: Workspace,
 }
 
-/// The session this worker serves and how to reach its gateway.
+/// The Macro deployment this bot's sessions live in, and how to act as the
+/// bot there.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Session {
-    /// Agent session id, minted by the service that created the session.
-    pub id: String,
-    /// The session's dial-in endpoint: the `gatewayUrl` returned by
-    /// `POST /agent-sessions`, taken verbatim.
-    pub gateway_url: String,
-    /// The bot's API token (`mbot_...`), presented on the dial.
+pub struct MacroApi {
+    /// Base URL of the agent-harness service, e.g.
+    /// `http://localhost:50009/agent-harness`. Sessions are created and
+    /// prompted here, and its `ws(s)` twin hosts the runtime gateway.
+    pub api_url: String,
+    /// Base URL of the storage service, e.g. `http://localhost:50009/storage`.
+    /// Hosts the bots and webhook APIs the daemon registers itself with.
+    pub storage_url: String,
+    /// The user who owns the bot; webhook registration acts for them.
+    pub owner_user_id: String,
+    /// The bot's API token (`mbot_...`).
     pub bot_token: String,
-    /// Bot scope the dial authorizes under; `user` unless the bot is
+    /// Bot scope requests authorize under; `user` unless the bot is
     /// team-owned and should act in its team scope.
     #[serde(default = "default_bot_scope")]
     pub bot_scope: String,
 }
 
-/// The harness process to spawn and bridge. Generic on purpose: any binary
+impl MacroApi {
+    /// The dial-in URL for a session on this deployment's runtime gateway:
+    /// the API base with a websocket scheme.
+    pub fn gateway_url(&self, session_id: &str) -> String {
+        let base = self.api_url.trim_end_matches('/');
+        let base = base
+            .replacen("https://", "wss://", 1)
+            .replacen("http://", "ws://", 1);
+        format!("{base}/runtime/{session_id}/ws")
+    }
+}
+
+/// The webhook server this daemon listens on.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Server {
+    /// Port `POST /macro-events` is served on.
+    pub port: u16,
+    /// The URL webhook deliveries reach this daemon at - what the feed is
+    /// registered with. Locally that is the stack's relay
+    /// (`http://sdk-webhook-relay:8787/macro-events`); in production, a
+    /// public HTTPS endpoint.
+    pub public_url: String,
+    /// Explicit signing secret, overriding boot-time feed registration.
+    /// Normally absent: the daemon registers its own feed and keeps the
+    /// minted secret in a state file next to the config.
+    #[serde(default)]
+    pub signing_secret: Option<String>,
+}
+
+/// The harness process spawned per session. Generic on purpose: any binary
 /// speaking ACP over stdio fits here - opencode, claude, hermes - so a new
 /// harness is a config change, not code.
 #[derive(Debug, Clone, Deserialize)]
@@ -48,17 +86,20 @@ pub struct Harness {
     /// Arguments, e.g. `["acp"]`.
     #[serde(default)]
     pub args: Vec<String>,
-    /// Working directory the harness runs in.
-    pub cwd: PathBuf,
 }
 
-/// The workspace the harness runs against.
+/// The workspace every session runs against.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workspace {
-    /// Repository to make available at the harness's cwd.
-    #[allow(dead_code)] // consumed by the workspace-setup TODO
-    pub repo_url: String,
+    /// Absolute directory harnesses run in; sent as each session's
+    /// workspace at creation.
+    pub path: PathBuf,
+    /// Repository nominally checked out at `path`, recorded on each
+    /// session it serves. Informational: having the repo cloned there is
+    /// the operator's job.
+    #[serde(default)]
+    pub repo_url: Option<String>,
 }
 
 fn default_bot_scope() -> String {
@@ -77,7 +118,7 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
-    /// The file is not a valid worker config.
+    /// The file is not a valid daemon config.
     #[error("invalid config at {path}")]
     Parse {
         /// The path that failed.
