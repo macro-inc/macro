@@ -53,6 +53,7 @@ import {
   storageServiceClient,
 } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -62,7 +63,7 @@ import {
   cn,
   Dropdown,
   Panel,
-  ToggleSwitch,
+  SegmentedControl,
   Tooltip,
 } from '@ui';
 import type { Result } from 'neverthrow';
@@ -82,17 +83,26 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { match } from 'ts-pattern';
 import { CustomScrollbar } from '../CustomScrollbar';
 import { ForwardToChannel } from '../ForwardToChannel';
 import { Permissions } from '../SharePermissions';
 import { toast } from '../Toast/Toast';
 import { ScrollIndicators } from '../VerticalScrollIndicators';
 import { openLoginModal } from './LoginButton';
+import {
+  buildLinkSharePayload,
+  buildLinkShareScopePayload,
+  getLinkShareScope,
+  getLinkShareScopeCopy,
+  getShareStatus,
+  LINK_SHARE_SCOPE_OPTIONS,
+  type LinkSharePayload,
+  type LinkShareScope,
+} from './linkShare';
 
 false && clickOutside;
 
-const isPublicLinkDisabledForItem = (itemType: ItemType): boolean =>
+const isLinkSharingDisabledForItem = (itemType: ItemType): boolean =>
   itemType === 'email' || itemType === 'project';
 
 interface IShareDialogContext {
@@ -257,6 +267,70 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
   );
 }
 
+interface LinkSharingControlsProps {
+  linkShare: LinkShare | null | undefined;
+  linkShareAccessLevel: AccessLevel | null | undefined;
+  hasExplicitShares: boolean;
+  setLinkShareScope: (scope: LinkShareScope) => void;
+  setLinkShareAccessLevel: (accessLevel: AccessLevel | null) => void;
+  copyLink: () => void;
+}
+
+function LinkSharingControls(props: LinkSharingControlsProps) {
+  const scope = () => getLinkShareScope(props.linkShare);
+  const scopeCopy = () => getLinkShareScopeCopy(scope());
+  const shareStatus = () =>
+    getShareStatus(props.linkShare, props.hasExplicitShares);
+
+  return (
+    <div class="flex flex-col gap-3 p-4 text-sm text-ink">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="font-medium">{scopeCopy().title}</span>
+          <Tooltip label={shareStatus().tooltip}>
+            <div
+              class={cn(
+                'flex items-center justify-center rounded-xl border px-2 py-0.5',
+                shareStatus().label === 'Just me'
+                  ? 'border-edge-muted bg-edge-muted text-ink-extra-muted'
+                  : 'border-accent/30 bg-accent/10 text-accent'
+              )}
+            >
+              <span class="text-xs font-medium whitespace-nowrap">
+                {shareStatus().label}
+              </span>
+            </div>
+          </Tooltip>
+        </div>
+        <SegmentedControl
+          aria-label="Link sharing scope"
+          size="sm"
+          value={scope()}
+          options={LINK_SHARE_SCOPE_OPTIONS}
+          onChange={props.setLinkShareScope}
+        />
+      </div>
+      <p class="text-sm text-ink-muted">{scopeCopy().description}</p>
+      <Show when={scope() !== 'NONE'}>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-ink-muted">
+            <span>Access level</span>
+            <ShareOptions
+              permissions={props.linkShareAccessLevel ?? 'view'}
+              hideNoAccess={true}
+              setPermissions={props.setLinkShareAccessLevel}
+            />
+          </div>
+          <Button variant="base" onClick={props.copyLink}>
+            <CopyIcon class="size-4" />
+            <span>Copy Link</span>
+          </Button>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 interface MobileShareDrawerProps {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
@@ -269,7 +343,8 @@ interface MobileShareDrawerProps {
   recipients: SharePermissionV2ChannelSharePermissions | undefined;
   channelNameMap: Map<string, { name: string; type: string }>;
   formattedOwner: string;
-  publicAccessLevel: AccessLevel | null | undefined;
+  linkShare: LinkShare | null | undefined;
+  linkShareAccessLevel: AccessLevel | null | undefined;
   refetch: () => void;
   navigateToChannel: (channelId: string) => void;
   removeChannelAccess: (channelId: string) => void;
@@ -278,8 +353,9 @@ interface MobileShareDrawerProps {
     accessLevel: AccessLevel,
     hideSuccessToast?: boolean
   ) => void;
-  setPublicPermissions: (accessLevel: AccessLevel | null) => void;
-  copyPublicLink: () => void;
+  setLinkShareScope: (scope: LinkShareScope) => void;
+  setLinkShareAccessLevel: (accessLevel: AccessLevel | null) => void;
+  copyLink: () => void;
 }
 
 function MobileShareDrawer(props: MobileShareDrawerProps) {
@@ -298,7 +374,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       tabs.push({ value: 'people', label: 'People' });
     if (
       props.userPermissions === Permissions.OWNER &&
-      !isPublicLinkDisabledForItem(props.itemType)
+      !isLinkSharingDisabledForItem(props.itemType)
     )
       tabs.push({ value: 'link', label: 'Link' });
     return tabs;
@@ -465,62 +541,14 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </div>
           </Show>
           <Show when={effectiveActiveTab() === 'link'}>
-            <div class="text-ink flex flex-col">
-              <div
-                class={cn(
-                  'flex flex-col gap-3 px-3 py-2 text-sm font-medium',
-                  props.publicAccessLevel != null &&
-                    'border-b border-edge-muted'
-                )}
-              >
-                <div class="flex items-center gap-2">
-                  Public link
-                  <div
-                    class={cn(
-                      'px-2 rounded-xl border py-0.5 flex justify-center items-center',
-                      props.publicAccessLevel != null
-                        ? 'border-accent/30 bg-accent/10'
-                        : 'border-edge-muted bg-edge-muted'
-                    )}
-                  >
-                    <span
-                      class={cn(
-                        'text-xs font-medium whitespace-nowrap',
-                        props.publicAccessLevel != null
-                          ? 'text-accent'
-                          : 'text-ink-extra-muted'
-                      )}
-                    >
-                      {props.publicAccessLevel != null ? 'ENABLED' : 'DISABLED'}
-                    </span>
-                  </div>
-                </div>
-                <ToggleSwitch
-                  onChange={(checked) =>
-                    props.setPublicPermissions(checked ? 'view' : null)
-                  }
-                  checked={props.publicAccessLevel != null}
-                  labelClass="whitespace-nowrap"
-                  label="Enable public link"
-                />
-              </div>
-              <Show when={props.publicAccessLevel != null}>
-                <div class="flex flex-col gap-3 px-3 py-2">
-                  <span class="text-sm text-ink-muted flex items-center">
-                    <span class="px-2">Anyone with the link can</span>
-                    <ShareOptions
-                      permissions={props.publicAccessLevel ?? null}
-                      hideNoAccess={true}
-                      setPermissions={props.setPublicPermissions}
-                    />
-                  </span>
-                  <Button variant="base" onClick={props.copyPublicLink}>
-                    <CopyIcon class="size-4" />
-                    <span>Copy Link</span>
-                  </Button>
-                </div>
-              </Show>
-            </div>
+            <LinkSharingControls
+              linkShare={props.linkShare}
+              linkShareAccessLevel={props.linkShareAccessLevel}
+              hasExplicitShares={(props.recipients?.length ?? 0) > 0}
+              setLinkShareScope={props.setLinkShareScope}
+              setLinkShareAccessLevel={props.setLinkShareAccessLevel}
+              copyLink={props.copyLink}
+            />
           </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -569,7 +597,7 @@ export function ShareModal(props: ShareModalProps) {
 
   const referralCode = useReferralCode();
 
-  const copyPublicLink = createCallback(() => {
+  const copyLink = createCallback(() => {
     const params: Record<string, string> = {};
     const code = referralCode();
     if (code) {
@@ -804,119 +832,102 @@ export function ShareModal(props: ShareModalProps) {
     }
   );
 
-  const publicAccessLevel = createMemo(() => {
+  const linkShare = createMemo(() => {
     const currentPermissions = permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) {
       return;
     }
 
-    const sharePermission = currentPermissions.value;
-    return sharePermission.publicAccessLevel;
+    return currentPermissions.value.linkShare;
   });
 
-  const setPublicPermissions = createCallback(
-    async (accessLevel: AccessLevel | null) => {
+  const linkShareAccessLevel = createMemo(() => {
+    const currentPermissions = permissionsResource.latest;
+    if (!currentPermissions || currentPermissions.isErr()) {
+      return;
+    }
+
+    return currentPermissions.value.linkShareAccessLevel;
+  });
+
+  const updateLinkSharePermissions = createCallback(
+    async (sharePermission: LinkSharePayload) => {
+      const scope = getLinkShareScope(sharePermission.linkShare);
+      let result: Result<any, ResultError<any>[]> | undefined;
+
       if (props.itemType === 'chat') {
-        const result = await cognitionApiServiceClient.updateChatPermissions({
-          sharePermission: {
-            publicAccessLevel: accessLevel,
-            isPublic: accessLevel != null,
-          },
+        result = await cognitionApiServiceClient.updateChatPermissions({
+          sharePermission,
           chat_id: props.id,
         });
-        if (!result.isErr()) {
-          refetch();
-
-          if (accessLevel === null) {
-            toast.success('Made chat private', {
-              subtext: 'Only shared users can access this chat',
-            });
-          } else {
-            toast.success('Updated public link sharing', {
-              subtext: `Anyone with the link can ${accessLevel} this chat`,
-            });
-
-            analytics.track('share_entity', {
-              entityType: 'chat',
-              entityId: props.id,
-              shareMethod: 'public_link',
-              accessLevel,
-              isPublic: true,
-            });
-          }
-        } else {
-          toast.alert('Failed to change chat access', {
-            subtext: 'Please try again',
-          });
-          console.error(result);
-        }
       } else if (props.itemType === 'document') {
-        const result = await storageServiceClient.editDocument({
-          sharePermission: {
-            publicAccessLevel: accessLevel,
-            isPublic: accessLevel != null,
-          },
+        result = await storageServiceClient.editDocument({
+          sharePermission,
           documentId: props.id,
         });
-        if (!result.isErr()) {
-          refetch();
-          if (accessLevel === null) {
-            toast.success('Made document private', {
-              subtext: 'Only shared users can access this document',
-            });
-          } else {
-            toast.success('Updated public link sharing', {
-              subtext: `Anyone with the link can ${accessLevel} this document`,
-            });
-
-            analytics.track('share_entity', {
-              entityType: 'document',
-              entityId: props.id,
-              shareMethod: 'public_link',
-              accessLevel,
-              isPublic: true,
-            });
-          }
-        } else {
-          toast.alert('Failed to change document access', {
-            subtext: 'Please try again',
-          });
-          console.error(result);
-        }
       } else if (props.itemType === 'project') {
-        const result = await storageServiceClient.projects.edit({
-          sharePermission: {
-            publicAccessLevel: accessLevel,
-            isPublic: accessLevel != null,
-          },
+        result = await storageServiceClient.projects.edit({
+          sharePermission,
           id: props.id,
         });
-        if (!result.isErr()) {
-          refetch();
-          if (accessLevel === null) {
-            toast.success('Made folder private', {
-              subtext: 'Only shared users can access this folder',
-            });
-          } else {
-            toast.success('Updated public link sharing', {
-              subtext: `Anyone with the link can ${accessLevel} this folder`,
-            });
-
-            analytics.track('share_entity', {
-              entityType: 'project',
-              entityId: props.id,
-              shareMethod: 'public_link',
-              accessLevel,
-              isPublic: true,
-            });
-          }
-        } else {
-          toast.alert('Failed to change folder access', {
-            subtext: 'Please try again',
-          });
-          console.error(result);
-        }
       }
+
+      const entityLabel =
+        props.itemType === 'project' ? 'folder' : props.itemType;
+      if (!result || result.isErr()) {
+        toast.alert(`Failed to change ${entityLabel} access`, {
+          subtext: 'Please try again',
+        });
+        console.error(result);
+        return;
+      }
+
+      refetch();
+      if (scope === 'NONE') {
+        toast.success(`Made ${entityLabel} private`, {
+          subtext: `Only shared users can access this ${entityLabel}`,
+        });
+        return;
+      }
+
+      const effectiveAccessLevel =
+        sharePermission.linkShareAccessLevel ?? 'view';
+      const audience =
+        scope === 'PUBLIC'
+          ? 'Anyone with the link'
+          : "Members of the owner's team with the link";
+      toast.success(`Updated ${getLinkShareScopeCopy(scope).title} sharing`, {
+        subtext: `${audience} can ${accessLevelText(effectiveAccessLevel).toLowerCase()} this ${entityLabel}`,
+      });
+
+      analytics.track('share_entity', {
+        entityType: props.itemType,
+        entityId: props.id,
+        shareMethod: scope === 'PUBLIC' ? 'public_link' : 'team_link',
+        accessLevel: effectiveAccessLevel,
+        linkShare: scope,
+      });
+    }
+  );
+
+  const setLinkShareScope = createCallback((scope: LinkShareScope) => {
+    const sharePermission = buildLinkShareScopePayload(
+      getLinkShareScope(linkShare()),
+      scope,
+      linkShareAccessLevel()
+    );
+    return updateLinkSharePermissions(sharePermission);
+  });
+
+  const setLinkShareAccessLevel = createCallback(
+    (accessLevel: AccessLevel | null) => {
+      const scope = getLinkShareScope(linkShare());
+      if (scope === 'NONE' || accessLevel === null) {
+        return;
+      }
+      return updateLinkSharePermissions(
+        buildLinkSharePayload(scope, accessLevel)
+      );
     }
   );
 
@@ -944,13 +955,15 @@ export function ShareModal(props: ShareModalProps) {
           recipients={recipients()}
           channelNameMap={channelNameMap()}
           formattedOwner={formattedOwner()}
-          publicAccessLevel={publicAccessLevel()}
+          linkShare={linkShare()}
+          linkShareAccessLevel={linkShareAccessLevel()}
           refetch={refetch}
           navigateToChannel={navigateToChannel}
           removeChannelAccess={removeChannelAccess}
           setChannelPermissions={setChannelPermissions}
-          setPublicPermissions={setPublicPermissions}
-          copyPublicLink={copyPublicLink}
+          setLinkShareScope={setLinkShareScope}
+          setLinkShareAccessLevel={setLinkShareAccessLevel}
+          copyLink={copyLink}
         />
       }
     >
@@ -1129,72 +1142,24 @@ export function ShareModal(props: ShareModalProps) {
                 </Panel>
               </Show>
 
-              {/* Card 3: Public link — plain border */}
+              {/* Card 3: Link sharing — plain border */}
               <Show
                 when={
                   props.userPermissions === Permissions.OWNER &&
-                  !isPublicLinkDisabledForItem(props.itemType)
+                  !isLinkSharingDisabledForItem(props.itemType)
                 }
               >
                 <Panel depth={2} class="rounded-xl">
-                  <Panel.Header
-                    class={cn(
-                      'justify-between px-4',
-                      publicAccessLevel() == null && 'border-b-0'
-                    )}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="text-sm font-medium">Public link</span>
-                      <div
-                        class={cn(
-                          'px-2 rounded-xl border py-0.5 flex justify-center items-center',
-                          publicAccessLevel() != null
-                            ? 'border-accent/30 bg-accent/10'
-                            : 'border-edge-muted bg-edge-muted'
-                        )}
-                      >
-                        <span
-                          class={cn(
-                            'text-xs font-medium whitespace-nowrap',
-                            publicAccessLevel() != null
-                              ? 'text-accent'
-                              : 'text-ink-extra-muted'
-                          )}
-                        >
-                          {publicAccessLevel() != null ? 'ENABLED' : 'DISABLED'}
-                        </span>
-                      </div>
-                    </div>
-                    <ToggleSwitch
-                      label="Enable public link"
-                      labelClass="text-xs whitespace-nowrap"
-                      checked={publicAccessLevel() != null}
-                      onChange={(on) =>
-                        setPublicPermissions(on ? 'view' : null)
-                      }
+                  <Panel.Body>
+                    <LinkSharingControls
+                      linkShare={linkShare()}
+                      linkShareAccessLevel={linkShareAccessLevel()}
+                      hasExplicitShares={(recipients()?.length ?? 0) > 0}
+                      setLinkShareScope={setLinkShareScope}
+                      setLinkShareAccessLevel={setLinkShareAccessLevel}
+                      copyLink={copyLink}
                     />
-                  </Panel.Header>
-                  <Show when={publicAccessLevel() != null}>
-                    <Panel.Body class="text-ink">
-                      <div class="flex items-center p-4 justify-between">
-                        <Button variant="base" onClick={copyPublicLink}>
-                          <CopyIcon class="size-4" />
-                          <span class="hidden sm:inline">Copy Link</span>
-                        </Button>
-                        <span class="text-sm text-ink-muted flex items-center">
-                          <span class="px-2 hidden sm:inline">
-                            Anyone with the link can
-                          </span>
-                          <span class="px-2 sm:hidden">Permissions:</span>
-                          <ShareOptions
-                            permissions={publicAccessLevel() ?? null}
-                            hideNoAccess={true}
-                            setPermissions={setPublicPermissions}
-                          />
-                        </span>
-                      </div>
-                    </Panel.Body>
-                  </Show>
+                  </Panel.Body>
                 </Panel>
               </Show>
             </Dialog.Content>
@@ -1261,34 +1226,22 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     icon: IconLink,
   }));
 
-  const shareAccessLevelText = createMemo(() => {
+  const shareStatus = createMemo(() => {
     const result = permissionsBlockResource[0].latest;
-    if (!result || result.isErr()) return '';
-    const sharePermission = result.value;
-    if (sharePermission.isPublic) return 'Public';
-    if (sharePermission.channelSharePermissions?.length) return 'Shared';
-    return 'Just me';
-  });
+    if (!result || result.isErr()) return;
 
-  const shareAccessTooltip = () =>
-    match(shareAccessLevelText())
-      .when(
-        (level) => level === 'Public',
-        () => 'Anyone with the link can access this item'
-      )
-      .when(
-        (level) => level === 'Shared',
-        () => 'Shared with specific people or channels'
-      )
-      .when(
-        (level) => level === 'Just me',
-        () => 'Only you can access this item'
-      )
-      .otherwise(() => 'This item has been shared with you');
+    const sharePermission = result.value;
+    return getShareStatus(
+      sharePermission.linkShare,
+      (sharePermission.channelSharePermissions?.length ?? 0) > 0
+    );
+  });
 
   return (
     <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
-      <Tooltip label={shareAccessTooltip()}>
+      <Tooltip
+        label={shareStatus()?.tooltip ?? 'This item has been shared with you.'}
+      >
         <Button
           onClick={() => {
             if (!isAuthenticated()) {

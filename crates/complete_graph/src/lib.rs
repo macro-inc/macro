@@ -13,6 +13,11 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use graphql_activity::{
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader, ActivityPortReader,
+    ActivityReader, EntityActivityLoader, GraphqlActivityAction, GraphqlActivityEvent,
+    GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader, entity_activity_loader,
+};
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
@@ -31,9 +36,9 @@ pub use graphql_email::{
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
     EntityRefInput, EntitySharePolicyInput, GraphqlEntityMutationError,
-    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlMutationError,
-    GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput, RenameEntityInput,
-    UpdateEntitySharePolicyInput,
+    GraphqlEntityMutationErrorCode, GraphqlEntityMutationResult, GraphqlLinkShare,
+    GraphqlMutationError, GraphqlMutationSuccess, GraphqlSharePolicyOperation, MoveEntityInput,
+    RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,

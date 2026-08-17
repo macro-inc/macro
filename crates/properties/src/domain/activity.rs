@@ -70,10 +70,16 @@ impl ActivitySource for PropertyTopicEvent {
                 &m.entity_id,
                 CommonAction::PropertyChanged(PropertyChange {
                     property: m.property_definition_id.to_string(),
-                    // The event carries only the new value today.
-                    from: None,
-                    // None means cleared; a serialization failure must not
-                    // masquerade as one, so it stores an explicit JSON null.
+                    // None means unknown/newly-attached for `from` and
+                    // cleared for `to`; a serialization failure must not
+                    // masquerade as either, so it stores an explicit JSON
+                    // null.
+                    from: m.previous_value.as_ref().map(|value| {
+                        serde_json::to_value(value).unwrap_or_else(|e| {
+                            tracing::error!(error=?e, "unserializable property value");
+                            serde_json::Value::Null
+                        })
+                    }),
                     to: m.value.as_ref().map(|value| {
                         serde_json::to_value(value).unwrap_or_else(|e| {
                             tracing::error!(error=?e, "unserializable property value");

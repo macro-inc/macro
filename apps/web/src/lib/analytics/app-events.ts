@@ -165,10 +165,12 @@ export type AppEvents = {
   share_entity: EntityEventPayload & {
     shareMethod?:
       | 'public_link'
+      | 'team_link'
       | 'channel'
       | 'forward'
       | 'attachment_public'
       | (string & {});
+    linkShare?: 'PUBLIC' | 'TEAM';
   };
 
   task_copy_branch_name: Record<string, unknown>;

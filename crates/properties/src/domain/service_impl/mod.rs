@@ -178,6 +178,7 @@ where
     fn entity_property_updated_event(
         property: &EntityProperty,
         value: &Option<PropertyValue>,
+        previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
     ) -> PropertyMacroEvent {
         PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
@@ -187,6 +188,7 @@ where
             property_definition_id: property.property_definition_id,
             actor_user_id: access.authenticated_user().cloned(),
             value: value.clone(),
+            previous_value: previous_value.clone(),
             updated_at: property.updated_at,
         })
     }
@@ -204,6 +206,7 @@ where
             self.publish_property_event(Self::entity_property_updated_event(
                 &mutation.property,
                 &mutation.value,
+                &mutation.previous_value,
                 access,
             ));
         }
@@ -390,6 +393,7 @@ where
                     property_definition_id: mutation.property.property_definition_id,
                     actor_user_id: Some(actor.clone().into_owned()),
                     value: mutation.value.clone(),
+                    previous_value: mutation.previous_value.clone(),
                     updated_at: mutation.property.updated_at,
                 },
             ));
@@ -620,6 +624,9 @@ where
             self.publish_property_event(Self::entity_property_updated_event(
                 &property,
                 &property_value,
+                // The relationship transaction doesn't capture the pre-write
+                // value; the activity transition simply omits its "from" side.
+                &None,
                 access,
             ));
             return Ok(EntityPropertyWithDefinition {
@@ -637,7 +644,7 @@ where
                 .await?;
         }
 
-        let property = self
+        let snapshot = self
             .repository
             .upsert_entity_property(
                 entity_id,
@@ -649,13 +656,14 @@ where
             .map_err(anyhow::Error::from)?;
 
         self.publish_property_event(Self::entity_property_updated_event(
-            &property,
+            &snapshot.property,
             &property_value,
+            &snapshot.previous_value,
             access,
         ));
 
         Ok(EntityPropertyWithDefinition {
-            property,
+            property: snapshot.property,
             definition: property_definition,
             value: property_value,
             options: None,
@@ -719,6 +727,7 @@ where
         self.publish_property_event(Self::entity_property_updated_event(
             &mutation.property,
             &mutation.value,
+            &mutation.previous_value,
             access,
         ));
 
@@ -756,6 +765,7 @@ where
             self.publish_property_event(Self::entity_property_updated_event(
                 &mutation.property,
                 &mutation.value,
+                &mutation.previous_value,
                 access,
             ));
         }

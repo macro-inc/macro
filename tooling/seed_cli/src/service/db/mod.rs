@@ -420,9 +420,9 @@ impl SeedDb {
         Ok(())
     }
 
-    /// Create a public share permission attached to a project.
+    /// Create a link share permission attached to a project.
     #[tracing::instrument(skip(self, share_permission), err)]
-    pub async fn create_project_public_permission(
+    pub async fn create_project_link_share_permission(
         &self,
         project_id: &str,
         share_permission: &SharePermissionV2,
@@ -438,9 +438,9 @@ impl SeedDb {
         Ok(())
     }
 
-    /// Create a public share permission attached to a chat.
+    /// Create a link share permission attached to a chat.
     #[tracing::instrument(skip(self, share_permission), err)]
-    pub async fn create_chat_public_permission(
+    pub async fn create_chat_link_share_permission(
         &self,
         chat_id: &str,
         share_permission: &SharePermissionV2,
@@ -464,8 +464,10 @@ impl SeedDb {
         let mut transaction = self.inner.begin().await?;
 
         sqlx::query!(
-            r#"INSERT INTO "SharePermission" (id, "isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-               VALUES ($1, false, NULL, NOW(), NOW())"#,
+            r#"INSERT INTO "SharePermission" (
+                   id, "linkShare", "linkShareAccessLevel", "createdAt", "updatedAt"
+               )
+               VALUES ($1, NULL, NULL, NOW(), NOW())"#,
             args.share_permission_id,
         )
         .execute(transaction.as_mut())

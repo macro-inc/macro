@@ -53,7 +53,62 @@ fn every_action_maps_to_stable_columns() {
         let (tag, payload) = action.to_columns();
         assert_eq!(tag, expected_tag, "tag for {action:?}");
         assert_eq!(payload, expected_payload, "payload for {action:?}");
+
+        // The read codec is the exact inverse: every stored pair decodes
+        // back to the action that produced it.
+        let decoded = Action::from_columns(tag, payload.as_ref())
+            .unwrap_or_else(|e| panic!("decode {tag}: {e}"));
+        assert_eq!(decoded, action, "round-trip for {tag}");
     }
+}
+
+#[test]
+fn unknown_tags_decode_to_recorded_unknown_preserving_the_row() {
+    let payload = Some(json!({ "novel": true }));
+
+    let (recorded, error) = RecordedAction::from_columns("renamed".to_string(), payload.clone());
+
+    assert_eq!(
+        recorded,
+        RecordedAction::Unknown {
+            tag: "renamed".to_string(),
+            payload,
+        }
+    );
+    assert!(matches!(error, Some(ActionDecodeError::UnknownTag)));
+}
+
+#[test]
+fn undecodable_payload_on_a_known_tag_degrades_to_unknown() {
+    let garbage = Some(json!({ "property": 42 }));
+
+    let (recorded, error) =
+        RecordedAction::from_columns("property_changed".to_string(), garbage.clone());
+
+    assert_eq!(
+        recorded,
+        RecordedAction::Unknown {
+            tag: "property_changed".to_string(),
+            payload: garbage,
+        }
+    );
+    assert!(matches!(error, Some(ActionDecodeError::InvalidPayload(_))));
+}
+
+#[test]
+fn missing_payload_on_a_payload_tag_is_an_explicit_error() {
+    assert!(matches!(
+        Action::from_columns("call_started", None),
+        Err(ActionDecodeError::MissingPayload)
+    ));
+}
+
+#[test]
+fn extra_payload_on_a_payload_free_tag_is_ignored() {
+    // A newer writer may start attaching payloads to today's payload-free
+    // tags; old readers must keep decoding the tag they know.
+    let decoded = Action::from_columns("edited", Some(&json!({ "future": 1 }))).unwrap();
+    assert_eq!(decoded, Action::Edited);
 }
 
 #[test]

@@ -311,29 +311,34 @@ impl CallRepository for PgCallRepo {
         let share_permission_id = uuid::Uuid::now_v7();
         let share_permission = SharePermissionV2 {
             id: share_permission_id.to_string(),
-            is_public: false,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),
                 access_level: AccessLevel::Edit,
             }]),
         };
+        let link_share = share_permission.link_share.map(|value| value.to_string());
+        let link_share_access_level = share_permission.link_share_access_level;
 
         let mut tx = self.pool.begin().await?;
 
         // insert share permission
         sqlx::query!(
             r#"
-            INSERT INTO "SharePermission" ("id", "isPublic","publicAccessLevel", "createdAt", "updatedAt")
+            INSERT INTO "SharePermission" (
+                "id",
+                "linkShare",
+                "linkShareAccessLevel",
+                "createdAt",
+                "updatedAt"
+            )
             VALUES ($1, $2, $3, NOW(), NOW())
-        "#,
+            "#,
             share_permission.id,
-            share_permission.is_public,
-            share_permission
-                .public_access_level
-                .as_ref()
-                .map(|s| s.to_string()),
+            link_share,
+            link_share_access_level as _,
         )
         .execute(tx.as_mut())
         .await?;

@@ -6,7 +6,9 @@ use model::document::FileType;
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
 use model::item::Item;
 use model::project::ProjectPreviewV2;
-use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
+};
 use sqlx::{Pool, Postgres};
 
 use super::PgProjectRepo;
@@ -16,6 +18,34 @@ use crate::domain::ports::ProjectRepo;
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
 const CHILD_ID: &str = "10000000-0000-0000-0000-000000000002";
 const DELETED_ID: &str = "10000000-0000-0000-0000-000000000009";
+
+#[derive(Debug, Eq, PartialEq)]
+struct StoredSharePermission {
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+}
+
+async fn project_share_permission_columns(
+    pool: &Pool<Postgres>,
+    project_id: &str,
+) -> StoredSharePermission {
+    sqlx::query_as!(
+        StoredSharePermission,
+        r#"
+        SELECT
+            permission."linkShare" AS "link_share?",
+            permission."linkShareAccessLevel"::text AS "link_share_access_level?"
+        FROM "SharePermission" permission
+        JOIN "ProjectPermission" project_permission
+            ON project_permission."sharePermissionId" = permission.id
+        WHERE project_permission."projectId" = $1
+        "#,
+        project_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -149,7 +179,8 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
     assert_eq!(permission.id, "share-root");
     assert_eq!(permission.owner, "macro|owner@test.com");
-    assert_eq!(permission.public_access_level, Some(AccessLevel::Edit));
+    assert_eq!(permission.link_share, Some(LinkShare::Public));
+    assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
     assert_eq!(
         permission.channel_share_permissions.expect("channel").len(),
         1
@@ -176,8 +207,7 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
 )]
 async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgProjectRepo::new(pool.clone());
-    let permission =
-        models_permissions::share_permission::SharePermissionV2::new_project_share_permission();
+    let permission = SharePermissionV2::new_project_share_permission();
     let project = repo
         .create_project(CreateProjectArgs {
             user_id: "macro|owner@test.com".to_owned(),
@@ -202,6 +232,13 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     .fetch_one(&pool)
     .await?;
     assert_eq!(metadata_count, 1);
+    assert_eq!(
+        project_share_permission_columns(&pool, &project.id).await,
+        StoredSharePermission {
+            link_share: None,
+            link_share_access_level: None,
+        }
+    );
 
     assert!(
         repo.create_project(CreateProjectArgs {
@@ -226,8 +263,39 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
+async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let mut permission = SharePermissionV2::new_project_share_permission();
+    permission.link_share = Some(LinkShare::Team);
+
+    let project = repo
+        .create_project(CreateProjectArgs {
+            user_id: "macro|owner@test.com".to_owned(),
+            name: "Team project".to_owned(),
+            parent_id: None,
+            share_permission: permission,
+        })
+        .await?;
+
+    assert_eq!(
+        project_share_permission_columns(&pool, &project.id).await,
+        StoredSharePermission {
+            link_share: Some("TEAM".to_owned()),
+            link_share_access_level: Some("view".to_owned()),
+        }
+    );
+    let permission = repo.get_project_share_permission(&project.id).await?;
+    assert_eq!(permission.link_share, Some(LinkShare::Team));
+    assert_eq!(permission.link_share_access_level, Some(AccessLevel::View));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
 async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = PgProjectRepo::new(pool.clone());
     let unchanged = repo
         .edit_project(EditProjectArgs {
             project_id: CHILD_ID.to_owned(),
@@ -253,25 +321,112 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         Some("10000000-0000-0000-0000-000000000005")
     );
 
-    let cleared = repo
+    let updated = repo
         .edit_project(EditProjectArgs {
             project_id: ROOT_ID.to_owned(),
             name: None,
             update_parent: true,
             parent_id: None,
-            share_permission: Some(
-                models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-                    is_public: Some(false),
-                    public_access_level: Some(AccessLevel::Edit),
-                    channel_share_permissions: None,
-                },
-            ),
+            share_permission: Some(UpdateSharePermissionRequestV2 {
+                link_share: Some(Some(LinkShare::Team)),
+                link_share_access_level: Some(None),
+                channel_share_permissions: None,
+            }),
         })
         .await?;
-    assert!(cleared.parent_id.is_none());
+    assert!(updated.parent_id.is_none());
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: Some("TEAM".to_owned()),
+            link_share_access_level: Some("view".to_owned()),
+        }
+    );
+
+    repo.edit_project(EditProjectArgs {
+        project_id: ROOT_ID.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(Some(AccessLevel::Comment)),
+            channel_share_permissions: None,
+        }),
+    })
+    .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: Some("TEAM".to_owned()),
+            link_share_access_level: Some("comment".to_owned()),
+        }
+    );
+
+    repo.edit_project(EditProjectArgs {
+        project_id: ROOT_ID.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        }),
+    })
+    .await?;
+    let before_omitted_update = project_share_permission_columns(&pool, ROOT_ID).await;
+    assert_eq!(
+        before_omitted_update,
+        StoredSharePermission {
+            link_share: Some("PUBLIC".to_owned()),
+            link_share_access_level: Some("edit".to_owned()),
+        }
+    );
+
+    repo.edit_project(EditProjectArgs {
+        project_id: ROOT_ID.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+    })
+    .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        before_omitted_update
+    );
+
+    repo.edit_project(EditProjectArgs {
+        project_id: ROOT_ID.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(None),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        }),
+    })
+    .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: None,
+            link_share_access_level: None,
+        }
+    );
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
-    assert!(!permission.is_public);
-    assert_eq!(permission.public_access_level, None);
+    assert_eq!(permission.link_share, None);
+    assert_eq!(permission.link_share_access_level, None);
+    assert_eq!(
+        permission.channel_share_permissions.expect("channel").len(),
+        1
+    );
     Ok(())
 }
 
@@ -464,11 +619,12 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         ),
         ("Empty".to_owned(), FileSystemNode::Folder(HashMap::new())),
     ]));
+    let mut share_permission = SharePermissionV2::new_project_share_permission();
+    share_permission.link_share = Some(LinkShare::Team);
     let result = repo
         .upload_folder(UploadFolderRepoArgs {
             user_id: MacroUserIdStr::parse_from_str("macro|owner@test.com")?.into_owned(),
-            share_permission:
-                models_permissions::share_permission::SharePermissionV2::new_project_share_permission(),
+            share_permission,
             root_folder,
             root_folder_name: "Upload".to_owned(),
             upload_request_id: "lambda-request-id".to_owned(),
@@ -501,6 +657,30 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         .iter()
         .map(|document| document.document_id.clone())
         .collect::<Vec<_>>();
+    let created_permissions = sqlx::query_scalar!(
+        r#"
+        WITH created_permission_ids AS (
+            SELECT "sharePermissionId" AS id
+            FROM "ProjectPermission"
+            WHERE "projectId" = ANY($1)
+            UNION
+            SELECT "sharePermissionId" AS id
+            FROM "DocumentPermission"
+            WHERE "documentId" = ANY($2)
+        )
+        SELECT COUNT(*) AS "count!"
+        FROM "SharePermission" permission
+        WHERE permission.id IN (SELECT id FROM created_permission_ids)
+          AND permission."linkShare" = 'TEAM'
+          AND permission."linkShareAccessLevel" = 'view'
+        "#,
+        &result.project_ids,
+        &document_ids,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(created_permissions, 4);
+
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;
     let remaining = sqlx::query_scalar!(

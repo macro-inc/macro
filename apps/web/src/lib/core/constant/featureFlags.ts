@@ -122,14 +122,6 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
-// Activity timeline: the Activity sidebar entry and the combined Firehose /
-// My Activity view. Keep it dev-only by default while the feature is under
-// development; override with VITE_ENABLE_ACTIVITY for controlled testing.
-export const ENABLE_ACTIVITY = resolveFeatureFlag(
-  'ENABLE_ACTIVITY',
-  DEV_MODE_ENV
-);
-
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
@@ -640,4 +632,25 @@ export const ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE = getFeatureFlagOverride(
 export const ENABLE_TAG_TEAM_SHARING_FLAG = 'enable-tag-team-sharing';
 export const ENABLE_TAG_TEAM_SHARING_OVERRIDE =
   getFeatureFlagOverride('ENABLE_TAG_TEAM_SHARING') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The "Activity" section in the entity side panel: the entity's recent
+// activity timeline from the GraphQL activity log (who did what, when).
+// Purely additive — when off, the section never mounts and no activity
+// query is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ENTITY_ACTIVITY_SECTION.
+export const ENABLE_ENTITY_ACTIVITY_SECTION_FLAG =
+  'enable-entity-activity-section';
+export const ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ENTITY_ACTIVITY_SECTION') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// The Activity view: the user's own activity feed from the GraphQL activity
+// log, replacing the retired soup/notification-derived timeline. Gates the
+// view (the /activity route redirects to the inbox when off) and its
+// sidebar entry. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_ACTIVITY_FEED.
+export const ENABLE_ACTIVITY_FEED_FLAG = 'enable-activity-feed';
+export const ENABLE_ACTIVITY_FEED_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_ACTIVITY_FEED') ??
   (DEV_MODE_ENV ? true : undefined);

@@ -79,6 +79,7 @@ fn entity_property_mutation(
     EntityPropertyMutationSnapshot {
         property: entity_property(entity_id, entity_type, property_definition_id),
         value,
+        previous_value: None,
     }
 }
 
@@ -101,6 +102,7 @@ fn entity_property_option_selection_for_event(
                 event_timestamp(),
             ),
             value: Some(PropertyValue::SelectOption(option_ids)),
+            previous_value: None,
         }),
     }
 }
@@ -1084,7 +1086,15 @@ async fn entity_property_event_set_publishes_null_authoritative_snapshot() {
                 && *definition_id == property_definition_id
                 && value.is_none()
         })
-        .return_once(move |_, _, _, _| Box::pin(async move { Ok(assignment) }));
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -1109,6 +1119,7 @@ async fn entity_property_event_set_publishes_null_authoritative_snapshot() {
             "entity_type": "DOCUMENT",
             "property_definition_id": property_definition_id,
             "actor_user_id": caller_user_id(),
+            "previous_value": null,
             "value": null,
             "updated_at": updated_at,
         })
@@ -1209,7 +1220,15 @@ async fn entity_property_event_actor_is_only_an_authenticated_user() {
             )
         });
         repo.expect_upsert_entity_property()
-            .return_once(move |_, _, _, _| Box::pin(async move { Ok(assignment) }));
+            .return_once(move |_, _, _, _| {
+                Box::pin(async move {
+                    Ok(EntityPropertyMutationSnapshot {
+                        property: assignment,
+                        value: None,
+                        previous_value: None,
+                    })
+                })
+            });
         let event_broker = RecordingEventBroker::default();
         let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -1297,7 +1316,13 @@ async fn test_set_status_complete_through_general_property_mutation() {
         })
         .returning(|entity_id, entity_type, property_definition_id, _| {
             let property = entity_property(entity_id, entity_type, property_definition_id);
-            Box::pin(async move { Ok(property) })
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property,
+                    value: None,
+                    previous_value: None,
+                })
+            })
         });
 
     let service = PropertiesServiceImpl::new(
@@ -1437,6 +1462,7 @@ async fn entity_property_event_parent_task_uses_primary_task_snapshot_only() {
             "entity_type": "TASK",
             "property_definition_id": SystemPropertyKey::PARENT_TASK_UUID,
             "actor_user_id": caller_user_id(),
+            "previous_value": null,
             "value": {
                 "type": "EntityReference",
                 "value": [{
@@ -2584,6 +2610,7 @@ async fn entity_property_event_add_option_uses_full_mutation_snapshot() {
             existing_option_id,
             added_option_id,
         ])),
+        previous_value: None,
     };
     let mut repo = MockPropertiesRepo::new();
     repo.expect_get_property_definition().returning(move |_| {
@@ -2622,6 +2649,7 @@ async fn entity_property_event_add_option_uses_full_mutation_snapshot() {
             "entity_type": "DOCUMENT",
             "property_definition_id": def_id,
             "actor_user_id": caller_user_id(),
+            "previous_value": null,
             "value": {
                 "type": "SelectOption",
                 "value": [existing_option_id, added_option_id],
@@ -2710,6 +2738,7 @@ async fn entity_property_event_remove_option_uses_full_mutation_snapshot() {
             updated_at,
         ),
         value: Some(PropertyValue::SelectOption(vec![remaining_option_id])),
+        previous_value: None,
     };
     let mut repo = MockPropertiesRepo::new();
     repo.expect_remove_entity_property_option()
@@ -2809,7 +2838,13 @@ async fn canonical_document_task_write_uses_task_storage_type() {
         })
         .returning(|entity_id, entity_type, property_definition_id, _| {
             let property = entity_property(entity_id, entity_type, property_definition_id);
-            Box::pin(async move { Ok(property) })
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property,
+                    value: None,
+                    previous_value: None,
+                })
+            })
         });
 
     let service = PropertiesServiceImpl::new(
@@ -2874,7 +2909,13 @@ async fn canonical_document_task_assignee_write_grants_permissions() {
         })
         .returning(|entity_id, entity_type, property_definition_id, _| {
             let property = entity_property(entity_id, entity_type, property_definition_id);
-            Box::pin(async move { Ok(property) })
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property,
+                    value: None,
+                    previous_value: None,
+                })
+            })
         });
 
     let mut permission_service = MockPermissionService::new();
@@ -3188,6 +3229,7 @@ async fn bulk_entity_property_event_publishes_every_property_snapshot() {
             "entity_type": "DOCUMENT",
             "property_definition_id": first_definition_id,
             "actor_user_id": caller_user_id(),
+            "previous_value": null,
             "value": {
                 "type": "SelectOption",
                 "value": first_final_option_ids,
@@ -3203,6 +3245,7 @@ async fn bulk_entity_property_event_publishes_every_property_snapshot() {
             "entity_type": "DOCUMENT",
             "property_definition_id": second_definition_id,
             "actor_user_id": caller_user_id(),
+            "previous_value": null,
             "value": {
                 "type": "SelectOption",
                 "value": second_final_option_ids,

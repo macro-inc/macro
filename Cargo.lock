@@ -3092,13 +3092,16 @@ dependencies = [
 name = "complete_graph"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "chrono",
  "email",
  "entity_access",
  "entity_mutation",
+ "graphql_activity",
  "graphql_channel",
  "graphql_common",
  "graphql_email",
@@ -6307,6 +6310,26 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_activity"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-graphql",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "macro_user_id",
+ "model-entity",
+ "models_pagination",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

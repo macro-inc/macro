@@ -5,9 +5,25 @@ use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateOperation,
 };
 use models_permissions::share_permission::{
-    SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 use sqlx::{PgPool, Postgres, Transaction};
+
+fn link_share_access_level_or_default(link_share_access_level: Option<AccessLevel>) -> AccessLevel {
+    link_share_access_level.unwrap_or_else(|| {
+        tracing::warn!(
+            "link_share was enabled but link share access level was not provided, setting to view"
+        );
+        AccessLevel::View
+    })
+}
+
+pub(super) fn normalize_link_share_access_level(
+    link_share: Option<LinkShare>,
+    link_share_access_level: Option<AccessLevel>,
+) -> Option<AccessLevel> {
+    link_share.map(|_| link_share_access_level_or_default(link_share_access_level))
+}
 
 pub(super) async fn get_project_share_permission(
     pool: &PgPool,
@@ -17,8 +33,8 @@ pub(super) async fn get_project_share_permission(
         r#"
         SELECT
             permission.id,
-            permission."isPublic" AS "is_public",
-            permission."publicAccessLevel" AS "public_access_level?",
+            permission."linkShare" AS "link_share?",
+            permission."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
             project."userId" AS owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -47,17 +63,16 @@ pub(super) async fn get_project_share_permission(
         .transpose()
         .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
         .filter(|permissions| !permissions.is_empty());
-    let public_access_level = row
-        .public_access_level
-        .map(|level| {
-            AccessLevel::from_str(&level).map_err(|error| sqlx::Error::Decode(Box::new(error)))
+    let link_share = row
+        .link_share
+        .map(|value| {
+            LinkShare::from_str(&value).map_err(|error| sqlx::Error::Decode(Box::new(error)))
         })
         .transpose()?;
-
     Ok(SharePermissionV2 {
         id: row.id,
-        is_public: row.is_public,
-        public_access_level,
+        link_share,
+        link_share_access_level: row.link_share_access_level,
         owner: row.owner,
         channel_share_permissions,
     })
@@ -68,17 +83,24 @@ pub(super) async fn create_project_share_permission(
     project_id: &str,
     permission: &SharePermissionV2,
 ) -> Result<(), sqlx::Error> {
+    let link_share = permission.link_share;
+    let link_share_access_level =
+        normalize_link_share_access_level(link_share, permission.link_share_access_level);
+    let link_share = link_share.map(|value| value.to_string());
+
     let row = sqlx::query!(
         r#"
-        INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+        INSERT INTO "SharePermission" (
+            "linkShare",
+            "linkShareAccessLevel",
+            "createdAt",
+            "updatedAt"
+        )
         VALUES ($1, $2, NOW(), NOW())
         RETURNING id
         "#,
-        permission.is_public,
-        permission
-            .public_access_level
-            .as_ref()
-            .map(ToString::to_string),
+        link_share,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;
@@ -122,33 +144,43 @@ pub(super) async fn edit_project_share_permission(
     .fetch_one(transaction.as_mut())
     .await?;
 
-    let clear_public_level = update.is_public == Some(false);
-    let default_public_level =
-        update.is_public == Some(true) && update.public_access_level.is_none();
-    let update_public_level =
-        clear_public_level || default_public_level || update.public_access_level.is_some();
-    let public_access_level = if clear_public_level {
-        None
-    } else if default_public_level {
-        Some("view".to_owned())
-    } else {
-        update.public_access_level.as_ref().map(ToString::to_string)
+    let update_link_share = update.link_share.is_some();
+    let link_share = update.link_share.flatten();
+    let (update_link_share_access_level, link_share_access_level) = match update.link_share {
+        Some(Some(_)) => (
+            true,
+            Some(link_share_access_level_or_default(
+                update.link_share_access_level.flatten(),
+            )),
+        ),
+        Some(None) => (true, None),
+        None => (
+            update.link_share_access_level.is_some(),
+            update.link_share_access_level.flatten(),
+        ),
     };
+    let link_share = link_share.map(|value| value.to_string());
 
     sqlx::query!(
         r#"
         UPDATE "SharePermission"
         SET
-            "isPublic" = CASE WHEN $2 THEN $3 ELSE "isPublic" END,
-            "publicAccessLevel" = CASE WHEN $4 THEN $5 ELSE "publicAccessLevel" END,
+            "linkShare" = CASE WHEN $2 THEN $3 ELSE "linkShare" END,
+            "linkShareAccessLevel" = CASE
+                WHEN $2 AND $3 IS NULL THEN NULL
+                WHEN $2 THEN COALESCE($5::"AccessLevel", 'view')
+                WHEN $4 AND "linkShare" IS NOT NULL THEN COALESCE($5::"AccessLevel", 'view')
+                WHEN $4 THEN NULL
+                ELSE "linkShareAccessLevel"
+            END,
             "updatedAt" = NOW()
         WHERE id = $1
         "#,
         share_permission_id,
-        update.is_public.is_some(),
-        update.is_public,
-        update_public_level,
-        public_access_level,
+        update_link_share,
+        link_share,
+        update_link_share_access_level,
+        link_share_access_level as _,
     )
     .execute(transaction.as_mut())
     .await?;

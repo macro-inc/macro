@@ -5,6 +5,7 @@ use model_entity::EntityType as ActivityEntityType;
 use uuid::Uuid;
 
 use macro_event_broker::Event;
+use models_properties::service::property_value::PropertyValue;
 
 use super::*;
 use crate::domain::events::EntityPropertyUpdatedMetadata;
@@ -25,7 +26,30 @@ fn update(actor: Option<MacroUserIdStr<'static>>) -> EntityPropertyUpdatedMetada
         property_definition_id: Uuid::from_u128(3),
         actor_user_id: actor,
         value: None,
+        previous_value: None,
         updated_at: Utc::now(),
+    }
+}
+
+#[test]
+fn property_update_carries_the_previous_value_as_the_transition_from() {
+    let previous = PropertyValue::SelectOption(vec![Uuid::from_u128(7)]);
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.previous_value = Some(previous.clone());
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected activities");
+    };
+    match &activities[0].action {
+        Action::PropertyChanged(change) => {
+            assert_eq!(
+                change.from,
+                Some(serde_json::to_value(&previous).expect("serializable"))
+            );
+            assert_eq!(change.to, None);
+        }
+        other => panic!("expected property_changed, got {other:?}"),
     }
 }
 
