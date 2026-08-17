@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                n.secondary_event_item_id,\n                n.secondary_event_item_type,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n              AND un.deleted_at IS NULL\n              AND (\n                (n.event_item_type = $2 AND n.event_item_id = $3)\n                OR (\n                    n.secondary_event_item_type = $2\n                    AND n.secondary_event_item_id = $3\n                )\n                OR (\n                    $2 = 'channel_message'\n                    AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = $3\n                )\n              )\n            ORDER BY un.created_at, un.notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "secondary_event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "secondary_event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notification_metadata: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "notification_event_type",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "02dd92a6524894ab4ab1b4042baf2b8ca7430ad8070561bef077b9507de191e8"
+}

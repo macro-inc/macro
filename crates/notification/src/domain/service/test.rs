@@ -115,6 +115,7 @@ struct MockRepository {
     entity_notifications:
         HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
     entity_notification_ids: Vec<Uuid>,
+    updated_notifications: Option<Vec<UserNotificationRow<serde_json::Value>>>,
     entity_lookup_calls: Mutex<Vec<(String, EntityType, String)>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
@@ -133,6 +134,7 @@ impl MockRepository {
             digest_eligible_notification_ids: None,
             entity_notifications: HashMap::new(),
             entity_notification_ids: Vec::new(),
+            updated_notifications: None,
             entity_lookup_calls: Mutex::new(Vec::new()),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
@@ -166,6 +168,14 @@ impl MockRepository {
 
     fn with_entity_notification_ids(mut self, notification_ids: Vec<Uuid>) -> Self {
         self.entity_notification_ids = notification_ids;
+        self
+    }
+
+    fn with_updated_notifications(
+        mut self,
+        notifications: Vec<UserNotificationRow<serde_json::Value>>,
+    ) -> Self {
+        self.updated_notifications = Some(notifications);
         self
     }
 
@@ -311,6 +321,9 @@ impl NotificationRepository for MockRepository {
             .lock()
             .unwrap()
             .push((user_id.to_string(), notification_ids.to_vec()));
+        if let Some(notifications) = &self.updated_notifications {
+            return Ok(notifications.clone());
+        }
         let now = Utc::now();
         Ok(notification_ids
             .iter()
@@ -329,6 +342,9 @@ impl NotificationRepository for MockRepository {
             notification_ids.to_vec(),
             done,
         ));
+        if let Some(notifications) = &self.updated_notifications {
+            return Ok(notifications.clone());
+        }
         let now = Utc::now();
         Ok(notification_ids
             .iter()
@@ -1809,6 +1825,38 @@ async fn test_update_notifications_and_return_preserves_requested_order() {
         TestNotifEvent::TestNotification(TestNotification { message })
             if message == "updated notification"
     )));
+}
+
+#[tokio::test]
+async fn test_update_notifications_and_return_skips_invalid_tagged_metadata() {
+    let user = test_user_id("invalid-updated-row@example.com");
+    let valid_id = Uuid::now_v7();
+    let invalid_id = Uuid::now_v7();
+    let now = Utc::now();
+    let valid = updated_notification(user.clone(), valid_id, false, None, now);
+    let mut invalid = updated_notification(user.clone(), invalid_id, false, None, now);
+    invalid.notification_event_type = "unknown_notification".to_string();
+
+    let repo = Arc::new(MockRepository::new().with_updated_notifications(vec![invalid, valid]));
+    let service = NotificationReaderService {
+        repository: repo,
+        queue: Arc::new(MockQueue::new()),
+        sns_endpoint: MockSnsEndpoint,
+        platform_config: test_platform_config(),
+        realtime: crate::domain::ports::NoopNotificationRealtimePublisher,
+    };
+
+    let updated = service
+        .update_notifications_and_return::<TestNotifEvent>(UpdateNotificationsRequest {
+            user_id: user,
+            notification_ids: &[invalid_id, valid_id],
+            status: NotificationStatus::Done(false),
+        })
+        .await
+        .expect("invalid metadata does not fail an already-committed update");
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].notification_id, valid_id);
 }
 
 #[tokio::test]

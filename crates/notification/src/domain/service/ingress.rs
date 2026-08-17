@@ -625,9 +625,23 @@ fn deserialize_updated_notifications<T: DeserializeOwned>(
 ) -> Result<Vec<UserNotificationRow<T>>, Report> {
     Ok(notifications
         .into_iter()
-        .map(|notification| notification.into_tagged().deserialize_metadata::<T>())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| rootcause::report!(error))?)
+        .filter_map(|notification| {
+            let notification_id = notification.notification_id;
+            let notification_event_type = notification.notification_event_type.clone();
+            match notification.into_tagged().deserialize_metadata::<T>() {
+                Ok(notification) => Some(notification),
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        %notification_id,
+                        notification_event_type,
+                        "skipping updated notification with invalid metadata"
+                    );
+                    None
+                }
+            }
+        })
+        .collect())
 }
 
 impl<N, Q, S, R> NotificationReader for NotificationReaderService<N, Q, S, R>

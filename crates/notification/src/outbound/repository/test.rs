@@ -31,6 +31,16 @@ impl Notification for TestMessageNotification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TestTaskNotification {
+    sub_type: String,
+}
+
+impl Notification for TestTaskNotification {
+    const TYPE_NAME: &'static str = "test_task_notification";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct TestGithubNotification {
     message: String,
 }
@@ -456,6 +466,121 @@ async fn test_get_notification_ids_for_entity_matches_primary_and_secondary_for_
         .collect::<HashSet<_>>();
 
     assert_eq!(notification_ids, HashSet::from([primary_id, secondary_id]));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_notification_ids_for_entity_matches_task_mapping(pool: Pool<Postgres>) {
+    let user = test_user("task-entity-user@test.com");
+    let task_id = Uuid::new_v4();
+    let task_entity_id = "task-1";
+
+    pool.create_notification(
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_str(task_entity_id),
+            secondary_notification_entity: None,
+            notification: TaggedContent::new(TestTaskNotification {
+                sub_type: "task".to_string(),
+            }),
+            sender_id: None,
+            recipient_ids: HashSet::from([user.clone()]),
+        },
+        task_id,
+        "test_service",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification_ids = pool
+        .get_notification_ids_for_entity(
+            &user,
+            &EntityType::Document.with_entity_str(task_entity_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(notification_ids, vec![task_id]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_notification_ids_for_entity_matches_message_mapping(pool: Pool<Postgres>) {
+    let user = test_user("message-entity-user@test.com");
+    let message_id = Uuid::new_v4().to_string();
+    let direct_id = Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let thread_reply_id = Uuid::parse_str("0193b1ea-b642-7589-893b-2b4a509c1e76").unwrap();
+
+    create_message_notification(&pool, &user, direct_id, &message_id, None).await;
+    create_message_notification(
+        &pool,
+        &user,
+        thread_reply_id,
+        &Uuid::new_v4().to_string(),
+        Some(&message_id),
+    )
+    .await;
+
+    let notification_ids = pool
+        .get_notification_ids_for_entity(
+            &user,
+            &EntityType::ChannelMessage.with_entity_str(&message_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(notification_ids, vec![direct_id, thread_reply_id]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_notification_ids_for_entity_matches_github_mapping(pool: Pool<Postgres>) {
+    let user = test_user("github-entity-user@test.com");
+    let github_id = Uuid::new_v4();
+    let foreign_entity_id = Uuid::new_v4().to_string();
+
+    pool.create_notification(
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::ForeignEntity
+                .with_entity_string(foreign_entity_id.clone()),
+            secondary_notification_entity: None,
+            notification: TaggedContent::new(TestGithubNotification {
+                message: "github".to_string(),
+            }),
+            sender_id: None,
+            recipient_ids: HashSet::from([user.clone()]),
+        },
+        github_id,
+        "test_service",
+        None,
+    )
+    .await
+    .unwrap();
+
+    pool.create_notification(
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::ForeignEntity
+                .with_entity_string(foreign_entity_id.clone()),
+            secondary_notification_entity: None,
+            notification: TaggedContent::new(TestNotification {
+                message: "non-github foreign entity".to_string(),
+            }),
+            sender_id: None,
+            recipient_ids: HashSet::from([user.clone()]),
+        },
+        Uuid::new_v4(),
+        "test_service",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification_ids = pool
+        .get_notification_ids_for_entity(
+            &user,
+            &EntityType::ForeignEntity.with_entity_str(&foreign_entity_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(notification_ids, vec![github_id]);
 }
 
 #[sqlx::test(

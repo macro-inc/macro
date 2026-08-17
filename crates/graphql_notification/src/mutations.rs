@@ -65,6 +65,7 @@ where
         entity: Entity<'static>,
         status: NotificationStatus,
     ) -> Result<Vec<UserNotificationRow<NotifEvent>>, Report> {
+        // Qualify the trait call to disambiguate it from this method and avoid recursive self-calls.
         NotificationReader::update_notifications_for_entity::<NotifEvent>(
             self,
             UpdateNotificationsForEntityRequest {

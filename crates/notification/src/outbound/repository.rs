@@ -44,6 +44,17 @@ type UserNotificationListRow = (
 );
 
 #[derive(sqlx::FromRow)]
+struct NotificationEntityMatchRow {
+    notification_id: Uuid,
+    event_item_id: String,
+    event_item_type: String,
+    secondary_event_item_id: Option<String>,
+    secondary_event_item_type: Option<String>,
+    notification_metadata: serde_json::Value,
+    notification_event_type: String,
+}
+
+#[derive(sqlx::FromRow)]
 struct EntityNotificationListRow {
     owner_id: String,
     notification_id: Uuid,
@@ -325,7 +336,9 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
         builder.push_bind(entity_tokens);
         builder.push(")) OR ");
 
-        builder.push("('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY(");
+        builder.push(
+            "('message:' || COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = ANY(",
+        );
         builder.push_bind(entity_tokens);
         builder.push(")) OR ");
 
@@ -335,6 +348,35 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
 
         builder.push(")");
     }
+}
+
+fn notification_refs_for_entity(entity: &Entity<'_>) -> Vec<NotificationEntityRef> {
+    let item_types: &[NotificationItemType] = match entity.entity_type {
+        EntityType::EmailThread => &[NotificationItemType::Email],
+        EntityType::ChannelMessage => &[NotificationItemType::Message],
+        EntityType::Channel => &[NotificationItemType::Channel],
+        EntityType::Document => &[NotificationItemType::Document, NotificationItemType::Task],
+        EntityType::Project => &[NotificationItemType::Project],
+        EntityType::Chat => &[NotificationItemType::Chat],
+        EntityType::Call => &[NotificationItemType::Call],
+        EntityType::ForeignEntity => &[NotificationItemType::Github],
+        EntityType::Reminder => &[NotificationItemType::Reminder],
+        EntityType::CalendarEvent => &[NotificationItemType::Calendar],
+        EntityType::User
+        | EntityType::Team
+        | EntityType::StaticFile
+        | EntityType::CrmCompany
+        | EntityType::CrmContact
+        | EntityType::Skill => &[],
+    };
+
+    item_types
+        .iter()
+        .map(|entity_type| NotificationEntityRef {
+            entity_type: *entity_type,
+            id: entity.entity_id.to_string(),
+        })
+        .collect()
 }
 
 fn notification_ref_matches_row(
@@ -957,9 +999,18 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         entity: &Entity<'_>,
     ) -> Result<Vec<Uuid>, Report> {
-        let notification_ids = sqlx::query_scalar!(
+        let entity_refs = notification_refs_for_entity(entity);
+        let rows = sqlx::query_as!(
+            NotificationEntityMatchRow,
             r#"
-            SELECT un.notification_id
+            SELECT
+                un.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                n.secondary_event_item_id,
+                n.secondary_event_item_type,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
@@ -969,6 +1020,10 @@ impl NotificationDbOps for PgPool {
                 OR (
                     n.secondary_event_item_type = $2
                     AND n.secondary_event_item_id = $3
+                )
+                OR (
+                    $2 = 'channel_message'
+                    AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = $3
                 )
               )
             ORDER BY un.created_at, un.notification_id
@@ -980,7 +1035,32 @@ impl NotificationDbOps for PgPool {
         .fetch_all(self)
         .await?;
 
-        Ok(notification_ids)
+        Ok(rows
+            .into_iter()
+            .filter(|row| {
+                let matches_secondary_entity = row.secondary_event_item_type.as_deref()
+                    == Some(entity.entity_type.as_ref())
+                    && row.secondary_event_item_id.as_deref() == Some(entity.entity_id.as_ref());
+                let matches_unmapped_primary_entity = entity_refs.is_empty()
+                    && row.event_item_type == entity.entity_type.as_ref()
+                    && row.event_item_id.as_str() == entity.entity_id.as_ref();
+
+                matches_secondary_entity
+                    || matches_unmapped_primary_entity
+                    || entity_refs.iter().any(|entity_ref| {
+                        notification_ref_matches_row(
+                            entity_ref,
+                            &row.event_item_id,
+                            &row.event_item_type,
+                            row.secondary_event_item_id.as_deref(),
+                            row.secondary_event_item_type.as_deref(),
+                            &row.notification_event_type,
+                            &row.notification_metadata,
+                        )
+                    })
+            })
+            .map(|row| row.notification_id)
+            .collect())
     }
 
     async fn get_basic_notifications(
