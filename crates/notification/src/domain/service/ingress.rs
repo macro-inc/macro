@@ -13,9 +13,9 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
-    NotificationListFilters, NotificationStatus, SendNotificationRequest,
-    UpdateNotificationsForEntityRequest, UpdateNotificationsRequest,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
+    NotificationStatus, SendNotificationRequest, UpdateNotificationsForEntityRequest,
+    UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
@@ -29,6 +29,7 @@ use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
@@ -98,10 +99,8 @@ pub trait NotificationReader: Send + Sync + 'static {
     fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> impl Future<
-        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
-    > + Send;
+        entities: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send;
 
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -745,14 +744,14 @@ where
     async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report> {
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report> {
         Ok(self
             .repository
-            .get_entity_notifications_batch(user_id, entity_refs)
+            .get_entity_notifications_batch(user_id, entities)
             .await?
             .into_iter()
-            .map(|(entity_ref, notifications)| {
+            .map(|(entity, notifications)| {
                 let notifications = notifications
                     .into_iter()
                     .filter_map(|notification| {
@@ -765,8 +764,8 @@ where
                                     error = ?error,
                                     %notification_id,
                                     notification_event_type,
-                                    entity_type = ?entity_ref.entity_type,
-                                    entity_id = %entity_ref.id,
+                                    entity_type = ?entity.entity_type,
+                                    entity_id = %entity.entity_id,
                                     "skipping notification with invalid metadata"
                                 );
                                 None
@@ -775,7 +774,7 @@ where
                     })
                     .collect();
 
-                (entity_ref, notifications)
+                (entity, notifications)
             })
             .collect())
     }

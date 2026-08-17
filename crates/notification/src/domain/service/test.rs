@@ -11,8 +11,7 @@ use crate::domain::models::queue_message::{
     RawQueueMessage, RealtimeNotif,
 };
 use crate::domain::models::request::{
-    NotificationEntityRef, NotificationItemType, NotificationStatus,
-    UpdateNotificationsForEntityRequest, UpdateNotificationsRequest,
+    NotificationStatus, UpdateNotificationsForEntityRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
@@ -30,7 +29,7 @@ use crate::domain::service::{
 use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use rate_limit::domain::models::RateLimitOk;
 use rootcause::{Report, report};
 use serde::de::DeserializeOwned;
@@ -112,8 +111,7 @@ struct MockRepository {
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
     basic_notifications: Vec<NotificationIdAndCollapseKey>,
     digest_eligible_notification_ids: Option<HashSet<Uuid>>,
-    entity_notifications:
-        HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+    entity_notifications: HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
     entity_notification_ids: Vec<Uuid>,
     updated_notifications: Option<Vec<UserNotificationRow<serde_json::Value>>>,
     entity_lookup_calls: Mutex<Vec<(String, EntityType, String)>>,
@@ -159,10 +157,10 @@ impl MockRepository {
 
     fn with_entity_notifications(
         mut self,
-        entity_ref: NotificationEntityRef,
+        entity: Entity<'static>,
         notifications: Vec<UserNotificationRow<serde_json::Value>>,
     ) -> Self {
-        self.entity_notifications.insert(entity_ref, notifications);
+        self.entity_notifications.insert(entity, notifications);
         self
     }
 
@@ -407,18 +405,17 @@ impl NotificationRepository for MockRepository {
     async fn get_entity_notifications_batch(
         &self,
         _user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
-        Ok(entity_refs
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
+        Ok(entities
             .into_iter()
-            .map(|entity_ref| {
+            .map(|entity| {
                 let notifications = self
                     .entity_notifications
-                    .get(&entity_ref)
+                    .get(&entity)
                     .cloned()
                     .unwrap_or_default();
-                (entity_ref, notifications)
+                (entity, notifications)
             })
             .collect())
     }
@@ -651,11 +648,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     async fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
+        entities: Vec<Entity<'static>>,
+    ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
         (**self)
-            .get_entity_notifications_batch(user_id, entity_refs)
+            .get_entity_notifications_batch(user_id, entities)
             .await
     }
 
@@ -1577,10 +1573,7 @@ async fn test_egress_conn_gateway_not_rate_limited() {
 #[tokio::test]
 async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {
     let user = test_user_id("alice@example.com");
-    let entity_ref = NotificationEntityRef {
-        entity_type: NotificationItemType::Document,
-        id: "doc-1".to_string(),
-    };
+    let entity_ref = EntityType::Document.with_entity_string("doc-1".to_string());
     let now = Utc::now();
     let valid_id = Uuid::now_v7();
     let invalid_id = Uuid::now_v7();
@@ -1619,10 +1612,7 @@ async fn test_get_entity_notifications_batch_skips_invalid_tagged_metadata() {
 #[tokio::test]
 async fn test_get_entity_notifications_batch_deserializes_tagged_metadata() {
     let user = test_user_id("alice@example.com");
-    let entity_ref = NotificationEntityRef {
-        entity_type: NotificationItemType::Document,
-        id: "doc-1".to_string(),
-    };
+    let entity_ref = EntityType::Document.with_entity_string("doc-1".to_string());
     let notification_id = Uuid::now_v7();
     let now = Utc::now();
     let mut notification = updated_notification(user.clone(), notification_id, false, None, now);

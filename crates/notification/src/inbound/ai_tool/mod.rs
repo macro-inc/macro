@@ -7,8 +7,8 @@ use crate::domain::{
     models::{
         UserNotificationRow,
         request::{
-            NotificationEntityRef, NotificationItemType, NotificationListFilters,
-            NotificationStatus, UpdateNotificationsRequest,
+            NotificationCategory, NotificationListFilters, NotificationStatus,
+            UpdateNotificationsRequest,
         },
     },
     service::NotificationReader,
@@ -19,6 +19,7 @@ use ai_toolset::{
 use async_trait::async_trait;
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use models_pagination::CreatedAt;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
@@ -60,6 +61,75 @@ where
         .add_tool::<MarkNotificationsDone, NotificationToolContext<T>>()
 }
 
+/// Canonical entity types accepted by the notification-listing tool.
+///
+/// This mirrors [`EntityType`] because the shared model intentionally does not
+/// depend on `schemars`, while AI tool inputs require [`JsonSchema`].
+#[allow(missing_docs)]
+#[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationEntityType {
+    User,
+    Chat,
+    Channel,
+    #[serde(alias = "message")]
+    ChannelMessage,
+    Document,
+    Project,
+    #[serde(alias = "email")]
+    EmailThread,
+    #[serde(alias = "calendar")]
+    CalendarEvent,
+    Team,
+    Call,
+    #[serde(alias = "github")]
+    ForeignEntity,
+    StaticFile,
+    CrmCompany,
+    CrmContact,
+    Reminder,
+    Skill,
+}
+
+impl From<NotificationEntityType> for EntityType {
+    fn from(value: NotificationEntityType) -> Self {
+        match value {
+            NotificationEntityType::User => Self::User,
+            NotificationEntityType::Chat => Self::Chat,
+            NotificationEntityType::Channel => Self::Channel,
+            NotificationEntityType::ChannelMessage => Self::ChannelMessage,
+            NotificationEntityType::Document => Self::Document,
+            NotificationEntityType::Project => Self::Project,
+            NotificationEntityType::EmailThread => Self::EmailThread,
+            NotificationEntityType::CalendarEvent => Self::CalendarEvent,
+            NotificationEntityType::Team => Self::Team,
+            NotificationEntityType::Call => Self::Call,
+            NotificationEntityType::ForeignEntity => Self::ForeignEntity,
+            NotificationEntityType::StaticFile => Self::StaticFile,
+            NotificationEntityType::CrmCompany => Self::CrmCompany,
+            NotificationEntityType::CrmContact => Self::CrmContact,
+            NotificationEntityType::Reminder => Self::Reminder,
+            NotificationEntityType::Skill => Self::Skill,
+        }
+    }
+}
+
+/// User-facing reference to one specific entity to filter notifications by.
+#[derive(Debug, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationEntityFilter {
+    /// Canonical entity type.
+    pub entity_type: NotificationEntityType,
+    /// Canonical entity identifier.
+    pub id: String,
+}
+
+impl NotificationEntityFilter {
+    fn into_entity(self) -> Entity<'static> {
+        EntityType::from(self.entity_type).with_entity_string(self.id)
+    }
+}
+
 /// List the current user's active notifications.
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -92,14 +162,14 @@ pub struct ListNotifications {
         description = "Filter to specific notification item types. If omitted, returns all types. Example: [\"email\", \"message\"] returns only email and message notifications."
     )]
     #[serde(default)]
-    pub include_types: Option<Vec<NotificationItemType>>,
+    pub include_types: Option<Vec<NotificationCategory>>,
 
     /// Filter to notifications for specific entities. If omitted, returns notifications for all entities.
     #[schemars(
-        description = "Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{\"entityType\":\"email\",\"id\":\"...\"}] returns notifications for one email thread."
+        description = "Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{\"entityType\":\"email_thread\",\"id\":\"...\"}] returns notifications for one email thread."
     )]
     #[serde(default)]
-    pub entities: Option<Vec<NotificationEntityRef>>,
+    pub entities: Option<Vec<NotificationEntityFilter>>,
 }
 
 /// A single notification item in the list response.
@@ -179,7 +249,13 @@ where
                     done: self.done.or(Some(false)),
                     seen: self.seen,
                     include_types: self.include_types.clone().unwrap_or_default(),
-                    entities: self.entities.clone().unwrap_or_default(),
+                    entities: self
+                        .entities
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(NotificationEntityFilter::into_entity)
+                        .collect(),
                 },
             )
             .await

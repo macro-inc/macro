@@ -20,7 +20,7 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
-use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
+use crate::domain::models::request::NotificationListFilters;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
     SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
@@ -158,10 +158,10 @@ pub trait NotificationRepository: Send + Sync + 'static {
     fn get_entity_notifications_batch(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entity_refs: Vec<NotificationEntityRef>,
+        entities: Vec<Entity<'static>>,
     ) -> impl Future<
         Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
             Report,
         >,
     > + Send;

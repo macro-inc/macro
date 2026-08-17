@@ -187,10 +187,10 @@ impl NotificationRepository for MockRepo {
     async fn get_entity_notifications_batch(
         &self,
         _: MacroUserIdStr<'_>,
-        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
+        entity_refs: Vec<model_entity::Entity<'static>>,
     ) -> Result<
         std::collections::HashMap<
-            crate::domain::models::request::NotificationEntityRef,
+            model_entity::Entity<'static>,
             Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>,
         >,
         Report,
