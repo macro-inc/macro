@@ -490,7 +490,7 @@ const parseBooleanOverride = (value: unknown): boolean | undefined =>
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
   'ENABLE_GRAPHQL_BACKFILL',
-  true
+  false
 );
 
 /** Browser-only Turso/OPFS cache rollout. Production defaults off. */
