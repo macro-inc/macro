@@ -208,9 +208,7 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match
-          when={isTouchDevice() && mobileStacks().length > 0}
-        >
+        <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
             entity={props.entity}
