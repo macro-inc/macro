@@ -979,7 +979,7 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel depth={2} class="rounded-xl">
+              <Panel depth={2} class="rounded-xl bg-dialog">
                 <Panel.Header class="px-4">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
@@ -1015,7 +1015,7 @@ export function ShareModal(props: ShareModalProps) {
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel depth={2} class="rounded-xl">
+                <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Header class="px-4">
                     <span class="text-sm font-medium">
                       People with access to this{' '}
@@ -1149,7 +1149,7 @@ export function ShareModal(props: ShareModalProps) {
                   !isLinkSharingDisabledForItem(props.itemType)
                 }
               >
-                <Panel depth={2} class="rounded-xl">
+                <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Body>
                     <LinkSharingControls
                       linkShare={linkShare()}
