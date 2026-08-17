@@ -23,12 +23,28 @@ pub struct MentionOrigin {
 }
 
 /// Open a new session for a mention.
+///
+/// Only for managed sessions - the ones whose sandbox this deployment
+/// provisions. External sessions are opened through
+/// [`agent_session::domain::ports::ExternalSessionOpener`] instead: they
+/// need no provisioning, no announcement, and no first prompt, so they are
+/// a plain create rather than a harness command.
 #[derive(Debug, Clone)]
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The mention itself.
     pub origin: MentionOrigin,
+}
+
+/// Whether this deployment provisions a sandbox for `bot`'s sessions.
+///
+/// Only the dedicated Macro coder bot is managed; every other agent bot hosts
+/// its own runtime and dials the gateway. This becomes a bot attribute the
+/// day managed bots stop being a closed set of one.
+#[must_use]
+pub fn is_managed_bot(bot: BotId) -> bool {
+    bot == bot_id::MACRO_CODER_BOT_ID
 }
 
 /// Where a prompt came from, when it came from somewhere the session should

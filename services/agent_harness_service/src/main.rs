@@ -6,6 +6,7 @@
 //! announcements, then drives the orchestrator from `macro.agent_sessions`.
 
 mod api;
+mod bots_directory;
 mod config;
 
 use std::sync::Arc;
@@ -21,12 +22,16 @@ use agent_harness::outbound::daytona::{
 };
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::inbound::axum_router::{AgentSessionControlState, AgentSessionRouterState};
+use agent_session::inbound::axum_router::{
+    AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
+};
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
 use bot_id::BotId;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
+use bots_directory::PgBotDirectory;
 use channels::domain::service::ChannelServiceImpl;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
@@ -215,12 +220,24 @@ async fn main() -> anyhow::Result<()> {
     let control_state = AgentSessionControlState::new(
         harness.clone(),
         entity_access,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let create_state = CreateSessionState::new(
+        harness.clone(),
+        Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone()))),
         MacroAuthorizationState::new(Arc::new(authorization_service)),
+        &macro_service_urls::AgentHarnessGatewayWebsocketUrl::new()?,
     );
     let http_port = config.port;
     let http = tokio::spawn(async move {
-        if let Err(error) =
-            api::setup_and_serve(read_state, control_state, http_port, shutdown_signal()).await
+        if let Err(error) = api::setup_and_serve(
+            read_state,
+            control_state,
+            create_state,
+            http_port,
+            shutdown_signal(),
+        )
+        .await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
         }

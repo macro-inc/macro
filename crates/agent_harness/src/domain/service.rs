@@ -6,7 +6,7 @@ use std::sync::Arc;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{
-    AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
 };
 use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
 use agent_session::domain::service::AgentSessionService;
@@ -18,7 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AnnounceOrigin, DeliverAction, HarnessCommand, OpenSession, SessionAnnouncement,
-    SessionDefaults, SpawnContainer,
+    SessionDefaults, SpawnContainer, is_managed_bot,
 };
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
@@ -116,6 +116,31 @@ where
     ) {
         tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
     }
+
+    /// Attach an external runtime that dialed in.
+    ///
+    /// The transport layer authenticates the dial before calling this; the
+    /// checks here are the ones only the domain can make.
+    pub async fn attach_external_runtime<Connector>(
+        &self,
+        session_id: AgentSessionId,
+        connector: Connector,
+    ) -> Result<()>
+    where
+        Connector: agent_session::domain::ports::AgentConnector + Clone,
+    {
+        // Re-read rather than trusted: attaching to a session that no longer
+        // exists would mint a live actor for a deleted row.
+        let session = self.inner.sessions.get_session(session_id).await?;
+        if is_managed_bot(session.bot_id) {
+            return Err(HarnessError::ManagedRuntime);
+        }
+        self.inner
+            .sessions
+            .attach_session(session_id, connector)
+            .await?;
+        Ok(())
+    }
 }
 
 /// The harness is what holds a session's live resources, so it is what the
@@ -151,6 +176,42 @@ where
         .await
         .map_err(into_session_error)?;
         Ok(action_id)
+    }
+}
+
+/// External sessions are a plain create: no sandbox (the runtime dials in),
+/// no first prompt (the runtime sends it through the control endpoint), and
+/// no announcement (announcing as the right bot needs a per-bot announcer
+/// this deployment does not have yet). The harness still owns the operation
+/// so the opening semantics have one home when they grow.
+impl<Sessions, Containers, Announcer> agent_session::domain::ports::ExternalSessionOpener
+    for AgentHarnessService<Sessions, Containers, Announcer>
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+{
+    async fn open_external_session(
+        &self,
+        request: agent_session::domain::ports::OpenExternalAgentSession,
+    ) -> agent_session::domain::error::Result<AgentSession> {
+        self.inner
+            .sessions
+            .create_session(CreateAgentSessionParams {
+                id: AgentSessionId::new(),
+                owner_id: request.owner,
+                bot_id: request.bot_id,
+                thread_id: request.thread.map(|thread| thread.thread_id),
+                originating_message_id: request.thread.map(|thread| thread.message_id),
+                model: self.inner.defaults.model.clone(),
+                harness: self.inner.defaults.harness.clone(),
+                repo_url: self.inner.defaults.repo_url.clone(),
+                workspace: request.workspace,
+                // The thread linkage is the caller's claim, not an observed
+                // mention; it must not grant the channel anything.
+                verified_mention: false,
+            })
+            .await
     }
 }
 
@@ -212,6 +273,10 @@ where
                 model: self.defaults.model.clone(),
                 harness: self.defaults.harness.clone(),
                 repo_url: repo_url.clone(),
+                // Managed sandboxes run in the path baked into their image.
+                workspace: agent_session::AGENT_WORKING_DIRECTORY.to_owned(),
+                // This open came from the trigger pipeline seeing the mention.
+                verified_mention: true,
             })
             .await?;
 
@@ -273,6 +338,17 @@ where
             // action against the new connection. Same id: the first attempt
             // never reached the wire.
             Err(AgentSessionError::Disconnected(_)) => {
+                // A external runtime is not ours to resurrect: only its
+                // operator can redial, so fail rather than spawn a sandbox
+                // for a session that never had one.
+                let session = self.sessions.get_session(session_id).await?;
+                if !is_managed_bot(session.bot_id) {
+                    // Kept in the session vocabulary so transports report it
+                    // as a disconnect, not an internal error.
+                    return Err(HarnessError::Session(AgentSessionError::Disconnected(
+                        session_id,
+                    )));
+                }
                 let container = self.containers.resume(session_id).await?;
                 self.sessions.attach_session(session_id, container).await?;
                 self.sessions

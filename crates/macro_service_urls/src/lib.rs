@@ -569,6 +569,14 @@ service_url! {
             dev: "https://agent-harness-dev.macro.com",
             prod: "https://agent-harness.macro.com",
         },
+        /// Agent harness runtime gateway WebSocket URL. External agent
+        /// runtimes dial `{base}/runtime/{session_id}/ws` here to serve the
+        /// sessions they were given by `POST /agent-sessions`.
+        pub AgentHarnessGatewayWebsocketUrl {
+            local: "ws://localhost:8101",
+            dev: "wss://agent-harness-dev.macro.com",
+            prod: "wss://agent-harness.macro.com",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",

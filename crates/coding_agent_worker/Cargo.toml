@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "coding_agent_worker"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "coding_agent_worker"
+path = "src/main.rs"
+
+[dependencies]
+# Direct crate import is the whole typegen story: the envelope types and the
+# websocket client wire come from the protocol crate, compiler-checked.
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+clap = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
+tokio-tungstenite = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -18,6 +18,7 @@ members = [
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
+  "crates/coding_agent_worker",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
@@ -61,6 +62,7 @@ members = [
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
@@ -281,6 +283,7 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
+toml = "0.8"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }

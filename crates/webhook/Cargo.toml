@@ -39,11 +39,9 @@ ingestion = [
   "ports",
 ]
 outbound = [
-  "dep:hex",
-  "dep:hmac",
+  "dep:webhook_signature",
   "dep:macro_uuid",
   "dep:reqwest",
-  "dep:sha2",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:tokio",
@@ -64,8 +62,6 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ], optional = true }
 futures = { workspace = true, optional = true }
-hex = { workspace = true, optional = true }
-hmac = { workspace = true, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
@@ -82,7 +78,7 @@ reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
 thiserror = { workspace = true }

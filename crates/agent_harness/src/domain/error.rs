@@ -21,6 +21,9 @@ pub enum HarnessError {
     /// The session has no container to talk to any more.
     #[error("agent session {0} is no longer connected")]
     Disconnected(AgentSessionId),
+    /// Something dialed in for a session whose runtime this deployment owns.
+    #[error("managed sessions own their runtime; nothing may dial in for them")]
+    ManagedRuntime,
     /// The session's transport failed.
     #[error(transparent)]
     Transport(#[from] TransportError),

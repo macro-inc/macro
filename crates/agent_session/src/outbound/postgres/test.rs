@@ -67,6 +67,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
                 handle: format!("test-agent-{}", macro_uuid::generate_uuid_v7()),
                 description: None,
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await
@@ -88,6 +89,8 @@ fn new_session(
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
         repo_url: "https://github.com/example/example".to_string(),
+        workspace: "/workspace".to_string(),
+        verified_mention: true,
     }
 }
 

@@ -32,6 +32,8 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         model: "claude".to_owned(),
         harness: "opencode".to_owned(),
         repo_url: "https://github.com/macro/macro".to_owned(),
+        workspace: "/workspace".to_owned(),
+        verified_mention: true,
     }
 }
 

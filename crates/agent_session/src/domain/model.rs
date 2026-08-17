@@ -44,6 +44,12 @@ pub struct CreateAgentSessionParams {
     pub harness: String,
     /// Repository the agent works with.
     pub repo_url: String,
+    /// Absolute directory the harness runs in on its runtime.
+    pub workspace: String,
+    /// Whether `originating_message_id` came from the trigger pipeline
+    /// observing a real mention, as opposed to being claimed by the caller.
+    /// Only a verified mention grants its channel access to the session.
+    pub verified_mention: bool,
 }
 
 /// A running or historical agent coding session.
@@ -69,6 +75,11 @@ pub struct AgentSession {
     pub harness: String,
     /// repo we are working with
     pub repo_url: String,
+    /// Directory the harness runs in, snapshotted at creation so that
+    /// resume and load can re-enter the directory the session actually ran
+    /// in. Not yet consumed by the session actor, which still uses
+    /// [`crate::AGENT_WORKING_DIRECTORY`].
+    pub workspace: String,
     /// ACP session if we have one
     pub acp_session_id: Option<String>,
     pub status: SessionStatus,

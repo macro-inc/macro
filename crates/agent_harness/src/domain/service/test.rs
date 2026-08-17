@@ -35,6 +35,8 @@ use crate::domain::ports::ContainerManager as _;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
+use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::ports::{ExternalSessionOpener as _, OpenExternalAgentSession};
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -146,7 +148,9 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { bot_id, origin } = open_command();
+    let OpenSession { origin, .. } = open_command();
+    // The coder bot: resume-on-disconnect only exists for managed sessions.
+    let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
@@ -159,6 +163,8 @@ async fn disconnected_session(
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            workspace: "/workspace".to_owned(),
+            verified_mention: true,
         },
     )
     .await
@@ -714,4 +720,147 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
         prompts(&resumed.agent()),
         [vec![ContentBlock::from("wake up")]]
     );
+}
+
+fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
+    OpenExternalAgentSession {
+        bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        workspace: workspace.to_owned(),
+        owner: sender(),
+        thread: None,
+    }
+}
+
+#[tokio::test]
+async fn an_external_open_provisions_nothing_and_prompts_nobody() {
+    let (service, repo, containers, announcer) = harness();
+
+    let session = service
+        .open_external_session(open_external_request("/home/operator/code"))
+        .await
+        .expect("an external open needs no runtime yet");
+
+    // The row exists with the stated workspace, but nothing was provisioned,
+    // nothing was announced, and no prompt has gone anywhere: the runtime
+    // delivers the first prompt itself through the control endpoint after
+    // dialing in.
+    assert_eq!(session.workspace, "/home/operator/code");
+    assert_eq!(containers.spawned(), 0);
+    assert!(announcer.announced().is_empty());
+
+    // The operator's runtime dials in and drives the ACP handshake; still no
+    // prompt, because none has been sent yet.
+    let runtime = ContainerMock::default();
+    let attach = service.attach_external_runtime(session.id, runtime.clone());
+    let drive = complete_handshake(&runtime);
+    let (attached, ()) = tokio::join!(attach, drive);
+    attached.expect("attach should succeed");
+    assert!(prompts(&runtime.agent()).is_empty());
+
+    // The runtime forwards the mention through control: the prompt lands.
+    service
+        .control_event(
+            session.id,
+            ControlEvent {
+                action: AgentAction::prompt("@claude fix the failing test"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("the first prompt reaches the attached runtime");
+    assert_eq!(
+        prompts(&runtime.agent()),
+        [vec![ContentBlock::from("@claude fix the failing test")]]
+    );
+    // Prompt delivery is ordered behind the `session/new` response, so the
+    // negotiated ACP session id has been persisted by now.
+    let row = repo.get(session.id).await.expect("the session row exists");
+    assert_eq!(row.acp_session_id.as_deref(), Some("acp-test"));
+}
+
+#[tokio::test]
+async fn a_redial_attaches_only_after_the_live_connection_drops() {
+    let (service, _repo, _containers, _announcer) = harness();
+    let session = service
+        .open_external_session(open_external_request("/srv/agent"))
+        .await
+        .expect("open");
+
+    let first = ContainerMock::default();
+    let (attached, ()) = tokio::join!(
+        service.attach_external_runtime(session.id, first.clone()),
+        complete_handshake(&first)
+    );
+    attached.expect("first attach");
+
+    // A redial while the first connection is still live is refused: one
+    // session, one runtime.
+    let premature = ContainerMock::default();
+    let error = service
+        .attach_external_runtime(session.id, premature)
+        .await
+        .expect_err("a live session refuses a second runtime");
+    assert!(
+        matches!(
+            &error,
+            HarnessError::Session(AgentSessionError::AlreadyConnected(id)) if *id == session.id,
+        ),
+        "got {error:?}"
+    );
+
+    // After the first connection drops, a redial attaches cleanly.
+    first.disconnects();
+    let second = ContainerMock::default();
+    while service
+        .attach_external_runtime(session.id, second.clone())
+        .await
+        .is_err()
+    {
+        // The actor notices the drop asynchronously; retry until it has.
+        tokio::task::yield_now().await;
+    }
+    assert!(prompts(&second.agent()).is_empty());
+}
+
+#[tokio::test]
+async fn nothing_may_dial_in_for_a_managed_session() {
+    let (service, repo, containers, _announcer) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    let error = service
+        .attach_external_runtime(id, ContainerMock::default())
+        .await
+        .expect_err("a managed session's runtime is not dialable");
+
+    assert!(
+        matches!(error, HarnessError::ManagedRuntime),
+        "got {error:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_disconnected_external_session_never_gets_a_sandbox() {
+    let (service, _repo, containers, _announcer) = harness();
+    let session = service
+        .open_external_session(open_external_request("/srv/agent"))
+        .await
+        .expect("open");
+
+    // No runtime ever dialed in, so a follow-up prompt has nowhere to go -
+    // and must NOT fall into the managed resume path and boot a sandbox for
+    // an operator-hosted bot.
+    let error = service
+        .execute(session.id, HarnessCommand::Deliver(forward_message("more")))
+        .await
+        .expect_err("nothing is attached");
+
+    assert!(
+        matches!(
+            error,
+            HarnessError::Session(AgentSessionError::Disconnected(id)) if id == session.id,
+        ),
+        "got {error:?}"
+    );
+    assert_eq!(containers.spawned(), 0);
+    assert_eq!(containers.resumed(), 0);
 }

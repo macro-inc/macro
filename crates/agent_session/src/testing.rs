@@ -109,6 +109,9 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             model: params.model,
             harness: params.harness,
             repo_url: params.repo_url,
+            workspace: params.workspace,
+            // verified_mention only affects access grants, which the in-memory
+            // repo does not model.
             acp_session_id: None,
             status: SessionStatus::default(),
             created_at: now,
@@ -298,6 +301,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         model: "claude-sonnet-5".to_string(),
         harness: "claude-code".to_string(),
         repo_url: "https://github.com/example/example".to_string(),
+        workspace: "/workspace".to_string(),
         acp_session_id: None,
         status: SessionStatus::NoMessages,
         created_at: now,
