@@ -2,7 +2,6 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { EventComposer } from '@app/features/calendar/events/EventComposer';
 import type { EventEditorInitialValues } from '@app/features/calendar/events/EventEditorForm';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -236,32 +235,6 @@ registerComponent(
     );
   })
 );
-
-const CalendarView = lazy(() =>
-  import('@app/features/calendar/calendar-view').then((module) => ({
-    default: module.CalendarView,
-  }))
-);
-
-function TrackedCalendarView() {
-  usePageViewTracking('calendar');
-  return <CalendarView />;
-}
-
-function CalendarViewWrapper() {
-  const calendarUiEnabled = useCalendarUiFlag();
-
-  return (
-    <Show
-      when={calendarUiEnabled()}
-      fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
-    >
-      <TrackedCalendarView />
-    </Show>
-  );
-}
-
-registerComponent('calendar', withAuth(CalendarViewWrapper));
 
 // The Activity tab briefly shipped as two separate views; restored splits
 // may still reference their ids.

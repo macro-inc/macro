@@ -66,6 +66,7 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   canvas: 'bg-canvas/20 group/item',
   video: 'bg-video/20 group/item',
   call: defaultFileColor,
+  calendar: defaultFileColor,
   contact: defaultFileColor,
   company: defaultFileColor,
   default: defaultFileColor,

@@ -39,9 +39,8 @@ import {
 import { useCalendarView } from './CalendarViewContext';
 import {
   calendarFocusTargetId,
-  clearCalendarFocus,
-  pendingCalendarFocus,
-} from './calendar-focus-intent';
+  useCalendarFocus,
+} from './calendar-focus-target';
 import { isCalendarRangeSupported } from './calendar-supported-range';
 import {
   DEFAULT_CALENDAR_SOURCE,
@@ -648,33 +647,33 @@ function CalendarPageHost(props: {
   const calendar = useFullCalendar();
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
+  const calendarFocus = useCalendarFocus();
   const [element, setElement] = createSignal<HTMLDivElement>();
   const isActive = () => pager.isActive(props.id);
 
-  // Deep-link consumption: a pending focus request (set by notification
-  // navigation, possibly before this split even mounted) pages the active
-  // calendar to the occurrence and opens its details once its chip renders.
+  // A block navigation request pages this calendar instance to one occurrence
+  // and opens its details once FullCalendar has mounted the target chip.
   let navigatedFor: number | undefined;
   createEffect(() => {
     props.chipMounts();
-    const intent = pendingCalendarFocus();
-    if (!intent || !isActive()) return;
+    const target = calendarFocus.pendingTarget();
+    if (!target || !isActive()) return;
     const dateInfo = calendar.dateInfo();
     if (!dateInfo) return;
-    if (intent.date < dateInfo.start || intent.date >= dateInfo.end) {
+    if (target.date < dateInfo.start || target.date >= dateInfo.end) {
       // Navigate once per request; the effect re-runs as the destination
       // page's chips mount, and by then the date is inside the view.
-      if (navigatedFor !== intent.requestedAt) {
-        navigatedFor = intent.requestedAt;
-        pager.navigateToDate(intent.date);
+      if (navigatedFor !== target.requestId) {
+        navigatedFor = target.requestId;
+        pager.navigateToDate(target.date);
       }
       return;
     }
-    const targetId = calendarFocusTargetId(intent);
+    const targetId = calendarFocusTargetId(target);
     const event = props.data.eventsById().get(targetId);
     const chip = props.eventElements.get(targetId);
     if (!event || !chip?.isConnected) return;
-    clearCalendarFocus();
+    calendarFocus.consume(target.requestId);
     calendarView.selectEvent(event, chip);
   });
 

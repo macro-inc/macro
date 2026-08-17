@@ -1,3 +1,5 @@
+import { createCalendarBlockRange } from '@block-calendar/calendar-range';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -23,10 +25,8 @@ import type { EntityType, NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { getReminderById } from '@queries/reminders/reminders';
-import { parseISO } from 'date-fns';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import { requestCalendarFocus } from '../calendar/calendar-focus-intent';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
 import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
@@ -45,7 +45,7 @@ async function goToLocationInSplit(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias,
   id: string,
-  params: Record<string, string>
+  params: Record<string, unknown>
 ) {
   const orchestrator = layoutManager.getOrchestrator();
   if (!orchestrator) return;
@@ -65,7 +65,7 @@ function openSplitIfNotOpen(
   id: string,
   options: {
     newSplit?: boolean;
-    params?: Record<string, string>;
+    params?: Record<string, unknown>;
     sourceHandle?: SplitHandle;
   } = {}
 ) {
@@ -403,23 +403,24 @@ function getSupportedHandler(
         // longer meant to have.
         if (!ENABLE_CALENDAR_UI()) return;
         const content = meta.content;
-        // parseISO keeps an all-day date local; `new Date('YYYY-MM-DD')`
-        // would read it as UTC midnight and land a day early west of it.
-        const start = content.startsAt
-          ? new Date(content.startsAt)
+        const time = content.startsAt
+          ? {
+              kind: 'timed' as const,
+              startsAt: content.startsAt,
+              endsAt: content.endsAt ?? undefined,
+            }
           : content.startDate
-            ? parseISO(content.startDate)
+            ? { kind: 'allDay' as const, startDate: content.startDate }
             : undefined;
-        if (start) {
-          requestCalendarFocus({
-            eventId: content.eventId,
-            occurrenceKey: content.occurrenceKey,
-            date: start,
-          });
-        }
-        openSplitIfNotOpen(lm, 'component', 'calendar', {
+        const range = time ? createCalendarBlockRange(time) : undefined;
+        openSplitIfNotOpen(lm, 'calendar', CALENDAR_BLOCK_ID, {
           newSplit,
           sourceHandle,
+          params: {
+            eventId: content.eventId,
+            occurrenceKey: content.occurrenceKey,
+            range,
+          },
         });
       };
     })

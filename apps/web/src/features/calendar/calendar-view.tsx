@@ -40,6 +40,10 @@ import {
   CalendarViewContextProvider,
   useCalendarView,
 } from './CalendarViewContext';
+import {
+  CalendarFocusContextProvider,
+  type CalendarFocusTarget,
+} from './calendar-focus-target';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
@@ -53,13 +57,15 @@ const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
 }).format;
 
 /** A calendar-focused workspace view backed by buffered FullCalendar pages. */
-export function CalendarView() {
+export function CalendarView(props: { focusTarget?: CalendarFocusTarget }) {
   return (
-    <CalendarViewContextProvider>
-      <CalendarPagerContextProvider>
-        <CalendarPagerRoot />
-      </CalendarPagerContextProvider>
-    </CalendarViewContextProvider>
+    <CalendarFocusContextProvider target={() => props.focusTarget}>
+      <CalendarViewContextProvider>
+        <CalendarPagerContextProvider>
+          <CalendarPagerRoot />
+        </CalendarPagerContextProvider>
+      </CalendarViewContextProvider>
+    </CalendarFocusContextProvider>
   );
 }
 

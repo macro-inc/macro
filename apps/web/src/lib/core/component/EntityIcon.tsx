@@ -105,6 +105,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Call',
   },
+  calendar: {
+    icon: WideCalendar,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Calendar',
+  },
   canvas: {
     icon: Canvas,
     foreground: 'text-canvas',
@@ -347,6 +353,7 @@ const WIDE_ICONS: Record<
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
   call: PhoneCall,
+  calendar: WideCalendar,
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,

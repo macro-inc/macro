@@ -1,3 +1,4 @@
+import type { CalendarBlockProps } from '@block-calendar/types';
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
 import type { BlockMarkdownProps } from '@block-md/component/Block';
@@ -49,6 +50,7 @@ import type { ObjectLike, ResultError } from './util/result';
  */
 export const BlockRegistry = [
   'call',
+  'calendar',
   'chat',
   'write',
   'pdf',
@@ -100,6 +102,7 @@ export type BlockAlias = (typeof BlockAliasRegistry)[BlockAliasKeys];
  */
 export const NonDocumentBlockTypes = [
   'call',
+  'calendar',
   'chat',
   'channel',
   'project',
@@ -144,6 +147,7 @@ function exclude(excludeSet: BlockName[]) {
  */
 const _ValidBlockCombinations: BlockCombinationRules = {
   call: allBlockNames,
+  calendar: allBlockNames,
   chat: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
   write: exclude(['write']),
@@ -169,6 +173,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
 // maps block name to valid parents
 export const ValidNestingCombinations: BlockCombinationRules = {
   call: new Set([]),
+  calendar: new Set([]),
   canvas: new Set(['md']),
   chat: new Set([]),
   pdf: new Set(['md']),
@@ -328,6 +333,7 @@ export type ExtractLoadType<T extends LoadFunction<any, any>> =
   ExtractSuccessType<Awaited<ReturnType<T>>>;
 
 export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
+  calendar: CalendarBlockProps;
   canvas: BlockCanvasProps;
   channel: BlockChannelProps;
   md: BlockMarkdownProps;
@@ -388,6 +394,9 @@ export type BlockDefinition<
 
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;
+
+  /** Whether mounting this block records entity-open analytics and history. */
+  openTrackingEnabled?: boolean;
 
   accepted: Record<string, string>;
 

@@ -1,6 +1,7 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -76,9 +77,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   // references, which the caller navigates to instead.
   if (data.type === 'reminder') return undefined;
 
-  // A calendar event opens the calendar component split, not a block.
+  // Calendar events open the singleton calendar block; the full opening path
+  // supplies the event range used to focus the requested occurrence.
   if (data.type === 'calendar_event')
-    return { type: 'component', id: 'calendar' };
+    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };

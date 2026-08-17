@@ -9,6 +9,7 @@ import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
   ENABLE_ANIMATED_ICONS,
   ENABLE_SNIPPETS_FLAG,
@@ -250,8 +251,13 @@ export function MobileDock(props: MobileDockProps) {
     // From any other view (document, task, etc.) treat it as forward navigation
     // so the user can swipe back to where they were.
     const fgContent = globalSplitManager()?.activeSplit()?.content();
-    const isOnSoupView = fgContent?.type === 'component';
-    openWithSplit({ type: 'component', id }, { mergeHistory: isOnSoupView });
+    const isOnDockView =
+      fgContent?.type === 'component' || fgContent?.type === 'calendar';
+    const content =
+      id === 'calendar'
+        ? ({ type: 'calendar', id: CALENDAR_BLOCK_ID } as const)
+        : ({ type: 'component', id } as const);
+    openWithSplit(content, { mergeHistory: isOnDockView });
   };
 
   return (

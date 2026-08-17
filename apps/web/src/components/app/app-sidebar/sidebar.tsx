@@ -25,6 +25,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -300,6 +301,15 @@ const isMarkdownDocumentsParams = (
   return initialClientFilters?.or?.includes('doc-markdown') ?? false;
 };
 
+function sidebarContent(
+  viewId: SidebarItem['id'],
+  params?: SidebarItem['params']
+): SplitContent {
+  return viewId === 'calendar'
+    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
+    : { type: 'component', id: viewId, params };
+}
+
 /**
  * Navigate to a sidebar view by pushing a fresh entry into the active split.
  * Holding shift opens it in a new split. Use in-app back/forward to return to
@@ -332,15 +342,12 @@ function navigateToSidebarView(args: {
     }
   }
 
-  return openWithSplit(
-    { type: 'component', id: viewId, params },
-    {
-      preferNewSplit: shiftKey,
-      mergeHistory: false,
-      allowDuplicate: true,
-      referredFrom,
-    }
-  );
+  return openWithSplit(sidebarContent(viewId, params), {
+    preferNewSplit: shiftKey,
+    mergeHistory: false,
+    allowDuplicate: viewId !== 'calendar',
+    referredFrom,
+  });
 }
 
 const registerSidebarHotkeys = ({
@@ -698,7 +705,7 @@ const SidebarDropdownLink = (
   const openFullscreen = () => {
     analytics.track('sidebar_click', { view: props.id });
     const handle = layout.replaceAllSplits(
-      { type: 'component', id: props.id, params: props.params },
+      sidebarContent(props.id, props.params),
       { referredFrom: 'sidebar' }
     );
     if (props.id === 'search' && handle) requestSearchFocus(handle.id);

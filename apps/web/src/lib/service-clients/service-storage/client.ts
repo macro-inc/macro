@@ -232,6 +232,7 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'automation'
+  | 'calendar_event'
   | 'foreign'
   | 'crm_company'
   | 'crm_contact';
@@ -325,6 +326,7 @@ const itemTypeSet = new Set([
   'channel_message',
   'call',
   'automation',
+  'calendar_event',
   'thread',
   'crm_company',
   'crm_contact',
@@ -342,6 +344,8 @@ export function blockNameToItemType(
       return 'chat';
     case 'call':
       return 'call';
+    case 'calendar':
+      return 'calendar_event';
     case 'channel':
       return 'channel';
     case 'project':
@@ -367,6 +371,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       return 'email';
     }
     case 'call':
+    case 'calendar_event':
     case 'chat':
     case 'document':
     case 'project':

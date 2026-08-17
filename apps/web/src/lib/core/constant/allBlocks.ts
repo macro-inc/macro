@@ -182,6 +182,7 @@ export function fileTypeToBlockName(
   if (!blockOrFiletype) return 'unknown';
 
   if (blockOrFiletype === 'channel_message') return 'channel';
+  if (blockOrFiletype === 'calendar_event') return 'calendar';
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (blockOrFiletype === 'crm_company') return 'company';
