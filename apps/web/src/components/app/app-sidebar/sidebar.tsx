@@ -668,7 +668,11 @@ const SidebarDropdownLink = (
     if (!activeContent) {
       return location.pathname.split('/').filter(Boolean).includes(props.id);
     }
-    return activeContent.id === props.id;
+    const expectedContent = sidebarContent(props.id, props.params);
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
 
   const handleContextMenuOpenChange = (open: boolean) => {
@@ -1784,6 +1788,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const layout = useSplitLayout();
 
   const location = useLocation();
+  const content = () => sidebarContent(props.id, props.params);
 
   // Always read the manager signal live: it is undefined until the split
   // layout mounts, which happens after the sidebar.
@@ -1797,15 +1802,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
       return paths.includes(props.id);
     }
 
-    return activeContent?.id === props.id;
+    const expectedContent = content();
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
-
-  const content = () =>
-    ({
-      type: 'component',
-      id: props.id,
-      params: props.params,
-    }) as const;
 
   return (
     <SidebarOpenInSplitMenu
@@ -1843,9 +1845,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
           let currentContentHandle = globalSplitManager()?.activeSplit();
 
           const currentContent = currentContentHandle?.content();
+          const expectedContent = content();
           const isSameContent =
-            currentContent?.type === 'component' &&
-            currentContent?.id === props.id;
+            currentContent?.type === expectedContent.type &&
+            currentContent.id === expectedContent.id;
 
           if (!isSameContent || e.shiftKey) {
             currentContentHandle = navigateToSidebarView({

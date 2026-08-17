@@ -51,6 +51,12 @@ false && pressPulse;
 
 type DockId = ListView | 'calendar';
 
+function dockContent(id: DockId) {
+  return id === 'calendar'
+    ? ({ type: 'calendar', id: CALENDAR_BLOCK_ID } as const)
+    : ({ type: 'component', id } as const);
+}
+
 type MobileDockButtonProps = {
   icon: MobileTouchIconComponent;
   label?: string;
@@ -242,7 +248,11 @@ export function MobileDock(props: MobileDockProps) {
       const segments = location.pathname.split('/').filter(Boolean);
       return segments[segments.length - 1] === id;
     }
-    return activeContent.id === id;
+    const expectedContent = dockContent(id);
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
 
   const navigate = (id: DockId) => {
@@ -253,11 +263,7 @@ export function MobileDock(props: MobileDockProps) {
     const fgContent = globalSplitManager()?.activeSplit()?.content();
     const isOnDockView =
       fgContent?.type === 'component' || fgContent?.type === 'calendar';
-    const content =
-      id === 'calendar'
-        ? ({ type: 'calendar', id: CALENDAR_BLOCK_ID } as const)
-        : ({ type: 'component', id } as const);
-    openWithSplit(content, { mergeHistory: isOnDockView });
+    openWithSplit(dockContent(id), { mergeHistory: isOnDockView });
   };
 
   return (
