@@ -1,10 +1,12 @@
 //! Broker event models for realtime activity delivery.
 //!
 //! Published by the materializing consumer after rows are durably inserted,
-//! keyed by `subject_id` so every subscriber pod can route a message to its
-//! own user-scoped broadcast without re-deriving recipients. The wire row
-//! stores the action as its two stored columns (tag + payload), so readers
-//! decode with the same forward tolerance as reads from Postgres.
+//! addressed (and keyed) per recipient so every subscriber pod can route a
+//! message to its own user-scoped broadcast without re-deriving recipients.
+//! Recipients are resolved at publish time: the acting subject plus everyone
+//! with current access to the touched entities. The wire row stores the
+//! action as its two stored columns (tag + payload), so readers decode with
+//! the same forward tolerance as reads from Postgres.
 
 #[cfg(test)]
 mod test;
@@ -80,10 +82,14 @@ impl ActivityWireRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum ActivityTopicEvent {
-    /// Activities were durably recorded for one subject.
+    /// Activities were durably recorded; addressed to one recipient.
     #[serde(rename = "activity.recorded")]
     Recorded {
-        /// The recorded rows, all sharing one `subject_id`.
+        /// The user this delivery is addressed to (a `macro|…` principal).
+        /// Not necessarily any row's subject: entity watchers receive other
+        /// principals' rows.
+        recipient_id: String,
+        /// The recorded rows this recipient may see.
         activities: Vec<ActivityWireRow>,
     },
 }
@@ -94,19 +100,23 @@ impl TopicEvent for ActivityTopicEvent {
     const SCHEMA_VERSION: u8 = 1;
 }
 
-/// Publishable realtime activity event, keyed by the rows' shared subject.
+/// Publishable realtime activity event, keyed by its recipient.
 pub struct ActivityMacroEvent {
     key: String,
     event: Event<ActivityTopicEvent>,
 }
 
 impl ActivityMacroEvent {
-    /// Creates an event for rows recorded for one subject, keyed by that
-    /// subject so a user's updates preserve publish order.
-    pub fn recorded(subject_id: impl Into<String>, activities: Vec<ActivityWireRow>) -> Self {
+    /// Creates an event addressed to one recipient, keyed by that recipient
+    /// so a user's updates preserve publish order.
+    pub fn recorded(recipient_id: impl Into<String>, activities: Vec<ActivityWireRow>) -> Self {
+        let recipient_id = recipient_id.into();
         Self {
-            key: subject_id.into(),
-            event: Event::new(ActivityTopicEvent::Recorded { activities }),
+            key: recipient_id.clone(),
+            event: Event::new(ActivityTopicEvent::Recorded {
+                recipient_id,
+                activities,
+            }),
         }
     }
 

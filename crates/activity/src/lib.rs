@@ -44,7 +44,8 @@ pub use domain::{
     service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
 };
 pub use domain::ports::{
-    ActivityRealtimePublisher, NoOpActivityRealtimePublisher,
+    ActivityAudienceExpander, ActivityRealtimePublisher,
+    NoOpActivityAudienceExpander, NoOpActivityRealtimePublisher,
 };
 #[cfg(feature = "realtime")]
 pub use domain::realtime::{

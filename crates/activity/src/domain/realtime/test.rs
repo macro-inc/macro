@@ -43,22 +43,23 @@ fn wire_row(subject: &MacroUserIdStr<'static>, entity_id: &str) -> ActivityWireR
     }
 }
 
-fn recorded(activities: Vec<ActivityWireRow>) -> ActivityTopicEvent {
-    ActivityTopicEvent::Recorded { activities }
+fn recorded(recipient: &str, activities: Vec<ActivityWireRow>) -> ActivityTopicEvent {
+    ActivityTopicEvent::Recorded {
+        recipient_id: recipient.to_string(),
+        activities,
+    }
 }
 
 #[tokio::test(start_paused = true)]
-async fn distributes_activities_to_subject_subscriptions() {
+async fn distributes_activities_to_recipient_subscriptions() {
     let one = user("one");
     let two = user("two");
     let receive_calls = Arc::new(AtomicUsize::new(0));
     let consumer = FakeConsumer {
         messages: Mutex::new(VecDeque::from([
             Err(rootcause::report!("transient receive failure")),
-            Ok(recorded(vec![
-                wire_row(&one, "doc-1"),
-                wire_row(&two, "doc-2"),
-            ])),
+            Ok(recorded(one.as_ref(), vec![wire_row(&one, "doc-1")])),
+            Ok(recorded(two.as_ref(), vec![wire_row(&two, "doc-2")])),
         ])),
         calls: Arc::clone(&receive_calls),
     };
@@ -78,7 +79,7 @@ async fn distributes_activities_to_subject_subscriptions() {
     assert!(run_error.to_string().contains("failed to receive"));
     assert_eq!(
         receive_calls.load(Ordering::SeqCst),
-        2 + MAX_RECEIVE_ATTEMPTS,
+        3 + MAX_RECEIVE_ATTEMPTS,
         "a successful event resets the receive retry strategy"
     );
     let ActivitySubscriptionUpdate::Updated(one_first) =
@@ -102,15 +103,25 @@ async fn distributes_activities_to_subject_subscriptions() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn drops_rows_with_non_user_subjects() {
+async fn routes_by_recipient_and_drops_non_user_recipients() {
     let subscribed = user("subscribed");
-    let mut bot_row = wire_row(&subscribed, "ignored");
-    bot_row.subject_id = "bot|automation".to_string();
+    let other = user("other");
+    // A row about someone else's action still reaches its addressed
+    // recipient — that is how entity watchers hear about other principals.
+    let mut foreign_subject_row = wire_row(&other, "doc-watched");
+    foreign_subject_row.subject_id = "bot|automation".to_string();
     let consumer = FakeConsumer {
-        messages: Mutex::new(VecDeque::from([Ok(recorded(vec![
-            bot_row,
-            wire_row(&subscribed, "doc-1"),
-        ]))])),
+        messages: Mutex::new(VecDeque::from([
+            // Addressed to a non-user principal: dropped whole.
+            Ok(recorded(
+                "bot|automation",
+                vec![wire_row(&subscribed, "ignored")],
+            )),
+            Ok(recorded(
+                subscribed.as_ref(),
+                vec![foreign_subject_row, wire_row(&subscribed, "doc-1")],
+            )),
+        ])),
         calls: Arc::new(AtomicUsize::new(0)),
     };
     let service = Arc::new(ActivityRealtimeConsumerService::new(consumer));
@@ -124,14 +135,21 @@ async fn drops_rows_with_non_user_subjects() {
     .expect("consumer task joins")
     .expect_err("fake consumer eventually stops");
 
-    // The bot row preceded doc-1 in the event, so the first delivery being
-    // doc-1 proves the bot-subject row was dropped rather than forwarded.
-    let ActivitySubscriptionUpdate::Updated(record) =
+    // The dropped event preceded these, so the first deliveries being the
+    // addressed rows proves the non-user recipient was dropped whole.
+    let ActivitySubscriptionUpdate::Updated(first) =
         receiver.recv().await.expect("subscriber receives")
     else {
         panic!("expected activity update");
     };
-    assert_eq!(record.entity_id, "doc-1");
+    assert_eq!(first.entity_id, "doc-watched");
+    assert_eq!(first.subject_id, "bot|automation");
+    let ActivitySubscriptionUpdate::Updated(second) =
+        receiver.recv().await.expect("subscriber receives")
+    else {
+        panic!("expected activity update");
+    };
+    assert_eq!(second.entity_id, "doc-1");
 }
 
 #[tokio::test(start_paused = true)]

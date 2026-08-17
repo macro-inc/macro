@@ -1,9 +1,10 @@
 //! Realtime distribution of recorded activities to user-scoped subscribers.
 //!
 //! Mirrors the WebSocket notification consumer: an independent (ungrouped)
-//! topic consumer feeds a per-user broadcast, and subscribers receive their
-//! own rows only — recipients were resolved at publish time (`subject_id`),
-//! so no access expansion happens here.
+//! topic consumer feeds a per-user broadcast, and each event is routed to
+//! its addressed recipient only — recipients were resolved at publish time
+//! (the acting subject plus the touched entities' current accessors), so no
+//! access expansion happens here.
 
 #[cfg(test)]
 mod test;
@@ -89,7 +90,7 @@ impl ActivitySubscription {
 
 /// Provides user-scoped subscriptions to realtime activity updates.
 pub trait ActivitySubscriptionService: Send + Sync + 'static {
-    /// Subscribes to activity updates whose subject is `user_id`.
+    /// Subscribes to activity updates addressed to `user_id`.
     fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> ActivitySubscription;
 }
 
@@ -134,7 +135,7 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
         }
     }
 
-    /// Subscribes to activity updates whose subject is `user_id`.
+    /// Subscribes to activity updates addressed to `user_id`.
     ///
     /// The returned subscription reports if its buffer fills, so a slow
     /// subscriber cannot delay the shared consumer or other subscribers.
@@ -163,8 +164,9 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
     ///
     /// Callers should run this future in a supervised task. Updates for
     /// users without active subscribers are intentionally dropped, as are
-    /// rows whose subject is not a user principal (bot-subject rows have no
-    /// feed to update).
+    /// events addressed to non-user principals (nothing can subscribe as a
+    /// bot). Rows keep whatever subject they carry — entity watchers receive
+    /// other principals' rows, bot subjects included.
     #[tracing::instrument(skip(self), err)]
     pub async fn run(&self) -> Result<(), Report> {
         loop {
@@ -174,26 +176,29 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
                     "failed to receive activity topic event after {MAX_RECEIVE_ATTEMPTS} attempts"
                 ))?;
 
-            let ActivityTopicEvent::Recorded { activities } = event;
+            let ActivityTopicEvent::Recorded {
+                recipient_id,
+                activities,
+            } = event;
+            let Ok(recipient) = MacroUserIdStr::parse_from_str(&recipient_id) else {
+                continue;
+            };
+            let recipient = recipient.into_owned();
             for row in activities {
-                let Ok(subject) = MacroUserIdStr::parse_from_str(&row.subject_id) else {
-                    continue;
-                };
-                let subject = subject.into_owned();
                 let Some(record) = row.into_record() else {
                     continue;
                 };
                 match self.broadcasts.publish(
-                    &subject,
+                    &recipient,
                     ActivitySubscriptionUpdate::Updated(Arc::new(record)),
                 ) {
                     Ok(subscriber_count) => tracing::trace!(
                         subscriber_count,
-                        subject = %subject,
+                        recipient = %recipient,
                         "distributed activity update"
                     ),
                     Err(_) => tracing::trace!(
-                        subject = %subject,
+                        recipient = %recipient,
                         "dropping activity update without subscribers"
                     ),
                 }
