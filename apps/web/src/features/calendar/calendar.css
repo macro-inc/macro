@@ -329,6 +329,10 @@
 	filter: invert(1) grayscale(1) contrast(100);
 }
 
+.calendar-view .fc .fc-timegrid-event .fc-event-main {
+	padding: 0;
+}
+
 .calendar-view .fc .fc-event .calendar-event-content {
 	container-type: inline-size;
 	border-radius: inherit;
@@ -445,8 +449,6 @@
 	--fc-event-border-color: var(--color-accent);
 	--fc-event-bg-color: var(--color-accent);
 	--fc-event-text-color: var(--color-surface);
-	box-shadow: 0 0 0 1px var(--color-accent);
-	border-style: solid;
 	opacity: 1;
 }
 
