@@ -15,6 +15,13 @@ import {
 export const ACTIVITY_PUSH_DEBOUNCE_MS = 300;
 
 /**
+ * Random extra delay on top of the debounce. One activity event fans out to
+ * every subscribed client at essentially the same instant; the jitter spreads
+ * their otherwise-synchronized refetches apart.
+ */
+export const ACTIVITY_PUSH_JITTER_MS = 700;
+
+/**
  * Turns realtime activity pushes into query revalidations.
  *
  * A pushed `GraphqlActivityEvent` normalizes into its cache record through
@@ -34,15 +41,41 @@ export function createActivityUpdatesHandler(context: {
   const { client, host } = context;
   let pendingEntityIds = new Set<string>();
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  let awaitingVisibility = false;
 
   const flush = () => {
     flushTimer = undefined;
+    // A hidden tab holds its refetch until it is next visible: the stale
+    // window is invisible anyway, and this keeps a fleet of background tabs
+    // from stampeding the API over the same pushed event.
+    if (typeof document !== 'undefined' && document.hidden) {
+      if (!awaitingVisibility) {
+        awaitingVisibility = true;
+        document.addEventListener(
+          'visibilitychange',
+          () => {
+            awaitingVisibility = false;
+            scheduleFlush();
+          },
+          { once: true }
+        );
+      }
+      return;
+    }
     const entityIds = pendingEntityIds;
     pendingEntityIds = new Set();
     void revalidateActivityQueries({ client, host, entityIds }).catch(
       (error) => {
         console.warn('activity push revalidation failed', error);
       }
+    );
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer !== undefined) return;
+    flushTimer = setTimeout(
+      flush,
+      ACTIVITY_PUSH_DEBOUNCE_MS + Math.random() * ACTIVITY_PUSH_JITTER_MS
     );
   };
 
@@ -53,9 +86,7 @@ export function createActivityUpdatesHandler(context: {
     if (patch?.__typename !== 'GraphqlActivityEvent') return;
 
     pendingEntityIds.add(patch.entityId);
-    if (flushTimer === undefined) {
-      flushTimer = setTimeout(flush, ACTIVITY_PUSH_DEBOUNCE_MS);
-    }
+    scheduleFlush();
   };
 }
 
