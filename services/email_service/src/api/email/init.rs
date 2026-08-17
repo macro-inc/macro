@@ -895,6 +895,20 @@ async fn apply_and_consume_calendar_grant(
     )
     .await
     .context("Failed to consume applied Google grant")?;
+
+    // Reaching here means consent completed for this inbox's mailbox and its
+    // refresh token was just replaced, so any reauth flag is stale. Links
+    // provisioned by this flow are upserted with the flag already clear; an
+    // inbox that merely reconnected is not, and would keep asking to reconnect
+    // until something happened to fetch a token. Best-effort: a stale badge is
+    // a worse outcome to trade a failed reconnect for.
+    email_db_client::links::update::clear_link_needs_reauth(&ctx.db, email_link_id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, link_id = %email_link_id, "failed to clear the reauth flag after a completed consent");
+        })
+        .ok();
+
     Ok(applied)
 }
 
