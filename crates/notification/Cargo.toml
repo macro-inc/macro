@@ -28,6 +28,7 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
+broadcast = { path = "../broadcast" }
 chrono = { workspace = true }
 cowlike = { path = "../cowlike" }
 either = { workspace = true }
@@ -35,7 +36,10 @@ futures = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 itertools = { workspace = true }
+kafka_util = { path = "../kafka_util" }
 last_online_tracker = { path = "../last_online_tracker" }
+macro_event_broker = { path = "../macro_event_broker" }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
@@ -53,6 +57,7 @@ redis = { workspace = true, features = [
   "tokio-comp",
   "tokio-rustls-comp",
 ] }
+rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
@@ -63,6 +68,7 @@ sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+tokio-retry = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true, optional = true }
@@ -72,6 +78,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_notifications = { path = "../model_notifications" }
 rate_limit = { path = "../rate_limit", features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 tower = { workspace = true }

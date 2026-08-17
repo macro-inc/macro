@@ -176,6 +176,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: true,
             attendees: vec![CalendarAttendee {
@@ -234,12 +235,24 @@ fn rejects_invalid_occurrence_time() {
 }
 
 #[test]
-fn complete_scope_capability_requires_top_level_scope() {
+fn complete_scope_capability_requires_every_requested_scope() {
     let complete = GoogleScopeSet::parse(&GOOGLE_CALENDAR_SCOPES.join(" "));
     assert!(complete.has_calendar_capability());
 
-    let partial = GoogleScopeSet::parse("https://www.googleapis.com/auth/calendar.events");
-    assert!(!partial.has_calendar_capability());
+    for scope in GOOGLE_CALENDAR_SCOPES {
+        let partial = GoogleScopeSet::parse(scope);
+        assert!(
+            !partial.has_calendar_capability(),
+            "{scope} alone must not read as the complete capability"
+        );
+    }
+}
+
+#[test]
+fn broad_calendar_grant_no_longer_reads_as_the_capability() {
+    let broad = GoogleScopeSet::parse("https://www.googleapis.com/auth/calendar");
+
+    assert!(!broad.has_calendar_capability());
 }
 
 #[derive(Clone)]

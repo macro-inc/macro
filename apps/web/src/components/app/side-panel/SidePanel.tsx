@@ -1,13 +1,14 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
-import { Button, Layer, Panel, Scroll } from '@ui';
+import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -192,7 +193,7 @@ function SidePanelLayoutInner(
           <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
-            <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
+            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
@@ -227,10 +228,10 @@ function SidePanelHeaderToggle() {
       variant="base"
       size="icon-sm"
       class={cn(
-        !isMobile() && 'bg-surface',
-        isMobile() &&
+        !isTouchDevice() && 'bg-surface',
+        isTouchDevice() &&
           'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-        isMobile() && ctx.isOpen() && 'text-accent'
+        isTouchDevice() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
       hotkey={TOKENS.block.toggleSidePanel}
@@ -332,7 +333,11 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
+          <Panel
+            depth={2}
+            style={{ height: 'auto' }}
+            class="rounded-xl bg-surface"
+          >
             <Accordion.Header class="group flex items-center">
               <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center gap-2 text-xs hover:underline">
                 <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
@@ -459,7 +464,7 @@ function EmptyPill(props: { label?: JSX.Element } = {}) {
 function Loading() {
   return (
     <div class="flex items-center justify-center p-2">
-      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-edge-muted/50"></div>
+      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-skeleton"></div>
     </div>
   );
 }
@@ -482,11 +487,9 @@ function CountTitle(props: { label: JSX.Element; count: number }) {
 
 function Card(props: ParentProps) {
   return (
-    <Layer depth={1}>
-      <div class="rounded-lg border border-edge-muted bg-surface overflow-hidden">
-        <div class="divide-y divide-edge-muted">{props.children}</div>
-      </div>
-    </Layer>
+    <div class="rounded-lg border border-edge-muted bg-inset overflow-hidden">
+      <div class="divide-y divide-edge-muted">{props.children}</div>
+    </div>
   );
 }
 

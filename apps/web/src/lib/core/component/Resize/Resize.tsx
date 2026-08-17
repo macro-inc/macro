@@ -144,6 +144,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     offsetOf,
     sizeOf,
     canFit: solver.canFitPanel,
+    swap: solver.swap,
     hide: solver.hide,
     show: solver.show,
     isHidden: solver.isHidden,

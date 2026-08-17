@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /**
  * Macro uses "splits" as its tab-like navigation concept.
@@ -9,13 +9,13 @@ import { isMobile } from '@core/mobile/isMobile';
  *
  * We also want touch opens to remain in the current split to avoid surprising
  * split creation. The call-site `e != null` heuristic can't detect touch on
- * iOS WKWebView (taps fire real mouse events), so guard on `isMobile()` here —
+ * iOS WKWebView (taps fire real mouse events), so guard on `isTouchDevice()` here —
  * mobile has no split concept and navigates in place / via forward navigation.
  */
 export function openInNewSplitForMention(
   altKey: boolean | undefined,
   defaultOpenInNewSplit: boolean
 ): boolean {
-  if (isMobile()) return false;
+  if (isTouchDevice()) return false;
   return altKey ? false : defaultOpenInNewSplit;
 }

@@ -2,9 +2,11 @@ use crate::config::BASE_URL;
 use axum::{Router, extract::State, routing::get};
 use tower_cookies::CookieManagerLayer;
 
+mod account_link;
 mod github;
 mod google;
 mod login;
+mod microsoft;
 
 pub fn router() -> Router<ApiContext> {
     Router::new().route(
@@ -108,6 +110,11 @@ pub(in crate::api) async fn handler(
                 error_description = ?params.error_description,
                 "oauth2 callback received without code",
             );
+            if provider == "microsoft"
+                && let Some(link_id) = state.link_id.as_ref()
+            {
+                account_link::cleanup_pending_link(&ctx, link_id).await;
+            }
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -124,6 +131,7 @@ pub(in crate::api) async fn handler(
             .await
             .map(|r| r.into_response())
             .map_err(|e| e.into_response()),
+        "microsoft" => microsoft::handler(&ctx, &code, &state).await,
         _ => Err((
             StatusCode::NOT_IMPLEMENTED,
             Json(ErrorResponse {

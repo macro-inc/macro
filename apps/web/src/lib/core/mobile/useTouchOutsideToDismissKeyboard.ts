@@ -1,6 +1,6 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { onCleanup, onMount } from 'solid-js';
+import { isTouchDevice } from './isTouchDevice';
 
 /**
  * Dismisses the virtual keyboard when the user touches outside of the given
@@ -14,7 +14,7 @@ import { onCleanup, onMount } from 'solid-js';
 export function useTouchOutsideToDismissKeyboard(
   getContainer: () => HTMLElement | null | undefined
 ) {
-  if (!isMobile()) return;
+  if (!isTouchDevice()) return;
 
   onMount(() => {
     function handleTouchStart(e: TouchEvent) {

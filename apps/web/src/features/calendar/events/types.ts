@@ -7,6 +7,9 @@ export type CalendarPeriodView =
   | 'timeGridWeek'
   | 'timeGridDay';
 
+/** The conferencing system backing an event's join URL. */
+export type ConferenceProvider = 'google_meet' | 'other';
+
 /** Supported first day of the calendar week. */
 export type CalendarWeekStart = 0 | 1;
 
@@ -39,6 +42,12 @@ export interface CalendarEvent {
   isReadOnly: boolean;
   /** Direct conference join URL, when available. */
   conferenceUrl?: string;
+  /**
+   * Which conferencing system backs `conferenceUrl`. Only `google_meet` is
+   * one Macro can attach and detach; anything else is shown for joining but
+   * never rewritten.
+   */
+  conferenceProvider?: ConferenceProvider;
   /** Event organizer display name. */
   organizerName?: string;
   /** Event organizer email address. */
@@ -59,7 +68,7 @@ export interface CalendarEvent {
   start: string;
   /** Exclusive ISO timestamp or local date string. */
   end: string;
-  /** Whether the event occupies the all-day area. */
+  /** Whether the canonical occurrence is all-day rather than timed. */
   allDay: boolean;
   /** Calendar source that owns the event. */
   calendar: CalendarSource;

@@ -12,7 +12,7 @@ import {
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
@@ -70,7 +70,7 @@ export type ChannelInputProps = InputCallbacks & {
   bots?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
-  /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
+  /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
   /**
    * Render a one-line `CollapsedInput` stand-in until the user clicks it.
@@ -274,7 +274,7 @@ export function ChannelInput(props: ChannelInputProps) {
       typingTracker.keystroke();
     },
     onEnter: () => {
-      if (isMobile()) return false;
+      if (isTouchDevice()) return false;
       typingTracker.stop();
       inputState.commands.send();
       return true;
@@ -423,7 +423,7 @@ export function ChannelInput(props: ChannelInputProps) {
           <Input.EditorShell
             ref={setScrollContainer}
             onClick={(event) => {
-              if (!isMobile()) {
+              if (!isTouchDevice()) {
                 event.stopPropagation();
                 markdownEditor.controls.focus();
               }
@@ -434,7 +434,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 config={markdownEditor}
                 placeholder={props.input.placeholder}
                 initialValue={inputState.view().value}
-                autofocus={!isMobile() && (props.autofocus ?? true)}
+                autofocus={!isTouchDevice() && (props.autofocus ?? true)}
                 class="text-sm"
                 refFn={attach}
                 onConnect={() => {
@@ -481,7 +481,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
-          class="mobile:rounded-full mobile:island"
+          class="touch:rounded-full touch:island"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -511,12 +511,12 @@ export function ChannelInput(props: ChannelInputProps) {
           collapsedInput.collapse();
         }}
         class={cn(
-          'rounded-xl mobile:rounded-3xl mobile:island',
+          'rounded-xl bg-surface touch:rounded-3xl touch:island',
           isCollapsed() && 'hidden',
-          isMobile() && 'bg-chrome'
+          isTouchDevice() && 'bg-chrome'
         )}
-        hideBorder={isMobile()}
-        depth={isMobile() ? 3 : 2}
+        hideBorder={isTouchDevice()}
+        depth={isTouchDevice() ? 3 : 2}
         solid
       >
         {renderSurfaceContent()}

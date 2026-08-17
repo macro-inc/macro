@@ -1352,84 +1352,9 @@
           }
         }
       },
-      "ConnGatewayInnerNotif_Value": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Entity",
-            "description": "The entity the notification is about."
-          },
-          {
-            "type": "object",
-            "required": [
-              "notification_id",
-              "notification_event_type",
-              "sent",
-              "done",
-              "created_at",
-              "updated_at",
-              "notification_metadata"
-            ],
-            "properties": {
-              "created_at": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When the notification was created."
-              },
-              "deleted_at": {
-                "type": ["string", "null"],
-                "format": "date-time",
-                "description": "When the notification was deleted."
-              },
-              "done": {
-                "type": "boolean",
-                "description": "Whether the notification is marked as done."
-              },
-              "notification_event_type": {
-                "type": "string",
-                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
-              },
-              "notification_id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The notification ID."
-              },
-              "notification_metadata": {
-                "$ref": "#/components/schemas/TaggedContent_Value",
-                "description": "Deserialized notification metadata."
-              },
-              "sender_id": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MacroUserIdStr",
-                    "description": "The user who triggered the notification."
-                  }
-                ]
-              },
-              "sent": {
-                "type": "boolean",
-                "description": "Whether the notification has been sent."
-              },
-              "updated_at": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When the notification was last updated."
-              },
-              "viewed_at": {
-                "type": ["string", "null"],
-                "format": "date-time",
-                "description": "When the notification was viewed/seen."
-              }
-            }
-          }
-        ],
-        "description": "the value of the inner payload inside [ConnGatewayNotification]"
-      },
       "ConnGatewayNotificationPayload": {
-        "$ref": "#/components/schemas/ConnGatewayInnerNotif_Value",
-        "description": "Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`ConnGatewayInnerNotif<serde_json::Value>`."
+        "$ref": "#/components/schemas/RealtimeNotif_TaggedContent_Value",
+        "description": "Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`RealtimeNotif<serde_json::Value>`."
       },
       "CreateNotification": {
         "allOf": [
@@ -2478,6 +2403,88 @@
           }
         }
       },
+      "RealtimeNotif_TaggedContent_Value": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The entity the notification is about."
+          },
+          {
+            "type": "object",
+            "required": [
+              "notification_id",
+              "notification_event_type",
+              "sent",
+              "done",
+              "created_at",
+              "updated_at",
+              "notification_metadata"
+            ],
+            "properties": {
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was created."
+              },
+              "deleted_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "notification_event_type": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notification_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notification_metadata": {
+                "type": "object",
+                "description": "A notification metadata value tagged with the notification event type.",
+                "required": ["tag", "content"],
+                "properties": {
+                  "content": {},
+                  "tag": {
+                    "$ref": "#/components/schemas/NotificationTypeName"
+                  }
+                }
+              },
+              "sender_id": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MacroUserIdStr",
+                    "description": "The user who triggered the notification."
+                  }
+                ]
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the notification was last updated."
+              },
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the notification was viewed/seen."
+              }
+            }
+          }
+        ],
+        "description": "the value of the inner payload inside [ConnGatewayNotification]"
+      },
       "ReminderMetadata": {
         "type": "object",
         "description": "Metadata for a reminder the user set for themselves coming due.\n\nThere is no sender: a reminder is self-set, so the dispatcher sends it with\n`sender_id: None` (a recipient who is also the sender is filtered out of\ntheir own notification). Every formatter here must therefore work without\none.\n\nThe associated entity, when there is one, lives on the notification row\nrather than in here, and clients resolve its name from that — so the\ndispatcher does not have to look up a name across five entity types.",
@@ -2538,17 +2545,6 @@
             "type": "integer",
             "format": "int64",
             "description": "the thread id"
-          }
-        }
-      },
-      "TaggedContent_Value": {
-        "type": "object",
-        "description": "A notification metadata value tagged with the notification event type.",
-        "required": ["tag", "content"],
-        "properties": {
-          "content": {},
-          "tag": {
-            "$ref": "#/components/schemas/NotificationTypeName"
           }
         }
       },

@@ -133,6 +133,23 @@ export const useApplyPreset = () => {
         });
       }
 
+      // Created by is a direct server-side document-owner refinement rather
+      // than a client predicate, so retain an explicit choice across the
+      // Tasks and Files tabs just as we do tags above. Do not carry a tab's
+      // own owner scope (e.g. Files → Owned) into another tab.
+      const currentCreatorIds =
+        queryFilters.state.include.documentOwnerId ?? [];
+      const presetCreatorIds =
+        currentPreset?.filters.include?.documentOwnerId ?? [];
+      const isExplicitCreatorFilter =
+        currentCreatorIds.length !== presetCreatorIds.length ||
+        currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
+      if (isExplicitCreatorFilter) {
+        mergedFilters.include.documentOwnerId = currentCreatorIds.length
+          ? [...currentCreatorIds]
+          : undefined;
+      }
+
       nextFilters = mergedFilters;
 
       nextClientFilters = {

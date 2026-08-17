@@ -290,7 +290,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
-    ) -> Result<models_properties::service::entity_property::EntityProperty, Self::Err> {
+    ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::upsert_entity_property(
             &self.pool,
             entity_id,

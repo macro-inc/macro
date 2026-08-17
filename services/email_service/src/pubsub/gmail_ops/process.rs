@@ -1,17 +1,14 @@
+use crate::pubsub::gmail_ops::email_api_error::handle_email_api_error;
 use crate::pubsub::gmail_ops::error_handlers::prefix_error_source;
 use crate::pubsub::gmail_ops::operations::block_sender::block_sender;
 use crate::pubsub::gmail_ops::operations::delete_label::delete_label;
 use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
 use crate::pubsub::gmail_ops::operations::unblock_sender::unblock_sender;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
-use crate::util::redis::rate_limit::RateLimitArgs;
 use anyhow::{Context, Result, anyhow};
 use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
-use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
-use uuid::Uuid;
 
 /// Processes a message from the gmail ops queue.
 pub async fn process_message(
@@ -68,33 +65,28 @@ async fn inner_process_message(
             })
         })?;
 
-    match &data.operation {
-        GmailOpsOperation::ModifyMessageLabels(payload) => {
-            modify_message_labels(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "modify_message_labels"))?;
-            tracing::debug!("Successfully processed modify message labels operation");
-        }
+    let (operation_name, operation_result) = match &data.operation {
+        GmailOpsOperation::ModifyMessageLabels(payload) => (
+            "modify_message_labels",
+            modify_message_labels(ctx, &link, payload).await,
+        ),
         GmailOpsOperation::DeleteLabel(payload) => {
-            delete_label(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "delete_label"))?;
-            tracing::debug!("Successfully processed delete label operation");
+            ("delete_label", delete_label(ctx, &link, payload).await)
         }
         GmailOpsOperation::BlockSender(payload) => {
-            block_sender(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "block_sender"))?;
-            tracing::debug!("Successfully processed block sender operation");
+            ("block_sender", block_sender(ctx, &link, payload).await)
         }
         GmailOpsOperation::UnblockSender(payload) => {
-            unblock_sender(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "unblock_sender"))?;
-            tracing::debug!("Successfully processed unblock sender operation");
+            ("unblock_sender", unblock_sender(ctx, &link, payload).await)
         }
+    };
+
+    if let Err(error) = operation_result {
+        let processing_error = handle_email_api_error(ctx, data, error).await;
+        return Err(prefix_error_source(processing_error, operation_name));
     }
 
+    tracing::debug!(operation_name, "Successfully processed Gmail operation");
     Ok(())
 }
 
@@ -107,86 +99,4 @@ fn extract_gmail_ops_message(
     let gmail_ops_message: GmailOpsPubsubMessage = serde_json::from_str(message_body)
         .context("Failed to deserialize message body to GmailOpsPubsubMessage")?;
     Ok(gmail_ops_message)
-}
-
-/// Fetches a Gmail access token for use in pubsub workers.
-#[tracing::instrument(skip(ctx, link), err)]
-pub async fn fetch_gmail_token(
-    ctx: &GmailOpsContext,
-    link: &Link,
-) -> Result<String, ProcessingError> {
-    let gmail_access_token = crate::util::gmail::auth::fetch_token_or_mark_reauth(
-        link,
-        &ctx.db,
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-        &ctx.sqs_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch gmail access token"),
-        })
-    })?;
-    Ok(gmail_access_token)
-}
-
-/// Checks Gmail API rate limits and routes processing accordingly.
-///
-/// Uses a two-tier system to prevent rate limit backpressure:
-/// - **Primary worker**: If rate limited, enqueues to retry queue and returns non-retryable error
-/// - **Retry worker**: If rate limited, returns retryable error so it gets tried again later
-#[tracing::instrument(skip(ctx, gmail_ops_operation), err)]
-pub async fn check_gmail_rate_limit(
-    ctx: &GmailOpsContext,
-    link_id: Uuid,
-    operation: GmailApiOperation,
-    gmail_ops_operation: GmailOpsOperation,
-) -> Result<(), ProcessingError> {
-    if !ctx
-        .redis_client
-        .is_rate_limited(RateLimitArgs {
-            user_id: link_id,
-            operation,
-            is_backfill: false,
-        })
-        .await
-    {
-        return Ok(());
-    }
-
-    if !ctx.retry_worker {
-        tracing::info!(
-            link_id = %link_id,
-            "Gmail API rate limited, moving message from primary queue to retry queue"
-        );
-        ctx.sqs_client
-            .enqueue_gmail_ops_retry_notification(GmailOpsPubsubMessage {
-                link_id,
-                operation: gmail_ops_operation,
-            })
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue gmail ops retry message"),
-                })
-            })?;
-        Err(ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiRateLimited,
-            source: anyhow::Error::msg(
-                "Gmail API rate limit exceeded, enqueued message on retry queue",
-            ),
-        }))
-    } else {
-        tracing::info!(
-            link_id = %link_id,
-            "Gmail API rate limited in retry worker, message will be retried after visibility timeout"
-        );
-        Err(ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::GmailApiRateLimited,
-            source: anyhow::Error::msg("Gmail API rate limit exceeded in retry worker"),
-        }))
-    }
 }

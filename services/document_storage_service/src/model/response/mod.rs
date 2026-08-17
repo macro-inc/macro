@@ -1,4 +1,3 @@
-pub mod activity;
 pub mod annotations;
 pub mod documents;
 pub mod history;

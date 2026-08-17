@@ -16,7 +16,7 @@ use uuid::Uuid;
 use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;
-use crate::domain::models::{TaggedContent, UserNotificationStatusUpdate};
+use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
@@ -274,7 +274,7 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
     /// Publish notification status updates to the users who own the notifications.
     fn publish_updates(
         &self,
-        updates: &[UserNotificationStatusUpdate<'_>],
+        payload: &NotificationStatusPayload<'_>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -283,14 +283,14 @@ pub trait NotificationRealtimePublisher: Send + Sync + 'static {
 pub struct NoopNotificationRealtimePublisher;
 
 impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
-    async fn publish_updates(&self, _: &[UserNotificationStatusUpdate<'_>]) -> Result<(), Report> {
+    async fn publish_updates(&self, _: &NotificationStatusPayload<'_>) -> Result<(), Report> {
         Ok(())
     }
 }
 
-/// Port for WebSocket delivery via connection gateway.
-pub trait WebSocketSender: Send + Sync + 'static {
-    /// Send notifications to users via WebSocket.
+/// Port for realtime notification delivery.
+pub trait RealtimeSender: Send + Sync + 'static {
+    /// Send notifications to users in realtime.
     ///
     /// Returns the set of users who successfully received the notification
     /// (i.e., they were online and the message was delivered).
@@ -299,6 +299,94 @@ pub trait WebSocketSender: Send + Sync + 'static {
         recipients: &[MacroUserIdStr<'a>],
         notification: &T,
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+}
+
+/// Receives events from the notifications topic with notification metadata decoded as `T`.
+pub trait NotificationTopicEventConsumer<T: Clone + 'static>: Send + Sync + 'static {
+    /// Waits for and returns the next notification topic event.
+    fn recv(
+        &self,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::models::websocket_notification_event::NotificationTopicEvent<'static, T>,
+            Report,
+        >,
+    > + Send;
+}
+
+/// Why a WebSocket notification subscription ended after its messages were drained.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WebSocketNotificationSubscriptionExit {
+    /// The subscription closed normally.
+    Closed,
+    /// The subscriber's bounded buffer filled.
+    SlowConsumer,
+    /// The subscriber fell behind the shared broadcast buffer.
+    Lagging {
+        /// Number of messages skipped by the broadcast receiver.
+        skipped: u64,
+    },
+}
+
+/// A WebSocket notification receiver with independently observable completion status.
+pub struct WebSocketNotificationSubscription<T> {
+    receiver: tokio::sync::mpsc::Receiver<T>,
+    exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+}
+
+impl<T> WebSocketNotificationSubscription<T> {
+    /// Creates a subscription from its message and exit-reason receivers.
+    pub fn from_parts(
+        receiver: tokio::sync::mpsc::Receiver<T>,
+        exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+    ) -> Self {
+        Self {
+            receiver,
+            exit_reason,
+        }
+    }
+
+    /// Receives the next buffered notification.
+    pub async fn recv(&mut self) -> Option<T> {
+        self.receiver.recv().await
+    }
+
+    /// Returns why the forwarding task stopped after buffered notifications are drained.
+    pub async fn exit_reason(self) -> WebSocketNotificationSubscriptionExit {
+        self.exit_reason
+            .await
+            .unwrap_or(WebSocketNotificationSubscriptionExit::Closed)
+    }
+}
+
+/// Provides user-scoped subscriptions to received WebSocket notification updates of type `T`.
+pub trait WebSocketNotificationSubscriptionService<T>: Send + Sync + 'static {
+    /// Subscribes to WebSocket notification updates addressed to `user_id`.
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T>;
+}
+
+impl<S, T> WebSocketNotificationSubscriptionService<T> for std::sync::Arc<S>
+where
+    S: WebSocketNotificationSubscriptionService<T>,
+{
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
+        self.as_ref().subscribe(user_id)
+    }
+}
+
+/// No-op WebSocket notification subscription service for schema-only consumers.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoopWebSocketNotificationSubscriptionService;
+
+impl<T: Send + 'static> WebSocketNotificationSubscriptionService<T>
+    for NoopWebSocketNotificationSubscriptionService
+{
+    fn subscribe(&self, _user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let (exit_reason_sender, exit_reason) = tokio::sync::oneshot::channel();
+        let _ = exit_reason_sender.send(WebSocketNotificationSubscriptionExit::Closed);
+        WebSocketNotificationSubscription::from_parts(receiver, exit_reason)
+    }
 }
 
 use crate::domain::models::queue_message::EmailContent;

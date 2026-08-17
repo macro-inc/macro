@@ -4,7 +4,7 @@ import CheckIcon from '@phosphor/check.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import Spinner from '@phosphor/spinner.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, Layer, Surface } from '@ui';
+import { Button, cn, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -50,7 +50,7 @@ interface ToastStyle {
 
 const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.SUCCESS]: {
-    background: 'bg-success/10',
+    background: 'bg-success-bg',
     accent: 'bg-success',
     borderColor: 'var(--color-success)',
     titleText: 'text-success-ink',
@@ -61,10 +61,10 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-success/80',
       text: 'text-success-ink',
     },
-    closeButtonHover: 'hover:text-success-ink hover:bg-success/10',
+    closeButtonHover: 'hover:text-success-ink hover:bg-success-hover',
   },
   [ToastType.FAILURE]: {
-    background: 'bg-failure/10',
+    background: 'bg-failure-bg',
     accent: 'bg-failure',
     titleText: 'text-failure-ink',
     borderColor: 'var(--color-failure)',
@@ -75,7 +75,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-failure/80',
       text: 'text-failure-ink',
     },
-    closeButtonHover: 'hover:text-failure-ink hover:bg-failure/10',
+    closeButtonHover: 'hover:text-failure-ink hover:bg-failure-hover',
   },
   [ToastType.ALERT]: {
     background: 'bg-alert/10',
@@ -281,18 +281,15 @@ function ToastBodyWrapper(props: {
       fallback={
         <Surface
           highlightColor={props.accentColor}
-          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl shadow-lg shadow-drop-shadow"
-          depth={2}
+          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl bg-toast shadow-lg shadow-drop-shadow"
         >
           {props.children}
         </Surface>
       }
     >
-      <Layer depth={3}>
-        <div class="island relative w-[90vw] p-2 rounded-xl">
-          {props.children}
-        </div>
-      </Layer>
+      <div class="island relative w-[90vw] p-2 rounded-xl bg-toast">
+        {props.children}
+      </div>
     </Show>
   );
 }

@@ -36,7 +36,7 @@ function SkillResultRow(props: { result: SkillSearchResult }) {
       {(skill) => (
         <button
           type="button"
-          class="block w-full text-left hover:bg-surface-hover"
+          class="block w-full text-left hover:bg-hover"
           onClick={openSkill}
         >
           <Tool.ListItem icon={<EntityRowIcon entity={skill()} />}>

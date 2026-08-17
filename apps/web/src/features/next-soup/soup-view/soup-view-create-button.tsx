@@ -115,7 +115,7 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
         <EntityIcon
           targetType={props.id as BlockName}
           size="xs"
-          class="mobile:size-6"
+          class="touch:size-6"
         />
       </Show>
     </Show>

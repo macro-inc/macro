@@ -16,15 +16,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let single_inbox_routes = Router::new()
         .route("/{id}/document_id", get(get_document_id::handler))
         .layer(
-            ServiceBuilder::new()
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::link::attach_link_context,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::gmail_token::attach_gmail_token,
-                )),
+            ServiceBuilder::new().layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::api::middleware::link::attach_link_context,
+            )),
         );
 
     Router::new()

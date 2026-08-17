@@ -4,7 +4,7 @@ import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarRsvpScope } from '@service-email/client';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { CalendarEvent } from './types';
 
 type RsvpResponse = Exclude<AttendeeResponseStatus, 'needs_action'>;
@@ -35,9 +35,13 @@ const SCOPE_OPTIONS = [
  * "this and following" option: the provider API cannot express a forward
  * response, so it would silently expire past the synced window.
  */
-export function EventRsvpSection(props: { event: CalendarEvent }) {
-  const selfAttendee = () =>
-    props.event.attendees.find((attendee) => attendee.isSelf);
+export function EventRsvpSection(props: {
+  event: CalendarEvent;
+  buttonSize?: 'sm' | 'md';
+}) {
+  const selfAttendee = createMemo(() =>
+    props.event.attendees.find((attendee) => attendee.isSelf)
+  );
   const isRecurring = () =>
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
@@ -91,20 +95,20 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
 
   return (
     <Show when={canRespond()}>
-      <div class="border-edge-muted flex items-center gap-3 border-t px-4 py-2.5 text-xs text-ink-muted">
+      <div class="border-edge-muted flex items-center gap-3 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs">
         <span>Going?</span>
-        <div class="ml-auto flex shrink-0 gap-1">
+        <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
           <For each={RSVP_OPTIONS}>
             {(option) => (
               <Button
                 variant={
                   selfAttendee()?.responseStatus === option.response
                     ? 'active'
-                    : 'ghost'
+                    : 'base'
                 }
-                size="sm"
-                class="rounded-lg px-2.5"
-                label={option.label}
+                size={props.buttonSize ?? 'sm'}
+                depth={3}
+                class="rounded-lg px-3"
                 onClick={() => respond(option.response)}
               >
                 {option.label}
@@ -146,17 +150,11 @@ export function EventRsvpSection(props: { event: CalendarEvent }) {
               <Button
                 variant="ghost"
                 class="rounded-lg"
-                label="Cancel"
                 onClick={() => setPendingResponse(undefined)}
               >
                 Cancel
               </Button>
-              <Button
-                variant="active"
-                class="rounded-lg"
-                label="OK"
-                onClick={confirm}
-              >
+              <Button variant="active" class="rounded-lg" onClick={confirm}>
                 OK
               </Button>
             </div>

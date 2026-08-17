@@ -34,8 +34,8 @@ export function SendAction(props: SendActionProps) {
       pending={isBlockedByPending()}
       disabled={isDisabled()}
       hidden={isMobile() && isBlockedByEmptyInput()}
-      // Full-frame mobile: pill rounding to match the dock/accessory islands.
-      class={cn('mobile:rounded-full', local.class)}
+      // Full-frame mobile/tablet: pill rounding to match the dock/accessory islands.
+      class={cn('touch:rounded-full', local.class)}
       onPointerDown={(event) => {
         event.preventDefault();
         void commands.send();

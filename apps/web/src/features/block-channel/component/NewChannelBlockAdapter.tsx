@@ -438,12 +438,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         <div
           ref={attachHotkeys}
           class={cn(
-            'h-full flex flex-col px-2 mobile:px-0',
+            'h-full flex flex-col px-2 touch:px-0',
             // The channel block is full-frame on mobile (messages scroll
             // behind the chrome); the other tabs still need to start below
             // the status bar + floating header.
             activeTab() !== 'messages' &&
-              'mobile:pt-(--mobile-content-inset-top)'
+              'touch:pt-(--mobile-content-inset-top)'
           )}
         >
           <Switch>

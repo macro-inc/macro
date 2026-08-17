@@ -1,4 +1,3 @@
-
 <div align="center">
   <a target="_blank" href="https://macro.com">
     <img width="2195" height="721" alt="Frame 11" src="https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb" />
@@ -46,18 +45,18 @@ Macro is composed of 'blocks' designed to be modular, extensible, and work toget
 
 Each surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.
 
-| Block | Docs | What it does |
-| --- | --- | --- |
-| Email | [Docs &rarr;](https://docs.macro.com/product/email) | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail. |
-| Messages | [Docs &rarr;](https://docs.macro.com/product/channels) | Channels and direct messages designed for focused technical discussions. |
-| Tasks | [Docs &rarr;](https://docs.macro.com/product/tasks) | Linear-inspired tasks, tightly integrated with channels, email, and agents. |
-| Docs | [Docs &rarr;](https://docs.macro.com/product/docs) | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |
-| Canvas | [Docs &rarr;](https://docs.macro.com/product/canvas) | 2D board with embedded @links to tasks, files, and emails. |
-| Agents | [Docs &rarr;](https://docs.macro.com/product/agents) | Unified, team-level memory. Can take action on your behalf. |
-| Calls | [Docs &rarr;](https://docs.macro.com/product/calls) | Recorded, transcribed, and logged to team memory for agents. |
-| File storage | [Docs &rarr;](https://docs.macro.com/product/folders) | Auto-imported from email and channels, fully searchable. |
-| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents. |
-| CRM | [Docs &rarr;](https://docs.macro.com/product/crm) | Customer and contact objects, custom properties, email sync, enrichment. |
+| Block         | Docs                                                      | What it does                                                                  |
+| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |
+| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |
+| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |
+| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |
+| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |
+| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |
+| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |
+| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |
+| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |
+| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |
 
 <br />
 
@@ -168,7 +167,6 @@ Memory isn't supposed to encompass everything. Macro also has a tool/MCP surface
 
 [Agents docs &rarr;](https://docs.macro.com/product/agents)
 
-
 Your coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:
 
 ```bash
@@ -203,26 +201,9 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 # Running it locally
 
-```bash
-git clone https://github.com/macro-inc/macro.git
-cd macro
-nix develop          # Rust toolchain, Bun, sqlx, zig, cargo-zigbuild
-just run_local       # local infra + backend services + proxy + frontend
-```
+To run the full app on your machine, follow [Running locally](docs/RUNNING_LOCALLY.md).
 
-Tauri's large platform dependencies live in focused shells: use
-`nix develop .#tauri-linux` for Linux desktop development or
-`nix develop .#tauri-android` for Android development on x86_64 Linux.
-
-`run_local` prints the frontend URL once the stack is up; `r` rebuilds changed Rust services, `q` tears it down. See [Running locally](docs/RUNNING_LOCALLY.md) for Doppler setup and named instances.
-
-```bash
-just check                    # type check the workspace
-just clippy                   # lints
-just setup_test_envs          # write the .env files tests need
-cargo test                    # full test suite
-cargo test -p email_service   # a single service
-```
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br />
 
@@ -279,6 +260,6 @@ If Macro is interesting/useful to you, please scroll up and give the repo a star
 <a href="https://github.com/macro-inc/macro">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/star-history-dark.svg" />
-    <img alt="Star history for macro-inc/macro, from launch to 713 stars" src=".github/readme/star-history-light.svg" width="100%" />
+    <img alt="Star history for macro-inc/macro, from launch to 1698 stars" src=".github/readme/star-history-light.svg" width="100%" />
   </picture>
 </a>

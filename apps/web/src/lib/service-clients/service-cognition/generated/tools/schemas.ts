@@ -1309,6 +1309,7 @@ export const ListEntitiesResponse = z.object({
     z.any().superRefine((x, ctx) => {
       const schemas = [
         z.object({
+          conferenceProvider: z.union([z.string(), z.null()]).optional(),
           conferenceUrl: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),
           location: z.union([z.string(), z.null()]).optional(),

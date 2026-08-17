@@ -16,6 +16,8 @@ channels = { path = "../channels", features = ["inbound", "outbound"] }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 prompt = { path = "../prompt" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

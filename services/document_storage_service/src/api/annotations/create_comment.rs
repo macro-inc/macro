@@ -168,13 +168,13 @@ pub async fn create_comment_handler(
                 if let Some(Mentions { mention_id, .. }) = &req.mentions
                     && !recipients.mention_recipients.is_empty()
                 {
-                    // If the document is public, grant the mentioned users access so
-                    // the comment surfaces in their soup/inbox — a notification alone
+                    // If the document is link-shared, grant the mentioned users access
+                    // so the comment surfaces in their soup/inbox — a notification alone
                     // isn't enough for the document to appear there.
                     let mention_recipients: Vec<MacroUserIdStr<'_>> =
                         recipients.mention_recipients.iter().cloned().collect();
 
-                    let _ = macro_db_client::share_on_mention::share_public_document_with_mentioned_users(
+                    let _ = macro_db_client::share_on_mention::share_link_shared_document_with_mentioned_users(
                         &db,
                         &document_id,
                         &mention_recipients,

@@ -1,5 +1,9 @@
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
-import type { CalendarEvent, CalendarSource } from './types';
+import type {
+  CalendarEvent,
+  CalendarSource,
+  ConferenceProvider,
+} from './types';
 
 /** Shared presentation source until calendar/account metadata is exposed. */
 export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
@@ -30,6 +34,9 @@ export function mapCalendarOccurrence(
     isCancelled: occurrence.isCancelled,
     isReadOnly: event.isReadOnly,
     conferenceUrl: event.conferenceUrl ?? undefined,
+    conferenceProvider:
+      (event.conferenceProvider as ConferenceProvider | null | undefined) ??
+      undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
     attendees: event.attendees ?? [],

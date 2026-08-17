@@ -1,6 +1,8 @@
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
-use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object, SimpleObject, Union};
+use async_graphql::{
+    Context, Enum, ErrorExtensions, ID, InputObject, MaybeUndefined, Object, SimpleObject, Union,
+};
 use entity_mutation::{
     DuplicateEntityRequest, EntityMutationActor, EntityMutationEffect, EntityMutationErrorCode,
     EntityMutationService, EntityMutationSuccess, MoveEntityRequest, MutateEntitiesResult,
@@ -11,7 +13,7 @@ use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::{SoupEntityEdges, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
-    UpdateSharePermissionRequestV2,
+    LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };
 
@@ -203,13 +205,33 @@ impl ChannelSharePolicyInput {
     }
 }
 
-/// Shared public/channel share-policy update.
+/// Audience allowed to access an entity through its share link.
+#[derive(Clone, Copy, Enum, Eq, PartialEq)]
+pub enum GraphqlLinkShare {
+    /// Anyone with the link can access the entity.
+    Public,
+    /// Members of the owner's team with the link can access the entity.
+    Team,
+}
+
+impl GraphqlLinkShare {
+    /// Convert this GraphQL audience into the permissions-domain model.
+    pub fn into_model(self) -> LinkShare {
+        match self {
+            Self::Public => LinkShare::Public,
+            Self::Team => LinkShare::Team,
+        }
+    }
+}
+
+/// Shared link/channel share-policy update.
 #[derive(InputObject)]
 pub struct EntitySharePolicyInput {
-    /// Whether public access should be enabled.
-    pub is_public: Option<bool>,
-    /// Public access level when public access is enabled.
-    pub public_access_level: Option<GraphqlEntityAccessLevel>,
+    /// Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
+    pub link_share: MaybeUndefined<GraphqlLinkShare>,
+    /// Link access level. Omit to leave unchanged or pass null to reset it to the default level
+    /// when a link share exists.
+    pub link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
     /// Channel access entries to add, remove, or replace.
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,
 }
@@ -218,10 +240,14 @@ impl EntitySharePolicyInput {
     /// Convert this GraphQL input into a shared permission update.
     pub fn into_model(self) -> UpdateSharePermissionRequestV2 {
         UpdateSharePermissionRequestV2 {
-            is_public: self.is_public,
-            public_access_level: self
-                .public_access_level
-                .map(GraphqlEntityAccessLevel::into_model),
+            link_share: self
+                .link_share
+                .map_value(GraphqlLinkShare::into_model)
+                .into(),
+            link_share_access_level: self
+                .link_share_access_level
+                .map_value(GraphqlEntityAccessLevel::into_model)
+                .into(),
             channel_share_permissions: self.channel_share_permissions.map(|entries| {
                 entries
                     .into_iter()
@@ -237,7 +263,7 @@ impl EntitySharePolicyInput {
 pub struct UpdateEntitySharePolicyInput {
     /// Entity whose share policy should change.
     pub entity: EntityRefInput,
-    /// New public/channel policy values.
+    /// New link/channel policy values.
     pub policy: EntitySharePolicyInput,
 }
 
@@ -251,14 +277,14 @@ impl UpdateEntitySharePolicyInput {
     }
 }
 
-/// Validate conditional fields required by public and channel share updates.
+/// Validate conditional fields required by link and channel share updates.
 fn validate_share_policy_inputs(
     inputs: &[UpdateEntitySharePolicyInput],
 ) -> async_graphql::Result<()> {
     for input in inputs {
-        if input.policy.is_public == Some(true) && input.policy.public_access_level.is_none() {
+        if input.policy.link_share.is_value() && !input.policy.link_share_access_level.is_value() {
             return Err(invalid_request(
-                "publicAccessLevel is required when public access is enabled",
+                "linkShareAccessLevel is required when link sharing is enabled",
             ));
         }
         if let Some(entries) = &input.policy.channel_share_permissions {
@@ -500,7 +526,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
         ))
     }
 
-    /// Update public and channel share policies across supported entity kinds.
+    /// Update link and channel share policies across supported entity kinds.
     async fn update_entity_share_policies(
         &self,
         ctx: &Context<'_>,

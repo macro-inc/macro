@@ -20,10 +20,13 @@ members = [
   "crates/cowlike",
   "crates/crm",
   "crates/embedding",
+  "crates/email_api_client",
   "crates/entity_mutation",
   "crates/favorites",
   "crates/foreign_entity",
   "crates/generic_email_domains",
+  "crates/gmail_client",
+  "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
@@ -159,8 +162,10 @@ glob = "0.3.3"
 guppy = "0.17.24"
 hex = "0.4.3"
 hmac = "0.12.1"
+encoding_rs = "0.8"
 http = "1"
 http-body-util = "0.1.2"
+httpdate = "1"
 image = "0.25"
 indexmap = "2"
 inquire = "0.7"
@@ -271,6 +276,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+wiremock = "0.6.5"
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
@@ -299,6 +305,8 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
+ammonia = "4.1.4"
+html-escape = "0.2"
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final

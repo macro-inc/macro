@@ -5,6 +5,7 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
 use std::borrow::Cow;
@@ -128,6 +129,15 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     match file_type {
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+fn should_revoke_non_owner_user_access(
+    share_permission: Option<&UpdateSharePermissionRequestV2>,
+) -> bool {
+    match share_permission.and_then(|permission| permission.link_share) {
+        Some(Some(LinkShare::Team)) | Some(None) => true,
+        Some(Some(LinkShare::Public)) | None => false,
     }
 }
 
@@ -1244,6 +1254,8 @@ impl<
             .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
         let share_permission_updated = args.share_permission.is_some();
+        let revoke_non_owner_user_access =
+            should_revoke_non_owner_user_access(args.share_permission.as_ref());
 
         self.repo
             .edit_document(EditDocumentRepoArgs {
@@ -1251,6 +1263,7 @@ impl<
                 document_name: document_name.clone(),
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                revoke_non_owner_user_access,
                 file_type: args.file_type.clone(),
             })
             .await

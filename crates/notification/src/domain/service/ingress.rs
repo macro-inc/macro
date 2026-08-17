@@ -19,8 +19,7 @@ use crate::domain::models::request::{
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusPatch, NotificationStatusUpdate, NotificationTypeName, PatchDelete,
-    UserNotificationRow, UserNotificationStatusUpdate,
+    NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -35,6 +34,7 @@ use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -87,15 +87,14 @@ pub trait NotificationReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
     /// Get a user's active notifications for multiple entities, grouped by requested entity.
-    fn get_entity_notifications_batch(
+    ///
+    /// Metadata is deserialized from the event-type-tagged notification representation.
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
+        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report>,
     > + Send;
 
     /// Get a single user notification by ID.
@@ -517,19 +516,14 @@ where
             let updates = changed
                 .iter()
                 .map(|notification| PatchDelete::Patch {
-                    id: notification.notification_id,
-                    diff: NotificationStatusPatch {
-                        done: notification.done,
-                        viewed_at: notification.viewed_at,
-                        updated_at: notification.updated_at,
-                    },
+                    diff: Cow::Borrowed(notification),
                 })
                 .collect();
-            let update = UserNotificationStatusUpdate {
+            let payload = NotificationStatusPayload::UserNotifications {
                 user: req.user_id.copied(),
-                update: NotificationStatusUpdate::new(updates),
+                updates,
             };
-            if let Err(err) = self.realtime.publish_updates(&[update]).await {
+            if let Err(err) = self.realtime.publish_updates(&payload).await {
                 tracing::warn!(error = ?err, "failed to publish notification status realtime update");
             }
         }
@@ -693,15 +687,42 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_entity_notifications_batch(
+    async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
-    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
-    {
-        self.repository
+    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<T>>>, Report> {
+        Ok(self
+            .repository
             .get_entity_notifications_batch(user_id, entity_refs)
-            .await
+            .await?
+            .into_iter()
+            .map(|(entity_ref, notifications)| {
+                let notifications = notifications
+                    .into_iter()
+                    .filter_map(|notification| {
+                        let notification_id = notification.notification_id;
+                        let notification_event_type = notification.notification_event_type.clone();
+                        match notification.into_tagged().deserialize_metadata::<T>() {
+                            Ok(notification) => Some(notification),
+                            Err(error) => {
+                                tracing::warn!(
+                                    error = ?error,
+                                    %notification_id,
+                                    notification_event_type,
+                                    entity_type = ?entity_ref.entity_type,
+                                    entity_id = %entity_ref.id,
+                                    "skipping notification with invalid metadata"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .collect();
+
+                (entity_ref, notifications)
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

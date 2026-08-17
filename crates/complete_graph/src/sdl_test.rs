@@ -74,7 +74,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
-        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlSoupNotification!]!",
+        "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "input MarkEmailThreadSeenInput {",
@@ -86,11 +86,28 @@ fn soup_response_schema_exposes_frontend_fields() {
         "MARK_SEEN",
         "MARK_DONE",
         "MARK_UNDONE",
-        "type SoupSubscriptionRoot {",
+        "type CompleteSubscriptionRoot {",
         "soupUpdates: [SoupPatch!]!",
+        "notificationUpdates: GraphqlNotificationPatch!",
+        "union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion",
+        "type GraphqlNotification {",
+        "metadata: GraphqlNotifEvent!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
+    assert!(
+        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
+        "notification metadata must be represented by the typed event union"
+    );
+    assert_eq!(
+        sdl.lines()
+            .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
+            .count(),
+        1,
+        "stored and realtime notifications must share one typed metadata field"
+    );
+    assert!(!sdl.contains("GraphqlRealtimeNotification"));
+    assert!(!sdl.contains("GraphqlSoupNotification"));
     assert!(
         !sdl.lines()
             .any(|line| line.trim() == "type GraphqlEntityRef {"),
@@ -132,6 +149,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "activity",
     ] {
         assert!(
             entity.fields.contains_key(shared_field),
@@ -159,6 +177,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),

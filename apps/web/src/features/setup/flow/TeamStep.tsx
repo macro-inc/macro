@@ -83,7 +83,7 @@ function OnTeamPanel(props: { name?: string; onContinue: () => void }) {
   return (
     <div class="flex flex-col gap-3">
       <div class="flex flex-col items-center gap-2 py-4 text-center">
-        <span class="flex size-10 items-center justify-center rounded-full bg-success/10 text-success">
+        <span class="flex size-10 items-center justify-center rounded-full bg-success-bg text-success">
           <CheckIcon class="size-5" />
         </span>
         <p class="text-sm font-medium text-ink">

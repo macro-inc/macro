@@ -1,11 +1,11 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Pool, Postgres, Row};
 
 use crate::domain::models::{
@@ -17,6 +17,9 @@ use crate::outbound::pg_document_repo::PgDocumentRepo;
 
 const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
+const TEST_DOCUMENT_ID: &str = "d0000000-0000-0000-0000-000000000001";
+const TEST_DOCUMENT_OWNER_ID: &str = "macro|user@user.com";
+const TEST_DOCUMENT_NON_OWNER_ID: &str = "macro|teammate1@user.com";
 
 fn user_id(user_id: &str) -> macro_user_id::user_id::MacroUserIdStr<'static> {
     macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)
@@ -96,6 +99,70 @@ async fn insert_github_pr_task(
     .execute(pool)
     .await
     .unwrap();
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct SharePermissionColumns {
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+}
+
+async fn share_permission_columns(
+    pool: &Pool<Postgres>,
+    document_id: &str,
+) -> SharePermissionColumns {
+    sqlx::query_as!(
+        SharePermissionColumns,
+        r#"
+        SELECT
+            sp."linkShare" as "link_share?",
+            sp."linkShareAccessLevel"::text as "link_share_access_level?"
+        FROM "SharePermission" sp
+        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+        WHERE dp."documentId" = $1
+        "#,
+        document_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn insert_non_owner_user_access(pool: &Pool<Postgres>) {
+    let document_id = macro_uuid::string_to_uuid(TEST_DOCUMENT_ID).unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'document', $2, 'user', 'edit')
+        "#,
+        document_id,
+        TEST_DOCUMENT_NON_OWNER_ID,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn direct_user_access_sources(pool: &Pool<Postgres>) -> Vec<String> {
+    let document_id = macro_uuid::string_to_uuid(TEST_DOCUMENT_ID).unwrap();
+
+    sqlx::query_scalar!(
+        r#"
+        SELECT source_id
+        FROM entity_access
+        WHERE entity_id = $1
+          AND entity_type = 'document'
+          AND source_type = 'user'
+          AND granted_from_project_id IS NULL
+        ORDER BY source_id
+        "#,
+        document_id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
 }
 
 async fn insert_second_team(pool: &Pool<Postgres>) {
@@ -301,6 +368,23 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(create_document_args(TEST_DOCUMENT_OWNER_ID, false, None))
+        .await
+        .unwrap();
+
+    let result = share_permission_columns(&pool, &document.document_id).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_edit_document_name(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
@@ -309,6 +393,7 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
         document_name: Some("new-name".to_string()),
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -333,6 +418,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
     })
     .await
@@ -357,6 +443,7 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Clear),
     })
     .await
@@ -381,6 +468,7 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -409,6 +497,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -429,6 +518,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -445,76 +535,121 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_edit_document_share_permission(pool: Pool<Postgres>) {
+async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
-        document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
+        document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: Some(false),
-            public_access_level: None,
+            link_share: Some(None),
+            link_share_access_level: Some(None),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: true,
         file_type: None,
     })
     .await
     .unwrap();
 
-    // Verify the share permission was updated
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
 
-    assert!(!result.is_public);
-    assert!(result.public_access_level.is_none());
+    assert_eq!(result.link_share, None);
+    assert_eq!(result.link_share_access_level, None);
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
+async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
-        document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
+        document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: Some(AccessLevel::Edit),
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(Some(AccessLevel::Comment)),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: true,
         file_type: None,
     })
     .await
     .unwrap();
 
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("TEAM"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("comment"));
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    })
     .await
     .unwrap();
 
-    assert_eq!(result.public_access_level, Some("edit".to_string()));
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(None),
+            channel_share_permissions: None,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    })
+    .await
+    .unwrap();
+
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level, None);
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![
+            TEST_DOCUMENT_NON_OWNER_ID.to_string(),
+            TEST_DOCUMENT_OWNER_ID.to_string(),
+        ]
+    );
 }
 
 #[sqlx::test(
@@ -523,46 +658,41 @@ async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
 )]
 async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("renamed".to_string()),
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: Some(true),
-            public_access_level: Some(AccessLevel::Edit),
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
     .unwrap();
 
-    let doc = repo
-        .get_basic_document("d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    let doc = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
     assert_eq!(doc.document_name, "renamed");
     assert_eq!(
         doc.project_id,
         Some("d0000000-0000-0000-0000-100000000001".to_string())
     );
 
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
 
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level, Some("edit".to_string()));
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![
+            TEST_DOCUMENT_NON_OWNER_ID.to_string(),
+            TEST_DOCUMENT_OWNER_ID.to_string(),
+        ]
+    );
 }
 
 #[sqlx::test(
@@ -1241,14 +1371,15 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -1313,14 +1444,15 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     };
 

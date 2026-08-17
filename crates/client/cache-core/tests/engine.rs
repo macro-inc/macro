@@ -219,7 +219,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                         "__typename": "GraphqlSoupChannel",
                         "id": "channel-1",
                         "notifications": [{
-                            "__typename": "GraphqlSoupNotification",
+                            "__typename": "GraphqlNotification",
                             "id": "notification-1",
                             "seen": false,
                             "viewedAt": null
@@ -298,7 +298,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                 &notification_variables,
                 &json!({
                     "updateNotifications": [{
-                        "__typename": "GraphqlSoupNotification",
+                        "__typename": "GraphqlNotification",
                         "id": "notification-1",
                         "seen": true,
                         "viewedAt": "2025-01-01T00:00:02Z"

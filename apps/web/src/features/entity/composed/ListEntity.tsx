@@ -73,7 +73,7 @@ export function MaybeEntityRow(props: {
 }) {
   const ctx = useContext(SwipableRowContext);
   return (
-    <Show when={isMobile() && ctx} fallback={props.children}>
+    <Show when={isTouchDevice() && ctx} fallback={props.children}>
       <SwipableRow
         id={props.entityId}
         swipeLeftColor={props.config?.swipeLeftColor}
@@ -162,7 +162,7 @@ export function ListEntity(props: ListEntityProps) {
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
 
   const mobileStacks = createMemo(() => {
-    if (!isMobile()) return [];
+    if (!isTouchDevice()) return [];
     if (!props.showUnrollNotifications) return [];
     const notifs = props.entity.notifications?.();
     if (!notifs?.length) return [];
@@ -189,10 +189,11 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10 mx-1': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
-          'bg-accent/8': props.checked,
-          'bg-accent/16': props.checked && props.highlighted,
-          'bg-hover': props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-hover/65':
+          'bg-list-selected': props.checked,
+          'bg-list-selected-highlighted': props.checked && props.highlighted,
+          'bg-list-highlighted':
+            props.highlighted && !props.checked && !isTouchDevice(),
+          'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}
@@ -207,7 +208,9 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match when={isMobile() && mobileStacks().length > 0}>
+        <Match
+          when={isTouchDevice() && mobileStacks().length > 0}
+        >
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
             entity={props.entity}
@@ -216,7 +219,7 @@ export function ListEntity(props: ListEntityProps) {
         </Match>
         <Match
           when={
-            isMobile() &&
+            isTouchDevice() &&
             ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
               isEmailEntity(props.entity) ||
               props.showUnrollNotifications)
@@ -247,7 +250,7 @@ export function ListEntity(props: ListEntityProps) {
         </Match>
       </Switch>
 
-      <Show when={hasNotifications() && !isMobile()}>
+      <Show when={hasNotifications() && !isTouchDevice()}>
         <div class="px-2 pb-1.5 -mt-1 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 ml-2 @lg/entity:ml-6')}>
             <Show when={isWithNotification(props.entity) && !showContentHits()}>

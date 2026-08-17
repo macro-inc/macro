@@ -469,9 +469,24 @@ export type getAttachmentResponse401 = {
   status: 401;
 };
 
+export type getAttachmentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type getAttachmentResponse404 = {
   data: ErrorResponse;
   status: 404;
+};
+
+export type getAttachmentResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type getAttachmentResponse429 = {
+  data: ErrorResponse;
+  status: 429;
 };
 
 export type getAttachmentResponse500 = {
@@ -485,7 +500,10 @@ export type getAttachmentResponseSuccess = getAttachmentResponse200 & {
 export type getAttachmentResponseError = (
   | getAttachmentResponse400
   | getAttachmentResponse401
+  | getAttachmentResponse403
   | getAttachmentResponse404
+  | getAttachmentResponse409
+  | getAttachmentResponse429
   | getAttachmentResponse500
 ) & {
   headers: Headers;
@@ -971,6 +989,21 @@ export type listBlockedSendersResponse403 = {
   status: 403;
 };
 
+export type listBlockedSendersResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listBlockedSendersResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type listBlockedSendersResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type listBlockedSendersResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -983,6 +1016,9 @@ export type listBlockedSendersResponseSuccess =
 export type listBlockedSendersResponseError = (
   | listBlockedSendersResponse401
   | listBlockedSendersResponse403
+  | listBlockedSendersResponse404
+  | listBlockedSendersResponse409
+  | listBlockedSendersResponse429
   | listBlockedSendersResponse500
 ) & {
   headers: Headers;
@@ -1892,6 +1928,11 @@ export type initUserResponse409 = {
   status: 409;
 };
 
+export type initUserResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type initUserResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -1904,6 +1945,7 @@ export type initUserResponseError = (
   | initUserResponse400
   | initUserResponse401
   | initUserResponse409
+  | initUserResponse429
   | initUserResponse500
 ) & {
   headers: Headers;
@@ -2014,9 +2056,24 @@ export type createLabelResponse401 = {
   status: 401;
 };
 
+export type createLabelResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createLabelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
 export type createLabelResponse409 = {
   data: ErrorResponse;
   status: 409;
+};
+
+export type createLabelResponse429 = {
+  data: ErrorResponse;
+  status: 429;
 };
 
 export type createLabelResponse500 = {
@@ -2030,7 +2087,10 @@ export type createLabelResponseSuccess = createLabelResponse201 & {
 export type createLabelResponseError = (
   | createLabelResponse400
   | createLabelResponse401
+  | createLabelResponse403
+  | createLabelResponse404
   | createLabelResponse409
+  | createLabelResponse429
   | createLabelResponse500
 ) & {
   headers: Headers;
@@ -2201,7 +2261,7 @@ collapse to one refresh per window.
 against the auth service and records the result on each link. A grant that died
 while the caller was inactive is detected here within minutes instead of waiting on
 the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
-the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+the one-time reauth fan-out) are handled by the email service token source.
  */
 export type healthCheckLinksResponse202 = {
   data: EmptyResponse;

@@ -12,6 +12,7 @@ pub(crate) mod init;
 pub(crate) mod labels;
 pub(crate) mod links;
 pub(crate) mod messages;
+pub(crate) mod provider_error;
 pub(crate) mod settings;
 pub(crate) mod sync;
 pub(crate) mod threads;

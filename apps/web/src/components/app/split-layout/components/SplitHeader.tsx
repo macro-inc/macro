@@ -13,11 +13,14 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityDragEvent } from '@entity';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -89,7 +92,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg mobile:active:bg-transparent"
+      class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -241,7 +244,7 @@ function SoupNavigationButtons() {
   const shouldShow = createMemo(() => {
     // The mobile swipe layout doesn't handle mergeHistory navigations, so
     // these controls would silently no-op there.
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
@@ -308,6 +311,8 @@ function SplitHeaderContextMenu(props: ParentProps) {
     () => panel.handle.content().type === 'component'
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
+  const canSwapWith = (direction: 'left' | 'right') =>
+    layout.manager.canSwapSplit(panel.handle.id, direction);
 
   const newSplitContent = () => ({
     type: 'component' as const,
@@ -385,6 +390,19 @@ function SplitHeaderContextMenu(props: ParentProps) {
             text="Duplicate split"
             disabled={!layout.manager.canAppendSplit() || !canDuplicateSplit()}
             onClick={() => insertSplitBeside('right', duplicateContent())}
+          />
+          <MenuSeparator />
+          <MenuItem
+            icon={ArrowLeft}
+            text="Swap split left"
+            disabled={!canSwapWith('left')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
+          />
+          <MenuItem
+            icon={ArrowRight}
+            text="Swap split right"
+            disabled={!canSwapWith('right')}
+            onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
           />
           <MenuSeparator />
           <MenuItem
@@ -491,11 +509,11 @@ export function SplitHeader(props: {
           '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
           // of floating islands
-          'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
+          'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
           isMobile() &&
             !isNativeMobilePlatform() &&
-            'mobile:top-[calc(var(--safe-top)+6px)]',
-          isEntityDraggingOver() && 'bg-active/50'
+            'touch:top-[calc(var(--safe-top)+6px)]',
+          isEntityDraggingOver() && 'bg-active'
         )}
         data-split-header
         ref={mergeRefs(droppable, props.ref)}
@@ -519,11 +537,11 @@ export function SplitHeader(props: {
           )}
         </Show>
         <div
-          class="absolute inset-0 flex justify-start items-center mobile:px-(--mobile-chrome-gutter) mobile:gap-2"
+          class="absolute inset-0 flex justify-start items-center touch:px-(--mobile-chrome-gutter) touch:gap-2"
           ref={props.collapseController.setRow}
         >
           <Show
-            when={isMobile()}
+            when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
@@ -559,14 +577,14 @@ export function SplitHeader(props: {
           <PriorityCollapseOverflowSensor
             controller={props.collapseController}
             truncateAsLastResort
-            class="relative min-w-0 h-full shrink overflow-hidden mobile:overflow-visible"
-            contentClass="h-full flex items-center gap-0.5 pl-2 mobile:pl-0 mobile:gap-2 mobile:max-w-full"
+            class="relative min-w-0 h-full shrink overflow-hidden touch:overflow-visible"
+            contentClass="h-full flex items-center gap-0.5 pl-2 touch:pl-0 touch:gap-2 touch:max-w-full"
             contentRef={(element) => {
               panel.layoutRefs.headerLeft = element;
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 mobile:px-0 mobile:gap-2">
+          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

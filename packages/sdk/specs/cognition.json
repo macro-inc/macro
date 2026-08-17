@@ -3417,6 +3417,11 @@
           }
         }
       },
+      "LinkShare": {
+        "type": "string",
+        "description": "Defines who can access an item through its share link.",
+        "enum": ["PUBLIC", "TEAM"]
+      },
       "MacroUserIdStr": {
         "type": "string"
       },
@@ -3867,7 +3872,7 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": ["id", "isPublic", "owner"],
+        "required": ["id", "owner"],
         "properties": {
           "channelSharePermissions": {
             "type": ["array", "null"],
@@ -3880,24 +3885,31 @@
             "type": "string",
             "description": "The share permission id"
           },
-          "isPublic": {
-            "type": "boolean",
-            "description": "If the item is publicly accessible"
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link"
+              }
+            ]
           },
-          "owner": {
-            "type": "string",
-            "description": "The owner of the item"
-          },
-          "publicAccessLevel": {
+          "linkShareAccessLevel": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
                 "$ref": "#/components/schemas/AccessLevel",
-                "description": "The level of public access"
+                "description": "The level of access granted through the share link"
               }
             ]
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the item"
           }
         }
       },
@@ -4184,18 +4196,25 @@
             },
             "description": "Any channel share permissions to be created/updated/removed"
           },
-          "isPublic": {
-            "type": ["boolean", "null"],
-            "description": "If the item is publicly accessible"
+          "linkShare": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LinkShare",
+                "description": "Who can access the item through its share link. Omit to leave unchanged or pass `null` to\ndisable link sharing."
+              }
+            ]
           },
-          "publicAccessLevel": {
+          "linkShareAccessLevel": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
                 "$ref": "#/components/schemas/AccessLevel",
-                "description": "The level of public access"
+                "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
               }
             ]
           }

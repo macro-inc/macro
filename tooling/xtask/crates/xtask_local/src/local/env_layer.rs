@@ -1,4 +1,7 @@
 //! Environment layering (lowest → highest precedence):
+//!   - Local only: the [`local_env::LocalEnv`] boot stubs — deterministic
+//!     placeholders that satisfy service config loaders on a `--no-doppler`
+//!     stack. Doppler overrides them, so real integration values always win.
 //!   - Doppler (`lcl_personal`/`dev_personal`) — the integration/secret config
 //!     services require.
 //!   - Local only: the typed [`local_env::LocalEnv`] overlaid on top —
@@ -51,14 +54,23 @@ pub fn resolve(
     // has — unlike the old defaults.env, which Doppler overrode). Dev keeps
     // Doppler as-is.
     let spec = mode.spec();
+    let local = spec
+        .overlay_local_env
+        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend));
     let mut env = BTreeMap::new();
+    // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
+    // a `--no-doppler` stack's config loaders satisfied, never to replace a
+    // real integration value a developer's Doppler config supplies.
+    if let Some(local) = &local {
+        env.extend(local.boot_stub_env());
+    }
     let doppler_used = if no_doppler {
         false
     } else {
         pull_doppler(spec.doppler_config, &mut env)?
     };
-    if spec.overlay_local_env {
-        for (k, v) in local_env::LocalEnv::for_instance(mode, instance, static_frontend).to_env() {
+    if let Some(local) = &local {
+        for (k, v) in local.to_env() {
             env.insert(k, v);
         }
         // Opt-in local trace export: point services at the local OTLP collector

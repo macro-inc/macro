@@ -48,10 +48,11 @@ function Root(props: RootProps): JSX.Element {
         // vars come from `.soup-list-entity` on the row wrapper.
         'mobile:rounded-none mobile:grid-cols-[auto_minmax(0,1fr)_max-content] mobile:items-center mobile:content-center mobile:pl-(--soup-inbox-unread) mobile:pr-3',
         {
-          'bg-accent/8': props.selected,
-          'bg-accent/16': props.selected && props.highlighted,
-          'bg-hover': props.highlighted && !props.selected && !isTouchDevice(),
-          'hover:bg-hover/65':
+          'bg-list-selected': props.selected,
+          'bg-list-selected-highlighted': props.selected && props.highlighted,
+          'bg-list-highlighted':
+            props.highlighted && !props.selected && !isTouchDevice(),
+          'hover:bg-list-hover':
             !props.highlighted && !props.selected && !isTouchDevice(),
         },
         props.class

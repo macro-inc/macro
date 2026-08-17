@@ -100,8 +100,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
-  const compact = () => !isMobile() && panelWidth() < COMPACT_WIDTH;
-  const narrow = () => !isMobile() && panelWidth() < NARROW_WIDTH;
+  const compact = () => !isTouchDevice() && panelWidth() < COMPACT_WIDTH;
+  const narrow = () => !isTouchDevice() && panelWidth() < NARROW_WIDTH;
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -303,7 +303,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       <div class="flex grow min-h-1 overflow-hidden">
         {/* Inline sidebar — hidden once the panel gets too narrow. */}
-        <Show when={!isMobile() && !compact()}>
+        <Show when={!isTouchDevice() && !compact()}>
           <SideNav
             class={cn(
               'w-[clamp(208px,20%,248px)] gap-3',
@@ -353,7 +353,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             around it tightens as the panel narrows, and goes uniform once the
             sidebar collapses. Full-bleed on mobile. */}
         <div
-          class="flex-1 min-w-0 overflow-hidden mobile:p-0"
+          class="flex-1 min-w-0 overflow-hidden touch:p-0"
           classList={{
             'py-2 pr-2 pl-0': !compact() && !narrow(),
             'py-1 pr-1 pl-0': !compact() && narrow(),
@@ -361,7 +361,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           }}
         >
           <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
+            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu touch:rounded-none touch:border-0 touch:bg-transparent">
               {/* Compact full-screen chrome: no split header to host the tabs,
                   so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its

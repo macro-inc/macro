@@ -472,6 +472,20 @@ export type InitGmailLinkResponse = {
 };
 
 /**
+ * Response returned when a Microsoft Outlook link is initiated.
+ */
+export type InitOutlookLinkResponse = {
+    /**
+     * The OAuth authorization URL to redirect the user to.
+     */
+    authorization_url: string;
+    /**
+     * The link ID for tracking the OAuth flow.
+     */
+    link_id: string;
+};
+
+/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -1200,6 +1214,10 @@ export type InitGmailLinkData = {
          * **OPTIONAL**. The original url to redirect to.
          */
         original_url: string;
+        /**
+         * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
+         */
+        scopes?: string;
     };
     url: '/link/gmail';
 };
@@ -1241,6 +1259,34 @@ export type CheckGmailLinkStatusResponses = {
 };
 
 export type CheckGmailLinkStatusResponse = CheckGmailLinkStatusResponses[keyof CheckGmailLinkStatusResponses];
+
+export type InitOutlookLinkData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * **OPTIONAL**. The original URL to redirect to.
+         */
+        original_url?: string;
+    };
+    url: '/link/outlook';
+};
+
+export type InitOutlookLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InitOutlookLinkError = InitOutlookLinkErrors[keyof InitOutlookLinkErrors];
+
+export type InitOutlookLinkResponses = {
+    200: InitOutlookLinkResponse;
+};
+
+export type InitOutlookLinkResponse2 = InitOutlookLinkResponses[keyof InitOutlookLinkResponses];
 
 export type AppleLoginData = {
     body: AppleLoginRequest;

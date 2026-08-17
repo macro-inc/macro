@@ -280,7 +280,7 @@ function PullRequestPreviewBody(props: {
                   href={url()}
                   target="_blank"
                   rel="noreferrer"
-                  class="shrink-0 text-ink-muted hover:text-ink"
+                  class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <OpenIcon class="size-4" />

@@ -1,3 +1,4 @@
+use device::{IsIpad, detect_is_ipad, is_ipad};
 use logger::Logger;
 use macro_bundle_updater_plugin::domain::{
     asset_service::BundleAssetResolver, bundle_routes::BundleRoutes,
@@ -29,6 +30,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
+mod device;
 mod share_target;
 mod staged_upload;
 
@@ -136,6 +138,11 @@ pub fn run() {
 
     registry.init();
 
+    // UIKit must be queried on the main thread, and `run()` is called straight
+    // from `main()` (`ffi::start_app()` on iOS), so this is it. The idiom never
+    // changes at runtime, so a one-shot snapshot is enough.
+    let is_ipad_device = detect_is_ipad();
+
     let embedded_bundle_build = embedded_bundle_build();
     let bundle_routes = BundleRoutes::new(embedded_bundle_build);
     let bundle_asset_resolver = BundleAssetResolver::new(bundle_routes.clone(), FileSystem);
@@ -241,6 +248,7 @@ pub fn run() {
         .manage(PendingShareFilesState::default())
         .manage(DeepLinkDelivery::default())
         .manage(graphql_cache_plugin::CacheState::default())
+        .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_read,
@@ -264,6 +272,7 @@ pub fn run() {
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
+            is_ipad,
             get_pending_share_filenames,
             pop_shared_files,
             clear_shared_files,

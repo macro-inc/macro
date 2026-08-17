@@ -1654,10 +1654,49 @@ async fn test_delete_document_publishes_no_event_when_repo_fails() {
 }
 
 #[tokio::test]
+async fn edit_document_sets_revocation_intent_from_link_share_target() {
+    for (link_share, expected_revocation) in [
+        (Some(Some(LinkShare::Team)), true),
+        (Some(None), true),
+        (Some(Some(LinkShare::Public)), false),
+        (None, false),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_edit_document()
+            .withf(move |args| {
+                args.revoke_non_owner_user_access == expected_revocation
+                    && args
+                        .share_permission
+                        .as_ref()
+                        .is_some_and(|permission| permission.link_share == link_share)
+            })
+            .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+
+        make_test_service(repo)
+            .edit_document(
+                edit_receipt("doc-1"),
+                task_document_context("doc-1"),
+                EditDocumentServiceArgs {
+                    document_name: None,
+                    project_id: None,
+                    share_permission: Some(UpdateSharePermissionRequestV2 {
+                        link_share,
+                        link_share_access_level: None,
+                        channel_share_permissions: None,
+                    }),
+                    file_type: None,
+                },
+            )
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
 async fn test_edit_document_publishes_document_updated_event() {
     let mut repo = make_mock_repo();
     repo.expect_edit_document()
-        .withf(|args| args.document_id == "doc-1")
+        .withf(|args| args.document_id == "doc-1" && !args.revoke_non_owner_user_access)
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);

@@ -77,6 +77,8 @@ export type ScalarFieldFilters = {
   tagFilterMode?: TagFilterMode;
   documentSeen?: boolean;
   documentDone?: boolean;
+  /** For tasks, whether the current user is an assignee. */
+  documentImportance?: boolean;
   isEmailAttachment?: boolean;
   emailSeen?: boolean;
   emailDone?: boolean;
@@ -128,6 +130,7 @@ export type DocumentFieldName =
   | 'documentOwnerId'
   | 'documentSeen'
   | 'documentDone'
+  | 'documentImportance'
   | 'isEmailAttachment'
   | 'documentCreatedAt'
   | 'documentUpdatedAt';

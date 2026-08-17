@@ -13,6 +13,7 @@ const item = (time: CalendarOccurrenceItem['occurrence']['time']) =>
       location: null,
       description: 'Weekly planning',
       conferenceUrl: 'https://meet.example.com/planning',
+      conferenceProvider: 'google_meet',
       organizerName: 'Alex Rivera',
       organizerEmail: 'alex@example.com',
       attendees: [
@@ -57,6 +58,7 @@ describe('mapCalendarOccurrence', () => {
       isCancelled: true,
       isReadOnly: true,
       conferenceUrl: 'https://meet.example.com/planning',
+      conferenceProvider: 'google_meet',
       organizerName: 'Alex Rivera',
       organizerEmail: 'alex@example.com',
       recurrenceLines: ['RRULE:FREQ=WEEKLY'],

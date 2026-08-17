@@ -136,7 +136,10 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class={SidePanel.pillClass + ' pointer-events-auto hover:bg-hover'}
+      class={
+        SidePanel.pillClass +
+        ' pointer-events-auto text-link hover:text-link-hover hover:bg-hover'
+      }
     >
       <span class="relative size-3 shrink-0">
         <EntityIcon targetType="project" size="fill" />

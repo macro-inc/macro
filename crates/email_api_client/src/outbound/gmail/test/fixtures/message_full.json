@@ -1,0 +1,10 @@
+{
+  "id":"message-1","threadId":"thread-1","labelIds":["INBOX","UNREAD"],
+  "snippet":"Hello","sizeEstimate":12,"historyId":"101","internalDate":"1700000000000",
+  "payload":{"partId":"","mimeType":"text/plain","filename":"","headers":[
+    {"name":"Message-ID","value":"<message-1@example.test>"},
+    {"name":"From","value":"Sender <sender@example.test>"},
+    {"name":"To","value":"User <user@example.test>"},
+    {"name":"Subject","value":"Fixture message"}
+  ],"body":{"size":5,"data":"SGVsbG8="}}
+}

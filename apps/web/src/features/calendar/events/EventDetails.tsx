@@ -23,7 +23,7 @@ import XIcon from '@phosphor/x.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
-import { Avatar, Button } from '@ui';
+import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -117,11 +117,12 @@ function CalendarUserItem(props: {
   secondaryLabelPosition?: 'above' | 'below';
   details?: JSX.Element;
   trailing?: JSX.Element;
+  nameClass?: string;
 }) {
   const secondaryLabelPosition = () => props.secondaryLabelPosition ?? 'below';
 
   return (
-    <div class="flex min-w-0 items-center gap-3">
+    <div class="flex min-w-0 items-center gap-4 sm:gap-3">
       <Show
         keyed
         when={props.iconProps}
@@ -147,18 +148,23 @@ function CalendarUserItem(props: {
         <Show
           when={secondaryLabelPosition() === 'above' && props.secondaryLabel}
         >
-          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+          <div class="flex gap-1 text-xs text-ink-extra-muted sm:text-xxs">
             {props.secondaryLabel}
           </div>
         </Show>
-        <span class="block select-text truncate text-ink-muted">
+        <span
+          class={cn(
+            'block select-text truncate text-ink-muted',
+            props.nameClass
+          )}
+        >
           {props.displayName()}
           <Show when={props.isSelf}> (you)</Show>
         </span>
         <Show
           when={secondaryLabelPosition() === 'below' && props.secondaryLabel}
         >
-          <div class="flex gap-1 text-xxs text-ink-extra-muted">
+          <div class="flex gap-1 text-xs text-ink-extra-muted sm:text-xxs">
             {props.secondaryLabel}
           </div>
         </Show>
@@ -169,7 +175,10 @@ function CalendarUserItem(props: {
   );
 }
 
-function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
+function CalendarAttendeeItem(props: {
+  item: ResolvedCalendarAttendee;
+  nameClass?: string;
+}) {
   const attendee = props.item.attendee;
   const response =
     attendee.responseStatus === 'needs_action'
@@ -187,7 +196,7 @@ function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
       </>
     ) : undefined;
   const details = attendee.comment ? (
-    <div class="line-clamp-2 select-text text-xxs italic text-ink-extra-muted">
+    <div class="line-clamp-2 select-text text-xs italic text-ink-extra-muted sm:text-xxs">
       {attendee.comment}
     </div>
   ) : undefined;
@@ -210,29 +219,49 @@ function CalendarAttendeeItem(props: { item: ResolvedCalendarAttendee }) {
       secondaryLabel={secondaryLabel}
       details={details}
       trailing={trailing}
+      nameClass={props.nameClass}
     />
   );
 }
 
-function CalendarAttendeeList(props: { attendees: CalendarAttendee[] }) {
-  const attendees = props.attendees.map(resolveCalendarAttendee);
+export interface CalendarAttendeeListProps {
+  attendees: CalendarAttendee[];
+  organizerFirst?: boolean;
+  itemClass?: (attendee: CalendarAttendee) => string | undefined;
+  nameClass?: string;
+}
+
+/** Resolved attendee rows shared by event details and read-only guest views. */
+export function CalendarAttendeeList(props: CalendarAttendeeListProps) {
   const sortedAttendees = createMemo(() =>
-    attendees
+    props.attendees
+      .map(resolveCalendarAttendee)
       .map((item) => ({ item, name: item.displayName() }))
-      .toSorted(
-        (first, second) =>
+      .toSorted((first, second) => {
+        if (
+          props.organizerFirst &&
+          first.item.attendee.isOrganizer !== second.item.attendee.isOrganizer
+        ) {
+          return first.item.attendee.isOrganizer ? -1 : 1;
+        }
+        return (
           compareAttendeeNames(first.name, second.name) ||
           compareAttendeeNames(
             first.item.attendee.email,
             second.item.attendee.email
           )
-      )
+        );
+      })
       .map(({ item }) => item)
   );
 
   return (
     <For each={sortedAttendees()}>
-      {(item) => <CalendarAttendeeItem item={item} />}
+      {(item) => (
+        <div class={cn(props.itemClass?.(item.attendee))}>
+          <CalendarAttendeeItem item={item} nameClass={props.nameClass} />
+        </div>
+      )}
     </For>
   );
 }
@@ -335,8 +364,8 @@ function EventRemindersItem(props: { event: CalendarEvent }) {
 
   return (
     <Show when={reminders().length > 0}>
-      <div class="-ml-7 flex items-start gap-3">
-        <BellSimpleIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
+      <div class="contents">
+        <BellSimpleIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
         <div class="flex select-text flex-col gap-0.5">
           <For each={reminders()}>
             {(reminder) => (
@@ -376,9 +405,9 @@ function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
     : undefined;
 
   return (
-    <div class="-ml-7 flex min-w-0 items-center gap-3">
-      <PersonIcon class="size-4 shrink-0 text-ink-extra-muted" />
-      <div class="min-w-0 flex-1">
+    <div class="contents">
+      <PersonIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
+      <div class="min-w-0">
         <CalendarUserItem
           displayName={displayName}
           iconProps={iconProps}
@@ -417,6 +446,10 @@ export function EventDetails(props: {
   const conferenceUrl = createMemo(() =>
     safeConferenceUrl(props.event.conferenceUrl)
   );
+  const conferenceLabel = () =>
+    props.event.conferenceProvider === 'google_meet'
+      ? 'Join Google Meet'
+      : 'Join meeting';
   const organizer = createMemo(() => findOrganizer(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
@@ -434,92 +467,85 @@ export function EventDetails(props: {
   });
 
   return (
-    <div class="min-w-0 p-1 text-ink">
-      <div class="flex items-start gap-3">
+    <div class="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
+      <span
+        aria-hidden="true"
+        class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
+      >
         <span
-          aria-hidden="true"
-          class="mt-0.5 flex size-4 shrink-0 items-center justify-center"
-        >
-          <span
-            class="size-2.5 rounded-sm"
-            style={{ 'background-color': props.event.calendar.color }}
-          />
-        </span>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-col gap-1 pr-8">
-            <div class="select-text text-base font-semibold leading-snug text-ink">
-              {props.event.title}
-            </div>
-            <div class="select-text text-xs text-ink-muted">
-              {formatEventSchedule(props.event, props.timeFormat)}
-            </div>
-            <Show when={recurrenceDescription()}>
-              {(description) => (
-                <div class="select-text text-xs text-ink-extra-muted">
-                  {description()}
-                </div>
-              )}
-            </Show>
-          </div>
-
-          <div class="mt-5 flex flex-col gap-3 text-xs text-ink-muted">
-            <Show when={conferenceUrl()}>
-              {(url) => (
-                <div class="-ml-7 flex items-center gap-3">
-                  <VideoCameraIcon class="size-4 shrink-0 text-ink-extra-muted" />
-                  <Button
-                    fullWidth
-                    variant="cta"
-                    size="sm"
-                    class="h-8 rounded-lg"
-                    label="Join meeting"
-                    onClick={() => openExternalUrl(url())}
-                  >
-                    Join meeting
-                    <ArrowSquareOutIcon class="size-3.5" />
-                  </Button>
-                </div>
-              )}
-            </Show>
-            <Show when={originalTimeZone()}>
-              {(timeZone) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <GlobeIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
-                  <span class="select-text">{timeZone()}</span>
-                </div>
-              )}
-            </Show>
-
-            <Show when={props.event.location}>
-              {(location) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <MapPinIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
-                  <span class="select-text">{location()}</span>
-                </div>
-              )}
-            </Show>
-
-            <Show when={props.event.description}>
-              {(description) => (
-                <div class="-ml-7 flex items-start gap-3">
-                  <TextAlignLeftIcon class="mt-0.5 size-4 shrink-0 text-ink-extra-muted" />
-                  <p class="select-text leading-relaxed text-ink-muted">
-                    {description()}
-                  </p>
-                </div>
-              )}
-            </Show>
-
-            <EventRemindersItem event={props.event} />
-
-            <Show when={organizer()}>
-              {(eventOrganizer) => (
-                <CalendarOrganizerItem organizer={eventOrganizer()} />
-              )}
-            </Show>
-          </div>
+          class="size-4 rounded-sm sm:size-3"
+          style={{ 'background-color': props.event.calendar.color }}
+        />
+      </span>
+      <div class="flex min-w-0 flex-col gap-1">
+        <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
+          {props.event.title}
         </div>
+        <div class="select-text text-sm text-ink-muted sm:text-xs">
+          {formatEventSchedule(props.event, props.timeFormat)}
+        </div>
+        <Show when={recurrenceDescription()}>
+          {(description) => (
+            <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
+              {description()}
+            </div>
+          )}
+        </Show>
       </div>
+
+      <Show when={conferenceUrl()}>
+        {(url) => (
+          <div class="contents">
+            <VideoCameraIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
+            <Button
+              fullWidth
+              variant="cta"
+              size="sm"
+              class="h-8 rounded-lg [&_svg]:size-3.5!"
+              onClick={() => openExternalUrl(url())}
+            >
+              {conferenceLabel()}
+              <ArrowSquareOutIcon />
+            </Button>
+          </div>
+        )}
+      </Show>
+      <Show when={originalTimeZone()}>
+        {(timeZone) => (
+          <div class="contents">
+            <GlobeIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <span class="select-text">{timeZone()}</span>
+          </div>
+        )}
+      </Show>
+
+      <Show when={props.event.location}>
+        {(location) => (
+          <div class="contents">
+            <MapPinIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <span class="select-text">{location()}</span>
+          </div>
+        )}
+      </Show>
+
+      <Show when={props.event.description}>
+        {(description) => (
+          <div class="contents">
+            <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+            <p class="select-text leading-relaxed text-ink-muted">
+              {description()}
+            </p>
+          </div>
+        )}
+      </Show>
+
+      <EventRemindersItem event={props.event} />
+
+      <Show when={organizer()}>
+        {(eventOrganizer) => (
+          <CalendarOrganizerItem organizer={eventOrganizer()} />
+        )}
+      </Show>
     </div>
   );
 }
@@ -532,10 +558,10 @@ export function EventAttendeesSection(props: {
     <Show when={props.attendees.length > 0}>
       <Collapsible
         defaultOpen
-        class="border-edge-muted border-t text-xs text-ink-muted"
+        class="border-edge-muted text-sm text-ink-muted sm:border-t sm:text-xs"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-hover hover:text-ink">
-          <UsersIcon class="size-4 shrink-0 text-ink-extra-muted" />
+        <Collapsible.Trigger class="group flex w-full items-center gap-4 px-4 py-4 text-left hover:bg-hover hover:text-ink sm:gap-3">
+          <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
           <span>
             {props.attendees.length}{' '}
             {plural('attendee', props.attendees.length)}
@@ -546,8 +572,8 @@ export function EventAttendeesSection(props: {
           />
         </Collapsible.Trigger>
         <Collapsible.Content class="data-closed:hidden">
-          <div class="flex gap-3 pb-3 pl-4 pt-1.5">
-            <span aria-hidden="true" class="size-4 shrink-0" />
+          <div class="flex gap-4 pb-3 pl-4 pt-1.5 sm:gap-3">
+            <span aria-hidden="true" class="size-5 shrink-0 sm:size-4" />
             <ScrollableAttendeeList attendees={props.attendees} />
           </div>
         </Collapsible.Content>
