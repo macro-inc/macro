@@ -1,0 +1,133 @@
+import { CalendarPage } from '@app/features/calendar/CalendarPage';
+import {
+  CALENDAR_PAGE_IDS,
+  useCalendarPager,
+} from '@app/features/calendar/CalendarPagerContext';
+import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
+import { CalendarSetupStatus } from '@app/features/calendar/CalendarSetupStatus';
+import { CalendarSidePanelSections } from '@app/features/calendar/CalendarSidePanelSections';
+import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
+import { SelectedEventDetails } from '@app/features/calendar/events/EventDetailsPopover';
+import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isMobile } from '@core/mobile/isMobile';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { Layer } from '@ui';
+import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
+import {
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { Header } from './Header';
+
+const CALENDAR_SWIPE_EDGE_INSET = 40;
+
+function CalendarPages() {
+  const calendarPager = useCalendarPager();
+  const calendarView = useCalendarView();
+  const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  let resizeFrame: number | undefined;
+
+  createResizeObserver(viewport, ({ width }) => {
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = undefined;
+      calendarView.setUseNarrowDayHeaders(width < 520);
+      calendarPager.updateSize();
+    });
+  });
+
+  onCleanup(() => {
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+  });
+
+  return (
+    <Layer depth={2}>
+      <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+        <CalendarRangeUnavailableBanner
+          class={isMobile() ? 'order-last' : undefined}
+          fullWidth={isMobile()}
+        />
+        <div
+          ref={setViewport}
+          class="relative flex min-w-0 min-h-0 flex-1"
+          role="region"
+          aria-label="Calendar periods"
+        >
+          <Pager.Viewport class="size-full min-w-0 min-h-0">
+            <For each={CALENDAR_PAGE_IDS}>
+              {(pageId) => (
+                <Pager.Page id={pageId}>
+                  <Suspense>
+                    <CalendarPage
+                      id={pageId}
+                      initialDate={calendarPager.initialDateFor(pageId)}
+                    />
+                  </Suspense>
+                </Pager.Page>
+              )}
+            </For>
+          </Pager.Viewport>
+          <Show when={isMobile()}>
+            <PagerSwipeGestures
+              edgeInset={CALENDAR_SWIPE_EDGE_INSET}
+              canStart={(event) =>
+                !(
+                  event.target instanceof Element &&
+                  event.target.closest(
+                    'button, input, select, textarea, [role="button"], .fc-event'
+                  )
+                )
+              }
+            />
+          </Show>
+          <CalendarSetupStatus />
+        </div>
+      </div>
+    </Layer>
+  );
+}
+
+function WorkspaceContent() {
+  const panel = useSplitPanelOrThrow();
+  const calendarView = useCalendarView();
+
+  onMount(() => panel.handle.setDisplayName('Calendar'));
+
+  return (
+    <>
+      <Header />
+      <CalendarSidePanelSections />
+
+      <SelectedEventDetails
+        anchor={calendarView.selectedEventAnchor}
+        event={calendarView.selectedEvent}
+        timeFormat={() => calendarView.displaySettings.timeFormat}
+        onClose={calendarView.closeEventDetails}
+      />
+
+      <main class="flex size-full min-h-0">
+        <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
+          <CalendarPages />
+        </div>
+      </main>
+    </>
+  );
+}
+
+export function Workspace() {
+  const calendarPager = useCalendarPager();
+
+  return (
+    <Pager.Root controller={calendarPager.pager}>
+      <SidePanel.Layout>
+        <WorkspaceContent />
+      </SidePanel.Layout>
+    </Pager.Root>
+  );
+}
