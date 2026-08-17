@@ -34,7 +34,7 @@ async function _importTheme(): Promise<void>{
       name: imported.name,
       version: 3,
       mode: imported.mode,
-      colorTokens: normalizeThemeColorTokens(imported.colorTokens),
+      colorTokens: normalizeThemeColorTokens(imported.colorTokens, imported.mode),
     };
     setUserThemes([...userThemes(), newTheme]);
     applyTheme(id);
@@ -144,7 +144,7 @@ export function previewLiveThemeColorToken(token: string, value: string): void {
 
 /** Writes all VNext authored tokens to the root and updates editor state. */
 export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
-  const normalizedTokens = normalizeThemeColorTokens(tokens);
+  const normalizedTokens = normalizeThemeColorTokens(tokens, liveThemeMode());
   for (const key of renderedColorTokenKeys) {
     if (!(key in normalizedTokens)) {
       document.documentElement.style.removeProperty(`--color-${key}`);

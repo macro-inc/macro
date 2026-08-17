@@ -1,6 +1,5 @@
 import {
   inputColorTokens,
-  semanticTokens,
   type ThemeV2,
   type ThemeV2Tokens,
   type ThemeV3,
@@ -65,21 +64,9 @@ export function isThemeV2(data: unknown): data is ThemeV2 {
   return true;
 }
 
-const REQUIRED_V3_COLOR_TOKENS = [
-  ...inputColorTokens,
-  ...semanticTokens.filter(
-    (token) =>
-      token !== 'tooltip' &&
-      token !== 'toast' &&
-      token !== 'link' &&
-      token !== 'link-hover' &&
-      token !== 'link-visited'
-  ),
-] as const;
-
-/** Validates the token-only persisted theme format. Extra token keys are
- * allowed so future tooling can extend the registry without invalidating a
- * theme, but every current authored token must be present. */
+/** Validates the token-only persisted theme format. Raw input colors are the
+ * only required authored values. Semantic and extension tokens are optional
+ * overrides and are filled from the central defaults when the theme loads. */
 export function isThemeV3(data: unknown): data is ThemeV3 {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
@@ -101,7 +88,7 @@ export function isThemeV3(data: unknown): data is ThemeV3 {
     return false;
   }
 
-  return REQUIRED_V3_COLOR_TOKENS.every(
+  return inputColorTokens.every(
     (token) => typeof colorTokens[token] === 'string'
   );
 }

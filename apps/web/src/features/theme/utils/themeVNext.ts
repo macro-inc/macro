@@ -75,19 +75,54 @@ export const mixTokens = (
 ) =>
   `color-mix(in ${space}, ${tokenReference(first)} ${Math.round(amount * 10000) / 100}%, ${tokenReference(second)})`;
 
-/** Backfills current defaults and drops tokens removed from the V3 registry
- * while preserving future extension keys. */
+/** The complete default semantic graph. Themes only need to store raw input
+ * colors; any entry they author here overrides this CSS-variable assignment. */
+export function getDefaultSemanticColorTokens(
+  mode: ThemeColorMode
+): Record<SemanticToken, string> {
+  return {
+    surface: 'var(--layer-surface)',
+    inset: 'var(--layer-inset)',
+    lift: 'var(--layer-lift)',
+    ink: tokenReference('content-0'),
+    'ink-muted': tokenReference('content-1'),
+    'ink-subtle': tokenReference('content-2'),
+    'ink-disabled': tokenReference('content-3'),
+    'ink-placeholder': tokenReference('content-4'),
+    link: tokenReference('accent'),
+    'link-hover': tokenReference('accent'),
+    'link-visited': tokenReference('accent'),
+    page: tokenReference('surface-0'),
+    panel: tokenReference('surface-1'),
+    dialog: tokenReference('surface-2'),
+    menu: tokenReference('surface-2'),
+    tooltip: tokenReference('surface-2'),
+    toast: tokenReference('surface-2'),
+    input: 'transparent',
+    'input-focus': tokenReference('lift'),
+    message: tokenReference('lift'),
+    hover: alphaToken('content-0', 0.03),
+    active: alphaToken('content-0', 0.06),
+    selected: alphaToken('accent', 0.08),
+    success: tokenReference('green'),
+    warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
+    failure: tokenReference('red'),
+    chrome: tokenReference('surface-4'),
+  };
+}
+
+/** Fills optional semantic assignments from the central defaults and drops
+ * tokens removed from the V3 registry while preserving extension keys. */
 export function normalizeThemeColorTokens(
-  tokens: ThemeColorTokens
+  tokens: ThemeColorTokens,
+  mode: ThemeColorMode
 ): ThemeColorTokens {
-  const next = { ...tokens };
+  const next: ThemeColorTokens = {
+    ...getDefaultSemanticColorTokens(mode),
+    ...tokens,
+  };
   delete next['surface-5'];
   delete next['edge-subtle'];
-  next.tooltip ??= tokenReference('surface-2');
-  next.toast ??= tokenReference('surface-2');
-  next.link ??= tokenReference('accent');
-  next['link-hover'] ??= tokenReference('accent');
-  next['link-visited'] ??= tokenReference('accent');
   return next;
 }
 
@@ -121,35 +156,7 @@ export function legacyThemeToVNextTokens(
     result[name] = oklch({ l: tokens.a0.l, c: tokens.a0.c, h: hue });
   }
 
-  const defaults: Record<SemanticToken, string> = {
-    surface: 'var(--layer-surface)',
-    inset: 'var(--layer-inset)',
-    lift: 'var(--layer-lift)',
-    ink: tokenReference('content-0'),
-    'ink-muted': tokenReference('content-1'),
-    'ink-subtle': tokenReference('content-2'),
-    'ink-disabled': tokenReference('content-3'),
-    'ink-placeholder': tokenReference('content-4'),
-    link: tokenReference('accent'),
-    'link-hover': tokenReference('accent'),
-    'link-visited': tokenReference('accent'),
-    page: tokenReference('surface-0'),
-    panel: tokenReference('surface-1'),
-    dialog: tokenReference('surface-2'),
-    menu: tokenReference('surface-2'),
-    tooltip: tokenReference('surface-2'),
-    toast: tokenReference('surface-2'),
-    input: 'transparent',
-    'input-focus': tokenReference('lift'),
-    message: tokenReference('lift'),
-    hover: alphaToken('content-0', 0.03),
-    active: alphaToken('content-0', 0.06),
-    selected: alphaToken('accent', 0.08),
-    success: tokenReference('green'),
-    warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
-    failure: tokenReference('red'),
-    chrome: tokenReference('surface-4'),
-  };
+  const defaults = getDefaultSemanticColorTokens(mode);
 
   Object.assign(result, defaults);
 

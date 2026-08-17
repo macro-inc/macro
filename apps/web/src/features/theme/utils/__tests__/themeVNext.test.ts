@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { ThemeV2Tokens } from '../../types/themeTypes';
+import {
+  semanticTokens,
+  type ThemeV2Tokens,
+} from '../../types/themeTypes';
 import {
   parseThemeAssignment,
   serializeThemeAssignment,
 } from '../themeAssignments';
 import { convertThemev2v3 } from '../themeMigrations';
 import {
+  getDefaultSemanticColorTokens,
   legacyThemeToVNextTokens,
   normalizeThemeColorTokens,
 } from '../themeVNext';
@@ -29,15 +33,18 @@ const legacyTokens: ThemeV2Tokens = {
 };
 
 describe('legacyThemeToVNextTokens', () => {
-  it('removes retired tokens from existing V3 token maps', () => {
-    expect(
-      normalizeThemeColorTokens({
+  it('fills semantic defaults and removes retired tokens from V3 token maps', () => {
+    const result = normalizeThemeColorTokens(
+      {
         'surface-4': '#fff',
         'surface-5': '#eee',
         'edge-subtle': '#ddd',
         extension: '#000',
-      })
-    ).toEqual({
+      },
+      'dark'
+    );
+
+    expect(result).toMatchObject({
       'surface-4': '#fff',
       extension: '#000',
       tooltip: 'var(--color-surface-2)',
@@ -46,6 +53,22 @@ describe('legacyThemeToVNextTokens', () => {
       'link-hover': 'var(--color-accent)',
       'link-visited': 'var(--color-accent)',
     });
+    expect(result['surface-5']).toBeUndefined();
+    expect(result['edge-subtle']).toBeUndefined();
+  });
+
+  it('centralizes a default for every semantic token', () => {
+    const defaults = getDefaultSemanticColorTokens('dark');
+    expect(Object.keys(defaults)).toEqual([...semanticTokens]);
+    expect(defaults).toMatchObject({
+      surface: 'var(--layer-surface)',
+      panel: 'var(--color-surface-1)',
+      warning: 'var(--color-amber)',
+      message: 'var(--color-lift)',
+    });
+    expect(getDefaultSemanticColorTokens('light').warning).toBe(
+      'var(--color-yellow)'
+    );
   });
 
   it('builds the final input and semantic registry', () => {

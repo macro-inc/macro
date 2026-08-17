@@ -236,10 +236,10 @@ body.tauri-ios {
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
   --color-input-focus: var(--color-lift);
-  --color-message: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
+  --color-message: var(--color-lift);
   --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
-  --color-hover: color-mix(in srgb, var(--color-content-0) 3%, transparent);
-  --color-active: color-mix(in srgb, var(--color-content-0) 6%, transparent);
+  --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
+  --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
   --color-selected: color-mix(in oklch, var(--color-accent) 8%, transparent);
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);

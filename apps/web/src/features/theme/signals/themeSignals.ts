@@ -34,7 +34,7 @@ setUserThemes(
       return [
         {
           ...theme,
-          colorTokens: normalizeThemeColorTokens(theme.colorTokens),
+          colorTokens: normalizeThemeColorTokens(theme.colorTokens, theme.mode),
         },
       ];
     }

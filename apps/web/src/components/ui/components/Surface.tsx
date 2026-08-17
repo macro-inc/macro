@@ -46,7 +46,7 @@ export function Surface(props: SurfaceProps) {
       <div
         style={style()}
         class={cn(
-          'relative rounded-md overflow-clip min-h-0 size-full',
+          'relative rounded-md overflow-clip min-h-0 size-full bg-surface',
           local.class
         )}
         {...rest}

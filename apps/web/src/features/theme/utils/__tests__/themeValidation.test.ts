@@ -179,15 +179,16 @@ describe('isThemeV2', () => {
 });
 
 describe('token-only ThemeV3 validation', () => {
-  it('accepts a V3 theme created before backfilled semantics were added', () => {
-    const legacyV3Theme = structuredClone(validV3Theme);
-    delete legacyV3Theme.colorTokens.tooltip;
-    delete legacyV3Theme.colorTokens.toast;
-    delete legacyV3Theme.colorTokens.link;
-    delete legacyV3Theme.colorTokens['link-hover'];
-    delete legacyV3Theme.colorTokens['link-visited'];
+  it('accepts a V3 theme containing only required raw input tokens', () => {
+    const inputOnlyTheme = structuredClone(validV3Theme);
+    for (const token of semanticTokens) {
+      delete inputOnlyTheme.colorTokens[token];
+    }
 
-    expect(isThemeV3(legacyV3Theme)).toBe(true);
+    expect(isThemeV3(inputOnlyTheme)).toBe(true);
+    expect(parseThemeV3Json(JSON.stringify(inputOnlyTheme))).toEqual(
+      inputOnlyTheme
+    );
   });
 
   it('accepts a complete V3 theme without legacy tokens or depth', () => {
@@ -199,7 +200,7 @@ describe('token-only ThemeV3 validation', () => {
     expect(isThemeV3({ ...validV3Theme, mode: 'system' })).toBe(false);
   });
 
-  it('rejects a missing authored token', () => {
+  it('rejects a missing required raw input token', () => {
     const colorTokens = { ...validV3Theme.colorTokens };
     delete colorTokens['surface-4'];
     expect(isThemeV3({ ...validV3Theme, colorTokens })).toBe(false);
