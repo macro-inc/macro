@@ -513,15 +513,12 @@ function InboxRow(props: {
               Reconnect
             </Button>
           </Show>
-          {/* A link that needs a full reconnect gets calendar access on the
-              pass after it: Reconnect restores the mailbox, then this button
-              appears to add the calendar scope. */}
+          {/* Its own consent flow, since Reconnect asks for the Gmail scopes
+              only. Shown alongside Reconnect rather than after it: this
+              request is a superset, so one consent repairs a dead grant and
+              enables calendar, sparing a full revoke two round trips. */}
           <Show
-            when={
-              calendarUiEnabled() &&
-              props.link.needs_calendar_permission &&
-              props.link.sync_status !== SyncStatus.NEEDS_REAUTH
-            }
+            when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
               variant="active"
