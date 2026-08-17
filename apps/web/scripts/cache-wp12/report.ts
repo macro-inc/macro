@@ -700,7 +700,7 @@ const isMeasuredSourceInput = (path: string): boolean => {
 export function listMeasuredSourceInputs(
   repositoryRoot = REPOSITORY_ROOT
 ): string[] {
-  const tracked = execFileSync('jj', ['file', 'list'], {
+  const tracked = execFileSync('git', ['ls-files'], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,

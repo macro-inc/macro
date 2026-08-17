@@ -1,4 +1,4 @@
-import init, * as wasm from "../pkg/turso_opfs_spike.js";
+import init, * as wasm from '../pkg/turso_opfs_spike.js';
 
 let wasmReady;
 let ownsLock = false;
@@ -8,11 +8,11 @@ let lockRequestStarted = false;
 let activeKill;
 let nestedWorkerConstructionCount = 0;
 let nestedWorkerMonitorInstalled = false;
-const DIRECT_PROBE_PATH = "direct-file.bin";
+const DIRECT_PROBE_PATH = 'direct-file.bin';
 
-if ("stackTraceLimit" in Error) Error.stackTraceLimit = 100;
+if ('stackTraceLimit' in Error) Error.stackTraceLimit = 100;
 
-if (typeof globalThis.Worker === "function") {
+if (typeof globalThis.Worker === 'function') {
   const WorkerConstructor = globalThis.Worker;
   globalThis.Worker = new Proxy(WorkerConstructor, {
     construct(target, argumentsList, newTarget) {
@@ -26,17 +26,23 @@ if (typeof globalThis.Worker === "function") {
   nestedWorkerMonitorInstalled = true;
 }
 
-globalThis.__tursoOpfsKillProgress = (commitCount, finiteBound, mainSize, walSize) => {
-  if (!activeKill) throw new Error("kill progress arrived without a pending kill RPC");
+globalThis.__tursoOpfsKillProgress = (
+  commitCount,
+  finiteBound,
+  mainSize,
+  walSize
+) => {
+  if (!activeKill)
+    throw new Error('kill progress arrived without a pending kill RPC');
   self.postMessage({
-    event: "kill-first-commit",
+    event: 'kill-first-commit',
     requestId: activeKill.requestId,
     commitCount,
     finiteBound,
     preSizes: activeKill.preSizes,
     postSizes: {
-      "graphql-cache.db": mainSize,
-      "graphql-cache.db-wal": walSize,
+      'graphql-cache.db': mainSize,
+      'graphql-cache.db-wal': walSize,
     },
     writeStartedAt: activeKill.startedAt,
     firstCommitObservedAt: new Date().toISOString(),
@@ -46,7 +52,7 @@ globalThis.__tursoOpfsKillProgress = (commitCount, finiteBound, mainSize, walSiz
 
 function errorRecord(error) {
   return {
-    name: error?.name ?? "Error",
+    name: error?.name ?? 'Error',
     message: error?.message ?? String(error),
     stack: error?.stack ?? null,
   };
@@ -72,58 +78,68 @@ async function initializeWasm() {
 function capabilities() {
   return {
     dedicatedWorker: self instanceof DedicatedWorkerGlobalScope,
-    storageGetDirectory: typeof navigator.storage?.getDirectory === "function",
-    webLocks: typeof navigator.locks?.request === "function",
+    storageGetDirectory: typeof navigator.storage?.getDirectory === 'function',
+    webLocks: typeof navigator.locks?.request === 'function',
     crossOriginIsolated: self.crossOriginIsolated,
-    sharedArrayBufferVisible: typeof SharedArrayBuffer !== "undefined",
+    sharedArrayBufferVisible: typeof SharedArrayBuffer !== 'undefined',
     nestedWorkerMonitorInstalled,
     nestedWorkerConstructionCount,
-    registryLifecycle: wasmReady ? wasm.registry_lifecycle() : "wasm-not-initialized",
+    registryLifecycle: wasmReady
+      ? wasm.registry_lifecycle()
+      : 'wasm-not-initialized',
     userAgent: navigator.userAgent,
   };
 }
 
 function requestOwner(lockName) {
-  if (lockRequestStarted) throw new Error("owner lock was already requested");
+  if (lockRequestStarted) throw new Error('owner lock was already requested');
   lockRequestStarted = true;
   if (!navigator.locks?.request) {
     return Promise.resolve({
       acquired: false,
-      unavailableReason: "Web Locks API is unavailable in this worker",
+      unavailableReason: 'Web Locks API is unavailable in this worker',
       capabilities: capabilities(),
     });
   }
 
   return new Promise((resolve, reject) => {
     void navigator.locks
-      .request(lockName, { mode: "exclusive", ifAvailable: true }, async (lock) => {
-        if (!lock) {
-          resolve({ acquired: false, capabilities: capabilities() });
-          return;
+      .request(
+        lockName,
+        { mode: 'exclusive', ifAvailable: true },
+        async (lock) => {
+          if (!lock) {
+            resolve({ acquired: false, capabilities: capabilities() });
+            return;
+          }
+          ownsLock = true;
+          try {
+            await initializeWasm();
+            ownerToken = wasm.claim_owner();
+            resolve({
+              acquired: true,
+              ownerToken,
+              capabilities: capabilities(),
+            });
+            await new Promise((release) => {
+              releaseLock = release;
+            });
+          } catch (error) {
+            reject(error);
+          } finally {
+            ownsLock = false;
+          }
         }
-        ownsLock = true;
-        try {
-          await initializeWasm();
-          ownerToken = wasm.claim_owner();
-          resolve({ acquired: true, ownerToken, capabilities: capabilities() });
-          await new Promise((release) => {
-            releaseLock = release;
-          });
-        } catch (error) {
-          reject(error);
-        } finally {
-          ownsLock = false;
-        }
-      })
+      )
       .catch(reject);
   });
 }
 
 async function beginSession(kind) {
   const raw =
-    kind === "database"
+    kind === 'database'
       ? await wasm.begin_database_session(ownerToken)
-      : kind === "direct"
+      : kind === 'direct'
         ? await wasm.begin_direct_probe_session(ownerToken)
         : await wasm.begin_immediate_probe_session(ownerToken);
   return parseRustJson(raw);
@@ -141,7 +157,7 @@ async function resetKind(kind) {
   const registration = await beginSession(kind);
   const close = closeSession(registration.session);
   const reset = parseRustJson(
-    await wasm.reset_closed_session_paths(ownerToken, close.close_token),
+    await wasm.reset_closed_session_paths(ownerToken, close.close_token)
   );
   return { registration, close, reset };
 }
@@ -164,7 +180,7 @@ async function cleanupDirectFaultArtifact() {
     await root.removeEntry(DIRECT_PROBE_PATH, { recursive: true });
     return true;
   } catch (error) {
-    if (error?.name === "NotFoundError") return false;
+    if (error?.name === 'NotFoundError') return false;
     throw error;
   }
 }
@@ -178,7 +194,7 @@ async function assertPoisonRejectsResetAndReopen(closeToken) {
   }
   let reopenError;
   try {
-    await beginSession("direct");
+    await beginSession('direct');
   } catch (error) {
     reopenError = errorRecord(error);
   }
@@ -193,12 +209,14 @@ async function assertPoisonRejectsResetAndReopen(closeToken) {
 
 async function removeEntryFailureProbe() {
   await cleanupDirectFaultArtifact();
-  const registration = await beginSession("direct");
+  const registration = await beginSession('direct');
   const close = closeSession(registration.session);
   const root = await navigator.storage.getDirectory();
   await root.removeEntry(DIRECT_PROBE_PATH);
-  const conflict = await root.getDirectoryHandle(DIRECT_PROBE_PATH, { create: true });
-  await conflict.getFileHandle("non-empty-child", { create: true });
+  const conflict = await root.getDirectoryHandle(DIRECT_PROBE_PATH, {
+    create: true,
+  });
+  await conflict.getFileHandle('non-empty-child', { create: true });
 
   let resetError;
   try {
@@ -214,7 +232,9 @@ async function removeEntryFailureProbe() {
     resetFailed: Boolean(resetError),
     resetError,
     actualRemoveEntryFailure:
-      /InvalidModificationError|Invalid modification|can not be modified|directory is not empty|non-empty/i.test(resetError?.message ?? ""),
+      /InvalidModificationError|Invalid modification|can not be modified|directory is not empty|non-empty/i.test(
+        resetError?.message ?? ''
+      ),
     artifactCleaned,
     ...poison,
   };
@@ -222,7 +242,7 @@ async function removeEntryFailureProbe() {
 
 async function recreationFailureProbe() {
   await cleanupDirectFaultArtifact();
-  const registration = await beginSession("direct");
+  const registration = await beginSession('direct');
   const close = closeSession(registration.session);
   wasm.inject_next_recreation_conflict(ownerToken, close.close_token);
 
@@ -240,7 +260,9 @@ async function recreationFailureProbe() {
     resetFailed: Boolean(resetError),
     resetError,
     actualRecreationFailure:
-      /TypeMismatchError|Wrong type|not an entry of requested type|path.*directory|file.*directory/i.test(resetError?.message ?? ""),
+      /TypeMismatchError|Wrong type|not an entry of requested type|path.*directory|file.*directory/i.test(
+        resetError?.message ?? ''
+      ),
     artifactCleaned,
     ...poison,
   };
@@ -248,13 +270,13 @@ async function recreationFailureProbe() {
 
 function expectedSyncHandleContention(error) {
   return /InvalidStateError|NoModificationAllowedError|sync access handle|createSyncAccessHandle|access handle.*(active|open|lock)|file.*locked/i.test(
-    `${error?.name ?? ""}: ${error?.message ?? error}`,
+    `${error?.name ?? ''}: ${error?.message ?? error}`
   );
 }
 
 async function releaseRecoveryOwner() {
   let releaseError;
-  if (ownerToken !== undefined && wasm.registry_lifecycle() === "idle") {
+  if (ownerToken !== undefined && wasm.registry_lifecycle() === 'idle') {
     try {
       wasm.release_owner(ownerToken);
     } catch (error) {
@@ -269,7 +291,7 @@ async function releaseRecoveryOwner() {
 
 async function recoverAfterKill(lockName, remainingMs) {
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
-    throw new Error("recoverAfterKill requires a positive remainingMs");
+    throw new Error('recoverAfterKill requires a positive remainingMs');
   }
   const attemptStartedAt = new Date().toISOString();
   const init = await requestOwner(lockName);
@@ -280,14 +302,16 @@ async function recoverAfterKill(lockName, remainingMs) {
   let result;
   let failureError;
   try {
-    const registration = await beginSession("database");
+    const registration = await beginSession('database');
     const preopenSizes = parseRustJson(
-      wasm.active_session_sizes(ownerToken, registration.session),
+      wasm.active_session_sizes(ownerToken, registration.session)
     );
     let committed;
     let close;
     try {
-      committed = parseRustJson(wasm.sql_count_kill_probe(ownerToken, registration.session));
+      committed = parseRustJson(
+        wasm.sql_count_kill_probe(ownerToken, registration.session)
+      );
     } catch (error) {
       close = closeSession(registration.session);
       releaseClosed(close);
@@ -295,7 +319,7 @@ async function recoverAfterKill(lockName, remainingMs) {
     }
     close = closeSession(registration.session);
     const reset = parseRustJson(
-      await wasm.reset_closed_session_paths(ownerToken, close.close_token),
+      await wasm.reset_closed_session_paths(ownerToken, close.close_token)
     );
     result = {
       acquired: true,
@@ -334,7 +358,7 @@ async function recoverAfterKill(lockName, remainingMs) {
 }
 
 async function lifecycleFailureProbe() {
-  const registration = await beginSession("direct");
+  const registration = await beginSession('direct');
   wasm.inject_next_close_failure(ownerToken, registration.session);
   let closeError;
   try {
@@ -350,7 +374,7 @@ async function lifecycleFailureProbe() {
   }
   let reopenError;
   try {
-    await beginSession("direct");
+    await beginSession('direct');
   } catch (error) {
     reopenError = errorRecord(error);
   }
@@ -366,25 +390,27 @@ async function lifecycleFailureProbe() {
 }
 
 async function dispatch(id, command, payload) {
-  if (command === "initOwner") return requestOwner(payload.lockName);
-  if (command === "recoverAfterKill") {
+  if (command === 'initOwner') return requestOwner(payload.lockName);
+  if (command === 'recoverAfterKill') {
     return recoverAfterKill(payload.lockName, payload.remainingMs);
   }
   if (!ownsLock || ownerToken === undefined) {
-    throw new Error(`command ${command} requires the database Web Lock owner token`);
+    throw new Error(
+      `command ${command} requires the database Web Lock owner token`
+    );
   }
 
   switch (command) {
-    case "resetDatabase":
-      return resetKind("database");
-    case "directFile": {
-      const initialReset = await resetKind("direct");
-      const registration = await beginSession("direct");
+    case 'resetDatabase':
+      return resetKind('database');
+    case 'directFile': {
+      const initialReset = await resetKind('direct');
+      const registration = await beginSession('direct');
       let operations;
       let close;
       try {
         operations = parseRustJson(
-          wasm.run_direct_file_probe(ownerToken, registration.session),
+          wasm.run_direct_file_probe(ownerToken, registration.session)
         );
       } finally {
         close = closeSession(registration.session);
@@ -392,36 +418,38 @@ async function dispatch(id, command, payload) {
       }
       return { initialReset, registration, operations, close };
     }
-    case "lifecycleFailureProbe":
+    case 'lifecycleFailureProbe':
       return lifecycleFailureProbe();
-    case "removeEntryFailureProbe":
+    case 'removeEntryFailureProbe':
       return removeEntryFailureProbe();
-    case "recreationFailureProbe":
+    case 'recreationFailureProbe':
       return recreationFailureProbe();
-    case "sqlWrite":
-      return withSession("database", (session) =>
-        wasm.sql_write_marker(ownerToken, session, payload.value),
+    case 'sqlWrite':
+      return withSession('database', (session) =>
+        wasm.sql_write_marker(ownerToken, session, payload.value)
       );
-    case "sqlRead":
-      return withSession("database", (session) => wasm.sql_read_marker(ownerToken, session));
-    case "freshRecovery":
-      return withSession("database", (session) =>
-        wasm.sql_verify_fresh_recovery(ownerToken, session),
+    case 'sqlRead':
+      return withSession('database', (session) =>
+        wasm.sql_read_marker(ownerToken, session)
       );
-    case "memoryProbe":
+    case 'freshRecovery':
+      return withSession('database', (session) =>
+        wasm.sql_verify_fresh_recovery(ownerToken, session)
+      );
+    case 'memoryProbe':
       wasm.run_builtin_memory_io_probe();
       return { unexpectedlyReturned: true };
-    case "beginImmediateProbe": {
-      const registration = await beginSession("immediate");
+    case 'beginImmediateProbe': {
+      const registration = await beginSession('immediate');
       wasm.run_begin_immediate_probe(ownerToken, registration.session);
       const close = closeSession(registration.session);
       releaseClosed(close);
       return { unexpectedlyReturned: true };
     }
-    case "killWrite": {
-      const registration = await beginSession("database");
+    case 'killWrite': {
+      const registration = await beginSession('database');
       const preSizes = parseRustJson(
-        wasm.active_session_sizes(ownerToken, registration.session),
+        wasm.active_session_sizes(ownerToken, registration.session)
       );
       activeKill = {
         requestId: id,
@@ -430,16 +458,21 @@ async function dispatch(id, command, payload) {
       };
       // Deliberately keep this RPC pending. The page terminates this worker
       // after Rust reports the first successfully committed write.
-      const result = wasm.run_worker_kill_write_loop(ownerToken, registration.session);
+      const result = wasm.run_worker_kill_write_loop(
+        ownerToken,
+        registration.session
+      );
       const close = closeSession(registration.session);
       releaseClosed(close);
       activeKill = undefined;
       return { unexpectedlyCompleted: result, close };
     }
-    case "shutdown": {
+    case 'shutdown': {
       const evidence = capabilities();
-      if (wasm.registry_lifecycle() !== "idle") {
-        throw new Error(`shutdown requires idle registry, got ${wasm.registry_lifecycle()}`);
+      if (wasm.registry_lifecycle() !== 'idle') {
+        throw new Error(
+          `shutdown requires idle registry, got ${wasm.registry_lifecycle()}`
+        );
       }
       wasm.release_owner(ownerToken);
       ownerToken = undefined;
@@ -452,7 +485,7 @@ async function dispatch(id, command, payload) {
 }
 
 let operationQueue = Promise.resolve();
-self.addEventListener("message", (event) => {
+self.addEventListener('message', (event) => {
   const { id, command, payload = {} } = event.data;
   const run = async () => {
     try {

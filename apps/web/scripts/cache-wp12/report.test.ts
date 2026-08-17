@@ -163,7 +163,7 @@ describe('WP-12 operations specifications', () => {
     ]) {
       expect(inputs).toContain(input);
     }
-    const trackedCrates = execFileSync('jj', ['file', 'list', 'crates'], {
+    const trackedCrates = execFileSync('git', ['ls-files', '--', 'crates'], {
       cwd: repositoryRoot,
       encoding: 'utf8',
     })
