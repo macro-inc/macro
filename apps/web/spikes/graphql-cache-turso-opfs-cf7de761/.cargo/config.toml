@@ -1,3 +1,0 @@
-# Keep direct standalone wasm builds independent of repository-parent Cargo config.
-[target.wasm32-unknown-unknown]
-rustflags = ["--cfg", 'getrandom_backend="wasm_js"']

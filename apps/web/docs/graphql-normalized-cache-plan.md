@@ -1,6 +1,6 @@
 # GraphQL Normalized Cache — Design & Plan
 
-Status: **implemented; browser persistence cut over to Turso/OPFS in WP-10**
+Status: **draft / pre-implementation**
 
 ## 1. Problem
 
@@ -20,13 +20,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
    else on disk. WASM linear memory is still browser memory, so the disk tier
    is the actual fix — Rust gives us a compact record format, deterministic
    eviction, and a portable engine.
-3. **Persistence & offline** — after a healthy, graceful close, a compatible
-   reopen preserves the cache and previously-seen queries remain answerable
-   fully offline. This means we persist not just entity records but also
-   *operation root links* (query + variables → root selection links), plus
-   staleness metadata. Browser persistence is deliberately disposable after an
-   abrupt/uncertain owner loss or compatibility/format mismatch: recovery
-   physically resets main/WAL and starts empty.
+3. **Persistence & offline** — cache survives restarts; previously-seen
+   queries must be answerable fully offline. This means we persist not just
+   entity records but also *operation root links* (query + variables →
+   root selection links), plus staleness metadata.
 4. **Both Tauri and web** — same core engine; Tauri **always** uses the
    native host (never OPFS/SharedWorker/webview storage), browser uses WASM
    in a worker.
@@ -59,10 +56,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     (records unreachable from any persisted operation root).
 11. **Cache identity & lifecycle** — namespace by `scope +
     schemaCompatibilityEpoch + cacheFormatVersion`, where **scope is an
-    anonymous client-generated uuid** (localStorage), *neither user nor
-    workspace identity*: construction is synchronous
+    anonymous client-generated uuid** (localStorage), *not* user identity:
+    construction is synchronous
     and offline-capable (no identity waterfall), and no PII appears in
-    enumerable storage metadata (OPFS / SQLite filenames).
+    enumerable storage metadata (IDB database names / SQLite filenames).
     User↔cache consistency is enforced by **identity witnessing**, split
     into two halves: *extraction* lives in the urql exchange
     (`extractIdentity: (data) => data.user.id` — the schema exposes
@@ -76,10 +73,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     Additive GraphQL schema changes retain existing normalized records;
     fragment reads can continue projecting fields already present. Manually
     bump the schema compatibility epoch when identity, field storage shape, or
-    other schema-derived cache semantics become incompatible. In the browser,
-    a compatibility-epoch/format mismatch physically resets main/WAL and
-    discards every row—not only normalized records, but also the mutation queue
-    and optimistic layers—before rebuilding from the network.
+    other schema-derived cache semantics become incompatible. Discard records
+    on compatibility-epoch/format mismatch (cache is disposable, rebuild from
+    network).
 
     **Key policy — presence-of-id convention**: no client-side key config.
     An output object type with `id: ID!` is keyed by `__typename:id`; no
@@ -102,19 +98,15 @@ entire cache in browser memory. With 10s of thousands of cached objects
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
 13. **Durable optimistic mutations** — optimistic GraphQL mutations are
-    persisted with their replay request and applied strictly in enqueue order.
-    In the browser they survive only a healthy, graceful close followed by a
-    compatible reopen. Compatibility/format reset and abrupt/uncertain owner
-    loss wipe all rows, including the mutation queue and optimistic layers;
-    queued intent is not imported or recovered. Retryability is decided by an
-    exchange callback; retryable failures retain their optimistic layer while
-    the current database remains healthy. Each queued network attempt has a
-    one-minute timeout, comfortably inside its five-minute lease.
+    persisted with their replay request, restored across restarts, and applied
+    strictly in enqueue order. Retryability is decided by an exchange callback;
+    retryable failures retain their optimistic layer. Each queued network
+    attempt has a one-minute timeout, comfortably inside its five-minute lease.
 
 ### Open questions
 
 - Encryption-at-rest for cached content (email bodies/snippets will flow
-  through this). OPFS/SQLite are origin-/app-scoped but plaintext on disk.
+  through this). IDB/SQLite are origin-/app-scoped but plaintext on disk.
 - Disk budget (proposal: 256 MB default, configurable).
 - Memory hot-tier budget (proposal: 32 MB default).
 
@@ -149,75 +141,86 @@ One Rust core engine, two hosts:
                     └───────────────┬──────────────────────────┘
               ┌─────────────────────┴──────────────────────┐
               ▼                                            ▼
-┌──────────────────────────────────────┐  ┌─────────────────────────────────┐
-│ BROWSER ONLY                         │  │ TAURI: native engine in the     │
-│ page -> SharedWorker coordinator     │  │ Tauri host process (Rust);      │
-│      -> elected DedicatedWorker      │  │ no webview storage ever         │
-│      -> cache-wasm                   │  │ • naturally shared across ALL   │
-│         Engine<TursoStorage>         │  │   webviews/windows              │
-│      -> Turso core -> OPFS main/WAL  │  │ • SQLite storage                │
-│ • one Web-Locked owner per scope     │  │ • invoke + event glue           │
-│ • unsupported APIs: no-op host       │  │                                 │
-└──────────────────┬───────────────────┘  └────────────────┬────────────────┘
-                   └──────────────────┬────────────────────┘
-                                      ▼
-                     ┌────────────────────────────────────┐
-                     │ JS glue: transport-agnostic async  │
-                     │ RPC client (`CacheHost` interface) │
-                     │ • normalizedCacheExchange (urql)   │
-                     │ • imperative read/write/invalidate │
-                     └────────────────────────────────────┘
+┌───────────────────────────────┐        ┌─────────────────────────────────┐
+│ BROWSER ONLY: wasm-bindgen    │        │ TAURI: native engine in the     │
+│ module in a worker;           │        │ Tauri host process (Rust);      │
+│ IndexedDB via the `idb` crate │        │ no webview storage ever         │
+│ (storage entirely in Rust)    │        │ • naturally shared across ALL   │
+│ • SharedWorker: one engine    │        │   webviews/windows              │
+│   shared by every browser tab │        │ • SQLite (or fs) storage        │
+│ • no SharedWorker: storage-   │        │ • glue over invoke + channels/  │
+│   free no-op cache host       │        │   events                        │
+│                               │        │                                 │
+└───────────────┬───────────────┘        └────────────────┬────────────────┘
+                └──────────────────┬──────────────────────┘
+                                   ▼
+                  ┌────────────────────────────────────┐
+                  │ JS glue: transport-agnostic async  │
+                  │ RPC client (`CacheHost` interface) │
+                  │ • normalizedCacheExchange (urql)   │
+                  │ • imperative read/write/invalidate │
+                  └────────────────────────────────────┘
 ```
 
 ### 4.1 Why the engine lives outside the page
 
 - Keeps main thread free (normalization of large pages off-thread).
-- The elected DedicatedWorker keeps Turso, OPFS handles, normalization, and
-  WASM out of page contexts. A lightweight SharedWorker coordinates tabs and
-  routes requests; it never imports the cache module or owns database handles.
-- On Tauri we do **not** use browser workers, OPFS, or webview storage at all.
-  The Tauri host process is the shared singleton across webviews/windows, with
-  native SQLite. The WASM/coordinator path is **browser-only**.
+- A worker is the natural place for a shared single engine instance
+  (SharedWorker) and keeps wasm out of every page context.
+- On Tauri we do **not** use SharedWorker or webview storage at all —
+  support is inconsistent across WKWebView/WebView2/Android WebView, and
+  webviews can't share a SharedWorker across windows. The Tauri host process
+  is the shared singleton: it gets us the multi-webview requirement for
+  free, with real SQLite instead of webview storage. The wasm/worker path is
+  **browser-only**.
 
 ### 4.2 Multi-consumer strategy (browser only)
 
-**Decision: Turso core in one elected DedicatedWorker, persisted through a
-Rust OPFS adapter and routed by a SharedWorker coordinator.** See
-[`graphql-cache-turso-worker-migration-plan.md`](./graphql-cache-turso-worker-migration-plan.md)
-and the approved
-[`graphql-cache-turso-g0-decision.md`](./graphql-cache-turso-g0-decision.md).
+**Decision: IndexedDB-backed persistence via the [`idb`
+crate](https://docs.rs/idb/latest/idb/), with one engine in a SharedWorker.
+Browsers without SharedWorker support use a storage-free no-op cache host.
+OPFS is dropped.**
+
+Rationale (see Appendix A):
+
+- OPFS sync access handles are unusable from SharedWorker on Chromium (no
+  sync handles, no nested `Worker` to delegate to), forcing a
+  leader-election topology with failover — significant complexity.
+- IDB point-reads measured *faster* than OPFS sync 4 KiB reads in the probe
+  (0.35 ms vs 2 ms avg), and batched writes (119 ms / 1000 records / txn)
+  are fine for our write rates.
+- IDB is available in SharedWorker on supported browsers.
+- Using the `idb` Rust crate keeps the entire storage layer inside the wasm
+  module (no JS-callback storage shim; JS glue is transport only).
 
 Topology:
 
-- **SharedWorker coordinator:** registers tabs, tracks liveness, elects an
-  owner epoch, and routes typed RPCs. It owns no WASM or storage handles.
-- **Elected DedicatedWorker:** acquires the scope-specific owner Web Lock,
-  loads the combined cache/Turso WASM module, and exclusively owns OPFS.
-- Graceful handoff drains and closes before preserving the compatible database,
-  including its mutation queue and optimistic layers. Abrupt/uncertain loss or
-  compatibility/format mismatch wipes main/WAL before reopening, so every row,
-  queued mutation, and optimistic layer is lost.
-- Missing SharedWorker, DedicatedWorker, MessageChannel, Web Locks, or OPFS
-  capabilities select a storage-free no-op `CacheHost`; there is no browser
-  fallback backend.
-- Tauri detection selects the native SQLite host before any browser worker or
-  cleanup is started. All paths remain behind the same `CacheHost` interface.
+- **Browser: SharedWorker** hosting the wasm engine — one instance across
+  tabs, no election or cross-engine coordination.
+- **No SharedWorker:** return a no-op `CacheHost` that always misses, ignores
+  writes, and does not initialize wasm or persistent storage. Mutations pass
+  through the exchange without durable optimism.
+- Selection at startup: Tauri detection (`isTauri`) → native transport;
+  otherwise SharedWorker support selects either the browser cache or no-op
+  host. All paths sit behind the same `CacheHost` interface.
 
 ### 4.3 Storage backends
 
-| Backend | Host | Notes |
-|---|---|---|
-| SQLite | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
-| Turso over OPFS | browser DedicatedWorker | one stable physical database per anonymous client-generated scope; records, queue/layers, and meta survive only healthy graceful close + compatible reopen |
+| Backend    | Host         | Notes                                          |
+|------------|--------------|------------------------------------------------|
+| SQLite     | Tauri native | records, mutation queue, optimistic layers, and meta; WAL mode |
+| IndexedDB  | browser      | via the `idb` crate; stable per-scope DB with object stores for records, mutation queue, optimistic layers, and meta |
 
-Normalized records are serialized with `postcard` BLOBs in both relational
-backends. Both implement schema-neutral, entity-key-ordered record scans.
-`Storage::scan_records` selects concrete normalized types by their compound
-`(__typename, id)` keys; `Engine::read_records` applies a validated named
-fragment, loads linked records in batches, includes optimistic layers, and
-omits incomplete projections. The `Storage` trait's futures use `MaybeSend`
-(`crates/maybe_send`): `Send` on native targets and unbounded on single-threaded
-WASM.
+Normalized records are serialized with `postcard`. SQLite stores the bytes in
+`records.value`; IndexedDB stores the bytes directly in the records object
+store. Both backends implement schema-neutral, entity-key-ordered record scans.
+`Storage::scan_records` selects concrete normalized types by their key ranges;
+`Engine::read_records` applies a validated named fragment, loads linked records
+in batches, includes optimistic layers, and omits incomplete projections.
+Note: wasm futures are not `Send`, so the `Storage` trait's futures
+are bound by `MaybeSend` (`crates/maybe_send`):
+`Send` on native targets — the Tauri host drives the engine directly from its
+multi-threaded runtime — and unbounded on wasm, implementable by `idb`.
 
 ### 4.4 Data model
 
@@ -254,23 +257,26 @@ soup entities from the normy config as they migrate.
 crates/client/            # members of the root cargo workspace
   cache-core/                  # pure engine, native tests (schema codegen in build.rs)
   cache-sqlite/                # Storage over SQLite (Tauri native host)
-  cache-turso/                 # Storage over Turso core (browser WASM host)
-  turso-opfs/                  # Rust OPFS IO/File adapter (DedicatedWorker)
-  cache-wasm/                  # combined engine/Turso wasm-bindgen shell
-apps/web/tauri/graphql_cache_plugin/ # native cache-core/cache-sqlite host
+  cache-idb/                   # Storage over IndexedDB (browser wasm host)
+  cache-wasm/                  # wasm-bindgen shell (web)
+apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
+                                     # cache-core over cache-sqlite. Lives in the
+                                     # tauri workspace (not crates/client): it
+                                     # depends on the patched tauri fork pinned
+                                     # there, path-deps back to crates/client.
 apps/web/src/lib/graphql-cache/ # JS glue
-  host/                        # CacheHost interface + worker & Tauri transports
+  host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
-  worker/                      # coordinator, elected engine, and worker core
+  worker/                      # SharedWorker entry + worker core
 ```
 
 ## 6. Phases
 
-**Phase 0 — original IDB spike** *(closed; historically superseded)*
-- Browser probe harness built; Chromium results remain unchanged in Appendix A.
-  The original IDB/SharedWorker decision was later superseded by the approved
-  Turso/OPFS coordinator migration. Safari/Firefox probe runs and the Tauri IPC
-  benchmark were deliberately skipped for this original spike.
+**Phase 0 — spike** *(closed)*
+- Browser probe harness built; Chromium results in Appendix A. **Decision
+  made: IDB-backed persistence via the `idb` crate in a SharedWorker, with
+  caching disabled when SharedWorker is unavailable (§4.2).** Safari/Firefox
+  probe runs and the Tauri IPC benchmark were deliberately skipped.
 - Wire protocol delivered in Phase 3 (`src/lib/graphql-cache/protocol.ts`).
 - The probe harness (`spikes/graphql-cache-probe/`) and the soup payload
   measurement script (`scripts/measure-soup-payloads.ts`) were removed
@@ -288,28 +294,27 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Deferred: nullability-based partial results (metadata already generated),
   byte-based LRU budgets, proptest round-trips, staleness metadata.
 
-**Phase 2 — original persistence** *(completed, then cut over in WP-10)*
-- Shared postcard record codec + `cache_namespace(scope)` embedding schema
-  compatibility epoch + format version.
+**Phase 2 — persistence** *(done — `cache-sqlite`, `cache-idb`)*
+- Shared postcard record codec + `cache_namespace(scope)` embedding
+  schema compatibility epoch + format version.
 - SQLite backend (Tauri native): WAL mode, batch txns, namespace
-  wipe-on-mismatch; tested natively including engine integration.
-- The original `cache-idb` browser backend and its tests were removed by the
-  one-way Turso cutover. No IDB records or queued mutations are migrated.
-- Browser persistence now lives in `cache-turso` + `turso-opfs`; a healthy,
-  compatible graceful reopen preserves records/queue/layers, while physical
-  recovery or compatibility reset wipes them all. SQLite remains unchanged.
+  wipe-on-mismatch; tested natively incl. engine integration.
+- IndexedDB backend via the `idb` crate: one DB per namespace, atomic
+  batch txns; tested in headless Chromium via wasm-bindgen-test incl.
+  engine-over-IDB round trip.
+- Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
+  `approx_size` for GC (hardening phase).
 
 **Phase 3 — hosts + JS glue** *(done)*
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id
   interning `"{clientId}:{urqlKey}"`), browser-verified via
   wasm-bindgen-test. Build: `just build-cache-wasm` →
-  `src/lib/graphql-cache/wasm/` (gitignored). The combined Turso artifact's
-  current size and startup budgets are tracked by migration WP-11.
+  `src/lib/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
 - ~~JS glue~~ (`apps/web/src/lib/graphql-cache/`, alias `@graphql-cache/*`):
-  wire protocol (`protocol.ts`), `CacheWorkerCore`, SharedWorker coordinator,
-  elected DedicatedWorker engine, and `createWorkerCacheHost` implementing
-  `CacheHost` (with a storage-free no-op host when required browser APIs are
-  unavailable). Type-checked and covered by multi-page browser E2E.
+  wire protocol (`protocol.ts`), `CacheWorkerCore` + SharedWorker entry,
+  and `createWorkerCacheHost` implementing `CacheHost` (with a storage-free
+  no-op host when SharedWorker is unavailable). Type-checked; end-to-end browser exercise
+  happens with the Phase 4 exchange integration.
 - ~~Tauri host~~ (`apps/web/tauri/graphql_cache_plugin`, in the *tauri*
   workspace — it needs the patched tauri fork pinned there; path-deps on
   `crates/client/{cache-core,cache-sqlite}`): engine behind an async mutex
@@ -317,8 +322,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   SQLite completes immediately), commands mirroring the worker protocol
   registered app-level in `src-tauri` (bundle-updater pattern, no
   capability plumbing), changed ops broadcast to every webview via the
-  `graphql-cache://ops-affected` event. One native engine per app process gives
-  singleton semantics without browser Web Locks or coordinator machinery. DB at
+  `graphql-cache://ops-affected` event. One native engine per app process = SharedWorker topology: no Web
+  Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.sqlite`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
   RPC with the same 10s timeout + Error-normalized rejections, event
@@ -331,7 +336,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   forward-queue re-injection (cache is off-thread, unlike graphcache's sync
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
-  network. Covered by the GraphQL-cache Vitest suite against fake hosts.
+  network. 8 vitest cases against a scripted fake host.
 - Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
   (browser: worker host; Tauri: native host): lazily builds the cached
   client; `fetchGraphqlSoup` uses
@@ -367,14 +372,13 @@ apps/web/src/lib/graphql-cache/ # JS glue
 
 ## 7. Risks
 
-- **Browser storage quirks** (OPFS capability/private mode, quota, or storage
-  eviction) — mitigated by the disposable-cache design (detect → wipe main/WAL
-  → rebuild from network). Missing coordinator/storage capabilities select the
-  storage-free no-op host. Tauri is unaffected (native host only).
-- **Owner loss or OPFS uncertainty** — coordinator epochs reject stale work;
-  one scope-specific Web Lock fences ownership, and abrupt replacement opens
-  only after a complete physical wipe of records, queued mutations, and
-  optimistic layers.
+- **Browser storage quirks** (Safari IDB edge cases/private mode, storage
+  eviction under pressure) — mitigated by the disposable-cache design
+  (detect → discard → rebuild from network). Browsers without SharedWorker
+  use the storage-free no-op host. Tauri is unaffected (native host only).
+- **`idb` crate dependency** — maintained third-party wasm bindings; if it
+  stalls, the `Storage` trait isolates us (swap for hand-rolled
+  `web-sys`-based bindings).
 - **RPC latency on hot paths** — reads are one round-trip to a worker/host;
   Chromium probe shows ≤1 ms for 64 KiB payloads. Batch reads per
   operation, not per record. Tauri IPC assumed adequate (benchmark skipped);

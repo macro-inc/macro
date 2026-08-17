@@ -168,48 +168,14 @@ cycles-ci:
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
 # (gitignored). Unconditional — CI app builds must never skip it (schema or
-# engine changes alter the wasm without a cache-wasm version bump). The timed
-# result is consumed by `just report-cache-wasm`; package inspection is a hard
-# dependency of every CI app build.
+# engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    output={{ justfile_directory() }}/src/lib/graphql-cache/wasm
-    started_ms=$(node -e 'process.stdout.write(String(Date.now()))')
-    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm \
-      --target web --release --out-dir "$output"
-    finished_ms=$(node -e 'process.stdout.write(String(Date.now()))')
-    elapsed_ms=$(( finished_ms - started_ms ))
-    printf '{"schemaVersion":1,"elapsedMs":%s,"cacheState":"workspace target and configured sccache","wasmPack":"%s"}\n' \
-      "$elapsed_ms" "$(wasm-pack --version)" > "$output/.wp11-build.json"
+    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
     bun {{ justfile_directory() }}/scripts/cache-wasm/cli.ts inspect-package
 
 # Deterministic package and production-dist structure/size inspection.
 inspect-cache-wasm: build-cache-wasm
     if [ -d dist ]; then bun scripts/cache-wasm/cli.ts inspect-dist --dist dist; fi
-
-# Build the actual production app, run dev and production cache browser smoke
-# in Chromium and Firefox, then write exact WP-11 environment/size/timing data.
-report-cache-wasm: build-prod
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Capture once before Playwright rewrites tracked evidence. In a clean jj
-    # successor this deliberately identifies the nearest non-empty parent, not
-    # the generated working child.
-    measured_revision=$(jj log -r 'latest(ancestors(@) & ~empty())' --no-graph -T change_id)
-    CACHE_WASM_WRITE_MEASUREMENTS=true bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts --project chromium --project firefox
-    CACHE_WASM_WRITE_MEASUREMENTS=true bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
-    bun scripts/cache-wasm/cli.ts report --dist dist --revision-change-id "$measured_revision"
-
-# Run the local WP-12 production lifecycle/resource/fault suite, record exact
-# Chromium/Firefox versions, and build the honest exposure-blocked report.
-report-cache-wp12: build-cache-wasm-browser-production
-    CACHE_WP12_WRITE_MEASUREMENTS=true bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
-    bun scripts/cache-wp12/report.ts
-
-# Validate dashboard/alert/rollback policy without claiming live deployment.
-check-cache-wp12-spec:
-    bunx --bun vitest run --project scripts scripts/cache-wp12/report.test.ts
 
 # Build the production browser harness served by Vite preview.
 build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-test-hooks
@@ -229,8 +195,8 @@ build-cache-wasm-browser-test-hooks:
 # Exercise development and production asset URLs, lazy election, MIME,
 # fresh-scope startup, DB-ready, first-ready, and linear-memory budgets.
 test-cache-wasm-browser:
-    CACHE_WASM_WRITE_MEASUREMENTS=true bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts --project chromium --project firefox
-    CACHE_WASM_WRITE_MEASUREMENTS=true bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
+    bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts --project chromium --project firefox
+    bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
 
 # Local profiling build: retain Rust symbols and DWARF source locations so an
 # exported Firefox profile can be symbolicated back to Rust files and lines.

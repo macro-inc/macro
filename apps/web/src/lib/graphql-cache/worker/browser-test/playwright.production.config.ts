@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
@@ -13,7 +12,6 @@ export default defineConfig({
     'wp12.browser.e2e.ts',
   ],
   timeout: 90_000,
-  globalSetup: resolve(directory, 'wp12-global-setup.ts'),
   fullyParallel: false,
   workers: 1,
   reporter: 'line',

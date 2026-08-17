@@ -1,8 +1,0 @@
-/target/
-/target-parent/
-/pkg/
-/pkg-head/
-/.turso-source/
-/.turso-source.tmp.*/
-/measurements/generated/*.actual.json
-/measurements/generated/*.actual.sha256

@@ -1,5 +1,0 @@
-raw_wasm=target/measure-release/wasm32-unknown-unknown/release/turso_core_wasm_spike.wasm
-node_wasm=target/measure-release/bindgen-node/turso_core_wasm_spike_bg.wasm
-optimized_node_wasm=target/measure-release/bindgen-node-optimized/turso_core_wasm_spike_bg.wasm
-web_wasm=target/measure-release/bindgen-web/turso_core_wasm_spike_bg.wasm
-optimized_web_wasm=target/measure-release/bindgen-web-optimized/turso_core_wasm_spike_bg.wasm

@@ -1,3 +1,0 @@
-(module
-  (memory 1)
-)

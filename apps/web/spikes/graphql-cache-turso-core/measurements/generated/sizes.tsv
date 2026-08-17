@@ -1,6 +1,0 @@
-artifact	raw_bytes	gzip_9_bytes	brotli_11_bytes
-cargo-release	9976133	2950478	2161273
-wasm-bindgen-node	8705907	2798227	2076370
-wasm-bindgen-node-wasm-opt-117-Oz	6678531	2465564	1823970
-wasm-bindgen-web	8705907	2798227	2076370
-wasm-bindgen-web-wasm-opt-117-Oz	6678531	2465564	1823970
