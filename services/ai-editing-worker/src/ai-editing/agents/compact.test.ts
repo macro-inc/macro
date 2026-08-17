@@ -1,22 +1,41 @@
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, ToolResultPart } from 'ai';
 import { describe, expect, it } from 'vitest';
 import { compactDocumentHistory } from './compact';
 
-function toolResult(output: unknown): ModelMessage {
+let nextCallId = 0;
+
+function toolMessage(output: ToolResultPart['output']): ModelMessage {
   return {
     role: 'tool',
     content: [
       {
         type: 'tool-result',
-        toolCallId: `c${Math.random()}`,
+        toolCallId: `c${nextCallId++}`,
         toolName: 'dispatch',
         output,
       },
     ],
-  } as unknown as ModelMessage;
+  };
 }
 
+/** A dispatch result: status line, then the post-edit document. */
+const toolResult = (text: string): ModelMessage =>
+  toolMessage({ type: 'text', value: text });
+
 const doc = (body: string) => `✓ APPLIED\n\n<document>\n${body}\n</document>`;
+
+function output(message: ModelMessage): ToolResultPart['output'] {
+  if (message.role !== 'tool') throw new Error('not a tool message');
+  const part = message.content[0];
+  if (part?.type !== 'tool-result') throw new Error('not a tool result');
+  return part.output;
+}
+
+function text(message: ModelMessage): string {
+  const out = output(message);
+  if (out.type !== 'text') throw new Error(`expected text, got ${out.type}`);
+  return out.value;
+}
 
 describe('compactDocumentHistory', () => {
   it('leaves a single document untouched', () => {
@@ -35,8 +54,6 @@ describe('compactDocumentHistory', () => {
       toolResult(doc('SECOND')),
       toolResult(doc('THIRD')),
     ]);
-    const text = (m: ModelMessage) =>
-      String((m.content as unknown as { output: string }[])[0]!.output);
 
     expect(text(out[0]!)).not.toContain('FIRST');
     expect(text(out[0]!)).toContain('omitted');
@@ -51,19 +68,38 @@ describe('compactDocumentHistory', () => {
       toolResult(doc('a')),
       toolResult(doc('b')),
     ]);
-    expect(String((out[0]!.content as unknown as { output: string }[])[0]!.output)).toContain(
-      '✓ APPLIED'
-    );
+    expect(text(out[0]!)).toContain('✓ APPLIED');
   });
 
-  it('handles the structured text output shape', () => {
+  it('ignores non-text outputs', () => {
+    const messages = [
+      toolMessage({ type: 'json', value: { doc: doc('a') } }),
+      toolResult(doc('b')),
+      toolResult(doc('c')),
+    ];
+    const out = compactDocumentHistory(messages);
+    expect(out[0]).toBe(messages[0]);
+    expect(text(out[1]!)).toContain('omitted');
+  });
+
+  it('elides every stale part of a multi-result message', () => {
+    const part = (value: string, id: string): ToolResultPart => ({
+      type: 'tool-result',
+      toolCallId: id,
+      toolName: 'dispatch',
+      output: { type: 'text', value },
+    });
     const out = compactDocumentHistory([
-      toolResult({ type: 'text', value: doc('a') }),
-      toolResult({ type: 'text', value: doc('b') }),
+      {
+        role: 'tool',
+        content: [part(doc('a'), 'c-a'), part(doc('b'), 'c-b')],
+      },
+      toolResult(doc('c')),
     ]);
-    const first = (out[0]!.content as unknown as { output: { value: string } }[])[0]!.output;
-    expect(first.value).not.toContain('>a<');
-    expect(first.value).toContain('omitted');
+    const parts = out[0]!.content as ToolResultPart[];
+    for (const p of parts) {
+      expect(p.output.type === 'text' && p.output.value).toContain('omitted');
+    }
   });
 
   it('does not mutate the input', () => {

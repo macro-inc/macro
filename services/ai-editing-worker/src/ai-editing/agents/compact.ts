@@ -10,12 +10,26 @@
  * With N dispatches over a D-token document, carrying them all costs O(N²·D)
  * across the session. Keeping only the newest makes it O(N·D) and — because the
  * elided text sits after the cached prefix — leaves caching intact.
+ *
+ * The SDK's `pruneMessages` is the wrong tool here: it drops whole tool
+ * call/result pairs, taking each dispatch's `editing_instruction` with them —
+ * and once the document bodies are gone those instructions are the only record
+ * of what each edit was asked to do.
  */
 
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, ToolContent, ToolResultPart } from 'ai';
 
 const DOC_OPEN = '<document>';
 const DOC_CLOSE = '</document>';
+
+/** A tool result whose output is plain text — the only shape we rewrite. */
+type TextResultPart = ToolResultPart & {
+  output: { type: 'text'; value: string };
+};
+
+function isTextResult(part: ToolContent[number]): part is TextResultPart {
+  return part.type === 'tool-result' && part.output.type === 'text';
+}
 
 /** Replace a result's document block with a one-line marker. */
 function elideDocument(text: string): string | null {
@@ -24,30 +38,6 @@ function elideDocument(text: string): string | null {
   if (start === -1 || end === -1 || end < start) return null;
   const elided = end + DOC_CLOSE.length - start;
   return `${text.slice(0, start)}[document state after this edit omitted — ${elided} chars; see the latest dispatch result for current content]${text.slice(end + DOC_CLOSE.length)}`;
-}
-
-function partText(part: unknown): string | null {
-  if (typeof part !== 'object' || part === null) return null;
-  const output = (part as { output?: unknown }).output;
-  if (typeof output === 'string') return output;
-  if (
-    typeof output === 'object' &&
-    output !== null &&
-    (output as { type?: string }).type === 'text'
-  ) {
-    const value = (output as { value?: unknown }).value;
-    return typeof value === 'string' ? value : null;
-  }
-  return null;
-}
-
-function withText(part: unknown, text: string): unknown {
-  const output = (part as { output?: unknown }).output;
-  if (typeof output === 'string') return { ...(part as object), output: text };
-  return {
-    ...(part as object),
-    output: { ...(output as object), value: text },
-  };
 }
 
 /**
@@ -61,10 +51,9 @@ export function compactDocumentHistory(
   // Locate every tool-result part that carries a document, in order.
   const carriers: { messageIndex: number; partIndex: number }[] = [];
   messages.forEach((message, messageIndex) => {
-    if (message.role !== 'tool' || !Array.isArray(message.content)) return;
+    if (message.role !== 'tool') return;
     message.content.forEach((part, partIndex) => {
-      const text = partText(part);
-      if (text && text.includes(DOC_OPEN)) {
+      if (isTextResult(part) && part.output.value.includes(DOC_OPEN)) {
         carriers.push({ messageIndex, partIndex });
       }
     });
@@ -73,22 +62,20 @@ export function compactDocumentHistory(
   // Nothing to gain until a newer snapshot has superseded an older one.
   if (carriers.length < 2) return messages;
 
-  const stale = carriers.slice(0, -1);
   const out = [...messages];
-  const rewritten = new Map<number, ModelMessage>();
 
-  for (const { messageIndex, partIndex } of stale) {
-    const message = (rewritten.get(messageIndex) ??
-      out[messageIndex]) as ModelMessage & { content: unknown[] };
-    const content = [...message.content] as unknown[];
-    const text = partText(content[partIndex]);
-    if (!text) continue;
-    const elided = elideDocument(text);
+  // Reading each message back out of `out` picks up an earlier rewrite, so a
+  // message holding several parallel dispatch results keeps all of its edits.
+  for (const { messageIndex, partIndex } of carriers.slice(0, -1)) {
+    const message = out[messageIndex];
+    if (message?.role !== 'tool') continue;
+    const part = message.content[partIndex];
+    if (!part || !isTextResult(part)) continue;
+    const elided = elideDocument(part.output.value);
     if (elided === null) continue;
-    content[partIndex] = withText(content[partIndex], elided) as never;
-    const next = { ...message, content } as ModelMessage;
-    rewritten.set(messageIndex, next);
-    out[messageIndex] = next;
+    const content = [...message.content];
+    content[partIndex] = { ...part, output: { ...part.output, value: elided } };
+    out[messageIndex] = { ...message, content };
   }
 
   return out;
