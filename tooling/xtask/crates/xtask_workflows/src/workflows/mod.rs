@@ -25,12 +25,11 @@ mod code_check_conventions;
 mod code_check_infra;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
-mod deploy_cloud_storage_on_push;
 mod deploy_fusionauth_instance;
+mod deploy_on_push;
 mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
-mod deploy_web_app_dev_push;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
@@ -180,14 +179,9 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_cloud_storage_on_push",
-        file_name: "deploy_cloud_storage_on_push.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_cloud_storage_on_push::deploy_cloud_storage_on_push,
-                deploy_cloud_storage_on_push::patch,
-            )
-        },
+        slug: "deploy_on_push",
+        file_name: "deploy_on_push.yml",
+        render_yaml: || render_patched(deploy_on_push::deploy_on_push, deploy_on_push::patch),
     },
     WorkflowFile {
         slug: "deploy_fusionauth_instance",
@@ -218,16 +212,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_web_app",
         file_name: "deploy_web_app.yml",
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
-    },
-    WorkflowFile {
-        slug: "deploy_web_app_dev_push",
-        file_name: "deploy_web_app_dev_push.yml",
-        render_yaml: || {
-            render_patched(
-                deploy_web_app_dev_push::deploy_web_app_dev_push,
-                deploy_web_app_dev_push::patch,
-            )
-        },
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

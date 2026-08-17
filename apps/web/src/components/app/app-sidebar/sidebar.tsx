@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
@@ -47,10 +48,10 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
+  ENABLE_REMINDERS,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -66,7 +67,7 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
 import WideCalendarIcon from '@icon/wide-calendar.svg';
@@ -81,6 +82,7 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -403,8 +405,13 @@ export const GoToHotkeys = () => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
   const links = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled()
+    )
   );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
@@ -875,7 +882,11 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64 shadow-menu">
+      {/*
+        The menu is shrink-to-fit, so without a cap a long name or email
+        stretches it instead of engaging the `truncate` below.
+      */}
+      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu">
         <Dropdown.Group class="p-1.5 gap-0">
           <div class="flex items-center gap-3 px-1 py-1">
             <Show
@@ -1011,6 +1022,17 @@ const ACTIVITY_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
 
+const REMINDERS_LINK: SidebarItem = {
+  id: 'reminders',
+  label: 'Reminders',
+  href: LIST_VIEW_PATHS.reminders,
+  icon: BellSimpleIcon,
+  // `r` is Calendar; `m` is free and the only other letter in "reminders" that
+  // is not already a sidebar destination.
+  hotkey: 'm',
+  hotkeyToken: TOKENS.sidebar.goTo.reminders,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Home, Getting
  * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
@@ -1026,7 +1048,8 @@ const ACTIVITY_LINK: SidebarItem = {
  */
 const buildSidebarLinks = (
   showGettingStarted: boolean,
-  showCalendar: boolean
+  showCalendar: boolean,
+  showActivity: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1034,11 +1057,22 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (ENABLE_ACTIVITY) {
+  if (showActivity) {
     const idx = links.findIndex((link) => link.id === 'inbox');
     links = [
       ...links.slice(0, idx + 1),
       ACTIVITY_LINK,
+      ...links.slice(idx + 1),
+    ];
+  }
+
+  if (ENABLE_REMINDERS()) {
+    // Directly below Activity, or below Inbox when Activity is off.
+    const anchorId = showActivity ? 'activity' : 'inbox';
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [
+      ...links.slice(0, idx + 1),
+      REMINDERS_LINK,
       ...links.slice(idx + 1),
     ];
   }
@@ -1063,7 +1097,7 @@ const buildSidebarLinks = (
 };
 
 const TeamInviteSidebarPromo = (props: { invite: TeamInviteDetails }) => {
-  const [inviterName] = useDisplayName(tryMacroId(props.invite.invited_by));
+  const inviterName = () => getDisplayName(tryMacroId(props.invite.invited_by));
   const joinTeamMutation = useJoinTeamMutation();
   const rejectInvitationMutation = useRejectInvitationMutation();
   const mutationPending = () =>
@@ -1119,8 +1153,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
   const allLinks = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled()
+    )
   );
 
   // Hides only the rendered row: the g+s hotkey and command menu entry keep
@@ -1245,6 +1284,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const findLink = (id: SidebarItem['id']) =>
     allLinks().find((link) => link.id === id && !link.hiddenFromSidebar);
   const searchLink = () => allLinks().find((link) => link.id === 'search');
+  const channelsLink = () => allLinks().find((link) => link.id === 'channels');
+  const channelsContent = () =>
+    ({
+      type: 'component',
+      id: 'channels',
+      params: channelsLink()?.params,
+    }) as const;
 
   const renderSidebarLink = (link: SidebarItem) => (
     <Dynamic
@@ -1284,8 +1330,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ),
   });
 
+  // Ids, not the built list: this group is a fixed set, and everything else
+  // lives in the collapsible Workspace section. `findLink` drops ids that
+  // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'activity']
+    ['home', 'getting-started', 'inbox', 'activity', 'reminders']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )
@@ -1483,12 +1532,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
             persistKey="workspace"
             items={workspaceItems()}
             headerMenu={() => (
-              <SidebarSectionMenu
-                label="Workspace"
-                options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
-                onToggle={toggleSectionVisibility}
-                onOpenChange={handleWorkspaceContextMenuOpenChange}
-              />
+              <div class="pointer-events-auto">
+                <SidebarSectionMenu
+                  label="Workspace"
+                  options={sectionMenuOptionsFor(WORKSPACE_LINK_IDS)}
+                  onToggle={toggleSectionVisibility}
+                  onOpenChange={handleWorkspaceContextMenuOpenChange}
+                />
+              </div>
             )}
             onOpenChange={scheduleMiddleScrollUpdate}
           />
@@ -1505,6 +1556,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
               sidebarState={sidebarDisplayState()}
               onSectionOpenChange={scheduleMiddleScrollUpdate}
               onDropdownOpenChange={handleOverlayDropdownOpenChange}
+              headerWrapper={(header) => (
+                <SidebarOpenInSplitMenu
+                  content={channelsContent}
+                  onOpenChange={handleOverlayDropdownOpenChange}
+                >
+                  {header}
+                </SidebarOpenInSplitMenu>
+              )}
             />
           </Suspense>
         </div>

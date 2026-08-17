@@ -1,6 +1,6 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useMessage } from './context';
@@ -21,7 +21,7 @@ export function FromPill(props: FromPillProps) {
     const id = triggeredBy();
     return id ? tryMacroId(id) : undefined;
   };
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
   const email = () => {
     const id = macroId();
     return id ? macroIdToEmail(id) : (triggeredBy() ?? '');

@@ -3,7 +3,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import CheckIcon from '@phosphor/check.svg?component-solid';
-import { addCtrlJKMenuNavigation, cn, Layer } from '@ui';
+import {
+  addCtrlJKMenuNavigation,
+  cn,
+  highlightFirstMenuItemOnOpen,
+  Layer,
+} from '@ui';
 import { Hotkey } from '@ui/components/Hotkey';
 import {
   type Component,
@@ -143,9 +148,7 @@ export function MenuItem(props: MenuItemProps) {
     <MenuItemWrapper
       class={cn(
         MENU_ITEM_CLASS,
-        props.disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/5 hover-transition-bg',
+        props.disabled && 'opacity-50 cursor-not-allowed',
         props.class
       )}
       onClick={props.onClick}
@@ -234,9 +237,7 @@ export function SubTrigger(props: {
     <ContextMenu.SubTrigger
       class={cn(
         MENU_ITEM_CLASS,
-        props.disabled
-          ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/5 hover-transition-bg'
+        props.disabled && 'opacity-50 cursor-not-allowed'
       )}
       disabled={props.disabled}
     >
@@ -307,7 +308,9 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-surface shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
+
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -403,6 +406,13 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
     onCleanup(cleanup);
   });
 
+  const handleOpenAutoFocus = (event: Event) => {
+    props.onOpenAutoFocus?.(event);
+    if (!event.defaultPrevented && contentRef) {
+      highlightFirstMenuItemOnOpen(contentRef);
+    }
+  };
+
   return (
     <MobileConditionalOverlay mobileFullScreen={props.mobileFullScreen}>
       <Show
@@ -411,6 +421,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
           <Layer depth={2}>
             <ContextMenu.Content
               class={cn(
+                MENU_SURFACE_SCOPE,
                 !props.overrideStyling && MENU_CONTENT_CLASS,
                 'menu-open-animation',
                 props.class,
@@ -419,7 +430,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
                   isMobile() &&
                   'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
               )}
-              onOpenAutoFocus={props.onOpenAutoFocus}
+              onOpenAutoFocus={handleOpenAutoFocus}
               ref={contentRef}
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
@@ -428,17 +439,20 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
           </Layer>
         }
       >
-        <Layer depth={2}>
-          <ContextMenu.SubContent
-            class={cn(
-              MENU_CONTENT_CLASS,
-              props.class,
-              props.width && menuWidths[props.width]
-            )}
-          >
-            {props.children}
-          </ContextMenu.SubContent>
-        </Layer>
+        <ContextMenu.Portal>
+          <Layer depth={2}>
+            <ContextMenu.SubContent
+              class={cn(
+                MENU_CONTENT_CLASS,
+                props.class,
+                props.width && menuWidths[props.width]
+              )}
+              ref={contentRef}
+            >
+              {props.children}
+            </ContextMenu.SubContent>
+          </Layer>
+        </ContextMenu.Portal>
       </Show>
     </MobileConditionalOverlay>
   );

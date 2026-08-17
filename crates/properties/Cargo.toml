@@ -9,14 +9,12 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:schemars",
-  "dep:serde_json",
   "ports",
 ]
 default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:serde_json",
   "dep:tokio",
   "dep:utoipa",
   "entity_access/inbound",
@@ -30,13 +28,13 @@ outbound = [
   "dep:model_notifications",
   "dep:models_permissions",
   "dep:notification",
-  "dep:serde_json",
   "dep:sqlx",
   "ports",
 ]
 ports = []
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
@@ -62,7 +60,7 @@ models_properties = { path = "../models_properties" }
 notification = { path = "../notification", optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }

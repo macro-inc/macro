@@ -60,6 +60,11 @@ pub enum EntityType {
     CrmCompany,
     /// The entity is a CRM contact tracked by a team
     CrmContact,
+    /// The entity is a reminder set by a user
+    Reminder,
+    /// The entity is an AI skill: either a skill document or a built-in
+    /// system skill (see the `system_skills` crate)
+    Skill,
 }
 
 impl EntityType {
@@ -86,6 +91,13 @@ impl EntityType {
             // — they aren't rows in the `entity_access` table.
             EntityType::CrmCompany => false,
             EntityType::CrmContact => false,
+            // A reminder is private to the user who set it. Access resolves
+            // from its owner column, not from a row in the `entity_access`
+            // table — the same shape as channels and CRM entities.
+            EntityType::Reminder => false,
+            // Skill refs are access-checked against the underlying document
+            // (system skills are visible to everyone).
+            EntityType::Skill => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

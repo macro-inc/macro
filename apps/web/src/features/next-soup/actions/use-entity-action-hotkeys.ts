@@ -24,7 +24,9 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
+  makeEditReminderAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -86,6 +88,8 @@ export const useEntityActionHotkeys = (
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
+  const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
 
@@ -300,18 +304,40 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Rename - 'r'
+  /**
+   * Whether 'r' should open the reminder editor rather than rename.
+   *
+   * The two are mutually exclusive rather than merely unlikely to overlap:
+   * `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
+   * reminder row's `ownerId` is always `''` while `userId()` is a macro id or
+   * undefined — so rename never claims a reminder, and sharing the key beats
+   * leaving 'r' dead on one. Its name is its description, which only the
+   * reminders API can change.
+   */
+  const editsReminder = (): boolean => {
+    const entities = getEntitiesForAction();
+    return entities.length === 1 && editReminderAction.canExecute(entities[0]);
+  };
+
+  // Rename - 'r'. Edits the reminder instead when the row is one.
   registerHotkey({
     hotkey: ['r'],
     hotkeyToken: TOKENS.entity.action.rename,
     scopeId,
     description: () => {
+      if (editsReminder()) return 'Edit reminder';
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Rename items' : 'Rename item';
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
+
+      if (editsReminder()) {
+        editReminderAction.executeWithSoup(entities, soup);
+        return true;
+      }
+
       if (!entities.every(renameAction.canExecute)) return false;
 
       renameAction.executeWithSoup(entities, soup);
@@ -319,6 +345,7 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
+      if (editsReminder()) return true;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
     },
@@ -474,6 +501,34 @@ export const useEntityActionHotkeys = (
         entities.length === 1 && copyEntityIdAction.canExecute(entities[0])
       );
     },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Set a reminder - 'h'. This shares the scope with the list's 'h' ("Collapse
+  // item", handlerPriority 4), so 'add' keeps both registered instead of one
+  // evicting the other. Collapse sorts first and returns false when there is
+  // nothing to collapse, which falls through to here.
+  registerHotkey({
+    hotkey: ['h'],
+    hotkeyToken: TOKENS.entity.action.createReminder,
+    scopeId,
+    description: 'Remind me',
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length !== 1) return false;
+      if (!createReminderAction.canExecute(entities[0])) return false;
+      createReminderAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length === 1 && createReminderAction.canExecute(entities[0])
+      );
+    },
+    registrationType: 'add',
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);

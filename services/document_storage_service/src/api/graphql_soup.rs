@@ -149,7 +149,6 @@ fn insert_graphql_context_data(
         state.soup_router_state.service(),
         state.soup_router_state.email_service(),
     );
-
     data.insert(macro_user_id.clone());
     data.insert(entity_mutation::EntityMutationActor {
         user_id: macro_user_id.clone(),
@@ -158,6 +157,7 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_entity_mutation_service.clone());
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_notification_reader.clone());
+    data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
     data.insert(soup_item_loader);
     data.insert(complete_graph::entity_properties_loader(
@@ -165,6 +165,10 @@ fn insert_graphql_context_data(
         property_reader,
     ));
     data.insert(complete_graph::email_content_loader(
+        macro_user_id.clone(),
+        email_content_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_metadata_loader(
         macro_user_id.clone(),
         email_content_reader,
     ));
@@ -181,5 +185,11 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::entity_notifications_loader(
         macro_user_id,
         state.graphql_notification_reader.clone(),
+    ));
+    // The feed resolver reads the reader directly; the edge goes through
+    // the request's DataLoader.
+    data.insert(state.activity_reader.clone());
+    data.insert(complete_graph::entity_activity_loader(
+        state.activity_reader.clone(),
     ));
 }

@@ -20,7 +20,11 @@ use cal::{
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
+use calendar_events::domain::reminder_dispatch::CalendarReminderDispatchService;
 use calendar_events::inbound::axum_router::CalendarRouterState;
+use calendar_events::inbound::dispatch_worker::CalendarReminderDispatchWorker;
+use calendar_events::outbound::notification_notifier::NotificationCalendarReminderNotifier;
+use calendar_events::outbound::sqs_dispatch_queue::SqsCalendarDispatchQueue;
 use call::{
     domain::service::CallServiceImpl,
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
@@ -89,9 +93,11 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
-use notification::domain::service::SqsNotificationIngress;
-use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
-use notification::outbound::queue::SqsQueue;
+use notification::domain::service::{
+    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+    WebSocketNotificationConsumerService,
+};
+use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -105,6 +111,14 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
+use reminders::{
+    domain::service::{RemindersServiceImpl, dispatch::ReminderDispatchService},
+    inbound::{axum_router::RemindersRouterState, dispatch_worker::DispatchWorker},
+    outbound::{
+        notification_notifier::NotificationReminderNotifier, pg_reminders_repo::PgRemindersRepo,
+        sqs_dispatch_queue::SqsDispatchQueue,
+    },
+};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -222,9 +236,13 @@ async fn main() -> anyhow::Result<()> {
     let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let reminder_dispatch_queue = macro_queues::ReminderDispatchQueue::new();
+    let calendar_reminder_dispatch_queue = macro_queues::CalendarReminderDispatchQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
-        .document_delete_queue(&document_delete_queue);
+        .document_delete_queue(&document_delete_queue)
+        .gmail_ops_queue(&gmail_ops_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
         Arc::new(sqs_client.clone()),
         macro_queues::WebhookEventQueue::new().to_string(),
@@ -322,23 +340,27 @@ async fn main() -> anyhow::Result<()> {
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
+        sqs_client.clone(),
         crm_service.clone(),
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
         0,
+    )
+    .with_macro_event_broker(macro_event_broker.clone());
+    let readonly_email_service = ReadonlyEmailPreviewAdapter(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(readonly_db.clone()),
+            frecency_service.clone(),
+            sqs_client.clone(),
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
     );
-    let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
-        EmailPgRepo::new(readonly_db.clone()),
-        frecency_service.clone(),
-        email::domain::ports::NoOpEnqueuer,
-        crm_service.clone(),
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
-        ),
-        0,
-    ));
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
@@ -774,6 +796,46 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        async move {
+            let consumer = activity::inbound::kafka_consumer::ActivityConsumer::<
+                _,
+                crate::service::activity::ActivitySourceEvent,
+                _,
+            >::new(activity_repo, crate::service::activity::ingest);
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting activity consumer");
+                let result = consumer
+                    .run(&activity_consumer_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("activity consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "activity consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.
@@ -864,6 +926,14 @@ async fn main() -> anyhow::Result<()> {
             macro_agent_tool_context,
             macro_agent_tools,
         )),
+        Arc::new(
+            channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
+                channels_service.clone(),
+                Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
+                    ai_usage::pg_recorder(db.clone()),
+                )),
+            ),
+        ),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
@@ -875,6 +945,10 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         );
 
+    // Held by value here and behind an `Arc` in the router state: the impl is a
+    // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
+    let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
+
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         frecency_service,
@@ -883,7 +957,48 @@ async fn main() -> anyhow::Result<()> {
         call_record_query_service,
         crm_service.clone(),
         foreign_entity_service_for_soup,
+        reminders_service.clone(),
     ));
+
+    let websocket_notification_consumer_service =
+        Arc::new(WebSocketNotificationConsumerService::new(
+            NotificationTopicConsumer::<model_notifications::NotifEvent>::from_env(
+                config.kafka_brokers.as_ref(),
+            )
+            .map_err(|error| {
+                anyhow::anyhow!("failed to create WebSocket notification topic consumer: {error:?}")
+            })?,
+        ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&websocket_notification_consumer_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
 
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
@@ -991,6 +1106,66 @@ async fn main() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
+    // every minute; the sweep fans one message out per due firing, onto the
+    // same queue, and every task in the pool delivers them in parallel.
+    let reminder_dispatch_worker = {
+        let queue = SqsDispatchQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            reminder_dispatch_queue.to_string(),
+        );
+        let dispatch_service = ReminderDispatchService::new(
+            PgRemindersRepo::new(db.clone()),
+            NotificationReminderNotifier::new((*notification_ingress_service).clone()),
+            queue.clone(),
+        );
+        DispatchWorker::new(dispatch_service, queue)
+    };
+
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            tracing::info!("starting reminder dispatch worker");
+            reminder_dispatch_worker.run(cancellation_token).await;
+            tracing::info!("reminder dispatch worker stopped");
+        }
+    });
+
+    // Calendar event reminder dispatch: same sweep/deliver shape as reminders,
+    // on its own queue. Behind a master switch — when off, the worker drains
+    // the minutely tick so the queue neither backs up nor dead-letters.
+    let calendar_reminder_dispatch_worker = {
+        let queue = SqsCalendarDispatchQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            calendar_reminder_dispatch_queue.to_string(),
+        );
+        let dispatch_service = CalendarReminderDispatchService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            NotificationCalendarReminderNotifier::new((*notification_ingress_service).clone()),
+            queue.clone(),
+        );
+        CalendarReminderDispatchWorker::new(dispatch_service, queue)
+    };
+
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let enabled = config.calendar_reminder_dispatch_enabled;
+        async move {
+            if enabled {
+                tracing::info!("starting calendar reminder dispatch worker");
+                calendar_reminder_dispatch_worker
+                    .run(cancellation_token)
+                    .await;
+                tracing::info!("calendar reminder dispatch worker stopped");
+            } else {
+                tracing::info!("calendar reminder dispatch disabled; draining its queue");
+                calendar_reminder_dispatch_worker
+                    .drain(cancellation_token)
+                    .await;
+            }
+        }
+    });
+
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let graphql_entity_mutation_service =
@@ -1028,11 +1203,22 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
+        reminders_state: RemindersRouterState::new(
+            Arc::new(reminders_service),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,
+            websocket_notification_consumer_service,
         ),
         graphql_notification_reader,
+        // GraphQL reads the activity log through the readonly pool; the
+        // Kafka consumer's writer-pool repo above is separate on purpose.
+        activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+        )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,

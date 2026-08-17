@@ -52,6 +52,7 @@ export const authExcluded = [
   'healthHandler',
   'initGithubLink',
   'initGmailLink',
+  'initOutlookLink',
   'inviteToTeam',
   'joinTeam',
   'logout',
@@ -159,15 +160,20 @@ export const emailExcluded = [
 export const emailBacklog = [
   'addDraftAttachment',
   'addForwardedAttachment',
+  'createCalendarEvent',
   'createDraft',
+  'deleteCalendarEvent',
   'deleteDraft',
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'listCalendars',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
   'removeForwardedAttachment',
+  'rsvpCalendarEvent',
+  'updateCalendarEvent',
   'upsertEmailFilter',
   'upsertScheduledMessage',
 ] as const satisfies readonly (keyof EmailSdk)[];
@@ -189,6 +195,8 @@ export const notificationBacklog =
 
 export const propertiesExcluded = [
   'ensureTagSet',
+  'mergeTag',
+  'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const propertiesBacklog =
@@ -280,8 +288,10 @@ export const storageBacklog = [
   'createAnchor',
   'createDocument',
   'createEntityMention',
+  'createReminder',
   'deleteAnchor',
   'deleteEntityMention',
+  'deleteReminder',
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
@@ -294,13 +304,15 @@ export const storageBacklog = [
   'getEntityPermission',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
-  'getRecentActivityHandler',
+  'getReminder',
   'listOccurrences',
+  'listReminders',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
   'simpleSave',
   'toggleShareWithTeam',
+  'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];
 

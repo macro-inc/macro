@@ -1,4 +1,4 @@
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { Property } from '../types';
@@ -7,6 +7,8 @@ import {
   formatDate,
   formatNumber,
   formatPropertyValue,
+} from '../utils/formatting';
+import {
   getEntityValues,
   getLinkValues,
   getSelectValues,
@@ -18,7 +20,7 @@ import {
   isNumberProperty,
   isSelectProperty,
   isStringProperty,
-} from '../utils';
+} from '../utils/typeGuards';
 
 type Props = {
   property: Property;
@@ -57,6 +59,7 @@ export function PropertyText(props: Props) {
 
   return (
     <Show
+      keyed
       when={userId()}
       fallback={
         <PrimitivePropertyText
@@ -69,7 +72,7 @@ export function PropertyText(props: Props) {
     >
       {(id) => (
         <UserPropertyText
-          id={id()}
+          id={id}
           fallback={props.fallback}
           class={props.class}
         />
@@ -94,10 +97,12 @@ function UserPropertyText(props: {
   fallback?: JSX.Element;
   class?: string;
 }) {
-  const parts = useDisplayNameParts(tryMacroId(props.id), {
-    emailFallback: 'local-part',
-  });
-  const text = () => parts.firstName() || parts.fullName();
+  const text = () => {
+    const parts = getDisplayNameParts(tryMacroId(props.id), {
+      emailFallback: 'local-part',
+    });
+    return parts.firstName || parts.fullName;
+  };
 
   return (
     <Show when={text()} fallback={props.fallback ?? null}>

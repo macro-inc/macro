@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_notifications::NotifEvent;
 use notification::domain::models::{
     UserNotificationRow,
     request::{NotificationEntityRef, NotificationItemType},
@@ -28,12 +29,14 @@ fn notification_item_type(entity_type: model_entity::EntityType) -> Option<Notif
         EntityType::Chat => Some(NotificationItemType::Chat),
         EntityType::Call => Some(NotificationItemType::Call),
         EntityType::ForeignEntity => Some(NotificationItemType::Github),
+        EntityType::Reminder => Some(NotificationItemType::Reminder),
+        EntityType::CalendarEvent => Some(NotificationItemType::Calendar),
         EntityType::User
         | EntityType::Team
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::CalendarEvent => None,
+        | EntityType::Skill => None,
     }
 }
 
@@ -65,7 +68,7 @@ pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
         keys: Vec<model_entity::Entity<'static>>,
     ) -> impl Future<
         Output = Result<
-            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
             rootcause::Report,
         >,
     > + Send
@@ -81,7 +84,7 @@ where
         user_id: MacroUserIdStr<'static>,
         keys: Vec<model_entity::Entity<'static>>,
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
         rootcause::Report,
     > {
         let mut result = keys
@@ -100,14 +103,14 @@ where
             .map(|(_, entity_ref)| entity_ref.clone())
             .collect();
 
-        let notifications_by_entity = self
-            .get_entity_notifications_batch(user_id, entity_refs)
+        let mut notifications_by_entity = self
+            .get_entity_notifications_batch::<NotifEvent>(user_id, entity_refs)
             .await
             .map_err(|err| rootcause::report!(err))?;
 
         for (original_key, entity_ref) in requested_refs {
-            if let Some(notifications) = notifications_by_entity.get(&entity_ref) {
-                result.insert(original_key, notifications.clone());
+            if let Some(notifications) = notifications_by_entity.remove(&entity_ref) {
+                result.insert(original_key, notifications);
             }
         }
 
@@ -125,7 +128,7 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
         _user_id: MacroUserIdStr<'static>,
         keys: Vec<model_entity::Entity<'static>>,
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
         rootcause::Report,
     > {
         Ok(keys.iter().map(|key| (key.clone(), Vec::new())).collect())
@@ -151,7 +154,7 @@ impl<R> Loader<model_entity::OwnedEntity> for EntityNotificationsLoader<R>
 where
     R: SoupNotificationEdgeReader,
 {
-    type Value = Vec<UserNotificationRow<serde_json::Value>>;
+    type Value = Vec<UserNotificationRow<NotifEvent>>;
     type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(
@@ -162,7 +165,7 @@ where
             .iter()
             .map(|key| key.as_entity().clone())
             .collect::<Vec<_>>();
-        let loaded = self
+        let mut loaded = self
             .reader
             .get_notifications(self.user_id.clone(), entities)
             .await
@@ -172,7 +175,7 @@ where
             .iter()
             .cloned()
             .map(|key| {
-                let notifications = loaded.get(key.as_entity()).cloned().unwrap_or_default();
+                let notifications = loaded.remove(key.as_entity()).unwrap_or_default();
                 (key, notifications)
             })
             .collect())

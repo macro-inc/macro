@@ -1,5 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
@@ -65,7 +65,7 @@ function getToolLabel(tool: BlockTool) {
 export function ResponsivePermissionsBadge() {
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <SplitHeaderRight>
           <SplitPermissionsBadge />
@@ -123,7 +123,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
 
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <>
           <SplitHeaderRight>

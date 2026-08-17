@@ -40,7 +40,7 @@ import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup, Show } from 'solid-js';
 import { useHistory } from '../history/HistoryContext';
 import {
   DispatchAgentButton,
@@ -62,6 +62,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
+  const isSkill = blockAliasedName === 'skill';
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
 
   const copyLink = () => {
@@ -219,11 +220,16 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel name={name} />
+        <Show when={isSkill}>
+          <span class="ml-1.5 inline-flex shrink-0 items-center self-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">
+            Skill
+          </span>
+        </Show>
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 mobile:hidden">
+        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
+        <div class="-order-1 touch:hidden">
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>

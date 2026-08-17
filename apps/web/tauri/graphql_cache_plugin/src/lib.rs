@@ -23,7 +23,8 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    ClaimedMutationWire, EngineHandle, OptimisticWriteResultWire, ReadResultWire, WriteResultWire,
+    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    InitialMutationClaimWire, ReadResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose

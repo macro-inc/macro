@@ -2,21 +2,22 @@
 //! values.
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 
 /// Key of a normalized record: `"Typename:keyValue"`, or [`ROOT_QUERY`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct EntityKey(pub String);
+pub struct EntityKey<'a>(pub Cow<'a, str>);
 
 /// The singleton record holding root-level query fields (graphcache's
 /// `Query` record). Field keys on it embed arguments, e.g.
 /// `soup({"input":{...}})`.
 pub const ROOT_QUERY: &str = "ROOT_QUERY";
 
-impl EntityKey {
+impl EntityKey<'static> {
     pub fn root() -> Self {
-        EntityKey(ROOT_QUERY.to_string())
+        EntityKey(Cow::Borrowed(ROOT_QUERY))
     }
 
     pub fn entity(typename: &str, key_values: &[&str]) -> Self {
@@ -26,15 +27,32 @@ impl EntityKey {
             s.push(':');
             s.push_str(v);
         }
-        EntityKey(s)
-    }
-
-    pub fn is_root(&self) -> bool {
-        self.0 == ROOT_QUERY
+        EntityKey(s.into())
     }
 }
 
-impl fmt::Display for EntityKey {
+impl<'a> EntityKey<'a> {
+    pub fn is_root(&self) -> bool {
+        self.0 == ROOT_QUERY
+    }
+
+    pub fn borrowed(&self) -> EntityKey<'_> {
+        EntityKey(Cow::Borrowed(self.0.as_ref()))
+    }
+
+    /// Converts this key into an owned key that can be stored independently.
+    pub fn into_owned(self) -> EntityKey<'static> {
+        EntityKey(Cow::Owned(self.0.into_owned()))
+    }
+}
+
+impl AsRef<str> for EntityKey<'_> {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl<'a> fmt::Display for EntityKey<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
@@ -93,7 +111,7 @@ pub enum CacheValue {
     Number(CacheNumber),
     String(String),
     /// Link to another normalized record.
-    Ref(EntityKey),
+    Ref(EntityKey<'static>),
     /// Embedded (non-keyable) object. `__typename` is stored as a regular
     /// field when known, for fragment matching on read.
     Object(BTreeMap<FieldKey, CacheValue>),

@@ -132,7 +132,7 @@ export function CommandMenuInner(props: {
   /** Optional class merged onto the Panel wrapper. */
   class?: string;
   /** Optional depth for the Panel wrapper. */
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
 }) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
 
@@ -566,13 +566,13 @@ export function CommandMenuInner(props: {
         <Show
           when={isInCommandScope()}
           fallback={
-            <span class="pl-2 text-accent">
+            <span class="flex size-5 shrink-0 items-center justify-center text-accent">
               <Macro class="size-3" />
             </span>
           }
         >
           <button
-            class="pl-2 text-ink-muted hover:text-ink transition-colors"
+            class="flex size-5 shrink-0 items-center justify-center text-ink-muted hover:text-ink transition-colors"
             onClick={handleBack}
             title="Back (Esc)"
           >
@@ -622,7 +622,7 @@ export function CommandMenuInner(props: {
 
       <CommandMenuShell.Body>
         <div
-          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out p-2"
+          class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show

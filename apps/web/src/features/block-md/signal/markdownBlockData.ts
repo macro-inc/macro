@@ -1,6 +1,7 @@
 import { blockDataSignalAs, createBlockStore } from '@core/block';
 import type {
   PluginManager,
+  ProgressStats,
   SelectionData,
   WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
@@ -33,6 +34,7 @@ export type MdData = {
   plugins?: PluginManager;
   selection?: Store<SelectionData>;
   wordcountStats?: Store<WordcountStats>;
+  progressStats?: Store<ProgressStats>;
   notebook?: HTMLElement;
   scrollContainer?: HTMLElement;
   commentMargin?: HTMLElement;

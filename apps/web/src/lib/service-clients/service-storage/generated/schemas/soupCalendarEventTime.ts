@@ -9,6 +9,10 @@ import type { SoupCalendarEventTimeOneOfFour } from './soupCalendarEventTimeOneO
 
 /**
  * Timed or all-day calendar event span.
+
+Fields are camelCased per variant rather than via `rename_all_fields`,
+which utoipa ignores — the generated OpenAPI schema would otherwise
+claim snake_case fields the wire never carries.
  */
 export type SoupCalendarEventTime =
   | SoupCalendarEventTimeOneOf

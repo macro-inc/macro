@@ -1899,3 +1899,101 @@ export const ensureTagSetResponse = zod
   .describe(
     'A tag set the caller can use. `definition` is absent until the set is provisioned\n(on first label create), in which case `options` is empty.'
   );
+
+/**
+ * Every entity carrying the personal label is retagged with the team label
+(deduped if it already has both) and the personal label is deleted. The team
+label's name and color win. This is the confirmation step after the promote
+endpoint reports a name collision.
+ * @summary Replace one of the caller's personal labels with an existing team label.
+ */
+export const mergeTagBody = zod
+  .object({
+    option_id: zod.uuid().describe('The personal label to retire.'),
+    target_option_id: zod
+      .uuid()
+      .describe(
+        'The team label every entity carrying `option_id` is retagged with.'
+      ),
+  })
+  .describe('Request to replace a personal label with an existing team label.');
+
+export const mergeTagResponse = zod
+  .object({
+    color: zod.string().nullish(),
+    displayOrder: zod.number(),
+    id: zod.uuid(),
+    propertyDefinitionId: zod.uuid(),
+    value: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['string']),
+            value: zod
+              .string()
+              .describe('String value for SelectString properties'),
+          })
+          .describe('String value for SelectString properties'),
+        zod
+          .object({
+            type: zod.enum(['number']),
+            value: zod
+              .number()
+              .describe('Number value for SelectNumber properties'),
+          })
+          .describe('Number value for SelectNumber properties'),
+      ])
+      .describe(
+        'The value of a property option - either a string or a number.'
+      ),
+  })
+  .describe('Property option response (API representation).');
+
+/**
+ * The label moves into the team tag set keeping its option id, so every entity
+already carrying it keeps the label — it just becomes visible to, and usable
+by, the whole team. A 409 means the team already has a label with that name;
+its body carries that label, and confirming the replacement is a call to the
+merge endpoint with `conflicting_option.id` as `target_option_id`.
+ * @summary Share one of the caller's personal labels with their team.
+ */
+export const promoteTagBody = zod
+  .object({
+    option_id: zod
+      .uuid()
+      .describe('The personal label to move into the team tag set.'),
+  })
+  .describe(
+    "Request to share one of the caller's personal labels with their team."
+  );
+
+export const promoteTagResponse = zod
+  .object({
+    color: zod.string().nullish(),
+    displayOrder: zod.number(),
+    id: zod.uuid(),
+    propertyDefinitionId: zod.uuid(),
+    value: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['string']),
+            value: zod
+              .string()
+              .describe('String value for SelectString properties'),
+          })
+          .describe('String value for SelectString properties'),
+        zod
+          .object({
+            type: zod.enum(['number']),
+            value: zod
+              .number()
+              .describe('Number value for SelectNumber properties'),
+          })
+          .describe('Number value for SelectNumber properties'),
+      ])
+      .describe(
+        'The value of a property option - either a string or a number.'
+      ),
+  })
+  .describe('Property option response (API representation).');

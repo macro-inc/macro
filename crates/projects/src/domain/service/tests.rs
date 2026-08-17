@@ -23,8 +23,8 @@ use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
     UploadExtractFolderRequest, UploadFolderStatus,
 };
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
@@ -497,8 +497,8 @@ fn patch_request(
 
 fn share_update() -> UpdateSharePermissionRequestV2 {
     UpdateSharePermissionRequestV2 {
-        is_public: Some(true),
-        public_access_level: Some(AccessLevel::View),
+        link_share: Some(Some(LinkShare::Public)),
+        link_share_access_level: Some(Some(AccessLevel::View)),
         channel_share_permissions: None,
     }
 }
@@ -651,7 +651,8 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
         .withf(move |args| {
             args.name == expected_name
                 && args.parent_id.as_deref() == Some(parent_id.to_string().as_str())
-                && !args.share_permission.is_public
+                && args.share_permission.link_share.is_none()
+                && args.share_permission.link_share_access_level.is_none()
         })
         .return_once(move |_| {
             Box::pin(async move {

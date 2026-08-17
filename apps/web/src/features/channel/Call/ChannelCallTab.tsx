@@ -1,6 +1,6 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { UserGroup } from '@core/component/UserGroup';
-import { tryMacroId, useDisplayNameParts } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
@@ -10,10 +10,10 @@ import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
 function ParticipantFirstName(props: { id: string }) {
-  const nameParts = useDisplayNameParts(tryMacroId(props.id));
-  const name = createMemo(
-    () => nameParts.firstName() || nameParts.fullName() || 'Someone'
-  );
+  const name = createMemo(() => {
+    const fullName = getDisplayName(tryMacroId(props.id));
+    return fullName.trim().split(/\s+/)[0] || fullName || 'Someone';
+  });
 
   return <>{name()}</>;
 }

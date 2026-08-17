@@ -777,20 +777,12 @@ where
                 }
             }
 
-            let participants = if let Some(thread_id) = message.thread_id {
-                self.repo
-                    .get_thread_participants(thread_id)
-                    .await
-                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?
-            } else {
-                participant_ids(
-                    &self
-                        .repo
-                        .get_participants(channel_id)
-                        .await
-                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?,
-                )
-            };
+            let channel_participants = self
+                .repo
+                .get_participants(channel_id)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+            let recipients = participant_ids(&channel_participants);
 
             let posted_notification =
                 if notification_policy == PatchMessageNotificationPolicy::NotifyAsPostedMessage {
@@ -810,11 +802,6 @@ where
                             channel_name: info.name.unwrap_or_default(),
                         }
                     };
-                    let notification_participants = self
-                        .repo
-                        .get_participants(channel_id)
-                        .await
-                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
                     let has_attachments = !self
                         .repo
                         .get_message_attachments(message_id)
@@ -824,7 +811,7 @@ where
 
                     Some(crate::domain::events::MessageChangedNotificationContext {
                         metadata,
-                        participants: notification_participants,
+                        participants: channel_participants,
                         mentions: replacement_mentions.clone().unwrap_or_default(),
                         has_attachments,
                     })
@@ -836,7 +823,7 @@ where
                 channel_id,
                 actor: actor.clone(),
                 message: message.clone(),
-                recipients: participants,
+                recipients,
                 nonce,
                 posted_notification,
             });

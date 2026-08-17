@@ -9,6 +9,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "activity"
+version = "0.1.0"
+dependencies = [
+ "channel_sender",
+ "chrono",
+ "kafka_util",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "model-entity",
+ "rdkafka",
+ "readonly",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,6 +91,7 @@ dependencies = [
  "non_empty",
  "prompt",
  "regex",
+ "rig-agent",
  "rig-core",
  "schemars 1.2.1",
  "serde",
@@ -288,10 +313,12 @@ dependencies = [
  "models_soup",
  "non_empty",
  "notification",
+ "projects",
  "prompt",
  "properties",
  "rand 0.9.4",
  "readonly_pool",
+ "reminders",
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
@@ -300,6 +327,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "skills",
  "soup",
  "sqlx",
  "sqs_client",
@@ -667,6 +695,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert-json-diff"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -762,7 +800,7 @@ dependencies = [
  "Inflector",
  "async-graphql-parser",
  "darling 0.23.0",
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "strum 0.27.2",
@@ -2444,7 +2482,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2518,21 +2556,25 @@ dependencies = [
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-sqs",
  "axum",
  "chrono",
  "futures",
- "icalendar",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
  "models_pagination",
+ "notification",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -2544,6 +2586,7 @@ dependencies = [
 name = "call"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "ai_usage",
@@ -2738,6 +2781,8 @@ dependencies = [
  "macro_user_id",
  "models_pagination",
  "prompt",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",
@@ -2762,6 +2807,7 @@ dependencies = [
 name = "channels"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -2829,6 +2875,7 @@ dependencies = [
 name = "chat"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "ai_toolset",
  "anyhow",
@@ -2934,7 +2981,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.1",
+ "strsim",
 ]
 
 [[package]]
@@ -3045,13 +3092,16 @@ dependencies = [
 name = "complete_graph"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "chrono",
  "email",
  "entity_access",
  "entity_mutation",
+ "graphql_activity",
  "graphql_channel",
  "graphql_common",
  "graphql_email",
@@ -3064,10 +3114,12 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model-entity",
+ "model_notifications",
  "model_user",
  "models_pagination",
  "models_properties",
  "models_soup",
+ "notification",
  "rootcause",
  "serde",
  "soup",
@@ -3838,7 +3890,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.11.1",
+ "strsim",
  "syn 2.0.117",
 ]
 
@@ -3852,7 +3904,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.11.1",
+ "strsim",
  "syn 2.0.117",
 ]
 
@@ -3865,7 +3917,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.11.1",
+ "strsim",
  "syn 2.0.117",
 ]
 
@@ -3963,6 +4015,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadpool"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0be2b1d1d6ec8d846f05e137292d0b89133caf95ef33695424c09568bdd39b1b"
+dependencies = [
+ "deadpool-runtime",
+ "lazy_static",
+ "num_cpus",
+ "tokio",
+]
+
+[[package]]
+name = "deadpool-runtime"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
+
+[[package]]
 name = "debug-ignore"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4046,47 +4116,6 @@ dependencies = [
  "tracing",
  "urlencoding",
  "workspace-hack",
-]
-
-[[package]]
-name = "deluxe"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed332aaf752b459088acf3dd4eca323e3ef4b83c70a84ca48fb0ec5305f1488"
-dependencies = [
- "deluxe-core",
- "deluxe-macros",
- "once_cell",
- "proc-macro2",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "deluxe-core"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eddada51c8576df9d6a8450c351ff63042b092c9458b8ac7d20f89cbd0ffd313"
-dependencies = [
- "arrayvec 0.7.6",
- "proc-macro2",
- "quote",
- "strsim 0.10.0",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "deluxe-macros"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f87546d9c837f0b7557e47b8bd6eae52c3c223141b76aa233c345c9ab41d9117"
-dependencies = [
- "deluxe-core",
- "heck 0.4.1",
- "if_chain",
- "proc-macro-crate 1.3.1",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -4372,6 +4401,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
@@ -4406,6 +4436,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_tools",
  "ai_usage",
  "analytics_client",
@@ -4504,6 +4535,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
+ "reminders",
  "reqwest 0.13.4",
  "rootcause",
  "s3_key",
@@ -4626,6 +4658,7 @@ dependencies = [
 name = "documents"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -4684,6 +4717,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
  "tokio",
@@ -4926,6 +4960,7 @@ dependencies = [
 name = "email"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4992,6 +5027,33 @@ name = "email_address"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
+
+[[package]]
+name = "email_api_client"
+version = "0.1.0"
+dependencies = [
+ "ammonia",
+ "base64 0.22.1",
+ "chrono",
+ "encoding_rs",
+ "gmail_client",
+ "html-escape",
+ "http 1.4.0",
+ "lol_html",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "regex",
+ "scraper",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
 
 [[package]]
 name = "email_db_client"
@@ -5108,6 +5170,7 @@ dependencies = [
  "doppler-config",
  "ego-tree",
  "email",
+ "email_api_client",
  "email_db_client",
  "email_utils",
  "entity_access",
@@ -5128,6 +5191,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5137,7 +5201,6 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
- "mailparse",
  "mime_guess",
  "model",
  "model-entity",
@@ -5803,6 +5866,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "jsonwebtoken 10.3.0",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -5811,6 +5875,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -5952,6 +6017,10 @@ name = "futures-timer"
 version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af43fadb8a98512d547e37b4e92e0ced13e205c061b87b4623eff01d918d6968"
+dependencies = [
+ "gloo-timers",
+ "send_wrapper",
+]
 
 [[package]]
 name = "futures-util"
@@ -6215,18 +6284,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
+name = "gloo-timers"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "482ce8a491a501da4cd806bd190275363d674f2845005c6ddbd5d3e1dd54495d"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "gmail_client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "base64 0.22.1",
- "chrono",
+ "httpdate",
  "jsonwebtoken 10.3.0",
- "mail-builder",
- "mockall",
  "models_email",
  "regex",
  "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_activity"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "async-graphql",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "macro_user_id",
+ "model-entity",
+ "models_pagination",
  "serde",
  "serde_json",
  "tokio",
@@ -6280,7 +6378,9 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "graphql_common",
  "macro_user_id",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",
@@ -6323,14 +6423,19 @@ name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "async-stream",
  "chrono",
+ "futures",
  "graphql_common",
  "macro_user_id",
  "model-entity",
+ "model_notifications",
  "notification",
  "rootcause",
  "serde_json",
  "tokio",
+ "tokio-stream",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -7174,22 +7279,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "icalendar"
-version = "0.17.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3478c3b7a2411366daf20457373174bff6cfbc1089333038b1f95594d23d985"
-dependencies = [
- "chrono",
- "chrono-tz",
- "iso8601",
- "nom 8.0.0",
- "nom-language",
- "rrule",
- "thiserror 2.0.18",
- "uuid",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7331,12 +7420,6 @@ dependencies = [
  "icu_normalizer",
  "icu_properties",
 ]
-
-[[package]]
-name = "if_chain"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd62e6b5e86ea8eeeb8db1de02880a6abc01a397b2ebb64b5d74ac255318f5cb"
 
 [[package]]
 name = "im"
@@ -7688,15 +7771,6 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
-
-[[package]]
-name = "iso8601"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84d00640a3a46595e984f1b124b21d56506a5844dc799f831dde9b05cb2f6c51"
-dependencies = [
- "nom 8.0.0",
-]
 
 [[package]]
 name = "item_filters"
@@ -9141,6 +9215,7 @@ dependencies = [
  "prompt",
  "readonly_pool",
  "redis",
+ "reminders",
  "rmcp",
  "search_service_client",
  "secretsmanager_client",
@@ -9220,6 +9295,7 @@ dependencies = [
  "macro_uuid",
  "notification",
  "readonly_pool",
+ "reminders",
  "search_service_client",
  "serde",
  "serde_json",
@@ -9469,6 +9545,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "invite_email",
  "macro_user_id",
  "mention_utils",
@@ -9685,6 +9762,7 @@ dependencies = [
  "model-entity",
  "models_pagination",
  "models_properties",
+ "reminders",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -9783,15 +9861,6 @@ dependencies = [
  "tracing",
  "uuid",
  "workspace-hack",
-]
-
-[[package]]
-name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.6",
 ]
 
 [[package]]
@@ -9915,15 +9984,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nom-language"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
-dependencies = [
- "nom 8.0.0",
-]
-
-[[package]]
 name = "non_empty"
 version = "0.1.0"
 dependencies = [
@@ -9956,6 +10016,7 @@ dependencies = [
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
+ "broadcast",
  "chrono",
  "cowlike",
  "either",
@@ -9964,18 +10025,23 @@ dependencies = [
  "hmac 0.12.1",
  "http-body-util",
  "itertools 0.14.0",
+ "kafka_util",
  "last_online_tracker",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
  "models_pagination",
  "rate_limit",
+ "rdkafka",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -9987,6 +10053,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tracing",
  "url",
@@ -10072,6 +10139,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -10242,6 +10310,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_cpus"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+dependencies = [
+ "hermit-abi",
+ "libc",
+]
+
+[[package]]
 name = "num_enum"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10257,7 +10335,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -11401,16 +11479,6 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-crate"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
-dependencies = [
- "once_cell",
- "toml_edit 0.19.15",
-]
-
-[[package]]
-name = "proc-macro-crate"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
@@ -11484,8 +11552,11 @@ dependencies = [
 name = "projects"
 version = "0.1.0"
 dependencies = [
+ "activity",
+ "ai_toolset",
  "anyhow",
  "async-recursion",
+ "async-trait",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
@@ -11523,6 +11594,7 @@ dependencies = [
  "rdkafka",
  "rootcause",
  "s3_key",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -11550,6 +11622,7 @@ dependencies = [
 name = "properties"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -12064,6 +12137,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67a77cd6f1a55ff3cb1969c2618f73107efaa6de1daf796ad60ce8f737ae97c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "readonly_pool"
 version = "0.1.0"
 dependencies = [
@@ -12219,6 +12303,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
+name = "reminders"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "entity_access",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "model_notifications",
+ "model_user",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "remote_env_var"
 version = "0.1.0"
 dependencies = [
@@ -12339,9 +12457,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
+name = "rig-agent"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b0796bbf47d7b76670401aac975bc619cf7fba3482b22dfe14992edaa9c2e04"
+dependencies = [
+ "async-stream",
+ "fastrand 2.4.1",
+ "futures",
+ "http 1.4.0",
+ "indexmap 2.14.0",
+ "rig-core",
+ "rig-derive",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
 name = "rig-core"
-version = "0.38.2"
-source = "git+https://github.com/macro-inc/rig?branch=feat%2Fresponses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35f5520515ae8f6851adcbc6fde9eea8e96f657418c062e16c82cd81cce44e8e"
 dependencies = [
  "as-any",
  "async-stream",
@@ -12353,9 +12494,9 @@ dependencies = [
  "futures-timer",
  "glob",
  "http 1.4.0",
+ "indexmap 2.14.0",
  "mime",
  "mime_guess",
- "nanoid",
  "ordered-float",
  "pin-project-lite",
  "reqwest 0.13.4",
@@ -12373,16 +12514,14 @@ dependencies = [
 
 [[package]]
 name = "rig-derive"
-version = "0.38.2"
-source = "git+https://github.com/macro-inc/rig?branch=feat%2Fresponses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb868fcebdf3ba425e3afad2e4926bb6d9e1188a856843b00bcee2e15c07424f"
 dependencies = [
  "convert_case 0.11.0",
- "deluxe",
- "indoc",
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
- "serde_json",
  "syn 2.0.117",
 ]
 
@@ -12505,19 +12644,6 @@ dependencies = [
  "hashbrown 0.14.5",
  "rustc-hash 1.1.0",
  "text-size",
-]
-
-[[package]]
-name = "rrule"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
-dependencies = [
- "chrono",
- "chrono-tz",
- "log",
- "regex",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -13278,6 +13404,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "send_wrapper"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
+
+[[package]]
 name = "serde"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13791,6 +13923,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cowlike",
+ "document_sub_type",
+ "email",
+ "filter_ast",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_search",
+ "models_soup",
+ "schemars 1.2.1",
+ "search_service_client",
+ "serde",
+ "soup",
+ "system_skills",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13910,6 +14071,7 @@ dependencies = [
  "properties",
  "readonly_pool",
  "recursion",
+ "reminders",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -14408,12 +14570,6 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
@@ -14482,6 +14638,17 @@ name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -14598,6 +14765,15 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_skills"
+version = "0.1.0"
+dependencies = [
+ "prompt",
  "uuid",
  "workspace-hack",
 ]
@@ -15049,17 +15225,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.19.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
-dependencies = [
- "indexmap 2.14.0",
- "toml_datetime 0.6.11",
- "winnow 0.5.40",
 ]
 
 [[package]]
@@ -16548,15 +16713,6 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.5.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "winnow"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
@@ -16571,6 +16727,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "wiremock"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08db1edfb05d9b3c1542e521aea074442088292f00b5f28e435c714a98f85031"
+dependencies = [
+ "assert-json-diff",
+ "base64 0.22.1",
+ "deadpool",
+ "futures",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.9.0",
+ "hyper-util",
+ "log",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -16789,7 +16968,6 @@ dependencies = [
  "bzip2-sys",
  "cc",
  "chrono",
- "chrono-tz",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint",
@@ -16846,6 +17024,7 @@ dependencies = [
  "percent-encoding",
  "phf 0.13.1",
  "phf_shared 0.10.0",
+ "phf_shared 0.11.3",
  "phf_shared 0.13.1",
  "prettyplease",
  "proc-macro2",
@@ -16854,11 +17033,12 @@ dependencies = [
  "rand 0.10.1",
  "rand 0.8.6",
  "rand 0.9.4",
+ "rand_core 0.6.4",
  "redis",
- "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",
+ "rig-agent",
  "rig-core",
  "rmcp",
  "rsa",

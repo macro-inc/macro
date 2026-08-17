@@ -21,11 +21,11 @@ import {
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
+  getDisplayName,
   tryMacroId,
-  useDisplayName,
   type WithCustomUserInput,
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
@@ -69,10 +69,9 @@ export function ChannelCompose() {
     return undefined;
   });
 
-  const dmUserName = createMemo<() => string | undefined>(() => {
+  const dmUserName = createMemo(() => {
     const id = dmUserId();
-    if (!id) return () => undefined;
-    return useDisplayName(tryMacroId(id))[0];
+    return id ? getDisplayName(tryMacroId(id)) : undefined;
   });
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
@@ -82,14 +81,14 @@ export function ChannelCompose() {
     if (recipients.length === 0) {
       return 'Draft message';
     } else if (recipients.length === 1) {
-      const dmName = dmUserName()();
+      const dmName = dmUserName();
       return dmName ? `DM with ${dmName}` : 'Draft message';
     } else {
       const names = recipients
         .slice(0, 2)
         .map((r) => {
           if (r.kind === 'user') {
-            return useDisplayName(tryMacroId(r.data.id))[0]();
+            return getDisplayName(tryMacroId(r.data.id));
           }
           return r.data.email || 'Unknown';
         })
@@ -186,7 +185,7 @@ export function ChannelCompose() {
     onMentionRemove: (mention) => mentionsTracker.onMentionRemove(mention),
     onChange: (markdown) => inputState.setValue(markdown),
     onEnter: () => {
-      if (isMobile()) return false;
+      if (isTouchDevice()) return false;
       void inputState.commands.send();
       return true;
     },
@@ -219,14 +218,14 @@ export function ChannelCompose() {
         <div class="h-full items-center flex" p-1></div>
       </SplitToolbarLeft>
       <div class="relative flex flex-col size-full panel">
-        <div class="pt-2 mobile:pt-[calc(var(--mobile-content-inset-top)+.5rem)] size-full grow overflow-y-auto @min-[40rem]:px-4">
+        <div class="pt-2 touch:pt-[calc(var(--mobile-content-inset-top)+.5rem)] size-full grow overflow-y-auto @min-[40rem]:px-4">
           <div class="macro-message-width macro-message-padding mx-auto pb-1 h-full">
             <input
               type="text"
               value={channelName()}
               disabled={selectedRecipients().length < 2}
               placeholder={previewName()}
-              class="text-xl font-medium mb-6 mt-12 mobile:mt-0 bg-transparent border-none outline-none w-full resize-none appearance-none focus:ring-0"
+              class="text-xl font-medium mb-6 mt-12 touch:mt-0 bg-transparent border-none outline-none w-full resize-none appearance-none focus:ring-0"
               style="box-shadow: none;"
               onInput={(e) => {
                 if (selectedRecipients().length >= 2) {
@@ -241,6 +240,7 @@ export function ChannelCompose() {
               placeholder="To: Macro users or email addresses"
               triedToSubmit={triedToSubmit}
               focusOnMount
+              hideMenuOnEscape
             />
             <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
               <InfoIcon class="shrink-0 size-8 mr-4 fill-edge" />
@@ -257,7 +257,7 @@ export function ChannelCompose() {
             region above the dock; desktop renders them inline as before. */}
         <FloatRegionOrInline region="accessory">
           <Show when={error()}>
-            <div class="shrink-0 w-full @min-[40rem]:px-4 mobile:px-(--mobile-chrome-gutter)">
+            <div class="shrink-0 w-full @min-[40rem]:px-4 touch:px-(--mobile-chrome-gutter)">
               <div class="mx-auto w-full macro-message-width macro-message-padding">
                 <div class="text-sm font-mono text-failure-ink">{error()}</div>
               </div>
@@ -265,7 +265,7 @@ export function ChannelCompose() {
           </Show>
           {/* ChannelInputContainer owns the mobile chrome gutter, so drop the
               desktop px-2 there. */}
-          <div class="px-2 mobile:px-0">
+          <div class="px-2 touch:px-0">
             <ChannelInputContainer>
               <Input.Root
                 input={inputState.view()}
@@ -273,7 +273,7 @@ export function ChannelCompose() {
               >
                 <Surface
                   depth={2}
-                  class="rounded-xl mobile:rounded-3xl ring ring-edge"
+                  class="rounded-xl touch:rounded-3xl ring ring-edge"
                   style={{ border: '0' }}
                 >
                   <Input.DropZone
@@ -296,7 +296,7 @@ export function ChannelCompose() {
                       <Input.EditorShell
                         ref={setScrollContainer}
                         onClick={(event) => {
-                          if (!isMobile()) {
+                          if (!isTouchDevice()) {
                             event.stopPropagation();
                             markdownEditor.controls.focus();
                           }

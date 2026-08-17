@@ -16,6 +16,9 @@ pub mod permission_service;
 pub mod properties_pg_repo;
 pub mod property_definition_queries;
 pub mod property_option_queries;
+pub mod tag_promotion_queries;
+#[cfg(test)]
+mod tag_promotion_test;
 pub mod task_property_queries;
 #[cfg(test)]
 pub mod test;

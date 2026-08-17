@@ -15,11 +15,14 @@ mod entity_mutation;
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EnrichedEmailThreadPreview,
-        GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread, Thread,
-        UpdateThreadLabelsResult, UpsertEmailFilterInput,
+        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMetadata,
+        EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread,
+        Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
-    ports::{EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService},
+    ports::{
+        EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
+        EmailThreadMetadataService,
+    },
 };
 use crm::domain::service::CrmService;
 use entity_access::domain::models::{
@@ -295,6 +298,25 @@ where
             .await
     }
 
+    async fn mark_thread_seen(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.mark_thread_seen_impl(macro_id, thread_id).await
+    }
+
+    async fn update_thread_labels_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        label_id: Uuid,
+        add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        self.update_thread_labels_for_user_impl(macro_id, thread_id, label_id, add)
+            .await
+    }
+
     async fn update_thread_project(
         &self,
         thread_receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -445,13 +467,32 @@ where
     }
 }
 
-impl<T, U, E, CS, Eam> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam>
+impl<T, U, E, CS, Eam, B> EmailThreadMetadataService for EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: CrmService,
     Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
+    anyhow::Error: From<T::Err>,
+{
+    async fn get_email_thread_metadata(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        self.get_email_thread_metadata_impl(receipts).await
+    }
+}
+
+impl<T, U, E, CS, Eam, B> EmailContentService for EmailServiceImpl<T, U, E, CS, Eam, B>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
+    CS: CrmService,
+    Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
     anyhow::Error: From<T::Err>,
 {
     async fn get_latest_messages_parsed(
@@ -461,6 +502,13 @@ where
         self.get_latest_messages_parsed_impl(receipts).await
     }
 
+    async fn get_latest_messages_full(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, crate::domain::models::Message>, EmailErr> {
+        self.get_latest_messages_full_impl(receipts).await
+    }
+
     async fn get_messages_parsed(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -468,6 +516,17 @@ where
         limit: i64,
     ) -> Result<Option<Vec<ParsedMessage>>, EmailErr> {
         self.get_thread_parsed_impl(receipt, offset, limit)
+            .await
+            .map(|thread| thread.map(|thread| thread.messages))
+    }
+
+    async fn get_messages_full(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Option<Vec<crate::domain::models::Message>>, EmailErr> {
+        self.get_thread_with_messages_impl(receipt, offset, limit)
             .await
             .map(|thread| thread.map(|thread| thread.messages))
     }

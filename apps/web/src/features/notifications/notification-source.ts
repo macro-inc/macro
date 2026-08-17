@@ -3,6 +3,7 @@ import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   optimisticInsertNotification,
+  type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
   useUserNotificationsQuery,
@@ -10,14 +11,11 @@ import {
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type {
-  ConnGatewayInnerNotifValue,
+  ConnGatewayNotificationPayload,
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
-import type {
-  UseInfiniteQueryResult,
-  UseQueryResult,
-} from '@tanstack/solid-query';
+import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
   createEffect,
@@ -59,10 +57,7 @@ export type NotificationSource = {
   readonly mutedEntities: Accessor<UserUnsubscribe[]>;
   readonly isLoading: Accessor<boolean>;
 
-  readonly _notificationsQuery: UseInfiniteQueryResult<
-    UnifiedNotification[],
-    Error
-  >;
+  readonly _notificationsQuery: UserNotificationsQuery;
 
   readonly _mutedEntitiesQuery: UseQueryResult<UserUnsubscribe[], Error>;
 
@@ -146,7 +141,9 @@ export function createNotificationSource(
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
-  const notificationsQuery = useUserNotificationsQuery({ limit: QUERY_LIMIT });
+  const notificationsQuery = useUserNotificationsQuery(() => ({
+    limit: QUERY_LIMIT,
+  }));
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
 
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
@@ -259,7 +256,7 @@ export function createNotificationSource(
   }
 
   const mapWebsocketNotification = (
-    raw: ConnGatewayInnerNotifValue
+    raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
     return {
       ...raw,
@@ -274,7 +271,7 @@ export function createNotificationSource(
     }
     let parsedNotification: UnifiedNotification;
     try {
-      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
       const unsafeMapped = mapWebsocketNotification(raw);
       const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
       if (!parseResult.success) {
@@ -295,7 +292,9 @@ export function createNotificationSource(
 
     subscriptions.forEach((subscribe) => subscribe(parsedNotification));
 
-    optimisticInsertNotification(parsedNotification);
+    if (notificationsQuery.transport === 'rest') {
+      optimisticInsertNotification(parsedNotification);
+    }
   });
 
   // Skip empty batches: entity-level read markers fire on mount regardless

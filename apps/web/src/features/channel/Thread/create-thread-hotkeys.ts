@@ -173,7 +173,10 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
         isThreadFocused: options.isThreadFocused(),
         isEditing: options.isEditing(),
       }),
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // Saving an inline edit returns focus to the thread before Enter is
+      // released. Consume browser key-repeat events without opening a reply.
+      if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
       actions?.onReply?.({ message: parentMsg });

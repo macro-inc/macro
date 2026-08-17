@@ -1,74 +1,22 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
-import CloseIcon from '@phosphor/x.svg';
-import { Button, Calendar as MiniCalendar } from '@ui';
+import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
 import { CalendarControls } from './events/CalendarControls';
-import { EventDetails } from './events/EventDetails';
-import { useFullCalendar } from './fullcalendar-solid';
-
-function CalendarEventSidePanelSection() {
-  const calendarView = useCalendarView();
-  const sidePanel = useSidePanel();
-
-  createEffect(
-    on(
-      () => [calendarView.selectedEvent()?.id, sidePanel?.isNarrow()] as const,
-      ([eventId, isNarrow]) => {
-        if (!eventId || !sidePanel || isNarrow) return;
-
-        sidePanel.setIsOpen(true);
-        if (!sidePanel.openSectionIds().includes('calendar-event')) {
-          sidePanel.setOpenSectionIds([
-            ...sidePanel.openSectionIds(),
-            'calendar-event',
-          ]);
-        }
-      }
-    )
-  );
-
-  return (
-    <Show when={calendarView.selectedEvent()}>
-      {(event) => (
-        <SidePanel.Section
-          id="calendar-event"
-          title="Event"
-          order={0}
-          defaultOpen
-          actions={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Close event details"
-              onClick={calendarView.closeEventDetails}
-            >
-              <CloseIcon class="size-3.5" />
-            </Button>
-          }
-        >
-          <EventDetails
-            event={event()}
-            timeFormat={calendarView.displaySettings.timeFormat}
-          />
-        </SidePanel.Section>
-      )}
-    </Show>
-  );
-}
 
 function CalendarMiniCalendarSidePanelSection() {
   const calendarView = useCalendarView();
-  const calendar = useFullCalendar();
+  const calendarPager = useCalendarPager();
   const initialDate = new Date();
   const [focusedDay, setFocusedDay] = createSignal(initialDate);
 
   const currentDate = createMemo(
-    () => calendar.dateInfo()?.view.calendar.getDate() ?? initialDate
+    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
   const highlightedRange = createMemo(() => {
-    const dateInfo = calendar.dateInfo();
+    const dateInfo = calendarPager.activeDateInfo();
     return dateInfo?.view.type === 'timeGridWeek'
       ? { end: dateInfo.end, start: dateInfo.start }
       : undefined;
@@ -77,7 +25,7 @@ function CalendarMiniCalendarSidePanelSection() {
   const selectDate = (date: Date | null) => {
     if (!date) return;
     setFocusedDay(date);
-    calendar.api()?.gotoDate(date);
+    calendarPager.gotoDate(date);
   };
 
   const navigateMonth = (month: Date) => {
@@ -88,7 +36,7 @@ function CalendarMiniCalendarSidePanelSection() {
         ? focused
         : month;
     setFocusedDay(targetDate);
-    calendar.api()?.gotoDate(targetDate);
+    calendarPager.gotoDate(targetDate);
   };
 
   createEffect(on(currentDate, setFocusedDay));
@@ -120,18 +68,20 @@ function CalendarSourcesSidePanelSection() {
   const calendarView = useCalendarView();
 
   return (
-    <SidePanel.Section
-      id="calendar-controls"
-      title="Calendars"
-      order={20}
-      defaultOpen
-    >
-      <CalendarControls
-        sources={calendarView.sources()}
-        isVisible={calendarView.isSourceVisible}
-        onVisibilityChange={calendarView.setSourceVisibility}
-      />
-    </SidePanel.Section>
+    <Show when={calendarView.sources().length > 1}>
+      <SidePanel.Section
+        id="calendar-controls"
+        title="Calendars"
+        order={20}
+        defaultOpen
+      >
+        <CalendarControls
+          sources={calendarView.sources()}
+          isVisible={calendarView.isSourceVisible}
+          onVisibilityChange={calendarView.setSourceVisibility}
+        />
+      </SidePanel.Section>
+    </Show>
   );
 }
 
@@ -141,7 +91,6 @@ export function CalendarSidePanelSections() {
 
   return (
     <Show when={!sidePanel?.isNarrow()}>
-      <CalendarEventSidePanelSection />
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
     </Show>

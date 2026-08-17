@@ -92,7 +92,15 @@ const getEntityRenameData = (
 ): EntityRenameData | null => {
   const { entity, newName } = operation;
   // crm companies/contacts aren't renamable and have no storage item type.
-  if (entity.type === 'crm_company' || entity.type === 'crm_contact') {
+  // Reminders aren't either — the entity-mutation router rejects them, and a
+  // reminder's name is its description, edited through the reminders API.
+  // Calendar event titles are edited through the calendar mutation API.
+  if (
+    entity.type === 'crm_company' ||
+    entity.type === 'crm_contact' ||
+    entity.type === 'reminder' ||
+    entity.type === 'calendar_event'
+  ) {
     return null;
   }
   return {

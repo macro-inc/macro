@@ -104,7 +104,7 @@ async fn it_writes_session_code_to_db() {
     let mut dummy = DummyCb::default();
     let res = get_redirect_url(
         &Some(SsoState {
-            original_url: Some("https://example.com".parse().unwrap()),
+            original_url: Some("https://macro.com".parse().unwrap()),
             is_mobile: true,
             referral_code: None,
         }),
@@ -113,7 +113,7 @@ async fn it_writes_session_code_to_db() {
     .await
     .unwrap();
     assert_eq!(dummy.called, 1);
-    assert_eq!(res.domain(), Some("example.com"));
+    assert_eq!(res.domain(), Some("macro.com"));
     assert_eq!(res.scheme(), "https");
     let query = res.query_pairs();
     let p = query.collect::<Vec<_>>();
@@ -122,6 +122,39 @@ async fn it_writes_session_code_to_db() {
             .find(|e| e.0 == "token" && !e.1.is_empty())
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn it_rejects_disallowed_original_url_without_side_effects() {
+    let mut dummy = DummyCb::default();
+    let res = get_redirect_url(
+        &Some(SsoState {
+            original_url: Some("https://evil.example.com/phish".parse().unwrap()),
+            is_mobile: true,
+            referral_code: None,
+        }),
+        async |x| dummy.cb(x).await,
+    )
+    .await;
+    assert_eq!(dummy.called, 0, "must not mint a session code");
+    assert_matches!(res, Err(InnerErr::DisallowedOriginalUrl));
+}
+
+#[tokio::test]
+async fn it_allows_macro_scheme_original_url() {
+    let mut dummy = DummyCb::default();
+    let res = get_redirect_url(
+        &Some(SsoState {
+            original_url: Some("macro://login".parse().unwrap()),
+            is_mobile: false,
+            referral_code: None,
+        }),
+        async |x| dummy.cb(x).await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(dummy.called, 0);
+    assert_eq!(res.as_str(), "macro://login");
 }
 
 #[tokio::test]

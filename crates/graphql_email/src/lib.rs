@@ -3,15 +3,25 @@
 #![deny(missing_docs)]
 
 mod loaders;
+mod mutation;
 mod objects;
 mod user_objects;
 mod user_query;
 
 pub use loaders::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailServiceEmailContentReader,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, email_content_loader,
+    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
+    EmailServiceEmailContentReader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
+    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    SoupEmailThreadMetadataEdgeReader, email_content_loader, email_thread_metadata_loader,
 };
-pub use objects::{GraphqlSoupEmailMessage, load_email_messages, load_latest_email_message};
+pub use mutation::{
+    EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
+    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
+};
+pub use objects::{
+    GraphqlSoupEmailMessage, email_message_selection_requires_full_payload, load_email_messages,
+    load_email_thread_metadata, load_latest_email_message,
+};
 pub use user_objects::{
     GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailProvider,
     GraphqlEmailSyncStatus,

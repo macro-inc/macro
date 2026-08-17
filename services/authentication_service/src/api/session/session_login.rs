@@ -46,7 +46,11 @@ pub async fn handler(
         .get_mobile_login_session(&session_code)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "failed to get mobile login session");
+            tracing::error!(
+                auth_handoff_failure = "session_code_lookup_failed",
+                error=?e,
+                "failed to get mobile login session"
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -57,6 +61,10 @@ pub async fn handler(
         })?;
 
     if refresh_token.is_none() {
+        tracing::warn!(
+            auth_handoff_failure = "session_code_invalid",
+            "mobile session code not found or expired"
+        );
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
@@ -72,7 +80,11 @@ pub async fn handler(
         .refresh_token("", &refresh_token)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "unable to refresh token");
+            tracing::error!(
+                auth_handoff_failure = "session_refresh_failed",
+                error=?e,
+                "unable to refresh token"
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

@@ -8,6 +8,7 @@ pub mod device;
 mod egress;
 mod ingress;
 mod push_notification_event;
+mod realtime;
 #[cfg(test)]
 mod test;
 mod voip;
@@ -23,6 +24,7 @@ pub use ingress::PlatformArnConfig;
 pub use ingress::SqsNotificationIngress;
 pub use push_notification_event::PushNotificationEventHandler;
 pub use push_notification_event::PushNotificationEventService;
+pub use realtime::WebSocketNotificationConsumerService;
 pub use voip::VoipPushServiceImpl;
 
 /// Error returned when sending a notification fails.

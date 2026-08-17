@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT time_zone, default_reminders FROM calendars WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "default_reminders",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "f9c9dddae0d73891642bf62285230aae7bb0b9475c5b9af3e4d1bc75a11f0852"
+}

@@ -12,7 +12,7 @@
 	);
 	--fc-event-border-color: var(--color-calendar);
 	--fc-event-text-color: var(--color-calendar);
-	--fc-highlight-color: var(--color-accent-bg);
+	--fc-highlight-color: transparent;
 	--fc-today-bg-color: transparent;
 	--fc-now-indicator-color: var(--color-accent);
 }
@@ -29,7 +29,6 @@
 }
 
 .calendar-view .fc .fc-view-harness {
-	border-radius: 0.75rem;
 	overflow: hidden;
 }
 
@@ -104,17 +103,40 @@
 	padding: 0.5rem 0.625rem;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number {
+.calendar-view .fc .fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number,
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.calendar-day-selected
+	.fc-daygrid-day-number {
+	position: relative;
+	z-index: 0;
 	display: inline-flex;
-	width: 1.25rem;
-	height: 1.25rem;
 	align-items: center;
 	justify-content: center;
-	margin: 0.25rem;
-	padding: 0;
+	font-weight: 600;
+}
+
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.fc-day-today
+	.fc-daygrid-day-number::before,
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.calendar-day-selected
+	.fc-daygrid-day-number::before {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	z-index: -1;
+	width: 1.25rem;
+	height: 1.25rem;
 	border: 1px solid var(--color-accent);
 	border-radius: 0.375rem;
-	font-weight: 600;
+	content: "";
+	transform: translate(-50%, -50%);
 }
 
 .calendar-view
@@ -122,18 +144,15 @@
 	.fc-dayGridMonth-view
 	.calendar-day-selected
 	.fc-daygrid-day-number {
-	display: inline-flex;
-	width: 1.25rem;
-	height: 1.25rem;
-	align-items: center;
-	justify-content: center;
-	margin: 0.25rem;
-	padding: 0;
-	border: 1px solid var(--color-accent);
-	border-radius: 0.375rem;
-	background: var(--color-accent);
 	color: var(--color-surface);
-	font-weight: 600;
+}
+
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.calendar-day-selected
+	.fc-daygrid-day-number::before {
+	background: var(--color-accent);
 }
 
 .calendar-view
@@ -174,12 +193,9 @@
 	color: var(--color-ink-disabled);
 }
 
-.calendar-view .fc-direction-ltr .fc-daygrid-event {
-	margin-right: 0.25rem;
-}
-
-.calendar-view .fc-direction-rtl .fc-daygrid-event {
-	margin-left: 0.25rem;
+.calendar-view .fc .fc-daygrid-event {
+	margin-right: 0.375rem;
+	margin-left: 0.375rem;
 }
 
 .calendar-view .fc-direction-ltr .fc-h-event:not(.fc-event-end) {
@@ -194,12 +210,254 @@
 	border-bottom-left-radius: 0.375rem;
 }
 
-.calendar-view .fc-direction-ltr .fc-timegrid-col-events {
-	margin-right: 0.25rem;
+.calendar-view .fc .fc-timegrid-col-events {
+	margin-right: 0.375rem;
+	margin-left: 0.375rem;
 }
 
-.calendar-view .fc-direction-rtl .fc-timegrid-col-events {
-	margin-left: 0.25rem;
+.calendar-view .fc .fc-event {
+	--fc-event-bg-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 5%,
+		var(--color-surface)
+	);
+	--fc-event-border-color: var(
+		--event-calendar-color,
+		var(--color-calendar)
+	);
+	--fc-event-text-color: var(
+		--event-calendar-color,
+		var(--color-calendar)
+	);
+	border-color: var(--fc-event-border-color);
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
+	transition:
+		box-shadow 120ms ease-out,
+		opacity 120ms ease-out;
+}
+
+.calendar-view .fc .fc-event.fc-event-draggable {
+	cursor: grab;
+}
+
+.calendar-view .fc .fc-event.fc-event-dragging {
+	cursor: grabbing;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content-selected)
+	.fc-event-resizer {
+	display: block;
+}
+
+.calendar-view .fc .fc-event-resizer::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	border-radius: 9999px;
+	background: var(--fc-event-border-color);
+	box-shadow: 0 0 0 1px var(--color-surface);
+	content: "";
+	transform: translate(-50%, -50%);
+}
+
+.calendar-view .fc .fc-h-event .fc-event-resizer::after {
+	width: 2px;
+	height: 0.625rem;
+}
+
+.calendar-view .fc .fc-v-event .fc-event-resizer::after {
+	width: 1rem;
+	height: 2px;
+}
+
+.calendar-view .fc .fc-event-mirror,
+.calendar-view .fc .fc-highlight,
+.calendar-view .fc .calendar-multi-day-selection-preview-event {
+	border: 1px solid var(--calendar-selection-color, var(--color-accent));
+	border-radius: 0.375rem;
+	background: var(--calendar-selection-color, var(--color-accent));
+	box-shadow: none;
+}
+
+.calendar-view .fc .calendar-multi-day-selection-preview-event {
+	color: var(--calendar-selection-color, var(--color-accent));
+	pointer-events: none;
+}
+
+.calendar-view .fc .fc-highlight {
+	inset: 2px;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-highlight {
+	top: 1.5rem;
+	right: 0.375rem;
+	bottom: auto;
+	left: 0.375rem;
+	height: 1rem;
+}
+
+/* Timed selections already render an event mirror; hide its backing fill. */
+.calendar-view .fc .fc-timegrid-col-bg .fc-highlight {
+	inset: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.calendar-view .fc .fc-event-mirror {
+	color: var(--calendar-selection-color, var(--color-accent));
+}
+
+.calendar-view .fc .fc-event-mirror .fc-event-main,
+.calendar-view .fc .calendar-multi-day-selection-preview-event .fc-event-main {
+	color: inherit;
+}
+
+/* Drag and resize mirrors use a filled accent background. */
+.calendar-view .fc .fc-event-mirror .calendar-event-content {
+	color: var(--color-surface);
+}
+
+.calendar-view .fc .fc-event-mirror .calendar-event-selection-preview,
+.calendar-view
+	.fc
+	.calendar-multi-day-selection-preview-event
+	.calendar-event-selection-preview {
+	filter: invert(1) grayscale(1) contrast(100);
+}
+
+.calendar-view .fc .fc-timegrid-event .fc-event-main {
+	padding: 0;
+}
+
+.calendar-view .fc .fc-event .calendar-event-content {
+	container-type: inline-size;
+	border-radius: inherit;
+	transition: background-color 120ms ease-out;
+}
+
+.calendar-view .fc .fc-timegrid-event .calendar-event-content {
+	container-type: size;
+}
+
+.calendar-view .fc .calendar-event-content-compact {
+	font-size: clamp(0.625rem, 7cqi, 0.6875rem);
+}
+
+.calendar-view .fc .calendar-event-title {
+	font-size: clamp(0.625rem, min(6cqi, 20cqh), 0.75rem);
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-compact
+	.calendar-event-title {
+	font-size: inherit;
+}
+
+.calendar-view .fc .calendar-event-metadata {
+	font-size: clamp(0.5625rem, min(5cqi, 18cqh), 0.6875rem);
+}
+
+.calendar-view .fc .calendar-event-time {
+	font-size: 0.6875rem;
+}
+
+.calendar-view .fc .calendar-event-content-layout {
+	padding: 1px 3px;
+}
+
+.calendar-view .fc .calendar-event-content-layout-single-line {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 1px 3px;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-layout-single-line
+	.calendar-event-time {
+	margin-top: 0;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-layout-single-line
+	.calendar-event-location {
+	display: none;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
+	--fc-event-bg-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 2%,
+		var(--color-surface)
+	);
+	border-style: dashed;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="declined"]) {
+	opacity: 0.5;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="declined"]
+	.calendar-event-title {
+	text-decoration: line-through;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
+	--fc-event-bg-color: transparent;
+	--fc-event-text-color: color-mix(
+		in oklch,
+		var(--event-calendar-color, var(--color-calendar)) 65%,
+		var(--color-ink-muted)
+	);
+}
+
+.calendar-view .fc .fc-event:hover {
+	z-index: 4;
+}
+
+.calendar-view .fc .fc-event:focus-visible {
+	z-index: 4;
+	box-shadow: 0 0 0 1px currentColor;
+}
+
+.calendar-view .fc .fc-event:hover .calendar-event-content,
+.calendar-view .fc .fc-event:focus-visible .calendar-event-content {
+	background-color: color-mix(
+		in oklch,
+		var(--color-accent) 10%,
+		transparent
+	);
+}
+
+.calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
+	z-index: 3;
+	--fc-event-border-color: var(--color-accent);
+	--fc-event-bg-color: var(--color-accent);
+	--fc-event-text-color: var(--color-surface);
+	opacity: 1;
+}
+
+.calendar-view
+	.fc
+	.fc-event:has(.calendar-event-content-selected)
+	.calendar-event-content-selected {
+	background-color: var(--color-accent);
+	color: var(--color-surface);
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {
@@ -233,44 +491,6 @@
 
 .calendar-view .fc .fc-timegrid-slot-minor {
 	border-top-color: transparent;
-}
-
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::before,
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::after {
-	position: absolute;
-	right: 0;
-	left: 0;
-	z-index: 5;
-	height: 1.5rem;
-	pointer-events: none;
-	content: "";
-}
-
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::before {
-	top: 0;
-	background: linear-gradient(
-		to bottom,
-		color-mix(in oklch, var(--color-surface) 75%, transparent),
-		transparent
-	);
-	opacity: 0;
-	transition: opacity 150ms ease-out;
-}
-
-.calendar-view
-	.fc
-	.fc-timegrid
-	.fc-scroller-harness-liquid[data-scrolled-from-top]::before {
-	opacity: 1;
-}
-
-.calendar-view .fc .fc-timegrid .fc-scroller-harness-liquid::after {
-	bottom: 0;
-	background: linear-gradient(
-		to top,
-		color-mix(in oklch, var(--color-surface) 75%, transparent),
-		transparent
-	);
 }
 
 .calendar-view .fc .fc-timegrid-axis-cushion,
@@ -357,19 +577,6 @@
 	display: none;
 }
 
-.calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-now-indicator-arrow {
-	right: 0;
-	left: 0;
-	display: flex;
-	height: auto;
-	margin-top: 0;
-	justify-content: flex-end;
-	overflow: visible;
-	border: 0;
-	background: transparent;
-	transform: translateY(-50%);
-}
-
 .calendar-view .fc .fc-timeGridWeek-view .fc-timegrid-axis {
 	width: 4.5rem;
 }
@@ -398,14 +605,6 @@
 		clip-path 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.calendar-view .fc .calendar-now-axis-indicator-gutter {
-	width: 0.375rem;
-	height: 0.625rem;
-	border-radius: 0 9999px 9999px 0;
-	clip-path: none;
-	pointer-events: none;
-}
-
 .calendar-view
 	.fc
 	.fc-timegrid-now-indicator-line
@@ -413,7 +612,7 @@
 	position: absolute;
 	top: 0;
 	right: 100%;
-	transform: translateY(-50%);
+	transform: translateY(calc(-50% + 0.5px));
 }
 
 .calendar-view

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_graphql::Context;
 use axum::extract::FromRef;
@@ -13,6 +13,7 @@ use entity_access::{
 };
 use futures::Stream;
 use graphql_common::{extract_part, require_authorized_user};
+use graphql_email::EmailThreadMutationOutput;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -106,6 +107,25 @@ where
         _ => Err(async_graphql::Error::new(
             "Soup returned a non-email entity for an email-thread request",
         )),
+    }
+}
+
+/// Mutation-output adapter that reloads the canonical Soup email-thread object.
+pub struct SoupEmailThreadMutationOutput<Edges>(PhantomData<fn() -> Edges>);
+
+impl<Edges> EmailThreadMutationOutput for SoupEmailThreadMutationOutput<Edges>
+where
+    Edges: SoupEntityEdges,
+{
+    type Thread = GraphqlSoupEmailThread<Edges>;
+
+    fn load_email_thread<'ctx>(
+        ctx: &'ctx Context<'_>,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
+    {
+        Box::pin(resolve_soup_email_thread::<Edges>(ctx, user_id, thread_id))
     }
 }
 

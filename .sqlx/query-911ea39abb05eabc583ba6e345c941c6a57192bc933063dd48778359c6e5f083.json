@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS (\n                UPDATE calendar_backfill_jobs job\n                SET status = 'pending',\n                    cursor = '{}',\n                    scanned_count = 0,\n                    extracted_count = 0,\n                    last_error = NULL,\n                    started_at = NULL,\n                    completed_at = NULL,\n                    lease_token = NULL,\n                    lease_expires_at = NULL,\n                    updated_at = now()\n                FROM calendar_accounts account, email_link_google_scopes scopes\n                WHERE job.email_link_id = account.email_link_id\n                  AND job.account_id = account.id\n                  AND scopes.link_id = job.email_link_id\n                  AND job.kind = 'google_calendar'\n                  AND job.status = 'complete'\n                  AND job.grant_version = scopes.grant_version\n                  AND scopes.granted_scopes @> $2::text[]\n                  AND account.sync_status = 'ready'\n                  AND account.last_synced_at <= $1\n                RETURNING job.id\n            ),\n            republished AS (\n                UPDATE calendar_sync_outbox outbox\n                SET published_at = NULL\n                FROM due\n                WHERE outbox.backfill_job_id = due.id\n            )\n            SELECT count(*) AS \"due_count!\" FROM due\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "due_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "911ea39abb05eabc583ba6e345c941c6a57192bc933063dd48778359c6e5f083"
+}

@@ -55,6 +55,12 @@ import type { UserTokensResponse } from './generated/schemas/userTokensResponse'
 
 const authHost = SERVER_HOSTS['auth-service'];
 
+/**
+ * Which permissions a Google consent screen asks for. `calendar` covers an
+ * inbox that is already connected, so the screen lists calendar access alone.
+ */
+export type ConsentScopes = 'gmail' | 'gmail_and_calendar' | 'calendar';
+
 const authApiFetch = <T extends ObjectLike>(
   input: string,
   init?: SafeFetchInit
@@ -193,8 +199,11 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
+    // The session code stays valid server-side for 5 minutes and is
+    // replayable, so retrying transient failures is safe.
     const result = await authApiFetch<UserTokensResponse>(
-      `/session/login/${args.session_code}`
+      `/session/login/${args.session_code}`,
+      { retry: { maxTries: 3, delay: 'exponential' } }
     );
     if (result.isOk()) {
       setAccessTokenData({
@@ -206,10 +215,18 @@ export const authServiceClient = {
     return result;
   },
   async deleteUser() {
-    setAccessTokenData(null);
-    return fetchWithAuth<GenericSuccessResponse>(`${authHost}/user/me`, {
-      method: 'DELETE',
-    });
+    const result = await fetchWithAuth<GenericSuccessResponse>(
+      `${authHost}/user/me`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+    if (result.isOk()) {
+      setAccessTokenData(null);
+    }
+
+    return result;
   },
   async appleLogin(args: AppleLoginRequest) {
     return authApiFetch<EmptyResponse>(`/login/apple`, {
@@ -543,10 +560,26 @@ export const authServiceClient = {
    * Returns the OAuth authorization URL to redirect the browser to.
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
+   *
+   * `scopes` selects which permissions the consent screen asks for. Only
+   * calendar entry points may request calendar access, and an inbox that is
+   * already connected should ask for `calendar` alone so the user isn't
+   * re-consenting to mailbox access they have already granted.
    */
-  async initGmailLink(originalUrl?: string) {
-    const url = originalUrl
-      ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
+  async initGmailLink(
+    originalUrl?: string,
+    options?: { scopes?: ConsentScopes }
+  ) {
+    const params = new URLSearchParams();
+    if (originalUrl) {
+      params.set('original_url', encodeURIComponent(originalUrl));
+    }
+    if (options?.scopes) {
+      params.set('scopes', options.scopes);
+    }
+    const query = params.toString();
+    const url = query
+      ? `${authHost}/link/gmail?${query}`
       : `${authHost}/link/gmail`;
     return (
       await fetchWithAuth<

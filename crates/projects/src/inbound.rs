@@ -5,3 +5,7 @@
 /// Axum project route adapter.
 #[cfg(feature = "axum")]
 pub mod axum_router;
+
+/// AI toolset adapter.
+#[cfg(feature = "ai_tools")]
+pub mod toolset;

@@ -266,9 +266,10 @@ pub(crate) async fn populate_properties(
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
-                SoupItem::Channel(_) | SoupItem::ChannelThread(_) | SoupItem::ForeignEntity(_) => {
-                    None
-                }
+                SoupItem::Channel(_)
+                | SoupItem::ChannelThread(_)
+                | SoupItem::ForeignEntity(_)
+                | SoupItem::Reminder(_) => None,
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
             .unwrap_or_default();

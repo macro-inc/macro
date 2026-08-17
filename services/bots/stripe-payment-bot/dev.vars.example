@@ -1,0 +1,5 @@
+MACRO_BOT_TOKEN=mbot_replace_me
+MACRO_ENV=prod
+# MACRO_STORAGE_URL=https://your-storage-api.example.com
+STRIPE_API_KEY=rk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me

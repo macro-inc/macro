@@ -9,6 +9,7 @@ import {
   getActiveDocumentTypeFilterIds,
   isDocumentTypeFilterId,
 } from '@app/features/next-soup/filters/configs/document-type-query';
+import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
@@ -71,15 +72,18 @@ function scrollAccordionItemToTop(
   });
 }
 
-export const MobileFilterDrawer = () => {
-  const { consolidatedFiltersList, resetToTabDefaults } =
+export const MobileFilterDrawer = (props: {
+  /** Extra classes on the trigger button (rendered only when filters exist). */
+  class?: string;
+}) => {
+  const { consolidatedFiltersList, resetToTabDefaults, handleAssigneeChange } =
     useFilterRefinements();
 
   const {
     soup,
     queryFilters,
     assigneeFilter,
-    setAssigneeFilter,
+    activeTab,
     inboxFilter,
     setInboxFilter,
   } = useSoupView();
@@ -88,6 +92,7 @@ export const MobileFilterDrawer = () => {
   const userId = useUserId();
 
   const [assigneeSearch, setAssigneeSearch] = createSignal('');
+  const [createdBySearch, setCreatedBySearch] = createSignal('');
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -99,10 +104,32 @@ export const MobileFilterDrawer = () => {
   const categories = createMemo(() => {
     const view = currentView();
     if (!view) return [];
+    if (view === 'documents' && activeTab() === 'folders') return [];
     return VIEW_FILTER_CATEGORIES[view] ?? [];
   });
 
   const isTasksView = () => currentView() === 'tasks';
+  const isDocumentsView = () => currentView() === 'documents';
+  const isCreatedByFilterView = () => {
+    const view = currentView();
+    return view === 'documents' || view === 'tasks';
+  };
+  const showCreatedByFilter = () =>
+    isCreatedByFilterView() && !(isDocumentsView() && activeTab() === 'owned');
+
+  const baseCreatedByIds = createMemo(() => {
+    const view = currentView();
+    if (view !== 'documents' && view !== 'tasks') return [];
+    return (
+      getViewPreset(view, activeTab(), {
+        userId: userId(),
+        isTeamAdmin: false,
+      })?.filters.include?.documentOwnerId ?? []
+    );
+  });
+  const createdByIds = createMemo(
+    () => queryFilters.state.include.documentOwnerId ?? []
+  );
 
   const picker = useInboxPicker({
     selectedIds: inboxFilter,
@@ -194,13 +221,14 @@ export const MobileFilterDrawer = () => {
     }
   };
 
+  // Routes through handleAssigneeChange so the assignee predicate and the
+  // server-side property query stay in sync with the selection — setting the
+  // signal alone updates the badge but never filters the list.
   const toggleAssignee = (id: string) => {
     const current = assigneeFilter();
-    if (current.includes(id)) {
-      setAssigneeFilter(current.filter((a) => a !== id));
-    } else {
-      setAssigneeFilter([...current, id]);
-    }
+    handleAssigneeChange(
+      current.includes(id) ? current.filter((a) => a !== id) : [...current, id]
+    );
   };
 
   const assigneeOptions = createMemo(() => {
@@ -246,6 +274,49 @@ export const MobileFilterDrawer = () => {
     );
   });
 
+  const createdByOptions = createMemo(() => {
+    const currentUserId = userId();
+    return [...contacts()]
+      .sort((a, b) => {
+        if (a.id === currentUserId) return -1;
+        if (b.id === currentUserId) return 1;
+        return 0;
+      })
+      .map((contact) => ({
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      }));
+  });
+
+  const filteredCreatedByOptions = createMemo(() => {
+    const query = createdBySearch().toLowerCase();
+    if (!query) return createdByOptions();
+    return createdByOptions().filter((option) =>
+      option.label.toLowerCase().includes(query)
+    );
+  });
+
+  const toggleCreatedBy = (id: string) => {
+    const current = createdByIds();
+    const next = current.includes(id)
+      ? current.filter((creatorId) => creatorId !== id)
+      : [...current, id];
+    const nextIds = next.length > 0 ? next : baseCreatedByIds();
+    queryFilters.set({
+      include: {
+        documentOwnerId: nextIds.length > 0 ? nextIds : undefined,
+      },
+    });
+  };
+
   const activeCount = () => consolidatedFiltersList().length;
 
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
@@ -264,7 +335,10 @@ export const MobileFilterDrawer = () => {
           variant="ghost"
           size="sm"
           depth={3}
-          class="island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5"
+          class={cn(
+            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5',
+            props.class
+          )}
           ref={pressPulse}
         >
           <SlidersHorizontalIcon />
@@ -612,6 +686,94 @@ export const MobileFilterDrawer = () => {
                         </div>
 
                         <Show when={filteredAssigneeOptions().length === 0}>
+                          <div class="px-4 py-2 text-sm text-ink-muted">
+                            No results
+                          </div>
+                        </Show>
+                      </Accordion.Content>
+                    </MobileDrawer.Section>
+                  </Show>
+
+                  {/* Created by section for Tasks and Files */}
+                  <Show when={showCreatedByFilter()}>
+                    <MobileDrawer.Section
+                      as={Accordion.Item}
+                      value="created-by"
+                    >
+                      <Accordion.Header>
+                        <Accordion.Trigger
+                          class="w-full flex items-center justify-between p-3 text-sm text-ink hover:bg-hover transition-colors outline-none group bg-surface mb-px"
+                          onClick={(e) =>
+                            scrollAccordionItemToTop(e, scrollRef())
+                          }
+                        >
+                          <span class="font-medium">Created by</span>
+                          <div class="flex items-center gap-2">
+                            <Show when={createdByIds().length > 0}>
+                              <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-surface text-xxs font-medium leading-none">
+                                {createdByIds().length}
+                              </span>
+                            </Show>
+                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
+                          </div>
+                        </Accordion.Trigger>
+                      </Accordion.Header>
+                      <Accordion.Content>
+                        <div class="flex items-center gap-2 px-3 py-2 muted bg-surface mb-px">
+                          <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
+                          <input
+                            type="text"
+                            aria-label="Search creators"
+                            value={createdBySearch()}
+                            onInput={(e) =>
+                              setCreatedBySearch(e.currentTarget.value)
+                            }
+                            placeholder="Search creators..."
+                            class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
+                          />
+                        </div>
+                        <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
+                          <For each={filteredCreatedByOptions()}>
+                            {(option) => {
+                              const active = () =>
+                                createdByIds().includes(option.id);
+                              return (
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={active()}
+                                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
+                                  onClick={() => toggleCreatedBy(option.id)}
+                                >
+                                  <span
+                                    class={cn(
+                                      'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                      active()
+                                        ? 'bg-accent border-accent'
+                                        : 'border-edge'
+                                    )}
+                                  >
+                                    <Show when={active()}>
+                                      <CheckIcon class="size-2.5 text-surface" />
+                                    </Show>
+                                  </span>
+                                  <span class="size-4 flex items-center justify-center shrink-0">
+                                    {option.icon()}
+                                  </span>
+                                  <span
+                                    class={cn(
+                                      'flex-1 truncate',
+                                      active() ? 'text-ink' : 'text-ink-muted'
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </button>
+                              );
+                            }}
+                          </For>
+                        </div>
+                        <Show when={filteredCreatedByOptions().length === 0}>
                           <div class="px-4 py-2 text-sm text-ink-muted">
                             No results
                           </div>

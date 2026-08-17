@@ -1,10 +1,10 @@
 mod backfill_attachment;
 mod backfill_message;
 mod backfill_thread;
-mod calendar_email_ics_backfill;
 mod calendar_google_backfill;
 mod depopulate_crm_contact;
 mod depopulate_crm_for_user;
+pub(crate) mod email_api_error;
 mod error_handlers;
 mod increment_counters;
 mod init;

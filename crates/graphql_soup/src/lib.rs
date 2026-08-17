@@ -29,5 +29,6 @@ pub use objects::{
     SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
-    resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
+    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,
+    resolve_soup_updates,
 };

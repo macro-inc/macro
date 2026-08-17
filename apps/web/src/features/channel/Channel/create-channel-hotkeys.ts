@@ -115,7 +115,11 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     hotkeyToken: TOKENS.channel.replyToMessage,
     description: 'Reply to message',
     condition: canRunSelectionActionHotkeys,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // Saving an inline edit returns focus to the selected message before
+      // Enter is released. Capture browser key-repeat events so that same
+      // physical press cannot immediately open the reply input.
+      if (event?.repeat) return true;
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);

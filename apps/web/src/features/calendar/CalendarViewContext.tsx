@@ -1,11 +1,14 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import type { EventDropArg } from '@fullcalendar/core';
-import type { EventResizeDoneArg } from '@fullcalendar/interaction';
-import { createMemo, createSignal } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { makePersisted } from '@solid-primitives/storage';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { mapCalendarEventToFullCalendar } from './events/event-mapper';
+import { calendarDisplayLabel, spansMultipleInboxes } from './calendar-label';
+import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
 import type {
   CalendarEvent,
+  CalendarPeriodView,
   CalendarSource,
   CalendarTimeFormat,
   CalendarWeekStart,
@@ -13,173 +16,155 @@ import type {
 import { getDefaultCalendarTimeFormat } from './time-format';
 
 interface CalendarEventState {
-  visibleSourceIds: string[];
-  selectedEventId: string | undefined;
+  readonly visibleSourceIds: string[];
+  readonly selectedEventId: string | undefined;
 }
 
 interface CalendarDisplaySettings {
+  readonly periodView: CalendarPeriodView;
+  readonly showWeekends: boolean;
+  readonly weekStartsOn: CalendarWeekStart;
+  readonly timeFormat: CalendarTimeFormat;
+}
+
+interface CalendarPreferences {
+  periodView: CalendarPeriodView;
+  hiddenSourceIds: string[];
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
 }
 
+const CALENDAR_PREFERENCES_KEY = 'macro:pref:calendar:settings';
+
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {
-    const [eventData, setEventData] = createSignal<
-      CalendarEvent[] | undefined
-    >();
-
-    const [eventState, setEventState] = createStore<CalendarEventState>({
-      visibleSourceIds: [],
-      selectedEventId: undefined,
+    const defaultPreferences: CalendarPreferences = {
+      periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
+      hiddenSourceIds: [],
+      showWeekends: true,
+      weekStartsOn: 0,
+      timeFormat: getDefaultCalendarTimeFormat(),
+    };
+    const [preferences, setPreferences] = makePersisted(
+      createStore<CalendarPreferences>(defaultPreferences),
+      {
+        name: CALENDAR_PREFERENCES_KEY,
+        deserialize: (value) => ({
+          ...defaultPreferences,
+          ...(JSON.parse(value) as Partial<CalendarPreferences>),
+        }),
+      }
+    );
+    const calendarsQuery = useVisibleCalendarsQuery();
+    const sources = createMemo<CalendarSource[]>(() => {
+      const calendars = calendarsQuery.data;
+      if (!calendars || calendars.length === 0) {
+        return [DEFAULT_CALENDAR_SOURCE];
+      }
+      const spansInboxes = spansMultipleInboxes(calendars);
+      return calendars.map((calendar) => ({
+        id: calendar.id,
+        name: calendarDisplayLabel(calendar, spansInboxes),
+        color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      }));
     });
+    const sourceById = createMemo(
+      () => new Map(sources().map((source) => [source.id, source]))
+    );
+    // Sources default to visible, so calendars discovered after a
+    // preference was saved (or events whose calendar is still loading)
+    // never silently disappear.
+    const isSourceVisible = (sourceId: string) =>
+      !preferences.hiddenSourceIds.includes(sourceId);
 
-    const [displaySettings, setDisplaySettings] =
-      createStore<CalendarDisplaySettings>({
-        showWeekends: true,
-        weekStartsOn: 0,
-        timeFormat: getDefaultCalendarTimeFormat(),
-      });
+    const [selectedEventId, setSelectedEventId] = createSignal<string>();
+    const eventState: CalendarEventState = {
+      get visibleSourceIds() {
+        return sources()
+          .filter((source) => isSourceVisible(source.id))
+          .map((source) => source.id);
+      },
+      get selectedEventId() {
+        return selectedEventId();
+      },
+    };
+    const displaySettings: CalendarDisplaySettings = {
+      get periodView() {
+        return preferences.periodView;
+      },
+      get showWeekends() {
+        return preferences.showWeekends;
+      },
+      get weekStartsOn() {
+        return preferences.weekStartsOn;
+      },
+      get timeFormat() {
+        return preferences.timeFormat;
+      },
+    };
 
-    const [sources, setSources] = createSignal<CalendarSource[]>([]);
+    const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
     const [selectedEventAnchor, setSelectedEventAnchor] =
       createSignal<HTMLElement>();
     const [useNarrowDayHeaders, setUseNarrowDayHeaders] = createSignal(false);
 
-    const events = createMemo(() => eventData() ?? []);
-    const eventsById = createMemo(
-      () => new Map(events().map((event) => [event.id, event]))
-    );
-    const selectedEvent = createMemo(() => {
-      const eventId = eventState.selectedEventId;
-      return eventId ? eventsById().get(eventId) : undefined;
-    });
-    const visibleEvents = createMemo(() =>
-      events().filter((event) =>
-        eventState.visibleSourceIds.includes(event.calendar.id)
-      )
-    );
-    const fullCalendarEvents = createMemo(() =>
-      visibleEvents().map(mapCalendarEventToFullCalendar)
-    );
-
-    const isSourceVisible = (sourceId: string) =>
-      eventState.visibleSourceIds.includes(sourceId);
-
-    const replaceEvents = (nextEvents: CalendarEvent[]) => {
-      setEventData(nextEvents);
-
-      const nextSources = new Map(
-        sources().map((source) => [source.id, source])
-      );
-
-      for (const event of nextEvents) {
-        nextSources.set(event.calendar.id, event.calendar);
-      }
-
-      replaceSources([...nextSources.values()]);
-
-      if (
-        eventState.selectedEventId &&
-        !nextEvents.some((event) => event.id === eventState.selectedEventId)
-      ) {
-        setEventState('selectedEventId', undefined);
-        setSelectedEventAnchor(undefined);
-      }
-    };
-
-    const replaceSources = (nextSources: CalendarSource[]) => {
-      const knownSourceIds = sources().map((source) => source.id);
-
-      setSources(nextSources);
-      setEventState('visibleSourceIds', (current) => {
-        const next = [...current];
-
-        for (const source of nextSources) {
-          if (
-            !knownSourceIds.includes(source.id) &&
-            !next.includes(source.id)
-          ) {
-            next.push(source.id);
-          }
-        }
-
-        return next;
-      });
-    };
-
     const closeEventDetails = () => {
-      setEventState('selectedEventId', undefined);
-      setSelectedEventAnchor(undefined);
+      batch(() => {
+        setSelectedEventId(undefined);
+        setSelectedEvent(undefined);
+        setSelectedEventAnchor(undefined);
+      });
     };
 
     const setSourceVisibility = (sourceId: string, visible: boolean) => {
-      setEventState('visibleSourceIds', (current) => {
-        if (visible) {
-          return current.includes(sourceId) ? current : [...current, sourceId];
-        }
-
-        return current.filter((id) => id !== sourceId);
-      });
+      setPreferences('hiddenSourceIds', (current) =>
+        visible
+          ? current.filter((id) => id !== sourceId)
+          : current.includes(sourceId)
+            ? current
+            : [...current, sourceId]
+      );
 
       if (!visible && selectedEvent()?.calendar.id === sourceId) {
         closeEventDetails();
       }
     };
 
-    const updateEventDates = ({
-      event,
-      revert,
-    }: EventDropArg | EventResizeDoneArg) => {
-      if (!eventsById().has(event.id) || !event.startStr || !event.endStr) {
-        revert();
-        return;
-      }
-
-      closeEventDetails();
-      setEventData((current) =>
-        (current ?? []).map((calendarEvent) =>
-          calendarEvent.id === event.id
-            ? {
-                ...calendarEvent,
-                start: event.startStr,
-                end: event.endStr,
-                allDay: event.allDay,
-              }
-            : calendarEvent
-        )
-      );
+    const selectEvent = (event: CalendarEvent, anchor: HTMLElement) => {
+      batch(() => {
+        setSelectedEventId(event.id);
+        setSelectedEvent(() => event);
+        setSelectedEventAnchor(anchor);
+      });
     };
 
-    const selectEvent = (eventId: string, anchor: HTMLElement) => {
-      setEventState('selectedEventId', eventId);
-      setSelectedEventAnchor(anchor);
+    const refreshSelectedEvent = (event: CalendarEvent) => {
+      if (eventState.selectedEventId !== event.id) return;
+      setSelectedEvent(event);
     };
 
     return {
-      eventData,
       eventState,
       displaySettings,
-      events,
       sources,
-      eventsById,
-      selectedEvent,
-      fullCalendarEvents,
+      sourceById,
       isSourceVisible,
+      setSourceVisibility,
+      selectedEvent,
       selectedEventAnchor,
       useNarrowDayHeaders,
       setUseNarrowDayHeaders,
-      replaceEvents,
-      replaceSources,
+      setPeriodView: (periodView: CalendarPeriodView) =>
+        setPreferences('periodView', periodView),
       setShowWeekends: (showWeekends: boolean) =>
-        setDisplaySettings('showWeekends', showWeekends),
+        setPreferences('showWeekends', showWeekends),
       setWeekStartsOn: (weekStartsOn: CalendarWeekStart) =>
-        setDisplaySettings('weekStartsOn', weekStartsOn),
+        setPreferences('weekStartsOn', weekStartsOn),
       setTimeFormat: (timeFormat: CalendarTimeFormat) =>
-        setDisplaySettings('timeFormat', timeFormat),
+        setPreferences('timeFormat', timeFormat),
       closeEventDetails,
-      setSourceVisibility,
-      updateEventDates,
       selectEvent,
+      refreshSelectedEvent,
     };
   });

@@ -38,7 +38,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
         <Show
           when={props.data.length > 0}
           fallback={
-            <div class="text-text-secondary italic">
+            <div class="text-ink-muted italic">
               No {props.title.toLowerCase()} found
             </div>
           }
@@ -54,7 +54,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
           <div class="mt-2 relative">
             <button
               onClick={copyToClipboard}
-              class="absolute top-2 right-2 p-1 rounded bg-surface-secondary hover:bg-surface-tertiary text-text-secondary hover:text-text-primary transition-colors z-10"
+              class="absolute top-2 right-2 p-1 rounded bg-panel hover:bg-lift text-ink-muted hover:text-ink transition-colors z-10"
               title="Copy to clipboard"
             >
               <Copy class="size-4" />
@@ -99,9 +99,9 @@ const DataDebug: Component = () => {
             title="useContacts()"
             data={contacts()}
             renderItem={(contact) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
+              <div class="bg-panel p-2 rounded text-sm">
                 <div class="font-medium">{contact.email}</div>
-                <div class="text-text-secondary">ID: {contact.id}</div>
+                <div class="text-ink-muted">ID: {contact.id}</div>
               </div>
             )}
           />
@@ -110,9 +110,9 @@ const DataDebug: Component = () => {
             title="useHistoryQuery()"
             data={historyQuery.data ?? []}
             renderItem={(item) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
+              <div class="bg-panel p-2 rounded text-sm">
                 <div class="font-medium">{item.name}</div>
-                <div class="text-text-secondary">
+                <div class="text-ink-muted">
                   ID: {item.id} | Type: {item.type}
                 </div>
               </div>

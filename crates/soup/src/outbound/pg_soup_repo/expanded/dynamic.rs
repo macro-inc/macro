@@ -8,6 +8,7 @@ use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    calendar_event::CalendarEventLiteral,
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
@@ -447,6 +448,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'organizerEmail', event.organizer_email,
                 'organizerName', event.organizer_name,
                 'conferenceUrl', event.conference_url,
+                'conferenceProvider', event.conference_provider,
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,
@@ -507,7 +509,11 @@ fn build_notification_exists_clause(
     )
 }
 
-fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    done: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -519,7 +525,11 @@ fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: 
     )
 }
 
-fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    seen: bool,
+) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
@@ -811,6 +821,73 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     }
 }
 
+/// A single-quoted SQL string literal with embedded quotes doubled. The
+/// calendar filter inlines caller-supplied strings (statuses, attendee and
+/// organizer emails), which unlike the ids the sibling builders inline are
+/// not shaped by a parser first.
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Renders the calendar-event filter bind-free, like every other arm of the
+/// hand-numbered grouped query: `push_bind` placeholders would start at `$1`
+/// and collide with the positionally-bound user id. The notification clauses
+/// reference `$1` as the requesting user, which both this query and
+/// `cursor_soup` guarantee.
+fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> String {
+    let Some(expr) = ast else {
+        return String::new();
+    };
+    let expr = push_not_inward(expr, false);
+    let formatting = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => {
+            format!("event.id = '{id}'")
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Status(status)) => {
+            format!("event.status = {}", sql_string_literal(&status))
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::StartsBefore(value)) => {
+            format!(
+                "COALESCE(event.starts_at, event.start_date::timestamp AT TIME ZONE 'UTC') < '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::EndsAfter(value)) => {
+            format!(
+                "COALESCE(event.ends_at, event.end_date::timestamp AT TIME ZONE 'UTC') > '{}'::timestamptz",
+                value.to_rfc3339()
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Attendee(email)) => {
+            format!(
+                "EXISTS (SELECT 1 FROM calendar_event_attendees attendee \
+                 WHERE attendee.event_id = event.id AND attendee.email = lower({}))",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::Organizer(email)) => {
+            format!(
+                "lower(event.organizer_email) = lower({})",
+                sql_string_literal(&email)
+            )
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
+            build_notification_done_clause("event.id", "calendar_event", done)
+        }
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
+            build_notification_seen_clause("event.id", "calendar_event", seen)
+        }
+    });
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
 fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -1007,6 +1084,18 @@ fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => id.is_nil(),
             filter_ast::ExprFrame::Literal(_) => false,
         })
     })
@@ -1817,10 +1906,15 @@ fn build_grouped_query<'a>(
             filter_ast.properties_filter.as_deref(),
             &[PropertyEntityType::Project],
         );
-    let include_calendar_events = properties_filter_can_apply_to(
-        filter_ast.properties_filter.as_deref(),
-        &[PropertyEntityType::CalendarEvent],
-    );
+    // Gated like the other three legs. Beyond skipping a union branch that can
+    // never match, this keeps the NIL-id exclusion every Soup query now sends
+    // from reaching `push_filter` below — see the bind-numbering note there.
+    let include_calendar_events =
+        !calendar_event_filter_is_impossible(filter_ast.calendar_event_filter.as_deref())
+            && properties_filter_can_apply_to(
+                filter_ast.properties_filter.as_deref(),
+                &[PropertyEntityType::CalendarEvent],
+            );
 
     push_accessible_items_cte(
         &mut builder,
@@ -1874,11 +1968,9 @@ fn build_grouped_query<'a>(
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
-        if let Some(filter) = filter_ast.calendar_event_filter.as_deref() {
-            builder.push(" AND (");
-            super::super::calendar_event::push_filter(&mut builder, filter);
-            builder.push(")");
-        }
+        builder.push(build_calendar_event_filter(
+            filter_ast.calendar_event_filter.as_deref(),
+        ));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "event.id::text",

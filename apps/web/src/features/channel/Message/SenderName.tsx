@@ -1,4 +1,4 @@
-import { tryMacroId, useDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { cn } from '@ui';
@@ -37,7 +37,7 @@ export function MessageSenderName(props: SenderNameProps) {
 
 export function SenderName(props: { message: MessageData }) {
   const macroId = () => tryMacroId(props.message.sender_id);
-  const [displayName] = useDisplayName(macroId());
+  const displayName = () => getDisplayName(macroId());
   const agentName = () =>
     botName(props.message.sender_id, props.message.sender);
   return <>{agentName() ?? displayName()}</>;

@@ -27,6 +27,7 @@ type ResizeSolver = {
   order: () => PanelId[];
   hasPanel: (id: PanelId) => boolean;
   canFitPanel: (panel: PanelConfig) => boolean;
+  swap: (firstId: PanelId, secondId: PanelId) => void;
   hide: (id: PanelId) => void;
   show: (id: PanelId) => void;
   isHidden: (id: PanelId) => boolean;
@@ -850,6 +851,50 @@ export function createResizeSolver(params: {
     setDirty('manual');
   }
 
+  function swap(firstId: PanelId, secondId: PanelId) {
+    if (firstId === secondId) return;
+
+    const ids = untrack(order);
+    const firstIndex = ids.indexOf(firstId);
+    const secondIndex = ids.indexOf(secondId);
+    if (firstIndex < 0 || secondIndex < 0) return;
+
+    const groupBounds = (index: number) => {
+      const group = panelData[ids[index]]?.shareGroup;
+      if (group === undefined) return [index, index] as const;
+
+      let start = index;
+      let end = index;
+      while (start > 0 && panelData[ids[start - 1]]?.shareGroup === group) {
+        start -= 1;
+      }
+      while (
+        end < ids.length - 1 &&
+        panelData[ids[end + 1]]?.shareGroup === group
+      ) {
+        end += 1;
+      }
+      return [start, end] as const;
+    };
+
+    const [firstStart, firstEnd] = groupBounds(firstIndex);
+    const [secondStart, secondEnd] = groupBounds(secondIndex);
+    if (firstStart === secondStart) return;
+
+    const [leftStart, leftEnd, rightStart, rightEnd] =
+      firstStart < secondStart
+        ? [firstStart, firstEnd, secondStart, secondEnd]
+        : [secondStart, secondEnd, firstStart, firstEnd];
+    const nextIds = [
+      ...ids.slice(0, leftStart),
+      ...ids.slice(rightStart, rightEnd + 1),
+      ...ids.slice(leftEnd + 1, rightStart),
+      ...ids.slice(leftStart, leftEnd + 1),
+      ...ids.slice(rightEnd + 1),
+    ];
+    setOrder(nextIds);
+  }
+
   return {
     direction: params.direction,
     addPanel,
@@ -880,6 +925,7 @@ export function createResizeSolver(params: {
     },
     order,
     moveHandle,
+    swap,
     hasPanel: (id: PanelId) => {
       return order().includes(id) && id in panelData;
     },

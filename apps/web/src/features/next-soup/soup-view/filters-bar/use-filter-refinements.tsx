@@ -39,10 +39,6 @@ import type {
 import type { SearchableOption } from './searchable-multi-select';
 import { useTagFilter } from './tag-filter';
 import {
-  TASK_STATUS_FILTER_IDS,
-  useTaskStatusFilter,
-} from './task-status-filter';
-import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
@@ -61,6 +57,16 @@ const TAB_ONLY_FILTERS = new Set([
   'email-drafts',
   'not-task',
 ]);
+
+const hasFilterCategoryRefinement = (
+  activeIds: readonly string[],
+  presetIds: readonly string[]
+): boolean => {
+  const active = new Set(activeIds);
+  return (
+    active.size !== presetIds.length || presetIds.some((id) => !active.has(id))
+  );
+};
 
 /**
  * Hook that provides detection of active filter refinements beyond tab defaults,
@@ -84,7 +90,6 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const taskStatus = useTaskStatusFilter();
   const tagFilter = useTagFilter();
   const dealStages = useDealStages();
 
@@ -283,6 +288,78 @@ export function useFilterRefinements() {
     ];
   });
 
+  /** Creator options for the Tasks and Files Created by filter. */
+  const createdByOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  const createdBySearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const option: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = option;
+      } else {
+        otherContactOptions.push(option);
+      }
+    }
+    return [...(meOption ? [meOption] : []), ...otherContactOptions];
+  });
+
+  // The Files "Owned" tab scopes its base query to the current creator.
+  // An empty explicit selection must restore that preset constraint instead
+  // of broadening the tab to all files.
+  const baseCreatedByIds = createMemo(
+    () => currentPreset()?.filters.include?.documentOwnerId ?? []
+  );
+  const createdByIds = createMemo(
+    () => filterData().include.documentOwnerId ?? []
+  );
+  const hasCreatedByRefinement = () =>
+    !deepEqual(createdByIds(), baseCreatedByIds());
+
+  const handleCreatedByChange = (ids: string[]) => {
+    const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
+    queryFilters.set({
+      include: {
+        documentOwnerId: nextIds.length > 0 ? nextIds : undefined,
+      },
+    });
+  };
+
   /**
    * Handler for owner filter changes (Customers view). Client-side
    * predicate only — companies come back from a dedicated capped CRM
@@ -348,8 +425,7 @@ export function useFilterRefinements() {
   /**
    * Handler for assignee filter changes.
    */
-  const handleAssigneeChange = (ids: string[]) => {
-    const current = assigneeFilter();
+  const handleAssigneeChange = (ids: string[], current = assigneeFilter()) => {
     const toAdd = ids.filter((id) => !current.includes(id));
     const toRemove = current.filter((id) => !ids.includes(id));
 
@@ -379,6 +455,29 @@ export function useFilterRefinements() {
       if (addProps.length)
         queryFilters.add({ include: { properties: addProps } });
     });
+  };
+
+  // My Tasks has an implicit current-user assignee scope in its tab preset.
+  // Materialize it in the editable Assignee picker without adding a redundant
+  // property filter until the user changes that default selection.
+  const [myTasksAssigneeEdited, setMyTasksAssigneeEdited] = createSignal(false);
+  const isMyTasksTab = () =>
+    currentView() === 'tasks' && activeTab() === 'my-tasks';
+  const defaultMyTasksAssigneeIds = () => {
+    const id = currentUserId();
+    return isMyTasksTab() && id ? [id] : [];
+  };
+  const visibleAssigneeIds = () => {
+    const ids = assigneeFilter();
+    if (ids.length > 0 || myTasksAssigneeEdited()) return ids;
+    return defaultMyTasksAssigneeIds();
+  };
+  const handleVisibleAssigneeChange = (ids: string[]) => {
+    const current = visibleAssigneeIds();
+    if (isMyTasksTab() && !myTasksAssigneeEdited()) {
+      setMyTasksAssigneeEdited(true);
+    }
+    handleAssigneeChange(ids, current);
   };
 
   /**
@@ -428,15 +527,14 @@ export function useFilterRefinements() {
       lastCacheTab = tab;
     }
 
-    const presetFilterIds = new Set([
-      ...(preset?.clientFilters.and ?? []),
-      ...(preset?.clientFilters.or ?? []),
-    ]);
+    const presetAndFilterIds = new Set(preset?.clientFilters.and ?? []);
+    const presetOrFilterIds = new Set(preset?.clientFilters.or ?? []);
 
     const filters: ConsolidatedFilter[] = [];
     const seenKeys = new Set<string>();
 
-    // Group view category filters by category
+    // Group view category filters by category. A category is a refinement only
+    // when its effective selection differs from the current tab's baseline.
     const categoryGroups = new Map<
       string,
       {
@@ -444,42 +542,56 @@ export function useFilterRefinements() {
         labelPlural?: string;
         allOptions: FilterValue[];
         multiple: boolean;
+        showTabDefaults: boolean;
+        presetAndOptionIds: FilterID[];
+        presetOrOptionIds: FilterID[];
       }
     >();
 
     for (const category of viewCategories()) {
-      // Status has a dedicated chip below.
-      if (view === 'tasks' && category.id === 'status') continue;
-
       const activeValues: FilterValue[] = [];
       const allOptions: FilterValue[] = [];
+      const presetAndOptionIds: FilterID[] = [];
+      const presetOrOptionIds: FilterID[] = [];
 
       for (const option of category.options) {
-        allOptions.push({
+        const value = {
           id: option.id,
           label: option.label,
           icon: option.icon,
-        });
+        };
+        allOptions.push(value);
 
-        if (
-          soup.predicates.isActive(option.id) &&
-          !TAB_ONLY_FILTERS.has(option.id) &&
-          !presetFilterIds.has(option.id as FilterID)
-        ) {
-          activeValues.push({
-            id: option.id,
-            label: option.label,
-            icon: option.icon,
-          });
+        if (TAB_ONLY_FILTERS.has(option.id)) continue;
+
+        if (soup.predicates.isActive(option.id)) activeValues.push(value);
+        if (presetAndFilterIds.has(option.id as FilterID)) {
+          presetAndOptionIds.push(option.id as FilterID);
+        }
+        if (presetOrFilterIds.has(option.id as FilterID)) {
+          presetOrOptionIds.push(option.id as FilterID);
         }
       }
 
-      if (activeValues.length > 0) {
+      const presetOptionIds = [...presetAndOptionIds, ...presetOrOptionIds];
+      const isMyTasksDefaultStatus =
+        view === 'tasks' && tab === 'my-tasks' && category.id === 'status';
+      if (
+        activeValues.length > 0 &&
+        (isMyTasksDefaultStatus ||
+          hasFilterCategoryRefinement(
+            activeValues.map((value) => value.id),
+            presetOptionIds
+          ))
+      ) {
         categoryGroups.set(category.id, {
           label: category.label,
           labelPlural: category.labelPlural,
           allOptions,
           multiple: category.multiple ?? true,
+          showTabDefaults: isMyTasksDefaultStatus,
+          presetAndOptionIds,
+          presetOrOptionIds,
         });
       }
     }
@@ -489,17 +601,26 @@ export function useFilterRefinements() {
       const key = `category:${categoryId}`;
       seenKeys.add(key);
 
-      // Helper to get current active values for this category (computed fresh)
+      // Helper to get current active values for this category (computed fresh).
       const getActiveValues = (): FilterValue[] => {
         const result: FilterValue[] = [];
         for (const opt of group.allOptions) {
           if (
             soup.predicates.isActive(opt.id) &&
-            !TAB_ONLY_FILTERS.has(opt.id) &&
-            !presetFilterIds.has(opt.id as FilterID)
+            !TAB_ONLY_FILTERS.has(opt.id)
           ) {
             result.push(opt);
           }
+        }
+        if (group.showTabDefaults) {
+          const order = new Map([
+            ['task-in-progress', 0],
+            ['task-not-started', 1],
+            ['task-in-review', 2],
+          ]);
+          result.sort(
+            (a, b) => (order.get(a.id) ?? 3) - (order.get(b.id) ?? 3)
+          );
         }
         return result;
       };
@@ -514,6 +635,8 @@ export function useFilterRefinements() {
           multiple: group.multiple,
           isValueActive: (id) => soup.predicates.isActive(id),
           onToggleValue: (id) => {
+            const filterId = id as FilterID;
+            const wasActive = soup.predicates.isActive(filterId);
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
             const isDocumentTypeFilter =
@@ -523,7 +646,12 @@ export function useFilterRefinements() {
               : undefined;
 
             batch(() => {
-              soup.predicates.toggle({ or: [id as FilterID] });
+              soup.predicates.set(({ andIds, orIds }) => ({
+                and: andIds.filter((currentId) => currentId !== filterId),
+                or: wasActive
+                  ? orIds.filter((currentId) => currentId !== filterId)
+                  : [...orIds, filterId],
+              }));
 
               if (isInboxTypeFilter) {
                 const activeTypeIds = group.allOptions
@@ -545,19 +673,30 @@ export function useFilterRefinements() {
                 return;
               }
 
-              const query = getFilterQuery(id);
+              const query = getFilterQuery(filterId);
               if (!query) return;
-
-              if (soup.predicates.isActive(id)) {
-                queryFilters.add(query);
-              } else {
-                queryFilters.remove(query);
-              }
+              if (wasActive) queryFilters.remove(query);
+              else queryFilters.add(query);
             });
           },
           onRemoveAll: () => {
-            // Compute current active values at removal time
-            const currentValues = getActiveValues();
+            const categoryOptionIds = new Set(
+              group.allOptions
+                .filter((option) => !TAB_ONLY_FILTERS.has(option.id))
+                .map((option) => option.id as FilterID)
+            );
+            const presetOptionIds = new Set([
+              ...group.presetAndOptionIds,
+              ...group.presetOrOptionIds,
+            ]);
+            const changes = [...categoryOptionIds].flatMap((id) => {
+              const wasActive = soup.predicates.isActive(id);
+              const shouldBeActive =
+                !group.showTabDefaults && presetOptionIds.has(id);
+              return wasActive === shouldBeActive
+                ? []
+                : [{ id, shouldBeActive }];
+            });
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
             const isDocumentTypeFilter =
@@ -565,14 +704,33 @@ export function useFilterRefinements() {
             const previousDocumentTypeIds = isDocumentTypeFilter
               ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
               : undefined;
+            const nextPresetAndIds = group.showTabDefaults
+              ? []
+              : group.presetAndOptionIds;
+            const nextPresetOrIds = group.showTabDefaults
+              ? []
+              : group.presetOrOptionIds;
 
             batch(() => {
-              for (const value of currentValues) {
-                soup.predicates.toggle({ or: [value.id as FilterID] });
-              }
+              soup.predicates.set(({ andIds, orIds }) => ({
+                and: [
+                  ...andIds.filter(
+                    (id) => !categoryOptionIds.has(id as FilterID)
+                  ),
+                  ...nextPresetAndIds,
+                ],
+                or: [
+                  ...orIds.filter(
+                    (id) => !categoryOptionIds.has(id as FilterID)
+                  ),
+                  ...nextPresetOrIds,
+                ],
+              }));
 
               if (isInboxTypeFilter) {
-                queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                queryFilters.replace(
+                  getInboxTypeQuery([...presetOptionIds]) ?? null
+                );
                 return;
               }
 
@@ -588,9 +746,11 @@ export function useFilterRefinements() {
                 return;
               }
 
-              for (const value of currentValues) {
-                const query = getFilterQuery(value.id);
-                if (query) queryFilters.remove(query);
+              for (const change of changes) {
+                const query = getFilterQuery(change.id);
+                if (!query) continue;
+                if (change.shouldBeActive) queryFilters.add(query);
+                else queryFilters.remove(query);
               }
             });
           },
@@ -598,56 +758,19 @@ export function useFilterRefinements() {
       );
     }
 
-    // Dedicated chip: the generic builder would hide the preset-seeded default.
-    const pushTaskStatusChip = () => {
-      if (view !== 'tasks') return;
-      const statusCategory = viewCategories().find((c) => c.id === 'status');
-      if (!statusCategory) return;
-
-      const allOptions: FilterValue[] = statusCategory.options.map((o) => ({
-        id: o.id,
-        label: o.label,
-        icon: o.icon,
-      }));
-
-      const getActiveValues = (): FilterValue[] =>
-        allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
-
-      // No chip when not narrowed (empty, or all selected = no filter).
-      const activeCount = getActiveValues().length;
-      if (activeCount === 0 || activeCount === allOptions.length) return;
-
-      const key = 'status';
-      seenKeys.add(key);
-
-      filters.push(
-        getOrCreateConsolidatedChip(key, () => ({
-          key,
-          categoryLabel: 'Status',
-          categoryLabelPlural: 'Statuses',
-          values: getActiveValues,
-          availableOptions: allOptions,
-          multiple: true,
-          isValueActive: (id) => taskStatus.isActive(id as FilterID),
-          onToggleValue: (id) => taskStatus.toggle(id as FilterID),
-          onRemoveAll: () => taskStatus.clear(),
-        }))
-      );
-    };
-
     // Assignee filter (consolidated) - using searchable approach
     const pushAssigneeConsolidatedChip = () => {
       const key = 'assignee';
       const popupOpen =
         consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
-      const ids = assigneeFilter();
+      const ids = visibleAssigneeIds();
       if (ids.length === 0 && !popupOpen) return;
 
       seenKeys.add(key);
 
       // Compute values as accessor for reactivity, including icons
       const getValues = (): FilterValue[] =>
-        assigneeFilter().map((id) => {
+        visibleAssigneeIds().map((id) => {
           const opt = assigneeOptionsMap().get(id);
           return {
             id,
@@ -672,12 +795,56 @@ export function useFilterRefinements() {
             categoryLabel: 'Assignee',
             values: getValues,
             searchableOptions: assigneeSearchableOptions,
-            activeSearchableIds: assigneeFilter,
-            onSearchableChange: handleAssigneeChange,
+            activeSearchableIds: visibleAssigneeIds,
+            onSearchableChange: handleVisibleAssigneeChange,
             searchPlaceholder: 'Search assignees...',
             isPopupOpen,
             setPopupOpen,
-            onRemoveAll: () => handleAssigneeChange([]),
+            onRemoveAll: () => handleVisibleAssigneeChange([]),
+          };
+        })
+      );
+    };
+
+    // Created by is a server-side document-owner filter shared by Tasks and
+    // Files. Unlike Assignee, it has no separate client predicate/state.
+    const pushCreatedByConsolidatedChip = () => {
+      if (view !== 'documents' && view !== 'tasks') return;
+      const key = 'created-by';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      if (!hasCreatedByRefinement() && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        createdByIds().map((id) => {
+          const option = createdByOptionsMap().get(id);
+          return { id, label: option?.label ?? id, icon: option?.icon };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (open: boolean) => {
+            if (!open) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(open);
+          };
+          return {
+            key,
+            categoryLabel: 'Created by',
+            values: getValues,
+            searchableOptions: createdBySearchableOptions,
+            activeSearchableIds: createdByIds,
+            onSearchableChange: handleCreatedByChange,
+            searchPlaceholder: 'Search creators...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleCreatedByChange([]),
           };
         })
       );
@@ -827,8 +994,8 @@ export function useFilterRefinements() {
       );
     };
 
-    pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
+    pushCreatedByConsolidatedChip();
     pushStageConsolidatedChip();
     pushOwnerConsolidatedChip();
     pushTagsConsolidatedChip();
@@ -942,18 +1109,13 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
-    // "Clear all" empties the status filter rather than restoring the default subset.
-    const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
-      TASK_STATUS_FILTER_IDS.includes(id as FilterID)
-    );
-
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      setMyTasksAssigneeEdited(false);
       setOwnerFilter([]);
       setStageFilter([]);
-      if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };
 
@@ -963,5 +1125,6 @@ export function useFilterRefinements() {
     resetToTabDefaults,
     currentView,
     consolidatedFiltersList,
+    handleAssigneeChange,
   };
 }

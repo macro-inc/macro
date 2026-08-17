@@ -1,5 +1,7 @@
 //! Maps email lifecycle events to search-index actions and processes them.
 
+use std::borrow::Cow;
+
 use ::email::domain::events::{EmailMacroEvent, EmailTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
@@ -37,6 +39,39 @@ pub(super) struct EmailEventDescription {
     pub(super) action: EmailIndexAction,
     pub(super) link_id: Uuid,
     pub(super) event_type: &'static str,
+}
+
+/// Worker-sharding key for an email event.
+///
+/// Email events are produced with a link-scoped (whole inbox) Kafka key, so
+/// thread- and message-scoped events shard by thread id instead: one inbox's
+/// backfill spreads across the worker pool while events for a single thread
+/// stay ordered. Link-scoped events keep the link-id producer key, so their
+/// ordering against a buffered thread event (e.g. a link removal racing a
+/// message upsert) is not guaranteed — an accepted risk of the same order as
+/// this consumer's existing commit-at-handoff drop window.
+pub(super) fn email_ordering_key(event: &EmailMacroEvent) -> Cow<'_, str> {
+    let thread_id = match &event.event().event {
+        EmailTopicEvent::LinkConnected(_)
+        | EmailTopicEvent::LinkDisconnected(_)
+        | EmailTopicEvent::LinkReauthRequired(_)
+        | EmailTopicEvent::ThreadsReindexRequested(_) => return Cow::Borrowed(event.key()),
+        EmailTopicEvent::MessageReceived(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageDraftSynced(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageSent(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageDeleted(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageSendQueued(metadata) => metadata.thread_id,
+        EmailTopicEvent::MessageSendCancelled(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadArchived(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadTrashed(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadRead(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadStarred(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadSpamChanged(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadProjectChanged(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadLabelsUpdated(metadata) => metadata.thread_id,
+        EmailTopicEvent::ThreadBackfilled(metadata) => metadata.thread_id,
+    };
+    Cow::Owned(thread_id.to_string())
 }
 
 pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescription {

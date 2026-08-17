@@ -19,6 +19,8 @@ on:
         required: true
       DD_API_KEY:
         required: true
+      NIX_CACHE_SIGNING_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       environment:
@@ -77,12 +79,38 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Warm shared release deps
       run: |-
         set -euo pipefail
         nix build --print-build-logs ".#deployCargoArtifacts"
         echo "Shared release deps realised into /nix/store; committed on job exit."
       shell: bash
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#deployCargoArtifacts
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -104,12 +132,38 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Warm shared lambda dep closure
       run: |-
         set -euo pipefail
         nix build --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
         echo "Shared lambda deps realised into /nix/store; committed on job exit."
       shell: bash
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#lambdaDeployCargoArtifacts .#callRecordingPreviewFfmpegLayer
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -137,6 +191,11 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build prebuilt binaries
       run: |
         set -euo pipefail
@@ -154,6 +213,27 @@ jobs:
       shell: bash
       env:
         SERVICE: ${{ matrix.service }}
+    - name: Push to nix cache
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#deploy-service-binaries-${{ matrix.service }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Upload handoff artifact
       run: nsc artifact upload prebuilt-binaries.tar.gz "$DEST" --expires_in=24h
       shell: bash
@@ -186,10 +266,19 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build Lambda artifacts
       run: .github/scripts/build-cloud-storage-lambdas-nix.sh
       env:
         SERVICE: ${{ matrix.service }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Log handoff receipt
       run: |
         set -euo pipefail

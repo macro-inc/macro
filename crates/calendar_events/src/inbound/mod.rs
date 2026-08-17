@@ -4,6 +4,10 @@
 #[cfg(feature = "inbound")]
 pub mod axum_router;
 
-/// RFC 5545 iCalendar invitation parsing.
-#[cfg(feature = "ics")]
-pub mod ics;
+/// Queue worker driving calendar reminder dispatch.
+#[cfg(feature = "dispatch")]
+pub mod dispatch_worker;
+
+/// Axum routes for authenticated calendar event mutations.
+#[cfg(feature = "inbound")]
+pub mod mutation_router;

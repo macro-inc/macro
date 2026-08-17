@@ -109,10 +109,10 @@ impl IdbStorage {
         // upgraded (delete/upgrade requests block while connections are
         // open); without this, `destroy` from another tab can hang forever.
         db.on_version_change(|event: web_sys::Event| {
-            if let Some(target) = event.target() {
-                if let Ok(db) = wasm_bindgen::JsCast::dyn_into::<web_sys::IdbDatabase>(target) {
-                    db.close();
-                }
+            if let Some(target) = event.target()
+                && let Ok(db) = wasm_bindgen::JsCast::dyn_into::<web_sys::IdbDatabase>(target)
+            {
+                db.close();
             }
         });
         let mut storage = IdbStorage { db };
@@ -190,7 +190,7 @@ impl IdbStorage {
 impl Storage for IdbStorage {
     type Error = IdbStorageError;
 
-    async fn get_batch(&self, keys: &[EntityKey]) -> Result<Vec<Option<Record>>, Self::Error> {
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         let tx = self
             .db
             .transaction(&[RECORDS_STORE], TransactionMode::ReadOnly)?;
@@ -200,7 +200,7 @@ impl Storage for IdbStorage {
         // transaction), then await in order.
         let mut requests = Vec::with_capacity(keys.len());
         for key in keys {
-            requests.push(store.get(JsValue::from_str(&key.0))?);
+            requests.push(store.get(JsValue::from_str(key.0.as_ref()))?);
         }
         let mut out = Vec::with_capacity(keys.len());
         for request in requests {
@@ -213,27 +213,33 @@ impl Storage for IdbStorage {
         Ok(out)
     }
 
-    async fn put_batch(&mut self, entries: Vec<(EntityKey, Record)>) -> Result<(), Self::Error> {
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
         let tx = self
             .db
             .transaction(&[RECORDS_STORE], TransactionMode::ReadWrite)?;
         let store = tx.object_store(RECORDS_STORE)?;
         for (key, record) in &entries {
             let bytes = encode_record(record);
-            store.put(&bytes_to_js(&bytes), Some(&JsValue::from_str(&key.0)))?;
+            store.put(
+                &bytes_to_js(&bytes),
+                Some(&JsValue::from_str(key.0.as_ref())),
+            )?;
         }
         // Committing the transaction is what makes the batch atomic.
         tx.commit()?.await?;
         Ok(())
     }
 
-    async fn delete_batch(&mut self, keys: &[EntityKey]) -> Result<(), Self::Error> {
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         let tx = self
             .db
             .transaction(&[RECORDS_STORE], TransactionMode::ReadWrite)?;
         let store = tx.object_store(RECORDS_STORE)?;
         for key in keys {
-            store.delete(JsValue::from_str(&key.0))?;
+            store.delete(JsValue::from_str(key.0.as_ref()))?;
         }
         tx.commit()?.await?;
         Ok(())
@@ -242,9 +248,9 @@ impl Storage for IdbStorage {
     async fn scan_records(
         &self,
         type_names: &[String],
-        after: Option<&EntityKey>,
+        after: Option<&EntityKey<'static>>,
         limit: usize,
-    ) -> Result<Vec<(EntityKey, Record)>, Self::Error> {
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
         if type_names.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
@@ -259,11 +265,11 @@ impl Storage for IdbStorage {
             }
             let prefix = format!("{type_name}:");
             let upper = format!("{type_name};");
-            if after.is_some_and(|after| after.0.as_str() >= upper.as_str()) {
+            if after.is_some_and(|after| after.0.as_ref() >= upper.as_str()) {
                 continue;
             }
             let (lower, lower_open) = match after {
-                Some(after) if after.0.as_str() >= prefix.as_str() => (after.0.as_str(), true),
+                Some(after) if after.0.as_ref() >= prefix.as_str() => (after.0.as_ref(), true),
                 _ => (prefix.as_str(), false),
             };
             let range = KeyRange::bound(
@@ -291,7 +297,10 @@ impl Storage for IdbStorage {
                     break;
                 };
                 let key = key.as_string().ok_or(IdbStorageError::NotString)?;
-                records.push((EntityKey(key), decode_record(&bytes_from_js(value)?)?));
+                records.push((
+                    EntityKey(key.into()),
+                    decode_record(&bytes_from_js(value)?)?,
+                ));
                 cursor.next(None).await?;
             }
         }
@@ -466,7 +475,7 @@ impl Storage for IdbStorage {
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
-        entries: Vec<(EntityKey, Record)>,
+        entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         let key = mutation_id_to_js(id)?;
         let tx = self.db.transaction(
@@ -487,7 +496,7 @@ impl Storage for IdbStorage {
         for (record_key, record) in &entries {
             records.put(
                 &bytes_to_js(&encode_record(record)),
-                Some(&JsValue::from_str(&record_key.0)),
+                Some(&JsValue::from_str(record_key.0.as_ref())),
             )?;
         }
         queue.delete(key.clone())?;

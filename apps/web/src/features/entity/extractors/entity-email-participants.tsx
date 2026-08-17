@@ -4,7 +4,7 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
 import { toast } from '@core/component/Toast/Toast';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
-import { emailToMacroId, useDisplayName } from '@core/user';
+import { emailToMacroId, getDisplayName } from '@core/user';
 import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
@@ -54,7 +54,7 @@ function ParticipantWithTooltip(props: {
   highlighted?: string;
 }) {
   const macroId = () => emailToMacroId(props.participant.email);
-  const [macroDisplayName] = useDisplayName(macroId());
+  const macroDisplayName = () => getDisplayName(macroId());
   const tooltipName = () =>
     resolveParticipantName(props.participant, macroDisplayName());
   const [open, setOpen] = createSignal(false);
@@ -176,7 +176,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
 export function EntityEmailParticipants(props: { entity: EmailEntity }) {
   const userEmail = useEmail();
   const fetchDisplayName = (email: string) =>
-    useDisplayName(emailToMacroId(email))[0]();
+    getDisplayName(emailToMacroId(email));
 
   const participants = () =>
     abbreviateParticipants(

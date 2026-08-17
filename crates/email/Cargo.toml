@@ -40,6 +40,7 @@ outbound = ["dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 attachment = { path = "../attachment", optional = true }
 anyhow = { workspace = true }

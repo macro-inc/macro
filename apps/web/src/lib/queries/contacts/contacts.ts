@@ -14,7 +14,8 @@ function contactsQueryOptions() {
   };
 }
 
-function useContactsQuery() {
+/** The raw contacts query — for callers that need its loading state. */
+export function useContactsQuery() {
   return useQuery(() => contactsQueryOptions());
 }
 

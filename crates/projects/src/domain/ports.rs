@@ -222,6 +222,100 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Unwired upload-URL port for hosts that expose project operations without
+/// upload flows (e.g. AI tools). Upload methods fail loudly if reached.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableProjectUploadUrlPort;
+
+impl ProjectUploadUrlPort for UnavailableProjectUploadUrlPort {
+    async fn put_upload_zip_staging_presigned_url(
+        &self,
+        _key: BulkUploadStagingKey,
+        _sha: String,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("project upload URLs are not available in this host")
+    }
+
+    async fn put_document_storage_presigned_url(
+        &self,
+        _key: String,
+        _sha: String,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("project upload URLs are not available in this host")
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        _key: String,
+        _sha: String,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("project upload URLs are not available in this host")
+    }
+
+    fn document_storage_bucket(&self) -> &str {
+        ""
+    }
+
+    fn docx_upload_bucket(&self) -> &str {
+        ""
+    }
+}
+
+/// Unwired bulk-upload port for hosts that expose project operations without
+/// upload flows (e.g. AI tools). Methods fail loudly if reached.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableBulkUploadRequestPort;
+
+impl BulkUploadRequestPort for UnavailableBulkUploadRequestPort {
+    async fn create_bulk_upload_request(
+        &self,
+        _request_id: Uuid,
+        _user_id: &str,
+        _name: Option<&str>,
+        _parent_id: Option<&str>,
+    ) -> anyhow::Result<BulkUploadRequest> {
+        anyhow::bail!("bulk-upload requests are not available in this host")
+    }
+
+    async fn get_bulk_upload_document_statuses(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<BulkUploadRequestDocuments> {
+        anyhow::bail!("bulk-upload requests are not available in this host")
+    }
+}
+
+/// Unwired content-hash counter for hosts that expose project operations
+/// without deletion flows (e.g. AI tools). Fails loudly if reached.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableShaCounterPort;
+
+impl ShaCounterPort for UnavailableShaCounterPort {
+    async fn decrement_counts(&self, _sha_counts: &[(String, i64)]) -> anyhow::Result<()> {
+        anyhow::bail!("content-hash counting is not available in this host")
+    }
+}
+
+/// Unwired search indexer for hosts that expose project operations without
+/// deletion flows (e.g. AI tools). Methods fail loudly if reached.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableProjectSearchIndexer;
+
+impl ProjectSearchIndexer for UnavailableProjectSearchIndexer {
+    async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
+        anyhow::bail!("project search indexing is not available in this host")
+    }
+
+    async fn enqueue_document_deletes(
+        &self,
+        _documents: Vec<(String, String)>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("project search indexing is not available in this host")
+    }
+}
+
 /// Inbound-facing service interface for project operations.
 pub trait ProjectService: Send + Sync + 'static {
     /// List projects visible through the user's project history.

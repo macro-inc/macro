@@ -20,7 +20,7 @@ import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 
 export function SoupFiltersBar(props: {
@@ -78,7 +78,7 @@ export function SoupFiltersBar(props: {
   );
 
   return (
-    <Show when={!isMobile()}>
+    <Show when={!isTouchDevice()}>
       <SplitToolbarLeft>
         <Show
           when={!isSearchView() && !isTagView()}

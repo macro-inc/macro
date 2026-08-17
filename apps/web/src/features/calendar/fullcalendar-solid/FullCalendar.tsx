@@ -1,7 +1,6 @@
 import {
   type AllDayContentArg,
   Calendar,
-  type CalendarApi,
   type CalendarOptions,
   type DatesSetArg,
   type DayCellContentArg,
@@ -87,7 +86,7 @@ export type FullCalendarHostProps = Omit<
 /** Public state and API available to descendants of `FullCalendar.Root`. */
 export interface FullCalendarContextValue {
   /** The mounted FullCalendar API, or `undefined` before a host mounts. */
-  api: Accessor<CalendarApi | undefined>;
+  api: Accessor<Calendar | undefined>;
   /** The latest date information emitted by FullCalendar. */
   dateInfo: Accessor<DatesSetArg | undefined>;
 }

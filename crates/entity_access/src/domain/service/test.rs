@@ -27,6 +27,7 @@ struct MockRepo {
     thread_access_calls: Arc<AtomicUsize>,
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
+    reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
     team_channel_role: Arc<Mutex<ChannelRoleResult>>,
@@ -60,6 +61,7 @@ impl MockRepo {
             thread_access_calls: Arc::new(AtomicUsize::new(0)),
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
+            reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
             team_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
@@ -279,6 +281,14 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.call_access.lock().await)
+    }
+
+    async fn get_reminder_access(
+        &self,
+        _reminder_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.reminder_access.lock().await)
     }
 
     async fn get_team_entity_access(

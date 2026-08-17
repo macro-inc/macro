@@ -67,6 +67,12 @@ type DisplayNameOptions = {
   emailFallback?: 'full' | 'local-part';
 };
 
+type DisplayNamePartStrings = {
+  firstName: string;
+  lastName: string;
+  fullName: string;
+};
+
 function formatEmailFallback(email: string, options?: DisplayNameOptions) {
   if (options?.emailFallback !== 'local-part') return email;
   return email.split('@')[0] || email;
@@ -176,6 +182,26 @@ export function getDisplayName(
   return defaultNameTransform(getUserNameItem(id), options);
 }
 
+/** Resolves structured display name parts from the shared reactive cache. */
+export function getDisplayNameParts(
+  id: MacroId | undefined | null,
+  options?: DisplayNameOptions
+): DisplayNamePartStrings {
+  if (!id) return { firstName: '', lastName: '', fullName: '' };
+
+  const item = getUserNameItem(id);
+  const fullName = defaultNameTransform(item, options);
+
+  if (item.loading) return { firstName: '', lastName: '', fullName };
+
+  const firstName =
+    item.firstName && item.firstName !== 'N/A' ? item.firstName : '';
+  const lastName =
+    item.lastName && item.lastName !== 'N/A' ? item.lastName : '';
+
+  return { firstName, lastName, fullName };
+}
+
 /** Shared hook that handles caching/fetching and returns the underlying UserNameItem */
 function useUserNameItem(id: MacroId) {
   ensureUserNameItem(id);
@@ -205,6 +231,10 @@ type DisplayNameParts = {
   refetch: () => void;
 };
 
+/**
+ * @deprecated Prefer `getDisplayNameParts` inside a reactive accessor so the
+ * current id is resolved when props/list rows change.
+ */
 export function useDisplayNameParts(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions
@@ -239,6 +269,10 @@ export function useDisplayNameParts(
   return { firstName, lastName, fullName, refetch };
 }
 
+/**
+ * @deprecated Prefer `getDisplayName` inside a reactive accessor so the
+ * current id is resolved when props/list rows change.
+ */
 export function useDisplayName(
   id: MacroId | undefined | null,
   options?: DisplayNameOptions

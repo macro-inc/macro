@@ -106,7 +106,7 @@ export function OnboardingModalLayout(props: OnboardingModalLayoutProps) {
           </div>
         </aside>
 
-        <main class="flex-1 min-w-0 flex flex-col bg-surface-secondary/30">
+        <main class="flex-1 min-w-0 flex flex-col bg-panel">
           <div class="flex-1 min-h-0 overflow-hidden">
             <div style={props.bodyStyle()} class="size-full">
               <Show

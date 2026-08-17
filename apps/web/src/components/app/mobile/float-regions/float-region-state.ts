@@ -9,13 +9,19 @@ export type FloatRegionName = (typeof FLOAT_REGIONS)[number];
 type FloatRegionRegistration = {
   /** Unique identity; comparisons use this rather than object reference. */
   id: symbol;
-  /** Higher wins; ties go to the most recently mounted contributor. */
-  priority: number;
+  /** Higher wins; ties go to the most recently mounted contributor. May be
+   *  reactive so a contributor can take a region over without remounting. */
+  priority: number | Accessor<number>;
   /** Reactive gate: panel activity, keyboard visibility, etc. */
   isActive: Accessor<boolean>;
   /** Mount order, used to break priority ties. */
   seq: number;
 };
+
+const priorityOf = (registration: FloatRegionRegistration) =>
+  typeof registration.priority === 'function'
+    ? registration.priority()
+    : registration.priority;
 
 export type FloatRegionRegistrationHandle = {
   /** Reactive: whether this contribution currently wins its region. */
@@ -66,8 +72,8 @@ function createFloatRegionsState() {
       if (!r.isActive()) continue;
       if (
         !winner ||
-        r.priority > winner.priority ||
-        (r.priority === winner.priority && r.seq > winner.seq)
+        priorityOf(r) > priorityOf(winner) ||
+        (priorityOf(r) === priorityOf(winner) && r.seq > winner.seq)
       ) {
         winner = r;
       }

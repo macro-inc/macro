@@ -1,0 +1,61 @@
+query MyActivity($input: ActivityFeedInput!) {
+	user {
+		id
+		activity(input: $input) {
+			items {
+				...ActivityEventFields
+			}
+			nextCursor
+		}
+	}
+}
+
+query EntityActivity($input: SoupInput!, $limit: Int) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...EntityActivityFields
+			}
+		}
+	}
+}
+
+fragment EntityActivityFields on GraphqlSoupEntity {
+	__typename
+	id
+	activity(limit: $limit) {
+		...ActivityEventFields
+	}
+}
+
+fragment ActivityEventFields on GraphqlActivityEvent {
+	__typename
+	id
+	actorId
+	subjectId
+	entityType
+	entityId
+	occurredAt
+	action {
+		__typename
+		... on GraphqlActivityPropertyChanged {
+			property
+			from
+			to
+		}
+		... on GraphqlActivityParticipantAdded {
+			participant
+		}
+		... on GraphqlActivityParticipantRemoved {
+			participant
+		}
+		... on GraphqlActivityCallStarted {
+			callId
+		}
+		... on GraphqlActivityUnknownAction {
+			tag
+			payload
+		}
+	}
+}

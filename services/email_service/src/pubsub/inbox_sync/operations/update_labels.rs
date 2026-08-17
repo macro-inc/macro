@@ -1,6 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::process;
-use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
+use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
     cg_refresh_email, complete_transaction_with_processing_error, publish_email_event,
 };
@@ -18,7 +17,6 @@ use models_email::email::service::link;
 use models_email::gmail::inbox_sync::{
     InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
 };
-use models_email::gmail::operations::GmailApiOperation;
 use models_email::service;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -35,7 +33,6 @@ pub async fn update_labels(
     link: &link::Link,
     payload: &UpdateLabelsPayload,
 ) -> result::Result<(), ProcessingError> {
-    let gmail_access_token = process::fetch_pubsub_gmail_token(ctx, link).await?;
     let provider_message_id = &payload.provider_message_id;
 
     // fetch simple message to get db_id from provider_id
@@ -95,27 +92,22 @@ pub async fn update_labels(
                 })
             })?;
 
-    // get the message labels from gmail
-    check_gmail_rate_limit_inbox_sync(
-        ctx,
-        link.id,
-        GmailApiOperation::MessagesGet,
-        InboxSyncOperation::UpdateLabels(payload.clone()),
-    )
-    .await?;
-
-    let gmail_message_labels = match ctx
-        .gmail_client
-        .get_message_label_ids(&gmail_access_token, &payload.provider_message_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to get message from gmail api".to_string()),
-            })
-        })? {
-        Some(labels) => labels,
-        None => {
+    let provider_labels = ctx
+        .email_api
+        .get_message_label_ids(link.id, &payload.provider_message_id)
+        .await;
+    let gmail_message_labels = match provider_labels {
+        Ok(Some(labels)) => labels,
+        Err(error) => {
+            return Err(handle_operation_error(
+                ctx,
+                link.id,
+                InboxSyncOperation::UpdateLabels(payload.clone()),
+                error,
+            )
+            .await);
+        }
+        Ok(None) => {
             tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
                 "Message not found in gmail when attempting to update labels");
             return Ok(());

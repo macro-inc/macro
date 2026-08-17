@@ -1,3 +1,5 @@
+/// Event-to-activity mappings for this domain.
+pub mod activity;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
 #[cfg(feature = "entity_mutation")]

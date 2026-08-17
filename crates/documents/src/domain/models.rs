@@ -135,6 +135,26 @@ pub struct GithubPullRequestComment {
     pub updated_at: Option<DateTime<Utc>>,
     /// The GitHub source for the comment, such as `issue_comment` or `review_comment`.
     pub source: String,
+    /// The id of the comment this one replies to, when it is part of a review
+    /// thread. Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_reply_to_id: Option<u64>,
+    /// The id of the pull request review this comment was submitted with.
+    /// Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request_review_id: Option<u64>,
+    /// The repository-relative file path the review comment is anchored to.
+    /// Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// The line in the current diff the comment is anchored to. Cleared by
+    /// GitHub when later commits outdate the comment's diff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u64>,
+    /// The line the comment was originally anchored to, kept even when the
+    /// diff has since changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_line: Option<u64>,
 }
 
 /// A check run associated with a GitHub pull request.
@@ -347,6 +367,8 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Whether to revoke direct non-owner user access in the edit transaction.
+    pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
     pub file_type: Option<FileTypeUpdate>,
 }
@@ -484,6 +506,52 @@ pub struct CreateSnippetRequest {
 pub struct CreateSnippetResponse {
     /// The document ID of the created snippet.
     pub document_id: String,
+}
+
+/// Request body for creating a skill — a markdown document containing
+/// instructions that AI reads and follows when the skill is referenced in an
+/// AI input.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillRequest {
+    /// The name of the skill.
+    pub skill_name: String,
+    /// Markdown source text. Defaults to an empty skill document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the skill with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a skill.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillResponse {
+    /// The document ID of the created skill.
+    pub document_id: String,
+}
+
+/// A built-in system skill: static, code-defined AI instructions surfaced
+/// through the same tools as user-authored skill documents, but with no
+/// document behind them.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillSummary {
+    /// The well-known id the skill is referenced by in mentions and AI tools.
+    pub id: uuid::Uuid,
+    /// The name of the skill.
+    pub name: String,
+}
+
+/// Response listing the built-in system skills.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillsResponse {
+    /// Every system skill, in display order.
+    pub skills: Vec<SystemSkillSummary>,
 }
 
 /// The team-share state of a document. The team is resolved from the document

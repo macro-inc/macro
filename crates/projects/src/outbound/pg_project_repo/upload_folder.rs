@@ -264,17 +264,24 @@ async fn create_document_share_permission(
     document_id: &str,
     permission: &SharePermissionV2,
 ) -> Result<(), sqlx::Error> {
+    let link_share = permission.link_share;
+    let link_share_access_level =
+        share::normalize_link_share_access_level(link_share, permission.link_share_access_level);
+    let link_share = link_share.map(|value| value.to_string());
+
     let permission_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
+        INSERT INTO "SharePermission" (
+            "linkShare",
+            "linkShareAccessLevel",
+            "createdAt",
+            "updatedAt"
+        )
         VALUES ($1, $2, NOW(), NOW())
         RETURNING id
         "#,
-        permission.is_public,
-        permission
-            .public_access_level
-            .as_ref()
-            .map(ToString::to_string),
+        link_share,
+        link_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

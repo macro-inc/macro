@@ -361,7 +361,12 @@ function soupQueryExcludesDone(key: QueryKey): boolean {
   return (
     serialized.includes('"emailView":"inbox"') ||
     serialized.includes('"NotificationDone":false') ||
-    serialized.includes('"nd":false')
+    serialized.includes('"nd":false') ||
+    // Reminders carry their done state on themselves rather than on a
+    // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
+    // shape the Reminders Active and Scheduled tabs filter on. Without it,
+    // marking a reminder done left the row sitting there until the refetch.
+    serialized.includes('"comp":false')
   );
 }
 
@@ -583,6 +588,10 @@ export function buildSingleEntityFilter(
     .with('calendarEvent', () => ({
       ...base,
       calendar_event_filters: { calendar_event_ids: [entityId] },
+    }))
+    .with('reminder', () => ({
+      ...base,
+      reminder_filters: { ids: [entityId] },
     }))
     .exhaustive();
 }

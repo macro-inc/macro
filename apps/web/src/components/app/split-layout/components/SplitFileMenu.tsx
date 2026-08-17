@@ -1,10 +1,18 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { makeFavoriteAction } from '@app/features/next-soup/actions';
+import {
+  makeCreateReminderAction,
+  makeFavoriteAction,
+} from '@app/features/next-soup/actions';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_REMINDERS_FLAG,
+  ENABLE_REMINDERS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -12,6 +20,7 @@ import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData, type EntityData } from '@entity';
 import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import BellSimple from '@phosphor/bell-simple.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Copy from '@phosphor/copy.svg';
@@ -252,6 +261,7 @@ export function SplitFileMenu(props: {
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
+  const createReminderAction = makeCreateReminderAction();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
 
@@ -280,6 +290,32 @@ export function SplitFileMenu(props: {
     };
   };
 
+  // Read reactively as well as through the action's imperative gate: `ops` below
+  // is a memo, so without a reactive dependency the item would stay missing for
+  // the life of this menu if PostHog answered after it was first computed. The
+  // other reminder surfaces re-evaluate per interaction and don't need this.
+  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
+    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
+  });
+
+  // Injected here rather than per-block so every block rendering this menu gets
+  // it, the way Favorite does. Entity types the reminders API cannot mint an
+  // access receipt for (channel messages/threads) return undefined and are
+  // filtered out.
+  const reminderOp = (): SplitFileMenuAction | undefined => {
+    if (!remindersFlag().enabled) return undefined;
+    const entity = menuEntity();
+    if (!entity || !createReminderAction.canExecute(entity)) return undefined;
+    return {
+      label: 'Remind me',
+      icon: BellSimple,
+      action: () => {
+        setOpen(false);
+        createReminderAction.execute([entity]);
+      },
+    };
+  };
+
   createEffect(() => {
     const openMenu = () => setOpen(true);
     ctx.setTitleFileMenuTrigger(() => openMenu);
@@ -288,6 +324,7 @@ export function SplitFileMenu(props: {
 
   const ops = createMemo<SplitFileMenuAction[]>(() => {
     const favorite = favoriteOp();
+    const reminder = reminderOp();
     const mapped = props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
@@ -387,7 +424,7 @@ export function SplitFileMenu(props: {
         }
       })
       .filter((op) => !!op);
-    return favorite ? [favorite, ...mapped] : mapped;
+    return [favorite, reminder, ...mapped].filter((op) => !!op);
   });
 
   const filteredTools = createMemo(() =>

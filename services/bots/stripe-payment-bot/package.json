@@ -1,0 +1,19 @@
+{
+  "name": "stripe-payment-bot",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "tsc --noEmit --project tsconfig.json",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "stripe": "^22.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "bun-types": "^1.3.14",
+    "wrangler": "^4.110.0"
+  }
+}

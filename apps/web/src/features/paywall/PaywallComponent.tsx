@@ -118,7 +118,7 @@ const PaywallComponent = (props: PaywallProps) => {
             <Show when={paywallMetadata()?.learnMoreUrl}>
               {(learnMoreUrl) => (
                 <a
-                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-ink-extra-muted hover:text-accent"
+                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-link hover:text-link-hover visited:text-link-visited"
                   href={learnMoreUrl()}
                   target="_blank"
                   rel="noopener"

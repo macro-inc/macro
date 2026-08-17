@@ -72,6 +72,7 @@ update-node-modules-hash:
 # Verify the fixed-output js node_modules derivation matches bun.lock.
 check-node-modules-nix:
   nix build .#js-node-modules --no-link
+  nix build .#js-node-modules --no-link --rebuild
 
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.

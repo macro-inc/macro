@@ -16,4 +16,5 @@ export type DocumentSubType =
 export const DocumentSubType = {
   task: 'task',
   snippet: 'snippet',
+  skill: 'skill',
 } as const;

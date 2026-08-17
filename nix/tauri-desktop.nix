@@ -67,7 +67,8 @@
         cargoVendorDir = rootCargoVendorDir;
         nativeBuildInputs = [
           pkgs.binaryen
-          pkgs.wasm-bindgen-cli
+          # wasm-pack requires the CLI version to exactly match Cargo.lock.
+          pkgs.wasm-bindgen-cli_0_2_126
           pkgs.wasm-pack
         ];
         doCheck = false;
@@ -505,6 +506,67 @@
         };
       };
       tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
+      tauriDesktopDmgAppleLd = pkgs.writeShellScriptBin "ld" ''
+        appleDeveloperDir=$(
+          unset DEVELOPER_DIR
+          /usr/bin/xcode-select --print-path
+        )
+        appleLd="$appleDeveloperDir/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
+        if [ ! -x "$appleLd" ]; then
+          appleLd=$(
+            export DEVELOPER_DIR="$appleDeveloperDir"
+            export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+            unset SDKROOT TOOLCHAINS
+            /usr/bin/xcrun --sdk macosx --find ld
+          )
+        fi
+        if [ ! -x "$appleLd" ]; then
+          echo "could not locate an executable Apple linker: $appleLd" >&2
+          exit 1
+        fi
+        case "$appleDeveloperDir" in
+          /nix/store/*)
+            echo "xcode-select unexpectedly selected Nix: $appleDeveloperDir" >&2
+            exit 1
+            ;;
+        esac
+        case "$appleLd" in
+          /nix/store/*)
+            echo "Apple linker selection unexpectedly resolved to Nix for $appleDeveloperDir: $appleLd" >&2
+            exit 1
+            ;;
+        esac
+        if [ -n "''${TAURI_DESKTOP_APPLE_LD_MARKER:-}" ]; then
+          printf '%s\n' "$appleLd" > "$TAURI_DESKTOP_APPLE_LD_MARKER"
+        fi
+        exec "$appleLd" "$@"
+      '';
+      tauriDesktopDmgAppleLinker = pkgs.writeShellScript "tauri-desktop-apple-linker" ''
+        # Point clang at a known-present ld shim. The macOS clang driver ignored
+        # /usr/bin in -B/PATH and otherwise kept selecting Nix's cctools wrapper.
+        export PATH="${tauriDesktopDmgAppleLd}/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        exec /usr/bin/clang -B"${tauriDesktopDmgAppleLd}/bin" "$@"
+      '';
+      tauriDesktopDmgAppleLinkerSmoke = pkgs.stdenv.mkDerivation {
+        name = "tauri-desktop-apple-linker-smoke";
+        dontUnpack = true;
+        buildPhase = ''
+          cat > smoke.c <<'EOF'
+          int main(void) { return 0; }
+          EOF
+          export TAURI_DESKTOP_APPLE_LD_MARKER="$PWD/apple-ld-used"
+          ${tauriDesktopDmgAppleLinker} -v smoke.c -o smoke
+          if [ ! -s "$TAURI_DESKTOP_APPLE_LD_MARKER" ]; then
+            echo "Apple clang did not invoke the xcrun-backed ld shim" >&2
+            exit 1
+          fi
+          echo "Apple linker smoke test used $(cat "$TAURI_DESKTOP_APPLE_LD_MARKER")"
+          ./smoke
+        '';
+        installPhase = ''
+          touch "$out"
+        '';
+      };
       tauriDesktopDmgConfig = builtins.toJSON (
         lib.recursiveUpdate
           {
@@ -530,6 +592,11 @@
           pname = "macro-tauri-desktop-dmg";
           TAURI_CONFIG = tauriDesktopDmgConfig;
           APPLE_SIGNING_IDENTITY = tauriDesktopDmgSigningIdentity;
+          # Nix's cctools ld crashes with SIGTRAP while linking the large final
+          # desktop binary on GitHub's macOS 15 arm64 runners. This derivation
+          # is already an impure, unsandboxed native macOS build for signing;
+          # use the runner's Apple linker and SDK for Cargo links.
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = tauriDesktopDmgAppleLinker;
           nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
           preBuild = ''
             if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
@@ -818,6 +885,7 @@
       // lib.optionalAttrs isAarch64Darwin {
         tauri-frontend = frontend;
         tauri-desktop-dmg = tauriDesktopDmg;
+        tauri-desktop-apple-linker-smoke = tauriDesktopDmgAppleLinkerSmoke;
         tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
       };
     };

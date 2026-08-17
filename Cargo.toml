@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "crates/activity",
   "crates/agent",
   "crates/agent_runtime_protocol",
   "crates/ai_projections",
@@ -19,10 +20,13 @@ members = [
   "crates/cowlike",
   "crates/crm",
   "crates/embedding",
+  "crates/email_api_client",
   "crates/entity_mutation",
   "crates/favorites",
   "crates/foreign_entity",
   "crates/generic_email_domains",
+  "crates/gmail_client",
+  "crates/graphql_activity",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
@@ -46,8 +50,11 @@ members = [
   "crates/onboarding",
   "crates/prompt",
   "crates/properties_service",
+  "crates/reminders",
   "crates/search_service",
+  "crates/skills",
   "crates/soup_realtime",
+  "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
   "crates/worker-rs-otel",
@@ -133,10 +140,12 @@ base64 = "0.22.1"
 bebop = "3.1.3"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
+chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
 cookie = "0.18.1"
+cron = "0.16.0"
 csv = "1"
 dashmap = "6.1.0"
 dateparser = "0.2.1"
@@ -153,10 +162,11 @@ glob = "0.3.3"
 guppy = "0.17.24"
 hex = "0.4.3"
 hmac = "0.12.1"
+encoding_rs = "0.8"
 http = "1"
 http-body-util = "0.1.2"
+httpdate = "1"
 image = "0.25"
-icalendar = { version = "0.17.12", features = ["chrono-tz", "recurrence"] }
 indexmap = "2"
 inquire = "0.7"
 itertools = "0.14"
@@ -204,6 +214,7 @@ rdkafka = { version = "0.37", default-features = false, features = [
   "ssl-vendored",
   "tokio",
 ] }
+readonly = "0.2"
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
@@ -265,6 +276,7 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+wiremock = "0.6.5"
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
@@ -293,6 +305,16 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
+ammonia = "4.1.4"
+html-escape = "0.2"
+
+# Retain Rust DWARF for local cache profiling while keeping release-level LLVM
+# optimization. wasm-pack's custom profile metadata prevents the final
+# wasm-opt pass from discarding or rewriting these locations.
+[profile.cache-wasm-profiling]
+inherits = "release"
+debug = 2
+strip = "none"
 
 # The Cloudflare sync worker is size-sensitive. Package manifests cannot own
 # profiles once they are workspace members, so keep its former release profile

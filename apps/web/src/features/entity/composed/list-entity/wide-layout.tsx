@@ -25,6 +25,7 @@ import {
   isGithubPrEntity,
   isProjectContainedEntity,
   isProjectEntity,
+  isReminderEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
@@ -40,6 +41,7 @@ import {
   GithubPullRequestChecksIndicator,
   GithubPullRequestPills,
 } from './foreign';
+import { ReminderWideContent } from './reminder';
 import type { LayoutProps } from './shared';
 
 function RowTags(props: {
@@ -142,6 +144,9 @@ export function WideLayout(props: LayoutProps) {
           </Match>
           <Match when={isAutomationEntity(props.entity) && props.entity}>
             {(entity) => <AutomationWideContent entity={entity()} />}
+          </Match>
+          <Match when={isReminderEntity(props.entity) && props.entity}>
+            {(entity) => <ReminderWideContent entity={entity()} />}
           </Match>
           <Match when={isGithubPrEntity(props.entity) && props.entity}>
             {(entity) => (

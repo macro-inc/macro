@@ -227,6 +227,7 @@ pub async fn build_tool_service_context_from_env(
         ),
         crm::domain::service::NoOpCrmService,
         foreign_entity_service,
+        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -310,20 +311,21 @@ pub async fn build_tool_service_context_from_env(
         entity_access_service.clone(),
     );
 
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(pool.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            sqs_client,
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
-        Arc::new(
-            EmailServiceImpl::new(
-                EmailPgRepo::new(pool.clone()),
-                FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
-                sqs_client,
-                crm_service.clone(),
-                entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-                    entity_access_management::outbound::PgRepository::new(pool.clone()),
-                ),
-                0,
-            )
-            .with_macro_event_broker(macro_event_broker.clone()),
-        ),
+        user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
@@ -372,10 +374,22 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let project_tool_context = crate::tool_context::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service,
+    );
+
     let anthropic_tool_context = build_anthropic_tool_context();
 
+    let skill_tool_context =
+        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+
     Ok(ToolServiceContext {
-        search_service_client: search_client,
+        search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
@@ -387,8 +401,10 @@ pub async fn build_tool_service_context_from_env(
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
+        project_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
+        skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

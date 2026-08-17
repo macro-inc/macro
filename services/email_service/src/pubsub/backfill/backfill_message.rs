@@ -1,69 +1,34 @@
-use crate::convert::map_message_resource_to_service;
+use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{
-    CheckGmailRateLimitArgs, CrmContactRecipient, check_gmail_rate_limit,
-    enqueue_populate_crm_contacts,
-};
+use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
-use anyhow::Context;
 use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 
 /// This step is invoked by BackfillThread once for each message in the thread.
 /// Creates a message object in the database. If the message is the last message in
 /// the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn backfill_message(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<BackfillMessagePayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError> {
     let p = &scope.payload;
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::MessagesGet,
-        retryable: true,
-        is_backfill: true,
-    })
-    .await?;
-
-    // get message from gmail
-    let message_resource = match ctx
-        .gmail_client
-        .get_message(access_token, &p.message_provider_id)
+    let fetched = ctx
+        .email_api
+        .get_message(link.id, &p.message_provider_id)
         .await
-    {
-        Ok(Some(message)) => message,
-        Ok(None) => {
-            return Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::MessageNotFoundInProvider,
-                source: anyhow::anyhow!("Message {} not found in Gmail", p.message_provider_id),
-            }));
-        }
-        Err(e) => {
-            return Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Gmail API failed to get message"),
-            }));
-        }
-    };
-
-    let calendar_payload = message_resource.payload.clone();
-
-    // Map Gmail resource to service model (IDs are generated in the parse function)
-    let mut message = map_message_resource_to_service(message_resource, link.id)
-        .context("Failed to map message resource to service")
-        .map_err(|e| {
+        .map_err(|error| map_email_api_error(error, "Failed to get provider message"))?
+        .ok_or_else(|| {
             ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e,
+                reason: FailureReason::MessageNotFoundInProvider,
+                source: anyhow::anyhow!("Message {} not found in provider", p.message_provider_id),
             })
         })?;
+    let mut message = fetched.message;
 
     process_message_pre_insert(&mut message).await;
 
@@ -83,45 +48,6 @@ pub async fn backfill_message(
             source: e.context("Failed to insert final message into database"),
         })
     })?;
-    let (message_db_id, persisted_thread_id) =
-        email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
-            &ctx.db,
-            link.id,
-            &p.message_provider_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to resolve persisted calendar invitation message"),
-            })
-        })?;
-
-    if ctx.calendar_sync_enabled {
-        crate::calendar_ingest::ingest_calendar_parts(
-            &ctx.db,
-            &ctx.gmail_client,
-            &ctx.redis_client,
-            crate::calendar_ingest::CalendarIngestInput {
-                is_backfill: true,
-                access_token,
-                owner_id: link.macro_id.as_ref(),
-                email_link_id: link.id,
-                email_thread_id: persisted_thread_id,
-                email_message_id: message_db_id,
-                provider_message_id: &p.message_provider_id,
-                payload: &calendar_payload,
-            },
-        )
-        .await
-        .inspect_err(|error| {
-            // Calendar extraction is best-effort: a Gmail or database failure
-            // here must not block the message's core side effects, and the
-            // durable email-ICS backfill re-extracts anything missed.
-            tracing::warn!(error = ?error, "failed to extract calendar invitation");
-        })
-        .ok();
-    }
 
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both

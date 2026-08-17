@@ -33,8 +33,8 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupType,
-            grouping::ItemGroupingInfo,
+            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
+            SoupSortDirection, SoupType, grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -1644,6 +1644,7 @@ fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1672,6 +1673,7 @@ fn ast_endpoint_email_crm_addresses_stamps_scope() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1700,6 +1702,7 @@ fn ast_endpoint_email_crm_both_lists_rejected() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1721,6 +1724,7 @@ fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1755,6 +1759,7 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1831,6 +1836,7 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
     });
     let api: ApiEntityFilterAst = serde_json::from_value(js).unwrap();
     let req = SoupRequest {
+        sort_direction: SoupSortDirection::default(),
         soup_type: SoupType::Expanded,
         limit: 20,
         cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
@@ -1848,4 +1854,64 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
     };
     let scope = ast.email_filter.crm_scope.as_ref().expect("scope set");
     assert!(matches!(scope, CrmScope::Domains(d) if d == &vec!["acme.com".to_string()]));
+}
+
+/// Ascending frecency has no meaning — the frecency branch orders by relevance
+/// score and never applies the merged sort a direction would flip. Rejecting
+/// keeps the parameter honest rather than accepting it and doing nothing.
+#[tokio::test]
+async fn ascending_frecency_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "frecency",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=frecency"
+        })
+    );
+}
+
+/// The descending default must still reach the service — the guard is scoped to
+/// the one unsupported combination, not to frecency as a whole.
+#[tokio::test]
+async fn descending_frecency_is_accepted() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "frecency" })).unwrap(),
+        ))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    // The mock service always errors, so the 500 is the harness rather than the
+    // guard — pinned instead of loosely asserting "not 400" so a genuine
+    // regression to some other status is caught. Reaching the service at all is
+    // the actual claim: the guard let this combination through.
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(inner_counter.lock().unwrap().len(), 1);
 }

@@ -191,6 +191,30 @@ pub const QUEUES: &[Queue] = &[
         name: macro_queues::StaticFileServiceS3EventQueueUrl::LOCAL,
         bindings: &[("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL", Url)],
     },
+    Queue {
+        // Carries both the reminder sweep tick and the per-firing fan-out it
+        // publishes. Consumed by cloud-storage-service's dispatch worker, which
+        // tight-loops on receive errors if the queue is not there.
+        //
+        // No EventBridge locally — LocalStack has `events` disabled — so nothing
+        // puts the minutely tick on this queue. `just poke_reminder_sweep` (or
+        // `just tick_reminder_sweeps`) stands in for the schedule.
+        name: macro_queues::ReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::ReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
+        // Same EventBridge stand-in as the reminders queue above:
+        // `just poke_calendar_reminder_sweep` (or
+        // `just tick_calendar_reminder_sweeps`) supplies the minutely tick.
+        name: macro_queues::CalendarReminderDispatchQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarReminderDispatchQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
 ];
 
 /// Every local S3 bucket and the env var that references it.

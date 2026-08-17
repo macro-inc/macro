@@ -25,40 +25,21 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { createTask } from '@core/util/create';
-import { filterMap } from '@core/util/list';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
+import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import SplitIcon from '@phosphor/square-half.svg';
 import XIcon from '@phosphor/x.svg';
-import {
-  propertyApiValuesToNormalized,
-  propertyValueToApi,
-} from '@property/api/converters';
 import { Modals } from '@property/component/modal';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-} from '@property/context/PropertiesContext';
-import { InlineTagsPill, useLocalDocTags } from '@property/tags';
-import type {
-  Property,
-  PropertyApiValues,
-  PropertyOption,
-} from '@property/types';
+import { PropertiesProvider } from '@property/context/PropertiesContext';
+import { InlineTagsPill } from '@property/tags';
+import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useTagsQuery } from '@queries/properties/tags';
-import { refetchSoupEntity } from '@queries/soup/cache';
-import { propertiesServiceClient } from '@service-properties/client';
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { useQuery } from '@tanstack/solid-query';
 import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
@@ -84,8 +65,13 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
+import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import {
+  createTaskComposerProperties,
+  createTaskWithProperties,
+  defaultTaskPropertyValues,
+} from '../util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
   loadTaskComposerDraft,
@@ -95,14 +81,6 @@ import {
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
-// Show these props in the composer (Linear-style left-to-right order).
-const COMPOSER_PROPERTIES = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
-];
-const COMPOSER_PROPERTY_SET = new Set<string>(COMPOSER_PROPERTIES);
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
 function composerTitleNavigationPlugin(
@@ -190,7 +168,7 @@ function isTitleSelectionAtStart() {
   return true;
 }
 
-function ComposeTaskTitleEditor(props: {
+export function ComposeTaskTitleEditor(props: {
   value: Accessor<string>;
   onChange: (value: string) => void;
   disabled: Accessor<boolean>;
@@ -334,93 +312,6 @@ function ComposeTaskTitleEditor(props: {
 }
 
 /**
- * Make a task and append props using the create_task endpoint.
- * @param taskTitle Title string
- * @param taskContent content markdown string
- * @param properties Stored prop value map
- * @param definitions The definitions map for extra meta data
- * @returns
- */
-async function createTaskWithProperties(
-  taskTitle: string,
-  taskContent: string,
-  properties: Array<[string, PropertyApiValues]>,
-  definitions: Map<
-    string,
-    PropertyDefinition | PropertyDefinitionDetailResponse
-  >,
-  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
-) {
-  // Convert properties to API format (filter out null values)
-  const propertyValues = properties.flatMap(([id, value]) => {
-    const definition = definitions.get(id);
-    const isMultiSelect = definition
-      ? 'is_multi_select' in definition
-        ? definition.is_multi_select
-        : definition.isMultiSelect
-      : value.valueType === 'SELECT_STRING' && !COMPOSER_PROPERTY_SET.has(id);
-    const apiValue = propertyValueToApi(value, isMultiSelect);
-    if (apiValue === null) return [];
-    return [{ propertyId: id, value: apiValue }];
-  });
-
-  const documentId = await createTask({
-    title: taskTitle,
-    content: taskContent,
-    propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
-  });
-
-  if (!documentId) {
-    toast.failure('Failed to create Task');
-    return null;
-  }
-
-  // refetchSoupEntity is already called inside createTask — just upsert to history
-  refetchSoupEntity(documentId, 'document');
-
-  // Upsert the new task to history
-  upsertToHistory({
-    itemId: documentId,
-    itemType: 'document',
-  });
-
-  return documentId;
-}
-
-/**
- * Helper to get display value of local property
- * @param definition The prop definition
- * @param savedValues The map of saved vals by propDef id
- * @param options The map of the options for the prop from the server
- * @returns
- */
-function extractPropertyValue(
-  definition: PropertyDefinition,
-  savedValues: Store<Record<string, PropertyApiValues>>,
-  options: Map<string, PropertyOption[]>
-) {
-  const { type, value } = propertyApiValuesToNormalized(
-    savedValues[definition.id]
-  );
-  if (type === 'EMPTY') return null;
-  if (
-    definition.data_type === 'SELECT_NUMBER' ||
-    definition.data_type === 'SELECT_STRING'
-  ) {
-    const opts = options.get(definition.id);
-    if (!opts) return null;
-    if (Array.isArray(value)) {
-      return filterMap(value as string[], (id) => {
-        const opt = opts.find((opt) => opt.id === id);
-        return opt ? opt.id : undefined;
-      });
-    }
-  } else {
-    return value;
-  }
-}
-
-/**
  * Toast preview component for successful task creation.
  * @param props
  * @returns
@@ -465,24 +356,12 @@ export function ComposeTask(props: ComposeTaskProps) {
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
     const ids = (() => {
       if (props.initialAssigneeIds && props.initialAssigneeIds.length > 0) {
-        return [...new Set(props.initialAssigneeIds)];
+        return props.initialAssigneeIds;
       }
       const id = currentUserId();
       return id ? [id] : [];
     })();
-    return {
-      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
-        valueType: 'ENTITY' as const,
-        refs: ids.map((entity_id) => ({
-          entity_id,
-          entity_type: 'USER' as const,
-        })),
-      },
-      [SYSTEM_PROPERTY_IDS.STATUS]: {
-        valueType: 'SELECT_STRING' as const,
-        values: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
-      },
-    };
+    return defaultTaskPropertyValues(ids);
   };
 
   // draft init logic
@@ -544,9 +423,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
   };
 
-  const [propertyValues, setPropertyValues] = createStore<
-    Record<string, PropertyApiValues>
-  >(initialState.propertyValues);
+  const {
+    propertyValues,
+    setPropertyValues,
+    properties,
+    saveHandler,
+    composerTags,
+    clearComposerTags,
+    createDefinitions,
+  } = createTaskComposerProperties({
+    initialValues: initialState.propertyValues,
+  });
 
   // History upsert mutation
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
@@ -577,124 +464,6 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   });
 
-  const systemPropertiesQuery = useQuery(() => ({
-    queryKey: ['compose-task', 'system-properties'],
-    queryFn: async () => {
-      const result = await propertiesServiceClient.listProperties({
-        scope: 'system',
-        include_options: true,
-      });
-      if (result.isErr()) {
-        throw new Error('Failed to fetch system properties');
-      }
-      const data = result.value;
-      return data;
-    },
-    staleTime: 1000 * 60 * 10, // TODO (seamus) Ask daniel what might make us wanna refetch this
-    retry: 1,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    placeholderData: (prev) => prev,
-  }));
-  const tagsQuery = useTagsQuery();
-
-  const definitions = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
-    return new Map(
-      data.map((p) => {
-        const definition = 'definition' in p ? p.definition : p;
-        return [definition.id, definition];
-      })
-    );
-  };
-
-  const createDefinitions = () => {
-    const map = new Map<
-      PropertyDefinition['id'],
-      PropertyDefinition | PropertyDefinitionDetailResponse
-    >(definitions());
-    for (const tagSet of tagsQuery.data ?? []) {
-      if (tagSet.definition) {
-        map.set(tagSet.definition.id, tagSet.definition);
-      }
-    }
-    return map;
-  };
-
-  const options = () => {
-    if (!systemPropertiesQuery.isSuccess) return new Map();
-    const data = systemPropertiesQuery.data;
-    return new Map(
-      data.map((p) => {
-        const definition = 'definition' in p ? p.definition : p;
-        const options = 'property_options' in p ? p.property_options : [];
-        return [definition.id, options];
-      })
-    );
-  };
-
-  const properties = (): Property[] => {
-    return filterMap(COMPOSER_PROPERTIES, (id) => {
-      const definition = definitions().get(id);
-      if (!definition) return;
-      return {
-        propertyId: `compose-${definition.display_name}`,
-        propertyDefinitionId: definition.id,
-        displayName: definition.display_name,
-        isMultiSelect: definition.is_multi_select,
-        owner: definition.owner,
-        specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: new Date(0),
-        createdAt: new Date(0),
-        valueType: definition.data_type,
-        value: extractPropertyValue(definition, propertyValues, options()),
-        options: options().get(definition.id),
-      } as Property;
-    });
-  };
-
-  const saveHandler: PropertySaveHandler = {
-    saveProperty: async (property: Property, value: PropertyApiValues) => {
-      setPropertyValues(property.propertyDefinitionId, value);
-    },
-    saveDate: async (property: Property, date: Date) => {
-      setPropertyValues(property.propertyDefinitionId, {
-        valueType: 'DATE',
-        value: date,
-      });
-    },
-  };
-
-  const composerTags = useLocalDocTags(
-    (definitionId) => {
-      const value = propertyValues[definitionId];
-      return value?.valueType === 'SELECT_STRING' && value.values
-        ? value.values
-        : [];
-    },
-    (definition, optionIds) => {
-      setPropertyValues(definition.id, {
-        valueType: 'SELECT_STRING',
-        values: optionIds,
-      });
-    }
-  );
-
-  const clearComposerTags = () => {
-    const next = structuredClone(unwrap(propertyValues));
-    for (const [definitionId, value] of Object.entries(next)) {
-      if (
-        value.valueType === 'SELECT_STRING' &&
-        !COMPOSER_PROPERTY_SET.has(definitionId)
-      ) {
-        delete next[definitionId];
-      }
-    }
-    setPropertyValues(reconcile(next));
-  };
-
   const deleteTitleTagsAtStart = () => {
     if (tagLayoutMode() !== 'title') return false;
     clearComposerTags();
@@ -702,7 +471,10 @@ export function ComposeTask(props: ComposeTaskProps) {
     return true;
   };
 
-  const showTaskCreatedToast = async (documentId: string) => {
+  const showTaskCreatedToast = async (
+    documentId: string,
+    optimisticSnapshot: Uint8Array | undefined
+  ) => {
     // Auto-copy link to clipboard
     const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
     let linkCopied = false;
@@ -713,6 +485,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       toast.failure('Failed to copy link to clipboard');
     }
 
+    const snapshotParams = optimisticSnapshot
+      ? { params: { optimisticSnapshot }, preserveParams: true as const }
+      : {};
+
     toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
@@ -721,7 +497,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: ArrowSquareOutIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null }
             );
           },
@@ -731,7 +507,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           icon: SplitIcon,
           onClick: () => {
             openWithSplit(
-              { type: 'task', id: documentId },
+              { type: 'task', id: documentId, ...snapshotParams },
               { referredFrom: null, preferNewSplit: true }
             );
           },
@@ -801,10 +577,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
 
+      const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId);
+        showTaskCreatedToast(documentId, optimisticSnapshot);
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
@@ -825,10 +602,13 @@ export function ComposeTask(props: ComposeTaskProps) {
       return;
     }
 
+    // Success: clear draft and notify
+    clearTaskComposerDraft();
+    const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId);
+      showTaskCreatedToast(documentId, optimisticSnapshot);
     }
     props.onCreateTask?.(taskTitle, taskContent);
   };
@@ -875,15 +655,20 @@ export function ComposeTask(props: ComposeTaskProps) {
       return;
     }
 
+    const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
+    const snapshotParams = optimisticSnapshot
+      ? { params: { optimisticSnapshot }, preserveParams: true as const }
+      : {};
+
     if (split) {
       split.replace({
-        next: { type: 'task', id: documentId },
+        next: { type: 'task', id: documentId, ...snapshotParams },
         mergeHistory: true,
         referredFrom: 'launcher',
       });
     } else {
       openWithSplit(
-        { type: 'task', id: documentId },
+        { type: 'task', id: documentId, ...snapshotParams },
         { referredFrom: 'launcher', preferNewSplit: true }
       );
     }

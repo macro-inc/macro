@@ -10,7 +10,7 @@ use notification::domain::{
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::objects::GraphqlSoupNotification;
+use crate::objects::GraphqlNotification;
 
 #[cfg(test)]
 mod test;
@@ -125,7 +125,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: UpdateNotificationsInput,
-    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+    ) -> async_graphql::Result<Vec<GraphqlNotification>> {
         let user_id = require_authenticated_user(ctx)?;
         let notification_ids = input
             .notification_ids
@@ -138,9 +138,16 @@ where
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
 
-        Ok(notifications
+        notifications
             .into_iter()
-            .map(GraphqlSoupNotification::from)
-            .collect())
+            .map(GraphqlNotification::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    "failed to deserialize notification metadata"
+                );
+                async_graphql::Error::new("notification metadata is unavailable")
+            })
     }
 }

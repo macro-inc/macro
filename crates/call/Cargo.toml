@@ -35,6 +35,7 @@ outbound = [
 ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 agent = { path = "../agent", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }

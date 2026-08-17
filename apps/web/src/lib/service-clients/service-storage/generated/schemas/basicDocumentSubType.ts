@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BasicDocumentSubTypeOneOf } from './basicDocumentSubTypeOneOf';
+import type { BasicDocumentSubTypeOneOfFive } from './basicDocumentSubTypeOneOfFive';
 import type { BasicDocumentSubTypeOneOfThree } from './basicDocumentSubTypeOneOfThree';
 
 /**
@@ -13,4 +14,5 @@ This ensures type-safety: task properties only exist when the document is a task
  */
 export type BasicDocumentSubType =
   | BasicDocumentSubTypeOneOf
-  | BasicDocumentSubTypeOneOfThree;
+  | BasicDocumentSubTypeOneOfThree
+  | BasicDocumentSubTypeOneOfFive;

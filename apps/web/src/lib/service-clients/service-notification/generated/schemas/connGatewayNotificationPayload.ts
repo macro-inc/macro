@@ -4,12 +4,12 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ConnGatewayInnerNotifValue } from './connGatewayInnerNotifValue';
+import type { RealtimeNotifTaggedContentValue } from './realtimeNotifTaggedContentValue';
 
 /**
- * Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+ * Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.
 
 Used for OpenAPI schema generation — serializes identically to
-`ConnGatewayInnerNotif<serde_json::Value>`.
+`RealtimeNotif<serde_json::Value>`.
  */
-export type ConnGatewayNotificationPayload = ConnGatewayInnerNotifValue;
+export type ConnGatewayNotificationPayload = RealtimeNotifTaggedContentValue;

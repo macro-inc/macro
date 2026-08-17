@@ -17,11 +17,14 @@ import {
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  makeCreateReminderAction,
   makeDeleteAction,
+  makeEditReminderAction,
   makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
+  makeMarkNotificationsReadAction,
   makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
@@ -33,7 +36,11 @@ import {
   makeShareAction,
 } from '../actions';
 import type { SoupState } from '../create-soup-state';
-import { openEntityInSplitFromUnifiedList } from '../utils';
+import {
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+  reminderSplitTarget,
+} from '../utils';
 
 const SIGNAL_TABS = new Set<string | undefined>([
   undefined,
@@ -104,6 +111,9 @@ export function createSoupEntityActions(): {
 
   const markRead = makeMarkReadAction();
   const markUnread = makeMarkUnreadAction();
+  const markNotificationsRead = makeMarkNotificationsReadAction({
+    notificationSource: () => notificationSource,
+  });
 
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
@@ -120,6 +130,8 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const createReminderAction = makeCreateReminderAction();
+  const editReminderAction = makeEditReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
@@ -170,9 +182,9 @@ export function createSoupEntityActions(): {
       }
     }
 
-    // Read-state toggle for email selections: a fully-read selection gets
-    // Mark Unread; anything with an unread thread gets Mark Read (which
-    // skips the already-read ones).
+    // Email selections keep their thread read-state toggle. Other entities
+    // can mark their attached notifications read; that action skips entities
+    // and notifications that are already read.
     if (canExecuteAll(markUnread.canExecute)) {
       topItems.push({
         id: 'mark-unread',
@@ -189,6 +201,15 @@ export function createSoupEntityActions(): {
         label: 'Mark Read',
         hotkeyToken: TOKENS.entity.action.markRead,
         onClick: handle(markRead.executeWithSoup),
+      });
+    } else if (
+      entities.every((entity) => entity.type !== 'email') &&
+      entities.some(markNotificationsRead.canExecute)
+    ) {
+      topItems.push({
+        id: 'mark-notifications-read',
+        label: 'Mark Read',
+        onClick: handle(markNotificationsRead.executeWithSoup),
       });
     }
 
@@ -209,6 +230,15 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
+      // A reminder opens what it references. A standalone one references
+      // nothing, so there is nothing to open.
+      if (entity.type === 'reminder') {
+        const target = reminderSplitTarget(entity);
+        if (!target) return undefined;
+        const open = splitManager.getSplitByContent(target.type, target.id);
+        if (open && open.id !== splitHandle?.viewerId()) return undefined;
+        return entity;
+      }
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -230,6 +260,8 @@ export function createSoupEntityActions(): {
             from: 'soup_view_entity_actions_menu',
           });
         }
+
+        markReminderSeenOnOpen(entity, notificationSource);
 
         // Same path as shift/opt+click, so the menu inherits Preview Pair
         // routing (new split when it fits; replacing the pair outright) and
@@ -274,6 +306,22 @@ export function createSoupEntityActions(): {
       });
     }
 
+    // Takes Rename's slot, and its 'r' key. The two cannot both appear:
+    // `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
+    // reminder row's `ownerId` is always `''` (both soup mappers set it — a
+    // reminder is private to its owner, so the row carries no owner id) while
+    // `userId()` is a macro id or undefined. Renaming one would fail anyway;
+    // its name is its description, which only the reminders API can change.
+    // Single-entity only: the editor asks about one reminder's time.
+    if (entities.length === 1 && editReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'edit-reminder',
+        label: 'Edit reminder',
+        hotkeyToken: TOKENS.entity.action.rename,
+        onClick: handle(editReminderAction.executeWithSoup),
+      });
+    }
+
     if (canExecuteAll(favoriteAction.canExecute)) {
       const allFavorited = entities.every((entity) =>
         favoriteAction.isFavorited(entity)
@@ -284,6 +332,16 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    // Single-entity only: a reminder points at one thing.
+    if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'create-reminder',
+        label: 'Remind me',
+        hotkeyToken: TOKENS.entity.action.createReminder,
+        onClick: handle(createReminderAction.executeWithSoup),
       });
     }
 

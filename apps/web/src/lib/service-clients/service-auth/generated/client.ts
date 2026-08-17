@@ -29,6 +29,8 @@ import type {
   InitGithubLinkResponse,
   InitGmailLinkParams,
   InitGmailLinkResponse,
+  InitOutlookLinkParams,
+  InitOutlookLinkResponse,
   InviteToTeamRequest,
   MacroApiTokenParams,
   MacroApiTokenResponse,
@@ -948,6 +950,91 @@ export const checkGmailLinkStatus = async (
     status: res.status,
     headers: res.headers,
   } as checkGmailLinkStatusResponse;
+};
+
+/**
+ * @summary Initiates a Microsoft Outlook account link for an authenticated user.
+ */
+export type initOutlookLinkResponse200 = {
+  data: InitOutlookLinkResponse;
+  status: 200;
+};
+
+export type initOutlookLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type initOutlookLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type initOutlookLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type initOutlookLinkResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type initOutlookLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type initOutlookLinkResponseSuccess = initOutlookLinkResponse200 & {
+  headers: Headers;
+};
+export type initOutlookLinkResponseError = (
+  | initOutlookLinkResponse400
+  | initOutlookLinkResponse401
+  | initOutlookLinkResponse404
+  | initOutlookLinkResponse429
+  | initOutlookLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type initOutlookLinkResponse =
+  | initOutlookLinkResponseSuccess
+  | initOutlookLinkResponseError;
+
+export const getInitOutlookLinkUrl = (params?: InitOutlookLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/outlook?${stringifiedParams}`
+    : `/link/outlook`;
+};
+
+export const initOutlookLink = async (
+  params?: InitOutlookLinkParams,
+  options?: RequestInit
+): Promise<initOutlookLinkResponse> => {
+  const res = await fetch(getInitOutlookLinkUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initOutlookLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as initOutlookLinkResponse;
 };
 
 /**

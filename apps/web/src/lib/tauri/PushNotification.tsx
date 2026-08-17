@@ -50,6 +50,14 @@ function usePushNotifications(
     createSignal<'granted' | 'denied' | undefined>(undefined)
   );
 
+  // Tracks an explicit in-app opt-out, as opposed to a logout or a fresh
+  // login/account-switch. Only this flag should suppress the automatic
+  // re-registration in syncDeviceRegistration; registrationResult/permission
+  // are cleared on logout too and can't be used to detect opt-out.
+  const [pushDisabledByUser, setPushDisabledByUser] = makePersisted(
+    createSignal(false)
+  );
+
   async function registerDeviceWithNotificationService(
     token: string
   ): Promise<'granted' | 'denied'> {
@@ -67,6 +75,7 @@ function usePushNotifications(
       return 'denied';
     }
     setPermission('granted');
+    setPushDisabledByUser(false);
     return 'granted';
   }
 
@@ -103,6 +112,7 @@ function usePushNotifications(
     }
     setRegistrationResult(undefined);
     setPermission(undefined);
+    setPushDisabledByUser(true);
   }
 
   // (Re-)register this device under whoever is currently logged in. The
@@ -110,6 +120,7 @@ function usePushNotifications(
   // not just when the APNs token rotates — or the previous account keeps
   // receiving this device's pushes.
   async function syncDeviceRegistration() {
+    if (pushDisabledByUser()) return;
     const sysPerm = await checkPermissions();
     if (sysPerm.status !== 'granted') return;
     const freshResult = await registerForRemoteNotifications();
@@ -138,6 +149,9 @@ function usePushNotifications(
       removeAllActive().catch(console.error),
       unregisterPushNotifications(),
     ]);
+    // unregisterPushNotifications() sets pushDisabledByUser, but that's an
+    // opt-out for this account, not the next one that logs in on this device.
+    setPushDisabledByUser(false);
   }
 
   const removeLifecycle = registerPushRegistrationLifecycle({

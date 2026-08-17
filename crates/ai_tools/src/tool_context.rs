@@ -38,7 +38,9 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
+use projects::inbound::toolset::ProjectToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
+use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
 use system_properties::{
@@ -232,6 +234,29 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
         entity_access_service,
         properties,
     }
+}
+
+/// Type alias for the skill service implementation used by AI tools.
+pub type ToolSkillService = skills::domain::service::SkillServiceImpl<
+    skills::outbound::search_service_searcher::SearchServiceSkillSearcher,
+    skills::outbound::soup_skill_lister::SoupSkillLister<ToolSoupService>,
+>;
+
+/// Type alias for the skill AI tool context.
+pub type ToolSkillToolContext = SkillToolContext<ToolSkillService>;
+
+/// Build the skill AI tool context from a search service client (skill
+/// search) and the soup service (skill listing).
+pub fn build_skill_tool_context(
+    search_service_client: Arc<search_service_client::SearchServiceClient>,
+    soup_service: Arc<ToolSoupService>,
+) -> ToolSkillToolContext {
+    SkillToolContext::new(skills::domain::service::SkillServiceImpl::new(
+        skills::outbound::search_service_searcher::SearchServiceSkillSearcher::new(
+            search_service_client,
+        ),
+        skills::outbound::soup_skill_lister::SoupSkillLister::new(soup_service),
+    ))
 }
 
 /// Type alias for the team member listing service used by AI tools.
@@ -599,6 +624,7 @@ pub type ToolSoupService = SoupImpl<
     ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
     ToolForeignEntityService,
+    reminders::domain::service::NoOpRemindersService,
 >;
 
 /// No-op notification service for properties (tools don't send assignment notifications)
@@ -710,6 +736,63 @@ pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationS
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
 pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+
+/// Type alias for the project service implementation used by AI tools.
+/// Upload, content-hash, and search-cleanup ports are unwired — project
+/// tools only create, read, and move projects, never run upload or purge
+/// flows.
+pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
+    projects::outbound::PgProjectRepo,
+    projects::domain::ports::UnavailableProjectUploadUrlPort,
+    projects::domain::ports::UnavailableBulkUploadRequestPort,
+    projects::domain::ports::UnavailableShaCounterPort,
+    ToolEntityAccessManagementService,
+    projects::domain::ports::UnavailableProjectSearchIndexer,
+    ToolEventBroker,
+>;
+
+/// Type alias for the project tool context. Move dispatch uses the same
+/// domain services the other tool contexts run on, so moves fire the same
+/// events and side effects as the REST/GraphQL paths.
+pub type ToolProjectToolContext = ProjectToolContext<
+    ToolProjectService,
+    ToolEntityAccessService,
+    ToolDocumentService,
+    ToolChatService,
+    ToolUserEmailService,
+>;
+
+/// Build the project tool context from shared domain and access services.
+/// The move services must be the same instances the document, chat, and
+/// email tool contexts run on so moves share their side-effect wiring.
+pub fn build_project_tool_context(
+    pool: sqlx::PgPool,
+    macro_event_broker: ToolEventBroker,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    document_service: Arc<ToolDocumentService>,
+    chat_service: Arc<ToolChatService>,
+    email_service: Arc<ToolUserEmailService>,
+) -> ToolProjectToolContext {
+    let project_service = projects::domain::service::ProjectServiceImpl::new(
+        projects::outbound::PgProjectRepo::new(pool.clone()),
+        projects::domain::ports::UnavailableProjectUploadUrlPort,
+        projects::domain::ports::UnavailableBulkUploadRequestPort,
+        projects::domain::ports::UnavailableShaCounterPort,
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool),
+        ),
+        projects::domain::ports::UnavailableProjectSearchIndexer,
+        None,
+        macro_event_broker,
+    );
+    ProjectToolContext::new(
+        Arc::new(project_service),
+        entity_access_service,
+        document_service,
+        chat_service,
+        email_service,
+    )
+}
 
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
@@ -1046,8 +1129,10 @@ pub struct ToolServiceContext {
     #[from_ref(skip)]
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
+    pub project_tool_context: ToolProjectToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
+    pub skill_tool_context: ToolSkillToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.

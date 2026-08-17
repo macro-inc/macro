@@ -2,16 +2,6 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_sync_service.rs
 name: Deploy Sync Service
 on:
-  push:
-    branches:
-    - main
-    paths:
-    - .github/workflows/deploy_sync_service.yml
-    - services/sync-service/**
-    - crates/macro_sync_service_jwt/**
-    - Cargo.toml
-    - Cargo.lock
-    - rust-toolchain.toml
   workflow_call:
     inputs:
       environment:

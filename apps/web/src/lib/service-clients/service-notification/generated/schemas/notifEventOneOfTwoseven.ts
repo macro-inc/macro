@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AiResponseMetadata } from './aiResponseMetadata';
+
 import type { NotifEventOneOfTwosevenTag } from './notifEventOneOfTwosevenTag';
+import type { ReminderMetadata } from './reminderMetadata';
 
 /**
- * An AI assistant responded to a chat.
+ * A reminder the user set for themselves came due.
  */
 export type NotifEventOneOfTwoseven = {
-  /** An AI assistant responded to a chat. */
-  content: AiResponseMetadata;
+  /** A reminder the user set for themselves came due. */
+  content: ReminderMetadata;
   tag: NotifEventOneOfTwosevenTag;
 };

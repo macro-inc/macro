@@ -100,6 +100,7 @@ where
             body_macro: input.body_macro,
             headers_json: input.headers_json,
             send_time: input.send_time,
+            actor_id: input.actor.as_ref().map(|actor| actor.as_ref().to_owned()),
         };
 
         self.email_repo

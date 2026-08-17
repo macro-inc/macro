@@ -7,6 +7,7 @@ use connection_gateway_models::{
 
 use model_entity::Entity;
 
+mod calendar;
 mod email;
 
 /// HTTP client for communicating with the connection gateway service.

@@ -1,4 +1,7 @@
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import {
+  useCalendarPromptAllowed,
+  useCalendarUiFlag,
+} from '@app/features/calendar/use-calendar-ui-flag';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -10,8 +13,9 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * re-shows Google consent for the linked account and applies the upgraded
  * grant to the existing link, which kicks off the calendar backfill.
  *
- * Inboxes that also need a full reconnect are skipped: the reconnect prompt
- * covers them, and reconnecting records the calendar grant anyway.
+ * Inboxes that also need a full reconnect are skipped so the two prompts don't
+ * stack. Reconnecting restores the mailbox without calendar access, which
+ * leaves `needs_calendar_permission` set and brings this prompt back.
  *
  * Closing the prompt sticks across reloads. Nothing is broken while calendar
  * is off, so re-asking every load is just nagging — Settings › Email keeps a
@@ -19,12 +23,13 @@ import { useEmailLinksQuery } from '@queries/email/link';
  */
 export function CalendarPermissionPrompt() {
   const calendarUiEnabled = useCalendarUiFlag();
+  const promptAllowed = useCalendarPromptAllowed();
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
 
   useKeyedPersistentToasts({
     items: () =>
-      calendarUiEnabled()
+      calendarUiEnabled() && promptAllowed()
         ? (linksQuery.data?.links ?? []).filter(
             (link) => link.needs_calendar_permission && !link.needs_reauth
           )
@@ -47,7 +52,7 @@ export function CalendarPermissionPrompt() {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
             dismiss();
-            startAddInbox();
+            startAddInbox({ scopes: 'calendar' });
           },
         },
       ],

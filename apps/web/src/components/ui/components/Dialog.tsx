@@ -89,7 +89,7 @@ export function Dialog(props: DialogProps) {
           <KobalteDialog.Content
             ref={props.contentRef}
             class={cn(
-              'portal-scope isolate rounded-xl',
+              'portal-scope isolate rounded-xl bg-dialog',
               props.fullscreen ? 'size-full' : 'w-200 max-w-[calc(100vw-16px)]',
               animateOnOpen() &&
                 (props.fullscreen

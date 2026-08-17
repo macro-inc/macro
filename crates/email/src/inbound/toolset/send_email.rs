@@ -107,9 +107,8 @@ where
     ) -> ToolResult<Self::Output> {
         println!("CALL SEND EMAIL {:?}", request_context);
 
-        let link = service_context
-            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
-            .await?;
+        let acting_user = MacroUserIdStr((*request_context.user_id).clone());
+        let link = service_context.resolve_link(acting_user.clone()).await?;
 
         let input = CreateDraftInput {
             db_id: None,
@@ -129,6 +128,7 @@ where
             // Composer override when present; otherwise None lets the backend
             // apply the default signature policy.
             include_signature: self.include_signature,
+            actor: Some(acting_user),
         };
 
         let sent = service_context

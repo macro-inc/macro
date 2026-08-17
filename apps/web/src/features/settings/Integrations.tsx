@@ -5,6 +5,7 @@ import {
   type SvgIcon,
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import { openExternalUrl } from '@core/util/url';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
@@ -53,7 +54,7 @@ function AddServerForm(props: {
       { server_name: serverName, server_url: serverUrl },
       {
         onSuccess: (result: StartAuthResponse) => {
-          window.open(result.authorization_url, '_blank');
+          openExternalUrl(result.authorization_url);
         },
         onError: () => {
           toast.failure('Server added but failed to start authorization');
@@ -238,7 +239,7 @@ function ServerRow(props: { server: ServerResponse }) {
       },
       {
         onSuccess: (result: StartAuthResponse) => {
-          window.open(result.authorization_url, '_blank');
+          openExternalUrl(result.authorization_url);
           writeAuthAttempted(props.server.url, true);
           setAttempted(true);
         },
@@ -371,7 +372,7 @@ function FeaturedServerRow(props: { server: FeaturedMcpServer }) {
         server_name: props.server.server_name,
         server_url: props.server.url,
       });
-      window.open(result.authorization_url, '_blank');
+      openExternalUrl(result.authorization_url);
     } catch {
       toast.failure('Server added but failed to start authorization');
     }

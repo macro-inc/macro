@@ -13,6 +13,7 @@ const DOCUMENT_TYPE_FILTER_IDS = [
   'file-docx',
   'file-video',
   'doc-snippet',
+  'doc-skill',
   'file-other',
 ] as const satisfies readonly FilterID[];
 
@@ -32,7 +33,7 @@ const documentTypeExpressions: Record<
     op: 'and',
     clauses: [
       { include: { fileType: ['md'] } },
-      { exclude: { subType: ['snippet', 'task'] } },
+      { exclude: { subType: ['snippet', 'task', 'skill'] } },
     ],
   },
   'doc-canvas': { include: { fileType: ['canvas'] } },
@@ -46,6 +47,13 @@ const documentTypeExpressions: Record<
     clauses: [
       { include: { fileType: ['md'] } },
       { include: { subType: ['snippet'] } },
+    ],
+  },
+  'doc-skill': {
+    op: 'and',
+    clauses: [
+      { include: { fileType: ['md'] } },
+      { include: { subType: ['skill'] } },
     ],
   },
   'file-other': {

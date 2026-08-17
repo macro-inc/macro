@@ -28,6 +28,10 @@ type ToolParserMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateProject: {
+    call: types.CreateProject;
+    response: types.CreateProjectResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
@@ -71,6 +75,7 @@ type ToolParserMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
@@ -84,6 +89,10 @@ type ToolParserMap = {
   MarkNotificationsSeen: {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
+  };
+  MoveToProject: {
+    call: types.MoveToProject;
+    response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
@@ -108,10 +117,15 @@ type ToolParserMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {
@@ -160,6 +174,10 @@ const toolParserMap = {
   CreateImportEntity: {
     call: schemas.CreateImportEntity,
     response: schemas.CreateImportEntityResponse,
+  },
+  CreateProject: {
+    call: schemas.CreateProject,
+    response: schemas.CreateProjectResponse,
   },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
   DeleteImportEntity: {
@@ -213,6 +231,10 @@ const toolParserMap = {
     call: schemas.ListNotifications,
     response: schemas.ListNotificationsResponse,
   },
+  ListSkills: {
+    call: schemas.ListSkills,
+    response: schemas.ListSkillsResponse,
+  },
   ListTags: { call: schemas.ListTags, response: schemas.ListTagsResponse },
   ListTeamMembers: {
     call: schemas.ListTeamMembers,
@@ -226,6 +248,10 @@ const toolParserMap = {
   MarkNotificationsSeen: {
     call: schemas.MarkNotificationsSeen,
     response: schemas.MarkNotificationsResponse,
+  },
+  MoveToProject: {
+    call: schemas.MoveToProject,
+    response: schemas.MoveToProjectResponse,
   },
   NameSearch: {
     call: schemas.NameSearch,
@@ -256,10 +282,18 @@ const toolParserMap = {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
   },
+  ReadProject: {
+    call: schemas.ReadProject,
+    response: schemas.ReadProjectResponse,
+  },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
+  },
+  SearchSkills: {
+    call: schemas.SearchSkills,
+    response: schemas.SearchSkillsResponse,
   },
   SearchTools: {
     call: schemas.SearchTools,
@@ -320,6 +354,10 @@ type ToolDataMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateProject: {
+    call: types.CreateProject;
+    response: types.CreateProjectResponse;
+  };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
@@ -363,6 +401,7 @@ type ToolDataMap = {
     call: types.ListNotifications;
     response: types.ListNotificationsResponse;
   };
+  ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
@@ -376,6 +415,10 @@ type ToolDataMap = {
   MarkNotificationsSeen: {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
+  };
+  MoveToProject: {
+    call: types.MoveToProject;
+    response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   ReadCallRecord: {
@@ -400,10 +443,15 @@ type ToolDataMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  SearchSkills: {
+    call: types.SearchSkills;
+    response: types.SearchSkillsResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SelfKnowledge: {

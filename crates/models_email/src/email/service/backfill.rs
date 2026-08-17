@@ -12,6 +12,10 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct BackfillThreadPayload {
     pub thread_provider_id: String,
+    /// When true (stale-cursor recovery jobs), an already-known thread is
+    /// refreshed — missing messages are backfilled — instead of skipped.
+    #[serde(default)]
+    pub refresh_existing: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -90,9 +94,6 @@ pub enum BackfillOperation {
     /// Fetch calendars, canonical events, and bounded occurrence projections
     /// from Google Calendar.
     CalendarGoogleBackfill(LinkScopedPayload<CalendarBackfillPayload>),
-    /// Start an email re-scan; the normal BackfillMessage path performs the
-    /// same iCalendar extraction used for live ingestion.
-    CalendarEmailIcsBackfill(LinkScopedPayload<CalendarBackfillPayload>),
     // Seeds the contacts service from one recent sent message. Fanned out
     // one-per-message by the priority pass of ListThreads (which lists the
     // user's last 200 sent messages). The consumer fetches the message and
@@ -139,7 +140,6 @@ impl BackfillOperation {
             BackfillOperation::BackfillAttachment(s) => Some(s.link_id),
             BackfillOperation::FinalizeBackfill(s) => Some(s.link_id),
             BackfillOperation::CalendarGoogleBackfill(s) => Some(s.link_id),
-            BackfillOperation::CalendarEmailIcsBackfill(s) => Some(s.link_id),
             BackfillOperation::SeedSentContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
@@ -160,8 +160,7 @@ impl BackfillOperation {
             BackfillOperation::BackfillAttachment(s) => Some(s.job_id),
             BackfillOperation::FinalizeBackfill(s) => Some(s.job_id),
             BackfillOperation::SeedSentContact(s) => Some(s.job_id),
-            BackfillOperation::CalendarGoogleBackfill(_)
-            | BackfillOperation::CalendarEmailIcsBackfill(_) => None,
+            BackfillOperation::CalendarGoogleBackfill(_) => None,
             BackfillOperation::PopulateCrmContact(_)
             | BackfillOperation::DepopulateCrmContact(_)
             | BackfillOperation::PopulateCrmForUser(_)

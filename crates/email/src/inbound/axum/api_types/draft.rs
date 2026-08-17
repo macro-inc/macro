@@ -160,6 +160,9 @@ impl CreateDraftRequest {
             headers_json: draft.headers_json,
             send_time: self.send_time,
             include_signature: draft.include_signature,
+            // Drafts carry no actor; attribution happens when the draft is
+            // actually sent.
+            actor: None,
         }
     }
 }

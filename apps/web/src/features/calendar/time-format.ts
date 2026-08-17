@@ -25,6 +25,36 @@ const calendarTimeFormatters = {
   ),
 } satisfies Record<CalendarTimeFormat, Intl.DateTimeFormat>;
 
+const compactWholeHourFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  hour12: true,
+});
+
+function compactDayPeriod(
+  parts: Intl.DateTimeFormatPart[],
+  showDayPeriod = true
+) {
+  return parts
+    .map((part, index) => {
+      if (part.type === 'dayPeriod') {
+        return showDayPeriod ? part.value.toLocaleLowerCase() : '';
+      }
+
+      const previousPart = parts[index - 1];
+      const nextPart = parts[index + 1];
+      if (
+        part.type === 'literal' &&
+        part.value.trim() === '' &&
+        (previousPart?.type === 'dayPeriod' || nextPart?.type === 'dayPeriod')
+      ) {
+        return '';
+      }
+
+      return part.value;
+    })
+    .join('');
+}
+
 /** Returns the time format that matches the user's current locale. */
 export function getDefaultCalendarTimeFormat(): CalendarTimeFormat {
   return new Intl.DateTimeFormat(undefined, {
@@ -37,4 +67,38 @@ export function getDefaultCalendarTimeFormat(): CalendarTimeFormat {
 /** Formats a time using the calendar's selected 12/24-hour preference. */
 export function formatCalendarTime(date: Date, timeFormat: CalendarTimeFormat) {
   return calendarTimeFormatters[timeFormat].format(date);
+}
+
+/** Formats event-card times compactly while preserving the selected clock. */
+export function formatCompactCalendarTime(
+  date: Date,
+  timeFormat: CalendarTimeFormat,
+  showDayPeriod = true
+) {
+  if (timeFormat === '24-hour') {
+    return calendarTimeFormatters[timeFormat].format(date);
+  }
+
+  const formatter =
+    date.getMinutes() === 0
+      ? compactWholeHourFormatter
+      : calendarTimeFormatters[timeFormat];
+  return compactDayPeriod(formatter.formatToParts(date), showDayPeriod);
+}
+
+/** Formats an event-card range without repeating a shared AM/PM marker. */
+export function formatCompactCalendarTimeRange(
+  start: Date,
+  end: Date,
+  timeFormat: CalendarTimeFormat
+) {
+  const startIsAm = start.getHours() < 12;
+  const endIsAm = end.getHours() < 12;
+  const sharesDayPeriod = timeFormat === '12-hour' && startIsAm === endIsAm;
+
+  return `${formatCompactCalendarTime(
+    start,
+    timeFormat,
+    !sharesDayPeriod
+  )}–${formatCompactCalendarTime(end, timeFormat)}`;
 }

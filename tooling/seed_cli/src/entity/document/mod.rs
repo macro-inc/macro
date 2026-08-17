@@ -8,7 +8,9 @@ use clap::{Args, Subcommand};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
-use models_permissions::share_permission::{SharePermissionV2, access_level::AccessLevel};
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, access_level::AccessLevel,
+};
 use serde::Deserialize;
 use uuid::{NoContext, Timestamp, Uuid};
 
@@ -43,13 +45,12 @@ pub struct CreateArgs {
     /// The path to the file you want to upload
     #[arg(long)]
     pub file_path: String,
-    /// Whether the document should be public or not. If enabled this will give
-    /// the document view access publicly
-    #[arg(long, default_value = "false")]
-    pub is_public: bool,
-    /// If you have a public document you need to provide the public access level
+    /// Who can access the document through its share link.
     #[arg(long)]
-    pub public_access_level: Option<String>,
+    pub link_share: Option<LinkShare>,
+    /// Access level granted through the share link.
+    #[arg(long)]
+    pub link_share_access_level: Option<AccessLevel>,
     /// Name of the document.
     /// Without the extension
     #[arg(long)]
@@ -75,6 +76,7 @@ pub struct SeedArgs {
 
 /// A row in the seed JSON file.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SeedDocumentRow {
     /// Pre-defined document UUID.
     document_id: Uuid,
@@ -82,8 +84,10 @@ struct SeedDocumentRow {
     document_name: String,
     /// File name from the seed/documents/files/ directory.
     file_name: String,
-    /// Whether the document is public.
-    is_public: bool,
+    /// Who can access the document through its share link.
+    link_share: Option<LinkShare>,
+    /// Access level granted through the share link.
+    link_share_access_level: Option<AccessLevel>,
 }
 
 impl DocumentArgs {
@@ -132,11 +136,9 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
             project_name: None,
             share_permission: &SharePermissionV2 {
                 id: String::new(),
+                link_share: args.link_share,
+                link_share_access_level: args.link_share_access_level,
                 owner: owner.as_ref().to_string(),
-                is_public: args.is_public,
-                public_access_level: args
-                    .public_access_level
-                    .map(|s| AccessLevel::from_str(&s).unwrap()),
                 channel_share_permissions: None,
             },
             skip_history: args.skip_history,
@@ -226,13 +228,9 @@ pub(crate) async fn seed_from_file_ref(
                 project_name: None,
                 share_permission: &SharePermissionV2 {
                     id: String::new(),
+                    link_share: row.link_share,
+                    link_share_access_level: row.link_share_access_level,
                     owner: owner.as_ref().to_string(),
-                    is_public: row.is_public,
-                    public_access_level: if row.is_public {
-                        Some(AccessLevel::View)
-                    } else {
-                        None
-                    },
                     channel_share_permissions: None,
                 },
                 skip_history: true,

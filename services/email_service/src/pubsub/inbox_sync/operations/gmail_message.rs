@@ -1,18 +1,23 @@
-use crate::convert::map_history_list_response_to_history;
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::process::fetch_pubsub_gmail_token;
-use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
+use crate::pubsub::inbox_sync::email_api_error::handle_gmail_message_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
-use models_email::gmail::history::InboxChanges;
+use email_api_client::domain::models::{EmailApiError, InboxChanges, SyncCursor};
+use models_email::email::service::backfill::BackfillJob;
+use models_email::email::service::backfill::{
+    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+};
 use models_email::gmail::inbox_sync::{
     DeleteMessagePayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
     UpdateLabelsPayload, UpsertMessagePayload,
 };
-use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use sqlx::PgPool;
 use std::result;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 // handle the initial message received from gmail notifying us of inbox changes.
 // ensure the message is valid, then send off pubsub messages for each change.
@@ -22,10 +27,6 @@ pub async fn gmail_message(
     link: &Link,
     payload: &GmailMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let gmail_access_token = fetch_pubsub_gmail_token(ctx, link).await?;
-
-    // get the user's latest history_id in the database
-    // if it's GTE this message's history id, do nothing - db is already updated or being updated
     let db_history_id = email_db_client::histories::fetch_history_id_for_link(
         &ctx.db,
         link.email_address.0.as_ref(),
@@ -35,7 +36,7 @@ pub async fn gmail_message(
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch history id from db".to_string()),
+            source: e.context("Failed to fetch history id from db"),
         })
     })?
     .ok_or_else(|| {
@@ -45,89 +46,64 @@ pub async fn gmail_message(
         })
     })?;
 
-    let db_history_u64 = db_history_id.parse::<u64>().map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::OutdatedHistoryId,
-            source: anyhow::Error::from(e).context("Failed to parse current history_id as u64"),
-        })
-    })?;
+    let db_history_u64 = match db_history_id.parse::<u64>() {
+        Ok(history_id) => history_id,
+        Err(error) => {
+            schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
+            return Err(ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::OutdatedHistoryId,
+                source: anyhow::Error::from(error)
+                    .context("Failed to parse current history_id as u64"),
+            }));
+        }
+    };
 
     if db_history_u64 >= payload.history_id {
         return Ok(());
     }
 
-    // ensure user's labels are synced before we start processing changes.
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::LabelsList,
-        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
-        // rate limited it's likely because of a large previous inbox update, so let that get
-        // fully processed before the next one.
-        retryable: false,
-        is_backfill: false,
-    })
-    .await?;
-    sync_labels(&ctx.db, &ctx.gmail_client, &gmail_access_token, link.id)
+    // Gmail message notifications intentionally refuse labels/history work when quota is
+    // exhausted. A later notification will cover the same cursor range, avoiding fan-out
+    // backpressure while preserving the separate retry queue for child operations.
+    let labels = ctx
+        .email_api
+        .list_labels(link.id)
         .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to sync labels"),
-            })
-        })?;
+        .map_err(handle_gmail_message_error)?;
+    sync_labels(&ctx.db, link.id, &labels).await.map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to reconcile labels"),
+        })
+    })?;
 
-    // the history.list call in gmail api fetches all changes SINCE the history_id we pass to it.
-    // we pass the db_history_id, aka history_id at the time of the last update. once
-    // we update the database, we set the db history_id to be the message history_id
-    // (the current history_id for the user)
-    check_gmail_rate_limit(CheckGmailRateLimitArgs {
-        redis_client: &ctx.redis_client,
-        link_id: link.id,
-        gmail_operation: GmailApiOperation::HistoryList,
-        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
-        // rate limited it's likely because of a large previous inbox update, so let that get
-        // fully processed before the next one.
-        retryable: false,
-        is_backfill: false,
-    })
-    .await?;
-    let history_response = ctx
-        .gmail_client
-        .get_history(&gmail_access_token, &db_history_id)
+    let change_batch = match ctx
+        .email_api
+        .list_changes(link.id, &SyncCursor::gmail(&db_history_id))
         .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context(format!("unable to get history for link id: {}", link.id)),
-            })
-        })?;
-    let inbox_changes = map_history_list_response_to_history(history_response);
+    {
+        Ok(batch) => batch,
+        Err(EmailApiError::OutdatedCursor) => {
+            schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
+            return Err(handle_gmail_message_error(EmailApiError::OutdatedCursor));
+        }
+        Err(error) => return Err(handle_gmail_message_error(error)),
+    };
 
-    // Update the history_id in the database immediately to prevent duplicate processing.
-    // The db history_id is used to determine which inbox changes need processing when
-    // handling GmailMessage InboxSyncOperations. By updating it before processing the
-    // current changes, we ensure that any new GmailMessage notifications that arrive
-    // will use the latest history_id for comparison. This prevents duplicate processing
-    // that could occur if we updated the history_id after processing the changes.
     email_db_client::histories::upsert_gmail_history(
         &ctx.db,
         link.id,
-        &inbox_changes.current_history_id,
+        change_batch.next_cursor.as_str(),
     )
     .await
     .map_err(|e| {
         ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to upsert gmail history".to_string()),
+            source: e.context("Failed to upsert gmail history"),
         })
     })?;
 
-    // Build pubsub messages from inbox_changes
-    let pubsub_messages = build_pubsub_messages(link.id, inbox_changes);
-
-    // Send them off
-    for ps_message in pubsub_messages {
+    for ps_message in build_pubsub_messages(link.id, change_batch.changes) {
         let message_for_error = ps_message.clone();
         ctx.sqs_client
             .enqueue_gmail_inbox_sync_notification(ps_message)
@@ -135,7 +111,7 @@ pub async fn gmail_message(
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
                     reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context(format!("Failed to enqueue message {:?}", message_for_error)),
+                    source: e.context(format!("Failed to enqueue message {message_for_error:?}")),
                 })
             })?;
     }
@@ -143,15 +119,118 @@ pub async fn gmail_message(
     Ok(())
 }
 
-/// Builds pubsub messages from history data
-#[tracing::instrument]
+async fn schedule_stale_cursor_backfill(
+    ctx: &PubSubContext,
+    link: &Link,
+    notification_history_id: u64,
+) -> result::Result<(), ProcessingError> {
+    let (job, created) =
+        ensure_recovery_backfill_job(&ctx.db, link.id, link.fusionauth_user_id.as_str()).await?;
+
+    let message = BackfillPubsubMessage {
+        backfill_operation: BackfillOperation::Init(JobScopedPayload {
+            link_id: link.id,
+            job_id: job.id,
+            payload: InitPayload {},
+        }),
+    };
+
+    if let Err(enqueue_error) = ctx.sqs_client.enqueue_email_backfill_message(message).await {
+        if created {
+            email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, job.id)
+                .await
+                .map_err(recovery_db_error)?;
+        }
+        return Err(ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: enqueue_error.context("Failed to enqueue stale-cursor backfill"),
+        }));
+    }
+
+    repair_stale_cursor(&ctx.db, link.id, notification_history_id).await;
+
+    Ok(())
+}
+
+/// Finds the link's active backfill job, creating one when none exists.
+///
+/// Returns the job and whether it was created by this call.
+async fn ensure_recovery_backfill_job(
+    db: &PgPool,
+    link_id: Uuid,
+    fusionauth_user_id: &str,
+) -> result::Result<(BackfillJob, bool), ProcessingError> {
+    let existing_job = email_db_client::backfill::job::get::get_active_backfill_job(db, link_id)
+        .await
+        .map_err(recovery_db_error)?;
+
+    if let Some(job) = existing_job {
+        return Ok((job, false));
+    }
+
+    match email_db_client::backfill::job::insert::create_backfill_job(
+        db,
+        link_id,
+        fusionauth_user_id,
+        None,
+        // Stale-cursor recovery: refresh existing threads so the gap window's
+        // replies are recovered (see backfill_thread's refresh path).
+        true,
+    )
+    .await
+    .map_err(recovery_db_error)?
+    {
+        Some(job) => Ok((job, true)),
+        None => {
+            let job = email_db_client::backfill::job::get::get_active_backfill_job(db, link_id)
+                .await
+                .map_err(recovery_db_error)?
+                .ok_or_else(|| {
+                    recovery_db_error(anyhow::anyhow!(
+                        "backfill insert conflicted but no active job was found"
+                    ))
+                })?;
+            Ok((job, false))
+        }
+    }
+}
+
+/// Persists the notification's history id as the link's sync cursor once a
+/// recovery backfill covers the gap.
+///
+/// Without this write the expired cursor stays in place, so every subsequent
+/// notification re-enters the `OutdatedCursor` arm and schedules another
+/// full-mailbox backfill forever. A write failure is deliberately swallowed:
+/// the notification is dropped either way, and the next notification re-enters
+/// this path (reusing the active job) and retries the repair.
+async fn repair_stale_cursor(db: &PgPool, link_id: Uuid, notification_history_id: u64) {
+    let _ = email_db_client::histories::upsert_gmail_history(
+        db,
+        link_id,
+        &notification_history_id.to_string(),
+    )
+    .await
+    .inspect_err(|error| {
+        tracing::warn!(error = ?error, %link_id, "failed to repair stale gmail sync cursor");
+    });
+}
+
+fn recovery_db_error(error: impl Into<anyhow::Error>) -> ProcessingError {
+    ProcessingError::Retryable(DetailedError {
+        reason: FailureReason::DatabaseQueryFailed,
+        source: error
+            .into()
+            .context("Failed to schedule stale-cursor backfill"),
+    })
+}
+
+/// Builds pubsub messages from history data.
 fn build_pubsub_messages(
     link_id: Uuid,
     inbox_changes: InboxChanges,
 ) -> Vec<InboxSyncPubsubMessage> {
     let mut pubsub_messages = Vec::new();
 
-    // Process messages to upsert
     for message_id in inbox_changes.message_ids_to_upsert {
         pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
@@ -160,8 +239,6 @@ fn build_pubsub_messages(
             }),
         });
     }
-
-    // Process messages to delete
     for message_id in inbox_changes.message_ids_to_delete {
         pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
@@ -170,7 +247,6 @@ fn build_pubsub_messages(
             }),
         });
     }
-
     for message_id in inbox_changes.labels_to_update {
         pubsub_messages.push(InboxSyncPubsubMessage {
             link_id,
