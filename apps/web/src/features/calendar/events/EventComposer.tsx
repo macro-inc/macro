@@ -1,8 +1,12 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
+import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventComposerForm } from './EventComposerForm';
-import type { EventEditorInitialValues } from './event-form-model';
+import {
+  defaultEditorInitialValues,
+  type EventEditorInitialValues,
+} from './event-form-model';
 import type { CalendarEvent } from './types';
 import { useEventEditor } from './useEventEditor';
 
@@ -24,6 +28,14 @@ export function EventComposer(props: {
       close();
     },
   });
+  const controller = createCalendarEventFormController({
+    initialValue:
+      editor.initialValues() ??
+      props.initialValues ??
+      defaultEditorInitialValues(),
+    calendarOptions: editor.calendarOptions,
+    guestOptions: editor.guestOptions,
+  });
 
   const isEdit = () => props.event !== undefined;
 
@@ -37,11 +49,9 @@ export function EventComposer(props: {
       class="portal-scope flex h-full min-h-0 flex-col p-4 text-ink"
     >
       <EventComposerForm
-        initialValues={editor.initialValues() ?? props.initialValues}
+        controller={controller}
         isEdit={isEdit()}
         disabledFields={editor.disabledFields()}
-        calendarOptions={editor.calendarOptions()}
-        guestOptions={editor.guestOptions}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
         pending={editor.pending()}
         onCalendarChange={props.onCalendarChange}

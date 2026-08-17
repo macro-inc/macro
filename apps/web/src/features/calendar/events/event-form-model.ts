@@ -13,7 +13,7 @@ import {
   parseISO,
   startOfHour,
 } from 'date-fns';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import { formatRecurrenceDescription } from './recurrence-description';
 import {
   buildRecurrenceLines,
@@ -289,12 +289,29 @@ export interface CreateEventEditorStateOptions {
   state: Accessor<EventEditorInitialValues>;
 }
 
+function recurrenceConfigFor(values: EventEditorInitialValues) {
+  return values.recurrenceLines.length > 0
+    ? parseRecurrenceConfig(values.recurrenceLines)
+    : undefined;
+}
+
+function recurrenceChoiceFor(values: EventEditorInitialValues) {
+  if (values.recurrenceLines.length === 0) return 'none';
+  const config = recurrenceConfigFor(values);
+  if (!config) return 'existing';
+  const start = values.allDay ? parseISO(values.start) : new Date(values.start);
+  const preset = recurrencePresetsFor(start).find((candidate) =>
+    recurrenceConfigsEqual(candidate.config, config)
+  );
+  return preset?.id ?? 'custom';
+}
+
 /** Shared recurrence and validation state used by event editor layouts. */
 export function createEventEditorState(options: CreateEventEditorStateOptions) {
-  const initialLines = [...options.initialValues.recurrenceLines];
-  const initialConfig =
-    initialLines.length > 0 ? parseRecurrenceConfig(initialLines) : undefined;
-  const hasUnrepresentableRule = initialLines.length > 0 && !initialConfig;
+  const [initialValues, setInitialValues] = createSignal(options.initialValues);
+  const initialConfig = createMemo(() => recurrenceConfigFor(initialValues()));
+  const hasUnrepresentableRule = () =>
+    initialValues().recurrenceLines.length > 0 && !initialConfig();
 
   const startForRecurrence = createMemo(() => {
     const start = options.state().start;
@@ -302,18 +319,9 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   });
   const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
-  const initialChoice = () => {
-    if (initialLines.length === 0) return 'none';
-    if (!initialConfig) return 'existing';
-    const initialStart = options.initialValues.allDay
-      ? parseISO(options.initialValues.start)
-      : new Date(options.initialValues.start);
-    const preset = recurrencePresetsFor(initialStart).find((candidate) =>
-      recurrenceConfigsEqual(candidate.config, initialConfig)
-    );
-    return preset?.id ?? 'custom';
-  };
-  const [recurrenceChoice, setRecurrenceChoice] = createSignal(initialChoice());
+  const [recurrenceChoice, setRecurrenceChoice] = createSignal(
+    recurrenceChoiceFor(options.initialValues)
+  );
   const recurrenceOptions = createMemo<EventEditorRecurrenceOption[]>(() => {
     const values = [
       { value: 'none', label: 'Does not repeat' },
@@ -322,11 +330,12 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
         label: preset.label,
       })),
     ];
-    if (hasUnrepresentableRule) {
+    if (hasUnrepresentableRule()) {
       values.push({
         value: 'existing',
         label: `Custom: ${
-          formatRecurrenceDescription(initialLines) ?? 'existing rule'
+          formatRecurrenceDescription(initialValues().recurrenceLines) ??
+          'existing rule'
         } (unchanged)`,
       });
     }
@@ -337,13 +346,13 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     recurrenceOptions().find((option) => option.value === recurrenceChoice()) ??
     recurrenceOptions()[0];
   const [customConfig, setCustomConfig] = createSignal<RecurrenceConfig>(
-    initialConfig ?? defaultCustomConfig(startForRecurrence())
+    initialConfig() ?? defaultCustomConfig(startForRecurrence())
   );
   const changeRecurrenceChoice = (choice: string) => {
     if (choice === 'custom') {
       const seed =
         presets().find((preset) => preset.id === recurrenceChoice())?.config ??
-        initialConfig ??
+        initialConfig() ??
         defaultCustomConfig(startForRecurrence());
       setCustomConfig(seed);
     }
@@ -394,6 +403,15 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     options.state().title.trim() !== '' &&
     eventTime() !== undefined &&
     customValid();
+  const replaceInitialValues = (next: EventEditorInitialValues) => {
+    batch(() => {
+      setInitialValues(() => next);
+      setRecurrenceChoice(recurrenceChoiceFor(next));
+      setCustomConfig(
+        recurrenceConfigFor(next) ?? defaultCustomConfig(startForRecurrence())
+      );
+    });
+  };
 
   return {
     startForRecurrence,
@@ -407,5 +425,6 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     dateRangeError,
     eventTime,
     canSave,
+    replaceInitialValues,
   };
 }

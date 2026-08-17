@@ -1,13 +1,7 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  createUniqueId,
-  Show,
-} from 'solid-js';
+import { createEffect, createUniqueId, Show } from 'solid-js';
+import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventComposerDateTimeRangeFields } from './EventComposerDateTimeRangeFields';
 import {
   EventComposerCalendarPill,
@@ -15,32 +9,16 @@ import {
   EventComposerLocationPill,
   EventComposerRecurrencePill,
 } from './EventComposerPropertyPills';
-import {
-  type EventComposerFormSnapshot,
-  isEventComposerFormDirty,
-} from './event-composer-dirty';
-import {
-  convertTimesForAllDay,
-  createEventEditorState,
-  defaultEditorInitialValues,
-  type EventEditorCalendarOption,
-  type EventEditorDisabledFields,
-  type EventEditorGuestOption,
-  type EventEditorInitialValues,
-  type EventEditorSubmitValues,
-  guestEmail,
-  initialGuestOptions,
-  moveAllDayRange,
-  type SelectedEventEditorGuest,
+import type {
+  EventEditorDisabledFields,
+  EventEditorSubmitValues,
 } from './event-form-model';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 export interface EventComposerFormProps {
-  initialValues?: EventEditorInitialValues;
+  controller: CalendarEventFormController;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
-  calendarOptions: EventEditorCalendarOption[];
-  guestOptions: Accessor<EventEditorGuestOption[]>;
   showRecurringEditNotice?: boolean;
   pending: boolean;
   class?: string;
@@ -56,101 +34,25 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
 
+  const controller = props.controller;
+  const state = controller.state;
   const isEdit = () => props.isEdit ?? false;
-  const initialValues =
-    props.initialValues ?? defaultEditorInitialValues(new Date());
-  const [state, setState] = createSignal<EventEditorInitialValues>({
-    ...initialValues,
-    recurrenceLines: [...initialValues.recurrenceLines],
-  });
-
-  const initialSelectedGuests = initialGuestOptions(
-    initialValues.guests,
-    props.guestOptions()
-  );
-  const initialGuestEmails = initialSelectedGuests.map(guestEmail);
-  const [selectedGuests, setSelectedGuests] = createSignal<
-    SelectedEventEditorGuest[]
-  >(initialSelectedGuests);
 
   const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     props.pending || fieldIsReadOnly(field);
 
-  const {
-    startForRecurrence,
-    recurrenceChoice,
-    recurrenceOptions,
-    selectedRecurrenceOption,
-    customConfig,
-    setCustomConfig,
-    changeRecurrenceChoice,
-    recurrenceLines,
-    dateRangeError,
-    eventTime,
-    canSave,
-  } = createEventEditorState({ initialValues, state });
-
-  const effectiveCalendarId = () =>
-    state().calendarId ?? props.calendarOptions[0]?.id;
-
-  const selectedCalendarOption = () =>
-    props.calendarOptions.find(
-      (option) => option.id === effectiveCalendarId()
-    ) ?? props.calendarOptions[0];
-
-  const initialSnapshot = (): EventComposerFormSnapshot => ({
-    title: initialValues.title,
-    allDay: initialValues.allDay,
-    start: initialValues.start,
-    end: initialValues.end,
-    recurrenceLines: initialValues.recurrenceLines,
-    calendarId: initialValues.calendarId ?? props.calendarOptions[0]?.id,
-    guestEmails: initialGuestEmails,
-    location: initialValues.location,
-    description: initialValues.description,
-  });
-  const currentSnapshot = (): EventComposerFormSnapshot => {
-    const current = state();
-    return {
-      title: current.title,
-      allDay: current.allDay,
-      start: current.start,
-      end: current.end,
-      recurrenceLines: recurrenceLines() ?? initialValues.recurrenceLines,
-      calendarId: effectiveCalendarId(),
-      guestEmails: selectedGuests().map(guestEmail),
-      location: current.location,
-      description: current.description,
-    };
-  };
-  const isDirty = createMemo(() =>
-    isEventComposerFormDirty(initialSnapshot(), currentSnapshot())
-  );
-
   createEffect(() => {
-    const option = selectedCalendarOption();
+    const option = controller.selectedCalendarOption();
     if (option) props.onCalendarChange?.(option.id, option.color);
   });
-  createEffect(() => props.onDirtyChange?.(isDirty()));
-
-  const changeCalendar = (calendarId: string) =>
-    setState({ ...state(), calendarId });
+  createEffect(() => props.onDirtyChange?.(controller.isDirty()));
 
   const submit = () => {
-    const time = eventTime();
-    if (!time || !canSave() || props.pending) return;
-    const current = state();
-    props.onSubmit({
-      title: current.title,
-      time,
-      recurrenceLines: recurrenceLines(),
-      calendarId: effectiveCalendarId(),
-      guestEmails: selectedGuests().map(guestEmail),
-      location: current.location,
-      description: current.description,
-    });
+    const values = controller.submitValues();
+    if (!values || props.pending) return;
+    props.onSubmit(values);
   };
 
   return (
@@ -172,24 +74,18 @@ export function EventComposerForm(props: EventComposerFormProps) {
                 start={state().start}
                 end={state().end}
                 allDay={state().allDay}
-                onStartChange={(start) =>
-                  setState(
-                    state().allDay
-                      ? moveAllDayRange(state(), start)
-                      : { ...state(), start }
-                  )
-                }
-                onEndChange={(end) => setState({ ...state(), end })}
-                onAllDayChange={(allDay) =>
-                  setState(convertTimesForAllDay(state(), allDay))
-                }
+                onStartChange={controller.setStart}
+                onEndChange={(end) => controller.setField('end', end)}
+                onAllDayChange={controller.setAllDay}
                 startDisabled={fieldIsDisabled('start')}
                 endDisabled={fieldIsDisabled('end')}
                 allDayDisabled={fieldIsDisabled('allDay')}
-                invalid={dateRangeError() !== undefined}
-                describedBy={dateRangeError() ? dateRangeErrorId : undefined}
+                invalid={controller.dateRangeError() !== undefined}
+                describedBy={
+                  controller.dateRangeError() ? dateRangeErrorId : undefined
+                }
               />
-              <Show when={dateRangeError()}>
+              <Show when={controller.dateRangeError()}>
                 {(error) => (
                   <p
                     id={dateRangeErrorId}
@@ -206,7 +102,7 @@ export function EventComposerForm(props: EventComposerFormProps) {
               type="text"
               value={state().title}
               onInput={(event) =>
-                setState({ ...state(), title: event.currentTarget.value })
+                controller.setField('title', event.currentTarget.value)
               }
               placeholder="New event"
               aria-label="Title"
@@ -219,13 +115,10 @@ export function EventComposerForm(props: EventComposerFormProps) {
               <textarea
                 value={state().description}
                 onInput={(event) =>
-                  setState({
-                    ...state(),
-                    description: event.currentTarget.value.replaceAll(
-                      /[\r\n]+/g,
-                      ' '
-                    ),
-                  })
+                  controller.setField(
+                    'description',
+                    event.currentTarget.value.replaceAll(/[\r\n]+/g, ' ')
+                  )
                 }
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.preventDefault();
@@ -242,46 +135,48 @@ export function EventComposerForm(props: EventComposerFormProps) {
 
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <EventComposerCalendarPill
-              options={props.calendarOptions}
-              value={selectedCalendarOption()}
-              onChange={changeCalendar}
+              options={controller.calendarOptions()}
+              value={controller.selectedCalendarOption()}
+              onChange={(calendarId) =>
+                controller.setField('calendarId', calendarId)
+              }
               disabled={props.pending}
               readOnly={fieldIsReadOnly('calendar')}
             />
             <EventComposerRecurrencePill
-              options={recurrenceOptions()}
-              value={selectedRecurrenceOption()}
-              onChange={changeRecurrenceChoice}
+              options={controller.recurrenceOptions()}
+              value={controller.selectedRecurrenceOption()}
+              onChange={controller.changeRecurrenceChoice}
               disabled={props.pending}
               readOnly={fieldIsReadOnly('recurrence')}
             />
             <EventComposerGuestsPill
-              options={props.guestOptions}
-              selected={selectedGuests()}
-              onChange={setSelectedGuests}
+              options={controller.guestOptions}
+              selected={controller.selectedGuests()}
+              onChange={controller.setSelectedGuests}
               disabled={props.pending}
               readOnly={fieldIsReadOnly('guests')}
             />
             <EventComposerLocationPill
               value={state().location}
-              onChange={(location) => setState({ ...state(), location })}
+              onChange={(location) => controller.setField('location', location)}
               disabled={fieldIsDisabled('location')}
             />
           </div>
         </div>
 
-        <Show when={recurrenceChoice() === 'custom'}>
+        <Show when={controller.recurrenceChoice() === 'custom'}>
           <Layer depth={3}>
             <div class="rounded-xl bg-surface p-4 text-ink">
               <RecurrenceBuilder
-                value={customConfig()}
-                start={startForRecurrence()}
+                value={controller.customConfig()}
+                start={controller.startForRecurrence()}
                 allDay={state().allDay}
                 disabled={fieldIsDisabled('recurrence')}
                 onChange={({
                   recurrenceDescription: _recurrenceDescription,
                   ...config
-                }) => setCustomConfig(config)}
+                }) => controller.setCustomConfig(config)}
               />
             </div>
           </Layer>
@@ -305,10 +200,10 @@ export function EventComposerForm(props: EventComposerFormProps) {
         </Button>
         <Button
           type="submit"
-          variant={canSave() ? 'active' : 'ghost'}
+          variant={controller.canSave() ? 'active' : 'ghost'}
           depth={3}
           class="rounded-lg border-0"
-          disabled={!canSave() || props.pending}
+          disabled={!controller.canSave() || props.pending}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >
           <Show
