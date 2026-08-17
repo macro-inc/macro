@@ -26,6 +26,8 @@ import { ColorSwatch } from './ColorSwatch';
 
 // Chroma axis maxes out at 0.37, matching the Basic editor's chroma slider.
 const CHROMA_MAX = 0.37;
+const COLOR_FIELD_SAMPLE_WIDTH = 64;
+const COLOR_FIELD_SAMPLE_HEIGHT = 40;
 
 const RING =
   'pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[white] shadow-[0_1px_3px_oklch(0_0_0/0.4)]';
@@ -53,15 +55,38 @@ function ColorField(props: {
       const context = canvas.getContext('2d');
       if (!context) return;
 
-      const { width, height } = canvas;
-      for (let y = 0; y < height; y += 1) {
-        const lightness = 1 - y / (height - 1);
-        for (let x = 0; x < width; x += 1) {
-          const chroma = (x / (width - 1)) * CHROMA_MAX;
-          context.fillStyle = `oklch(${lightness} ${chroma} ${hue}deg)`;
-          context.fillRect(x, y, 1, 1);
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = COLOR_FIELD_SAMPLE_WIDTH;
+      sampleCanvas.height = COLOR_FIELD_SAMPLE_HEIGHT;
+      const sampleContext = sampleCanvas.getContext('2d');
+      if (!sampleContext) return;
+
+      const image = sampleContext.createImageData(
+        COLOR_FIELD_SAMPLE_WIDTH,
+        COLOR_FIELD_SAMPLE_HEIGHT
+      );
+      const color = new Color('oklch', [0, 0, hue]);
+
+      for (let y = 0; y < COLOR_FIELD_SAMPLE_HEIGHT; y += 1) {
+        const lightness = 1 - y / (COLOR_FIELD_SAMPLE_HEIGHT - 1);
+        for (let x = 0; x < COLOR_FIELD_SAMPLE_WIDTH; x += 1) {
+          const chroma = (x / (COLOR_FIELD_SAMPLE_WIDTH - 1)) * CHROMA_MAX;
+          color.coords = [lightness, chroma, hue];
+          const [red = 0, green = 0, blue = 0] = color.to('srgb').coords;
+          const offset = (y * COLOR_FIELD_SAMPLE_WIDTH + x) * 4;
+
+          image.data[offset] = Math.round(clamp(red, 0, 1) * 255);
+          image.data[offset + 1] = Math.round(clamp(green, 0, 1) * 255);
+          image.data[offset + 2] = Math.round(clamp(blue, 0, 1) * 255);
+          image.data[offset + 3] = 255;
         }
       }
+
+      sampleContext.putImageData(image, 0, 0);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(sampleCanvas, 0, 0, canvas.width, canvas.height);
     });
   });
 

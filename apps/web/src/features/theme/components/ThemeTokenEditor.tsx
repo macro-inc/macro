@@ -140,6 +140,7 @@ function ColorControl(props: {
   createEffect(() => {
     const value = props.value;
     if (value === lastWritten) return;
+    lastWritten = value;
     try {
       const next = getOklch(value);
       setL(next.l);
