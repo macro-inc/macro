@@ -15,11 +15,14 @@ export const makeSenderFilterAction = (
     for (const entity of entities) {
       if (entity.type !== 'email' || !entity.senderEmail) continue;
       // Filters are per-inbox, so the same sender in two inboxes is two
-      // distinct filters — key the dedupe on the inbox too.
-      const key = `${entity.linkId ?? ''}:${entity.senderEmail.trim().toLowerCase()}`;
+      // distinct filters — key the dedupe on the inbox too. Key off the
+      // normalized header value so a missing link id and an explicit primary
+      // one collapse to a single request.
+      const linkId = toHeaderLinkId(entity.linkId);
+      const key = `${linkId ?? ''}:${entity.senderEmail.trim().toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      await action(entity.senderEmail, toHeaderLinkId(entity.linkId));
+      await action(entity.senderEmail, linkId);
     }
   };
 

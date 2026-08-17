@@ -82,6 +82,23 @@ describe('makeSenderFilterAction', () => {
       'link-b'
     );
   });
+
+  it('collapses a missing link id and an explicit primary one into one request', async () => {
+    await createRoot(async (dispose) => {
+      const action = makeSenderFilterAction(mocks.filterAction);
+      await action.execute([
+        emailEntity({ id: 'a', linkId: undefined }),
+        emailEntity({ id: 'b', linkId: mocks.primaryLinkId }),
+      ]);
+      dispose();
+    });
+
+    expect(mocks.filterAction).toHaveBeenCalledTimes(1);
+    expect(mocks.filterAction).toHaveBeenCalledWith(
+      'sender@example.com',
+      undefined
+    );
+  });
 });
 
 describe('makeBlockSenderAction', () => {
