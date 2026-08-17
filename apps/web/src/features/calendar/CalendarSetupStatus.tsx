@@ -79,12 +79,18 @@ export function CalendarSetupStatus() {
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
 
-  // Only the permission state has a working mailbox already; connecting and
-  // reconnecting both need the mailbox scopes alongside calendar.
-  const startSetup = () =>
+  // The permission and disabled states both sit on a working mailbox —
+  // turning calendar off leaves Gmail untouched — so they ask for calendar
+  // alone. Connecting and reconnecting need the mailbox scopes alongside it.
+  const startSetup = () => {
+    const state = setupState();
     void startAddInbox({
-      scopes: setupState() === 'permission' ? 'calendar' : 'gmail_and_calendar',
+      scopes:
+        state === 'permission' || state === 'disabled'
+          ? 'calendar'
+          : 'gmail_and_calendar',
     });
+  };
 
   return (
     <Show when={setupState() !== undefined}>
