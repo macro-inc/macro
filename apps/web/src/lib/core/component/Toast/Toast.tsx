@@ -275,7 +275,7 @@ function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
           size={props.mobile ? 'sm' : 'md'}
           onClick={action.onClick}
           variant="base"
-          class="px-2 py-1"
+          class="px-2 py-1 bg-lift"
           depth={3}
         >
           <Show when={action.icon}>
@@ -310,7 +310,7 @@ function ToastBodyWrapper(props: {
         </Surface>
       }
     >
-      <div class="island relative w-[90vw] p-2 rounded-xl bg-toast">
+      <div class="island relative w-full p-2 rounded-xl bg-toast">
         {props.children}
       </div>
     </Show>
