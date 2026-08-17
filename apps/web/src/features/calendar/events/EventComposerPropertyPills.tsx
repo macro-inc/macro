@@ -25,7 +25,7 @@ import {
   type EventEditorGuestOption,
   guestEmail,
   type SelectedEventEditorGuest,
-} from './EventEditorForm';
+} from './event-form-model';
 
 const GUEST_NAME_COLLATOR = new Intl.Collator(undefined, {
   sensitivity: 'base',

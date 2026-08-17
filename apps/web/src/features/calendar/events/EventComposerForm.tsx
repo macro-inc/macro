@@ -16,6 +16,10 @@ import {
   EventComposerRecurrencePill,
 } from './EventComposerPropertyPills';
 import {
+  type EventComposerFormSnapshot,
+  isEventComposerFormDirty,
+} from './event-composer-dirty';
+import {
   convertTimesForAllDay,
   createEventEditorState,
   defaultEditorInitialValues,
@@ -28,11 +32,7 @@ import {
   initialGuestOptions,
   moveAllDayRange,
   type SelectedEventEditorGuest,
-} from './EventEditorForm';
-import {
-  type EventComposerFormSnapshot,
-  isEventComposerFormDirty,
-} from './event-composer-dirty';
+} from './event-form-model';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
 
 export interface EventComposerFormProps {

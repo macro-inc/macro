@@ -48,7 +48,7 @@ import {
   mapCalendarOccurrence,
 } from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
-import { calendarSelectionToEditorInitialValues } from './events/EventEditorForm';
+import { calendarSelectionToEditorInitialValues } from './events/event-form-model';
 import {
   type CalendarEventTimeChange,
   calendarEventRenderId,

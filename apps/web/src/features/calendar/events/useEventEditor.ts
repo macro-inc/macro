@@ -12,7 +12,7 @@ import {
   calendarEventToEditorInitialValues,
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
-} from './EventEditorForm';
+} from './event-form-model';
 import type { CalendarEvent } from './types';
 
 const EDIT_DISABLED_FIELDS = {

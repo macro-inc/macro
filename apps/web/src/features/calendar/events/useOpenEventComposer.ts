@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
-import type { EventEditorInitialValues } from './EventEditorForm';
+import type { EventEditorInitialValues } from './event-form-model';
 import type { CalendarEvent } from './types';
 
 /** Values and lifecycle callbacks used to open an event composer. */

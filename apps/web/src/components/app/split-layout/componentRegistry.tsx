@@ -1,6 +1,6 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { EventComposer } from '@app/features/calendar/events/EventComposer';
-import type { EventEditorInitialValues } from '@app/features/calendar/events/EventEditorForm';
+import type { EventEditorInitialValues } from '@app/features/calendar/events/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';

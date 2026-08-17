@@ -2,7 +2,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
 import { EventComposerForm } from './EventComposerForm';
-import type { EventEditorInitialValues } from './EventEditorForm';
+import type { EventEditorInitialValues } from './event-form-model';
 import type { CalendarEvent } from './types';
 import { useEventEditor } from './useEventEditor';
 
