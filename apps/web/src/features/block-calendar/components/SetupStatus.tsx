@@ -1,9 +1,9 @@
+import { useCalendarPager } from '@app/features/calendar/CalendarPagerContext';
+import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { useCalendarPager } from './CalendarPagerContext';
-import { isCalendarRangeSupported } from './calendar-supported-range';
 
 const SETUP_MESSAGES = {
   connect: {
@@ -24,7 +24,7 @@ const SETUP_MESSAGES = {
 } as const;
 
 /** Displays account setup actions above the complete calendar pager. */
-export function CalendarSetupStatus() {
+export function SetupStatus() {
   const calendarPager = useCalendarPager();
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();

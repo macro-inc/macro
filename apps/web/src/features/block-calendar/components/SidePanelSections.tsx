@@ -1,9 +1,9 @@
+import { useCalendarPager } from '@app/features/calendar/CalendarPagerContext';
+import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
+import { CalendarControls } from '@app/features/calendar/events/CalendarControls';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
-import { useCalendarPager } from './CalendarPagerContext';
-import { useCalendarView } from './CalendarViewContext';
-import { CalendarControls } from './events/CalendarControls';
 
 function CalendarMiniCalendarSidePanelSection() {
   const calendarView = useCalendarView();
@@ -86,7 +86,7 @@ function CalendarSourcesSidePanelSection() {
 }
 
 /** Registers the calendar's contextual right-side panel sections. */
-export function CalendarSidePanelSections() {
+export function SidePanelSections() {
   const sidePanel = useSidePanel();
 
   return (

@@ -4,8 +4,6 @@ import {
   useCalendarPager,
 } from '@app/features/calendar/CalendarPagerContext';
 import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
-import { CalendarSetupStatus } from '@app/features/calendar/CalendarSetupStatus';
-import { CalendarSidePanelSections } from '@app/features/calendar/CalendarSidePanelSections';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
 import { SelectedEventDetails } from '@app/features/calendar/events/EventDetailsPopover';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
@@ -23,6 +21,8 @@ import {
   Suspense,
 } from 'solid-js';
 import { Header } from './Header';
+import { SetupStatus } from './SetupStatus';
+import { SidePanelSections } from './SidePanelSections';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -86,7 +86,7 @@ function CalendarPages() {
               }
             />
           </Show>
-          <CalendarSetupStatus />
+          <SetupStatus />
         </div>
       </div>
     </Layer>
@@ -102,7 +102,7 @@ function WorkspaceContent() {
   return (
     <>
       <Header />
-      <CalendarSidePanelSections />
+      <SidePanelSections />
 
       <SelectedEventDetails
         anchor={calendarView.selectedEventAnchor}
