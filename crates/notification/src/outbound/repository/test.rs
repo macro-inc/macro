@@ -469,7 +469,7 @@ async fn test_get_notification_ids_for_entity_matches_primary_and_secondary_for_
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_task_mapping(pool: Pool<Postgres>) {
+async fn test_get_notification_ids_for_entity_matches_task_entity(pool: Pool<Postgres>) {
     let user = test_user("task-entity-user@test.com");
     let task_id = Uuid::new_v4();
     let task_entity_id = "task-1";
@@ -503,7 +503,7 @@ async fn test_get_notification_ids_for_entity_matches_task_mapping(pool: Pool<Po
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_message_mapping(pool: Pool<Postgres>) {
+async fn test_get_notification_ids_for_entity_matches_message_entity(pool: Pool<Postgres>) {
     let user = test_user("message-entity-user@test.com");
     let message_id = Uuid::new_v4().to_string();
     let direct_id = Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
@@ -531,9 +531,12 @@ async fn test_get_notification_ids_for_entity_matches_message_mapping(pool: Pool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_notification_ids_for_entity_matches_github_mapping(pool: Pool<Postgres>) {
+async fn test_get_notification_ids_for_entity_matches_foreign_entity_notifications_including_github(
+    pool: Pool<Postgres>,
+) {
     let user = test_user("github-entity-user@test.com");
-    let github_id = Uuid::new_v4();
+    let github_id = Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let generic_id = Uuid::parse_str("0193b1ea-b642-7589-893b-2b4a509c1e76").unwrap();
     let foreign_entity_id = Uuid::new_v4().to_string();
 
     pool.create_notification(
@@ -560,12 +563,12 @@ async fn test_get_notification_ids_for_entity_matches_github_mapping(pool: Pool<
                 .with_entity_string(foreign_entity_id.clone()),
             secondary_notification_entity: None,
             notification: TaggedContent::new(TestNotification {
-                message: "non-github foreign entity".to_string(),
+                message: "generic foreign entity".to_string(),
             }),
             sender_id: None,
             recipient_ids: HashSet::from([user.clone()]),
         },
-        Uuid::new_v4(),
+        generic_id,
         "test_service",
         None,
     )
@@ -580,7 +583,7 @@ async fn test_get_notification_ids_for_entity_matches_github_mapping(pool: Pool<
         .await
         .unwrap();
 
-    assert_eq!(notification_ids, vec![github_id]);
+    assert_eq!(notification_ids, vec![github_id, generic_id]);
 }
 
 #[sqlx::test(

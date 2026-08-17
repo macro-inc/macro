@@ -51,7 +51,6 @@ struct NotificationEntityMatchRow {
     secondary_event_item_id: Option<String>,
     secondary_event_item_type: Option<String>,
     notification_metadata: serde_json::Value,
-    notification_event_type: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -350,33 +349,44 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
     }
 }
 
-fn notification_refs_for_entity(entity: &Entity<'_>) -> Vec<NotificationEntityRef> {
-    let item_types: &[NotificationItemType] = match entity.entity_type {
-        EntityType::EmailThread => &[NotificationItemType::Email],
-        EntityType::ChannelMessage => &[NotificationItemType::Message],
-        EntityType::Channel => &[NotificationItemType::Channel],
-        EntityType::Document => &[NotificationItemType::Document, NotificationItemType::Task],
-        EntityType::Project => &[NotificationItemType::Project],
-        EntityType::Chat => &[NotificationItemType::Chat],
-        EntityType::Call => &[NotificationItemType::Call],
-        EntityType::ForeignEntity => &[NotificationItemType::Github],
-        EntityType::Reminder => &[NotificationItemType::Reminder],
-        EntityType::CalendarEvent => &[NotificationItemType::Calendar],
-        EntityType::User
-        | EntityType::Team
-        | EntityType::StaticFile
-        | EntityType::CrmCompany
-        | EntityType::CrmContact
-        | EntityType::Skill => &[],
-    };
+fn message_ref_matches_row(
+    message_id: &str,
+    secondary_event_item_id: Option<&str>,
+    secondary_event_item_type: Option<&str>,
+    metadata: &serde_json::Value,
+) -> bool {
+    let directly_targets_message = metadata
+        .get("messageId")
+        .or_else(|| metadata.get("message_id"))
+        .and_then(|value| value.as_str())
+        .is_some_and(|stored_message_id| stored_message_id == message_id);
+    let targets_message_as_thread = secondary_event_item_type == Some("channel_message")
+        && secondary_event_item_id == Some(message_id);
 
-    item_types
-        .iter()
-        .map(|entity_type| NotificationEntityRef {
-            entity_type: *entity_type,
-            id: entity.entity_id.to_string(),
-        })
-        .collect()
+    directly_targets_message || targets_message_as_thread
+}
+
+fn notification_entity_matches_row(
+    entity: &Entity<'_>,
+    event_item_id: &str,
+    event_item_type: &str,
+    secondary_event_item_id: Option<&str>,
+    secondary_event_item_type: Option<&str>,
+    metadata: &serde_json::Value,
+) -> bool {
+    let directly_targets_entity = event_item_type == entity.entity_type.as_ref()
+        && event_item_id == entity.entity_id.as_ref();
+    let targets_secondary_entity = secondary_event_item_type == Some(entity.entity_type.as_ref())
+        && secondary_event_item_id == Some(entity.entity_id.as_ref());
+    let targets_message = entity.entity_type == EntityType::ChannelMessage
+        && message_ref_matches_row(
+            entity.entity_id.as_ref(),
+            secondary_event_item_id,
+            secondary_event_item_type,
+            metadata,
+        );
+
+    directly_targets_entity || targets_secondary_entity || targets_message
 }
 
 fn notification_ref_matches_row(
@@ -389,15 +399,12 @@ fn notification_ref_matches_row(
     metadata: &serde_json::Value,
 ) -> bool {
     if entity_ref.entity_type == NotificationItemType::Message {
-        let directly_targets_message = metadata
-            .get("messageId")
-            .or_else(|| metadata.get("message_id"))
-            .and_then(|value| value.as_str())
-            .is_some_and(|message_id| message_id == entity_ref.id);
-        let targets_message_as_thread = secondary_event_item_type == Some("channel_message")
-            && secondary_event_item_id == Some(entity_ref.id.as_str());
-
-        return directly_targets_message || targets_message_as_thread;
+        return message_ref_matches_row(
+            &entity_ref.id,
+            secondary_event_item_id,
+            secondary_event_item_type,
+            metadata,
+        );
     }
 
     if entity_ref.id != event_item_id {
@@ -999,7 +1006,6 @@ impl NotificationDbOps for PgPool {
         user_id: &MacroUserIdStr<'_>,
         entity: &Entity<'_>,
     ) -> Result<Vec<Uuid>, Report> {
-        let entity_refs = notification_refs_for_entity(entity);
         let rows = sqlx::query_as!(
             NotificationEntityMatchRow,
             r#"
@@ -1009,8 +1015,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 n.secondary_event_item_id,
                 n.secondary_event_item_type,
-                n.metadata as "notification_metadata: serde_json::Value",
-                n.notification_event_type
+                n.metadata as "notification_metadata: serde_json::Value"
             FROM user_notification un
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
@@ -1038,26 +1043,14 @@ impl NotificationDbOps for PgPool {
         Ok(rows
             .into_iter()
             .filter(|row| {
-                let matches_secondary_entity = row.secondary_event_item_type.as_deref()
-                    == Some(entity.entity_type.as_ref())
-                    && row.secondary_event_item_id.as_deref() == Some(entity.entity_id.as_ref());
-                let matches_unmapped_primary_entity = entity_refs.is_empty()
-                    && row.event_item_type == entity.entity_type.as_ref()
-                    && row.event_item_id.as_str() == entity.entity_id.as_ref();
-
-                matches_secondary_entity
-                    || matches_unmapped_primary_entity
-                    || entity_refs.iter().any(|entity_ref| {
-                        notification_ref_matches_row(
-                            entity_ref,
-                            &row.event_item_id,
-                            &row.event_item_type,
-                            row.secondary_event_item_id.as_deref(),
-                            row.secondary_event_item_type.as_deref(),
-                            &row.notification_event_type,
-                            &row.notification_metadata,
-                        )
-                    })
+                notification_entity_matches_row(
+                    entity,
+                    &row.event_item_id,
+                    &row.event_item_type,
+                    row.secondary_event_item_id.as_deref(),
+                    row.secondary_event_item_type.as_deref(),
+                    &row.notification_metadata,
+                )
             })
             .map(|row| row.notification_id)
             .collect())
