@@ -150,11 +150,9 @@ export function SplitPanel(props: SplitPanelProps) {
     return Boolean(splits && splits.length > 1);
   }
 
-  const shouldHideSplitHeader = createMemo(
-    () =>
-      (isTouchDevice() && isListViewID(props.handle.content().id)) ||
-      isSoloSettings()
-  );
+  // On mobile the header stays visible for list views too: it hosts the
+  // floating filter-pill strip (see MobileSoupViewTabs).
+  const shouldHideSplitHeader = createMemo(() => isSoloSettings());
 
   const splitFocusStyling = () =>
     !isTouchDevice() &&

@@ -51,7 +51,6 @@ import { NarrowLayout } from './list-entity/narrow-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
-  InboxDivider,
   type LayoutProps,
   useCharacterCount,
   useListLayout,
@@ -159,8 +158,8 @@ export function ListEntity(props: ListEntityProps) {
 
   const listLayout = useListLayout();
   const isWide = listLayout?.isWide ?? (() => true);
-  const usesCondensedNarrowLayout = () =>
-    !isWide() && listLayout?.narrowLayout() === 'condensed';
+  const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
+  const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
 
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
@@ -172,28 +171,6 @@ export function ListEntity(props: ListEntityProps) {
     );
     if (!validNotifs.length) return [];
     return stackNotifications(validNotifs);
-  });
-
-  // A single stack collapses into the condensed entity row only when it's a
-  // new-messages-in-a-channel stack — the entity (channel) preview already
-  // conveys "new messages here". Replies, mentions, and other types carry
-  // per-stack context worth showing, so they render as a stack even when
-  // alone.
-  const shouldUnrollStacks = () => {
-    const stacks = mobileStacks();
-    if (stacks.length === 0) return false;
-    if (stacks.length > 1) return true;
-    return stacks[0].type !== 'channel_message_send';
-  };
-
-  // Latch to true once the stack view has ever been used (including async
-  // arrivals). Prevents a jarring layout switch when notifications drop back
-  // to a single condensable stack.
-  const [hasBeenUnrolled, setHasBeenUnrolled] = createSignal(
-    shouldUnrollStacks()
-  );
-  createEffect(() => {
-    if (shouldUnrollStacks()) setHasBeenUnrolled(true);
   });
 
   return (
@@ -231,20 +208,17 @@ export function ListEntity(props: ListEntityProps) {
             <WideLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match
-          when={isTouchDevice() && (hasBeenUnrolled() || shouldUnrollStacks())}
-        >
-          <Entity.Notification.MobileStacks
+        <Match when={isTouchDevice() && mobileStacks().length > 0}>
+          <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
           />
-          <InboxDivider />
         </Match>
         <Match
           when={
             isTouchDevice() &&
-            (isChannelEntity(props.entity) ||
+            ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
               isEmailEntity(props.entity) ||
               props.showUnrollNotifications)
           }
@@ -256,7 +230,7 @@ export function ListEntity(props: ListEntityProps) {
             <NarrowInboxLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
-        <Match when={usesCondensedNarrowLayout()}>
+        <Match when={!isMobile() && usesCondensedNarrowLayout()}>
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}

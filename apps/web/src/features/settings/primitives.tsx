@@ -31,7 +31,10 @@ export function SettingsPage(props: {
 }) {
   return (
     <div class="h-full overflow-y-auto">
-      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-8 touch:pb-12">
+      {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
+          scroll content (plus the usual breathing room) so pages scroll under
+          the floating header and bottom rows like every other block. */}
+      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}

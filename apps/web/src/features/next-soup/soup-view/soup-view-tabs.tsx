@@ -287,36 +287,55 @@ export const CollapsedSoupViewTabs = () => {
   );
 };
 
+/**
+ * Filter-drawer button + per-view filter pills, rendered in the mobile split
+ * header. The strip is full-bleed: negative margins cancel the header row's
+ * gutter so pills scroll to the device edges, the gutter travels inside the
+ * scroll content, and the drawer button stays pinned at the strip's start
+ * while pills pass beneath it.
+ */
 export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="flex items-center px-(--mobile-chrome-gutter)">
-      <MobileFilterDrawer />
-      <Switch>
-        <Match when={listView() === 'companies'}>
-          <MobileCompanyModeTabs />
-        </Match>
-        <For
-          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
-        >
-          {(v) => (
-            <Match when={listView() === v}>
-              <MobileViewTabs view={v} />
-            </Match>
-          )}
-        </For>
-      </Switch>
-    </div>
+    <Switch>
+      <Match when={listView() === 'companies'}>
+        <MobileCompanyModeTabs />
+      </Match>
+      <For
+        each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+      >
+        {(v) => (
+          <Match when={listView() === v}>
+            <MobileViewTabs view={v} />
+          </Match>
+        )}
+      </For>
+    </Switch>
   );
 };
+
+// Full-bleed breakout for header strips: the strip sits in the header row's
+// left flex slot, whose right edge stops short of the panel edge (row gap +
+// right-side column), so sizing it there leaves a sliver the pills can't
+// scroll over (right where the list's scrollbar sits). Instead, opt out of
+// flex sizing and span the header container itself (100cqw resolves against
+// @container/split-header = the panel width): -ml cancels the row gutter so
+// the strip runs device edge to device edge, over the scrollbar.
+const MOBILE_TAB_STRIP_CLASS =
+  '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
+const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
+const MOBILE_TAB_DRAWER_CLASS = 'sticky left-(--mobile-chrome-gutter) z-10';
 
 const MobileCompanyModeTabs = () => {
   const { viewMode, setViewMode } = useSoupView();
 
   return (
     <PillTabs
-      class="pl-2"
+      scrollable
+      class={MOBILE_TAB_STRIP_CLASS}
+      contentClass={MOBILE_TAB_CONTENT_CLASS}
+      leading={<MobileFilterDrawer class={MOBILE_TAB_DRAWER_CLASS} />}
       items={COMPANY_MODE_TABS}
       value={viewMode()}
       onChange={(value) => setViewMode(value as SoupViewMode)}
@@ -331,7 +350,10 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
 
   return (
     <PillTabs
-      class="pl-2"
+      scrollable
+      class={MOBILE_TAB_STRIP_CLASS}
+      contentClass={MOBILE_TAB_CONTENT_CLASS}
+      leading={<MobileFilterDrawer class={MOBILE_TAB_DRAWER_CLASS} />}
       items={VIEW_TAB_LISTS[props.view]}
       value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}

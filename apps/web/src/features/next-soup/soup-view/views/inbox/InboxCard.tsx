@@ -41,7 +41,12 @@ function Root(props: RootProps): JSX.Element {
         // `pl-9` reserves a fixed left column for the select checkbox (rendered
         // by the row wrapper) so content never reflows when it appears on hover.
         'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-9',
-
+        // Mobile renders the same cards in slightly different visual
+        // language: a full-bleed row whose left rail holds the unread dot
+        // (see the span below) instead of the checkbox gutter, with the
+        // avatar column centered against the content. The --soup-inbox-*
+        // vars come from `.soup-list-entity` on the row wrapper.
+        'mobile:rounded-none mobile:grid-cols-[auto_minmax(0,1fr)_max-content] mobile:items-center mobile:content-center mobile:pl-(--soup-inbox-unread) mobile:pr-3',
         {
           'bg-list-selected': props.selected,
           'bg-list-selected-highlighted': props.selected && props.highlighted,
@@ -58,6 +63,11 @@ function Root(props: RootProps): JSX.Element {
       onClick={props.onClick}
       onKeyDown={onKeyDown}
     >
+      {/* Mobile-only unread dot in the left rail. */}
+      <span
+        aria-hidden="true"
+        class="absolute left-(--soup-inbox-unread-indicator-padding-x) top-1/2 hidden size-(--soup-inbox-unread-indicator-diameter) -translate-y-1/2 rounded-full bg-accent opacity-0 group-data-unread/inbox-item:opacity-100 mobile:block"
+      />
       {props.children}
     </div>
   );
@@ -74,7 +84,7 @@ function Icon(props: IconProps): JSX.Element {
   return (
     <span
       class={cn(
-        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible',
+        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible mobile:size-(--soup-inbox-icon-diameter)',
         props.class
       )}
     >

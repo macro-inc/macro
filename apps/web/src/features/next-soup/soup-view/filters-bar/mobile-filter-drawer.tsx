@@ -72,7 +72,10 @@ function scrollAccordionItemToTop(
   });
 }
 
-export const MobileFilterDrawer = () => {
+export const MobileFilterDrawer = (props: {
+  /** Extra classes on the trigger button (rendered only when filters exist). */
+  class?: string;
+}) => {
   const { consolidatedFiltersList, resetToTabDefaults, handleAssigneeChange } =
     useFilterRefinements();
 
@@ -332,7 +335,10 @@ export const MobileFilterDrawer = () => {
           variant="ghost"
           size="sm"
           depth={3}
-          class="island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5"
+          class={cn(
+            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5',
+            props.class
+          )}
           ref={pressPulse}
         >
           <SlidersHorizontalIcon />

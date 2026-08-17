@@ -1,8 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { cn } from '@ui';
 import { Show } from 'solid-js';
-import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
-import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import { SearchContent } from '../../extractors-search/search-content';
 import { SearchSender } from '../../extractors-search/search-sender';
@@ -15,40 +12,31 @@ import {
 import { isSearchEntity } from '../../types/search';
 import { ChannelJoinButton } from './channel';
 import { EmailInboxChip } from './email';
-import type { LayoutProps } from './shared';
+import { type LayoutProps, RowIndicator } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-2 items-center text-sm px-2 grid"
+      class="w-full gap-x-1 items-center text-sm pr-2 pl-1 grid"
       style={{
         'grid-template-columns': 'auto 1fr max-content',
         'grid-template-rows': '44px',
         'grid-template-areas': '"indicator title timestamp"',
       }}
     >
-      <Entity.Slot placement="indicator" class="relative self-start pt-3">
-        <Show when={!props.hideCheckbox}>
-          <div
-            class={cn('w-0 opacity-0 overflow-hidden', {
-              'w-6 opacity-100': props.checked,
-            })}
-          >
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
-          </div>
-        </Show>
+      <Entity.Slot placement="indicator" class="relative">
+        <RowIndicator
+          checked={props.checked}
+          hideCheckbox={props.hideCheckbox}
+          onChecked={props.onChecked}
+          unread={props.unread}
+        />
       </Entity.Slot>
 
       <Entity.Slot
         placement="title"
         class="ph-no-capture flex items-center gap-2 truncate font-semibold"
       >
-        <Show when={props.unread}>
-          <UnreadIndicator active />
-        </Show>
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
