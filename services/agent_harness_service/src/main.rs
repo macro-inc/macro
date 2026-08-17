@@ -14,7 +14,7 @@ use std::sync::Arc;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::SessionDefaults;
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::agent_trigger_to_harness_command;
+use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::daytona::{
@@ -88,14 +88,13 @@ async fn main() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    anyhow::ensure!(
-        !config.daytona_api_key.trim().is_empty(),
-        "DAYTONA_API_KEY is required"
-    );
-    anyhow::ensure!(
-        !config.github_token.trim().is_empty(),
-        "GITHUB_TOKEN is required"
-    );
+    // Credential-less boot is deliberate: external sessions need neither.
+    // A managed spawn without them fails at spawn time instead, loudly.
+    if config.daytona_api_key.trim().is_empty() || config.github_token.trim().is_empty() {
+        tracing::warn!(
+            "DAYTONA_API_KEY and/or GITHUB_TOKEN are unset: managed sandboxes are unarmed; external agent sessions are unaffected"
+        );
+    }
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -167,7 +166,6 @@ async fn main() -> anyhow::Result<()> {
     ));
     let announcer = ChannelAnnouncer::new(
         channel_service,
-        bot_id,
         LexicalClient::new(
             config.internal_api_key.clone(),
             LexicalServiceUrl::new()?.to_string(),
@@ -311,8 +309,8 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let (session_id, command) = match agent_trigger_to_harness_command(event.event().event.clone(), bot_id) {
-                    Ok(command) => command,
+                let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
+                    Ok(routed) => routed,
                     Err(skipped) => {
                         tracing::debug!(?skipped, "skipped an agent session event");
                         match commit_message(&consumer, kafka_message) {
@@ -331,15 +329,30 @@ async fn main() -> anyhow::Result<()> {
                     run_error = Some(error);
                     break;
                 }
-                let execution = harness.execute(session_id, command);
-                tasks.spawn(async move {
-                    match execution.await {
-                        Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
-                        Err(error) => {
-                            tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
-                        }
+                match routed {
+                    RoutedTrigger::Command(session_id, command) => {
+                        let execution = harness.execute(session_id, command);
+                        tasks.spawn(async move {
+                            match execution.await {
+                                Ok(()) => tracing::info!(%session_id, "executed an agent harness command"),
+                                Err(error) => {
+                                    tracing::error!(error = ?error, %session_id, "failed to execute an agent harness command");
+                                }
+                            }
+                        });
                     }
-                });
+                    RoutedTrigger::Announce(session_id, prompt) => {
+                        let harness = harness.clone();
+                        tasks.spawn(async move {
+                            match harness.announce_external_prompt(session_id, prompt).await {
+                                Ok(()) => tracing::info!(%session_id, "announced an external prompt"),
+                                Err(error) => {
+                                    tracing::error!(error = ?error, %session_id, "failed to announce an external prompt");
+                                }
+                            }
+                        });
+                    }
+                }
             }
             Some(result) = tasks.join_next(), if !tasks.is_empty() => {
                 if let Err(error) = result {

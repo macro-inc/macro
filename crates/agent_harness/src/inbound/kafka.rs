@@ -14,17 +14,28 @@ use bot_id::BotId;
 use macro_user_id::email::ReadEmailParts;
 
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
+    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
+    is_managed_bot,
 };
 
 #[cfg(test)]
 mod test;
 
-/// Why an event yielded no command. Only for logging - none of these are
+/// What one trigger event asks this deployment to do.
+#[derive(Debug, Clone)]
+pub enum RoutedTrigger {
+    /// Run a harness command for the managed bot's session.
+    Command(AgentSessionId, HarnessCommand),
+    /// Post the chip for a prompt an external bot's runtime delivers itself.
+    Announce(AgentSessionId, AnnouncePrompt),
+}
+
+/// Why an event yielded no work. Only for logging - none of these are
 /// errors, and the consumer commits the offset either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skipped {
-    /// The event belongs to a different bot's deployment.
+    /// The event is another deployment's to act on: an open for a bot whose
+    /// runtime opens its own sessions, or managed traffic that is not ours.
     ForeignBot,
     /// The sender is not a user, so there is nobody to own the session.
     NotFromUser,
@@ -36,12 +47,18 @@ pub enum Skipped {
     NotMacroStaff,
 }
 
-/// Route one trigger event: a command for `our_bot`, or a reason it was
+/// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
-pub fn agent_trigger_to_harness_command(
+///
+/// Opens are only ours when the mentioned bot is `our_bot` - external bots'
+/// runtimes open their own sessions over the API. Events for sessions that
+/// already exist always carry work: a prompt to deliver when the session is
+/// managed here, or just its announcement when the bot's own runtime
+/// delivers the prompt.
+pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     our_bot: BotId,
-) -> Result<(AgentSessionId, HarnessCommand), Skipped> {
+) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
             // TODO: remove
@@ -64,7 +81,7 @@ pub fn agent_trigger_to_harness_command(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
-            Ok((
+            Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
                     bot_id: mentioned.bot_id,
@@ -87,19 +104,39 @@ pub fn agent_trigger_to_harness_command(
                 message,
             },
         )) => {
-            if bot_id != our_bot {
-                return Err(Skipped::ForeignBot);
+            let origin = AnnounceOrigin {
+                channel_id: message.channel_id,
+                thread_id: message.thread_id.unwrap_or(message.message_id),
+            };
+            if is_managed_bot(bot_id) {
+                // A managed session's prompt is delivered (and announced)
+                // by the deployment that manages it; anyone else stays out
+                // of the way entirely.
+                if bot_id != our_bot {
+                    return Err(Skipped::ForeignBot);
+                }
+                return Ok(RoutedTrigger::Command(
+                    session_id,
+                    HarnessCommand::Deliver(DeliverAction::prompt(
+                        message.content,
+                        message.sender.as_user().cloned(),
+                        Some(origin),
+                    )),
+                ));
             }
-            Ok((
+            let sender = message
+                .sender
+                .as_user()
+                .cloned()
+                .ok_or(Skipped::NotFromUser)?;
+            Ok(RoutedTrigger::Announce(
                 session_id,
-                HarnessCommand::Deliver(DeliverAction::prompt(
-                    message.content,
-                    message.sender.as_user().cloned(),
-                    Some(AnnounceOrigin {
-                        channel_id: message.channel_id,
-                        thread_id: message.thread_id.unwrap_or(message.message_id),
-                    }),
-                )),
+                AnnouncePrompt {
+                    bot_id,
+                    origin,
+                    content: message.content,
+                    sender,
+                },
             ))
         }
         _ => Err(Skipped::Unrecognized),

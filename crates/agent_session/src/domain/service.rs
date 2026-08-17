@@ -37,10 +37,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::{mpsc, oneshot};
 
+use bots::domain::models::BotId;
+
 use super::error::{AgentSessionError, Result};
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, CreateAgentSessionParams,
-    LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, AuthorKind, ChannelSession,
+    CreateAgentSessionParams, LogAppended, Message, MessageId, SessionLog, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionRealtime,
@@ -94,6 +96,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         action: AgentAction,
         action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session an incoming channel context routes to, if any.
+    fn find_for_channel(
+        &self,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> impl Future<Output = Result<ChannelSession>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
@@ -224,6 +233,14 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn find_for_channel(
+        &self,
+        thread_id: Option<Uuid>,
+        bot_id: Option<BotId>,
+    ) -> Result<ChannelSession> {
+        self.repo.find_for_channel(thread_id, bot_id).await
     }
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {

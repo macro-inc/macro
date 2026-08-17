@@ -687,15 +687,20 @@ pub struct CreateAgentSessionRequest {
     pub thread: Option<CreateSessionThread>,
 }
 
-/// Thread linkage on a create request.
-#[derive(Debug, Clone, Copy, Deserialize, ToSchema)]
+/// The triggering mention on a create request.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
+    /// Channel the mentioning message was posted in.
+    pub channel_id: Uuid,
     /// Thread the session belongs to; defaults to the message itself, which
     /// is how a top-level mention roots its own thread.
     pub thread_id: Option<Uuid>,
     /// The mentioning message.
     pub message_id: Uuid,
+    /// The mention's text, quoted in the session's announcement.
+    #[serde(default)]
+    pub content: String,
 }
 
 /// Response body for `POST /agent-sessions`.
@@ -728,6 +733,11 @@ pub enum CreateSessionApiError {
     UnparseableOwner,
     /// The workspace is not an acceptable path.
     InvalidWorkspace(&'static str),
+    /// The thread already routes to a session; carries it for recovery.
+    ThreadSessionExists {
+        /// The existing session, when it could be resolved.
+        session_id: Option<AgentSessionId>,
+    },
     /// The domain rejected the open.
     Domain(AgentSessionError),
 }
@@ -767,6 +777,13 @@ impl IntoResponse for CreateSessionApiError {
                 "owner is not a user id".to_owned(),
             ),
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
+            Self::ThreadSessionExists { session_id } => {
+                let body = serde_json::json!({
+                    "message": "this bot already has a session for this thread",
+                    "sessionId": session_id,
+                });
+                return (StatusCode::CONFLICT, Json(body)).into_response();
+            }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
@@ -905,19 +922,40 @@ pub async fn create_agent_session_handler<
     validate_workspace(&request.workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
-    let session = state
+    let thread = request.thread.map(|thread| SessionThread {
+        channel_id: thread.channel_id,
+        thread_id: thread.thread_id.unwrap_or(thread.message_id),
+        message_id: thread.message_id,
+        content: thread.content,
+    });
+    let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
             workspace: request.workspace,
             repo_url: request.repo_url,
             owner,
-            thread: request.thread.map(|thread| SessionThread {
-                thread_id: thread.thread_id.unwrap_or(thread.message_id),
-                message_id: thread.message_id,
-            }),
+            thread: thread.clone(),
         })
-        .await?;
+        .await
+    {
+        Ok(session) => session,
+        // A conflicted open answers with the session the thread already
+        // routes to, so a redelivered trigger can resume serving it
+        // instead of being dropped.
+        Err(AgentSessionError::ThreadSessionExists) => {
+            let session_id = match thread {
+                Some(thread) => state
+                    .opener
+                    .find_thread_session(thread.thread_id, bot_id)
+                    .await
+                    .unwrap_or_default(),
+                None => None,
+            };
+            return Err(CreateSessionApiError::ThreadSessionExists { session_id });
+        }
+        Err(error) => return Err(error.into()),
+    };
 
     let gateway_url = format!("{}/runtime/{}/ws", state.gateway_base_url, session.id);
     Ok((

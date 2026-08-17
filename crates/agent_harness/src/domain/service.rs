@@ -10,6 +10,7 @@ use agent_session::domain::model::{
 };
 use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
 use agent_session::domain::service::AgentSessionService;
+use bot_id::BotId;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,8 +18,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, OpenSession, SessionAnnouncement,
-    SessionDefaults, SpawnContainer, is_managed_bot,
+    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, OpenSession,
+    SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
 };
 use crate::domain::ports::{ContainerManager, SessionAnnouncer};
 
@@ -117,6 +118,50 @@ where
         tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
     }
 
+    /// Post the announcement for a prompt an external runtime delivers.
+    ///
+    /// The follow-up-mention half of the external split: the runtime sends
+    /// the prompt through the control endpoint, and the observed trigger
+    /// event lands here to post the magic chip the replies render into.
+    /// Needs only the session row - a chip must post even while the runtime
+    /// is disconnected, anchoring whatever reply eventually comes.
+    #[tracing::instrument(err, skip(self, prompt), fields(%session_id))]
+    pub async fn announce_external_prompt(
+        &self,
+        session_id: AgentSessionId,
+        prompt: AnnouncePrompt,
+    ) -> Result<()> {
+        // Re-read rather than trusted: the row is what vouches that the
+        // trigger's session and bot actually belong together.
+        let session = self.inner.sessions.get_session(session_id).await?;
+        if session.bot_id != prompt.bot_id {
+            tracing::warn!(
+                %session_id,
+                event_bot = %prompt.bot_id,
+                session_bot = %session.bot_id,
+                "dropping an announce whose bot does not own the session"
+            );
+            return Ok(());
+        }
+
+        self.inner
+            .announcer
+            .announce(SessionAnnouncement {
+                session_id,
+                bot_id: session.bot_id,
+                origin_channel_id: prompt.origin.channel_id,
+                origin_thread_id: prompt.origin.thread_id,
+                prompted_message_id: self
+                    .inner
+                    .sessions
+                    .next_prompt_message_id(session_id)
+                    .await?,
+                prompted_content: prompt.content,
+                triggered_by: prompt.sender,
+            })
+            .await
+    }
+
     /// Attach an external runtime that dialed in.
     ///
     /// The transport layer authenticates the dial before calling this; the
@@ -179,11 +224,13 @@ where
     }
 }
 
-/// External sessions are a plain create: no sandbox (the runtime dials in),
-/// no first prompt (the runtime sends it through the control endpoint), and
-/// no announcement (announcing as the right bot needs a per-bot announcer
-/// this deployment does not have yet). The harness still owns the operation
-/// so the opening semantics have one home when they grow.
+/// External sessions create the row and announce - the magic-chip message
+/// the session's bot posts into the mention's thread, which is where the
+/// app renders the session's replies. No sandbox (the runtime dials in) and
+/// no first prompt (the runtime sends it through the control endpoint).
+/// The announcement is best-effort: a session a runtime is about to serve
+/// must not die because the courtesy post failed, most plainly when the bot
+/// cannot post in the claimed channel.
 impl<Sessions, Containers, Announcer> agent_session::domain::ports::ExternalSessionOpener
     for AgentHarnessService<Sessions, Containers, Announcer>
 where
@@ -195,14 +242,15 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        self.inner
+        let session = self
+            .inner
             .sessions
             .create_session(CreateAgentSessionParams {
                 id: AgentSessionId::new(),
-                owner_id: request.owner,
+                owner_id: request.owner.clone(),
                 bot_id: request.bot_id,
-                thread_id: request.thread.map(|thread| thread.thread_id),
-                originating_message_id: request.thread.map(|thread| thread.message_id),
+                thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
+                originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
                 model: self.inner.defaults.model.clone(),
                 harness: self.inner.defaults.harness.clone(),
                 repo_url: request.repo_url,
@@ -211,7 +259,46 @@ where
                 // mention; it must not grant the channel anything.
                 verified_mention: false,
             })
-            .await
+            .await?;
+
+        if let Some(thread) = request.thread {
+            let announcement = SessionAnnouncement {
+                session_id: session.id,
+                bot_id: request.bot_id,
+                origin_channel_id: thread.channel_id,
+                origin_thread_id: thread.thread_id,
+                prompted_message_id: MessageId::first(AuthorKind::User),
+                prompted_content: thread.content,
+                triggered_by: request.owner,
+            };
+            if let Err(error) = self.inner.announcer.announce(announcement).await {
+                tracing::warn!(
+                    error = ?error,
+                    session = %session.id,
+                    "external session announcement failed; the session runs unannounced"
+                );
+            }
+        }
+
+        Ok(session)
+    }
+
+    async fn find_thread_session(
+        &self,
+        thread_id: macro_uuid::Uuid,
+        bot_id: BotId,
+    ) -> agent_session::domain::error::Result<Option<AgentSessionId>> {
+        match self
+            .inner
+            .sessions
+            .find_for_channel(Some(thread_id), Some(bot_id))
+            .await?
+        {
+            agent_session::domain::model::ChannelSession::CreatedFromThread(session) => {
+                Ok(Some(session.id))
+            }
+            agent_session::domain::model::ChannelSession::None => Ok(None),
+        }
     }
 }
 
@@ -283,6 +370,7 @@ where
         self.announcer
             .announce(SessionAnnouncement {
                 session_id,
+                bot_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
@@ -382,8 +470,13 @@ where
             return Ok(None);
         };
 
+        // The announcement posts as the session's own bot, which only the
+        // row remembers.
+        let session = self.sessions.get_session(session_id).await?;
+
         Ok(Some(SessionAnnouncement {
             session_id,
+            bot_id: session.bot_id,
             origin_channel_id: origin.channel_id,
             origin_thread_id: origin.thread_id,
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,

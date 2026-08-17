@@ -38,20 +38,26 @@ pub trait BotDirectory: Send + Sync + 'static {
     fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
 }
 
-/// The thread whose mention triggered a session, when one did.
+/// The mention that triggered a session, when one did.
 ///
-/// Linkage only, no content: it is what routes follow-up mentions in the
-/// thread to this session. The mention's text never travels here - the
-/// runtime delivers it as the first prompt through the session control
-/// endpoint. Because this linkage is claimed by the caller rather than
-/// observed by the trigger pipeline, it never grants the thread's channel
-/// any access to the session.
-#[derive(Debug, Clone, Copy)]
+/// Routes follow-up mentions in the thread to this session and feeds the
+/// announcement - the magic-chip message the session's bot posts back into
+/// the thread. The mention's text is quoted there for display only; the
+/// runtime still delivers it as the first prompt through the session
+/// control endpoint. Because all of this is claimed by the caller rather
+/// than observed by the trigger pipeline, it never grants the thread's
+/// channel any access to the session, and the announcement stands only
+/// where the bot can already post.
+#[derive(Debug, Clone)]
 pub struct SessionThread {
+    /// Channel the mentioning message was posted in.
+    pub channel_id: Uuid,
     /// Thread the session belongs to.
     pub thread_id: Uuid,
     /// The mentioning message itself.
     pub message_id: Uuid,
+    /// The mention's text, quoted in the announcement.
+    pub content: String,
 }
 
 /// Everything needed to open a session served by an external runtime.
@@ -78,6 +84,15 @@ pub trait ExternalSessionOpener: Send + Sync + 'static {
         &self,
         request: OpenExternalAgentSession,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// The session a thread's mentions already route to, if one exists.
+    /// What a caller whose open conflicted needs to recover: redeliveries
+    /// resume serving the existing session instead of being dropped.
+    fn find_thread_session(
+        &self,
+        thread_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
 }
 
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions

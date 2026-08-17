@@ -865,3 +865,106 @@ async fn a_disconnected_external_session_never_gets_a_sandbox() {
     assert_eq!(containers.spawned(), 0);
     assert_eq!(containers.resumed(), 0);
 }
+
+#[tokio::test]
+async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
+    let (service, _repo, containers, announcer) = harness();
+    let mut request = open_external_request("/srv/agent");
+    let bot = request.bot_id;
+    request.thread = Some(agent_session::domain::ports::SessionThread {
+        channel_id: macro_uuid::Uuid::from_u128(0xC1),
+        thread_id: macro_uuid::Uuid::from_u128(0xC2),
+        message_id: macro_uuid::Uuid::from_u128(0xC2),
+        content: "@opencode fix the flaky test".to_owned(),
+    });
+
+    service
+        .open_external_session(request)
+        .await
+        .expect("open with a mention");
+
+    // The magic-chip announcement lands in the mention's thread, posted as
+    // the session's own bot - still with nothing provisioned.
+    assert_eq!(containers.spawned(), 0);
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1);
+    assert_eq!(announced[0].bot_id, bot);
+    assert_eq!(
+        announced[0].origin_channel_id,
+        macro_uuid::Uuid::from_u128(0xC1)
+    );
+    assert_eq!(
+        announced[0].prompted_content,
+        "@opencode fix the flaky test"
+    );
+}
+
+#[tokio::test]
+async fn an_external_prompt_announce_posts_into_the_observed_origin() {
+    let (service, _repo, containers, announcer) = harness();
+    let request = open_external_request("/srv/agent");
+    let bot = request.bot_id;
+    let session = service
+        .open_external_session(request)
+        .await
+        .expect("open without a mention");
+
+    // No runtime ever attached: the chip must still post, anchoring
+    // whatever reply arrives once the runtime comes back.
+    service
+        .announce_external_prompt(
+            session.id,
+            crate::domain::model::AnnouncePrompt {
+                bot_id: bot,
+                origin: AnnounceOrigin {
+                    channel_id: macro_uuid::Uuid::from_u128(0xAA),
+                    thread_id: macro_uuid::Uuid::from_u128(0xAB),
+                },
+                content: "follow-up from the channel".to_owned(),
+                sender: sender(),
+            },
+        )
+        .await
+        .expect("the observed prompt announces");
+
+    assert_eq!(containers.spawned(), 0);
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1, "threadless open posts no chip");
+    assert_eq!(announced[0].bot_id, bot);
+    assert_eq!(
+        announced[0].origin_channel_id,
+        macro_uuid::Uuid::from_u128(0xAA)
+    );
+    assert_eq!(
+        announced[0].origin_thread_id,
+        macro_uuid::Uuid::from_u128(0xAB)
+    );
+    assert_eq!(announced[0].prompted_content, "follow-up from the channel");
+}
+
+#[tokio::test]
+async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
+    let (service, _repo, _containers, announcer) = harness();
+    let session = service
+        .open_external_session(open_external_request("/srv/agent"))
+        .await
+        .expect("open without a mention");
+
+    service
+        .announce_external_prompt(
+            session.id,
+            crate::domain::model::AnnouncePrompt {
+                bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+                origin: AnnounceOrigin {
+                    channel_id: macro_uuid::Uuid::from_u128(0xAA),
+                    thread_id: macro_uuid::Uuid::from_u128(0xAB),
+                },
+                content: "not yours".to_owned(),
+                sender: sender(),
+            },
+        )
+        .await
+        .expect("a foreign announce is dropped, not an error");
+
+    assert_eq!(announcer.announced().len(), 0);
+}

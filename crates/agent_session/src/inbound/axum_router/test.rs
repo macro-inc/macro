@@ -69,8 +69,8 @@ impl ExternalSessionOpener for RecordingOpener {
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
             owner_id: request.owner.clone(),
-            thread_id: request.thread.map(|thread| thread.thread_id),
-            originating_message_id: request.thread.map(|thread| thread.message_id),
+            thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
+            originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
             bot_id: request.bot_id,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
@@ -83,6 +83,14 @@ impl ExternalSessionOpener for RecordingOpener {
         };
         self.opened.lock().unwrap().push(request);
         Ok(session)
+    }
+
+    async fn find_thread_session(
+        &self,
+        _thread_id: Uuid,
+        _bot_id: BotId,
+    ) -> crate::domain::error::Result<Option<AgentSessionId>> {
+        Ok(None)
     }
 }
 
@@ -156,7 +164,11 @@ fn body(bot_id: Option<Uuid>, workspace: &str, owner: Option<&str>) -> String {
         "botId": bot_id,
         "workspace": workspace,
         "owner": owner,
-        "thread": { "messageId": "00000000-0000-0000-0000-000000000002" },
+        "thread": {
+            "channelId": "00000000-0000-0000-0000-000000000001",
+            "messageId": "00000000-0000-0000-0000-000000000002",
+            "content": "fix the flaky test",
+        },
     })
     .to_string()
 }
@@ -201,8 +213,9 @@ async fn a_bot_opens_an_external_session_for_itself() {
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
     assert_eq!(opened[0].workspace, "/home/wolf/code");
     // A top-level mention roots its own thread.
-    let thread = opened[0].thread.expect("thread linkage was given");
+    let thread = opened[0].thread.as_ref().expect("thread linkage was given");
     assert_eq!(thread.thread_id, thread.message_id);
+    assert_eq!(thread.content, "fix the flaky test");
 }
 
 #[tokio::test]

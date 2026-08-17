@@ -16,7 +16,6 @@ mod test;
 
 use std::sync::Arc;
 
-use bot_id::BotId;
 use channel_sender::ChannelSender;
 use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use channels::domain::ports::ChannelService;
@@ -36,22 +35,18 @@ fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChi
     }
 }
 
-/// Posts session announcements as `bot_id` through a [`ChannelService`].
+/// Posts session announcements as their session's bot through a
+/// [`ChannelService`].
 pub struct ChannelAnnouncer<Channels> {
     channels: Arc<Channels>,
-    bot_id: BotId,
     lexical: LexicalClient,
 }
 
 impl<Channels> ChannelAnnouncer<Channels> {
-    /// Announce as `bot_id`, posting through `channels`, with content
-    /// composed by `lexical`.
-    pub fn new(channels: Arc<Channels>, bot_id: BotId, lexical: LexicalClient) -> Self {
-        Self {
-            channels,
-            bot_id,
-            lexical,
-        }
+    /// Post through `channels`, with content composed by `lexical`. The
+    /// sender is per-announcement: whichever bot the session runs for.
+    pub fn new(channels: Arc<Channels>, lexical: LexicalClient) -> Self {
+        Self { channels, lexical }
     }
 }
 
@@ -69,7 +64,7 @@ where
 
         self.channels
             .post_message(
-                ChannelSender::new_from_bot(self.bot_id),
+                ChannelSender::new_from_bot(announcement.bot_id),
                 announcement.origin_channel_id,
                 PostMessageRequest {
                     content,
