@@ -442,6 +442,7 @@ registerComponent(
     );
   })
 );
+
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);

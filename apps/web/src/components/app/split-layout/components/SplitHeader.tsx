@@ -492,7 +492,6 @@ export function SplitHeader(props: {
           // On mobile the header overlays the panel body as a transparent strip
           // of floating islands
           'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
-          isMobile() && isListViewID(panel.handle.content().id) && 'hidden',
           isMobile() &&
             !isNativeMobilePlatform() &&
             'mobile:top-[calc(var(--safe-top)+6px)]',
@@ -536,11 +535,15 @@ export function SplitHeader(props: {
               </div>
             }
           >
-            {/* Back/forward island. */}
+            {/* Back/forward island. List views never render the back button
+                (their header hosts the filter pills instead), so the island
+                hides for them even when history allows going back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                !panel.handle.canGoBack() && 'hidden'
+                (!panel.handle.canGoBack() ||
+                  isListViewID(panel.handle.content().id)) &&
+                  'hidden'
               )}
             >
               <Show when={!isListViewID(panel.handle.content().id)}>

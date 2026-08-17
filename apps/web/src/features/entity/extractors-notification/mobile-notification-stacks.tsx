@@ -10,15 +10,19 @@ import {
   openNotification,
 } from '@notifications';
 import { cn } from '@ui';
-import { createEffect, type JSX, useContext } from 'solid-js';
+import { createEffect, type JSX, Show, useContext } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { CollapsibleList } from '../components/CollapsibleList';
+import { UnreadIndicator } from '../components/UnreadIndicator';
+import { InboxDivider } from '../composed/list-entity/shared';
 import { Entity } from '../entity';
 import { type EntityData, isChannelEntity } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 import { isNotificationUnread } from '../utils/notification';
 import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
+import { NotificationDescription } from './notification-description';
+import { NotificationIcon } from './notification-icon';
 import { NotificationSenderIcon } from './notification-sender-icon';
 import { NotificationTimestamp } from './notification-timestamp';
 
@@ -29,62 +33,93 @@ export type EntityRowConfig = {
   swipeRightRevealedComponent?: JSX.Element;
 };
 
+/**
+ * One notification stack in the NarrowInboxLayout visual language: unread dot
+ * + entity avatar, entity title + stack timestamp, and a two-line body — the
+ * stack's description ("Peter: 3 replies") over its latest content preview.
+ */
 function MobileStackRowLayout(props: {
   stack: NotificationStack;
   entity: WithNotification<EntityData>;
   unread: boolean;
   onClick?: (e: MouseEvent) => void;
 }) {
+  const isDirectMessage = () =>
+    isChannelEntity(props.entity) &&
+    props.entity.channelType === 'direct_message';
+
   return (
     <Entity.Layout
       class="w-full text-sm grid"
       onClick={props.onClick}
       style={{
-        'grid-template-columns': 'auto 1fr auto',
-        'grid-template-rows': 'auto auto',
-        'grid-template-areas': '"icon title timestamp" "icon body body"',
+        'grid-template-columns': 'auto 1fr 8ch',
+        'grid-template-rows': 'auto auto auto',
+        'grid-template-areas':
+          '"icon title timestamp" "icon body body" "icon body body"',
       }}
     >
       <Entity.Slot
         placement="icon"
-        class="flex flex-col items-center gap-1 pt-3.5 pl-3 pr-2"
+        class="flex items-center self-center pr-(--soup-inbox-icon-padding-r)"
       >
-        <Entity.Notification.Icon
-          stack={props.stack}
-          class={cn('size-3.5 shrink-0', {
-            'text-accent': props.unread,
-            'text-ink-muted': !props.unread,
-          })}
+        <UnreadIndicator
+          class="mx-(--soup-inbox-unread-indicator-padding-x) size-(--soup-inbox-unread-indicator-diameter)"
+          active={props.unread}
         />
-        <span
-          class={cn('size-1.5 rounded-full bg-accent shrink-0 opacity-0', {
-            'opacity-100': props.unread,
-          })}
-        />
+        <Show
+          when={isDirectMessage()}
+          fallback={
+            <div class="size-(--soup-inbox-icon-diameter) shrink-0 bg-edge-muted rounded-full flex items-center justify-center">
+              <div class="size-[calc(var(--soup-inbox-icon-diameter)*var(--soup-inbox-icon-factor))]">
+                <Entity.Icon entity={props.entity} />
+              </div>
+            </div>
+          }
+        >
+          <div class="size-11 shrink-0">
+            <Entity.Icon entity={props.entity} class="bg-edge-muted text-ink" />
+          </div>
+        </Show>
       </Entity.Slot>
+
       <Entity.Slot
         placement="title"
-        class="flex items-center gap-2 overflow-hidden min-w-0 pt-3"
+        class="ph-no-capture flex items-center gap-2 truncate font-semibold pt-3"
       >
-        <NotificationSenderIcon stack={props.stack} size="sm" />
-        <span class="truncate min-w-0 font-medium text-ink">
-          <Entity.Notification.Description stack={props.stack} />
-        </span>
+        <Entity.Title entity={props.entity} />
       </Entity.Slot>
+
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted pt-3 pr-4 pl-2 tabular-nums"
+        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4 tabular-nums"
       >
         <NotificationTimestamp stack={props.stack} />
       </Entity.Slot>
+
       <Entity.Slot
         placement="body"
-        class={cn('text-ink-muted/80 pb-2.5 min-h-lh pr-4 text-xs', {
-          truncate: props.stack.type !== 'document_mention',
-        })}
+        class="flex flex-col gap-0.5 pb-2 min-h-[2lh] pr-4 min-w-0"
       >
-        <NotificationContent stack={props.stack} />
+        <span class="flex items-center gap-1.5 min-w-0">
+          <NotificationIcon
+            stack={props.stack}
+            class="size-3 shrink-0 text-ink-muted/60"
+          />
+          <NotificationSenderIcon stack={props.stack} size="sm" />
+          <span class="ph-no-capture truncate min-w-0 font-medium text-ink-muted">
+            <NotificationDescription stack={props.stack} />
+          </span>
+        </span>
+        <span
+          class={cn('ph-no-capture text-ink-extra-muted', {
+            truncate: props.stack.type !== 'document_mention',
+          })}
+        >
+          <NotificationContent stack={props.stack} />
+        </span>
       </Entity.Slot>
+      <InboxDivider />
     </Entity.Layout>
   );
 }
@@ -169,14 +204,23 @@ function keyStack(stack: NotificationStack): KeyedStack {
   return { ...stack, id: getMostRecentNotification(stack).id };
 }
 
-interface MobileNotificationStacksProps {
+interface MobileNotificationStackRowsProps {
   stacks: NotificationStack[];
   entity: WithNotification<EntityData>;
   entityRowConfig?: EntityRowConfig;
   visibleCount?: number;
 }
 
-export function MobileNotificationStacks(props: MobileNotificationStacksProps) {
+/**
+ * The mobile inbox rendering of an entity's notifications: one
+ * NarrowInboxLayout-styled row per stack, using the same per-thread splitting
+ * as desktop (stackNotifications) — top-level channel sends share one row,
+ * and each thread (replies + thread mentions of one parent message) gets its
+ * own. Each row swipes and opens independently.
+ */
+export function MobileNotificationStackRows(
+  props: MobileNotificationStackRowsProps
+) {
   const [stacks, setStacks] = createStore<KeyedStack[]>([]);
 
   createEffect(() => {
@@ -185,45 +229,21 @@ export function MobileNotificationStacks(props: MobileNotificationStacksProps) {
     );
   });
 
-  const isDirectMessage = () =>
-    isChannelEntity(props.entity) &&
-    props.entity.channelType === 'direct_message';
-
   return (
-    <div class="pl-(--soup-stack-row-padding-l) pb-3 relative">
-      {/* Non-swipeable header */}
-      <div class="grid grid-cols-[calc(var(--soup-inbox-left-of-content)-var(--soup-stack-row-padding-l))_auto] w-full text-sm items-center pr-4 py-3">
-        <div class="ml-(--soup-stack-header-icon-padding-l) mr-(--soup-inbox-icon-padding-r) shrink-0 size-(--soup-stack-icon-diameter) bg-edge-muted rounded-full flex items-center justify-center">
-          <Entity.Icon
-            entity={props.entity}
-            class={cn(
-              !isDirectMessage() &&
-                'size-[calc(var(--soup-stack-icon-diameter)*var(--soup-inbox-icon-factor))]'
-            )}
-          />
-        </div>
-        <span class="flex-1 truncate font-semibold text-sm">
-          <Entity.Title entity={props.entity} />
-        </span>
-      </div>
-      {/* Stack rows */}
-      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden divide-y divide-ink-muted/8">
-        <CollapsibleList
-          items={stacks}
-          visibleCount={props.visibleCount ?? 3}
-          togglePosition="bottom"
-          expandText={(count) => `Show ${count} more`}
-          persistKey={`notif-stacks:${props.entity.id}`}
-        >
-          {(stack) => (
-            <MobileStackRow
-              stack={stack}
-              entity={props.entity}
-              entityRowConfig={props.entityRowConfig}
-            />
-          )}
-        </CollapsibleList>
-      </div>
-    </div>
+    <CollapsibleList
+      items={stacks}
+      visibleCount={props.visibleCount ?? 3}
+      togglePosition="bottom"
+      expandText={(count) => `Show ${count} more`}
+      persistKey={`notif-stacks:${props.entity.id}`}
+    >
+      {(stack) => (
+        <MobileStackRow
+          stack={stack}
+          entity={props.entity}
+          entityRowConfig={props.entityRowConfig}
+        />
+      )}
+    </CollapsibleList>
   );
 }
