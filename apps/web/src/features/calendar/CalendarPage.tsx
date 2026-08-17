@@ -1,7 +1,6 @@
 import { FullCalendar, useFullCalendar } from '@app/lib/fullcalendar-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type {
   DateSelectArg,
@@ -17,9 +16,7 @@ import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
-  useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
-import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -32,11 +29,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import {
-  type CalendarPageData,
-  type CalendarPageId,
-  useCalendarPager,
-} from './CalendarPagerContext';
+import { type CalendarPageId, useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
 import {
   calendarFocusTargetId,
@@ -44,9 +37,10 @@ import {
 } from './calendar-focus-target';
 import { isCalendarRangeSupported } from './calendar-supported-range';
 import {
-  DEFAULT_CALENDAR_SOURCE,
-  mapCalendarOccurrence,
-} from './events/calendar-occurrence-mapper';
+  type CalendarOccurrenceData,
+  useCalendarOccurrenceData,
+} from './data/use-calendar-occurrence-data';
+import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
 import { CalendarEventContent } from './events/EventContent';
 import { calendarSelectionToEditorInitialValues } from './events/event-form-model';
 import {
@@ -185,7 +179,7 @@ function CalendarScrollIndicators(props: {
   );
 }
 
-function CalendarPageDataStatus(props: { data: CalendarPageData }) {
+function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
   const isRangeUnavailable = createMemo(() => {
     const range = props.data.range();
     return range !== undefined && !isCalendarRangeSupported(range);
@@ -265,63 +259,6 @@ function CalendarPageDataStatus(props: { data: CalendarPageData }) {
   );
 }
 
-function createCalendarPageData(
-  range: Accessor<CalendarOccurrenceQueryRange | undefined>,
-  isActive: Accessor<boolean>
-): CalendarPageData {
-  const userId = useUserId();
-  const calendarView = useCalendarView();
-  const isRangeSupported = createMemo(() => {
-    const currentRange = range();
-    return currentRange !== undefined && isCalendarRangeSupported(currentRange);
-  });
-  const occurrencesQuery = useCalendarOccurrencesQuery(
-    () => ({ userId: userId(), range: range() }),
-    () => ({
-      enabled: isRangeSupported(),
-      pollWhileSyncing: isActive(),
-      refetchOnWindowFocus: isActive(),
-    })
-  );
-  const events = createMemo(() => {
-    if (!isRangeSupported()) return [];
-    const sourceById = calendarView.sourceById();
-    return (occurrencesQuery.data?.items ?? []).map((item) =>
-      mapCalendarOccurrence(
-        item,
-        item.event.calendarId != null
-          ? sourceById.get(item.event.calendarId)
-          : undefined
-      )
-    );
-  });
-  const visibleEvents = createMemo(() =>
-    events().filter((event) => calendarView.isSourceVisible(event.calendar.id))
-  );
-  const eventsById = createMemo(
-    () => new Map(events().map((event) => [event.id, event]))
-  );
-  const fullCalendarEvents = createMemo(() =>
-    visibleEvents().map(mapCalendarEventToFullCalendar)
-  );
-  const isLoading = () =>
-    range() === undefined ||
-    (isRangeSupported() &&
-      (occurrencesQuery.isPending || occurrencesQuery.isPlaceholderData));
-  const isSyncing = () =>
-    occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
-
-  return {
-    range,
-    occurrencesQuery,
-    events,
-    eventsById,
-    fullCalendarEvents,
-    isLoading,
-    isSyncing,
-  };
-}
-
 /** One independently rendered and queried FullCalendar page. */
 export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const pager = useCalendarPager();
@@ -340,17 +277,27 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     calendarView.useNarrowDayHeaders() && !isMobile();
-  const data = createCalendarPageData(range, isActive);
+  const data = useCalendarOccurrenceData({
+    range,
+    sourceById: calendarView.sourceById,
+    isSourceVisible: calendarView.isSourceVisible,
+    queryOptions: () => ({
+      pollWhileSyncing: isActive(),
+      refetchOnWindowFocus: isActive(),
+    }),
+  });
   const updateEventTime = useUpdateCalendarEventMutation();
+  const fullCalendarEvents = createMemo(() =>
+    data.visibleEvents().map(mapCalendarEventToFullCalendar)
+  );
   // FullCalendar owns temporary drag/resize state imperatively. Replacing its
   // event inputs mid-interaction clears that state and turns the pointer drag
   // into a date-selection mirror, so hold a stable query snapshot until stop.
   const [eventInteractionActive, setEventInteractionActive] =
     createSignal(false);
   const renderedFullCalendarEvents = createMemo<EventInput[]>(
-    (current) =>
-      eventInteractionActive() ? current : data.fullCalendarEvents(),
-    data.fullCalendarEvents()
+    (current) => (eventInteractionActive() ? current : fullCalendarEvents()),
+    fullCalendarEvents()
   );
   let interactionEventsById: ReturnType<typeof data.eventsById> | undefined;
 
@@ -630,7 +577,7 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
 
 function CalendarPageHost(props: {
   id: CalendarPageId;
-  data: CalendarPageData;
+  data: CalendarOccurrenceData;
   eventElements: Map<string, HTMLElement>;
   chipMounts: Accessor<undefined>;
   selectionColor: string;

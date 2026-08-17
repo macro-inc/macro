@@ -1,9 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import type { Calendar, DatesSetArg, EventInput } from '@fullcalendar/core';
-import type {
-  CalendarOccurrenceQueryRange,
-  useCalendarOccurrencesQuery,
-} from '@queries/calendar/occurrences';
+import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createPager, type PagerController } from '@ui/components/Pager';
 import {
   type Accessor,
@@ -15,7 +11,8 @@ import {
   onCleanup,
 } from 'solid-js';
 import { useCalendarView } from './CalendarViewContext';
-import type { CalendarEvent, CalendarPeriodView } from './events/types';
+import type { CalendarOccurrenceData } from './data/use-calendar-occurrence-data';
+import type { CalendarPeriodView } from './events/types';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
 export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
@@ -23,22 +20,12 @@ export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
 const TIME_GRID_SCROLLER_SELECTOR =
   '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller';
 
-export interface CalendarPageData {
-  range: Accessor<CalendarOccurrenceQueryRange | undefined>;
-  occurrencesQuery: ReturnType<typeof useCalendarOccurrencesQuery>;
-  events: Accessor<CalendarEvent[]>;
-  eventsById: Accessor<Map<string, CalendarEvent>>;
-  fullCalendarEvents: Accessor<EventInput[]>;
-  isLoading: Accessor<boolean>;
-  isSyncing: Accessor<boolean>;
-}
-
 export interface CalendarPageHandle {
   id: CalendarPageId;
   api: Accessor<Calendar | undefined>;
   dateInfo: Accessor<DatesSetArg | undefined>;
   element: Accessor<HTMLDivElement | undefined>;
-  data: CalendarPageData;
+  data: CalendarOccurrenceData;
 }
 
 const shiftedDateForView = (
