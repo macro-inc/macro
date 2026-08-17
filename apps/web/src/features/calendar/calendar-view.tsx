@@ -48,7 +48,6 @@ import { calendarPeriodLabel } from './calendar-label';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
-import './calendar.css';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
@@ -318,7 +317,7 @@ function CalendarWorkspace() {
         onClose={calendarView.closeEventDetails}
       />
 
-      <main class="calendar-view flex size-full min-h-0">
+      <main class="flex size-full min-h-0">
         <div class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col">
           <CalendarPages />
         </div>

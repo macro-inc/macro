@@ -1,15 +1,7 @@
-import { FullCalendar, useFullCalendar } from '@app/lib/fullcalendar-solid';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
-import type {
-  DateSelectArg,
-  DatesSetArg,
-  EventInput,
-} from '@fullcalendar/core';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import timeGridPlugin from '@fullcalendar/timegrid';
+import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
@@ -41,71 +33,16 @@ import {
   useCalendarOccurrenceData,
 } from './data/use-calendar-occurrence-data';
 import { DEFAULT_CALENDAR_SOURCE } from './events/calendar-occurrence-mapper';
-import { CalendarEventContent } from './events/EventContent';
 import { calendarSelectionToEditorInitialValues } from './events/event-form-model';
 import {
   type CalendarEventTimeChange,
-  calendarEventRenderId,
   calendarEventTimeFromFullCalendar,
   canEditCalendarEventTime,
 } from './events/event-interaction';
-import { mapCalendarEventToFullCalendar } from './events/event-mapper';
-import {
-  isMultiDaySelectionPreview,
-  multiDaySelectionRenderingPlugin,
-} from './events/multi-day-selection-rendering';
-import type { CalendarTimeFormat } from './events/types';
+import type { CalendarEvent } from './events/types';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
-import {
-  CALENDAR_TIME_FORMAT_OPTIONS,
-  formatCalendarTime,
-  formatCompactCalendarTime,
-} from './time-format';
+import { CalendarGrid, type CalendarGridHandle } from './grid/CalendarGrid';
 import { useCalendarTimeGridHoverIndicator } from './useCalendarTimeGridHoverIndicator';
-
-const formatWeekdayHeader = {
-  narrow: new Intl.DateTimeFormat(undefined, {
-    weekday: 'narrow',
-  }).format,
-  short: new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-  }).format,
-};
-
-const formatDayNumber = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-}).format;
-
-const isSameLocalDate = (first: Date, second: Date) =>
-  first.getFullYear() === second.getFullYear() &&
-  first.getMonth() === second.getMonth() &&
-  first.getDate() === second.getDate();
-
-function CurrentTimeAxisIndicator(props: {
-  date: Date;
-  timeFormat: CalendarTimeFormat;
-}) {
-  return (
-    <span class="calendar-now-axis-indicator">
-      <span class="calendar-now-time">
-        {formatCalendarTime(props.date, props.timeFormat)}
-      </span>
-    </span>
-  );
-}
-
-function getLocalScrollTime() {
-  const now = new Date();
-  const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
-  const scrollMinutes = Math.max(
-    0,
-    Math.floor((minutesSinceMidnight - 60) / 30) * 30
-  );
-  const hours = Math.floor(scrollMinutes / 60);
-  const minutes = scrollMinutes % 60;
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
-}
 
 interface CalendarScrollTarget {
   scrollElement: HTMLElement;
@@ -287,43 +224,6 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
     }),
   });
   const updateEventTime = useUpdateCalendarEventMutation();
-  const fullCalendarEvents = createMemo(() =>
-    data.visibleEvents().map(mapCalendarEventToFullCalendar)
-  );
-  // FullCalendar owns temporary drag/resize state imperatively. Replacing its
-  // event inputs mid-interaction clears that state and turns the pointer drag
-  // into a date-selection mirror, so hold a stable query snapshot until stop.
-  const [eventInteractionActive, setEventInteractionActive] =
-    createSignal(false);
-  const renderedFullCalendarEvents = createMemo<EventInput[]>(
-    (current) => (eventInteractionActive() ? current : fullCalendarEvents()),
-    fullCalendarEvents()
-  );
-  let interactionEventsById: ReturnType<typeof data.eventsById> | undefined;
-
-  const eventByRenderId = (id: string) =>
-    interactionEventsById?.get(id) ?? data.eventsById().get(id);
-  const handleEventInteractionStart = () => {
-    interactionEventsById = data.eventsById();
-    setEventInteractionActive(true);
-  };
-  const handleEventInteractionStop = () => {
-    // FullCalendar emits drop/resize immediately after stop, so defer clearing
-    // the snapshot until those callbacks have consumed it.
-    queueMicrotask(() => {
-      interactionEventsById = undefined;
-      setEventInteractionActive(false);
-    });
-  };
-
-  // Rendered chip elements by view-model id, so a deep link can anchor the
-  // details popover to the real chip. The signal bumps on every mount
-  // because FullCalendar renders chips outside Solid's reactive graph.
-  const eventElements = new Map<string, HTMLElement>();
-  const [chipMounts, notifyChipMount] = createSignal(undefined, {
-    equals: false,
-  });
-
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
     const calendar = firstWritableCalendar();
@@ -356,8 +256,10 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
     setRange(nextRange);
   };
 
-  const handleEventTimeChange = (change: CalendarEventTimeChange) => {
-    const event = eventByRenderId(calendarEventRenderId(change.event));
+  const handleEventTimeChange = (
+    change: CalendarEventTimeChange,
+    event: CalendarEvent | undefined
+  ) => {
     if (
       !isActive() ||
       updateEventTime.isPending ||
@@ -388,215 +290,51 @@ export function CalendarPage(props: { id: CalendarPageId; initialDate: Date }) {
   };
 
   return (
-    <FullCalendar.Root
-      plugins={[
-        dayGridPlugin,
-        interactionPlugin,
-        timeGridPlugin,
-        multiDaySelectionRenderingPlugin,
-      ]}
+    <CalendarGrid
       initialView={calendarView.displaySettings.periodView}
       initialDate={props.initialDate}
-      height="100%"
-      expandRows
-      fixedWeekCount={false}
-      handleWindowResize={false}
-      allDayText="All day"
-      nowIndicator
-      headerToolbar={false}
-      scrollTime={getLocalScrollTime()}
-      scrollTimeReset={false}
-      weekends={calendarView.displaySettings.showWeekends}
-      firstDay={calendarView.displaySettings.weekStartsOn}
-      slotLabelFormat={
-        CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
+      events={data.visibleEvents()}
+      eventsById={data.eventsById()}
+      showWeekends={calendarView.displaySettings.showWeekends}
+      weekStartsOn={calendarView.displaySettings.weekStartsOn}
+      timeFormat={calendarView.displaySettings.timeFormat}
+      useNarrowDayHeaders={useNarrowWeekdayHeaders()}
+      useNarrowEventContent={calendarView.useNarrowDayHeaders()}
+      selectionColor={effectiveSelectionColor()}
+      selectedEventId={
+        isActive() ? calendarView.eventState.selectedEventId : undefined
       }
-      eventTimeFormat={
-        CALENDAR_TIME_FORMAT_OPTIONS[calendarView.displaySettings.timeFormat]
-      }
-      events={renderedFullCalendarEvents()}
-      eventAllow={() => !updateEventTime.isPending}
-      eventResizableFromStart
-      eventDragStart={handleEventInteractionStart}
-      eventDragStop={handleEventInteractionStop}
-      eventDrop={handleEventTimeChange}
-      eventResizeStart={handleEventInteractionStart}
-      eventResizeStop={handleEventInteractionStop}
-      eventResize={handleEventTimeChange}
-      selectable={!isMobile()}
-      unselectAuto={false}
-      selectMirror
-      selectMinDistance={5}
-      select={handleSelect}
-      eventClick={({ el, event, jsEvent }) => {
-        jsEvent.preventDefault();
-        if (!isActive()) return;
-        const selectedEvent = eventByRenderId(calendarEventRenderId(event));
-        if (selectedEvent) calendarView.selectEvent(selectedEvent, el);
+      eventTimeChangePending={updateEventTime.isPending}
+      onDatesSet={handleDatesSet}
+      onDateSelect={handleSelect}
+      onEventSelect={(event, element) => {
+        if (isActive()) calendarView.selectEvent(event, element);
       }}
-      eventDidMount={({ el, event, isMirror }) => {
-        const eventId = calendarEventRenderId(event);
-        const calendarEvent = eventByRenderId(eventId);
-        if (calendarEvent) {
-          el.style.setProperty(
-            '--event-calendar-color',
-            calendarEvent.calendar.color
-          );
-        }
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
-
-        eventElements.set(eventId, el);
-        // A re-render (query settling, live refresh) replaces chip elements.
-        // Re-anchor an open details popover to the remounted chip — its old
-        // anchor is a disconnected node the popover can't position against.
-        if (isActive() && calendarView.eventState.selectedEventId === eventId) {
-          const selected = eventByRenderId(eventId);
-          if (selected) calendarView.selectEvent(selected, el);
-        }
-        notifyChipMount();
-      }}
-      eventWillUnmount={({ el, event, isMirror }) => {
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
-
-        const eventId = calendarEventRenderId(event);
-        if (eventElements.get(eventId) === el) {
-          eventElements.delete(eventId);
-        }
-      }}
-      datesSet={handleDatesSet}
-      dayHeaderFormat={{
-        weekday: useNarrowWeekdayHeaders() ? 'narrow' : 'short',
-      }}
-      dayCellClassNames={({ date, view }) =>
-        isSameLocalDate(date, view.calendar.getDate())
-          ? ['calendar-day-selected']
-          : []
-      }
+      onEventTimeChange={handleEventTimeChange}
     >
-      <FullCalendar.DayHeaderContent>
-        {({ date, text, view }) => {
-          if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
-            const weekday =
-              view.type === 'timeGridDay'
-                ? formatWeekdayHeader.short(date)
-                : formatWeekdayHeader[
-                    useNarrowWeekdayHeaders() ? 'narrow' : 'short'
-                  ](date);
-
-            return (
-              <>
-                <span class="calendar-day-header-weekday">{weekday}</span>{' '}
-                <span
-                  class="calendar-day-header-date"
-                  classList={{
-                    'calendar-day-header-date-selected': isSameLocalDate(
-                      date,
-                      view.calendar.getDate()
-                    ),
-                  }}
-                >
-                  {formatDayNumber(date)}
-                </span>
-              </>
-            );
-          }
-          return text;
-        }}
-      </FullCalendar.DayHeaderContent>
-
-      <FullCalendar.SlotLabelContent>
-        {({ date }) =>
-          formatCompactCalendarTime(
-            date,
-            calendarView.displaySettings.timeFormat
-          )
-        }
-      </FullCalendar.SlotLabelContent>
-
-      <FullCalendar.EventContent>
-        {(renderProps) => {
-          const event = eventByRenderId(
-            calendarEventRenderId(renderProps.event)
-          );
-          if (
-            !event &&
-            (isMultiDaySelectionPreview(renderProps.event) ||
-              (renderProps.isMirror &&
-                !renderProps.isDragging &&
-                !renderProps.isResizing))
-          ) {
-            return (
-              <div class="calendar-event-selection-preview flex h-full min-w-0 flex-col overflow-hidden px-1 py-0.5 text-xs leading-tight">
-                <span class="truncate font-semibold">New event</span>
-                <Show when={renderProps.timeText}>
-                  <span class="truncate">{renderProps.timeText}</span>
-                </Show>
-              </div>
-            );
-          }
-          if (!event) return null;
-
-          return (
-            <CalendarEventContent
-              event={event}
-              renderProps={renderProps}
-              isSelected={
-                isActive() &&
-                calendarView.eventState.selectedEventId === event.id
-              }
-              timeFormat={calendarView.displaySettings.timeFormat}
-              isNarrow={calendarView.useNarrowDayHeaders()}
-            />
-          );
-        }}
-      </FullCalendar.EventContent>
-
-      <FullCalendar.NowIndicatorContent>
-        {({ isAxis }) => {
-          if (isAxis) return null;
-
-          return (
-            <CurrentTimeAxisIndicator
-              date={new Date()}
-              timeFormat={calendarView.displaySettings.timeFormat}
-            />
-          );
-        }}
-      </FullCalendar.NowIndicatorContent>
-
-      <CalendarPageHost
-        id={props.id}
-        data={data}
-        eventElements={eventElements}
-        chipMounts={chipMounts}
-        selectionColor={effectiveSelectionColor()}
-      />
-    </FullCalendar.Root>
+      {(grid) => <CalendarPageHost id={props.id} data={data} grid={grid} />}
+    </CalendarGrid>
   );
 }
 
 function CalendarPageHost(props: {
   id: CalendarPageId;
   data: CalendarOccurrenceData;
-  eventElements: Map<string, HTMLElement>;
-  chipMounts: Accessor<undefined>;
-  selectionColor: string;
+  grid: CalendarGridHandle;
 }) {
-  const calendar = useFullCalendar();
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
   const calendarFocus = useCalendarFocus();
-  const [element, setElement] = createSignal<HTMLDivElement>();
   const isActive = () => pager.isActive(props.id);
 
   // A block navigation request pages this calendar instance to one occurrence
   // and opens its details once FullCalendar has mounted the target chip.
   let navigatedFor: number | undefined;
   createEffect(() => {
-    props.chipMounts();
+    props.grid.chipMounts();
     const target = calendarFocus.pendingTarget();
     if (!target || !isActive()) return;
-    const dateInfo = calendar.dateInfo();
+    const dateInfo = props.grid.dateInfo();
     if (!dateInfo) return;
     if (target.date < dateInfo.start || target.date >= dateInfo.end) {
       // Navigate once per request; the effect re-runs as the destination
@@ -609,20 +347,22 @@ function CalendarPageHost(props: {
     }
     const targetId = calendarFocusTargetId(target);
     const event = props.data.eventsById().get(targetId);
-    const chip = props.eventElements.get(targetId);
+    const chip = props.grid.eventElements.get(targetId);
     if (!event || !chip?.isConnected) return;
     calendarFocus.consume(target.requestId);
     calendarView.selectEvent(event, chip);
   });
 
-  useCalendarTimeGridHoverIndicator(() => (isActive() ? element() : undefined));
+  useCalendarTimeGridHoverIndicator(() =>
+    isActive() ? props.grid.element() : undefined
+  );
 
   onMount(() => {
     const unregister = pager.registerPage({
       id: props.id,
-      api: calendar.api,
-      dateInfo: calendar.dateInfo,
-      element,
+      api: props.grid.api,
+      dateInfo: props.grid.dateInfo,
+      element: props.grid.element,
       data: props.data,
     });
     onCleanup(unregister);
@@ -670,13 +410,7 @@ function CalendarPageHost(props: {
 
   return (
     <>
-      <FullCalendar.Host
-        tabIndex={-1}
-        ref={setElement}
-        style={{ '--calendar-selection-color': props.selectionColor }}
-        class="calendar-view-host size-full min-w-0 min-h-0 overflow-hidden"
-      />
-      <CalendarScrollIndicators calendarElement={element} />
+      <CalendarScrollIndicators calendarElement={props.grid.element} />
       <CalendarPageDataStatus data={props.data} />
     </>
   );
