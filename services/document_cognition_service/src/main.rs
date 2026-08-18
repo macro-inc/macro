@@ -555,6 +555,11 @@ async fn main() -> anyhow::Result<()> {
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        calendar_tool_context: ai_tools::build_calendar_tool_context(
+            db.clone(),
+            EmailServiceUrl::new()?.to_string(),
+            internal_api_key.clone(),
+        ),
         notification_tool_context: notification_tool_context.clone(),
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),

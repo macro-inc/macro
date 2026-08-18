@@ -186,7 +186,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_auth_key.clone(),
         sync_service_url,
     ));
-    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url));
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
     let lexical_client = LexicalClient::new(
         env.document_storage_service_auth_key.to_string(),
         lexical_service_url,
@@ -346,6 +346,12 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
     );
 
+    let calendar_tool_context = crate::tool_context::build_calendar_tool_context(
+        pool.clone(),
+        email_service_url,
+        env.internal_api_key.to_string(),
+    );
+
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(pool.clone()),
         queue: notification_queue,
@@ -397,6 +403,7 @@ pub async fn build_tool_service_context_from_env(
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        calendar_tool_context,
         notification_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

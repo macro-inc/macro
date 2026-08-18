@@ -1,5 +1,6 @@
 use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
+use calendar_events::inbound::toolset::CalendarToolContext;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
@@ -211,6 +212,44 @@ pub fn build_channel_tool_context_with_dispatcher(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
+    )
+}
+
+/// Type alias for the calendar occurrence read service used by AI tools.
+pub type ToolCalendarReadService = calendar_events::domain::service::CalendarService<
+    calendar_events::outbound::pg::PgCalendarRepository,
+>;
+
+/// Type alias for the calendar mutation client used by AI tools. Mutations
+/// call the email service — the calendar write authority holding the Google
+/// client, token minting, and request gate — with internal auth on behalf
+/// of the requesting user, so tool-driven edits behave identically to
+/// UI-driven ones.
+pub type ToolCalendarMutationService =
+    calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations;
+
+/// Type alias for the calendar AI tool context.
+pub type ToolCalendarToolContext =
+    CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
+
+/// Build the calendar AI tool context: reads query the local occurrence
+/// projections from `pool`; mutations call the email service at
+/// `email_service_url` with the shared internal API key.
+pub fn build_calendar_tool_context(
+    pool: sqlx::PgPool,
+    email_service_url: String,
+    internal_api_key: String,
+) -> ToolCalendarToolContext {
+    CalendarToolContext::new(
+        Arc::new(
+            calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations::new(
+                email_service_url,
+                internal_api_key,
+            ),
+        ),
+        Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(pool),
+        )),
     )
 }
 
@@ -1134,6 +1173,7 @@ pub struct ToolServiceContext {
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
+    pub calendar_tool_context: ToolCalendarToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.

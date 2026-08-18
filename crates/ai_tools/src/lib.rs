@@ -18,6 +18,7 @@ mod tool_context;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
+use calendar_events::inbound::toolset::calendar_toolset;
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
@@ -47,22 +48,22 @@ pub use tool_context::no_op_schedule_context;
 pub use tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
     NoOpNotificationService, NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties,
-    RequestContext, TaskPropertiesAdapter, ToolCallRecordQueryService, ToolCallService,
-    ToolCallToolContext, ToolChannelEventDispatcher, ToolChannelMessagesService,
-    ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService,
-    ToolCrmToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolImportService,
-    ToolImportToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
-    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext,
-    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_crm_tool_context,
-    build_project_tool_context, build_properties_service, build_properties_tool_context,
-    build_skill_tool_context, build_task_properties_adapter, build_team_repository,
-    build_team_tool_context,
+    RequestContext, TaskPropertiesAdapter, ToolCalendarMutationService, ToolCalendarReadService,
+    ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
+    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
+    ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
+    ToolForeignEntityService, ToolFrecencyService, ToolImportService, ToolImportToolContext,
+    ToolMcpSelector, ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPipedreamConnection, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
+    ToolPropertiesToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
+    ToolSoupService, ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext,
+    ToolUserEmailService, build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
+    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    build_crm_tool_context, build_project_tool_context, build_properties_service,
+    build_properties_tool_context, build_skill_tool_context, build_task_properties_adapter,
+    build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -104,6 +105,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
+        .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_tool::<Subagent, ToolServiceContext>()
         .add_tool::<SearchTools, ToolServiceContext>()
@@ -132,6 +134,7 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+        .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let toolset = Arc::new(toolset);

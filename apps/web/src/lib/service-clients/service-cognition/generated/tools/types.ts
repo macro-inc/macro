@@ -68,6 +68,10 @@ export type ChannelMessagesWindowType =
  */
 export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
 /**
+ * A requested change to an event's video conference.
+ */
+export type ConferenceChangeInput = 'google_meet' | 'remove';
+/**
  * The content of the document
  */
 export type Content =
@@ -134,6 +138,38 @@ export type ContentType =
   | 'chat-message'
   | 'project';
 /**
+ * The mutually exclusive time shape supplied to calendar tools.
+ */
+export type EventTimeInput =
+  | {
+      /**
+       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
+       */
+      endsAt: string;
+      kind: 'timed';
+      /**
+       * Inclusive start instant, RFC 3339 UTC (e.g. 2026-08-20T17:00:00Z).
+       */
+      startsAt: string;
+      /**
+       * IANA time zone the event was scheduled in (e.g.
+       * America/New_York). Recurring events expand in this zone.
+       */
+      timeZone?: string | null;
+    }
+  | {
+      /**
+       * Exclusive local end date (YYYY-MM-DD); the day after the last
+       * covered day, so a one-day event ends the next date.
+       */
+      endDate: string;
+      kind: 'allDay';
+      /**
+       * Inclusive local start date (YYYY-MM-DD).
+       */
+      startDate: string;
+    };
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -161,6 +197,10 @@ export type TagColor =
   | 'purple'
   | 'pink'
   | 'gray';
+/**
+ * How much of a recurring series a deletion removes.
+ */
+export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
 /**
  * Where document content is, or is expected to be, read from.
  */
@@ -626,6 +666,19 @@ export interface AppliedTag {
   scope: TagScope;
 }
 /**
+ * An attendee supplied to a calendar tool.
+ */
+export interface AttendeeInput {
+  /**
+   * The attendee's email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional for this attendee. Defaults to required.
+   */
+  isOptional?: boolean;
+}
+/**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
 export interface BashCodeExecution {
@@ -747,6 +800,108 @@ export interface BulkSetEntityPropertyOptionsResult {
    * One of: applied, skipped_no_permission, failed.
    */
   status: string;
+}
+/**
+ * One calendar event occurrence in the requested window.
+ */
+export interface CalendarEventListItem {
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
+   * all-day events.
+   */
+  end: string;
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
+   */
+  eventId: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Whether this occurrence belongs to a recurring series.
+   */
+  isRecurring: boolean;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * The user's own RSVP on this event, when they are an attendee.
+   */
+  myResponse?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Occurrence key identifying this instance within its recurring series;
+   * pass as `recurrenceId` for occurrence-scoped deletion.
+   */
+  recurrenceId?: string | null;
+  /**
+   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  start: string;
+  /**
+   * Event status: confirmed or tentative.
+   */
+  status: string;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Display title.
+   */
+  title: string;
+}
+/**
+ * An attendee of a calendar event, as returned by calendar tools.
+ */
+export interface ToolEventAttendee {
+  /**
+   * Attendee email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional.
+   */
+  isOptional: boolean;
+  /**
+   * Whether this attendee organized the event.
+   */
+  isOrganizer: boolean;
+  /**
+   * RSVP state: needs_action, accepted, declined, or tentative.
+   */
+  responseStatus: string;
 }
 export interface CallRecordMetadata {
   attended: boolean;
@@ -1251,6 +1406,42 @@ export interface MessageWithAttachments {
   date: string;
 }
 /**
+ * Create an event on the user's calendar, inviting any listed attendees through Google Calendar. The event is written to Google immediately, so attendees receive invitations the moment it is created — confirm details with the user before creating events with attendees.
+ *
+ * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
+ */
+export interface CreateCalendarEvent {
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+  /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Optional event body/description.
+   */
+  description?: string | null;
+  /**
+   * Optional physical or virtual location label.
+   */
+  location?: string | null;
+  /**
+   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
+   */
+  recurrenceLines?: string[];
+  time: EventTimeInput;
+  /**
+   * The event title.
+   */
+  title: string;
+}
+/**
  * Create a plaintext document.
  */
 export interface CreateDocument {
@@ -1477,6 +1668,35 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
+ *
+ * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
+ */
+export interface DeleteCalendarEvent {
+  /**
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
+   */
+  recurrenceId?: string | null;
+  scope?: DeletionScopeInput;
+}
+/**
+ * Response from the DeleteCalendarEvent tool.
+ */
+export interface DeleteCalendarEventResponse {
+  /**
+   * The id of the deleted event.
+   */
+  eventId: string;
+  /**
+   * A human-readable confirmation of what was removed.
+   */
+  summary: string;
 }
 /**
  * Decline a staged import candidate on the user's behalf. The item is remembered as declined so it won't be proposed again; only the user's own staged items can be declined.
@@ -2079,6 +2299,90 @@ export interface ImportNotionPageResponse {
    * `import_in_progress`.
    */
   outcome: string;
+}
+/**
+ * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
+ *
+ * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
+ */
+export interface ListCalendarEvents {
+  /**
+   * Exclusive window end, RFC 3339 UTC. Must be after start.
+   */
+  end: string;
+  /**
+   * Inclusive window start, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z).
+   */
+  start: string;
+}
+/**
+ * Response from the ListCalendarEvents tool.
+ */
+export interface ListCalendarEventsResponse {
+  /**
+   * Occurrences in the window, soonest first.
+   */
+  events: CalendarEventListItem[];
+  /**
+   * A human-readable summary of the result.
+   */
+  summary: string;
+  /**
+   * `syncing` while any connected calendar is still ingesting — results
+   * may be incomplete — or `ready`.
+   */
+  syncStatus: string;
+  /**
+   * Whether the window held more occurrences than were returned; narrow
+   * the window to see the rest.
+   */
+  truncated: boolean;
+}
+/**
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
+ *
+ * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool. An empty result means no calendar is connected.
+ */
+export type ListCalendars = {};
+/**
+ * Response from the ListCalendars tool.
+ */
+export interface ListCalendarsToolResponse {
+  /**
+   * The calendars the user can see, primaries and writables first.
+   */
+  calendars: ToolCalendar[];
+  /**
+   * A human-readable summary of the calendars.
+   */
+  summary: string;
+}
+/**
+ * A calendar surfaced to the AI.
+ */
+export interface ToolCalendar {
+  /**
+   * Calendar id; pass as `calendarId` to CreateCalendarEvent to target
+   * this calendar.
+   */
+  calendarId: string;
+  /**
+   * Connected inbox address the calendar belongs to.
+   */
+  emailAddress: string;
+  /**
+   * Whether this is its account's primary calendar — the default target
+   * for created events.
+   */
+  isPrimary: boolean;
+  /**
+   * Whether events can be created and modified on this calendar.
+   */
+  isWritable: boolean;
+  /**
+   * Provider display name.
+   */
+  name: string;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
@@ -3816,6 +4120,120 @@ export interface TextEditorCodeExecutionToolError {
 export interface TextEditorCodeExecutionResponse {
   content: TextEditorCodeExecutionContent;
   tool_use_id: string;
+}
+/**
+ * A calendar event as returned by the create and update tools.
+ */
+export interface ToolCalendarEvent {
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  end: string;
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Whether the event recurs.
+   */
+  isRecurring: boolean;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Raw RFC 5545 recurrence properties, when the event recurs.
+   */
+  recurrenceLines: string[];
+  /**
+   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
+   */
+  start: string;
+  /**
+   * Event status: confirmed, tentative, or cancelled.
+   */
+  status: string;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Display title.
+   */
+  title: string;
+}
+/**
+ * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
+ *
+ * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit.
+ */
+export interface UpdateCalendarEvent {
+  /**
+   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
+   */
+  attendees?: AttendeeInput[] | null;
+  /**
+   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   */
+  conference?: ConferenceChangeInput | null;
+  /**
+   * Replacement event body/description. An empty string clears it; omit to keep the current one.
+   */
+  description?: string | null;
+  /**
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Replacement location label. An empty string clears it; omit to keep the current one.
+   */
+  location?: string | null;
+  /**
+   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence.
+   */
+  recurrenceLines?: string[] | null;
+  /**
+   * Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time.
+   */
+  time?: EventTimeInput | null;
+  /**
+   * Replacement title. Omit to keep the current title.
+   */
+  title?: string | null;
 }
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
