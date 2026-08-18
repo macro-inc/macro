@@ -5,9 +5,7 @@ export type BooleanFlag = boolean | undefined;
 export type BrowserTursoCacheRolloutInput = {
   isTauri: boolean;
   graphqlTransportEnabled: boolean;
-  enableEnvOverride: BooleanFlag;
   disableEnvOverride: BooleanFlag;
-  posthogEnable: BooleanFlag;
   posthogDisable: BooleanFlag;
 };
 
@@ -18,17 +16,15 @@ export type BrowserTursoCacheRolloutDecision = {
     | 'tauri-native-unchanged'
     | 'graphql-transport-disabled'
     | 'emergency-disabled'
-    | 'env-enabled'
-    | 'posthog-enabled'
-    | 'not-enabled';
+    | 'graphql-transport-enabled';
   /** Whether the caller must retain the existing native cache path. */
   nativeCacheUnchanged: boolean;
 };
 
 /**
- * Pure cache rollout policy. The emergency flag is intentionally independent from the
- * rollout flag and any true kill source wins. Undefined PostHog values fail
- * closed. Tauri returns before browser policy is considered.
+ * Pure cache rollout policy. The GraphQL soup gate enables both transport and
+ * cache. The emergency flag is independent and any true kill source wins.
+ * Tauri returns before browser policy is considered.
  */
 export function resolveBrowserTursoCacheRollout(
   input: BrowserTursoCacheRolloutInput
@@ -57,26 +53,10 @@ export function resolveBrowserTursoCacheRollout(
       nativeCacheUnchanged: false,
     };
   }
-  if (input.enableEnvOverride !== undefined) {
-    return {
-      enabled: input.enableEnvOverride,
-      cohort: input.enableEnvOverride ? 'override' : 'control',
-      reason: input.enableEnvOverride ? 'env-enabled' : 'not-enabled',
-      nativeCacheUnchanged: false,
-    };
-  }
-  if (input.posthogEnable === true) {
-    return {
-      enabled: true,
-      cohort: 'treatment',
-      reason: 'posthog-enabled',
-      nativeCacheUnchanged: false,
-    };
-  }
   return {
-    enabled: false,
-    cohort: 'control',
-    reason: 'not-enabled',
+    enabled: true,
+    cohort: 'treatment',
+    reason: 'graphql-transport-enabled',
     nativeCacheUnchanged: false,
   };
 }

@@ -84,7 +84,9 @@ vi.mock('@graphql-cache/rollout', () => ({
     (): BrowserTursoCacheRolloutDecision => ({
       enabled: mocks.tauri ? mocks.graphqlEnabled : mocks.enabled,
       cohort: mocks.tauri ? 'unknown' : 'treatment',
-      reason: mocks.tauri ? 'tauri-native-unchanged' : 'posthog-enabled',
+      reason: mocks.tauri
+        ? 'tauri-native-unchanged'
+        : 'graphql-transport-enabled',
       nativeCacheUnchanged: mocks.tauri,
     }),
 }));
