@@ -67,6 +67,18 @@ impl CalendarRepository for FakeRepo {
         Ok(CalendarSyncStatus::Ready)
     }
 
+    async fn mention_previews(
+        &self,
+        _requester_id: &str,
+        items: Vec<crate::domain::models::CalendarMentionRequestItem>,
+        _now: chrono::DateTime<Utc>,
+    ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, Report> {
+        Ok(items
+            .iter()
+            .map(|_| crate::domain::models::CalendarMentionPreview::DoesNotExist)
+            .collect())
+    }
+
     async fn get_event_mutation_target(
         &self,
         _requester_id: &str,

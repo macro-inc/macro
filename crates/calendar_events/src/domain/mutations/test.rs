@@ -171,6 +171,15 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
+    async fn mention_previews(
+        &self,
+        _requester_id: &str,
+        _items: Vec<crate::domain::models::CalendarMentionRequestItem>,
+        _now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
+        unreachable!()
+    }
+
     async fn upsert_google_calendar(
         &self,
         _key: CalendarBackfillJobKey,

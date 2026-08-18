@@ -581,6 +581,62 @@ impl CalendarOccurrenceCursor {
     }
 }
 
+/// One mentioned event to resolve for a requester's mention preview.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarMentionRequestItem {
+    /// Mentioned calendar event entity id, possibly another user's projection.
+    pub event_id: Uuid,
+    /// Occurrence the mention points at, when it targets one instance.
+    pub occurrence_key: Option<String>,
+}
+
+/// Resolution of one mentioned calendar event for a requester.
+///
+/// Event entities are per-owner projections of a meeting, so a mention from
+/// another attendee resolves through the shared iCalendar UID to the
+/// requester's own copy — the preview never exposes another user's row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarMentionPreview {
+    /// The requester holds a live copy of the meeting on a visible calendar.
+    Accessible(Box<CalendarMentionEvent>),
+    /// The event exists but is on no calendar the requester can see.
+    NoAccess,
+    /// No live event has this id.
+    DoesNotExist,
+}
+
+/// Meeting-level fields shown in a calendar event mention preview, taken from
+/// the requester's own projection of the meeting.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionEvent {
+    /// The requester's own event entity for the mentioned meeting. Differs
+    /// from the mentioned id when the mention came from another attendee.
+    pub viewer_event_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Time of the previewed instance: the requested occurrence when it
+    /// exists, else the next upcoming one, else the latest past one, else the
+    /// series start.
+    pub time: EventTime,
+    /// Key of the previewed instance, absent when no occurrence is
+    /// materialized.
+    pub occurrence_key: Option<String>,
+    /// Whether the event repeats.
+    pub is_recurring: bool,
+    /// Location label, when set.
+    pub location: Option<String>,
+    /// Organizer email.
+    pub organizer_email: Option<String>,
+    /// Organizer display name.
+    pub organizer_name: Option<String>,
+    /// Number of attendees on the requester's copy.
+    pub attendee_count: usize,
+    /// Entity update time of the requester's copy.
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Inclusive/exclusive viewport range for occurrence queries.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

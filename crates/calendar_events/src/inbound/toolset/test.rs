@@ -240,6 +240,14 @@ impl CalendarOccurrenceService for MockOccurrences {
     ) -> Result<CalendarSyncStatus, rootcause::Report> {
         Ok(self.status)
     }
+
+    async fn mention_previews(
+        &self,
+        _requester_id: &str,
+        _items: Vec<crate::domain::models::CalendarMentionRequestItem>,
+    ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
+        unreachable!("no calendar tool resolves mention previews")
+    }
 }
 
 fn context(

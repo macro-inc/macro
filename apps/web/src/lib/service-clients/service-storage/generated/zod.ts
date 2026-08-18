@@ -1028,6 +1028,129 @@ export const listOccurrencesResponse = zod
   .describe('Paginated calendar occurrence viewport response.');
 
 /**
+ * @summary Resolve mentioned calendar events to the requester's own projections.
+ */
+export const mentionPreviewsBody = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            eventId: zod.uuid().describe('Mentioned calendar event id.'),
+            occurrenceKey: zod
+              .string()
+              .nullish()
+              .describe(
+                'Occurrence the mention points at, when it targets one instance.'
+              ),
+          })
+          .describe('One mentioned event to resolve for the requester.')
+      )
+      .describe('Mentioned events to resolve, at most 100.'),
+  })
+  .describe('Batch calendar mention preview request.');
+
+export const mentionPreviewsResponseItemsItemEventAttendeeCountMin = 0;
+
+export const mentionPreviewsResponse = zod
+  .object({
+    items: zod.array(
+      zod
+        .object({
+          event: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  attendeeCount: zod
+                    .number()
+                    .min(mentionPreviewsResponseItemsItemEventAttendeeCountMin)
+                    .describe("Number of attendees on the requester's copy."),
+                  isRecurring: zod
+                    .boolean()
+                    .describe('Whether the event repeats.'),
+                  location: zod
+                    .string()
+                    .nullish()
+                    .describe('Location label, when set.'),
+                  occurrenceKey: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Key of the previewed instance, absent when no occurrence is\nmaterialized.'
+                    ),
+                  organizerEmail: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer email.'),
+                  organizerName: zod
+                    .string()
+                    .nullish()
+                    .describe('Organizer display name.'),
+                  time: zod
+                    .union([
+                      zod
+                        .object({
+                          endsAt: zod.iso
+                            .datetime({})
+                            .describe('Exclusive end instant.'),
+                          kind: zod.enum(['timed']),
+                          startsAt: zod.iso
+                            .datetime({})
+                            .describe('Inclusive start instant.'),
+                          timeZone: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Original IANA time-zone identifier, when supplied.'
+                            ),
+                        })
+                        .describe('An event with absolute instants.'),
+                      zod
+                        .object({
+                          endDate: zod.iso
+                            .date()
+                            .describe('Exclusive local end date.'),
+                          kind: zod.enum(['allDay']),
+                          startDate: zod.iso
+                            .date()
+                            .describe('Inclusive local start date.'),
+                        })
+                        .describe(
+                          "An all-day event using RFC 5545's exclusive end date."
+                        ),
+                    ])
+                    .describe(
+                      'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+                    ),
+                  title: zod.string().describe('Display title.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe("Entity update time of the requester's copy."),
+                  viewerEventId: zod
+                    .uuid()
+                    .describe(
+                      "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee."
+                    ),
+                })
+                .describe(
+                  "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting."
+                ),
+            ])
+            .optional(),
+          eventId: zod
+            .uuid()
+            .describe('The mentioned event id, echoed from the request.'),
+          type: zod
+            .enum(['access', 'no_access', 'does_not_exist'])
+            .describe('Requester-relative visibility of one mentioned event.'),
+        })
+        .describe('Resolution of one mentioned event, in request order.')
+    ),
+  })
+  .describe('Batch calendar mention preview response.');
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as

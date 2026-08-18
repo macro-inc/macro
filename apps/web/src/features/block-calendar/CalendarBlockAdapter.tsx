@@ -9,9 +9,14 @@ import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
+import { storageServiceClient } from '@service-storage/client';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
-import { isCalendarBlockRange } from './calendar-range';
+import {
+  type CalendarBlockEventTime,
+  createCalendarBlockRange,
+  isCalendarBlockRange,
+} from './calendar-range';
 import { resolveCalendarBlockTarget } from './calendar-target';
 import { Workspace } from './components/Workspace';
 import type { CalendarBlockProps, CalendarBlockTargetRequest } from './types';
@@ -40,6 +45,52 @@ function targetRequestFromParams(
   };
 }
 
+/**
+ * A target with an event id but no usable range — a copied `/app/calendar`
+ * link or a mention without preview data — resolves through the calendar
+ * mention preview API, which also maps another user's projection of the
+ * meeting to the viewer's own copy.
+ */
+async function resolveTargetRequestFromPreview(
+  params: CalendarBlockProps,
+  requestId: number
+): Promise<CalendarBlockTargetRequest | undefined> {
+  if (typeof params.eventId !== 'string' || params.eventId.length === 0) {
+    return undefined;
+  }
+  const occurrenceKey =
+    typeof params.occurrenceKey === 'string' ? params.occurrenceKey : undefined;
+  const result = await storageServiceClient.getBatchCalendarEventPreviews({
+    items: [{ eventId: params.eventId, occurrenceKey }],
+  });
+  if (result.isErr()) return undefined;
+  const item = result.value.items[0];
+  if (item?.type !== 'access' || !item.event) return undefined;
+
+  const time: CalendarBlockEventTime =
+    item.event.time.kind === 'timed'
+      ? {
+          kind: 'timed',
+          startsAt: item.event.time.startsAt,
+          endsAt: item.event.time.endsAt,
+        }
+      : {
+          kind: 'allDay',
+          startDate: item.event.time.startDate,
+          endDate: item.event.time.endDate,
+        };
+  const range = createCalendarBlockRange(time);
+  if (!range) return undefined;
+
+  return {
+    eventId: item.event.viewerEventId,
+    range,
+    occurrenceKey: item.event.occurrenceKey ?? occurrenceKey,
+    requestId,
+    requestedAt: Date.now(),
+  };
+}
+
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
@@ -60,13 +111,37 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
     CalendarBlockTargetRequest | undefined
   >(targetRequestFromParams(props, nextRequestId++));
 
+  // Preview resolution is async, so a stale answer must never clobber a
+  // target the user has since re-aimed.
+  const applyResolvedTarget = (request: CalendarBlockTargetRequest) => {
+    setTargetRequest((previous) =>
+      previous && previous.requestId > request.requestId ? previous : request
+    );
+  };
+
+  const aimAtParams = (params: CalendarBlockProps) => {
+    const requestId = nextRequestId++;
+    const direct = targetRequestFromParams(params, requestId);
+    if (direct) {
+      setTargetRequest(direct);
+      return;
+    }
+    if (typeof params.eventId === 'string' && params.eventId.length > 0) {
+      resolveTargetRequestFromPreview(params, requestId).then((resolved) => {
+        if (resolved) applyResolvedTarget(resolved);
+      });
+      return;
+    }
+    setTargetRequest(undefined);
+  };
+
+  if (!targetRequest() && typeof props.eventId === 'string' && props.eventId) {
+    aimAtParams(props);
+  }
+
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
-      const request = targetRequestFromParams(
-        params as CalendarBlockProps,
-        nextRequestId++
-      );
-      setTargetRequest(request);
+      aimAtParams(params as CalendarBlockProps);
     },
   });
 

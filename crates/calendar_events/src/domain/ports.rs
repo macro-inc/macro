@@ -11,12 +11,12 @@ use super::models::{
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
     CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
-    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
-    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
-    StoredGoogleCalendar, VisibleCalendar,
+    CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
+    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
+    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus,
+    DisconnectedGoogleCalendar, DueCalendarReminder, GoogleCalendarSyncSnapshot,
+    GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel,
+    GoogleWatchConfig, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -261,6 +261,14 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
+
+    /// Resolve mentioned events to the requester's own projections, one
+    /// result per requested item in order.
+    fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<CalendarMentionRequestItem>,
+    ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, Report>> + Send;
 }
 
 /// Persistence operations used by calendar business logic.
@@ -309,6 +317,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
+
+    /// Resolve mentioned events to the requester's own projections, one
+    /// result per requested item in order. `now` anchors which occurrence a
+    /// series previews when the mention names no instance.
+    fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<CalendarMentionRequestItem>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, Report>> + Send;
 
     /// Upsert one provider calendar while holding the current backfill fence.
     fn upsert_google_calendar(

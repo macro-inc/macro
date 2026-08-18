@@ -268,6 +268,9 @@ const renameCallRecordSetData = (
 
 const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName, itemType }) => {
+    // Calendar event previews are API-served projections keyed to the
+    // viewer's copy; renames flow through calendar mutations instead.
+    if (itemType === 'calendar_event') return;
     setPreviewName({
       itemId: id,
       name: newName,
