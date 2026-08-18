@@ -37,9 +37,9 @@ export function useEventEditor(props: UseEventEditorProps) {
   });
   const initialLines = createMemo(() => props.event()?.recurrenceLines ?? []);
 
-  const calendarsQuery = useVisibleCalendarsQuery(() => ({
-    enabled: !isEdit(),
-  }));
+  // Event edits also need calendar metadata to resolve reminders that still
+  // follow the calendar defaults.
+  const calendarsQuery = useVisibleCalendarsQuery();
   const contacts = useContacts();
 
   const guestOptions = createMemo(() =>
@@ -54,11 +54,16 @@ export function useEventEditor(props: UseEventEditorProps) {
   const calendarOptions = createMemo(() => {
     const event = props.event();
     if (event) {
+      const calendarId = event.calendarId ?? event.calendar.id;
+      const calendar = calendarsQuery.data?.find(
+        (candidate) => candidate.id === calendarId
+      );
       return [
         {
-          id: event.calendar.id,
+          id: calendarId,
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
+          defaultReminders: calendar?.defaultReminders,
         },
       ];
     }
@@ -67,6 +72,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       id: calendar.id,
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      defaultReminders: calendar.defaultReminders,
     }));
   });
 
@@ -104,6 +110,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(recurrenceChanged
             ? { recurrenceLines: values.recurrenceLines }
             : {}),
+          ...(values.reminders ? { reminders: values.reminders } : {}),
         },
       });
       return;
@@ -117,6 +124,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       location: values.location === '' ? undefined : values.location,
       description: values.description === '' ? undefined : values.description,
       attendees: values.guestEmails.map((email) => ({ email })),
+      ...(values.reminders ? { reminders: values.reminders } : {}),
     });
   };
 

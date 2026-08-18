@@ -4,6 +4,8 @@ import {
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
+import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import {
   addDays,
   addHours,
@@ -61,6 +63,8 @@ export interface EventEditorInitialValues {
   guests: string;
   location: string;
   description: string;
+  /** Per-user reminder configuration; absent means the calendar default. */
+  reminders?: EventReminders;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -68,6 +72,8 @@ export interface EventEditorCalendarOption {
   id: string;
   label: string;
   color: string;
+  /** Provider defaults shown until the event's reminders are customized. */
+  defaultReminders?: EventReminderOverride[];
 }
 
 /** Editable fields that a create/edit owner may disable. */
@@ -80,7 +86,8 @@ type EventEditorField =
   | 'calendar'
   | 'guests'
   | 'location'
-  | 'description';
+  | 'description'
+  | 'reminders';
 
 /** Field-level disabled state supplied by a create/edit owner. */
 export type EventEditorDisabledFields = Partial<
@@ -96,6 +103,8 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
+  /** Present only when the user changed the event's reminder configuration. */
+  reminders?: EventReminders;
 }
 
 export function defaultEditorInitialValues(
@@ -112,6 +121,7 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
+    reminders: undefined,
   };
 }
 
@@ -160,10 +170,11 @@ export function calendarEventToEditorInitialValues(
       start,
       end: shiftDateValue(exclusiveEnd, -1),
       recurrenceLines: [...event.recurrenceLines],
-      calendarId: event.calendar.id,
+      calendarId: event.calendarId ?? event.calendar.id,
       guests,
       location: event.location ?? '',
       description: event.description ?? '',
+      reminders: event.reminders,
     };
   }
 
@@ -173,10 +184,11 @@ export function calendarEventToEditorInitialValues(
     start: format(new Date(event.start), DATETIME_VALUE),
     end: format(new Date(event.end), DATETIME_VALUE),
     recurrenceLines: [...event.recurrenceLines],
-    calendarId: event.calendar.id,
+    calendarId: event.calendarId ?? event.calendar.id,
     guests,
     location: event.location ?? '',
     description: event.description ?? '',
+    reminders: event.reminders,
   };
 }
 

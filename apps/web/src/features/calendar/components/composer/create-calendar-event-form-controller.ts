@@ -1,5 +1,12 @@
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import {
+  buildReminderOverrides,
+  popupMinutes,
+  REMINDER_METHOD_POPUP,
+  REMINDER_OVERRIDES_MAX,
+  resolveReminderOverrides,
+} from '../../utils/event-reminders';
+import {
   parseRecurrenceConfig,
   recurrenceConfigsEqual,
 } from '../../utils/recurrence';
@@ -26,13 +33,14 @@ interface EventComposerFormSnapshot {
   guestEmails: readonly string[];
   location: string;
   description: string;
+  reminderMinutes: readonly number[];
 }
 
 function normalizedGuestEmails(emails: readonly string[]) {
   return emails.map((email) => email.trim().toLowerCase()).sort();
 }
 
-function arraysEqual(first: readonly string[], second: readonly string[]) {
+function arraysEqual<Value>(first: readonly Value[], second: readonly Value[]) {
   return (
     first.length === second.length &&
     first.every((value, index) => value === second[index])
@@ -70,7 +78,8 @@ function isEventComposerFormDirty(
       normalizedGuestEmails(initial.guestEmails),
       normalizedGuestEmails(current.guestEmails)
     ) ||
-    !recurrenceLinesEqual(initial.recurrenceLines, current.recurrenceLines)
+    !recurrenceLinesEqual(initial.recurrenceLines, current.recurrenceLines) ||
+    !arraysEqual(initial.reminderMinutes, current.reminderMinutes)
   );
 }
 
@@ -82,7 +91,22 @@ export interface CreateCalendarEventFormControllerOptions {
 }
 
 function cloneValue(value: EventEditorInitialValues): EventEditorInitialValues {
-  return { ...value, recurrenceLines: [...value.recurrenceLines] };
+  return {
+    ...value,
+    recurrenceLines: [...value.recurrenceLines],
+    reminders: value.reminders
+      ? {
+          ...value.reminders,
+          overrides: value.reminders.overrides?.map((reminder) => ({
+            ...reminder,
+          })),
+        }
+      : undefined,
+  };
+}
+
+function normalizedReminderMinutes(minutes: readonly number[]) {
+  return [...new Set(minutes)].sort((first, second) => first - second);
 }
 
 /** Caller-owned state and commands for the reusable calendar event form. */
@@ -114,20 +138,70 @@ export function createCalendarEventFormController(
   const effectiveCalendarId = () =>
     state().calendarId ?? options.calendarOptions()[0]?.id;
 
-  const selectedCalendarOption = () =>
+  const calendarOptionFor = (calendarId: string | undefined) =>
     options
       .calendarOptions()
-      .find((option) => option.id === effectiveCalendarId()) ??
-    options.calendarOptions()[0];
+      .find(
+        (option) =>
+          option.id === (calendarId ?? options.calendarOptions()[0]?.id)
+      ) ?? options.calendarOptions()[0];
+
+  const selectedCalendarOption = () => calendarOptionFor(state().calendarId);
+
+  const resolvedReminderMinutesFor = (values: EventEditorInitialValues) =>
+    normalizedReminderMinutes(
+      popupMinutes(
+        resolveReminderOverrides(
+          values.reminders,
+          calendarOptionFor(values.calendarId)?.defaultReminders
+        )
+      )
+    );
+  const baselineReminderMinutes = () => resolvedReminderMinutesFor(state());
+  const initialReminderMinutes = () =>
+    resolvedReminderMinutesFor(initialValue());
+  const [reminderEdits, setReminderEdits] = createSignal<
+    number[] | undefined
+  >();
+  const reminderMinutes = createMemo(
+    () => reminderEdits() ?? baselineReminderMinutes()
+  );
+  const preservedReminderCount = createMemo(() => {
+    const reminders = state().reminders;
+    if (!reminders || reminders.useDefault) return 0;
+    return (reminders.overrides ?? []).filter(
+      (reminder) => reminder.method !== REMINDER_METHOD_POPUP
+    ).length;
+  });
+  const canAddReminder = () =>
+    reminderMinutes().length + preservedReminderCount() <
+    REMINDER_OVERRIDES_MAX;
+  const reminderUpdate = () => {
+    const edits = reminderEdits();
+    if (
+      edits === undefined ||
+      arraysEqual(
+        normalizedReminderMinutes(edits),
+        normalizedReminderMinutes(baselineReminderMinutes())
+      )
+    ) {
+      return undefined;
+    }
+    return buildReminderOverrides(edits, state().reminders);
+  };
 
   const effectiveRecurrenceLines = () =>
     recurrence.recurrenceLines() ?? initialValue().recurrenceLines;
 
-  const value = createMemo<EventEditorInitialValues>(() => ({
-    ...state(),
-    recurrenceLines: [...effectiveRecurrenceLines()],
-    guests: selectedGuests().map(guestEmail).join(', '),
-  }));
+  const value = createMemo<EventEditorInitialValues>(() => {
+    const reminders = reminderUpdate();
+    return {
+      ...state(),
+      recurrenceLines: [...effectiveRecurrenceLines()],
+      guests: selectedGuests().map(guestEmail).join(', '),
+      reminders: reminders ?? state().reminders,
+    };
+  });
 
   const snapshot = (): EventComposerFormSnapshot => ({
     title: state().title,
@@ -139,6 +213,7 @@ export function createCalendarEventFormController(
     guestEmails: selectedGuests().map(guestEmail),
     location: state().location,
     description: state().description,
+    reminderMinutes: normalizedReminderMinutes(reminderMinutes()),
   });
 
   const initialSnapshot = (): EventComposerFormSnapshot => ({
@@ -151,6 +226,7 @@ export function createCalendarEventFormController(
     guestEmails: initialGuestEmails(),
     location: initialValue().location,
     description: initialValue().description,
+    reminderMinutes: normalizedReminderMinutes(initialReminderMinutes()),
   });
 
   const isDirty = createMemo(() =>
@@ -158,6 +234,15 @@ export function createCalendarEventFormController(
   );
 
   const notifyChange = () => options.onChange?.(value());
+
+  const setReminderMinutes = (minutes: number[]) => {
+    const normalized = normalizedReminderMinutes(minutes);
+    if (arraysEqual(normalized, normalizedReminderMinutes(reminderMinutes()))) {
+      return;
+    }
+    setReminderEdits(normalized);
+    notifyChange();
+  };
   const replaceState = (next: EventEditorInitialValues) => {
     setState(cloneValue(next));
     notifyChange();
@@ -201,6 +286,7 @@ export function createCalendarEventFormController(
     const time = recurrence.eventTime();
     if (!time || !recurrence.canSave()) return undefined;
     const current = state();
+    const reminders = reminderUpdate();
     return {
       title: current.title,
       time,
@@ -209,6 +295,7 @@ export function createCalendarEventFormController(
       guestEmails: selectedGuests().map(guestEmail),
       location: current.location,
       description: current.description,
+      ...(reminders ? { reminders } : {}),
     };
   };
 
@@ -220,6 +307,7 @@ export function createCalendarEventFormController(
       setState(cloned);
       setInitialGuestEmails(guests.map(guestEmail));
       setSelectedGuestsState(guests);
+      setReminderEdits(undefined);
       recurrence.replaceInitialValues(cloned);
     });
   };
@@ -232,6 +320,10 @@ export function createCalendarEventFormController(
     selectedGuests,
     effectiveCalendarId,
     selectedCalendarOption,
+    reminderMinutes,
+    preservedReminderCount,
+    canAddReminder,
+    setReminderMinutes,
     setField,
     setStart,
     setAllDay,
