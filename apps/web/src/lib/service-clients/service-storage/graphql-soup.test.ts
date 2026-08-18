@@ -80,15 +80,19 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
 vi.mock('@core/util/platformFetch', () => ({ platformFetch: vi.fn() }));
 vi.mock('@graphql-cache/rollout', () => ({
-  getBrowserTursoCacheRolloutDecision:
-    (): BrowserTursoCacheRolloutDecision => ({
-      enabled: mocks.tauri ? mocks.graphqlEnabled : mocks.enabled,
-      cohort: mocks.tauri ? 'unknown' : 'treatment',
+  getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
+    const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
+    return {
+      enabled,
+      cohort: mocks.tauri ? 'unknown' : enabled ? 'treatment' : 'control',
       reason: mocks.tauri
         ? 'tauri-native-unchanged'
-        : 'graphql-transport-enabled',
+        : enabled
+          ? 'graphql-transport-enabled'
+          : 'graphql-transport-disabled',
       nativeCacheUnchanged: mocks.tauri,
-    }),
+    };
+  },
 }));
 vi.mock('@graphql-cache/index', () => ({
   createWorkerCacheHost: mocks.createWorkerCacheHost,
