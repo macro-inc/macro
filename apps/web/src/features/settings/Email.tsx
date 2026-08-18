@@ -1,4 +1,4 @@
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';

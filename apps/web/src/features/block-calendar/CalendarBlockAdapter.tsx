@@ -1,6 +1,6 @@
 import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import { CalendarViewContextProvider } from '@app/features/calendar/components/CalendarViewContext';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

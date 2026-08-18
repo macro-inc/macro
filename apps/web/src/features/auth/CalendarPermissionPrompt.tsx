@@ -1,7 +1,7 @@
 import {
   useCalendarPromptAllowed,
   useCalendarUiFlag,
-} from '@app/features/calendar/use-calendar-ui-flag';
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';

@@ -20,7 +20,7 @@ import {
   CalendarGrid,
   type CalendarGridHandle,
 } from '@app/features/calendar/grid/CalendarGrid';
-import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/useCalendarTimeGridHoverIndicator';
+import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';

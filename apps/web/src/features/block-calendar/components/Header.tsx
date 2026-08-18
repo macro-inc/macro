@@ -7,7 +7,7 @@ import {
 import { CalendarPeriodSelector } from '@app/features/calendar/components/CalendarPeriodSelector';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
-import { useCalendarHotkeys } from '@app/features/calendar/use-calendar-hotkeys';
+import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {

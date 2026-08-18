@@ -1,4 +1,4 @@
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import IconGear from '@icon/macro-gear.svg';

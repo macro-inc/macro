@@ -5,7 +5,7 @@ import {
   type EventEditorInitialValues,
 } from '@app/features/calendar/events/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
-import { useEventEditor } from '@app/features/calendar/events/useEventEditor';
+import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
