@@ -26,6 +26,9 @@ use webhook::domain::models::{
 
 use crate::config::{MacroApi, Server};
 
+#[cfg(test)]
+mod test;
+
 const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
 const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
 const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
@@ -54,10 +57,56 @@ pub struct FeedRegistration {
 }
 
 /// The persisted half of a registration: what only creation reveals.
-#[derive(Debug, Serialize, Deserialize)]
-struct FeedState {
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FeedState {
     webhook_id: String,
     signing_secret: String,
+}
+
+pub(crate) trait FeedStateStore {
+    fn load(&self) -> rootcause::Result<Option<FeedState>>;
+
+    fn save(&self, state: &FeedState) -> rootcause::Result<()>;
+}
+
+pub(crate) struct FileFeedStateStore {
+    path: PathBuf,
+}
+
+impl FileFeedStateStore {
+    fn failure(&self) -> String {
+        format!(
+            "failed to use the feed state file at {}",
+            self.path.display()
+        )
+    }
+}
+
+impl FeedStateStore for FileFeedStateStore {
+    fn load(&self) -> rootcause::Result<Option<FeedState>> {
+        let found = std::fs::read_to_string(&self.path);
+        if let Err(error) = &found
+            && error.kind() == std::io::ErrorKind::NotFound
+        {
+            return Ok(None);
+        }
+        // State we cannot parse is state we do not have: the feed it named
+        // is treated as stale, deleted, and replaced.
+        let raw = found.context(self.failure())?;
+        Ok(serde_json::from_str(&raw).ok())
+    }
+
+    fn save(&self, state: &FeedState) -> rootcause::Result<()> {
+        let raw = serde_json::to_string_pretty(state).expect("a serializable state");
+        std::fs::write(&self.path, raw).context(self.failure())?;
+        // The secret signs deliveries to us; keep it out of other users' reach.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
 }
 
 /// Where the feed state lives: next to the config it belongs to.
@@ -66,16 +115,16 @@ pub fn state_path(config_path: &Path) -> PathBuf {
 }
 
 /// The webhook-feed reconciler for one bot on one deployment.
-pub struct FeedReconciler {
+pub(crate) struct FeedReconciler<S = FileFeedStateStore> {
     http: reqwest::Client,
     base: String,
     macro_api: MacroApi,
     owner_user_id: String,
     public_url: String,
-    state_path: PathBuf,
+    state_store: S,
 }
 
-impl FeedReconciler {
+impl FeedReconciler<FileFeedStateStore> {
     /// Build a reconciler from the daemon's config.
     pub fn new(macro_api: &MacroApi, server: &Server, config_path: &Path) -> Self {
         Self {
@@ -84,10 +133,14 @@ impl FeedReconciler {
             macro_api: macro_api.clone(),
             owner_user_id: macro_api.owner_user_id.clone(),
             public_url: server.public_url.clone(),
-            state_path: state_path(config_path),
+            state_store: FileFeedStateStore {
+                path: state_path(config_path),
+            },
         }
     }
+}
 
+impl<S: FeedStateStore> FeedReconciler<S> {
     fn credentialed(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         request
             .header(BOT_TOKEN_HEADER, &self.macro_api.bot_token)
@@ -116,13 +169,6 @@ impl FeedReconciler {
             .context(format!("could not read the service's answer to {what}"))?)
     }
 
-    fn state_failure(&self) -> String {
-        format!(
-            "failed to use the feed state file at {}",
-            self.state_path.display()
-        )
-    }
-
     /// Reconcile: return a feed that exists, points at this daemon, and
     /// whose secret this daemon holds.
     pub async fn ensure_feed(&self) -> rootcause::Result<FeedRegistration> {
@@ -147,7 +193,7 @@ impl FeedReconciler {
             .collect();
 
         // The remembered feed, when it still exists and points here.
-        if let Some(state) = self.load_state()?
+        if let Some(state) = self.state_store.load()?
             && let Some(row) = mine.iter().find(|row| row.id == state.webhook_id)
             && row.endpoint_url == self.public_url
         {
@@ -197,7 +243,7 @@ impl FeedReconciler {
             )
             .await?;
 
-        self.save_state(&FeedState {
+        self.state_store.save(&FeedState {
             webhook_id: created.id.clone(),
             signing_secret: created.signing_secret.clone(),
         })?;
@@ -232,31 +278,5 @@ impl FeedReconciler {
                 tracing::warn!(error = ?error, %webhook_id, "feed validation failed");
             }
         }
-    }
-
-    fn load_state(&self) -> rootcause::Result<Option<FeedState>> {
-        let found = std::fs::read_to_string(&self.state_path);
-        if let Err(error) = &found
-            && error.kind() == std::io::ErrorKind::NotFound
-        {
-            return Ok(None);
-        }
-        // State we cannot parse is state we do not have: the feed it named
-        // is treated as stale, deleted, and replaced.
-        let raw = found.context(self.state_failure())?;
-        Ok(serde_json::from_str(&raw).ok())
-    }
-
-    fn save_state(&self, state: &FeedState) -> rootcause::Result<()> {
-        let raw = serde_json::to_string_pretty(state).expect("a serializable state");
-        std::fs::write(&self.state_path, raw).context(self.state_failure())?;
-        // The secret signs deliveries to us; keep it out of other users' reach.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            let _ =
-                std::fs::set_permissions(&self.state_path, std::fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
     }
 }
