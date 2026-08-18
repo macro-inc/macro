@@ -13,9 +13,7 @@ use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
     deduplicate_patches, missing_patch_record,
 };
-use crate::normalize::{
-    NormalizeError, RecordUpdates, normalize, project_hydration_response,
-};
+use crate::normalize::{NormalizeError, RecordUpdates, normalize, project_hydration_response};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,

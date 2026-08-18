@@ -154,15 +154,10 @@ fn project_value(
             for item in items {
                 let item = match item {
                     Json::Null => Json::Null,
-                    Json::Object(object) => project_object_fields(
-                        &field.selection_set,
-                        named_type,
-                        object,
-                    )?
-                    .map_or_else(
-                        || Json::Object(serde_json::Map::new()),
-                        Json::Object,
-                    ),
+                    Json::Object(object) => {
+                        project_object_fields(&field.selection_set, named_type, object)?
+                            .map_or_else(|| Json::Object(serde_json::Map::new()), Json::Object)
+                    }
                     _ => {
                         return Err(NormalizeError::Shape {
                             type_name: named_type.to_string(),
