@@ -1,5 +1,5 @@
 use cache_core::engine::{BeginOptimisticWrite, Engine};
-use cache_core::search::{SearchProfile, SearchRequest};
+use cache_core::search::{SearchCursor, SearchProfile, SearchRequest};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
@@ -233,6 +233,45 @@ fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
                 .len(),
             1
         );
+    });
+}
+
+#[test]
+fn in_memory_recent_browse_uses_component_wise_record_key_order() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let entries = ["Type:9", "Type0:1"].map(|key| {
+            let mut record = Record::default();
+            record.fields.insert(
+                "__typename".into(),
+                CacheValue::String("GraphqlSoupDocument".into()),
+            );
+            record
+                .fields
+                .insert("name".into(), CacheValue::String(key.into()));
+            record.fields.insert(
+                "updatedAt".into(),
+                CacheValue::Number(cache_core::value::CacheNumber::PosInt(1)),
+            );
+            (EntityKey(key.into()), record)
+        });
+        storage.put_batch(entries.into()).await.unwrap();
+
+        let first = storage
+            .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 1)
+            .await
+            .unwrap();
+        assert_eq!(first[0].record_key.as_ref(), "Type:9");
+
+        let cursor = SearchCursor {
+            timestamp_ms: first[0].timestamp_ms,
+            record_key: first[0].record_key.clone(),
+        };
+        let second = storage
+            .browse_search_documents(SearchProfile::QuickAccessV1, "document", Some(&cursor), 1)
+            .await
+            .unwrap();
+        assert_eq!(second[0].record_key.as_ref(), "Type0:1");
     });
 }
 

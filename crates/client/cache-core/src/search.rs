@@ -306,12 +306,21 @@ fn source_hash(record: &Record) -> String {
         .collect()
 }
 
+pub(crate) fn compare_record_keys(left: &EntityKey<'_>, right: &EntityKey<'_>) -> Ordering {
+    let left = left.as_ref().split_once(':').unwrap_or((left.as_ref(), ""));
+    let right = right
+        .as_ref()
+        .split_once(':')
+        .unwrap_or((right.as_ref(), ""));
+    left.0.cmp(right.0).then_with(|| left.1.cmp(right.1))
+}
+
 /// Sorts recent browse results deterministically.
 pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering {
     right
         .timestamp_ms
         .cmp(&left.timestamp_ms)
-        .then_with(|| left.record_key.cmp(&right.record_key))
+        .then_with(|| compare_record_keys(&left.record_key, &right.record_key))
 }
 
 /// Returns a fuzzy+freshness score, or `None` when every query token fails to
