@@ -2,9 +2,10 @@ import { CalendarGridSkeleton } from '@app/features/calendar/components/Calendar
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
+import { HoverCard } from '@core/component/HoverCard';
 import type { CalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
-import { HoverCard } from '@ui/components/HoverCard';
+import { Surface } from '@ui/components/Surface';
 import { createSignal, lazy, type ParentProps, Show, Suspense } from 'solid-js';
 
 const CalendarEmbed = lazy(() =>
@@ -84,21 +85,38 @@ export function CalendarSidebarPreview(
 
   return (
     <HoverCard
-      as="div"
+      trigger={props.children}
+      triggerAs="div"
       triggerClass="w-full"
+      triggerTabIndex={-1}
       content={
-        <Show when={open() && !props.disabled}>
-          <Suspense fallback={<PreviewSkeleton />}>
-            <PreviewContent />
-          </Suspense>
-        </Show>
+        <Surface
+          depth={3}
+          hideBorder
+          class="h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl shadow-menu ring ring-edge"
+        >
+          <div
+            class="size-full"
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <Show when={open() && !props.disabled}>
+              <Suspense fallback={<PreviewSkeleton />}>
+                <PreviewContent />
+              </Suspense>
+            </Show>
+          </div>
+        </Surface>
       }
-      contentClass="h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] items-stretch justify-stretch overflow-hidden rounded-xl bg-surface p-0 text-ink shadow-menu menu-open-animation"
+      contentClass="max-w-[calc(100vw-1rem)] menu-open-animation"
+      openDelay={300}
+      closeDelay={200}
       disabled={props.disabled}
       onOpenChange={setOpen}
       placement="right-start"
-    >
-      {props.children}
-    </HoverCard>
+      requirePointerMovement
+    />
   );
 }

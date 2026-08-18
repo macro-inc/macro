@@ -18,8 +18,6 @@ type HoverCardProps = ParentProps<{
    * instead of stacking it on top of the popover.
    */
   disabled?: boolean;
-  /** Called when the trigger's hover state changes. */
-  onOpenChange?: (open: boolean) => void;
 }>;
 
 /**
@@ -39,10 +37,7 @@ export function HoverCard(props: HoverCardProps) {
     <Show when={!isTouchDevice()} fallback={props.children}>
       <KobalteTooltip
         open={open()}
-        onOpenChange={(open) => {
-          setHovered(open);
-          props.onOpenChange?.(open);
-        }}
+        onOpenChange={setHovered}
         placement={props.placement ?? 'bottom'}
         overflowPadding={16}
         fitViewport={true}
