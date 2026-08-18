@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
-    ports::{ActivityFeedPage, ActivityReads, ActivityRepo, EntityActivityMap},
+    ports::{ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap},
 };
 
 /// Writes activities to MacroDB.
@@ -289,5 +289,42 @@ impl ActivityReads for PgActivityRepo {
                 .push(record);
         }
         Ok(by_entity)
+    }
+
+    async fn subject_activity_range(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityRange, Self::Err> {
+        let limit = limit.get();
+        let fetch = i64::from(limit) + 1;
+        let mut rows = sqlx::query_as!(
+            StoredRow,
+            r#"
+            SELECT id, actor_id, action, action_payload,
+                   subject_id, entity_type, entity_id, occurred_at
+            FROM activity_events
+            WHERE subject_id = $1
+              AND occurred_at >= $2
+              AND occurred_at < $3
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT $4
+            "#,
+            subject_id,
+            from,
+            to,
+            fetch,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let truncated = rows.len() > limit as usize;
+        rows.truncate(limit as usize);
+        Ok(ActivityRange {
+            records: rows.into_iter().filter_map(StoredRow::decode).collect(),
+            truncated,
+        })
     }
 }

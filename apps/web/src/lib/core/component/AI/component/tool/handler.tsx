@@ -44,6 +44,7 @@ import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
   readChannelMessageContextHandler,
@@ -119,6 +120,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,
   ReadChannelMessages: readChannelMessagesHandler,

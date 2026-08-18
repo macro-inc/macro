@@ -233,6 +233,7 @@ pub async fn build_tool_service_context(
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
+        activity_tool_context: ai_tools::build_activity_tool_context(pool.clone()),
         document_tool_context,
         properties_tool_context,
         email_tool_context,

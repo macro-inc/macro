@@ -24,6 +24,15 @@ pub struct ActivityFeedPage {
     pub next: Option<(DateTime<Utc>, Uuid)>,
 }
 
+/// A bounded time-range read of one subject's activity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityRange {
+    /// Decoded rows in the requested range, newest first.
+    pub records: Vec<ActivityRecord>,
+    /// Whether more matching raw rows existed beyond the requested limit.
+    pub truncated: bool,
+}
+
 /// Persists activities.
 pub trait ActivityRepo {
     /// The adapter's error type.
@@ -73,4 +82,15 @@ pub trait ActivityReads {
         keys: &[(EntityType, String)],
         per_entity_limit: u32,
     ) -> impl Future<Output = Result<EntityActivityMap, Self::Err>> + Send;
+
+    /// The subject's activity in the half-open interval `[from, to)`, newest
+    /// first, capped at `limit`. `truncated` reports whether more matching raw
+    /// rows exist, so callers can disclose that the bounded result is partial.
+    fn subject_activity_range(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityRange, Self::Err>> + Send;
 }

@@ -498,6 +498,81 @@ export type PageDirection = 'older' | 'newer';
  */
 export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction =
+  | {
+      type: 'created';
+    }
+  | {
+      type: 'edited';
+    }
+  | {
+      type: 'opened';
+    }
+  | {
+      type: 'deleted';
+    }
+  | {
+      type: 'messaged';
+    }
+  | {
+      type: 'sent';
+    }
+  | {
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * The property definition id.
+       */
+      property: string;
+      /**
+       * The new value, or `None` when cleared.
+       */
+      to?: {
+        [k: string]: unknown;
+      };
+      type: 'propertyChanged';
+    }
+  | {
+      /**
+       * The added principal.
+       */
+      participant: string;
+      type: 'participantAdded';
+    }
+  | {
+      /**
+       * The removed principal.
+       */
+      participant: string;
+      type: 'participantRemoved';
+    }
+  | {
+      /**
+       * The started call's id.
+       */
+      callId: string;
+      type: 'callStarted';
+    }
+  | {
+      /**
+       * The stored payload, verbatim.
+       */
+      payload?: {
+        [k: string]: unknown;
+      };
+      /**
+       * The stored action tag.
+       */
+      tag: string;
+      type: 'unknown';
+    };
+/**
  * Position of a channel message.
  */
 export type ToolMessageKind = 'topLevelMessage' | 'threadReply';
@@ -3235,6 +3310,54 @@ export interface ProjectSearchResult {
    * The score of the result
    */
   score?: number | null;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Do not use it for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ */
+export interface ReadActivity {
+  /**
+   * Inclusive start of the range as an RFC 3339 timestamp.
+   */
+  from: string;
+  /**
+   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
+   */
+  to: string;
+}
+/**
+ * Response from [`ReadActivity`].
+ */
+export interface ReadActivityResponse {
+  /**
+   * Matching activity events, newest first.
+   */
+  activities: ToolActivityEvent[];
+  /**
+   * Whether more than 100 events matched the requested range.
+   */
+  truncated: boolean;
+}
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export interface ToolActivityEvent {
+  action: ToolActivityAction;
+  /**
+   * The principal that mechanically performed the action.
+   */
+  actorId: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  /**
+   * The kind of entity acted on.
+   */
+  entityType: string;
+  /**
+   * When the action occurred.
+   */
+  occurredAt: string;
 }
 /**
  * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
