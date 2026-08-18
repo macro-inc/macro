@@ -20,7 +20,7 @@ export type CalendarPageId = (typeof CALENDAR_PAGE_IDS)[number];
 const TIME_GRID_SCROLLER_SELECTOR =
   '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller';
 
-export interface CalendarPageHandle {
+interface CalendarPageHandle {
   id: CalendarPageId;
   api: Accessor<Calendar | undefined>;
   dateInfo: Accessor<DatesSetArg | undefined>;
