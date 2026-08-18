@@ -40,6 +40,11 @@ import {
   CalendarViewContextProvider,
   useCalendarView,
 } from './CalendarViewContext';
+import {
+  CalendarFocusContextProvider,
+  type CalendarFocusTarget,
+} from './calendar-focus-target';
+import { calendarPeriodLabel } from './calendar-label';
 import { SelectedEventDetails } from './events/EventDetailsPopover';
 import { useOpenEventComposer } from './events/useOpenEventComposer';
 import { useCalendarHotkeys } from './use-calendar-hotkeys';
@@ -53,13 +58,15 @@ const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
 }).format;
 
 /** A calendar-focused workspace view backed by buffered FullCalendar pages. */
-export function CalendarView() {
+export function CalendarView(props: { focusTarget?: CalendarFocusTarget }) {
   return (
-    <CalendarViewContextProvider>
-      <CalendarPagerContextProvider>
-        <CalendarPagerRoot />
-      </CalendarPagerContextProvider>
-    </CalendarViewContextProvider>
+    <CalendarFocusContextProvider target={() => props.focusTarget}>
+      <CalendarViewContextProvider>
+        <CalendarPagerContextProvider>
+          <CalendarPagerRoot />
+        </CalendarPagerContextProvider>
+      </CalendarViewContextProvider>
+    </CalendarFocusContextProvider>
   );
 }
 
@@ -191,6 +198,9 @@ function CalendarWorkspace() {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
   const dateTitle = createMemo(() => formatMonthTitle(currentDate()));
+  const periodLabel = createMemo(() =>
+    calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
+  );
   const visibleRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     return dateInfo ? { end: dateInfo.end, start: dateInfo.start } : undefined;
@@ -265,7 +275,6 @@ function CalendarWorkspace() {
                 variant="ghost"
                 size="sm"
                 class="rounded-lg px-2"
-                label="New event"
                 onClick={() => openEventComposer()}
               >
                 <PlusIcon class="size-3.5" />
@@ -277,7 +286,7 @@ function CalendarWorkspace() {
                   variant="ghost"
                   size="icon-sm"
                   class="rounded-lg"
-                  label="Previous period"
+                  label={`Previous ${periodLabel()}`}
                   hotkey={TOKENS.calendar.period.previous}
                   onClick={() => void pager.previous()}
                 >
@@ -287,7 +296,7 @@ function CalendarWorkspace() {
                   variant="ghost"
                   size="icon-sm"
                   class="rounded-lg"
-                  label="Next period"
+                  label={`Next ${periodLabel()}`}
                   hotkey={TOKENS.calendar.period.next}
                   onClick={() => void pager.next()}
                 >

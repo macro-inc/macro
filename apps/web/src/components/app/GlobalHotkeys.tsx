@@ -59,7 +59,7 @@ import {
   themeMode,
   themes,
 } from '@theme/signals/themeSignals';
-import type { ThemeV2 } from '@theme/types/themeTypes';
+import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
   applySystemTheme,
   applyTheme,
@@ -379,7 +379,7 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
-  const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
+  const ThemeDisplay: Component<{ theme: ThemeV3 }> = (props) => (
     <div class="flex items-center gap-2">
       {props.theme.name}
       <ThemeChips theme={props.theme} size="sm" />
@@ -388,7 +388,7 @@ export default function GlobalShortcuts() {
 
   // The per-mode theme the OS scheme currently resolves to — shown as the
   // "System preference" option's swatch and previewed on highlight.
-  const systemResolvedTheme = (): ThemeV2 | undefined =>
+  const systemResolvedTheme = (): ThemeV3 | undefined =>
     themes().find(
       (theme) =>
         theme.id ===

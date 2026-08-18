@@ -6,9 +6,6 @@
  */
 
 export * from './accessLevel';
-export * from './activity';
-export * from './activityOneOf';
-export * from './activityOneOfTwo';
 export * from './activityType';
 export * from './addFavoriteRequest';
 export * from './addFavoriteRequestEntityType';
@@ -610,8 +607,6 @@ export * from './genericErrorResponse';
 export * from './genericResponse';
 export * from './genericResponseMessage';
 export * from './genericSuccessResponse';
-export * from './getActivitiesResponse';
-export * from './getActivitiesResponseData';
 export * from './getAttachmentReferencesResponse';
 export * from './getBatchCallRecordPreviewRequest';
 export * from './getBatchCallRecordPreviewResponse';
@@ -666,7 +661,6 @@ export * from './getProjectContentResponse';
 export * from './getProjectResponse';
 export * from './getProjectResponseData';
 export * from './getProjectsResponse';
-export * from './getRecentActivityHandlerParams';
 export * from './getSystemSkillsHandler200';
 export * from './getUserDocumentsHandlerParams';
 export * from './getUserHistoryResponse';
@@ -1168,8 +1162,6 @@ export * from './uploadFolderHandler200DataOneOf';
 export * from './uploadFolderRequest';
 export * from './uploadFolderRequestParentId';
 export * from './upsertUserDocumentViewLocationRequest';
-export * from './userActivitiesResponse';
-export * from './userActivitiesResponseNextOffset';
 export * from './userDocumentsResponse';
 export * from './userDocumentsResponseNextOffset';
 export * from './userDocumentViewLocation';

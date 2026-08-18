@@ -29,6 +29,11 @@ use mcp_client::inbound::axum_router::{
 };
 use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
+use pipedream_mcp::inbound::axum_router::{
+    self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
+    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamTokenResponse,
+    PipedreamUpdateRequest,
+};
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
@@ -101,7 +106,13 @@ use utoipa::OpenApi;
             mcp_api::delete_server,
             mcp_api::start_auth,
             mcp_api::client_metadata,
-            mcp_api::auth_callback
+            mcp_api::auth_callback,
+            pipedream_api::list_connections,
+            pipedream_api::update_connection,
+            pipedream_api::delete_connection,
+            pipedream_api::create_connect_token,
+            pipedream_api::complete_connection,
+            pipedream_api::browse_catalog_handler
         ),
         components(
             schemas(
@@ -229,6 +240,14 @@ use utoipa::OpenApi;
                 UpdateServerRequest,
                 StartAuthRequest,
                 StartAuthResponse,
+
+                // Pipedream MCP connectors
+                PipedreamConnectionResponse,
+                PipedreamUpdateRequest,
+                PipedreamTokenResponse,
+                PipedreamCompleteRequest,
+                PipedreamCatalogResponse,
+                PipedreamCatalogEntryResponse,
                 model_error_response::ErrorResponse,
             ),
         ),

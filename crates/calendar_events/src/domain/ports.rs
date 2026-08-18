@@ -10,9 +10,10 @@ use super::models::{
     AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-    CalendarEventPatch, CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
-    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus, DueCalendarReminder,
+    CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
+    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
+    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
     GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
     GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
     StoredGoogleCalendar, VisibleCalendar,
@@ -176,6 +177,16 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
+
+    /// Close a push notification channel. A channel Google no longer knows
+    /// about is success, since the goal is only that it stops delivering.
+    fn stop_watch_channel(
+        &self,
+        access_token: &str,
+        email_link_id: Uuid,
+        channel_id: &str,
+        resource_id: &str,
+    ) -> impl Future<Output = Result<(), GoogleProviderError>> + Send;
 }
 
 /// How much of a recurring series a deletion removes.
@@ -256,11 +267,27 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
 pub trait CalendarRepository: Send + Sync + 'static {
     /// Apply the actual scopes returned by Google and atomically schedule any
     /// newly unlocked historical work.
+    ///
+    /// `intent` decides how the grant meets a standing calendar opt-out: an
+    /// explicit calendar request clears it, anything else is filtered through
+    /// it so calendar scopes that merely rode along stay unrecorded.
     fn apply_google_grant(
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> impl Future<Output = Result<AppliedGoogleGrant, Report>> + Send;
+
+    /// Turn the calendar capability off for an inbox the requester owns:
+    /// remove its calendar data, drop the calendar scopes from the recorded
+    /// grant, and stamp the opt-out that keeps a later incidental re-grant
+    /// from resurrecting it. Returns `None` when the requester owns no such
+    /// inbox, and the still-open push channels otherwise.
+    fn disconnect_google_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DisconnectedGoogleCalendar>, Report>> + Send;
 
     /// Upsert an event through an explicit, source-matched ingestion authority.
     fn upsert_event(
@@ -421,6 +448,15 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+
+    /// Turn calendar off for one of the requester's own connected inboxes:
+    /// its calendar data is removed, the calendar scopes leave the recorded
+    /// grant, and its push channels are closed at Google.
+    fn disconnect_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 }
 
 /// Use-case failures surfaced by calendar mutations.

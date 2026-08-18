@@ -11,6 +11,7 @@ export function EventComposer(props: {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
   onCalendarChange?: (calendarId: string, color: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -44,6 +45,7 @@ export function EventComposer(props: {
         showRecurringEditNotice={editor.showRecurringEditNotice()}
         pending={editor.pending()}
         onCalendarChange={props.onCalendarChange}
+        onDirtyChange={props.onDirtyChange}
         onCancel={close}
         onSubmit={editor.save}
       />

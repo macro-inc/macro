@@ -92,6 +92,7 @@ use utoipa::OpenApi;
         email::links::list::list_links_handler,
         email::links::health_check::health_check_handler,
         email::links::delete::delete_link_handler,
+        email::links::calendar::disable_link_calendar_handler,
         email::links::resync::resync_link_handler,
         email::labels::create::handler,
         email::labels::delete::handler,

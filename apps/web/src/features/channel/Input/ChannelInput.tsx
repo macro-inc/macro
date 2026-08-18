@@ -511,7 +511,7 @@ export function ChannelInput(props: ChannelInputProps) {
           collapsedInput.collapse();
         }}
         class={cn(
-          'rounded-xl touch:rounded-3xl touch:island',
+          'rounded-xl bg-surface touch:rounded-3xl touch:island',
           isCollapsed() && 'hidden',
           isTouchDevice() && 'bg-chrome'
         )}

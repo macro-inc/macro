@@ -9,6 +9,8 @@ use chrono::Utc;
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, MessageSentMetadata};
 use email_api_client::domain::models::{SendRequest, SentIds};
 use email_db_client::messages::scheduled::get::get_and_start_processing_scheduled_message;
+use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::message::MessageToSend;
 use models_email::service::pubsub::ScheduledPubsubMessage;
 use sqlx_core::any::AnyConnectionBackend;
@@ -182,8 +184,14 @@ async fn process_scheduled_message_inner(
 
             // Gmail accepted the send and the DB updates are committed:
             // publish the message_sent event resolving the earlier
-            // message_send_queued.
-            // Actor is not tracked on scheduled sends; owner is on `link`.
+            // message_send_queued. The actor was persisted on the scheduled
+            // row at enqueue time; rows from before actor tracking decode to
+            // `None` (no attribution).
+            let actor = scheduled_message
+                .actor_id
+                .as_deref()
+                .and_then(|raw| MacroUserIdStr::parse_from_str(raw).ok())
+                .map(|actor| actor.into_owned());
             if let (Some(message_db_id), Some(thread_db_id)) =
                 (message_to_send.db_id, message_to_send.thread_db_id)
             {
@@ -192,7 +200,7 @@ async fn process_scheduled_message_inner(
                     &EmailMacroEvent::message_sent(MessageSentMetadata {
                         link_id: link.id,
                         owner: link.macro_id.clone(),
-                        actor: None,
+                        actor,
                         message_id: message_db_id,
                         thread_id: thread_db_id,
                         provider_message_id: message_to_send

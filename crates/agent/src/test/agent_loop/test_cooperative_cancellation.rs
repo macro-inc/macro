@@ -10,6 +10,7 @@
 use super::util;
 use crate::stream::ToolResponse;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::JsonSchema;
@@ -36,6 +37,10 @@ struct TestCtx {
     description = "Runs until the request is cancelled."
 )]
 struct InfiniteTool {}
+
+impl ToolAnnotated for InfiniteTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Infinite");
+}
 
 #[async_trait]
 impl AsyncTool<TestCtx> for InfiniteTool {

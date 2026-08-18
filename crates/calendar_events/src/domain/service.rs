@@ -9,8 +9,8 @@ use super::{
     models::{
         AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
         CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarOccurrenceCursor, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleScopeSet, OccurrenceRange,
+        CalendarGrantIntent, CalendarOccurrenceCursor, GoogleBackfillRunReport,
+        GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
@@ -55,15 +55,18 @@ where
     /// Apply an OAuth grant using actual scopes returned by Google.
     ///
     /// The repository owns the transaction that increments the grant version
-    /// and inserts the two idempotent backfill jobs.
+    /// and inserts the two idempotent backfill jobs. `intent` states whether
+    /// the consent flow behind this grant explicitly asked for calendar
+    /// access, which is what clears a standing calendar opt-out.
     #[tracing::instrument(skip(self, scopes), err)]
     pub async fn apply_google_grant(
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
         self.repository
-            .apply_google_grant(email_link_id, scopes)
+            .apply_google_grant(email_link_id, scopes, intent)
             .await
     }
 

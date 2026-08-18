@@ -16,6 +16,11 @@ const SETUP_MESSAGES = {
     description: 'Grant calendar access to show your events in Macro.',
     action: 'Grant access',
   },
+  disabled: {
+    title: 'Calendar is off',
+    description: 'Grant calendar access again to show your events in Macro.',
+    action: 'Turn on',
+  },
   reauth: {
     title: 'Reconnect calendar',
     description: 'Reconnect your Google account to resume calendar sync.',
@@ -36,7 +41,7 @@ export function CalendarSetupStatus() {
   // or delegated inbox can leave events visible without a working calendar
   // connection belonging to the current user.
   const setupState = createMemo<
-    'connect' | 'permission' | 'reauth' | undefined
+    'connect' | 'permission' | 'reauth' | 'disabled' | undefined
   >(() => {
     const activeData = calendarPager.activeData();
     const range = activeData?.range();
@@ -58,7 +63,13 @@ export function CalendarSetupStatus() {
     if (hasAvailableCalendar) return undefined;
     if (links.some((link) => link.needs_reauth)) return 'reauth';
     if (links.some((link) => link.needs_calendar_permission)) {
-      return 'permission';
+      // A calendar the user turned off is not a missing upgrade; say so, and
+      // still offer the way back since they came to the calendar view.
+      return links.every(
+        (link) => !link.needs_calendar_permission || link.calendar_disabled
+      )
+        ? 'disabled'
+        : 'permission';
     }
 
     return 'connect';
@@ -68,12 +79,18 @@ export function CalendarSetupStatus() {
     () => SETUP_MESSAGES[setupState() ?? 'connect']
   );
 
-  // Only the permission state has a working mailbox already; connecting and
-  // reconnecting both need the mailbox scopes alongside calendar.
-  const startSetup = () =>
+  // The permission and disabled states both sit on a working mailbox —
+  // turning calendar off leaves Gmail untouched — so they ask for calendar
+  // alone. Connecting and reconnecting need the mailbox scopes alongside it.
+  const startSetup = () => {
+    const state = setupState();
     void startAddInbox({
-      scopes: setupState() === 'permission' ? 'calendar' : 'gmail_and_calendar',
+      scopes:
+        state === 'permission' || state === 'disabled'
+          ? 'calendar'
+          : 'gmail_and_calendar',
     });
+  };
 
   return (
     <Show when={setupState() !== undefined}>
@@ -82,12 +99,7 @@ export function CalendarSetupStatus() {
         fallback={
           <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
             <span>{setupMessage().title}</span>
-            <Button
-              variant="active"
-              size="sm"
-              label={setupMessage().action}
-              onClick={startSetup}
-            >
+            <Button variant="active" size="sm" onClick={startSetup}>
               {setupMessage().action}
             </Button>
           </div>
@@ -102,12 +114,7 @@ export function CalendarSetupStatus() {
               {setupMessage().title}
             </div>
             <p class="text-xs text-ink-muted">{setupMessage().description}</p>
-            <Button
-              variant="active"
-              size="sm"
-              label={setupMessage().action}
-              onClick={startSetup}
-            >
+            <Button variant="active" size="sm" onClick={startSetup}>
               {setupMessage().action}
             </Button>
           </div>

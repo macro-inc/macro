@@ -13,7 +13,7 @@ import {
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
-import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
@@ -83,8 +83,8 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileDock } from './mobile/MobileDock';
-import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
+import { MobileSearchRow } from './mobile/MobileSearchRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
@@ -541,13 +541,15 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
-        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
-          <MobileBottomEdgeFade />
-          <MobileDock />
+        <FloatRegion
+          region="accessory"
+          priority={() => (SearchState.isOpen() ? 100 : 0)}
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileSearchRow />
         </FloatRegion>
-      </Show>
-      <Show when={isTouchDevice()}>
-        <MobileSearchOuter />
+        {/* The views row owns the bottom (dock) slot. */}
+        <MobileViewsRow />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

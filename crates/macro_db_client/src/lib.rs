@@ -1,6 +1,5 @@
 #[cfg(feature = "account_merge_request")]
 pub mod account_merge_request;
-pub mod activity;
 pub mod advisory_lock;
 pub mod annotations;
 pub mod blocked_email;

@@ -1381,7 +1381,7 @@ function TeamManagement(props: {
             when={!teamQuery.isLoading}
             fallback={
               <SettingsCard>
-                <div class="animate-pulse bg-ink-extra-muted rounded h-16 m-4" />
+                <div class="animate-pulse bg-skeleton rounded h-16 m-4" />
               </SettingsCard>
             }
           >
@@ -1694,9 +1694,7 @@ export function Team() {
     // Each state renders its own SettingsPage (scrolling, centered column) so
     // Team matches the Account/Appearance layout.
     <Suspense
-      fallback={
-        <div class="animate-pulse bg-ink-extra-muted rounded h-4 w-32 m-6" />
-      }
+      fallback={<div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />}
     >
       <TeamContent />
     </Suspense>

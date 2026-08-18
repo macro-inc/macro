@@ -1,10 +1,10 @@
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { saveTheme, updateTheme } from '../utils/themeUtils';
+import { isMobile } from '@core/mobile/isMobile';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
 import IconShuffle from '@phosphor-icons/core/regular/shuffle.svg?component-solid';
-import { isMobile } from '@core/mobile/isMobile';
-import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
+import { createMemo, Show } from 'solid-js';
+import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { saveTheme, updateTheme } from '../utils/themeUtils';
 
 function ThemeTools(props: {
   class?: string;
@@ -25,8 +25,11 @@ function ThemeTools(props: {
     const editing = editingTheme();
     if (editing) return editing.name;
     const theme = themes().find((theme) => theme.id === currentThemeId());
-    if(isThemeSaved()){return theme?.name}
-    else{return defaultThemeName}
+    if (isThemeSaved()) {
+      return theme?.name;
+    } else {
+      return defaultThemeName;
+    }
   });
 
   // Editing an existing custom theme writes back to it; otherwise save a new one.
@@ -41,29 +44,33 @@ function ThemeTools(props: {
 
   return (
     <div
-      class={cn('flex items-center overflow-hidden w-full min-w-0', props.class)}
+      class={cn(
+        'flex items-center overflow-hidden w-full min-w-0',
+        props.class
+      )}
       style={{
-        'gap': '4.5px' /* (41 - 32) / 2 */,
+        gap: '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var(--font-sans)',
         'scrollbar-width': 'none',
         'font-size': '14px',
-        'height': '39.5px',
+        height: '39.5px',
       }}
     >
       <div
         onKeyDown={(e) => {
-          if(e.key === 'Enter'){
+          if (e.key === 'Enter') {
             e.preventDefault();
             const name = themeName.innerText.trim();
-            if(name){
+            if (name) {
               commit(name);
               themeName.blur();
+            } else {
+              themeName.innerText = currentThemeName() ?? defaultThemeName;
             }
-            else { themeName.innerText = currentThemeName() ?? defaultThemeName; }
           }
         }}
         onBlur={() => {
-          if(!themeName.innerText.trim()){
+          if (!themeName.innerText.trim()) {
             themeName.innerText = currentThemeName() ?? defaultThemeName;
           }
         }}
@@ -72,12 +79,12 @@ function ThemeTools(props: {
           'bg-transparent text-ink-muted border-ink/[0.06]',
           'hover:bg-surface hover:text-ink',
           'focus:bg-surface focus:text-ink focus:border-accent',
-          'min-w-0 overflow-hidden text-ellipsis',
+          'min-w-0 overflow-hidden text-ellipsis'
         )}
         style={{
           'white-space': 'nowrap',
           // Narrower on mobile so it fits on the same line as the Basic/Advanced tabs.
-          'flex': isMobile() ? '0 1 7.5rem' : '0 1 13rem',
+          flex: isMobile() ? '0 1 7.5rem' : '0 1 13rem',
           'min-width': '0',
         }}
         contentEditable={true}

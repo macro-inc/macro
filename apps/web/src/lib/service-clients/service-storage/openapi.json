@@ -10,78 +10,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/activity": {
-      "get": {
-        "tags": ["activity::get_recent_activity"],
-        "summary": "Gets the users recent activities",
-        "operationId": "get_recent_activity_handler",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of items to retreive. Default 10, max 100.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "The offset to start from. Default 0.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetActivitiesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "deprecated": true
-      }
-    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -11068,28 +10996,6 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
-      "Activity": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["Document"],
-            "properties": {
-              "Document": {
-                "$ref": "#/components/schemas/BasicDocument"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["Chat"],
-            "properties": {
-              "Chat": {
-                "$ref": "#/components/schemas/Chat"
-              }
-            }
-          }
-        ]
-      },
       "ActivityType": {
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
@@ -18566,28 +18472,6 @@
           }
         }
       },
-      "GetActivitiesResponse": {
-        "type": "object",
-        "required": ["error"],
-        "properties": {
-          "data": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/UserActivitiesResponse",
-                "description": "Data to be returned"
-              }
-            ]
-          },
-          "error": {
-            "type": "boolean",
-            "description": "Indicates if an error occurred"
-          }
-        },
-        "deprecated": true
-      },
       "GetAttachmentReferencesResponse": {
         "type": "object",
         "description": "Response from the attachment-references endpoint.",
@@ -23924,30 +23808,6 @@
             "type": "string"
           }
         }
-      },
-      "UserActivitiesResponse": {
-        "type": "object",
-        "required": ["recent", "total"],
-        "properties": {
-          "next_offset": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The next offset to be used if there is one"
-          },
-          "recent": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Activity"
-            },
-            "description": "The activities returned from the query"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The total number of activities the user has"
-          }
-        },
-        "deprecated": true
       },
       "UserDocumentViewLocation": {
         "type": "object",

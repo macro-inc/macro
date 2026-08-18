@@ -87,6 +87,7 @@ ignore = [
   { id = "RUSTSEC-2026-0248", reason = "im is unmaintained; direct dependency of loro, no upstream migration yet" },
   { id = "RUSTSEC-2026-0251", reason = "sized-chunks is unmaintained; transitive via im <- loro, pending loro moving off im" },
   { id = "RUSTSEC-2026-0253", reason = "lru 0.16.4 pinned by async-graphql; no patched release compatible yet, and the unsound path needs a panicking key Drop during pop()" },
+  { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via aws-smithy legacy hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },

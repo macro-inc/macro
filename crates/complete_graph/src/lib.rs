@@ -46,7 +46,7 @@ pub use graphql_favorite::{
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
     NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
-    UpdateNotificationsInput, entity_notifications_loader,
+    UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_permission::{
     EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,

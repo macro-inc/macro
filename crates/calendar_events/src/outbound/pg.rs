@@ -15,12 +15,12 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
         CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
         CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
-        CalendarEventUpsert, CalendarLinkTokenIdentity, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, ConferenceProvider,
-        DueCalendarReminder, EventReminderOverride, EventReminders, EventStart, EventStatus,
-        EventTime, EventTransparency, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel, OccurrenceRange,
-        ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarOccurrence,
+        CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
+        ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
+        EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarReminderDispatchRepo,
@@ -231,7 +231,8 @@ impl PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -254,6 +255,7 @@ struct GrantRow {
     email_address: String,
     granted_scopes: Vec<String>,
     grant_version: i64,
+    calendar_disabled_at: Option<DateTime<Utc>>,
 }
 
 struct StoredCalendarRow {
@@ -350,6 +352,7 @@ impl CalendarRepository for PgCalendarRepository {
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         // The email_links row remains the grant serialization point. Every
@@ -361,7 +364,8 @@ impl CalendarRepository for PgCalendarRepository {
                 l.macro_id,
                 l.email_address::text AS "email_address!",
                 COALESCE(g.granted_scopes, '{}') AS "granted_scopes!",
-                COALESCE(g.grant_version, 0) AS "grant_version!"
+                COALESCE(g.grant_version, 0) AS "grant_version!",
+                g.calendar_disabled_at
             FROM email_links l
             LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
             WHERE l.id = $1
@@ -373,10 +377,25 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        // The user's own opt-out outranks whatever Google reports. Consent
+        // requests carry `include_granted_scopes=true`, so a plain Gmail
+        // reconnect hands back the calendar scopes of an earlier grant; only a
+        // flow that explicitly asked for calendar counts as re-enabling it.
+        let clear_opt_out = matches!(intent, CalendarGrantIntent::CalendarRequested);
+        let calendar_opted_out = row.calendar_disabled_at.is_some() && !clear_opt_out;
+        let scopes = if calendar_opted_out {
+            scopes.without_calendar()
+        } else {
+            scopes
+        };
+
         let old_scopes = GoogleScopeSet::from_scopes(row.granted_scopes);
         let had_calendar_capability = old_scopes.has_calendar_capability();
         let changed = old_scopes != scopes;
         if !changed {
+            if clear_opt_out {
+                clear_calendar_opt_out_tx(&mut tx, email_link_id).await?;
+            }
             let jobs = if scopes.has_calendar_capability() {
                 retry_failed_backfills_tx(&mut tx, email_link_id, row.grant_version).await?
             } else {
@@ -399,11 +418,16 @@ impl CalendarRepository for PgCalendarRepository {
             ON CONFLICT (link_id) DO UPDATE
             SET granted_scopes = EXCLUDED.granted_scopes,
                 grant_version = EXCLUDED.grant_version,
+                calendar_disabled_at = CASE
+                    WHEN $4 THEN NULL
+                    ELSE email_link_google_scopes.calendar_disabled_at
+                END,
                 updated_at = now()
             "#,
             email_link_id,
             &granted_scopes,
             grant_version,
+            clear_opt_out,
         )
         .execute(&mut *tx)
         .await
@@ -472,6 +496,111 @@ impl CalendarRepository for PgCalendarRepository {
             changed,
             jobs,
         })
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn disconnect_google_calendar(
+        &self,
+        requester_id: &str,
+        email_link_id: Uuid,
+    ) -> Result<Option<DisconnectedGoogleCalendar>, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        // Same serialization point and lock order as grant application, so a
+        // consent landing concurrently either precedes or follows this removal.
+        // Only the inbox's owner may disconnect it: a delegate reads the
+        // owner's calendar and must not be able to delete the owner's data.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                l.fusionauth_user_id,
+                l.email_address::text AS "email_address!",
+                l.provider::text AS "provider!",
+                COALESCE(g.granted_scopes, '{}') AS "granted_scopes!"
+            FROM email_links l
+            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+            WHERE l.id = $1 AND l.macro_id = $2
+            FOR UPDATE OF l
+            "#,
+            email_link_id,
+            requester_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        // Read the open channels before the calendars go away; the caller
+        // closes them at Google once the local removal has committed.
+        let watch_channels = sqlx::query!(
+            r#"
+            SELECT
+                c.watch_channel_id AS "channel_id!",
+                c.watch_resource_id AS "resource_id!"
+            FROM calendars c
+            JOIN calendar_accounts a ON a.id = c.account_id
+            WHERE a.email_link_id = $1
+              AND c.watch_channel_id IS NOT NULL
+              AND c.watch_resource_id IS NOT NULL
+            "#,
+            email_link_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?
+        .into_iter()
+        .map(|row| CalendarWatchRelease {
+            channel_id: row.channel_id,
+            resource_id: row.resource_id,
+        })
+        .collect();
+
+        let granted_scopes = GoogleScopeSet::from_scopes(row.granted_scopes)
+            .without_calendar()
+            .into_vec();
+        let grant_version = sqlx::query_scalar!(
+            r#"
+            INSERT INTO email_link_google_scopes (
+                link_id, granted_scopes, grant_version, calendar_disabled_at
+            )
+            VALUES ($1, $2, 1, now())
+            ON CONFLICT (link_id) DO UPDATE
+            SET granted_scopes = EXCLUDED.granted_scopes,
+                grant_version = email_link_google_scopes.grant_version + 1,
+                calendar_disabled_at = now(),
+                updated_at = now()
+            RETURNING grant_version AS "grant_version!"
+            "#,
+            email_link_id,
+            &granted_scopes,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        // Fence anything mid-flight against the superseded grant, then tear
+        // the local projection down and drop the account itself, which
+        // cascades its calendars and backfill jobs.
+        invalidate_stale_google_jobs_tx(&mut tx, email_link_id, grant_version).await?;
+        disable_google_calendar_capability_tx(&mut tx, email_link_id).await?;
+        sqlx::query!(
+            "DELETE FROM calendar_accounts WHERE email_link_id = $1",
+            email_link_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+
+        tx.commit().await.map_err(report)?;
+        Ok(Some(DisconnectedGoogleCalendar {
+            token_identity: CalendarLinkTokenIdentity {
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+            },
+            watch_channels,
+        }))
     }
 
     #[tracing::instrument(skip(self, write), err)]
@@ -1926,6 +2055,25 @@ async fn invalidate_stale_google_jobs_tx(
     Ok(())
 }
 
+async fn clear_calendar_opt_out_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    email_link_id: Uuid,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        UPDATE email_link_google_scopes
+        SET calendar_disabled_at = NULL,
+            updated_at = now()
+        WHERE link_id = $1 AND calendar_disabled_at IS NOT NULL
+        "#,
+        email_link_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
 async fn disable_google_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     email_link_id: Uuid,
@@ -1982,9 +2130,26 @@ async fn disable_google_calendar_capability_tx(
     .fetch_all(&mut **tx)
     .await
     .map_err(report)?;
-    for event_id in affected_event_ids {
-        restore_best_source_or_delete(tx, event_id).await?;
+    for event_id in &affected_event_ids {
+        restore_best_source_or_delete(tx, *event_id).await?;
     }
+
+    // Reminder delivery claims are deliberately not foreign-keyed to
+    // occurrences, so an event that lost its last source takes its claims with
+    // it here rather than leaving them behind forever.
+    sqlx::query!(
+        r#"
+        DELETE FROM calendar_event_reminder_deliveries d
+        WHERE d.event_id = ANY($1)
+          AND NOT EXISTS (
+                SELECT 1 FROM calendar_events e WHERE e.id = d.event_id
+          )
+        "#,
+        &affected_event_ids,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
     Ok(())
 }
 

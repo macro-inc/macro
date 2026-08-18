@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
@@ -39,6 +40,11 @@ pub struct CreateDraftInput {
     /// (the user dismissed it), `Some(true)` to force-include, `None` to apply
     /// the inbox's default policy. Only consulted on send (ignored for drafts).
     pub include_signature: Option<bool>,
+    /// The authenticated user performing the send, set by the transport
+    /// layer (never from the request body). Distinct from the link owner on
+    /// delegated inboxes; attribution (events, activity) follows the actor.
+    /// Ignored for drafts.
+    pub actor: Option<MacroUserIdStr<'static>>,
 }
 
 /// A draft input with all IDs resolved, ready for database insertion.
@@ -73,6 +79,9 @@ pub struct ResolvedDraftInput {
     pub headers_json: Option<JsonValue>,
     /// Scheduled send time.
     pub send_time: Option<DateTime<Utc>>,
+    /// The sending user's principal string, persisted with the scheduled
+    /// send so the eventual `message_sent` event can attribute the actor.
+    pub actor_id: Option<String>,
 }
 
 /// Simplified message info used for validation queries.

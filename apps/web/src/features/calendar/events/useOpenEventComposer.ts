@@ -12,13 +12,14 @@ export interface OpenEventComposerOptions {
   onClose?: () => void;
 }
 
-/** Opens an event composer with confirmation before discarding a new event. */
+/** Opens an event composer with confirmation before discarding changes. */
 export function useOpenEventComposer() {
   const { popoverSplit } = useSplitLayout();
   const owner = getOwner();
 
   return (options: OpenEventComposerOptions = {}) => {
     let eventSaved = false;
+    let formDirty = false;
     let closeConfirmationPending = false;
 
     return popoverSplit(
@@ -29,6 +30,9 @@ export function useOpenEventComposer() {
           event: options.event,
           initialValues: options.initialValues,
           onCalendarChange: options.onCalendarChange,
+          onDirtyChange: (dirty: boolean) => {
+            formDirty = dirty;
+          },
           onSaveSuccess: () => {
             eventSaved = true;
           },
@@ -38,7 +42,7 @@ export function useOpenEventComposer() {
         onClose: async (close) => {
           if (closeConfirmationPending) return;
 
-          if (!eventSaved) {
+          if (!eventSaved && formDirty) {
             closeConfirmationPending = true;
             try {
               const confirmed = await confirmDialog(

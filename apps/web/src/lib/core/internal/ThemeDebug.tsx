@@ -27,17 +27,17 @@ const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
 
 function ThemeDebug() {
   return (
-    <div class="size-full overflow-auto bg-surface p-6">
+    <div class="size-full overflow-auto p-6">
       <div class="flex flex-col gap-8 max-w-6xl mx-auto">
         <h1 class="text-2xl font-bold text-ink">Theme Debug</h1>
 
         {/* Panel Depths Section */}
         <section class="flex flex-col gap-4">
-          <h2 class="text-xl font-semibold text-ink">Panel Depths (0-5)</h2>
+          <h2 class="text-xl font-semibold text-ink">Panel Depths (0-4)</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <For each={[0, 1, 2, 3, 4, 5] as const}>
+            <For each={[0, 1, 2, 3, 4] as const}>
               {(depth) => (
-                <Panel depth={depth} class="min-h-40">
+                <Panel depth={depth} class="min-h-40 bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Depth {depth}
@@ -53,19 +53,16 @@ function ThemeDebug() {
 
           {/* Nested panels to show depth hierarchy */}
           <h3 class="text-lg font-medium text-ink mt-4">Nested Panel Depths</h3>
-          <Panel depth={0} class="p-4">
+          <Panel depth={0} class="bg-surface p-4">
             <p class="text-xs text-ink-muted mb-2">Depth 0</p>
-            <Panel depth={1} class="p-4">
+            <Panel depth={1} class="bg-surface p-4">
               <p class="text-xs text-ink-muted mb-2">Depth 1</p>
-              <Panel depth={2} class="p-4">
+              <Panel depth={2} class="bg-surface p-4">
                 <p class="text-xs text-ink-muted mb-2">Depth 2</p>
-                <Panel depth={3} class="p-4">
+                <Panel depth={3} class="bg-surface p-4">
                   <p class="text-xs text-ink-muted mb-2">Depth 3</p>
-                  <Panel depth={4} class="p-4">
-                    <p class="text-xs text-ink-muted mb-2">Depth 4</p>
-                    <Panel depth={5} class="p-4">
-                      <p class="text-xs text-ink-muted">Depth 5 (innermost)</p>
-                    </Panel>
+                  <Panel depth={4} class="bg-surface p-4">
+                    <p class="text-xs text-ink-muted">Depth 4 (innermost)</p>
                   </Panel>
                 </Panel>
               </Panel>
@@ -77,12 +74,12 @@ function ThemeDebug() {
         <section class="flex flex-col gap-4">
           <h2 class="text-xl font-semibold text-ink">Active Panels</h2>
           <p class="text-sm text-ink-muted">
-            Panels with the `active` prop show an accent border gradient.
+            Panels with the `active` prop show the active focus ring.
           </p>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <For each={[1, 2, 3] as const}>
               {(depth) => (
-                <Panel depth={depth} class="min-h-32">
+                <Panel active depth={depth} class="min-h-32 bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Active Depth {depth}
@@ -90,7 +87,7 @@ function ThemeDebug() {
                   </Panel.Header>
                   <Panel.Body class="p-4">
                     <p class="text-sm text-ink-muted">
-                      Active panel with accent styling
+                      Active panel using its layer-relative surface
                     </p>
                   </Panel.Body>
                 </Panel>
@@ -309,7 +306,7 @@ function ThemeDebug() {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <For each={[1, 2, 3, 4] as const}>
               {(depth) => (
-                <Panel depth={depth}>
+                <Panel depth={depth} class="bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Panel Depth {depth}

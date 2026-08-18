@@ -122,7 +122,7 @@ export function Tooltip(props: TooltipProps) {
         <KobalteTooltip.Portal>
           <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
             <Surface
-              class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word"
+              class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip"
               depth={3}
             >
               <div class="flex flex-row items-center gap-2">

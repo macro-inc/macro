@@ -301,6 +301,9 @@ const getDocumentMentionItemType = (
     .with('channel_thread', () => 'channel')
     .with('automation', () => 'automation')
     .with('call', () => 'call')
+    .with('calendar_event', () => {
+      throw new Error('calendar blocks cannot be document mentions');
+    })
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })

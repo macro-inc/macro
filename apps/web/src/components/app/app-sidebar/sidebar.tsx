@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
@@ -24,6 +25,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
 import {
@@ -47,7 +49,6 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_ACTIVITY,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -300,6 +301,15 @@ const isMarkdownDocumentsParams = (
   return initialClientFilters?.or?.includes('doc-markdown') ?? false;
 };
 
+function sidebarContent(
+  viewId: SidebarItem['id'],
+  params?: SidebarItem['params']
+): SplitContent {
+  return viewId === 'calendar'
+    ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
+    : { type: 'component', id: viewId, params };
+}
+
 /**
  * Navigate to a sidebar view by pushing a fresh entry into the active split.
  * Holding shift opens it in a new split. Use in-app back/forward to return to
@@ -332,15 +342,12 @@ function navigateToSidebarView(args: {
     }
   }
 
-  return openWithSplit(
-    { type: 'component', id: viewId, params },
-    {
-      preferNewSplit: shiftKey,
-      mergeHistory: false,
-      allowDuplicate: true,
-      referredFrom,
-    }
-  );
+  return openWithSplit(sidebarContent(viewId, params), {
+    preferNewSplit: shiftKey,
+    mergeHistory: false,
+    allowDuplicate: viewId !== 'calendar',
+    referredFrom,
+  });
 }
 
 const registerSidebarHotkeys = ({
@@ -405,8 +412,13 @@ export const GoToHotkeys = () => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
   const links = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled()
+    )
   );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
@@ -656,7 +668,11 @@ const SidebarDropdownLink = (
     if (!activeContent) {
       return location.pathname.split('/').filter(Boolean).includes(props.id);
     }
-    return activeContent.id === props.id;
+    const expectedContent = sidebarContent(props.id, props.params);
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
 
   const handleContextMenuOpenChange = (open: boolean) => {
@@ -693,7 +709,7 @@ const SidebarDropdownLink = (
   const openFullscreen = () => {
     analytics.track('sidebar_click', { view: props.id });
     const handle = layout.replaceAllSplits(
-      { type: 'component', id: props.id, params: props.params },
+      sidebarContent(props.id, props.params),
       { referredFrom: 'sidebar' }
     );
     if (props.id === 'search' && handle) requestSearchFocus(handle.id);
@@ -1043,7 +1059,8 @@ const REMINDERS_LINK: SidebarItem = {
  */
 const buildSidebarLinks = (
   showGettingStarted: boolean,
-  showCalendar: boolean
+  showCalendar: boolean,
+  showActivity: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = [
     DASHBOARD_LINK,
@@ -1051,7 +1068,7 @@ const buildSidebarLinks = (
     ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
   ];
 
-  if (ENABLE_ACTIVITY) {
+  if (showActivity) {
     const idx = links.findIndex((link) => link.id === 'inbox');
     links = [
       ...links.slice(0, idx + 1),
@@ -1062,7 +1079,7 @@ const buildSidebarLinks = (
 
   if (ENABLE_REMINDERS()) {
     // Directly below Activity, or below Inbox when Activity is off.
-    const anchorId = ENABLE_ACTIVITY ? 'activity' : 'inbox';
+    const anchorId = showActivity ? 'activity' : 'inbox';
     const idx = links.findIndex((l) => l.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
@@ -1147,8 +1164,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
+  const activityFeedEnabled = useActivityFeedFlag();
   const allLinks = createMemo((): SidebarItem[] =>
-    buildSidebarLinks(gettingStartedEnabled(), calendarUiEnabled())
+    buildSidebarLinks(
+      gettingStartedEnabled(),
+      calendarUiEnabled(),
+      activityFeedEnabled()
+    )
   );
 
   // Hides only the rendered row: the g+s hotkey and command menu entry keep
@@ -1766,6 +1788,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
   const layout = useSplitLayout();
 
   const location = useLocation();
+  const content = () => sidebarContent(props.id, props.params);
 
   // Always read the manager signal live: it is undefined until the split
   // layout mounts, which happens after the sidebar.
@@ -1779,15 +1802,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
       return paths.includes(props.id);
     }
 
-    return activeContent?.id === props.id;
+    const expectedContent = content();
+    return (
+      activeContent.type === expectedContent.type &&
+      activeContent.id === expectedContent.id
+    );
   };
-
-  const content = () =>
-    ({
-      type: 'component',
-      id: props.id,
-      params: props.params,
-    }) as const;
 
   return (
     <SidebarOpenInSplitMenu
@@ -1825,9 +1845,10 @@ const SidebarLink = (props: SidebarLinkProps) => {
           let currentContentHandle = globalSplitManager()?.activeSplit();
 
           const currentContent = currentContentHandle?.content();
+          const expectedContent = content();
           const isSameContent =
-            currentContent?.type === 'component' &&
-            currentContent?.id === props.id;
+            currentContent?.type === expectedContent.type &&
+            currentContent.id === expectedContent.id;
 
           if (!isSameContent || e.shiftKey) {
             currentContentHandle = navigateToSidebarView({

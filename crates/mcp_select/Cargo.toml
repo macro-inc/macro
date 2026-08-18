@@ -1,0 +1,15 @@
+[package]
+name = "mcp_select"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+anyhow.workspace = true
+macro_user_id = { path = "../macro_user_id" }
+mcp_client = { path = "../mcp_client" }
+pipedream_mcp = { path = "../pipedream_mcp" }
+serde_json.workspace = true
+tracing.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

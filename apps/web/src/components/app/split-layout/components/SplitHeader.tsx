@@ -1,6 +1,7 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -76,9 +77,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   // references, which the caller navigates to instead.
   if (data.type === 'reminder') return undefined;
 
-  // A calendar event opens the calendar component split, not a block.
+  // Calendar events open the singleton calendar block; the full opening path
+  // supplies the event range used to focus the requested occurrence.
   if (data.type === 'calendar_event')
-    return { type: 'component', id: 'calendar' };
+    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
@@ -510,13 +512,10 @@ export function SplitHeader(props: {
           // On mobile the header overlays the panel body as a transparent strip
           // of floating islands
           'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
-          isTouchDevice() &&
-            isListViewID(panel.handle.content().id) &&
-            'hidden',
           isMobile() &&
             !isNativeMobilePlatform() &&
             'touch:top-[calc(var(--safe-top)+6px)]',
-          isEntityDraggingOver() && 'bg-active/50'
+          isEntityDraggingOver() && 'bg-active'
         )}
         data-split-header
         ref={mergeRefs(droppable, props.ref)}
@@ -556,11 +555,15 @@ export function SplitHeader(props: {
               </div>
             }
           >
-            {/* Back/forward island. */}
+            {/* Back/forward island. List views never render the back button
+                (their header hosts the filter pills instead), so the island
+                hides for them even when history allows going back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                !panel.handle.canGoBack() && 'hidden'
+                (!panel.handle.canGoBack() ||
+                  isListViewID(panel.handle.content().id)) &&
+                  'hidden'
               )}
             >
               <Show when={!isListViewID(panel.handle.content().id)}>

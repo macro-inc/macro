@@ -232,6 +232,7 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'automation'
+  | 'calendar_event'
   | 'foreign'
   | 'crm_company'
   | 'crm_contact';
@@ -325,6 +326,7 @@ const itemTypeSet = new Set([
   'channel_message',
   'call',
   'automation',
+  'calendar_event',
   'thread',
   'crm_company',
   'crm_contact',
@@ -342,6 +344,8 @@ export function blockNameToItemType(
       return 'chat';
     case 'call':
       return 'call';
+    case 'calendar':
+      return 'calendar_event';
     case 'channel':
       return 'channel';
     case 'project':
@@ -367,6 +371,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       return 'email';
     }
     case 'call':
+    case 'calendar_event':
     case 'chat':
     case 'document':
     case 'project':
@@ -1148,12 +1153,10 @@ export const storageServiceClient = {
     ).map((result) => result.data);
   },
 
-  async getPins(params?: { limit?: number; offset?: number }) {
-    return (
-      await dssFetch<{ data: UserPins }>(
-        `/pins?limit=${params?.limit ?? 10}&offset=${params?.offset ?? 0}`
-      )
-    ).map((result) => result.data);
+  async getPins() {
+    return (await dssFetch<{ data: UserPins }>('/pins')).map(
+      (result) => result.data
+    );
   },
 
   async pinItem(params: { id: string } & AddPinRequest) {

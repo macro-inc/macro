@@ -22,14 +22,13 @@ import {
   themes,
   userThemes,
 } from '@theme/signals/themeSignals';
-import type { ThemeV2 } from '@theme/types/themeTypes';
+import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
   applyTheme,
   clearThemePreview,
   deleteTheme,
   exportTheme,
   getLiveTheme,
-  isTokensDark,
   pinTheme,
   previewTheme,
   resolveActiveThemeId,
@@ -203,7 +202,7 @@ function createThemeEditorController(onSelect: (id: string) => void) {
     toast.success('Theme saved');
   };
 
-  const deleteThemeById = (theme: ThemeV2) => {
+  const deleteThemeById = (theme: ThemeV3) => {
     // The delete button sits inside the theme's (hovered, so previewed) row and
     // closes the dropdown programmatically, which skips onOpenChange — revert
     // the preview here so the deleted theme's colors don't linger.
@@ -231,7 +230,7 @@ function ThemeSelectorRow(props: {
   description?: string;
   value: () => string;
   onSelect: (id: string) => void;
-  filter: (theme: ThemeV2) => boolean;
+  filter: (theme: ThemeV3) => boolean;
 }) {
   const editor = createThemeEditorController(props.onSelect);
 
@@ -276,11 +275,11 @@ function InterfaceThemeSelect(props: {
   value: () => string;
   onPick: (id: string) => void;
   onEdit: (id: string) => void;
-  onDelete: (theme: ThemeV2) => void;
+  onDelete: (theme: ThemeV3) => void;
   onNewTheme: () => void;
   // Restricts the listed themes to this mode's themes (light or dark). The
   // selected value's swatch is always shown, even if it falls outside the filter.
-  filter?: (theme: ThemeV2) => boolean;
+  filter?: (theme: ThemeV3) => boolean;
   // Whether this selector's inline editor is open — makes the pill's edit button
   // a toggle that scraps edits and closes via onCloseEditor.
   editorOpen?: () => boolean;
@@ -291,16 +290,15 @@ function InterfaceThemeSelect(props: {
   let inputRef: HTMLInputElement | undefined;
 
   const current = () => themes().find((theme) => theme.id === props.value());
-  const matches = (theme: ThemeV2) =>
+  const matches = (theme: ThemeV3) =>
     (props.filter?.(theme) ?? true) &&
     theme.name.toLowerCase().includes(filter().trim().toLowerCase());
-  const defaults = () =>
-    (DEFAULT_THEMES as unknown as ThemeV2[]).filter(matches);
+  const defaults = () => DEFAULT_THEMES.filter(matches);
   const customs = () => userThemes().filter(matches);
 
   // `editable` custom themes get an inline edit affordance that opens the
   // editor for that theme (saving writes back to it).
-  const themeItem = (theme: ThemeV2, editable?: boolean) => (
+  const themeItem = (theme: ThemeV3, editable?: boolean) => (
     <Dropdown.Item
       class="group touch:min-h-10"
       onSelect={() => props.onPick(theme.id)}
@@ -479,21 +477,21 @@ const SYSTEM_VALUE = 'system';
  * to, so the user sees the theme it would apply.
  */
 function ActiveThemeSelect(props: {
-  onChooseTheme: (theme: ThemeV2) => void;
+  onChooseTheme: (theme: ThemeV3) => void;
   onChooseSystem: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
 
   // The theme the OS scheme currently resolves to (for the System preference
   // swatch). Falls back to the live tokens so a swatch always renders.
-  const systemTheme = (): ThemeV2 => {
+  const systemTheme = (): ThemeV3 => {
     const id = systemMode() === 'dark' ? darkModeTheme() : lightModeTheme();
     return themes().find((theme) => theme.id === id) ?? getLiveTheme();
   };
 
   // The active theme shown on the chip: the OS-resolved theme in system mode,
   // otherwise the pinned theme (via resolveActiveThemeId).
-  const activeTheme = (): ThemeV2 =>
+  const activeTheme = (): ThemeV3 =>
     themes().find((theme) => theme.id === resolveActiveThemeId()) ??
     getLiveTheme();
 
@@ -669,14 +667,14 @@ export function Appearance() {
                 description="Used when your system is set to light."
                 value={lightModeTheme}
                 onSelect={setLightModeTheme}
-                filter={(theme) => !isTokensDark(theme.tokens)}
+                filter={(theme) => theme.mode === 'light'}
               />
               <ThemeSelectorRow
                 label="Dark theme"
                 description="Used when your system is set to dark."
                 value={darkModeTheme}
                 onSelect={setDarkModeTheme}
-                filter={(theme) => isTokensDark(theme.tokens)}
+                filter={(theme) => theme.mode === 'dark'}
               />
             </Show>
           </SettingsCard>

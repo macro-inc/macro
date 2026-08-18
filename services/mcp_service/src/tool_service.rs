@@ -4,9 +4,23 @@ use rmcp::{
     handler::server::ServerHandler,
     model::{
         Content, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+        ToolAnnotations,
     },
 };
 use std::sync::Arc;
+
+/// Maps our protocol-agnostic annotations onto the MCP wire representation.
+///
+/// [`ToolKind`](ai_toolset::ToolKind) collapses `readOnlyHint`/`destructiveHint`
+/// into one choice, so this is the only place the two booleans are derived —
+/// they can never disagree.
+fn mcp_annotations(annotations: &ai_toolset::ToolAnnotations) -> ToolAnnotations {
+    ToolAnnotations::with_title(annotations.title)
+        .read_only(annotations.kind.read_only_hint())
+        .destructive(annotations.kind.destructive_hint())
+        .idempotent(annotations.idempotent)
+        .open_world(annotations.open_world)
+}
 
 /// MCP server handler that extracts authenticated user identity from HTTP
 /// request parts injected by rmcp's `StreamableHttpService`.
@@ -47,6 +61,8 @@ impl<Context> AuthenticatedToolService<Context> {
                     value.description.to_owned(),
                     Arc::new(value.input_schema.clone()),
                 )
+                .with_title(value.annotations.title)
+                .annotate(mcp_annotations(&value.annotations))
             })
             .collect()
     }

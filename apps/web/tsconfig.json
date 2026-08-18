@@ -131,6 +131,9 @@
       "@block-chat/*": [
         "./src/features/block-chat/*"
       ],
+      "@block-calendar/*": [
+        "./src/features/block-calendar/*"
+      ],
       "@block-code/*": [
         "./src/features/block-code/*"
       ],

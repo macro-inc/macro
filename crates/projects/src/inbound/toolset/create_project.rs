@@ -1,6 +1,7 @@
 //! CreateProject tool for creating projects (folders).
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use anyhow::Context;
 use async_trait::async_trait;
 use entity_access::domain::models::EditAccessLevel;
@@ -58,6 +59,10 @@ pub struct CreateProject {
     )]
     #[serde(default)]
     pub parent_project_id: Option<uuid::Uuid>,
+}
+
+impl ToolAnnotated for CreateProject {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create project");
 }
 
 #[async_trait]

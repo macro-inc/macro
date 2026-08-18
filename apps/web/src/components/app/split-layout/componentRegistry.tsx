@@ -1,7 +1,7 @@
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { EventComposer } from '@app/features/calendar/events/EventComposer';
 import type { EventEditorInitialValues } from '@app/features/calendar/events/EventEditorForm';
 import type { CalendarEvent } from '@app/features/calendar/events/types';
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -13,6 +13,7 @@ import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-m
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
@@ -27,7 +28,6 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  ENABLE_ACTIVITY,
   ENABLE_CRM,
   ENABLE_REMINDERS,
   LOCAL_ONLY,
@@ -178,24 +178,41 @@ registerComponent(
   })
 );
 
-const ActivityView = lazy(() =>
-  import('@app/features/activity-timeline/activity-view').then((module) => ({
-    default: module.ActivityView,
+const MyActivityView = lazy(() =>
+  import('@app/features/activity/my-activity-view').then((module) => ({
+    default: module.MyActivityView,
   }))
 );
 
-registerComponent(
-  'activity',
-  withAuth(() => {
-    // Keep the registration so direct navigation and restored splits can
-    // recover safely without loading the data-owning Activity view.
-    if (!ENABLE_ACTIVITY) {
-      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
-    }
-    usePageViewTracking('activity');
-    return <ActivityView />;
-  })
-);
+function TrackedMyActivityView() {
+  usePageViewTracking('activity');
+  return <MyActivityView />;
+}
+
+function MyActivityViewWrapper() {
+  const activityFeedEnabled = useActivityFeedFlag();
+  const posthog = usePosthog();
+
+  // Registered even when the flag is off so a bookmarked /activity or a
+  // restored split recovers to the inbox instead of an empty split, and the
+  // data-owning feed view is never mounted. The redirect replaces the split
+  // irreversibly, so it must wait for PostHog to actually answer — on a
+  // fresh reload the flag reads false until flags load.
+  return (
+    <Show
+      when={activityFeedEnabled()}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedMyActivityView />
+    </Show>
+  );
+}
+
+registerComponent('activity', withAuth(MyActivityViewWrapper));
 
 registerComponent(
   'reminders',
@@ -218,32 +235,6 @@ registerComponent(
     );
   })
 );
-
-const CalendarView = lazy(() =>
-  import('@app/features/calendar/calendar-view').then((module) => ({
-    default: module.CalendarView,
-  }))
-);
-
-function TrackedCalendarView() {
-  usePageViewTracking('calendar');
-  return <CalendarView />;
-}
-
-function CalendarViewWrapper() {
-  const calendarUiEnabled = useCalendarUiFlag();
-
-  return (
-    <Show
-      when={calendarUiEnabled()}
-      fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
-    >
-      <TrackedCalendarView />
-    </Show>
-  );
-}
-
-registerComponent('calendar', withAuth(CalendarViewWrapper));
 
 // The Activity tab briefly shipped as two separate views; restored splits
 // may still reference their ids.
@@ -445,6 +436,7 @@ registerComponent(
     );
   })
 );
+
 /** END - APP ROUTES */
 
 registerComponent('loading', () => <LoadingBlock />);
@@ -540,6 +532,9 @@ registerComponent('calendar-event-compose', (params) => {
           | ((calendarId: string, color: string) => void)
           | undefined
       }
+      onDirtyChange={
+        params?.onDirtyChange as ((dirty: boolean) => void) | undefined
+      }
       onSaveSuccess={params?.onSaveSuccess as (() => void) | undefined}
     />
   );
@@ -555,6 +550,10 @@ registerComponent(
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 
 if (LOCAL_ONLY) {
+  registerComponent(
+    'theme-edit-3',
+    lazy(() => import('@theme/components/ThemeEdit3'))
+  );
   registerComponent(
     'theme-debug',
     lazy(() => import('@core/internal/ThemeDebug'))

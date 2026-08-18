@@ -1088,9 +1088,24 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
 }
 
 /// Type alias for the import service implementation used by AI tools.
+/// The MCP connection to Pipedream's remote server: `None` on deployments
+/// where Pipedream isn't configured (its toolsets then come up empty).
+pub type ToolPipedreamConnection =
+    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+
+/// The MCP stack selector wired to the concrete DCS stores: the native
+/// server store and the Pipedream connection store. Picks which stack
+/// serves a user's tools (Pipedream connectors win; see `mcp_select`).
+pub type ToolMcpSelector = mcp_select::McpToolSelector<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    ToolPipedreamConnection,
+>;
+
+/// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    ToolMcpSelector,
     ToolEntityCreator,
 >;
 

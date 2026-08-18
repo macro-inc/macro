@@ -111,6 +111,16 @@ pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceIm
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
     mcp_client::outbound::pg_server_repo::PgServerRepo,
     DcsImportService,
+    ai_tools::ToolMcpSelector,
+>;
+
+/// Concrete Pipedream MCP router state for DCS: the Postgres connection
+/// store plus the Pipedream client (None when not configured — endpoints
+/// answer 501).
+pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    pipedream_mcp::outbound::api::PipedreamClient,
+    DcsAuthorizationService,
 >;
 
 #[derive(Clone, FromRef)]
@@ -144,6 +154,9 @@ pub struct ApiContext {
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
     pub mcp_state: DcsMcpRouterState,
+    pub pipedream_state: DcsPipedreamRouterState,
+    /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
+    pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.

@@ -20,12 +20,11 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .connect_timeout(std::time::Duration::from_secs(3))
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .context("failed to build http client")?;
+    // The shared client serves the legacy bulk-unfurl and proxy routes.
+    // Redirects are handled manually so every hop can be checked, while the
+    // custom resolver rejects DNS rebinding at connection time.
+    let http_client = http_safety::SsrfSafeHttpClient::new()
+        .context("failed to build shared safe http client")?;
 
     let state = api::context::ApiContext {
         environment: config.environment,

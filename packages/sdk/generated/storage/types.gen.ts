@@ -9,12 +9,6 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
-export type Activity = {
-    Document: BasicDocument;
-} | {
-    Chat: Chat;
-};
-
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -4778,17 +4772,6 @@ export type GenericSuccessResponse = {
 };
 
 /**
- * @deprecated
- */
-export type GetActivitiesResponse = {
-    data?: null | UserActivitiesResponse;
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
-};
-
-/**
  * Response from the attachment-references endpoint.
  */
 export type GetAttachmentReferencesResponse = {
@@ -8003,24 +7986,6 @@ export type UpsertUserDocumentViewLocationRequest = {
 };
 
 /**
- * @deprecated
- */
-export type UserActivitiesResponse = {
-    /**
-     * The next offset to be used if there is one
-     */
-    next_offset?: number | null;
-    /**
-     * The activities returned from the query
-     */
-    recent: Array<Activity>;
-    /**
-     * The total number of activities the user has
-     */
-    total: number;
-};
-
-/**
  * The last place a user viewed a particular document at
  */
 export type UserDocumentViewLocation = {
@@ -8260,36 +8225,6 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
-
-export type GetRecentActivityHandlerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The maximum number of items to retreive. Default 10, max 100.
-         */
-        limit: number;
-        /**
-         * The offset to start from. Default 0.
-         */
-        offset: number;
-    };
-    url: '/activity';
-};
-
-export type GetRecentActivityHandlerErrors = {
-    400: GenericErrorResponse;
-    401: GenericErrorResponse;
-    500: GenericErrorResponse;
-};
-
-export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
-
-export type GetRecentActivityHandlerResponses = {
-    200: GetActivitiesResponse;
-};
-
-export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;

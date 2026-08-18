@@ -3,6 +3,7 @@ use crate::types::request::CODE_EXECUTION_TOOL;
 use crate::types::response::ResponseContentKind;
 use crate::types::response::code_execution::TextEditorCodeExecutionResponse;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -16,6 +17,11 @@ use serde::Deserialize;
 pub struct TextEditorCodeExecution {
     /// The text editing instruction.
     pub input: String,
+}
+
+impl ToolAnnotated for TextEditorCodeExecution {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Edit file in sandbox").with_open_world();
 }
 
 #[async_trait]

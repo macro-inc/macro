@@ -330,7 +330,7 @@ export default function ImportLinear() {
               <For each={createdIds()}>
                 {(id) => (
                   <a
-                    class="text-sm text-ink underline underline-offset-2"
+                    class="text-sm text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2"
                     href={buildSimpleEntityUrl({ type: 'task', id })}
                     target="_blank"
                     rel="noreferrer"

@@ -874,7 +874,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 bg-surface border-b-0">
+        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
           <Show
             when={searchMode()}
             fallback={
@@ -996,7 +996,7 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content>
+        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
