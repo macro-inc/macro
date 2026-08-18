@@ -129,9 +129,12 @@ function parseGmailSignature(htmlElement: Element) {
 }
 
 /** Elements that can execute or embed active content, and are never legitimate
- * email body markup. */
+ * email body markup. `svg` and `math` are here because their subtrees can
+ * mutate an attribute after we validate it (`<animate attributeName="href">`),
+ * so a per-attribute check is not enough — matches the backend allowlist,
+ * which drops both. */
 const ACTIVE_ELEMENTS =
-  'script,iframe,frame,frameset,object,embed,applet,base,meta,link,noscript,template';
+  'script,iframe,frame,frameset,object,embed,applet,base,meta,link,noscript,template,svg,math';
 
 /** Attributes carrying a URL that must be scheme-checked. */
 const URL_ATTRIBUTES = ['href', 'src', 'action', 'background', 'poster'];

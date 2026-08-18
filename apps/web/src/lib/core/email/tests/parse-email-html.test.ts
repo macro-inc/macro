@@ -182,6 +182,21 @@ describe('active content scrubbing', () => {
     expect(result.mainContent).toContain('/relative.png');
   });
 
+  it('removes svg and mathml subtrees', () => {
+    // An animation element can rewrite an href after a per-attribute check has
+    // already passed it, so the whole subtree has to go.
+    const html =
+      '<p>hi</p>' +
+      '<svg><a href="https://ok.example/"><animate attributeName="href" to="javascript:alert(1)"/></a></svg>' +
+      '<math><mtext><a href="https://ok.example/">x</a></mtext></math>';
+    const result = parseEmailContent(html, false, false);
+    expect(result.mainContent).toContain('<p>hi</p>');
+    expect(result.mainContent).not.toContain('<svg');
+    expect(result.mainContent).not.toContain('<animate');
+    expect(result.mainContent).not.toContain('javascript:');
+    expect(result.mainContent).not.toContain('<math');
+  });
+
   it('sanitizeEmailHtml keeps head styles while scrubbing', () => {
     const html =
       '<html><head><style>.a{color:red}</style></head><body><p onclick="x()">hi</p></body></html>';
