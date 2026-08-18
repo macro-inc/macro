@@ -30,6 +30,7 @@ mod deploy_on_push;
 mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
+mod docs_check;
 mod path_validation;
 mod preview_fly;
 mod pulumi_preview_pr;
@@ -272,6 +273,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
+    },
+    WorkflowFile {
+        slug: "docs_check",
+        file_name: "docs-check.yml",
+        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

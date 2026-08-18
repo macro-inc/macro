@@ -869,7 +869,7 @@ impl CalendarEventMutationTarget {
 }
 
 /// A calendar visible to a requester, listed for pickers and filters.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct VisibleCalendar {

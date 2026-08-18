@@ -1,0 +1,16 @@
+---
+title: DeleteReminder
+description: "Permanently delete one of the current user's reminders, along with any notification it already produced. Get the `reminderId` from ListReminders or CreateReminder.  This cannot be undone, and it is not the usual way to clear a reminder. When the user has simply dealt with one, use UpdateReminder with `completed: true` instead: that takes it off their active list but keeps it, still readable with ListReminders `completed: true` and restorable with `completed: false`. Delete is for reminders they want gone rather than finished — one set by mistake, or for something that is no longer happening. If it is not clear which they mean, mark it done."
+---
+
+# DeleteReminder
+
+Permanently delete one of the current user's reminders, along with any notification it already produced. Get the `reminderId` from ListReminders or CreateReminder.
+
+This cannot be undone, and it is not the usual way to clear a reminder. When the user has simply dealt with one, use UpdateReminder with `completed: true` instead: that takes it off their active list but keeps it, still readable with ListReminders `completed: true` and restorable with `completed: false`. Delete is for reminders they want gone rather than finished — one set by mistake, or for something that is no longer happening. If it is not clear which they mean, mark it done.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `reminderId` | string | Yes | The id of the reminder to delete. |

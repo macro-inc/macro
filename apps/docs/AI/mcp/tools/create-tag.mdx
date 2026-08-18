@@ -1,0 +1,16 @@
+---
+title: CreateTag
+description: "Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead."
+---
+
+# CreateTag
+
+Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `label` | string | Yes | The tag's label, e.g. "Urgent" or "Follow-up". |
+| `color` | `"red"` \| `"tomato"` \| `"orange"` \| `"amber"` \| `"yellow"` \| `"green"` \| `"teal"` \| `"blue"` \| `"indigo"` \| `"purple"` \| `"pink"` \| `"gray"` | Yes | A tag color from the fixed palette. |
+| `scope` | `"personal"` \| `"team"` | No | Which tag set a tag belongs to, relative to the caller. |

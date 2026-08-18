@@ -225,7 +225,7 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
         &self,
         document_id: &str,
         markdown: &str,
-    ) -> Result<(), DocumentError> {
+    ) -> Result<Vec<u8>, DocumentError> {
         match self {
             Self::Disabled => Err(DocumentError::Internal(anyhow::anyhow!(
                 "markdown initializer disabled"

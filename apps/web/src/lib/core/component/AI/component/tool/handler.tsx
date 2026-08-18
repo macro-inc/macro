@@ -5,6 +5,13 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import {
+  createCalendarEventHandler,
+  deleteCalendarEventHandler,
+  listCalendarEventsHandler,
+  listCalendarsHandler,
+  updateCalendarEventHandler,
+} from './CalendarTools';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -75,6 +82,11 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  CreateCalendarEvent: createCalendarEventHandler,
+  UpdateCalendarEvent: updateCalendarEventHandler,
+  DeleteCalendarEvent: deleteCalendarEventHandler,
+  ListCalendarEvents: listCalendarEventsHandler,
+  ListCalendars: listCalendarsHandler,
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportNotionPage: importNotionPageHandler,

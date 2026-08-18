@@ -1,0 +1,20 @@
+---
+title: ReadChannelMessageContext
+description: "Read the local channel and thread context around one message id. If the id is a thread reply, this resolves the parent, returns nearby top-level channel messages, and returns nearby replies around the anchor reply."
+---
+
+# ReadChannelMessageContext
+
+Read the local channel and thread context around one message id. If the id is a thread reply, this resolves the parent, returns nearby top-level channel messages, and returns nearby replies around the anchor reply.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id containing the message. |
+| `messageId` | string | Yes | Message id to anchor the context. May be top-level or a thread reply. |
+| `channelBefore` | integer | No | Approximate number of older top-level messages to include. Defaults to 3. |
+| `channelAfter` | integer | No | Approximate number of newer top-level messages to include. Defaults to 3. |
+| `threadBefore` | integer | No | Number of replies before a reply anchor to include. Defaults to 10, maximum 50. |
+| `threadAfter` | integer | No | Number of replies after a reply anchor to include. Defaults to 10, maximum 50. |
+| `maxCharsPerMessage` | integer | No | Maximum characters to return per message/reply. Defaults to 4000, maximum 16000. |

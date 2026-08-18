@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateCalendarEvent: {
+    call: types.CreateCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -34,6 +38,10 @@ type ToolParserMap = {
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteCalendarEvent: {
+    call: types.DeleteCalendarEvent;
+    response: types.DeleteCalendarEventResponse;
+  };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
     response: types.DeleteImportEntityResponse;
@@ -61,6 +69,14 @@ type ToolParserMap = {
   ImportNotionPage: {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
+  };
+  ListCalendarEvents: {
+    call: types.ListCalendarEvents;
+    response: types.ListCalendarEventsResponse;
+  };
+  ListCalendars: {
+    call: types.ListCalendars;
+    response: types.ListCalendarsToolResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;
@@ -155,6 +171,10 @@ type ToolParserMap = {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
   };
+  UpdateCalendarEvent: {
+    call: types.UpdateCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
@@ -177,6 +197,10 @@ const toolParserMap = {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
   },
+  CreateCalendarEvent: {
+    call: schemas.CreateCalendarEvent,
+    response: schemas.ToolCalendarEvent,
+  },
   CreateDocument: {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
@@ -194,6 +218,10 @@ const toolParserMap = {
     response: schemas.ToolReminder,
   },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteCalendarEvent: {
+    call: schemas.DeleteCalendarEvent,
+    response: schemas.DeleteCalendarEventResponse,
+  },
   DeleteImportEntity: {
     call: schemas.DeleteImportEntity,
     response: schemas.DeleteImportEntityResponse,
@@ -224,6 +252,14 @@ const toolParserMap = {
   ImportNotionPage: {
     call: schemas.ImportNotionPage,
     response: schemas.ImportNotionPageResponse,
+  },
+  ListCalendarEvents: {
+    call: schemas.ListCalendarEvents,
+    response: schemas.ListCalendarEventsResponse,
+  },
+  ListCalendars: {
+    call: schemas.ListCalendars,
+    response: schemas.ListCalendarsToolResponse,
   },
   ListCompanies: {
     call: schemas.ListCompanies,
@@ -339,6 +375,10 @@ const toolParserMap = {
     call: schemas.TextEditorCodeExecution,
     response: schemas.TextEditorCodeExecutionResponse,
   },
+  UpdateCalendarEvent: {
+    call: schemas.UpdateCalendarEvent,
+    response: schemas.ToolCalendarEvent,
+  },
   UpdateReminder: {
     call: schemas.UpdateReminder,
     response: schemas.ToolReminder,
@@ -372,6 +412,10 @@ type ToolDataMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateCalendarEvent: {
+    call: types.CreateCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -386,6 +430,10 @@ type ToolDataMap = {
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteCalendarEvent: {
+    call: types.DeleteCalendarEvent;
+    response: types.DeleteCalendarEventResponse;
+  };
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
     response: types.DeleteImportEntityResponse;
@@ -413,6 +461,14 @@ type ToolDataMap = {
   ImportNotionPage: {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
+  };
+  ListCalendarEvents: {
+    call: types.ListCalendarEvents;
+    response: types.ListCalendarEventsResponse;
+  };
+  ListCalendars: {
+    call: types.ListCalendars;
+    response: types.ListCalendarsToolResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;
@@ -506,6 +562,10 @@ type ToolDataMap = {
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
+  };
+  UpdateCalendarEvent: {
+    call: types.UpdateCalendarEvent;
+    response: types.ToolCalendarEvent;
   };
   UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateThreadLabels: {

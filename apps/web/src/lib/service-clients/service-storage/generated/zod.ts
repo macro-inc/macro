@@ -4913,6 +4913,11 @@ export const createTaskHandlerResponse = zod
         .nullish()
         .describe('The time the document instance \/ document BOM was updated'),
     }),
+    initialSnapshot: zod
+      .string()
+      .describe(
+        'Base64-encoded canonical Loro snapshot used to initialize the task.'
+      ),
     teamId: zod
       .uuid()
       .nullish()

@@ -279,6 +279,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "calendar_events",
  "call",
  "channels",
  "chat",
@@ -2676,6 +2677,9 @@ dependencies = [
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
  "aws-sdk-sqs",
  "axum",
  "chrono",
@@ -2689,6 +2693,7 @@ dependencies = [
  "notification",
  "reqwest 0.13.4",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
