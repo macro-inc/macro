@@ -1,10 +1,10 @@
-//! Engine host: the cache engine + SQLite storage behind an async mutex.
+//! Engine host: the cache engine + Turso storage behind an async mutex.
 //!
 //! `cache-core`'s `Storage` futures are `MaybeSend` — `Send` on native
 //! targets — so the engine is driven directly from the tauri/tokio runtime;
 //! the async mutex serializes commands the same way the browser worker's
-//! queue does. SQLite work completes immediately (blocking IO is the point
-//! of the native host), so holding a runtime thread through it is fine.
+//! queue does. Turso work completes immediately on its native synchronous IO
+//! driver, so holding a runtime thread through it is fine.
 //!
 //! Operation ids cross the IPC boundary as strings (`"{clientId}:{urqlKey}"`)
 //! so multiple webviews can register operations against the one shared
@@ -22,7 +22,7 @@ use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToke
 use cache_core::record_selection::RecordSelection;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
-use cache_sqlite::SqliteStorage;
+use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -162,7 +162,7 @@ impl OpInterner {
 type Variables = serde_json::Map<String, serde_json::Value>;
 
 struct EngineState {
-    engine: Engine<SqliteStorage>,
+    engine: Engine<TursoStorage>,
     ops: OpInterner,
 }
 
@@ -201,7 +201,7 @@ fn parse_transaction_id(id: &str) -> Result<u64, String> {
 impl EngineHandle {
     /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
     /// unset (engine default).
-    pub fn new(storage: SqliteStorage, hot_capacity: Option<u32>) -> Self {
+    pub fn new(storage: TursoStorage, hot_capacity: Option<u32>) -> Self {
         let engine = match hot_capacity.filter(|c| *c > 0) {
             Some(cap) => Engine::with_capacity(storage, cap as usize),
             None => Engine::new(storage),
@@ -211,6 +211,23 @@ impl EngineHandle {
                 engine,
                 ops: OpInterner::default(),
             })),
+        }
+    }
+
+    /// Consumes the sole handle and explicitly closes native Turso storage.
+    pub fn shutdown(self) -> Result<(), String> {
+        let mutex = Arc::try_unwrap(self.inner)
+            .map_err(|_| "graphql cache still has active command handles".to_string())?;
+        let state = mutex.into_inner();
+        let outcome = state
+            .engine
+            .into_storage()
+            .try_close()
+            .map_err(|error| error.to_string())?;
+        match outcome {
+            TursoStorageCloseOutcome::Healthy | TursoStorageCloseOutcome::ResetRequired(_) => {
+                Ok(())
+            }
         }
     }
 
@@ -251,10 +268,7 @@ impl EngineHandle {
     ) -> Result<Vec<cache_core::record_selection::SelectedRecord>, String> {
         let selection =
             RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
-        let keys: Vec<_> = keys
-            .into_iter()
-            .map(|key| EntityKey(key.into()))
-            .collect();
+        let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
         self.inner
             .lock()
             .await

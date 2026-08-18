@@ -345,6 +345,16 @@ pub fn run() {
                     });
                 }
             }
+            RunEvent::Exit => {
+                if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {
+                    state
+                        .shutdown()
+                        .inspect_err(
+                            |error| tracing::error!(error=?error, "failed to close graphql cache"),
+                        )
+                        .ok();
+                }
+            }
             _ => {}
         });
 }

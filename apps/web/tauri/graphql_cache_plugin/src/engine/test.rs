@@ -25,7 +25,7 @@ fn soup_data(has_next_page: bool) -> serde_json::Value {
 }
 
 fn spawn_handle() -> EngineHandle {
-    let storage = SqliteStorage::open_in_memory("scope-1").unwrap();
+    let storage = TursoStorage::open_in_memory("scope-1").unwrap();
     EngineHandle::new(storage, None)
 }
 

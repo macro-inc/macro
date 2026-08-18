@@ -21,7 +21,7 @@ use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::SelectedRecord;
 use cache_core::search::{SearchPage, SearchRequest};
-use cache_sqlite::SqliteStorage;
+use cache_turso::TursoFileDatabase;
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -39,10 +39,8 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
-/// database lives at `{app_data_dir}/graphql-cache/cache.sqlite`. A scope
-/// change clears all cache state; for the same scope, a schema compatibility
-/// epoch or format mismatch clears disposable records but retains queued user
-/// intent.
+/// database lives at `{app_data_dir}/graphql-cache/cache.turso`. Incompatible
+/// or uncertain storage is physically replaced before opening.
 #[tauri::command]
 pub async fn graphql_cache_init<R: Runtime>(
     app: AppHandle<R>,
@@ -69,8 +67,11 @@ pub async fn graphql_cache_init<R: Runtime>(
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let storage =
-        SqliteStorage::open(dir.join("cache.sqlite"), &scope).map_err(|e| e.to_string())?;
+    let database =
+        TursoFileDatabase::new(dir.join("cache.turso")).map_err(|error| error.to_string())?;
+    let storage = database
+        .open_or_reset(&scope)
+        .map_err(|error| error.to_string())?;
     let handle = EngineHandle::new(storage, hot_capacity);
     *guard = Some(InitializedCache { scope, handle });
     Ok(())
