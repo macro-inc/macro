@@ -36,11 +36,7 @@ const threadEntity = (channelId = 'chan-1') =>
     content: 'ship it',
   }) as EntityData;
 
-/** A list, `hidesDone` deciding whether it drops rows that are marked done. */
-const soupState = (hidesDone = true) =>
-  ({
-    predicates: { isActive: () => hidesDone },
-  }) as unknown as SoupState;
+const soupState = () => ({}) as SoupState;
 
 /** The follow-up the action handed the composer for the latest open. */
 const composerOnCreated = (): (() => void | Promise<void>) | undefined =>
@@ -148,7 +144,9 @@ describe('makeCreateReminderAction', () => {
   it('opens the composer when driven from a soup list', async () => {
     const target = entity('channel', 'channel-1');
 
-    await makeCreateReminderAction().executeWithSoup([target], soupState());
+    await makeCreateReminderAction().executeWithSoup([target], soupState(), {
+      advances: true,
+    });
 
     expect(mocks.openReminderComposer).toHaveBeenCalledWith(
       target,
@@ -179,18 +177,36 @@ describe('makeCreateReminderAction', () => {
   });
 
   // Marking done from a list moves focus off the row, which needs the list.
-  it('passes soup to the created handler when driven from a list', async () => {
+  it('passes the list to the created handler when driven from one', async () => {
     const onCreated = vi.fn();
     const target = entity('email', 'thread-1');
     const soup = soupState();
 
     await makeCreateReminderAction({ onCreated }).executeWithSoup(
       [target],
-      soup
+      soup,
+      { advances: true }
     );
     await composerOnCreated()?.();
 
-    expect(onCreated).toHaveBeenCalledWith(target, soup);
+    expect(onCreated).toHaveBeenCalledWith(target, { soup, advances: true });
+  });
+
+  // Whether the list moves on is the surface's answer, carried through to the
+  // handler rather than guessed at from the list.
+  it('carries a list that does not advance through to the handler', async () => {
+    const onCreated = vi.fn();
+    const target = entity('document', 'doc-1');
+    const soup = soupState();
+
+    await makeCreateReminderAction({ onCreated }).executeWithSoup(
+      [target],
+      soup,
+      { advances: false }
+    );
+    await composerOnCreated()?.();
+
+    expect(onCreated).toHaveBeenCalledWith(target, { soup, advances: false });
   });
 });
 
@@ -201,13 +217,19 @@ describe('markReminderTargetDone', () => {
     executeWithSoup: vi.fn(async () => {}),
   });
 
-  it('marks the target done from a list, advancing it', async () => {
+  // The whole point of the follow-up on a list that triages: a reminder leaves
+  // the selection on the next row exactly as Mark done does, through the same
+  // soup path and the same `onNavigate`.
+  it('marks the target done through soup when the list advances', async () => {
     const markDone = markDoneStub();
     const onNavigate = vi.fn();
     const target = entity('email', 'thread-1');
     const soup = soupState();
 
-    await markReminderTargetDone(markDone, onNavigate)(target, soup);
+    await markReminderTargetDone(markDone, onNavigate)(target, {
+      soup,
+      advances: true,
+    });
 
     expect(markDone.executeWithSoup).toHaveBeenCalledWith(
       [target],
@@ -217,13 +239,16 @@ describe('markReminderTargetDone', () => {
     );
   });
 
-  // A Documents view or a folder keeps the row, so there is nothing to advance
-  // off — advancing would move the selection, and its preview, for no reason.
-  it('does not advance a list that keeps done rows', async () => {
+  // A Documents view or a folder does not triage, so advancing would move the
+  // selection, and its preview, for no reason.
+  it('does not advance a list that says it does not', async () => {
     const markDone = markDoneStub();
     const target = entity('document', 'doc-1');
 
-    await markReminderTargetDone(markDone)(target, soupState(false));
+    await markReminderTargetDone(markDone)(target, {
+      soup: soupState(),
+      advances: false,
+    });
 
     expect(markDone.executeWithSoup).not.toHaveBeenCalled();
     expect(markDone.execute).toHaveBeenCalledWith([target], undefined, {

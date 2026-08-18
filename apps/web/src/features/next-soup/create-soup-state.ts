@@ -7,7 +7,6 @@ import {
   createPredicatesStore,
   type PredicateConfig,
 } from '@app/features/next-soup/filters/filter-store/predicates-store';
-import { HIDES_DONE_PREDICATES } from '@app/features/next-soup/hides-done';
 import { createSelectionState } from '@app/features/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
@@ -15,6 +14,17 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+
+/**
+ * Active "focus" predicates that exclude done entities. When one of these is
+ * active, marking an entity done removes it from the list, so its row should
+ * collapse before being removed rather than disappearing instantly.
+ *
+ * The inbox tabs activate `inbox` / `noise` rather than the standalone
+ * `not-done` predicate (see `soup-filter-presets.ts`), so all three are
+ * included here.
+ */
+const COLLAPSE_ON_DONE_PREDICATES: FilterID[] = ['not-done', 'inbox', 'noise'];
 
 export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 
@@ -402,7 +412,7 @@ export const createSoupState = <TId extends string = FilterID>(
       set: setCollapseEntityCallback,
       shouldCollapse: () => {
         return (
-          HIDES_DONE_PREDICATES.some((id) => predicates.isActive(id)) &&
+          COLLAPSE_ON_DONE_PREDICATES.some((id) => predicates.isActive(id)) &&
           collapseEntityCallback() !== undefined &&
           isModality('touch')
         );

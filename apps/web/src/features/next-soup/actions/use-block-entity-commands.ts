@@ -164,12 +164,15 @@ export const useBlockEntityCommands = (
     if (!entity) return false;
     if (!createReminderAction.canExecute(entity)) return false;
 
-    // Driven through soup when the block is being triaged out of a list, so the
-    // mark-done that follows advances rather than stranding the split on a row
-    // the list no longer has.
+    // Driven through soup when the block is being triaged out of a list. Having
+    // a `triageRow` is the same condition 'e' advances on, so the mark-done
+    // that follows moves to the next row exactly as Mark done does rather than
+    // leaving the split on one the list has dropped.
     const selectedRow = triageRow();
     if (soup && selectedRow) {
-      void createReminderAction.executeWithSoup([selectedRow.original], soup);
+      void createReminderAction.executeWithSoup([selectedRow.original], soup, {
+        advances: true,
+      });
       return true;
     }
 
