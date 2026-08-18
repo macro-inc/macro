@@ -16,21 +16,25 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Connection, Numeric, Value};
 
 #[cfg(not(target_arch = "wasm32"))]
+use std::io::ErrorKind;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::AtomicU64;
 #[cfg(not(target_arch = "wasm32"))]
-use turso_core::{Database, IO, MemoryIO, OpenOptions, SqliteDialect};
+use turso_core::{Database, IO, MemoryIO, OpenOptions, PlatformIO, SqliteDialect};
 #[cfg(target_arch = "wasm32")]
 use turso_opfs::{
     CloseFailure, ClosedSession, ConnectedOpfsSession, OpenDisposition, OpfsError, OpfsOwner,
     ResetFailure,
 };
 
-/// Frozen browser-storage schema version, independent of cache postcard versions.
-pub const BROWSER_STORAGE_SCHEMA_VERSION: u32 = 6;
+/// Frozen storage schema version, independent of cache postcard versions.
+pub const STORAGE_SCHEMA_VERSION: u32 = 6;
 
-/// Coarse outcome of validating an OPFS Turso session.
+/// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TursoStorageOpenOutcome {
     /// Existing compatible storage was validated and preserved.
@@ -71,7 +75,8 @@ const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM
 /// On `wasm32` this value owns the consuming
 /// `turso_opfs::ConnectedOpfsSession` capability. It must be consumed with
 /// [`Self::try_close`] before OPFS preservation or reset.
-/// Native builds own a Turso `MemoryIO` database solely for conformance tests.
+/// Native builds own either a filesystem-backed Turso database or a `MemoryIO`
+/// database used by conformance tests.
 pub struct TursoStorage {
     health: AtomicU8,
     #[cfg(target_arch = "wasm32")]
@@ -443,6 +448,94 @@ impl std::fmt::Display for TursoStorageOpenFailure {
 #[cfg(target_arch = "wasm32")]
 impl std::error::Error for TursoStorageOpenFailure {}
 
+/// Reopenable filesystem-backed Turso database for native hosts.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Debug)]
+pub struct TursoFileDatabase {
+    path: PathBuf,
+    turso_path: String,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl TursoFileDatabase {
+    /// Creates a native database owner for `path`.
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, TursoStorageError> {
+        let path = path.as_ref().to_path_buf();
+        let turso_path = path
+            .to_str()
+            .ok_or(TursoStorageError::InvalidInput)?
+            .to_owned();
+        Ok(Self { path, turso_path })
+    }
+
+    /// Opens and initializes or validates this database for `scope`.
+    pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
+        let fresh = !self.path.exists();
+        let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(TursoStorageError::turso)?);
+        open_native_database(io, &self.turso_path, scope, fresh)
+    }
+
+    /// Opens this database, physically replacing incompatible or uncertain
+    /// storage before retrying once.
+    pub fn open_or_reset(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
+        match self.open(scope) {
+            Ok(storage) => Ok(storage),
+            Err(error) if error.requires_physical_reset() => {
+                self.physical_reset()?;
+                self.open(scope)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Deletes the native main and WAL files after all connections are closed.
+    pub fn physical_reset(&self) -> Result<(), TursoStorageError> {
+        remove_native_file(&self.path)?;
+        let wal_path = PathBuf::from(format!("{}-wal", self.turso_path));
+        remove_native_file(&wal_path)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn remove_native_file(path: &Path) -> Result<(), TursoStorageError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(TursoStorageError::reset(PhysicalResetReason::Io)),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn open_native_database(
+    io: Arc<dyn IO>,
+    path: &str,
+    scope: &str,
+    fresh: bool,
+) -> Result<TursoStorage, TursoStorageError> {
+    let database = Database::open(io, path, OpenOptions::new(Arc::new(SqliteDialect)))
+        .map_err(TursoStorageError::turso)
+        .map_err(|error| if fresh { error } else { error.initialization() })?;
+    let connection = database
+        .connect()
+        .map_err(TursoStorageError::turso)
+        .map_err(|error| if fresh { error } else { error.initialization() })?;
+    if let Err(error) = initialize(&connection, scope, fresh) {
+        if connection.close().is_err() {
+            return Err(TursoStorageError::reset(
+                PhysicalResetReason::TransactionOutcomeUncertain,
+            ));
+        }
+        return Err(error);
+    }
+    Ok(TursoStorage {
+        health: AtomicU8::new(0),
+        database,
+        connection,
+        #[cfg(all(test, not(target_arch = "wasm32")))]
+        fault: Mutex::new(None),
+    })
+}
+
 /// Reopenable Turso `MemoryIO` database used by native conformance tests.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct TursoMemoryDatabase {
@@ -476,38 +569,14 @@ impl TursoMemoryDatabase {
             (state.io.clone(), !state.initialized)
         };
         let io_trait: Arc<dyn IO> = io;
-        let database = Database::open(
-            io_trait,
-            &self.path,
-            OpenOptions::new(Arc::new(SqliteDialect)),
-        )
-        .map_err(TursoStorageError::turso)
-        .map_err(|error| if fresh { error } else { error.initialization() })?;
-        let connection = database
-            .connect()
-            .map_err(TursoStorageError::turso)
-            .map_err(|error| if fresh { error } else { error.initialization() })?;
-        if let Err(error) = initialize(&connection, scope, fresh) {
-            if connection.close().is_err() {
-                return Err(TursoStorageError::reset(
-                    PhysicalResetReason::TransactionOutcomeUncertain,
-                ));
-            }
-            return Err(error);
-        }
+        let storage = open_native_database(io_trait, &self.path, scope, fresh)?;
         if fresh {
             self.state
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
                 .initialized = true;
         }
-        Ok(TursoStorage {
-            health: AtomicU8::new(0),
-            database,
-            connection,
-            #[cfg(all(test, not(target_arch = "wasm32")))]
-            fault: Mutex::new(None),
-        })
+        Ok(storage)
     }
 
     /// Replaces the complete in-memory main/WAL store with a fresh one.
@@ -1058,7 +1127,7 @@ fn initialize(
             driver::execute(
                 connection,
                 "INSERT INTO meta (key, value) VALUES ('storage_schema_version', ?1)",
-                vec![text(&BROWSER_STORAGE_SCHEMA_VERSION.to_string())],
+                vec![text(&STORAGE_SCHEMA_VERSION.to_string())],
             )?;
             Ok(())
         })
@@ -1079,10 +1148,7 @@ fn initialize(
     let expected = [
         ("namespace", cache_namespace(scope)),
         ("scope", scope.to_owned()),
-        (
-            "storage_schema_version",
-            BROWSER_STORAGE_SCHEMA_VERSION.to_string(),
-        ),
+        ("storage_schema_version", STORAGE_SCHEMA_VERSION.to_string()),
     ];
     if metadata.len() != expected.len() {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));

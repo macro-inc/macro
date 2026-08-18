@@ -16,13 +16,13 @@ mod storage;
 
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
-    BROWSER_STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome, TursoStorageOpenOutcome,
+    STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome, TursoStorageOpenOutcome,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use storage::TursoMemoryDatabase;
 #[cfg(target_arch = "wasm32")]
 pub use storage::{
     HealthyTursoStorageClosed, ResetRequiredTursoStorageClosed, TursoStorageCloseFailure,
     TursoStorageOpenFailure, TursoStorageResetFailure,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use storage::{TursoFileDatabase, TursoMemoryDatabase};
