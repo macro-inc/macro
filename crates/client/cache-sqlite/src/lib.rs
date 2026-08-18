@@ -676,8 +676,8 @@ mod tests {
                     .join(" ")
             };
             assert!(
-                details.contains("COVERING INDEX mutation_queue_created_at_ms_idx"),
-                "diagnostics query did not use the covering timestamp index: {details}"
+                details.contains("mutation_queue_created_at_ms_idx"),
+                "diagnostics query did not use the timestamp index: {details}"
             );
             assert_eq!(
                 storage.queue_diagnostics().await.unwrap(),

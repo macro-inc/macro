@@ -173,7 +173,7 @@ export function cacheWasmLinearMemoryBytes(): number {
 /** Loads and initializes the wasm module exactly once per worker context. */
 export function loadCacheWasm(): Promise<CacheWasmModule> {
   if (!modulePromise) {
-    modulePromise = (async () => {
+    const initialization = (async () => {
       const telemetry = workerCacheTelemetry();
       const now = (): number => globalThis.performance?.now() ?? Date.now();
       const url = new URL('../wasm/cache_wasm.js', import.meta.url).href;
@@ -263,6 +263,10 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         throw error;
       }
     })();
+    modulePromise = initialization;
+    void initialization.catch(() => {
+      if (modulePromise === initialization) modulePromise = undefined;
+    });
   }
   return modulePromise;
 }

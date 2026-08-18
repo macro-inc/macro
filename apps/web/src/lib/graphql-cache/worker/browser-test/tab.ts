@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
   createCacheCoordinatorPageAdapter,
@@ -35,6 +36,8 @@ const lockManager = {
     callback: (lock: Lock | null) => unknown
   ) =>
     navigator.locks.request(lockName, options, async (lock) => {
+      // The harness intentionally releases liveness early and discards a
+      // callback result that no caller consumes.
       await Promise.race([
         Promise.resolve(callback(lock)),
         releaseLivenessSignal,
@@ -129,66 +132,58 @@ const sendRequest = async (
 };
 
 const handleCommand = (command: BrowserHarnessCommand): void => {
-  switch (command.kind) {
-    case 'write':
-      void sendRequest(command.commandId, {
+  match(command)
+    .with({ kind: 'write' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'write',
         query: 'query Value { value }',
-        data: { value: command.value },
+        data: { value: value.value },
       });
-      break;
-    case 'read':
-      void sendRequest(command.commandId, {
+    })
+    .with({ kind: 'read' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'read',
         query: 'query Value { value }',
       });
-      break;
-    case 'slow-read':
-      void sendRequest(command.commandId, {
+    })
+    .with({ kind: 'slow-read' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'read',
         query: 'query Slow { value }',
       });
-      break;
-    case 'graceful-close':
+    })
+    .with({ kind: 'graceful-close' }, (value) => {
       void adapter.dispose({ graceful: true }).then(() => {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: true,
         });
         setTimeout(() => window.close());
       });
-      break;
-    case 'crash-worker':
+    })
+    .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: false,
           error: 'tab has no worker',
         });
         return;
       }
       currentWorker.postMessage({ testKind: 'crash' }, []);
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-    case 'release-liveness-lock':
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'release-liveness-lock' }, (value) => {
       releaseLivenessLock();
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-    case 'stale-response':
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'stale-response' }, (value) => {
       if (!currentWorker) {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: false,
           error: 'tab has no worker',
         });
@@ -197,18 +192,14 @@ const handleCommand = (command: BrowserHarnessCommand): void => {
       currentWorker.postMessage(
         {
           testKind: 'stale-response',
-          ownerEpoch: command.ownerEpoch,
-          routeId: command.routeId,
+          ownerEpoch: value.ownerEpoch,
+          routeId: value.routeId,
         },
         []
       );
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-  }
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .exhaustive();
 };
 
 channel.onmessage = (event: MessageEvent<BrowserHarnessEnvelope>) => {

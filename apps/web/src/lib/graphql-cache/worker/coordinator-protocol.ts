@@ -2,9 +2,13 @@ import {
   type CachePush,
   type CacheRequest,
   type CacheResponse,
-  isCacheResponseErrorCode,
+  isCachePush,
+  isCacheResponse,
+  isWorkerMessage,
   type WorkerMessage,
 } from '../protocol';
+
+export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope around the unchanged cache RPC. */
 export const CACHE_COORDINATOR_PROTOCOL_VERSION = 1 as const;
@@ -248,13 +252,14 @@ const isDatabaseActionProof = (value: unknown): value is DatabaseActionProof =>
   value === 'opened-existing' || value === 'wiped-before-open';
 
 const isEngineOpenOutcome = (value: unknown): value is EngineOpenOutcome =>
+  typeof value === 'string' &&
   [
     'opened-existing',
     'opened-new',
     'reset-incompatible',
     'reset-corrupt',
     'reset-storage-uncertain',
-  ].includes(String(value));
+  ].includes(value);
 
 const isEngineFatalCode = (value: unknown): value is EngineFatalCode =>
   value === 'storage-reset-required' || value === 'runtime-failure';
@@ -489,59 +494,6 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       return false;
   }
 }
-
-/** Strictly validates an unchanged cache response. */
-export function isCacheResponse(value: unknown): value is CacheResponse {
-  if (!isRecord(value) || !isSafeNonNegativeInteger(value.id)) return false;
-  if (value.ok === true) {
-    return (
-      hasOnlyKeys(value, ['id', 'ok', 'result']) && hasOwn(value, 'result')
-    );
-  }
-  return (
-    value.ok === false &&
-    hasOnlyKeys(value, ['id', 'ok', 'error', 'errorCode']) &&
-    isString(value.error) &&
-    (value.errorCode === undefined || isCacheResponseErrorCode(value.errorCode))
-  );
-}
-
-/** Strictly validates an unchanged cache push. */
-export function isCachePush(value: unknown): value is CachePush {
-  if (!isRecord(value)) return false;
-  switch (value.kind) {
-    case 'ops-affected':
-      return (
-        hasOnlyKeys(value, ['kind', 'opIds', 'keys']) &&
-        isStringArray(value.opIds) &&
-        isStringArray(value.keys)
-      );
-    case 'cache-changed':
-      return hasOnlyKeys(value, ['kind']);
-    case 'mutation-settled': {
-      if (
-        !hasOnlyKeys(value, ['kind', 'settlement']) ||
-        !isRecord(value.settlement) ||
-        !isString(value.settlement.transactionId)
-      ) {
-        return false;
-      }
-      if (value.settlement.status === 'committed') {
-        return hasOnlyKeys(value.settlement, ['transactionId', 'status']);
-      }
-      return (
-        value.settlement.status === 'permanently-failed' &&
-        hasOnlyKeys(value.settlement, ['transactionId', 'status', 'error']) &&
-        isString(value.settlement.error)
-      );
-    }
-    default:
-      return false;
-  }
-}
-
-export const isWorkerMessage = (value: unknown): value is WorkerMessage =>
-  isCacheResponse(value) || isCachePush(value);
 
 /** Validates an untrusted page-to-coordinator message. */
 export function validateTabToCoordinatorEnvelope(

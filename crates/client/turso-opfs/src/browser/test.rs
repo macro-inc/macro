@@ -466,7 +466,9 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
         main.lock_file(true)
             .expect("owner lock makes file lock a no-op");
         main.unlock_file().expect("owner unlock no-op");
+        // Monotonic clock samples are strictly increasing.
         assert!(io.current_time_monotonic() < io.current_time_monotonic());
+        // Wall-clock micros is the sub-second microsecond component.
         assert!(io.current_time_wall_clock().micros < 1_000_000);
 
         let empty = write_completion();

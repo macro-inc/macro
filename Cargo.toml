@@ -206,6 +206,7 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 postcard = { version = "1", features = ["use-std"] }
+pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
 # uses vendored to fix lambda builds failing.
@@ -285,6 +286,8 @@ wiremock = "0.6.5"
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
+wasm-bindgen-test = "0.3"
+web-sys = "0.3"
 web-time = "1.1.0"
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements

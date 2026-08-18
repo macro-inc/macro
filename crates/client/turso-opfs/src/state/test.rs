@@ -254,7 +254,9 @@ fn reset_failure_poison_rejects_reopen_release_and_token_reuse() {
     let (mut machine, owner, token) = closed_machine();
     machine.start_reset(owner, token).unwrap();
     machine.poison(owner, "partial deletion".into()).unwrap();
+    machine.poison(owner, "later failure".into()).unwrap();
     assert_eq!(machine.phase_label(), "poisoned");
+    assert_eq!(machine.poison_reason(), Some("partial deletion"));
     assert_eq!(
         machine.finish_reset(owner, token).unwrap_err().kind,
         StateErrorKind::Poisoned

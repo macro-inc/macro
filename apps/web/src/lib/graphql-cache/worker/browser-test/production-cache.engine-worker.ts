@@ -6,21 +6,19 @@ import {
   installCacheEngineWorker,
 } from '../cache-engine-runtime';
 
-type BlockableMutationKind = Extract<
-  CacheRequest,
-  {
-    kind:
-      | 'write'
-      | 'enqueue-optimistic-mutation'
-      | 'claim-next-mutation'
-      | 'defer-optimistic-write'
-      | 'commit-optimistic-write'
-      | 'rollback-optimistic-write'
-      | 'invalidate'
-      | 'delete-records'
-      | 'clear';
-  }
->['kind'];
+const BLOCKABLE_MUTATION_KINDS = [
+  'write',
+  'enqueue-optimistic-mutation',
+  'claim-next-mutation',
+  'defer-optimistic-write',
+  'commit-optimistic-write',
+  'rollback-optimistic-write',
+  'invalidate',
+  'delete-records',
+  'clear',
+] as const satisfies readonly CacheRequest['kind'][];
+
+type BlockableMutationKind = (typeof BLOCKABLE_MUTATION_KINDS)[number];
 
 let telemetry: BroadcastChannel | undefined;
 let activeScope: string | undefined;
@@ -103,17 +101,10 @@ self.onmessage = (event: MessageEvent<unknown>) => {
     'testKind' in event.data &&
     event.data.testKind === 'arm-mutation-block' &&
     'requestKind' in event.data &&
-    [
-      'write',
-      'enqueue-optimistic-mutation',
-      'claim-next-mutation',
-      'defer-optimistic-write',
-      'commit-optimistic-write',
-      'rollback-optimistic-write',
-      'invalidate',
-      'delete-records',
-      'clear',
-    ].includes(String(event.data.requestKind))
+    typeof event.data.requestKind === 'string' &&
+    (BLOCKABLE_MUTATION_KINDS as readonly string[]).includes(
+      event.data.requestKind
+    )
   ) {
     armedMutationKind = event.data.requestKind as BlockableMutationKind;
     if (activeScope) {

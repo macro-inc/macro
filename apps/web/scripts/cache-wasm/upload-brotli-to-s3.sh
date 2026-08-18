@@ -34,6 +34,10 @@ if ! brotli --decompress --stdout "$sidecar" | cmp --silent - "$raw"; then
   exit 1
 fi
 relative_key=${raw#"${dist_root%/}"/}
+if [ "$relative_key" = "$raw" ]; then
+  echo "cache WASM is not contained by dist root" >&2
+  exit 1
+fi
 args=(
   s3 cp "$sidecar" "$s3_prefix/$relative_key"
   --content-type application/wasm

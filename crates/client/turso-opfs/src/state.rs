@@ -200,6 +200,9 @@ impl Default for Machine {
 
 impl Machine {
     pub(crate) fn claim_owner(&mut self) -> Result<OwnerId, StateError> {
+        if matches!(self.phase, Phase::Poisoned { .. }) {
+            return Err(poisoned());
+        }
         if self.phase != Phase::Unowned {
             return Err(StateError::new(
                 StateErrorKind::Ownership,
@@ -760,6 +763,9 @@ impl Machine {
     }
 
     pub(crate) fn poison(&mut self, owner: OwnerId, reason: String) -> Result<(), StateError> {
+        if matches!(self.phase, Phase::Poisoned { owner: current, .. } if current == owner) {
+            return Ok(());
+        }
         let current_owner = match self.phase {
             Phase::Unowned => None,
             Phase::Idle { owner }
@@ -803,6 +809,14 @@ impl Machine {
     #[cfg(all(test, target_arch = "wasm32"))]
     pub(crate) fn is_poisoned(&self) -> bool {
         matches!(self.phase, Phase::Poisoned { .. })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn poison_reason(&self) -> Option<&str> {
+        match &self.phase {
+            Phase::Poisoned { reason, .. } => Some(reason),
+            _ => None,
+        }
     }
 }
 

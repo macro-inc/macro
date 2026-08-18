@@ -26,6 +26,10 @@ const ready = (
     expectedOwnerLockName: OWNER_LOCK,
     ownerLockHeld: true,
     databaseActionProof,
+    openOutcome:
+      databaseActionProof === 'wiped-before-open'
+        ? 'reset-storage-uncertain'
+        : 'opened-existing',
   });
 
 const init = (id: number) => ({ id, kind: 'init', scope: 'scope' }) as const;
@@ -87,6 +91,30 @@ describe('CoordinatorCore', () => {
       kind: 'broadcast-engine-replaced',
       ownerEpoch: 2,
     });
+  });
+
+  it('rejects unregistered and retiring-tab requests', () => {
+    const core = new CoordinatorCore('scope');
+    expect(core.request('missing', clear(1))).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        tabId: 'missing',
+        requestId: 1,
+        error: 'requester tab is not registered',
+      }),
+    ]);
+
+    core.registerTab('tab-a');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.beginGracefulDeparture('tab-a', 1);
+    expect(core.request('tab-a', clear(2))).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        tabId: 'tab-a',
+        requestId: 2,
+        error: 'requester tab is retiring',
+      }),
+    ]);
   });
 
   it('rewrites colliding per-tab request ids into unique routes and restores them', () => {
@@ -271,14 +299,23 @@ describe('CoordinatorCore', () => {
       expectedOwnerLockName: OWNER_LOCK,
       ownerLockHeld: true,
       databaseActionProof: 'opened-existing',
+      openOutcome: 'opened-existing',
     });
     expect(action(wrongLock, 'protocol-violation').error).toContain(
       'wrong physical owner lock'
     );
     core.resumeAfterLoss();
-    const wrongProof = ready(core, 'tab-b', 2, 'opened-existing');
+    const wrongProof = core.engineReady({
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      ownerLockName: OWNER_LOCK,
+      expectedOwnerLockName: OWNER_LOCK,
+      ownerLockHeld: true,
+      databaseActionProof: 'opened-existing',
+      openOutcome: 'reset-storage-uncertain',
+    });
     expect(action(wrongProof, 'protocol-violation').error).toContain(
-      'wipe-before-open'
+      'does not match open outcome'
     );
     expect(core.snapshot().activeOwnerCount).toBe(0);
   });

@@ -1494,14 +1494,16 @@ describe('normalizedCacheExchange', () => {
 
     it('does not forward or retry an admitted enqueue after multi-tab transport uncertainty', async () => {
       const oldScopeQueue: unknown[] = [];
-      const enqueueAttempts = vi.fn(async (args) => {
-        // A second tab could observe this durable side effect even though this
-        // tab lost the SharedWorker response immediately afterward.
-        oldScopeQueue.push(args.data);
-        throw Object.assign(new Error('old-scope transport failed'), {
-          errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
-        });
-      });
+      const enqueueAttempts = vi.fn(
+        async (args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]) => {
+          // A second tab could observe this durable side effect even though this
+          // tab lost the SharedWorker response immediately afterward.
+          oldScopeQueue.push(args.data);
+          throw Object.assign(new Error('old-scope transport failed'), {
+            errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+          });
+        }
+      );
       host.enqueueOptimisticMutation = enqueueAttempts;
       const secondTabObservedQueue = (): unknown[] => [...oldScopeQueue];
       const onCacheError = vi.fn();

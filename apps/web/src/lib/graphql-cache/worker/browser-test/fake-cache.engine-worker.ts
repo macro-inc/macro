@@ -200,7 +200,17 @@ async function activate(
                   message.request.query.includes('Slow'),
               });
               queue = queue.then(async () => {
-                const response = await execute(activeDatabase, message.request);
+                let response: CacheResponse;
+                try {
+                  response = await execute(activeDatabase, message.request);
+                } catch (error) {
+                  response = {
+                    id: message.request.id,
+                    ok: false,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  };
+                }
                 port.postMessage(
                   withVersion<EngineToCoordinatorEnvelope>({
                     kind: 'engine-response',
@@ -210,8 +220,9 @@ async function activate(
                   })
                 );
                 if (
-                  message.request.kind === 'write' ||
-                  message.request.kind === 'clear'
+                  response.ok &&
+                  (message.request.kind === 'write' ||
+                    message.request.kind === 'clear')
                 ) {
                   port.postMessage(
                     withVersion<EngineToCoordinatorEnvelope>({

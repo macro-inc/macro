@@ -68,6 +68,10 @@ describe('cache worker message validators', () => {
   });
 
   it.each([
+    null,
+    [],
+    'push',
+    7,
     { id: -1, ok: true, result: null },
     { id: 1, ok: true },
     { id: 1, ok: false, error: 'failed', extra: true },

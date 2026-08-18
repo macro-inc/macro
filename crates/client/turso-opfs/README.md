@@ -28,8 +28,7 @@ termination proof.
 
 ## Repeatable verification
 
-After this crate is integrated into the root workspace, run from the repository
-root:
+Run from the repository root:
 
 ```bash
 cargo fmt -p turso-opfs -- --check

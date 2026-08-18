@@ -119,7 +119,7 @@ try {
   host.onOpsAffected((keys) => {
     order.push('active-notified');
     replacementActiveKeys.push(keys);
-    replacementRead = host.readQuery({
+    replacementRead ??= host.readQuery({
       opKey: keys[0],
       query: QUERY,
       operationName: 'Soup',

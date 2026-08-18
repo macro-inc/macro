@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { CacheRequest } from './protocol';
 
 /** Fixed cache telemetry names. Dashboards must not accept ad-hoc names. */
@@ -464,30 +465,26 @@ export function isolateCacheTelemetry(
 export function operationCategoryForRequest(
   request: Pick<CacheRequest, 'kind'>
 ): CacheOperationCategory {
-  switch (request.kind) {
-    case 'init':
-      return 'initialization';
-    case 'read':
-    case 'read-records':
-      return 'read';
-    case 'write':
-      return 'write';
-    case 'enqueue-optimistic-mutation':
-    case 'claim-next-mutation':
-    case 'defer-optimistic-write':
-    case 'commit-optimistic-write':
-    case 'rollback-optimistic-write':
-      return 'transaction';
-    case 'inspect-query':
-    case 'inspect-query-variants':
-      return 'inspection';
-    case 'invalidate':
-    case 'delete-records':
-      return 'invalidation';
-    case 'teardown':
-    case 'clear':
-      return 'lifecycle';
-  }
+  return match(request.kind)
+    .with('init', () => 'initialization' as const)
+    .with('read', 'read-records', () => 'read' as const)
+    .with('write', () => 'write' as const)
+    .with(
+      'enqueue-optimistic-mutation',
+      'claim-next-mutation',
+      'defer-optimistic-write',
+      'commit-optimistic-write',
+      'rollback-optimistic-write',
+      () => 'transaction' as const
+    )
+    .with(
+      'inspect-query',
+      'inspect-query-variants',
+      () => 'inspection' as const
+    )
+    .with('invalidate', 'delete-records', () => 'invalidation' as const)
+    .with('teardown', 'clear', () => 'lifecycle' as const)
+    .exhaustive();
 }
 
 export function isStorageTransactionRequest(
@@ -515,7 +512,7 @@ export function classifyCacheError(error: unknown): CacheErrorCode {
         ? error.toLowerCase()
         : '';
   if (message.includes('timeout')) return 'timeout';
-  if (message.includes('quota') || message.includes('full'))
+  if (message.includes('quota') || /\bfull\b/.test(message))
     return 'opfs-quota';
   if (message.includes('opfs') && message.includes('unavailable')) {
     return 'opfs-unavailable';

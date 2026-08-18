@@ -66,7 +66,7 @@ describe('cache WASM S3 upload', () => {
       'utf8'
     );
     expect(infrastructure).toContain(
-      `find ${'${appArchiveOutputPath}'} -type f -name 'cache_wasm_bg*.wasm.br' -delete`
+      `find ${'${shellQuote(appArchiveOutputPath)}'} -type f -name 'cache_wasm_bg*.wasm.br' -delete`
     );
     expect(infrastructure).toContain('--exclude "app-archive/*"');
   });
@@ -139,7 +139,7 @@ describe('cache WASM S3 upload', () => {
     const fakeAws = join(bin, 'aws');
     writeFileSync(
       fakeAws,
-      `#!/usr/bin/env bash\nprintf '%s\\n' CALL "$@" >> ${JSON.stringify(argumentsPath)}\n`
+      `#!/usr/bin/env bash\nprintf '%s\\n' CALL "$@" >> ${JSON.stringify(argumentsPath)}\nif [ "\${1:-}" = s3api ]; then printf '%s\\n' app/assets/cache_wasm_bg-old.wasm app/assets/cache_wasm_bg-current.wasm; fi\n`
     );
     chmodSync(fakeAws, 0o755);
 
@@ -156,19 +156,16 @@ describe('cache WASM S3 upload', () => {
       }
     );
     expect(result.status).toBe(0);
-    expect(readFileSync(argumentsPath, 'utf8').trim().split('\n')).toEqual([
-      'CALL',
-      's3',
-      'rm',
-      's3://example/app',
-      '--recursive',
-      '--exclude',
-      '*',
-      '--include',
-      '*cache_wasm_bg*.wasm',
-      '--exclude',
-      'assets/cache_wasm_bg-current.wasm',
-    ]);
+    const calls = readFileSync(argumentsPath, 'utf8');
+    expect(calls).toContain(
+      'CALL\ns3api\nlist-objects-v2\n--bucket\nexample\n--prefix\napp/\n'
+    );
+    expect(calls).toContain(
+      'CALL\ns3\nrm\ns3://example/app/assets/cache_wasm_bg-old.wasm\n'
+    );
+    expect(calls).not.toContain(
+      'rm\ns3://example/app/assets/cache_wasm_bg-current.wasm'
+    );
   });
 
   it('does not invoke pruning when the current upload fails', () => {

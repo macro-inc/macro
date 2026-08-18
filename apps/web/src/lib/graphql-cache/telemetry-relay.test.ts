@@ -80,7 +80,7 @@ describe('cache telemetry worker relay', () => {
     expect(channel.closed).toBe(true);
   });
 
-  it('isolates channel and lock failures', () => {
+  it('isolates channel failures', () => {
     const relay = new CacheTelemetryRelay(
       new CacheTelemetryReporter(browserCacheTelemetryContext('unknown'), {
         emit: () => undefined,
@@ -89,6 +89,21 @@ describe('cache telemetry worker relay', () => {
         createChannel: () => {
           throw new Error('channel unavailable');
         },
+      }
+    );
+
+    expect(() => relay.start()).not.toThrow();
+    expect(() => relay.dispose()).not.toThrow();
+  });
+
+  it('isolates lock failures after creating the channel', () => {
+    const channel = new FakeChannel();
+    const relay = new CacheTelemetryRelay(
+      new CacheTelemetryReporter(browserCacheTelemetryContext('unknown'), {
+        emit: () => undefined,
+      }),
+      {
+        createChannel: () => channel as unknown as BroadcastChannel,
         lockManager: {
           request: () => {
             throw new Error('lock unavailable');
@@ -99,5 +114,6 @@ describe('cache telemetry worker relay', () => {
 
     expect(() => relay.start()).not.toThrow();
     expect(() => relay.dispose()).not.toThrow();
+    expect(channel.closed).toBe(true);
   });
 });

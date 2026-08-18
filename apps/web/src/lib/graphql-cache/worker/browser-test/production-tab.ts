@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
   createCacheCoordinatorPageAdapter,
@@ -112,9 +113,9 @@ const sendRequest = async (
 };
 
 const handleCommand = (command: ProductionHarnessCommand): void => {
-  switch (command.kind) {
-    case 'write':
-      void sendRequest(command.commandId, {
+  match(command)
+    .with({ kind: 'write' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'write',
         query: QUERY,
         operationName: 'Soup',
@@ -124,105 +125,85 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
             id: 'production-user',
             soup: {
               nextCursor: null,
-              items: [
-                {
-                  __typename: 'GraphqlSoupDocument',
-                  id: command.value,
-                },
-              ],
+              items: [{ __typename: 'GraphqlSoupDocument', id: value.value }],
             },
           },
         },
         identity: 'production-test-user',
       });
-      break;
-    case 'read':
-      void sendRequest(command.commandId, {
+    })
+    .with({ kind: 'read' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'read',
         query: QUERY,
         operationName: 'Soup',
         variables: VARIABLES,
       });
-      break;
-    case 'slow-read':
-      void sendRequest(command.commandId, {
+    })
+    .with({ kind: 'slow-read' }, (value) => {
+      void sendRequest(value.commandId, {
         kind: 'read',
         query: SLOW_QUERY,
         operationName: 'Slow',
         variables: VARIABLES,
       });
-      break;
-    case 'graceful-close':
+    })
+    .with({ kind: 'graceful-close' }, (value) => {
       void adapter.dispose({ graceful: true }).then(() => {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: true,
         });
         setTimeout(() => window.close());
       });
-      break;
-    case 'crash-worker':
+    })
+    .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: false,
           error: 'tab has no production worker',
         });
         return;
       }
       currentWorker.postMessage({ testKind: 'crash' }, []);
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-    case 'arm-mutation-block':
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'arm-mutation-block' }, (value) => {
       if (!currentWorker) {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: false,
           error: 'tab has no production worker',
         });
         return;
       }
       currentWorker.postMessage(
-        {
-          testKind: 'arm-mutation-block',
-          requestKind: command.requestKind,
-        },
+        { testKind: 'arm-mutation-block', requestKind: value.requestKind },
         []
       );
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-    case 'request':
-      void sendRequest(command.commandId, command.request);
-      break;
-    case 'terminate-worker':
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'request' }, (value) => {
+      void sendRequest(value.commandId, value.request);
+    })
+    .with({ kind: 'terminate-worker' }, (value) => {
       if (!currentWorker) {
         report({
           kind: 'command-result',
-          commandId: command.commandId,
+          commandId: value.commandId,
           ok: false,
           error: 'tab has no production worker',
         });
         return;
       }
       currentWorker.terminate();
-      report({
-        kind: 'command-result',
-        commandId: command.commandId,
-        ok: true,
-      });
-      break;
-  }
+      report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .exhaustive();
 };
 
 channel.onmessage = (event: MessageEvent<ProductionHarnessEnvelope>) => {

@@ -15,17 +15,17 @@ thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 turso-opfs = { path = "../turso-opfs" }
-turso_core = { workspace = true, features = ["fs", "uuid"] }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 
 [dev-dependencies]
-pollster = "0.4"
+pollster = { workspace = true }
 serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 cache-sqlite = { path = "../cache-sqlite" }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = { workspace = true }

@@ -340,11 +340,6 @@ export function normalizedCacheExchange(
      * later optimistic entity writes can affect the active operation.
      */
     const dependencyRefreshOps = new Set<number>();
-    const networkBoundQueries = new Map<number, number>();
-    const replacementFallbackKeys = new Set<number>();
-    const deferredAffectedKeys = new Set<number>();
-    const completedReplacementFallbackKeys = new Set<number>();
-    const networkRegistrationSatisfiedKeys = new Set<number>();
     type RetainedReplacementFallback = {
       version: number;
       writeArgs: Parameters<CacheHost['writeQuery']>[0];
@@ -353,25 +348,49 @@ export function normalizedCacheExchange(
       invalidated: boolean;
       recoveryPromise?: Promise<void>;
     };
-    const retainedReplacementFallbacks = new Map<
-      number,
-      RetainedReplacementFallback
-    >();
-    const networkResultVersions = new Map<number, number>();
-    const queryResultTurns = new Map<number, Promise<void>>();
+    type QueryState = {
+      networkBoundQueries: number;
+      replacementFallback: boolean;
+      deferredAffected: boolean;
+      completedReplacementFallback: boolean;
+      networkRegistrationSatisfied: boolean;
+      retainedReplacementFallback?: RetainedReplacementFallback;
+      networkResultVersion: number;
+      queryResultTurn?: Promise<void>;
+    };
+    const queryStates = new Map<number, QueryState>();
+    const queryState = (key: number): QueryState => {
+      let state = queryStates.get(key);
+      if (!state) {
+        state = {
+          networkBoundQueries: 0,
+          replacementFallback: false,
+          deferredAffected: false,
+          completedReplacementFallback: false,
+          networkRegistrationSatisfied: false,
+          networkResultVersion: 0,
+        };
+        queryStates.set(key, state);
+      }
+      return state;
+    };
 
     const acquireQueryResultTurn = async (key: number): Promise<() => void> => {
-      const previous = queryResultTurns.get(key) ?? Promise.resolve();
+      const state = queryState(key);
+      const previous = state.queryResultTurn ?? Promise.resolve();
       let release!: () => void;
       const current = new Promise<void>((resolve) => {
         release = resolve;
       });
-      queryResultTurns.set(key, current);
+      state.queryResultTurn = current;
       await previous;
       return () => {
         release();
-        if (queryResultTurns.get(key) === current) {
-          queryResultTurns.delete(key);
+        if (
+          queryStates.get(key) === state &&
+          state.queryResultTurn === current
+        ) {
+          state.queryResultTurn = undefined;
         }
       };
     };
@@ -381,8 +400,9 @@ export function normalizedCacheExchange(
       version: number
     ): Promise<void> => {
       while (true) {
-        const retained = retainedReplacementFallbacks.get(key);
-        if (!retained || retained.version >= version) return;
+        const state = queryStates.get(key);
+        const retained = state?.retainedReplacementFallback;
+        if (!state || !retained || retained.version >= version) return;
         retained.invalidated = true;
         retained.readyPending = false;
         if (retained.recoveryPromise) {
@@ -390,8 +410,8 @@ export function normalizedCacheExchange(
           // attempt settles; the newer result must write strictly after it.
           await retained.recoveryPromise;
         }
-        if (retainedReplacementFallbacks.get(key) === retained) {
-          retainedReplacementFallbacks.delete(key);
+        if (state.retainedReplacementFallback === retained) {
+          state.retainedReplacementFallback = undefined;
         }
       }
     };
@@ -415,16 +435,17 @@ export function normalizedCacheExchange(
     };
 
     const recoverRetainedReplacementFallback = (key: number): void => {
-      const retained = retainedReplacementFallbacks.get(key);
-      if (!retained || retained.invalidated || !activeOps.has(key)) return;
-      retained.readyPending = true;
-      if (retained.recovering || (networkBoundQueries.get(key) ?? 0) > 0) {
+      const state = queryStates.get(key);
+      const retained = state?.retainedReplacementFallback;
+      if (!state || !retained || retained.invalidated || !activeOps.has(key))
         return;
-      }
+      retained.readyPending = true;
+      if (retained.recovering || state.networkBoundQueries > 0) return;
       retained.recovering = true;
       const recovery = (async () => {
         while (
-          retainedReplacementFallbacks.get(key) === retained &&
+          queryStates.get(key) === state &&
+          state.retainedReplacementFallback === retained &&
           !retained.invalidated &&
           retained.readyPending
         ) {
@@ -432,7 +453,8 @@ export function normalizedCacheExchange(
           try {
             await host.writeQuery(retained.writeArgs);
             if (
-              retainedReplacementFallbacks.get(key) !== retained ||
+              queryStates.get(key) !== state ||
+              state.retainedReplacementFallback !== retained ||
               retained.invalidated ||
               !activeOps.has(key)
             ) {
@@ -448,21 +470,23 @@ export function normalizedCacheExchange(
               entityResolvers: retained.writeArgs.entityResolvers,
             });
             if (
-              retainedReplacementFallbacks.get(key) !== retained ||
+              queryStates.get(key) !== state ||
+              state.retainedReplacementFallback !== retained ||
               retained.invalidated
             ) {
               return;
             }
-            retainedReplacementFallbacks.delete(key);
+            state.retainedReplacementFallback = undefined;
             dependencyRefreshOps.delete(key);
-            replacementFallbackKeys.delete(key);
-            deferredAffectedKeys.delete(key);
-            completedReplacementFallbackKeys.delete(key);
-            networkRegistrationSatisfiedKeys.delete(key);
+            state.replacementFallback = false;
+            state.deferredAffected = false;
+            state.completedReplacementFallback = false;
+            state.networkRegistrationSatisfied = false;
             return;
           } catch (error) {
             if (
-              retainedReplacementFallbacks.get(key) !== retained ||
+              queryStates.get(key) !== state ||
+              state.retainedReplacementFallback !== retained ||
               retained.invalidated
             ) {
               return;
@@ -480,10 +504,14 @@ export function normalizedCacheExchange(
         if (retained.recoveryPromise === recovery) {
           retained.recoveryPromise = undefined;
         }
-        if (retainedReplacementFallbacks.get(key) !== retained) return;
+        if (
+          queryStates.get(key) !== state ||
+          state.retainedReplacementFallback !== retained
+        )
+          return;
         retained.recovering = false;
         if (retained.invalidated) {
-          retainedReplacementFallbacks.delete(key);
+          state.retainedReplacementFallback = undefined;
         } else if (retained.readyPending) {
           recoverRetainedReplacementFallback(key);
         }
@@ -493,13 +521,15 @@ export function normalizedCacheExchange(
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
         if (!activeOps.has(key)) continue;
-        if ((networkBoundQueries.get(key) ?? 0) > 0) {
-          deferredAffectedKeys.add(key);
+        const state = queryState(key);
+        if (state.networkBoundQueries > 0) {
+          state.deferredAffected = true;
           continue;
         }
-        const registrationOnly = completedReplacementFallbackKeys.delete(key);
-        replacementFallbackKeys.delete(key);
-        if (retainedReplacementFallbacks.has(key)) {
+        const registrationOnly = state.completedReplacementFallback;
+        state.completedReplacementFallback = false;
+        state.replacementFallback = false;
+        if (state.retainedReplacementFallback) {
           recoverRetainedReplacementFallback(key);
           continue;
         }
@@ -515,10 +545,7 @@ export function normalizedCacheExchange(
         makeSubject<Operation>();
 
       const enqueueQueryForward = (op: Operation): void => {
-        networkBoundQueries.set(
-          op.key,
-          (networkBoundQueries.get(op.key) ?? 0) + 1
-        );
+        queryState(op.key).networkBoundQueries += 1;
         enqueueForward(op);
       };
 
@@ -526,18 +553,21 @@ export function normalizedCacheExchange(
         key: number,
         replacementRegistrationSatisfied: boolean
       ): void => {
-        const remaining = (networkBoundQueries.get(key) ?? 1) - 1;
+        const state = queryState(key);
+        const remaining = state.networkBoundQueries - 1;
         if (remaining > 0) {
-          networkBoundQueries.set(key, remaining);
+          state.networkBoundQueries = remaining;
           return;
         }
-        networkBoundQueries.delete(key);
-        const deferred = deferredAffectedKeys.delete(key);
-        const replacementFallback = replacementFallbackKeys.delete(key);
+        state.networkBoundQueries = 0;
+        const deferred = state.deferredAffected;
+        state.deferredAffected = false;
+        const replacementFallback = state.replacementFallback;
+        state.replacementFallback = false;
         if (deferred) {
-          completedReplacementFallbackKeys.delete(key);
+          state.completedReplacementFallback = false;
           if (!replacementRegistrationSatisfied) {
-            if (retainedReplacementFallbacks.has(key)) {
+            if (state.retainedReplacementFallback) {
               recoverRetainedReplacementFallback(key);
             } else {
               reexecuteAffected(key, true);
@@ -547,7 +577,7 @@ export function normalizedCacheExchange(
           // A fast fallback completed before replacement initialization. The
           // later affected notification must register cache dependencies but
           // must not issue the API request a second time.
-          completedReplacementFallbackKeys.add(key);
+          state.completedReplacementFallback = true;
         }
       };
 
@@ -744,7 +774,7 @@ export function normalizedCacheExchange(
         } catch (error) {
           options.onCacheError?.(error, op);
           if (isOwnerEpochLostError(error)) {
-            replacementFallbackKeys.add(op.key);
+            queryState(op.key).replacementFallback = true;
           }
           // `cache-only` must never touch the network, even when the cache
           // itself fails — degrade to an empty result instead.
@@ -914,8 +944,9 @@ export function normalizedCacheExchange(
         } else if (op.kind === 'query') {
           const releaseTurn = await acquireQueryResultTurn(op.key);
           try {
-            const resultVersion = (networkResultVersions.get(op.key) ?? 0) + 1;
-            networkResultVersions.set(op.key, resultVersion);
+            const state = queryState(op.key);
+            const resultVersion = state.networkResultVersion + 1;
+            state.networkResultVersion = resultVersion;
             // Every newer result supersedes an older retained payload, even an
             // error or intermediate streamed result with no cache write.
             await invalidateOlderRetainedFallback(op.key, resultVersion);
@@ -936,7 +967,7 @@ export function normalizedCacheExchange(
                 result.error === undefined &&
                 result.hasNext !== true &&
                 activeOps.has(op.key) &&
-                replacementFallbackKeys.has(op.key)
+                state.replacementFallback
                   ? {
                       version: resultVersion,
                       writeArgs,
@@ -948,23 +979,22 @@ export function normalizedCacheExchange(
               if (retained) {
                 // Install before the first write: replacement-ready pushes can
                 // arrive synchronously while the cache attempt is settling.
-                retainedReplacementFallbacks.set(op.key, retained);
+                state.retainedReplacementFallback = retained;
               }
               try {
                 await host.writeQuery(writeArgs);
                 if (
                   activeOps.has(op.key) &&
-                  (dependencyRefreshOps.has(op.key) ||
-                    deferredAffectedKeys.has(op.key))
+                  (dependencyRefreshOps.has(op.key) || state.deferredAffected)
                 ) {
                   // A miss or replacement fallback needs one successful read
                   // on the current generation after network write-through.
                   await host.readQuery(readArgs);
                   dependencyRefreshOps.delete(op.key);
-                  networkRegistrationSatisfiedKeys.add(op.key);
+                  state.networkRegistrationSatisfied = true;
                 }
-                if (retainedReplacementFallbacks.get(op.key) === retained) {
-                  retainedReplacementFallbacks.delete(op.key);
+                if (state.retainedReplacementFallback === retained) {
+                  state.retainedReplacementFallback = undefined;
                 }
               } catch (error) {
                 options.onCacheError?.(error, op);
@@ -972,12 +1002,12 @@ export function normalizedCacheExchange(
             }
             if (result.hasNext !== true) {
               dependencyRefreshOps.delete(op.key);
-              const registrationSatisfied =
-                networkRegistrationSatisfiedKeys.delete(op.key);
+              const registrationSatisfied = state.networkRegistrationSatisfied;
+              state.networkRegistrationSatisfied = false;
               finishNetworkQuery(op.key, registrationSatisfied);
             }
           } finally {
-            if (!activeOps.has(op.key)) networkResultVersions.delete(op.key);
+            if (!activeOps.has(op.key)) queryStates.delete(op.key);
             releaseTurn();
           }
         } else if (op.kind === 'mutation') {
@@ -1117,13 +1147,7 @@ export function normalizedCacheExchange(
           if (op.kind === 'teardown') {
             activeOps.delete(op.key);
             dependencyRefreshOps.delete(op.key);
-            networkBoundQueries.delete(op.key);
-            replacementFallbackKeys.delete(op.key);
-            deferredAffectedKeys.delete(op.key);
-            completedReplacementFallbackKeys.delete(op.key);
-            networkRegistrationSatisfiedKeys.delete(op.key);
-            retainedReplacementFallbacks.delete(op.key);
-            networkResultVersions.delete(op.key);
+            queryStates.delete(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
         })

@@ -322,11 +322,16 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                     });
                 }
                 Err(failure) => {
+                    let error = failure.error();
+                    if !error.requires_physical_reset() {
+                        let owner = failure.preserve().map_err(err_js)?;
+                        owner.release().await.map_err(err_js)?;
+                        return Err(err_js(error));
+                    }
                     let outcome = recovery_outcome(
-                        failure
-                            .error()
+                        error
                             .physical_reset_reason()
-                            .unwrap_or(PhysicalResetReason::Compatibility),
+                            .expect("reset-required error has a reset reason"),
                     );
                     (failure.reset().await.map_err(err_js)?, outcome)
                 }

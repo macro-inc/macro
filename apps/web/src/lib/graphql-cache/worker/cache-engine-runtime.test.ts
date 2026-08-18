@@ -413,6 +413,10 @@ describe('cache engine worker runtime', () => {
     const oldOutputBlocked = new Promise<void>((resolve) => {
       releaseOldOutput = resolve;
     });
+    let markOldOutputPosted!: () => void;
+    const oldOutputPosted = new Promise<void>((resolve) => {
+      markOldOutputPosted = resolve;
+    });
     const oldRuntime = await attachRuntime(
       router,
       tabA,
@@ -433,6 +437,7 @@ describe('cache engine worker runtime', () => {
           await oldOutputBlocked;
           port.postMessage({ id: request.id, ok: true, result: null });
           port.postMessage({ kind: 'cache-changed' });
+          markOldOutputPosted();
         },
       })
     );
@@ -490,7 +495,7 @@ describe('cache engine worker runtime', () => {
     );
 
     releaseOldOutput();
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await oldOutputPosted;
 
     expect(effectCount).toBe(1);
     expect(replacementRequests).toEqual([]);

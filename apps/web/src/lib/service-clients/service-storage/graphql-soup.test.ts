@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   let enabled = true;
@@ -79,12 +80,13 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
 vi.mock('@core/util/platformFetch', () => ({ platformFetch: vi.fn() }));
 vi.mock('@graphql-cache/rollout', () => ({
-  getBrowserTursoCacheRolloutDecision: () => ({
-    enabled: mocks.tauri ? mocks.graphqlEnabled : mocks.enabled,
-    cohort: mocks.tauri ? 'control' : 'treatment',
-    reason: mocks.tauri ? 'tauri-unchanged' : 'enabled',
-    nativeCacheUnchanged: mocks.tauri,
-  }),
+  getBrowserTursoCacheRolloutDecision:
+    (): BrowserTursoCacheRolloutDecision => ({
+      enabled: mocks.tauri ? mocks.graphqlEnabled : mocks.enabled,
+      cohort: mocks.tauri ? 'unknown' : 'treatment',
+      reason: mocks.tauri ? 'tauri-native-unchanged' : 'posthog-enabled',
+      nativeCacheUnchanged: mocks.tauri,
+    }),
 }));
 vi.mock('@graphql-cache/index', () => ({
   createWorkerCacheHost: mocks.createWorkerCacheHost,
@@ -153,6 +155,10 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.resetQueue();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();
     const soup = await import('./graphql-soup');
@@ -197,6 +203,5 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();
     expect(mocks.createWorkerCacheHost).not.toHaveBeenCalled();
     expect(WorkerConstructor).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   });
 });

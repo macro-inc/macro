@@ -240,6 +240,13 @@ describe('coordinator runtime protocol', () => {
       }).ok
     ).toBe(false);
     expect(
+      validateCoordinatorToTabEnvelope({
+        coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION + 1,
+        kind: 'engine-replaced',
+        ownerEpoch: 1,
+      }).ok
+    ).toBe(false);
+    expect(
       validateEngineToCoordinatorEnvelope({
         ...version,
         kind: 'heartbeat-ack',

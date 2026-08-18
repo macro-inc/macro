@@ -8,6 +8,7 @@ import {
 import type {
   DatabaseAction,
   DatabaseActionProof,
+  EngineOpenOutcome,
   OwnerEpoch,
   RouteId,
 } from './coordinator-protocol';
@@ -97,10 +98,11 @@ export type EngineReady = {
   expectedOwnerLockName: string;
   ownerLockHeld: true;
   databaseActionProof: DatabaseActionProof;
+  openOutcome: EngineOpenOutcome;
 };
 
-const proofFor = (action: DatabaseAction): DatabaseActionProof =>
-  action === 'wipe-before-open' ? 'wiped-before-open' : 'opened-existing';
+const proofFor = (outcome: EngineOpenOutcome): DatabaseActionProof =>
+  outcome.startsWith('reset-') ? 'wiped-before-open' : 'opened-existing';
 
 /** Pure election, epoch, routing, drain, and abrupt-loss state machine. */
 export class CoordinatorCore {
@@ -181,8 +183,8 @@ export class CoordinatorCore {
       error = 'engine became ready without the exclusive owner lock';
     } else if (ready.ownerLockName !== ready.expectedOwnerLockName) {
       error = 'engine reported the wrong physical owner lock';
-    } else if (ready.databaseActionProof !== proofFor(state.databaseAction)) {
-      error = `engine did not prove ${state.databaseAction}`;
+    } else if (ready.databaseActionProof !== proofFor(ready.openOutcome)) {
+      error = `engine proof does not match open outcome ${ready.openOutcome}`;
     }
     if (error) {
       return [

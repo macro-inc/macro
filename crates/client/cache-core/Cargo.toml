@@ -19,4 +19,4 @@ apollo-compiler = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-pollster = "0.4"
+pollster = { workspace = true }

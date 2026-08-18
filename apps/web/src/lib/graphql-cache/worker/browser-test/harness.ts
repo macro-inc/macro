@@ -1,3 +1,4 @@
+import { databaseOwnerLockName } from '../coordinator-protocol';
 import type {
   BrowserHarnessCommand,
   BrowserHarnessEnvelope,
@@ -151,10 +152,8 @@ const run = async (): Promise<Record<string, unknown>> => {
     workers.toReversed().find((worker) => worker.ownerEpoch >= minimumEpoch);
 
   const ownerLockName = (): string | undefined => {
-    const owner = latestOwner();
-    if (!owner) return;
-    const identity = `graphql-cache:${scope}`;
-    return `macro:turso-opfs:v1:${new TextEncoder().encode(identity).byteLength}:${identity}`;
+    if (!latestOwner()) return;
+    return databaseOwnerLockName(scope);
   };
 
   const verifyOwnerLock = async (ownerEpoch: number): Promise<void> => {

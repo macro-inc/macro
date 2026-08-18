@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { match } from 'ts-pattern';
 import { loadBrowserTestCacheWasm } from './browser-test-wasm-module';
 
 type StorageControlRequest = {
@@ -18,13 +19,14 @@ worker.onmessage = (event: MessageEvent<StorageControlRequest>) => {
   const request = event.data;
   void (async () => {
     const { module, wasmUrl } = await loadBrowserTestCacheWasm();
-    if (request.kind === 'incompatible-namespace') {
-      await module.browserTestMakeNamespaceIncompatible(request.scope);
-    } else if (request.kind === 'corrupt-queue-payload') {
-      await module.browserTestCorruptQueuePayload(request.scope);
-    } else {
-      throw new Error('unsupported browser-test storage mutation');
-    }
+    await match(request)
+      .with({ kind: 'incompatible-namespace' }, ({ scope }) =>
+        module.browserTestMakeNamespaceIncompatible(scope)
+      )
+      .with({ kind: 'corrupt-queue-payload' }, ({ scope }) =>
+        module.browserTestCorruptQueuePayload(scope)
+      )
+      .exhaustive();
     worker.postMessage({
       id: request.id,
       ok: true,

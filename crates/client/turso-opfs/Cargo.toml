@@ -12,7 +12,7 @@ js-sys = { workspace = true }
 turso_core = { workspace = true, features = ["fs", "uuid"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-sys = { version = "0.3", features = [
+web-sys = { workspace = true, features = [
   "AbortController",
   "AbortSignal",
   "DedicatedWorkerGlobalScope",
@@ -30,4 +30,4 @@ web-sys = { version = "0.3", features = [
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = { workspace = true }

@@ -13,5 +13,5 @@ tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-pollster = "0.4"
+pollster = { workspace = true }
 tempfile = "3"

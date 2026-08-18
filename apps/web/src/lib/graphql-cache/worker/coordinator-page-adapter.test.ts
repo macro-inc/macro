@@ -109,6 +109,7 @@ describe('CacheCoordinatorPageAdapter', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -833,6 +834,5 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    vi.useRealTimers();
   });
 });

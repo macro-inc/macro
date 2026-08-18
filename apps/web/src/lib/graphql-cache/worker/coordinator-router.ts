@@ -584,12 +584,6 @@ export class CoordinatorRouter {
         this.applyActions(core.enginePush(message.ownerEpoch, message.push));
         break;
       case 'engine-drained': {
-        this.telemetry.record({
-          name: 'graphql_cache.owner',
-          operationCategory: 'lifecycle',
-          outcome: 'graceful',
-          ownerEvent: 'graceful-drain-completed',
-        });
         const actions = core.engineDrained(message.tabId, message.ownerEpoch);
         if (actions.some((action) => action.kind === 'protocol-violation')) {
           this.applyActions(actions);
@@ -600,6 +594,12 @@ export class CoordinatorRouter {
           );
           break;
         }
+        this.telemetry.record({
+          name: 'graphql_cache.owner',
+          operationCategory: 'lifecycle',
+          outcome: 'graceful',
+          ownerEvent: 'graceful-drain-completed',
+        });
         this.applyActions(actions);
         break;
       }

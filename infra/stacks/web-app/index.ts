@@ -68,16 +68,23 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 // only, so their archive copy removes the sidecar before FileArchive snapshots it.
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
+const cacheWasmRetentionDays = 7;
+const shellQuote = (value: string): string =>
+  "'" + value.replaceAll("'", "'\\''") + "'";
 execSync('rm -rf ./output', { stdio: 'inherit' });
-execSync(`mkdir -p ${buildOutputPath} ${appArchiveOutputPath}`, {
-  stdio: 'inherit',
-});
-execSync(`cp -r ${localPath}/* ${buildOutputPath}`, { stdio: 'inherit' });
-execSync(`cp -r ${localPath}/* ${appArchiveOutputPath}`, {
+execSync(
+  `mkdir -p ${shellQuote(buildOutputPath)} ${shellQuote(appArchiveOutputPath)}`,
+  { stdio: 'inherit' }
+);
+execSync(`cp -r ${shellQuote(localPath)}/* ${shellQuote(buildOutputPath)}`, {
   stdio: 'inherit',
 });
 execSync(
-  `find ${appArchiveOutputPath} -type f -name 'cache_wasm_bg*.wasm.br' -delete`,
+  `cp -r ${shellQuote(localPath)}/* ${shellQuote(appArchiveOutputPath)}`,
+  { stdio: 'inherit' }
+);
+execSync(
+  `find ${shellQuote(appArchiveOutputPath)} -type f -name 'cache_wasm_bg*.wasm.br' -delete`,
   { stdio: 'inherit' }
 );
 
@@ -95,9 +102,10 @@ new aws.s3.BucketObjectv2(
   }
 );
 // Copy the index.html to the routing lambda
-execSync(`cp ${buildOutputPath}/index.html ./appRouteLambda/index.html`, {
-  stdio: 'inherit',
-});
+execSync(
+  `cp ${shellQuote(`${buildOutputPath}/index.html`)} ./appRouteLambda/index.html`,
+  { stdio: 'inherit' }
+);
 
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
@@ -139,7 +147,7 @@ const indexHtmlObjectMetadataCommand = new command.local.Command(
 new command.local.Command(
   'prune-old-cache-wasm-command',
   {
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app`,
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
     triggers: [Date.now()],
   },
   {

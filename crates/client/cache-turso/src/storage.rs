@@ -387,6 +387,18 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
+    /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
+    ///
+    /// This accessor must only be used when [`Self::error`] does not require a
+    /// physical reset. A close failure poisons the worker-local owner.
+    pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
+        let closed = self
+            .session
+            .try_close()
+            .map_err(|failure| failure.error().clone())?;
+        closed.preserve()
+    }
+
     /// Consumes the failure, closes Turso, and physically resets main and WAL.
     ///
     /// Neither the connected nor closed session is exposed. Close/reset failure

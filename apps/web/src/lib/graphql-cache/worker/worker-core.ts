@@ -258,7 +258,7 @@ export class CacheWorkerCore {
     ) {
       await new Promise<void>((resolve) => this.drainWaiters.add(resolve));
     }
-    if (this.initPromise) await this.initPromise;
+    if (this.initPromise) await this.initPromise.catch(() => undefined);
     const engine = this.engine;
     if (!engine) return;
     this.recordCachedQueueDiagnostics();

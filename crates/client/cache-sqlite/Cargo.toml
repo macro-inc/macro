@@ -12,6 +12,6 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-pollster = "0.4"
+pollster = { workspace = true }
 serde_json = { workspace = true }
 tempfile = "3"

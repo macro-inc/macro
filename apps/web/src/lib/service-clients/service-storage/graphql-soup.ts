@@ -169,6 +169,12 @@ export function getGraphqlSoupClient(): Client {
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const cleanup = () => {
+      unregisterHost();
+      host?.dispose();
+      subscriptionsLifecycle.dispose();
+      if (websocketClient) void websocketClient.dispose();
+    };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
       fallbackAfterInitializationFailure();
@@ -253,20 +259,11 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheHost = host;
       unregisterHost = registerCacheHost(host);
       subscriptionsLifecycle.replace(client, host);
-      const cleanup = () => {
-        unregisterHost();
-        host?.dispose();
-        subscriptionsLifecycle.dispose();
-        if (websocketClient) void websocketClient.dispose();
-      };
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;
       return client;
     } catch (error) {
-      unregisterHost();
-      host?.dispose();
-      subscriptionsLifecycle.dispose();
-      if (websocketClient) void websocketClient.dispose();
+      cleanup();
       cachedCacheHost = undefined;
       cachedCacheCleanup = undefined;
       console.warn('graphql cache init failed; using uncached client', error);

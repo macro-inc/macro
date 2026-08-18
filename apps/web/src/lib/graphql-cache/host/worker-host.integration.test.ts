@@ -259,6 +259,7 @@ describe('worker CacheHost coordinator integration', () => {
   const enqueueGates = new Map<string, Promise<void>>();
 
   beforeEach(() => {
+    localStorage.clear();
     logs.length = 0;
     dedicatedWorkers.length = 0;
     sharedWorkers.length = 0;
@@ -318,7 +319,7 @@ describe('worker CacheHost coordinator integration', () => {
           return this.delegate.onmessageerror;
         }
 
-        set onmessageerror(value: IntegrationDedicatedWorker['onmessageerror']) {
+        set onmessageerror(value: IntegrationDedicatedWorker['onmessageerror'],) {
           this.delegate.onmessageerror = value;
         }
 

@@ -334,10 +334,9 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
         ownerLockName: activation.ownerLockName,
         ownerLockHeld: true,
-        databaseActionProof:
-          activation.databaseAction === 'wipe-before-open'
-            ? 'wiped-before-open'
-            : 'opened-existing',
+        databaseActionProof: initializationOpenOutcome.startsWith('reset-')
+          ? 'wiped-before-open'
+          : 'opened-existing',
         openOutcome: initializationOpenOutcome,
       })
     );

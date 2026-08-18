@@ -540,6 +540,41 @@ describe('CoordinatorRouter', () => {
     );
   });
 
+  it('removes a gracefully retiring owner before liveness-loss re-election', async () => {
+    const releases = new Map<string, () => void>();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: (lockName, onReleased) => {
+        releases.set(lockName, onReleased);
+        return () => undefined;
+      },
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'graceful-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    releases.get('graphql-cache-tab:scope:tab-a')?.();
+    await Promise.resolve();
+
+    expect(router.snapshot()?.tabIds).toEqual(['tab-b']);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      databaseAction: 'wipe-before-open',
+    });
+  });
+
   it('terminates a live owner before dropping a MessagePort on messageerror', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,

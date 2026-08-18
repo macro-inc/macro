@@ -2,7 +2,7 @@ use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
 };
-use cache_core::store::Storage;
+use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -86,6 +86,10 @@ impl Storage for BrowserStorage {
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
         self.inner.load_mutation_queue().await
+    }
+
+    async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, Self::Error> {
+        self.inner.queue_diagnostics().await
     }
 
     async fn claim_next_mutation(

@@ -13,7 +13,8 @@ export function loadBrowserTestCacheWasm(): Promise<{
   module: BrowserTestCacheWasmModule;
   wasmUrl: string;
 }> {
-  modulePromise ??= (async () => {
+  if (modulePromise) return modulePromise;
+  const initialization = (async () => {
     const glueUrl = new URL(
       '../../wasm-browser-test/cache_wasm_browser_test_hooks.js',
       import.meta.url
@@ -33,5 +34,9 @@ export function loadBrowserTestCacheWasm(): Promise<{
     await module.default({ module_or_path: compiled });
     return { module, wasmUrl };
   })();
-  return modulePromise;
+  modulePromise = initialization;
+  void initialization.catch(() => {
+    if (modulePromise === initialization) modulePromise = undefined;
+  });
+  return initialization;
 }

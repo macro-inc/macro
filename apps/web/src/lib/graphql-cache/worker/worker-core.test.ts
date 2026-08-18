@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -10,6 +10,10 @@ import { CacheWorkerCore } from './worker-core';
 describe('CacheWorkerCore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('dispatches read-records to the wasm engine', async () => {
@@ -863,6 +867,7 @@ describe('CacheWorkerCore', () => {
   });
 
   it('serializes a hanging refresh away from correctness and bounds it without changing results', async () => {
+    vi.useFakeTimers();
     let monotonicNow = 0;
     const queueDiagnostics = vi
       .fn()
@@ -912,6 +917,7 @@ describe('CacheWorkerCore', () => {
       query: 'query Read { value }',
     });
     expect(readQuery).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(20);
     await read;
     expect(readQuery).toHaveBeenCalledOnce();
     expect(port.postMessage).toHaveBeenCalledWith({
