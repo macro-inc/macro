@@ -225,7 +225,7 @@ function CalendarAttendeeItem(props: {
   );
 }
 
-export interface CalendarAttendeeListProps {
+interface CalendarAttendeeListProps {
   attendees: CalendarAttendee[];
   organizerFirst?: boolean;
   itemClass?: (attendee: CalendarAttendee) => string | undefined;
@@ -233,7 +233,7 @@ export interface CalendarAttendeeListProps {
 }
 
 /** Resolved attendee rows shared by event details and read-only guest views. */
-export function CalendarAttendeeList(props: CalendarAttendeeListProps) {
+function CalendarAttendeeList(props: CalendarAttendeeListProps) {
   const sortedAttendees = createMemo(() =>
     props.attendees
       .map(resolveCalendarAttendee)

@@ -12,7 +12,7 @@ export type CalendarPeriodView =
   | 'timeGridDay';
 
 /** The conferencing system backing an event's join URL. */
-export type ConferenceProvider = 'google_meet' | 'other';
+type ConferenceProvider = 'google_meet' | 'other';
 
 /** Supported first day of the calendar week. */
 export type CalendarWeekStart = 0 | 1;

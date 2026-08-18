@@ -71,7 +71,7 @@ export interface EventEditorCalendarOption {
 }
 
 /** Editable fields that a create/edit owner may disable. */
-export type EventEditorField =
+type EventEditorField =
   | 'title'
   | 'allDay'
   | 'start'
@@ -215,7 +215,7 @@ function parseGuestEmails(value: string) {
   return [...new Set(value.split(/[\s,;]+/).filter((email) => email !== ''))];
 }
 
-export type EventEditorGuestKind = 'user' | 'contact';
+type EventEditorGuestKind = 'user' | 'contact';
 export type EventEditorGuestOption =
   CombinedRecipientItem<EventEditorGuestKind>;
 export type SelectedEventEditorGuest =

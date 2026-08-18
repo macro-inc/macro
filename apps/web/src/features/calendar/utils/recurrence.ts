@@ -31,7 +31,7 @@ type ParsedRecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
 type ParsedWeekdayCode = keyof typeof WEEKDAYS;
 
 /** One weekday selector from an RFC 5545 `BYDAY` rule. */
-export interface RecurrenceWeekday {
+interface RecurrenceWeekday {
   /** Weekday code such as `MO` or `FR`. */
   weekday: ParsedWeekdayCode;
   /** Positional selector such as `1` for first or `-1` for last. */
@@ -39,7 +39,7 @@ export interface RecurrenceWeekday {
 }
 
 /** The recurrence fields used by the calendar event details UI. */
-export interface ParsedRecurrenceRule {
+interface ParsedRecurrenceRule {
   /** RFC 5545 recurrence frequency, when supported. */
   frequency?: ParsedRecurrenceFrequency;
   /** Frequency interval. Defaults to one. */
@@ -436,7 +436,7 @@ const WORKWEEK: readonly WeekdayCode[] = ['MO', 'TU', 'WE', 'TH', 'FR'];
 export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
 /** How a recurrence ends. */
-export type RecurrenceEnds =
+type RecurrenceEnds =
   | { kind: 'never' }
   | { kind: 'on'; date: string }
   | { kind: 'after'; count: number };
