@@ -10,6 +10,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
+import LinkIcon from '@phosphor/link.svg';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CloseIcon from '@phosphor/x.svg';
@@ -25,6 +26,7 @@ import {
   useImperativeDialog,
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { copyCalendarEventMention } from '../copy-event-mention';
 import { EventRsvpSection } from './EventRsvpSection';
 import { useOpenEventComposer } from './use-open-event-composer';
 
@@ -156,8 +158,18 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
             >
               <CloseIcon />
             </MobileDrawer.Close>
-            <Show when={canModify()}>
-              <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1">
+              <Button
+                aria-label="Copy event"
+                variant="ghost"
+                size="icon-md"
+                depth={3}
+                class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                onClick={() => copyCalendarEventMention(props.event)}
+              >
+                <LinkIcon />
+              </Button>
+              <Show when={canModify()}>
                 <Button
                   aria-label="Edit event"
                   variant="ghost"
@@ -178,8 +190,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 >
                   <TrashIcon />
                 </Button>
-              </div>
-            </Show>
+              </Show>
+            </div>
           </div>
           <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div class="px-3">
@@ -367,6 +379,16 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex items-center justify-end gap-1 px-2 pt-2">
+                <Button
+                  aria-label="Copy event"
+                  variant="ghost"
+                  size="icon-sm"
+                  depth={3}
+                  class="rounded-md text-ink-muted [&_svg]:size-4"
+                  onClick={() => copyCalendarEventMention(props.event)}
+                >
+                  <LinkIcon />
+                </Button>
                 <Show when={canModify()}>
                   <Button
                     aria-label="Edit event"
