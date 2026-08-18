@@ -20,12 +20,16 @@ use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
     NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
 };
+use cache_core::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
 use rusqlite::{Connection, OptionalExtension, Transaction, params, params_from_iter};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
+
+/// Version of the disposable native search projection schema.
+const NATIVE_SEARCH_SCHEMA_VERSION: u32 = 3;
 
 /// Errors produced by the SQLite storage backend.
 #[derive(Debug, Error)]
@@ -39,6 +43,9 @@ pub enum SqliteStorageError {
     /// Durable queue metadata violated an invariant.
     #[error("invalid mutation queue state: {0}")]
     QueueInvariant(String),
+    /// A search cursor did not contain a canonical entity key.
+    #[error("invalid search cursor")]
+    InvalidSearchCursor,
 }
 
 /// [`Storage`] backend over a SQLite database (Tauri native host).
@@ -75,6 +82,20 @@ impl SqliteStorage {
                  key TEXT PRIMARY KEY,
                  value BLOB NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS search_documents (
+                 profile TEXT NOT NULL,
+                 __typename TEXT NOT NULL,
+                 id TEXT NOT NULL,
+                 bucket TEXT NOT NULL,
+                 search_text TEXT NOT NULL,
+                 timestamp_ms INTEGER NOT NULL,
+                 source_hash TEXT NOT NULL,
+                 PRIMARY KEY(profile, __typename, id)
+             );
+             CREATE INDEX IF NOT EXISTS search_documents_browse_idx
+                 ON search_documents(
+                     profile, bucket, timestamp_ms DESC, __typename ASC, id ASC
+                 );
              CREATE TABLE IF NOT EXISTS mutation_queue (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  query TEXT NOT NULL,
@@ -108,20 +129,59 @@ impl SqliteStorage {
                 row.get(0)
             })
             .optional()?;
+        let stored_search_version: Option<String> = conn
+            .query_row(
+                "SELECT v FROM meta WHERE k = 'search_schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
 
+        let expected_search_version = NATIVE_SEARCH_SCHEMA_VERSION.to_string();
+        let search_schema_changed =
+            stored_search_version.as_deref() != Some(expected_search_version.as_str());
         let tx = conn.transaction()?;
+        // Existing projection schemas must be physically replaced before the
+        // version marker advances. The cache is disposable and intentionally
+        // does not backfill by scanning record blobs.
+        if stored_search_version.is_some() && search_schema_changed {
+            tx.execute_batch(
+                "DROP TABLE search_documents;
+                 CREATE TABLE search_documents (
+                     profile TEXT NOT NULL,
+                     __typename TEXT NOT NULL,
+                     id TEXT NOT NULL,
+                     bucket TEXT NOT NULL,
+                     search_text TEXT NOT NULL,
+                     timestamp_ms INTEGER NOT NULL,
+                     source_hash TEXT NOT NULL,
+                     PRIMARY KEY(profile, __typename, id)
+                 );
+                 CREATE INDEX search_documents_browse_idx
+                     ON search_documents(
+                         profile, bucket, timestamp_ms DESC, __typename ASC, id ASC
+                     );",
+            )?;
+        }
         if stored_scope.as_deref() != Some(scope) {
             // Scope changes are identity changes: queued user intent must not
             // cross the boundary. `None` is the one-time upgrade from the
             // pre-queue schema, where no durable mutations existed.
             tx.execute("DELETE FROM optimistic_layers", [])?;
             tx.execute("DELETE FROM mutation_queue", [])?;
+            tx.execute("DELETE FROM search_documents", [])?;
             tx.execute("DELETE FROM records", [])?;
         } else if stored_namespace.as_deref() != Some(expected_namespace.as_str()) {
             // Incompatible schema/cache-format changes only invalidate
             // disposable records. The queue retains source GraphQL +
             // optimistic JSON so the engine can re-normalize it against the
             // current schema.
+            tx.execute("DELETE FROM search_documents", [])?;
+            tx.execute("DELETE FROM records", [])?;
+        } else if search_schema_changed {
+            // The projection is derived from complete records, so a profile
+            // change discards both rather than backfilling by blob scan.
+            tx.execute("DELETE FROM search_documents", [])?;
             tx.execute("DELETE FROM records", [])?;
         }
         tx.execute(
@@ -133,6 +193,11 @@ impl SqliteStorage {
             "INSERT INTO meta (k, v) VALUES ('namespace', ?1)
              ON CONFLICT(k) DO UPDATE SET v = excluded.v",
             params![expected_namespace],
+        )?;
+        tx.execute(
+            "INSERT INTO meta (k, v) VALUES ('search_schema_version', ?1)
+             ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+            params![expected_search_version],
         )?;
         tx.commit()?;
 
@@ -152,6 +217,15 @@ impl SqliteStorage {
         Ok(self
             .conn()
             .query_row("SELECT COUNT(*) FROM records", [], |row| row.get(0))?)
+    }
+
+    /// Number of compact search documents.
+    pub fn search_document_count(&self) -> Result<u64, SqliteStorageError> {
+        Ok(self
+            .conn()
+            .query_row("SELECT COUNT(*) FROM search_documents", [], |row| {
+                row.get(0)
+            })?)
     }
 
     /// Number of mutations waiting for settlement.
@@ -202,6 +276,64 @@ fn row_stored_mutation(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Resu
         lease_expires_at_ms: row.get(offset + 8)?,
         last_error: row.get(offset + 9)?,
         created_at_ms: row.get(offset + 10)?,
+    })
+}
+
+fn entity_key_parts<'a>(key: &'a EntityKey<'_>) -> Option<(&'a str, &'a str)> {
+    key.as_ref()
+        .split_once(':')
+        .filter(|(typename, _)| !typename.is_empty())
+}
+
+fn write_search_documents(
+    tx: &Transaction<'_>,
+    entries: &[(EntityKey<'static>, Record)],
+) -> Result<(), rusqlite::Error> {
+    let mut delete =
+        tx.prepare_cached("DELETE FROM search_documents WHERE __typename = ?1 AND id = ?2")?;
+    let mut upsert = tx.prepare_cached(
+        "INSERT INTO search_documents (
+             profile, __typename, id, bucket, search_text, timestamp_ms, source_hash
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(profile, __typename, id) DO UPDATE SET
+             bucket = excluded.bucket,
+             search_text = excluded.search_text,
+             timestamp_ms = excluded.timestamp_ms,
+             source_hash = excluded.source_hash",
+    )?;
+    for (key, record) in entries {
+        let Some((typename, id)) = entity_key_parts(key) else {
+            continue;
+        };
+        delete.execute(params![typename, id])?;
+        for document in project_search_documents(key, record) {
+            upsert.execute(params![
+                document.profile.as_str(),
+                typename,
+                id,
+                document.bucket,
+                document.search_text,
+                document.timestamp_ms,
+                document.source_hash,
+            ])?;
+        }
+    }
+    Ok(())
+}
+
+fn row_search_document(
+    row: &rusqlite::Row<'_>,
+    profile: SearchProfile,
+) -> rusqlite::Result<SearchDocument> {
+    let typename: String = row.get(0)?;
+    let id: String = row.get(1)?;
+    Ok(SearchDocument {
+        profile,
+        record_key: EntityKey::entity(&typename, &[&id]),
+        bucket: row.get(2)?,
+        search_text: row.get(3)?,
+        timestamp_ms: row.get(4)?,
+        source_hash: row.get(5)?,
     })
 }
 
@@ -257,6 +389,7 @@ impl Storage for SqliteStorage {
                 stmt.execute(params![key.0.as_ref(), encode_record(record)])?;
             }
         }
+        write_search_documents(&tx, &entries)?;
         tx.commit()?;
         Ok(())
     }
@@ -265,9 +398,14 @@ impl Storage for SqliteStorage {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         {
-            let mut stmt = tx.prepare_cached("DELETE FROM records WHERE key = ?1")?;
+            let mut record_stmt = tx.prepare_cached("DELETE FROM records WHERE key = ?1")?;
+            let mut search_stmt = tx
+                .prepare_cached("DELETE FROM search_documents WHERE __typename = ?1 AND id = ?2")?;
             for key in keys {
-                stmt.execute(params![key.0.as_ref()])?;
+                record_stmt.execute(params![key.0.as_ref()])?;
+                if let Some((typename, id)) = entity_key_parts(key) {
+                    search_stmt.execute(params![typename, id])?;
+                }
             }
         }
         tx.commit()?;
@@ -313,6 +451,77 @@ impl Storage for SqliteStorage {
             records.push((EntityKey(key.into()), decode_record(&value)?));
         }
         Ok(records)
+    }
+
+    async fn load_search_documents(
+        &self,
+        profile: SearchProfile,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        let conn = self.conn();
+        let mut statement = conn.prepare_cached(
+            "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash
+             FROM search_documents WHERE profile = ?1",
+        )?;
+        let rows = statement.query_map(params![profile.as_str()], |row| {
+            row_search_document(row, profile)
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    async fn browse_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+        after: Option<&SearchCursor>,
+        limit: usize,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        let conn = self.conn();
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut documents = Vec::new();
+        if let Some(cursor) = after {
+            let (cursor_typename, cursor_id) = entity_key_parts(&cursor.record_key)
+                .ok_or(SqliteStorageError::InvalidSearchCursor)?;
+            let mut statement = conn.prepare_cached(
+                "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash
+                 FROM search_documents
+                 WHERE profile = ?1 AND bucket = ?2
+                   AND (
+                       timestamp_ms < ?3
+                       OR (timestamp_ms = ?3 AND (
+                           __typename > ?4 OR (__typename = ?4 AND id > ?5)
+                       ))
+                   )
+                 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?6",
+            )?;
+            let rows = statement.query_map(
+                params![
+                    profile.as_str(),
+                    bucket,
+                    cursor.timestamp_ms,
+                    cursor_typename,
+                    cursor_id,
+                    limit
+                ],
+                |row| row_search_document(row, profile),
+            )?;
+            for row in rows {
+                documents.push(row?);
+            }
+        } else {
+            let mut statement = conn.prepare_cached(
+                "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash
+                 FROM search_documents
+                 WHERE profile = ?1 AND bucket = ?2
+                 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3",
+            )?;
+            let rows = statement.query_map(params![profile.as_str(), bucket, limit], |row| {
+                row_search_document(row, profile)
+            })?;
+            for row in rows {
+                documents.push(row?);
+            }
+        }
+        Ok(documents)
     }
 
     async fn enqueue_mutation(
@@ -542,6 +751,7 @@ impl Storage for SqliteStorage {
                 stmt.execute(params![key.0.as_ref(), encode_record(record)])?;
             }
         }
+        write_search_documents(&tx, &entries)?;
         tx.execute("DELETE FROM mutation_queue WHERE id = ?1", params![sql_id])?;
         tx.commit()?;
         Ok(true)
@@ -569,6 +779,7 @@ impl Storage for SqliteStorage {
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM optimistic_layers", [])?;
         tx.execute("DELETE FROM mutation_queue", [])?;
+        tx.execute("DELETE FROM search_documents", [])?;
         tx.execute("DELETE FROM records", [])?;
         tx.commit()?;
         Ok(())
@@ -619,6 +830,161 @@ mod tests {
             s.clear().await.unwrap();
             assert_eq!(s.record_count().unwrap(), 0);
         });
+    }
+
+    #[test]
+    fn search_projection_is_write_through_and_browse_uses_covering_order_index() {
+        block_on(async {
+            let mut storage = SqliteStorage::open_in_memory("search").unwrap();
+            let mut document = Record::default();
+            document.fields.insert(
+                "__typename".into(),
+                CacheValue::String("GraphqlSoupDocument".into()),
+            );
+            document
+                .fields
+                .insert("name".into(), CacheValue::String("Quarterly Plan".into()));
+            document.fields.insert(
+                "updatedAt".into(),
+                CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
+            );
+            storage
+                .put_batch(vec![
+                    (key("GraphqlSoupDocument:d1"), document.clone()),
+                    (key("GraphqlSoupDocument:d2"), document),
+                ])
+                .await
+                .unwrap();
+
+            let columns = {
+                let conn = storage.conn();
+                let mut statement = conn
+                    .prepare("PRAGMA table_info('search_documents')")
+                    .unwrap();
+                statement
+                    .query_map([], |row| row.get::<_, String>(1))
+                    .unwrap()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap()
+            };
+            assert_eq!(
+                columns,
+                [
+                    "profile",
+                    "__typename",
+                    "id",
+                    "bucket",
+                    "search_text",
+                    "timestamp_ms",
+                    "source_hash",
+                ]
+            );
+
+            let loaded = storage
+                .load_search_documents(SearchProfile::QuickAccessV1)
+                .await
+                .unwrap();
+            assert_eq!(loaded.len(), 2);
+            assert!(
+                loaded
+                    .iter()
+                    .all(|document| document.search_text == "quarterly plan")
+            );
+            let first = storage
+                .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 1)
+                .await
+                .unwrap();
+            assert_eq!(first[0].record_key.as_ref(), "GraphqlSoupDocument:d1");
+            let cursor = SearchCursor {
+                timestamp_ms: first[0].timestamp_ms,
+                record_key: first[0].record_key.clone(),
+            };
+            let second = storage
+                .browse_search_documents(SearchProfile::QuickAccessV1, "document", Some(&cursor), 1)
+                .await
+                .unwrap();
+            assert_eq!(second[0].record_key.as_ref(), "GraphqlSoupDocument:d2");
+
+            let details = {
+                let conn = storage.conn();
+                let mut plan = conn
+                    .prepare(
+                        "EXPLAIN QUERY PLAN SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = 'quick-access-v1' AND bucket = 'document' ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT 25",
+                    )
+                    .unwrap();
+                plan.query_map([], |row| row.get::<_, String>(3))
+                    .unwrap()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap()
+                    .join(" ")
+            };
+            assert!(
+                details.contains("search_documents_browse_idx"),
+                "browse query did not use projection index: {details}"
+            );
+            assert!(!details.contains("records"));
+
+            storage
+                .delete_batch(&[key("GraphqlSoupDocument:d2")])
+                .await
+                .unwrap();
+            // Replacing the same base key with an unsearchable record deletes
+            // the stale derived row in the same transaction.
+            storage
+                .put_batch(vec![(key("GraphqlSoupDocument:d1"), Record::default())])
+                .await
+                .unwrap();
+            assert_eq!(storage.search_document_count().unwrap(), 0);
+        });
+    }
+
+    #[test]
+    fn previous_search_schema_is_replaced_without_blob_backfill() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path();
+        {
+            let storage = SqliteStorage::open(path, "search-upgrade").unwrap();
+            let conn = storage.conn();
+            conn.execute_batch(
+                "DROP TABLE search_documents;
+                 CREATE TABLE search_documents (
+                     profile TEXT NOT NULL,
+                     __typename TEXT NOT NULL,
+                     id TEXT NOT NULL,
+                     entity_type TEXT NOT NULL,
+                     bucket TEXT NOT NULL,
+                     search_text TEXT NOT NULL,
+                     timestamp_ms INTEGER NOT NULL,
+                     source_hash TEXT NOT NULL,
+                     PRIMARY KEY(profile, __typename, id)
+                 );
+                 CREATE INDEX search_documents_browse_idx
+                     ON search_documents(
+                         profile, bucket, timestamp_ms DESC, __typename ASC, id ASC
+                     );
+                 UPDATE meta SET v = '2' WHERE k = 'search_schema_version';
+                 INSERT INTO records(key, value) VALUES ('Thing:stale', X'00');",
+            )
+            .unwrap();
+        }
+
+        let storage = SqliteStorage::open(path, "search-upgrade").unwrap();
+        assert_eq!(storage.record_count().unwrap(), 0);
+        let columns = {
+            let conn = storage.conn();
+            let mut statement = conn
+                .prepare("PRAGMA table_info('search_documents')")
+                .unwrap();
+            statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+        assert!(columns.iter().all(|column| column != "record_key"));
+        assert!(columns.iter().all(|column| column != "entity_type"));
+        assert!(columns.iter().any(|column| column == "__typename"));
+        assert!(columns.iter().any(|column| column == "id"));
     }
 
     #[test]

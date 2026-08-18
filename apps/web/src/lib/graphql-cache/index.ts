@@ -65,10 +65,17 @@ export type {
   ReadRecordsArgs,
   ReadResult,
   RecordCursor,
+  SearchCacheArgs,
+  SearchCachePage,
+  SearchCursor,
+  SearchDocumentWire,
+  SearchProfile,
   SelectedRecordPageWire,
   WriteResult,
 } from './protocol';
 export {
+  MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
+  validateCacheSearchArgs,
   validateRecordSelectionLimit,
 } from './protocol';

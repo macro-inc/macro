@@ -20,6 +20,33 @@ describe('coordinator runtime protocol', () => {
   it('validates unchanged cache RPC and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'plan',
+          limit: 20,
+          nowMs: 123,
+        },
+      })
+    ).toBe(true);
+    expect(
+      isCacheRequest({
+        id: 2,
+        kind: 'search',
+        request: {
+          profile: 'quick-access-v1',
+          buckets: ['document'],
+          query: 'plan',
+          limit: 20,
+          nowMs: 123,
+          extra: true,
+        },
+      })
+    ).toBe(false);
     expect(isCacheRequest({ id: 1, kind: 'clear', surprise: true })).toBe(
       false
     );

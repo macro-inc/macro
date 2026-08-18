@@ -2563,6 +2563,7 @@ version = "0.1.0"
 dependencies = [
  "apollo-compiler",
  "apollo-parser",
+ "chrono",
  "lru",
  "maybe_send",
  "pollster",
@@ -2602,7 +2603,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-lock",
  "cache-core",

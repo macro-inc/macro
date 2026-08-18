@@ -10,6 +10,7 @@ import type {
   CacheResponse,
   EnqueueOptimisticMutationResult,
   ReadResult,
+  SearchCachePage,
   SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
@@ -379,6 +380,12 @@ export class CacheWorkerCore {
           request.fragmentName,
           request.cursor,
           request.limit
+        );
+        return result;
+      })
+      .with({ kind: 'search' }, async (request) => {
+        const result: SearchCachePage = await this.requireEngine().search(
+          request.request
         );
         return result;
       })

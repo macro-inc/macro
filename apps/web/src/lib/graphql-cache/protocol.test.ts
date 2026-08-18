@@ -4,6 +4,7 @@ import {
   isCacheResponse,
   isWorkerMessage,
   MAX_RECORD_SELECTION_PAGE_SIZE,
+  validateCacheSearchArgs,
   validateRecordSelectionLimit,
 } from './protocol';
 
@@ -26,6 +27,44 @@ describe('validateRecordSelectionLimit', () => {
     expect(() => validateRecordSelectionLimit(limit)).toThrow(
       'record selection limit must be an integer between 1 and 500'
     );
+  });
+});
+
+describe('validateCacheSearchArgs', () => {
+  it('fills transport-neutral defaults and preserves deterministic clocks', () => {
+    expect(
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        nowMs: 123,
+      })
+    ).toEqual({
+      profile: 'quick-access-v1',
+      buckets: [],
+      query: '',
+      limit: 25,
+      nowMs: 123,
+    });
+  });
+
+  it('rejects unbounded text, invalid buckets and page sizes', () => {
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        query: 'x'.repeat(513),
+        limit: 25,
+      })
+    ).toThrow('query is too long');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        buckets: ['Document; DROP TABLE records'],
+        limit: 25,
+      })
+    ).toThrow('invalid cache search bucket');
+    expect(() =>
+      validateCacheSearchArgs({ profile: 'quick-access-v1', limit: 501 })
+    ).toThrow('record selection limit');
   });
 });
 

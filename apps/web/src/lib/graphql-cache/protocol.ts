@@ -29,6 +29,37 @@ export type SelectedRecordPageWire = {
   nextCursor: RecordCursor | null;
 };
 
+export type SearchProfile = 'quick-access-v1';
+
+export type SearchCursor = {
+  timestampMs: number;
+  recordKey: string;
+};
+
+export type SearchDocumentWire = {
+  profile: SearchProfile;
+  recordKey: string;
+  bucket: string;
+  searchText: string;
+  timestampMs: number;
+  sourceHash: string;
+};
+
+export type SearchCacheArgs = {
+  profile: SearchProfile;
+  buckets?: string[];
+  query?: string;
+  cursor?: SearchCursor;
+  limit: number;
+  /** Injected for deterministic freshness scoring. Defaults to Date.now(). */
+  nowMs?: number;
+};
+
+export type SearchCachePage = {
+  documents: SearchDocumentWire[];
+  nextCursor: SearchCursor | null;
+};
+
 export type ReadRecordsArgs = {
   /** Serialized generated fragment document. */
   document: string;
@@ -39,6 +70,7 @@ export type ReadRecordsArgs = {
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
 
 /** Validates a record-selection page size before crossing a host boundary. */
 export function validateRecordSelectionLimit(limit: number): number {
@@ -52,6 +84,25 @@ export function validateRecordSelectionLimit(limit: number): number {
     );
   }
   return limit;
+}
+
+export function validateCacheSearchArgs(
+  args: SearchCacheArgs
+): SearchCacheArgs & { nowMs: number } {
+  validateRecordSelectionLimit(args.limit);
+  const query = args.query ?? '';
+  if (new TextEncoder().encode(query).length > MAX_CACHE_SEARCH_QUERY_BYTES) {
+    throw new RangeError('cache search query is too long');
+  }
+  if (args.buckets?.some((bucket) => !/^[a-z_]{1,64}$/.test(bucket))) {
+    throw new RangeError('invalid cache search bucket');
+  }
+  return {
+    ...args,
+    query,
+    buckets: args.buckets ?? [],
+    nowMs: args.nowMs ?? Date.now(),
+  };
 }
 
 export type QueryRevalidationWire = {
@@ -258,6 +309,10 @@ export type CacheRequest = { id: number } & (
       fragmentName: string;
       cursor?: RecordCursor;
       limit: number;
+    }
+  | {
+      kind: 'search';
+      request: SearchCacheArgs & { nowMs: number };
     }
   | {
       kind: 'inspect-query';

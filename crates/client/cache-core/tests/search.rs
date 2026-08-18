@@ -1,0 +1,278 @@
+use cache_core::engine::{BeginOptimisticWrite, Engine};
+use cache_core::search::{SearchProfile, SearchRequest};
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{CacheValue, EntityKey, Record};
+use pollster::block_on;
+use serde_json::{Value as Json, json};
+
+const QUERY: &str = r#"
+query Soup($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupDocument { documentName: name ownerId }
+      }
+      nextCursor
+    }
+  }
+}
+"#;
+
+fn variables() -> serde_json::Map<String, Json> {
+    let Json::Object(variables) = json!({ "input": { "limit": 100 } }) else {
+        unreachable!()
+    };
+    variables
+}
+
+fn page(name: &str) -> Json {
+    json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "items": [{
+                    "__typename": "GraphqlSoupDocument",
+                    "id": "doc-1",
+                    "documentName": name,
+                    "ownerId": "user-1"
+                }],
+                "nextCursor": null
+            }
+        }
+    })
+}
+
+const RENAME: &str = r#"
+mutation Rename($inputs: [RenameEntityInput!]!) {
+  renameEntities(inputs: $inputs) {
+    results {
+      ... on GraphqlMutationSuccess {
+        effects {
+          ... on SoupUpdated {
+            item {
+              __typename
+              id
+              ... on GraphqlSoupDocument { documentName: name ownerId }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"#;
+
+fn request(query: &str, limit: usize) -> SearchRequest {
+    SearchRequest {
+        profile: SearchProfile::QuickAccessV1,
+        buckets: vec!["document".into()],
+        query: query.into(),
+        cursor: None,
+        limit,
+        now_ms: 1_000,
+    }
+}
+
+#[test]
+fn text_search_loads_compact_catalog_once_and_never_scans_records() {
+    block_on(async {
+        let storage = InMemoryStorage::new();
+        let diagnostics = storage.clone();
+        let mut engine = Engine::new(storage);
+        engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &variables(),
+                &page("Alpha Plan"),
+                None,
+            )
+            .await
+            .unwrap();
+        let gets_before_search = diagnostics.record_get_count();
+
+        let first = engine.search(&request("alpha", 20)).await.unwrap();
+        let second = engine.search(&request("plan", 20)).await.unwrap();
+        assert_eq!(
+            first.documents[0].record_key.as_ref(),
+            "GraphqlSoupDocument:doc-1"
+        );
+        assert_eq!(second.documents.len(), 1);
+        assert_eq!(diagnostics.search_catalog_load_count(), 1);
+        assert_eq!(diagnostics.record_get_count(), gets_before_search);
+        assert_eq!(diagnostics.record_scan_count(), 0);
+
+        // A write-through update patches the loaded catalog incrementally.
+        engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &variables(),
+                &page("Beta Plan"),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            engine
+                .search(&request("alpha", 20))
+                .await
+                .unwrap()
+                .documents
+                .is_empty()
+        );
+        assert_eq!(
+            engine
+                .search(&request("beta", 20))
+                .await
+                .unwrap()
+                .documents
+                .len(),
+            1
+        );
+        assert_eq!(diagnostics.search_catalog_load_count(), 1);
+
+        engine
+            .delete_keys(&[EntityKey::entity("GraphqlSoupDocument", &["doc-1"])])
+            .await
+            .unwrap();
+        assert!(
+            engine
+                .search(&request("beta", 20))
+                .await
+                .unwrap()
+                .documents
+                .is_empty()
+        );
+        assert_eq!(diagnostics.record_scan_count(), 0);
+    });
+}
+
+#[test]
+fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &variables(),
+                &page("Alpha Plan"),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .search(&request("alpha", 20))
+                .await
+                .unwrap()
+                .documents
+                .len(),
+            1
+        );
+
+        let Json::Object(rename_variables) = json!({
+            "inputs": [{
+                "entity": { "type": "DOCUMENT", "id": "doc-1" },
+                "displayName": "Beta Plan"
+            }]
+        }) else {
+            unreachable!()
+        };
+        let optimistic = json!({
+            "renameEntities": {
+                "results": [{
+                    "__typename": "GraphqlMutationSuccess",
+                    "effects": [{
+                        "__typename": "SoupUpdated",
+                        "item": {
+                            "__typename": "GraphqlSoupDocument",
+                            "id": "doc-1",
+                            "documentName": "Beta Plan",
+                            "ownerId": "user-1"
+                        }
+                    }]
+                }]
+            }
+        });
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: RENAME,
+                    operation_name: Some("Rename"),
+                    variables: &rename_variables,
+                    data: &optimistic,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            engine
+                .search(&request("alpha", 20))
+                .await
+                .unwrap()
+                .documents
+                .is_empty()
+        );
+        assert_eq!(
+            engine
+                .search(&request("beta", 20))
+                .await
+                .unwrap()
+                .documents
+                .len(),
+            1
+        );
+    });
+}
+
+#[test]
+fn empty_query_is_bounded_and_uses_recent_projection_path() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let entries = (0..1_000)
+            .map(|index| {
+                let mut record = Record::default();
+                record.fields.insert(
+                    "__typename".into(),
+                    CacheValue::String("GraphqlSoupDocument".into()),
+                );
+                record.fields.insert(
+                    "name".into(),
+                    CacheValue::String(format!("Document {index}")),
+                );
+                record.fields.insert(
+                    "updatedAt".into(),
+                    CacheValue::Number(cache_core::value::CacheNumber::PosInt(index)),
+                );
+                (
+                    EntityKey::entity("GraphqlSoupDocument", &[&index.to_string()]),
+                    record,
+                )
+            })
+            .collect();
+        storage.put_batch(entries).await.unwrap();
+        let diagnostics = storage.clone();
+        let mut engine = Engine::new(storage);
+
+        let page = engine.search(&request("", 25)).await.unwrap();
+        assert_eq!(page.documents.len(), 25);
+        assert_eq!(page.documents[0].timestamp_ms, 999);
+        assert!(page.next_cursor.is_some());
+        assert_eq!(diagnostics.search_catalog_load_count(), 0);
+        assert_eq!(diagnostics.record_get_count(), 0);
+        assert_eq!(diagnostics.record_scan_count(), 0);
+    });
+}

@@ -106,6 +106,33 @@ describe('createTauriCacheHost', () => {
     });
   });
 
+  it('searches the compact native projection with the same typed request', async () => {
+    const page = { documents: [], nextCursor: null };
+    invokeMock.mockImplementation((command: string) =>
+      Promise.resolve(command === 'graphql_cache_search' ? page : null)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+
+    await expect(
+      host.search({
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
+        limit: 25,
+        nowMs: 123,
+      })
+    ).resolves.toEqual(page);
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_search', {
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'plan',
+        limit: 25,
+        nowMs: 123,
+      },
+    });
+  });
+
   it('sends writes with origin op id and identity', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const writeResult = { changed: ['A:1'], affectedOps: [], reset: false };

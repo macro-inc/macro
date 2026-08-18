@@ -222,8 +222,11 @@ const isNonEmptyString = (value: unknown): value is string =>
 const isOptionalString = (value: unknown): value is string | undefined =>
   value === undefined || isString(value);
 
+const isSafeInteger = (value: unknown): value is number =>
+  Number.isSafeInteger(value);
+
 const isSafeNonNegativeInteger = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && (value as number) >= 0;
+  isSafeInteger(value) && (value as number) >= 0;
 
 const isPositiveInteger = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) > 0;
@@ -294,6 +297,31 @@ const isEntityResolvers = (value: unknown): boolean =>
         isString(resolver.targetType) &&
         isStringArray(resolver.argumentPath)
     ));
+
+const isSearchRequest = (value: unknown): boolean => {
+  if (!isRecord(value)) return false;
+  const cursor = value.cursor;
+  return (
+    hasOnlyKeys(value, [
+      'profile',
+      'buckets',
+      'query',
+      'cursor',
+      'limit',
+      'nowMs',
+    ]) &&
+    value.profile === 'quick-access-v1' &&
+    isStringArray(value.buckets) &&
+    isString(value.query) &&
+    isPositiveInteger(value.limit) &&
+    isSafeNonNegativeInteger(value.nowMs) &&
+    (cursor === undefined ||
+      (isRecord(cursor) &&
+        hasOnlyKeys(cursor, ['timestampMs', 'recordKey']) &&
+        isSafeInteger(cursor.timestampMs) &&
+        isString(cursor.recordKey)))
+  );
+};
 
 const commonRequest = (record: UnknownRecord): boolean =>
   isSafeNonNegativeInteger(record.id) && isNonEmptyString(record.kind);
@@ -456,6 +484,11 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isString(value.fragmentName) &&
         isOptionalString(value.cursor) &&
         isPositiveInteger(value.limit)
+      );
+    case 'search':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+        isSearchRequest(value.request)
       );
     case 'inspect-query':
       return (

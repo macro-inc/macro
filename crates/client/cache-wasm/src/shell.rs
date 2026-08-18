@@ -9,6 +9,7 @@ use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection};
+use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
@@ -767,6 +768,21 @@ impl CacheEngine {
                 .engine_mut()?
                 .read_records(&selection, cursor.as_ref(), limit as usize)
                 .await;
+            let page = state.engine_result(result)?;
+            to_js(&page)
+        })
+    }
+
+    /// Searches the compact materialized projection. Empty queries use the
+    /// indexed recent path; text queries rank the compact catalog without
+    /// scanning normalized record blobs.
+    pub fn search(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: SearchRequest = serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let result = state.engine_mut()?.search(&request).await;
             let page = state.engine_result(result)?;
             to_js(&page)
         })

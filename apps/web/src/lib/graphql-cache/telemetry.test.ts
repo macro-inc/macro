@@ -144,6 +144,7 @@ describe('cache telemetry privacy contract', () => {
       init: 'initialization',
       read: 'read',
       'read-records': 'read',
+      search: 'read',
       write: 'write',
       'enqueue-optimistic-mutation': 'transaction',
       'inspect-query-variants': 'inspection',

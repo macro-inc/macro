@@ -5,6 +5,7 @@ use cache_core::queue::{
     MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation,
     PersistedOptimisticLayer, StoredMutation,
 };
+use cache_core::search::{SearchProfile, project_search_documents};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use cache_sqlite::SqliteStorage;
@@ -352,6 +353,58 @@ async fn record_contract<S: Storage>(storage: &mut S) {
         .unwrap();
 }
 
+async fn search_projection_contract<S: Storage>(storage: &mut S) {
+    let searchable_key = key("GraphqlSoupDocument:search-1");
+    let mut searchable = Record::default();
+    searchable.fields.insert(
+        "__typename".into(),
+        CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    searchable
+        .fields
+        .insert("name".into(), CacheValue::String("Quarterly Plan".into()));
+    searchable.fields.insert(
+        "updatedAt".into(),
+        CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
+    );
+    assert_eq!(
+        project_search_documents(&searchable_key, &searchable).len(),
+        1
+    );
+    storage
+        .put_batch(vec![(searchable_key.clone(), searchable)])
+        .await
+        .unwrap();
+    let loaded = storage
+        .load_search_documents(SearchProfile::QuickAccessV1)
+        .await
+        .unwrap();
+    assert!(
+        loaded
+            .iter()
+            .any(|document| document.record_key == searchable_key)
+    );
+    let browsed = storage
+        .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 1)
+        .await
+        .unwrap();
+    assert_eq!(browsed.len(), 1);
+    assert_eq!(browsed[0].record_key, searchable_key);
+
+    storage
+        .delete_batch(std::slice::from_ref(&searchable_key))
+        .await
+        .unwrap();
+    assert!(
+        storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap()
+            .iter()
+            .all(|document| document.record_key != searchable_key)
+    );
+}
+
 async fn reopen_contract<F: BackendFactory>(
     factory: &mut F,
     mut storage: F::Backend,
@@ -669,6 +722,7 @@ async fn common_contract<F: BackendFactory>(
     mut storage: F::Backend,
 ) -> F::Backend {
     record_contract(&mut storage).await;
+    search_projection_contract(&mut storage).await;
     let mut storage = reopen_contract(factory, storage).await;
     queue_contract(&mut storage).await;
     clear_contract(&mut storage).await;

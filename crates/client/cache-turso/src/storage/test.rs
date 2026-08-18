@@ -111,6 +111,117 @@ async fn expect_every_storage_method_latched(
 }
 
 #[test]
+fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("search-projection").unwrap();
+        let mut document = Record::default();
+        document.fields.insert(
+            "__typename".into(),
+            cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
+        );
+        document.fields.insert(
+            "name".into(),
+            cache_core::value::CacheValue::String("Quarterly Plan".into()),
+        );
+        document.fields.insert(
+            "updatedAt".into(),
+            cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
+        );
+        storage
+            .put_batch(vec![
+                (key("GraphqlSoupDocument:d1"), document.clone()),
+                (key("GraphqlSoupDocument:d2"), document),
+            ])
+            .await
+            .unwrap();
+
+        let columns = driver::query(
+            &storage.connection(),
+            "PRAGMA table_info('search_documents')",
+            Vec::new(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| required_text(&row, 1).unwrap())
+        .collect::<Vec<_>>();
+        assert_eq!(
+            columns,
+            [
+                "profile",
+                "__typename",
+                "id",
+                "bucket",
+                "search_text",
+                "timestamp_ms",
+                "source_hash",
+            ]
+        );
+
+        let loaded = storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert!(
+            loaded
+                .iter()
+                .all(|document| document.search_text == "quarterly plan")
+        );
+        let first = storage
+            .browse_search_documents(SearchProfile::QuickAccessV1, "document", None, 1)
+            .await
+            .unwrap();
+        assert_eq!(first[0].record_key.as_ref(), "GraphqlSoupDocument:d1");
+        let cursor = SearchCursor {
+            timestamp_ms: first[0].timestamp_ms,
+            record_key: first[0].record_key.clone(),
+        };
+        let second = storage
+            .browse_search_documents(SearchProfile::QuickAccessV1, "document", Some(&cursor), 1)
+            .await
+            .unwrap();
+        assert_eq!(second[0].record_key.as_ref(), "GraphqlSoupDocument:d2");
+
+        let plan = driver::query(
+            &storage.connection(),
+            &format!("EXPLAIN QUERY PLAN {SEARCH_BROWSE}"),
+            vec![
+                text("quick-access-v1"),
+                text("document"),
+                Value::from_i64(25),
+            ],
+        )
+        .unwrap();
+        let details = plan
+            .iter()
+            .filter_map(|row| required_text(row, 3).ok())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            details.contains("search_documents_browse_idx"),
+            "browse query did not use projection index: {details}"
+        );
+        assert!(!details.contains("records"));
+
+        storage
+            .delete_batch(&[key("GraphqlSoupDocument:d2")])
+            .await
+            .unwrap();
+        storage
+            .put_batch(vec![(key("GraphqlSoupDocument:d1"), record("internal"))])
+            .await
+            .unwrap();
+        assert!(
+            storage
+                .load_search_documents(SearchProfile::QuickAccessV1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
+}
+
+#[test]
 fn queue_diagnostics_use_one_payload_free_aggregate_query() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("queue-diagnostics").unwrap();
@@ -298,6 +409,8 @@ fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
                 "queue-diagnostics-index",
                 "DROP INDEX mutation_queue_created_at_ms_idx",
             ),
+            ("search-table", "DROP TABLE search_documents"),
+            ("search-index", "DROP INDEX search_documents_browse_idx"),
         ] {
             let database = TursoMemoryDatabase::new(format!("mismatch-{name}.db"));
             let storage = database.open("scope").unwrap();
@@ -497,12 +610,27 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
             ],
         ),
         (
+            "search-extra-column",
+            vec![
+                "DROP TABLE search_documents",
+                "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, extra TEXT, PRIMARY KEY (profile, __typename, id))",
+                CREATE_SCHEMA[3],
+            ],
+        ),
+        (
+            "search-index-order",
+            vec![
+                "DROP INDEX search_documents_browse_idx",
+                "CREATE INDEX search_documents_browse_idx ON search_documents(profile, timestamp_ms DESC, bucket, __typename, id)",
+            ],
+        ),
+        (
             "queue-autoincrement",
             vec![
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[3],
+                CREATE_SCHEMA[5],
             ],
         ),
         (
@@ -511,7 +639,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL, FOREIGN KEY (identity) REFERENCES meta(key))",
-                CREATE_SCHEMA[3],
+                CREATE_SCHEMA[5],
             ],
         ),
         (
@@ -520,7 +648,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[3],
+                CREATE_SCHEMA[5],
             ],
         ),
         (
@@ -529,7 +657,7 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
                 "DROP TABLE optimistic_layers",
                 "DROP TABLE mutation_queue",
                 "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 1, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
-                CREATE_SCHEMA[3],
+                CREATE_SCHEMA[5],
             ],
         ),
         (

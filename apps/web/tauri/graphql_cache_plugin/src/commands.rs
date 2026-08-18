@@ -20,6 +20,7 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::record_selection::{RecordCursor, SelectedRecordPage};
+use cache_core::search::{SearchPage, SearchRequest};
 use cache_sqlite::SqliteStorage;
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -115,6 +116,15 @@ pub async fn graphql_cache_read_records(
     engine_handle(&state)?
         .read_records(document, fragment_name, parse_record_cursor(cursor)?, limit)
         .await
+}
+
+/// Searches the compact cache projection without scanning normalized records.
+#[tauri::command]
+pub async fn graphql_cache_search(
+    state: State<'_, CacheState>,
+    request: SearchRequest,
+) -> Result<SearchPage, String> {
+    engine_handle(&state)?.search(request).await
 }
 
 /// Normalizes and stores a network response; broadcasts affected operations

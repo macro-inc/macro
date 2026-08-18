@@ -20,6 +20,7 @@ use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::{RecordCursor, RecordSelection, SelectedRecordPage};
+use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_sqlite::SqliteStorage;
 use serde::Serialize;
@@ -256,6 +257,17 @@ impl EngineHandle {
             .await
             .engine
             .read_records(&selection, cursor.as_ref(), limit as usize)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Searches the compact materialized projection without record scans.
+    pub async fn search(&self, request: SearchRequest) -> Result<SearchPage, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .search(&request)
             .await
             .map_err(|error| error.to_string())
     }

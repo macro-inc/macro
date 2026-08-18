@@ -20,7 +20,10 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   type ReadRecordsArgs,
   type ReadResult,
+  type SearchCacheArgs,
+  type SearchCachePage,
   type SelectedRecordPageWire,
+  validateCacheSearchArgs,
   validateRecordSelectionLimit,
   type WorkerMessage,
   type WriteResult,
@@ -606,6 +609,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           ? initializationTimeoutMs
           : msg.kind === 'read' ||
               msg.kind === 'read-records' ||
+              msg.kind === 'search' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
             ? requestTimeoutMs
@@ -785,6 +789,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         cursor: args.cursor,
         limit,
       })) as SelectedRecordPageWire;
+    },
+
+    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+      const requestArgs = validateCacheSearchArgs(args);
+      await ensureInitialized();
+      return (await request({
+        kind: 'search',
+        request: requestArgs,
+      })) as SearchCachePage;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

@@ -52,6 +52,46 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it('dispatches bounded search to the wasm compact projection', async () => {
+    const page = {
+      documents: [
+        {
+          profile: 'quick-access-v1' as const,
+          recordKey: 'GraphqlSoupDocument:d1',
+          bucket: 'document',
+          searchText: 'quarterly plan',
+          timestampMs: 123,
+          sourceHash: 'abc',
+        },
+      ],
+      nextCursor: null,
+    };
+    const search = vi.fn().mockResolvedValue(page);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ search }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    const request = {
+      profile: 'quick-access-v1' as const,
+      buckets: ['document'],
+      query: 'plan',
+      limit: 20,
+      nowMs: 456,
+    };
+    await core.handleRequest(port, { id: 2, kind: 'search', request });
+
+    expect(search).toHaveBeenCalledWith(request);
+    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
+  });
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {

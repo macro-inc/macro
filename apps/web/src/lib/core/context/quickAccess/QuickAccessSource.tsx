@@ -21,10 +21,12 @@ import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { searchQuickAccessItems } from './entity-search';
 import type {
   Bucket,
   BucketCombination,
@@ -242,6 +244,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const contacts = useContacts();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
+  const cacheHost = getGraphqlSoupCacheHost();
+  const [cacheRevision, setCacheRevision] = createSignal(0);
+  const unsubscribeCacheChanges = cacheHost?.onCacheChanged(() => {
+    setCacheRevision((revision) => revision + 1);
+  });
+  onCleanup(() => unsubscribeCacheChanges?.());
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
     useQuickAccessCrmCompaniesQuery();
@@ -757,7 +765,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const first = args[0];
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
-    const list = createLazyMemo(() => {
+    const baseList = createLazyMemo(() => {
       if (options?.enabled?.() === false) return [];
       let indices: IndexEntry[];
 
@@ -783,6 +791,78 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
       return resolveEntries(indices);
     });
+
+    const [projectedIds, setProjectedIds] = createSignal<string[] | undefined>(
+      undefined
+    );
+    if (options && cacheHost) {
+      let generation = 0;
+      onCleanup(() => {
+        generation += 1;
+      });
+      createEffect(() => {
+        cacheRevision();
+        const enabled = options.enabled?.() !== false;
+        const query = options.searchTerm?.() ?? '';
+        const currentGeneration = ++generation;
+        if (!enabled) {
+          setProjectedIds(undefined);
+          return;
+        }
+        void cacheHost
+          .search({
+            profile: 'quick-access-v1',
+            buckets,
+            query,
+            limit: 500,
+          })
+          .then(
+            (page) => {
+              if (currentGeneration !== generation) return;
+              setProjectedIds(
+                page.documents.map(({ recordKey }) => {
+                  const separator = recordKey.indexOf(':');
+                  return separator < 0
+                    ? recordKey
+                    : recordKey.slice(separator + 1);
+                })
+              );
+            },
+            () => {
+              if (currentGeneration === generation) setProjectedIds([]);
+            }
+          );
+      });
+    }
+
+    const list = createLazyMemo(() => {
+      const base = baseList();
+      if (!options) return base;
+      const local = searchQuickAccessItems(base, options.searchTerm?.() ?? '');
+      const projected = projectedIds();
+      if (!projected) return local;
+
+      // Search describes cached contents, not corpus completeness. Keep the
+      // server-backed/local candidates as a fallback after projection-ranked
+      // hits, and resolve full data only from the already materialized item
+      // cache. Consumers never need a normalized-record scan.
+      const allowed = new Set(base.map((item) => item.id));
+      const seen = new Set<string>();
+      const ranked: QuickAccessItem[] = [];
+      for (const id of projected) {
+        if (!allowed.has(id) || seen.has(id)) continue;
+        const item = itemCache.get(id)?.item;
+        if (!item) continue;
+        seen.add(id);
+        ranked.push(item);
+      }
+      for (const item of local) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        ranked.push(item);
+      }
+      return ranked;
+    });
     return {
       items: list,
       totalCount: () => list().length,
@@ -807,6 +887,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   return {
     useList,
     usesRecordSelection: () => false,
+    usesSearchProjection: () => cacheHost !== undefined,
     isLoading,
     refresh,
     getById,

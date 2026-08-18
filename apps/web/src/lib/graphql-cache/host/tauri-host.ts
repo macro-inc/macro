@@ -18,7 +18,10 @@ import {
   type MutationSettlement,
   type ReadRecordsArgs,
   type ReadResult,
+  type SearchCacheArgs,
+  type SearchCachePage,
   type SelectedRecordPageWire,
+  validateCacheSearchArgs,
   validateRecordSelectionLimit,
   type WriteResult,
 } from '../protocol';
@@ -172,6 +175,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           limit,
         }
       );
+    },
+
+    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+      const searchRequest = validateCacheSearchArgs(args);
+      await ready;
+      return await request<SearchCachePage>('graphql_cache_search', {
+        request: searchRequest,
+      });
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

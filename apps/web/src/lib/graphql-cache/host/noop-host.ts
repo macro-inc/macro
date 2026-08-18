@@ -31,6 +31,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
       validateRecordSelectionLimit(args.limit);
       return { records: [], nextCursor: null };
     },
+    async search() {
+      return { documents: [], nextCursor: null };
+    },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },

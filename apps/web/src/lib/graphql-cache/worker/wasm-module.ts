@@ -18,6 +18,8 @@ import type {
   QueryRevalidationWire,
   ReadResult,
   RecordCursor,
+  SearchCacheArgs,
+  SearchCachePage,
   SelectedRecordPageWire,
   WriteResult,
 } from '../protocol';
@@ -71,6 +73,9 @@ export interface CacheEngine {
     cursor: RecordCursor | undefined,
     limit: number
   ): Promise<SelectedRecordPageWire>;
+  search(
+    request: SearchCacheArgs & { nowMs: number }
+  ): Promise<SearchCachePage>;
   writeQuery(
     originOpId: string | undefined,
     query: string,
