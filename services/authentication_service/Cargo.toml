@@ -108,6 +108,7 @@ mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
+models_permissions = { path = "../../crates/models_permissions" }
 model_notifications = { path = "../../crates/model_notifications" }
 native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }

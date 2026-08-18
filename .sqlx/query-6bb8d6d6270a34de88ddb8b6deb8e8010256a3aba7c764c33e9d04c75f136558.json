@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,\n                t.allow_non_admin_invites,\n                COALESCE(tcs.crm_enabled, FALSE) AS \"crm_enabled!\"\n            FROM team t\n            LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id\n            WHERE t.id = $1\n            ",
+  "query": "\n            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)\n            VALUES ($1, $2, $3, $4, 1, $5, $6)\n            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,\n                default_link_share as \"default_link_share: LinkShare\"\n            ",
   "describe": {
     "columns": [
       {
@@ -25,28 +25,28 @@
       },
       {
         "ordinal": 4,
-        "name": "auto_join_domain",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
         "name": "enterprise",
         "type_info": "Bool"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "allow_non_admin_invites",
         "type_info": "Bool"
       },
       {
-        "ordinal": 7,
-        "name": "crm_enabled!",
-        "type_info": "Bool"
+        "ordinal": 6,
+        "name": "default_link_share: LinkShare",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Varchar",
+        "Text",
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -54,11 +54,10 @@
       false,
       false,
       false,
-      true,
       false,
       false,
-      null
+      true
     ]
   },
-  "hash": "8b1e8ff98b7b6cfc0d18fc32bcba5f41392f2f716d7c3ba7c7d50044981a322e"
+  "hash": "6bb8d6d6270a34de88ddb8b6deb8e8010256a3aba7c764c33e9d04c75f136558"
 }

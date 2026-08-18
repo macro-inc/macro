@@ -1,4 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
+import {
+  getLinkShareScope,
+  LINK_SHARE_SCOPE_OPTIONS,
+  type LinkShareScope,
+  NO_LINK_SHARE,
+} from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
@@ -46,7 +52,15 @@ import {
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, cn, Dialog, Panel, ToggleSwitch, Tooltip } from '@ui';
+import {
+  Button,
+  cn,
+  Dialog,
+  Panel,
+  SegmentedControl,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createMemo,
   createSignal,
@@ -979,6 +993,20 @@ function TeamManagement(props: {
     toggleNonAdminInvitesMutation.mutate({ teamId: props.teamId });
   };
 
+  // The team-wide default link-share scope for newly shared items. NONE
+  // (stored as null) means link sharing starts off.
+  const defaultLinkShare = () =>
+    getLinkShareScope(teamQuery.data?.team.default_link_share);
+
+  const handleChangeDefaultLinkShare = (scope: LinkShareScope) => {
+    if (!props.teamId || patchTeamMutation.isPending) return;
+    if (scope === defaultLinkShare()) return;
+    patchTeamMutation.mutate({
+      teamId: props.teamId,
+      request: { default_link_share: scope === NO_LINK_SHARE ? null : scope },
+    });
+  };
+
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
     if (!props.teamId || !newName) return;
@@ -1296,6 +1324,24 @@ function TeamManagement(props: {
                     teamQuery.isLoading
                   }
                   onChange={handleToggleNonAdminInvites}
+                />
+              </SettingsRow>
+
+              <SettingsRow
+                label="Default link sharing"
+                description="The link-sharing scope newly shared items start with. None means link sharing starts off."
+                hideDescriptionOnMobile
+              >
+                <SegmentedControl
+                  aria-label="Default link sharing scope"
+                  size="sm"
+                  value={defaultLinkShare()}
+                  options={LINK_SHARE_SCOPE_OPTIONS.map((option) => ({
+                    ...option,
+                    disabled:
+                      patchTeamMutation.isPending || teamQuery.isLoading,
+                  }))}
+                  onChange={handleChangeDefaultLinkShare}
                 />
               </SettingsRow>
             </Show>
