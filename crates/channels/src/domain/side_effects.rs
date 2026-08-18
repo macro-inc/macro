@@ -30,18 +30,23 @@ use uuid::Uuid;
 /// Entity type used by message mentions that target a bot.
 pub const BOT_MENTION_ENTITY_TYPE: &str = "bot";
 
-/// A trigger derived from a channel message that mentions one or more bots.
+/// A bot-trigger candidate derived from a user-authored channel message.
+///
+/// Every user-authored message is a candidate; whether it actually triggers a
+/// bot (explicit mention or inferred invocation) is decided downstream by the
+/// consumer.
 #[derive(Debug, Clone)]
 pub struct ChannelBotTrigger {
-    /// Channel containing the triggering message.
+    /// Channel containing the candidate message.
     pub channel_id: Uuid,
-    /// The user-authored message that mentioned the bot(s).
+    /// The user-authored message.
     pub message: MutatedMessage,
-    /// Bots mentioned in the message.
-    pub bot_ids: Vec<BotId>,
+    /// Bots explicitly mentioned in the message that are active in the
+    /// channel. Empty when the message mentions no bot.
+    pub mentioned_bot_ids: Vec<BotId>,
 }
 
-/// Sender for bot triggers derived from channel messages.
+/// Sender for bot-trigger candidates derived from channel messages.
 pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 
 /// Collect the bot ids mentioned in a message.
@@ -392,7 +397,7 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
         }
     }
 
-    /// Dispatch bot triggers for any bots mentioned in a user-authored message.
+    /// Dispatch a bot-trigger candidate for a user-authored message.
     fn dispatch_bot_triggers(
         &self,
         channel_id: Uuid,
@@ -405,17 +410,13 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
         if message.sender_id.as_user().is_none() {
             return;
         }
-        let bot_ids = active_bot_mention_ids(mentions, participants);
-        if bot_ids.is_empty() {
-            return;
-        }
 
         if let Some(bot_triggers) = &self.bot_triggers
             && bot_triggers
                 .send(ChannelBotTrigger {
                     channel_id,
                     message: message.clone(),
-                    bot_ids,
+                    mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
                 })
                 .is_err()
         {

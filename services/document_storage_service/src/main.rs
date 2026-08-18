@@ -93,9 +93,11 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
-use notification::domain::service::SqsNotificationIngress;
-use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
-use notification::outbound::queue::SqsQueue;
+use notification::domain::service::{
+    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
+    WebSocketNotificationConsumerService,
+};
+use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -924,6 +926,14 @@ async fn main() -> anyhow::Result<()> {
             macro_agent_tool_context,
             macro_agent_tools,
         )),
+        Arc::new(
+            channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
+                channels_service.clone(),
+                Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
+                    ai_usage::pg_recorder(db.clone()),
+                )),
+            ),
+        ),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
@@ -949,6 +959,46 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
         reminders_service.clone(),
     ));
+
+    let websocket_notification_consumer_service =
+        Arc::new(WebSocketNotificationConsumerService::new(
+            NotificationTopicConsumer::<model_notifications::NotifEvent>::from_env(
+                config.kafka_brokers.as_ref(),
+            )
+            .map_err(|error| {
+                anyhow::anyhow!("failed to create WebSocket notification topic consumer: {error:?}")
+            })?,
+        ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&websocket_notification_consumer_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
 
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
@@ -1161,8 +1211,14 @@ async fn main() -> anyhow::Result<()> {
         graphql_soup_schema: complete_graph::build_schema_from_arcs(
             soup_service,
             soup_realtime_service,
+            websocket_notification_consumer_service,
         ),
         graphql_notification_reader,
+        // GraphQL reads the activity log through the readonly pool; the
+        // Kafka consumer's writer-pool repo above is separate on purpose.
+        activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+        )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,

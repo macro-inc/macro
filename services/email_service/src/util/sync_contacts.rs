@@ -1,14 +1,14 @@
-use crate::convert::map_person_to_contact;
+use crate::outbound::email_api::GmailApi;
 use crate::pubsub::util::publish_email_event;
 use anyhow::{Context, anyhow};
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
+use email_api_client::domain::models::EmailApiError;
 use futures::{StreamExt, stream};
-use gmail_client::GmailClient;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::contact::Contact;
+use models_email::service::contact::{Contact, ContactList};
 use models_email::service::link::Link;
 use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::sync_token::SyncTokens;
@@ -25,28 +25,33 @@ mod test;
 pub async fn sync_contacts<B: MacroEventBroker>(
     link: &Link,
     db: &PgPool,
-    gmail_client: &GmailClient,
+    email_api: &GmailApi,
     sqs_client: &SQS,
     macro_event_broker: &B,
-    gmail_access_token: &str,
 ) -> anyhow::Result<()> {
     // 1. Get existing sync tokens from our DB
     let (contacts_sync_token, other_contacts_sync_token) =
         fetch_existing_sync_tokens(db, link).await?;
 
     // 2. Fetch new contacts and the corresponding new sync tokens from the Gmail API
-    let (new_contacts, new_tokens) = fetch_new_contacts_from_google(
-        gmail_client,
+    let (new_contacts, new_tokens) = Box::pin(fetch_new_contacts_from_google(
+        email_api,
         link,
-        gmail_access_token,
         contacts_sync_token,
         other_contacts_sync_token,
-    )
+    ))
     .await;
 
     // 3. If we received any new/updated contacts, process and store them.
     if !new_contacts.is_empty() {
-        process_and_store_contacts(db, sqs_client, macro_event_broker, link, new_contacts).await?;
+        Box::pin(process_and_store_contacts(
+            db,
+            sqs_client,
+            macro_event_broker,
+            link,
+            new_contacts,
+        ))
+        .await?;
     }
 
     // 4. Store the new sync tokens in our DB
@@ -76,9 +81,8 @@ async fn fetch_existing_sync_tokens(
 /// Fetches primary and "other" contacts from the Google API.
 /// Errors from the API are logged but do not cause this function to fail.
 async fn fetch_new_contacts_from_google(
-    gmail_client: &GmailClient,
+    email_api: &GmailApi,
     link: &Link,
-    gmail_access_token: &str,
     contacts_sync_token: Option<String>,
     other_contacts_sync_token: Option<String>,
 ) -> (Vec<Contact>, SyncTokens) {
@@ -86,9 +90,8 @@ async fn fetch_new_contacts_from_google(
     let mut new_contacts_token = None;
     let mut new_other_contacts_token = None;
 
-    match gmail_client.get_self_contact(gmail_access_token).await {
-        Ok(person_resource) => {
-            let contact = map_person_to_contact(link.id, person_resource);
+    match email_api.get_self_contact(link.id).await {
+        Ok(contact) => {
             all_new_contacts.push(contact);
         }
         Err(e) => {
@@ -96,32 +99,34 @@ async fn fetch_new_contacts_from_google(
         }
     };
 
-    match gmail_client
-        .get_contacts(gmail_access_token, contacts_sync_token.as_deref())
-        .await
+    match list_contacts_with_expiry_recovery(
+        email_api,
+        link,
+        contacts_sync_token.as_deref(),
+        ContactListKind::Primary,
+    )
+    .await
     {
-        Ok((person_resources, sync_token)) => {
-            new_contacts_token = Some(sync_token);
-            let contacts = person_resources
-                .into_iter()
-                .map(|p| map_person_to_contact(link.id, p));
-            all_new_contacts.extend(contacts);
+        Ok(contact_list) => {
+            new_contacts_token = Some(contact_list.next_sync_token);
+            all_new_contacts.extend(contact_list.contacts);
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
         }
     };
 
-    match gmail_client
-        .get_other_contacts(gmail_access_token, other_contacts_sync_token.as_deref())
-        .await
+    match list_contacts_with_expiry_recovery(
+        email_api,
+        link,
+        other_contacts_sync_token.as_deref(),
+        ContactListKind::Other,
+    )
+    .await
     {
-        Ok((person_resources, sync_token)) => {
-            new_other_contacts_token = Some(sync_token);
-            let contacts = person_resources
-                .into_iter()
-                .map(|p| map_person_to_contact(link.id, p));
-            all_new_contacts.extend(contacts);
+        Ok(contact_list) => {
+            new_other_contacts_token = Some(contact_list.next_sync_token);
+            all_new_contacts.extend(contact_list.contacts);
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");
@@ -135,6 +140,49 @@ async fn fetch_new_contacts_from_google(
     };
 
     (all_new_contacts, new_sync_tokens)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ContactListKind {
+    Primary,
+    Other,
+}
+
+/// Lists one contact collection, retrying once from scratch when the stored
+/// sync token has expired.
+///
+/// People API sync tokens expire after about seven days; without this
+/// recovery, an idle link's contact sync would fail permanently until the
+/// user reconnected the inbox.
+async fn list_contacts_with_expiry_recovery(
+    email_api: &GmailApi,
+    link: &Link,
+    sync_token: Option<&str>,
+    kind: ContactListKind,
+) -> Result<ContactList, EmailApiError> {
+    match list_contacts_once(email_api, link, sync_token, kind).await {
+        Err(EmailApiError::OutdatedCursor) if sync_token.is_some() => {
+            tracing::warn!(
+                link_id = %link.id,
+                ?kind,
+                "contacts sync token expired; retrying with a full sync"
+            );
+            list_contacts_once(email_api, link, None, kind).await
+        }
+        result => result,
+    }
+}
+
+async fn list_contacts_once(
+    email_api: &GmailApi,
+    link: &Link,
+    sync_token: Option<&str>,
+    kind: ContactListKind,
+) -> Result<ContactList, EmailApiError> {
+    match kind {
+        ContactListKind::Primary => email_api.list_contacts(link.id, sync_token).await,
+        ContactListKind::Other => email_api.list_other_contacts(link.id, sync_token).await,
+    }
 }
 
 /// Handles processing (SFS uploads) and database storage for a list of contacts.

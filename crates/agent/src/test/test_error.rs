@@ -1,6 +1,7 @@
 use crate::error::*;
-use rig_core::agent::StreamingError;
-use rig_core::completion::{CompletionError, PromptError};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
+use rig_core::completion::CompletionError;
 
 fn prompt_cancelled() -> PromptError {
     PromptError::PromptCancelled {

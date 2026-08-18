@@ -3,6 +3,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from './channel';
 import { Message } from './message';
+import { postToChannel } from './post';
 
 /**
  * A thread within a channel, rooted at a top-level message. Replies and
@@ -45,19 +46,7 @@ export class Thread {
    * @returns The created reply.
    */
   async reply(body: string | RichMessage): Promise<Message> {
-    const { content, mentions } = toBody(body);
-    const { id } = unwrap(
-      await this.client.storage.postMessage({
-        path: { channel_id: this.channelId },
-        body: {
-          content,
-          mentions,
-          attachments: [],
-          thread_id: this.rootId,
-          nonce: crypto.randomUUID(),
-        },
-      }),
-    );
+    const id = await postToChannel(this.client, this, toBody(body));
     return Message.byId(this.client, this.channelId, id);
   }
 }

@@ -821,12 +821,12 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
         .expect("expected bot trigger");
     assert_eq!(trigger.channel_id, channel_id);
     assert_eq!(trigger.message.id, message_id);
-    assert_eq!(trigger.bot_ids, vec![bot_id::MACRO_AI_BOT_ID]);
+    assert_eq!(trigger.mentioned_bot_ids, vec![bot_id::MACRO_AI_BOT_ID]);
     assert!(bot_trigger_receiver.try_recv().is_err());
 }
 
 #[tokio::test]
-async fn user_message_with_uninstalled_bot_mention_does_not_enqueue_bot_trigger() {
+async fn user_message_with_uninstalled_bot_mention_enqueues_candidate_without_that_bot() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -874,6 +874,33 @@ async fn user_message_with_uninstalled_bot_mention_does_not_enqueue_bot_trigger(
             nonce: None,
             notification_policy: PostMessageNotificationPolicy::Default,
         })
+        .await;
+
+    let trigger = bot_trigger_receiver
+        .try_recv()
+        .expect("expected bot trigger candidate");
+    assert!(trigger.mentioned_bot_ids.is_empty());
+}
+
+#[tokio::test]
+async fn bot_message_never_enqueues_bot_trigger() {
+    let channel_id = Uuid::new_v4();
+    let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeContacts::default(),
+    )
+    .with_bot_trigger_sender(bot_trigger_sender);
+
+    service
+        .handle(bot_message_posted_event(
+            channel_id,
+            Uuid::new_v4(),
+            Some(Uuid::new_v4()),
+            &["macro|recipient@example.com"],
+        ))
         .await;
 
     assert!(bot_trigger_receiver.try_recv().is_err());

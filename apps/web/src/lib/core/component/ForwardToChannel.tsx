@@ -449,7 +449,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     >
       <Show when={isAuthenticated()}>
         {/* Row 1: Recipient input + ShareOptions */}
-        <div class="flex items-center pr-2">
+        <div class="flex items-center bg-surface pr-2">
           <div class="min-w-0 flex-1 min-h-11">
             <RecipientSelector<'user' | 'contact' | 'channel'>
               placeholder="To: Email or group"

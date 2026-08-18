@@ -11,7 +11,7 @@ import {
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type {
-  ConnGatewayInnerNotifValue,
+  ConnGatewayNotificationPayload,
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
@@ -256,7 +256,7 @@ export function createNotificationSource(
   }
 
   const mapWebsocketNotification = (
-    raw: ConnGatewayInnerNotifValue
+    raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
     return {
       ...raw,
@@ -271,7 +271,7 @@ export function createNotificationSource(
     }
     let parsedNotification: UnifiedNotification;
     try {
-      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
       const unsafeMapped = mapWebsocketNotification(raw);
       const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
       if (!parseResult.success) {

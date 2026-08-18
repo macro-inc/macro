@@ -13,7 +13,7 @@ import {
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
-import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
@@ -56,6 +56,7 @@ import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { useUserInfoQuery } from '@queries/auth/user-info';
@@ -65,7 +66,7 @@ import {
   useLocation,
   useNavigate,
 } from '@solidjs/router';
-import { cn } from '@ui';
+import { cn, ImperativeDialogHost } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import {
   createEffect,
@@ -82,8 +83,8 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileDock } from './mobile/MobileDock';
-import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
+import { MobileSearchRow } from './mobile/MobileSearchRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
@@ -101,7 +102,7 @@ const AUTH_URLS = [
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
+  createSignal<SidebarState>(!isTouchDevice() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -112,7 +113,7 @@ export function Layout(props: RouteSectionProps) {
   const location = useLocation();
   const sidebarVisible = createMemo(
     () =>
-      !isMobile() &&
+      !isTouchDevice() &&
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname) &&
       // Settings-as-the-sole-split has its own tab nav — hide app chrome.
@@ -428,6 +429,7 @@ function LayoutInner(props: RouteSectionProps) {
         'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
+      <ImperativeDialogHost />
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
@@ -438,7 +440,7 @@ function LayoutInner(props: RouteSectionProps) {
             <CalendarPermissionPrompt />
           </Show>
           <GlobalShortcuts />
-          <Show when={!isMobile()}>
+          <Show when={!isTouchDevice()}>
             <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
@@ -495,7 +497,7 @@ function LayoutInner(props: RouteSectionProps) {
               onOverlayOpenChange={setSidebarOverlayOpenGuarded}
               onOpenChange={(open) => {
                 if (!open) {
-                  setSidebarState(isMobile() ? 'hidden' : 'slim');
+                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
                   return;
                 }
 
@@ -533,19 +535,21 @@ function LayoutInner(props: RouteSectionProps) {
       <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
       <Show
         when={
-          isMobile() &&
+          isTouchDevice() &&
           isAuthenticated() &&
           !AUTH_URLS.includes(location.pathname)
         }
       >
         <FloatRegionHost />
-        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
-          <MobileBottomEdgeFade />
-          <MobileDock />
+        <FloatRegion
+          region="accessory"
+          priority={() => (SearchState.isOpen() ? 100 : 0)}
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileSearchRow />
         </FloatRegion>
-      </Show>
-      <Show when={isMobile()}>
-        <MobileSearchOuter />
+        {/* The views row owns the bottom (dock) slot. */}
+        <MobileViewsRow />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

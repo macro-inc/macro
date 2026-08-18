@@ -1,6 +1,8 @@
 //! UpdateReminder tool for rescheduling, rewording, or completing a reminder.
 
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
@@ -69,6 +71,10 @@ pub struct UpdateReminder {
     )]
     #[serde(default)]
     pub completed: Option<bool>,
+}
+
+impl ToolAnnotated for UpdateReminder {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Update reminder");
 }
 
 #[async_trait]

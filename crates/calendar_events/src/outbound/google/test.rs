@@ -659,6 +659,7 @@ fn mutation_bodies_serialize_reminders_in_google_shape() {
         visibility: None,
         transparency: None,
         reminders: Some(reminders.clone()),
+        conference: None,
     };
     assert_eq!(draft_body(&draft)["reminders"], expected);
 
@@ -674,5 +675,195 @@ fn mutation_bodies_serialize_reminders_in_google_shape() {
             .get("reminders"),
         None,
         "an untouched patch must not clobber provider reminders"
+    );
+}
+
+#[test]
+fn attaching_a_meet_asks_google_to_generate_one() {
+    let body = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::GoogleMeet),
+        ..CalendarEventPatch::default()
+    });
+
+    let create_request = &body["conferenceData"]["createRequest"];
+    assert_eq!(
+        create_request["conferenceSolutionKey"]["type"],
+        "hangoutsMeet"
+    );
+    // Google treats a repeated requestId as a duplicate and ignores the
+    // request, so each attach must mint a fresh one.
+    let other = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::GoogleMeet),
+        ..CalendarEventPatch::default()
+    });
+    assert_ne!(
+        create_request["requestId"],
+        other["conferenceData"]["createRequest"]["requestId"]
+    );
+}
+
+#[test]
+fn detaching_a_conference_sends_an_explicit_null() {
+    let body = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::Removed),
+        ..CalendarEventPatch::default()
+    });
+
+    // A missing key would leave the conference in place; only JSON null
+    // detaches it.
+    assert!(body.get("conferenceData").is_some());
+    assert!(body["conferenceData"].is_null());
+}
+
+#[test]
+fn a_patch_that_leaves_conferencing_alone_omits_the_field_and_the_parameter() {
+    let body = patch_body(&CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..CalendarEventPatch::default()
+    });
+
+    assert!(body.get("conferenceData").is_none());
+    assert_eq!(conference_query(&body), None);
+}
+
+#[test]
+fn conference_writes_declare_conference_support() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        let patch = patch_body(&CalendarEventPatch {
+            conference: Some(change),
+            ..CalendarEventPatch::default()
+        });
+        assert_eq!(conference_query(&patch), Some(CONFERENCE_DATA_VERSION));
+    }
+}
+
+#[test]
+fn drafts_carry_conference_requests_and_their_parameter() {
+    let draft = CalendarEventDraft {
+        title: "Kickoff".to_string(),
+        description: None,
+        location: None,
+        time: EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-07-24T14:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-07-24T15:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        },
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        visibility: None,
+        transparency: None,
+        reminders: None,
+        conference: Some(ConferenceChange::GoogleMeet),
+    };
+
+    let body = draft_body(&draft);
+
+    assert_eq!(
+        body["conferenceData"]["createRequest"]["conferenceSolutionKey"]["type"],
+        "hangoutsMeet"
+    );
+    assert_eq!(conference_query(&body), Some(CONFERENCE_DATA_VERSION));
+}
+
+#[test]
+fn a_meet_conference_is_classified_as_google_meet() {
+    let data: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        conference_url(Some(&data)).as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(
+        conference_provider(Some(&data), true),
+        Some(ConferenceProvider::GoogleMeet)
+    );
+}
+
+/// A third-party conference stays joinable but must never be reported as a
+/// Meet: the product offers to detach only conferences Macro owns, so
+/// misclassifying a Zoom link here is what would let an edit destroy it.
+#[test]
+fn a_third_party_conference_is_not_classified_as_google_meet() {
+    let data: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "addOn"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://example.zoom.us/j/123"}]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        conference_provider(Some(&data), true),
+        Some(ConferenceProvider::Other)
+    );
+}
+
+#[test]
+fn an_event_without_a_conference_has_no_provider() {
+    assert_eq!(conference_provider(None, false), None);
+}
+
+/// A legacy classic Hangout arrives as a bare `hangoutLink` with no
+/// conference data, and Macro cannot regenerate it.
+#[test]
+fn a_bare_hangout_link_is_not_classified_as_google_meet() {
+    assert_eq!(
+        conference_provider(None, true),
+        Some(ConferenceProvider::Other)
+    );
+}
+
+#[test]
+fn a_conference_google_is_still_generating_is_pending() {
+    let pending: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "createRequest": {"status": {"statusCode": "pending"}}
+    }))
+    .unwrap();
+    let settled: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+        "createRequest": {"status": {"statusCode": "success"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}]
+    }))
+    .unwrap();
+
+    assert!(conference_is_pending(Some(&pending)));
+    assert!(!conference_is_pending(Some(&settled)));
+    assert!(!conference_is_pending(None));
+}
+
+/// Mutations serialize the provider echo into `raw_payload`, so conference
+/// fields must survive a deserialize/serialize round trip or a later sync
+/// would read the event back without its conference.
+#[test]
+fn conference_data_survives_the_raw_payload_round_trip() {
+    let event: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "meet@example.com",
+        "hangoutLink": "https://meet.google.com/abc-defg-hij",
+        "conferenceData": {
+            "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+            "entryPoints": [
+                {"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}
+            ]
+        }
+    }))
+    .unwrap();
+
+    let round_tripped: GoogleEvent =
+        serde_json::from_value(serde_json::to_value(&event).unwrap()).unwrap();
+
+    assert_eq!(
+        conference_provider(round_tripped.conference_data.as_ref(), true),
+        Some(ConferenceProvider::GoogleMeet)
+    );
+    assert_eq!(
+        conference_url(round_tripped.conference_data.as_ref()).as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
     );
 }

@@ -9,12 +9,12 @@ export function registerCacheHost(host: CacheHost): () => void {
   return () => hosts.delete(host);
 }
 
-/** Best-effort wipe of records and queued user intent during logout. */
+/** Best-effort reset of each active cache database during logout. */
 export async function clearRegisteredCaches(): Promise<void> {
   const results = await Promise.allSettled(
     [...hosts].map((host) => host.clear())
   );
   if (results.some((result) => result.status === 'rejected')) {
-    rotateCacheScope();
+    await rotateCacheScope();
   }
 }

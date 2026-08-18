@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateCalendarEventRequestAttendees } from './updateCalendarEventRequestAttendees';
+import type { UpdateCalendarEventRequestConference } from './updateCalendarEventRequestConference';
 import type { UpdateCalendarEventRequestDescription } from './updateCalendarEventRequestDescription';
 import type { UpdateCalendarEventRequestLocation } from './updateCalendarEventRequestLocation';
 import type { UpdateCalendarEventRequestRecurrenceLines } from './updateCalendarEventRequestRecurrenceLines';
@@ -20,6 +21,7 @@ import type { UpdateCalendarEventRequestVisibility } from './updateCalendarEvent
 export interface UpdateCalendarEventRequest {
   /** Replacement attendee list. */
   attendees?: UpdateCalendarEventRequestAttendees;
+  conference?: UpdateCalendarEventRequestConference;
   /** Replacement description; an empty string clears it. */
   description?: UpdateCalendarEventRequestDescription;
   /** Replacement location; an empty string clears it. */

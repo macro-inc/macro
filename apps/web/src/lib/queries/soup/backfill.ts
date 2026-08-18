@@ -1,6 +1,12 @@
 import { createTabLeaderSignal } from '@notifications/notification-election';
+import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
-  fetchGraphqlSoupBackfill,
+  SoupBackfillDocument,
+  SoupDocument,
+} from '@service-storage/graphql/generated/graphql';
+import {
+  type FetchGraphqlSoupOptions,
+  fetchGraphqlSoup,
   type GraphqlSoupInitialInput,
   type GraphqlSoupInput,
   graphqlCacheEnabled,
@@ -16,18 +22,31 @@ import {
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 4;
+const BACKFILL_VERSION = 5;
 const PAGE_LIMIT = 250;
-// Five threads × twenty messages reaches the DataLoader's 100-message cap.
+// Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
+type SoupBackfillFetchPage = (
+  input: GraphqlSoupInput,
+  options?: FetchGraphqlSoupOptions
+) => Promise<SoupPage>;
+
+const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
+  fetchGraphqlSoup(SoupDocument, { input }, options);
+
+const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
+  fetchGraphqlSoup(SoupBackfillDocument, { input }, options);
+
 export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */
   checkpointId: string;
+  /** Optional network fetcher; defaults to the standard Soup operation. */
+  fetchPage?: SoupBackfillFetchPage;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
@@ -60,6 +79,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   // Restart completed legacy newest-message checkpoints with the new shape.
   checkpointId: 'email-thread-pages',
+  fetchPage: fetchEmailContentPage,
   input: {
     limit: EMAIL_CONTENT_PAGE_LIMIT,
     expand: true,
@@ -329,8 +349,14 @@ export async function runSoupBackfill(
         }
       : { initial: passInput };
     // Network-only fetching leaves the persisted cursor unchanged on failure,
-    // so TanStack retries from the same page.
-    const page = await fetchGraphqlSoupBackfill(input, { signal });
+    // so TanStack retries from the same page. Only the email lane overrides the
+    // standard content-free Soup operation.
+    const fetchPage = params.fetchPage ?? fetchSoupPage;
+    const page = await fetchPage(input, {
+      signal,
+      allowOfflineFallback: false,
+      requestPolicy: 'network-only',
+    });
 
     const completed = page.next_cursor == null;
     checkpoint = {

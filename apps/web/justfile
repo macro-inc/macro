@@ -65,18 +65,23 @@ node_heap := "--max-old-space-size=6144"
 
 build-dev: build-cache-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
 build-staging: build-cache-wasm
     MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
 build-prod: build-cache-wasm
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
 build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle
@@ -87,7 +92,7 @@ dist-archive: build-prod
     set -euo pipefail
     TARGET="$(cd {{ justfile_directory() }}/../../tooling/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd dist && zip -qr "$TARGET" .)
+    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br')
     echo "Archive: $TARGET"
 
 bundle-smoke-server *ARGS:
@@ -162,6 +167,27 @@ cycles-ci:
 # engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
     wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
+
+# Build the production browser harness served by Vite preview.
+build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-test-hooks
+    bunx --bun vite build --config src/lib/graphql-cache/worker/browser-test/vite.config.ts
+    bun scripts/cache-wasm/cli.ts package-dist --dist src/lib/graphql-cache/worker/browser-test/.dist-production
+
+# Build the separate destructive-hook WASM used only by cache recovery tests.
+# Its distinct name keeps it outside the one-production-cache-WASM deploy gate.
+[private]
+build-cache-wasm-browser-test-hooks:
+    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm \
+      --target web --release \
+      --out-name cache_wasm_browser_test_hooks \
+      --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm-browser-test \
+      --features browser-test-hooks
+
+# Exercise development and production asset URLs, lazy election, MIME,
+# fresh-scope startup, DB-ready, first-ready, and linear-memory budgets.
+test-cache-wasm-browser:
+    bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts --project chromium --project firefox
+    bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
 
 # Local profiling build: retain Rust symbols and DWARF source locations so an
 # exported Firefox profile can be symbolicated back to Rust files and lines.

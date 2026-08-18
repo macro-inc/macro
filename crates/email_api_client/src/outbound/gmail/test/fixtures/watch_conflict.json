@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Only one user push notification client allowed per developer project"
+  }
+}

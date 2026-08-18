@@ -1,6 +1,8 @@
 //! CreateReminder tool for scheduling a nudge for the current user.
 
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
@@ -92,6 +94,10 @@ pub struct CreateReminder {
     )]
     #[serde(default)]
     pub entity_id: Option<Uuid>,
+}
+
+impl ToolAnnotated for CreateReminder {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create reminder");
 }
 
 #[async_trait]

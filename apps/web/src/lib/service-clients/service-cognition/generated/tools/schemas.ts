@@ -1395,6 +1395,7 @@ export const ListEntitiesResponse = z.object({
     z.any().superRefine((x, ctx) => {
       const schemas = [
         z.object({
+          conferenceProvider: z.union([z.string(), z.null()]).optional(),
           conferenceUrl: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),
           location: z.union([z.string(), z.null()]).optional(),
@@ -1778,17 +1779,22 @@ export const ListNotifications = z.object({
       z.array(
         z.object({
           entityType: z.enum([
-            'email',
-            'message',
+            'user',
+            'chat',
             'channel',
+            'channel_message',
             'document',
             'project',
-            'chat',
+            'email_thread',
+            'calendar_event',
+            'team',
             'call',
-            'task',
-            'github',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
             'reminder',
-            'calendar',
+            'skill',
           ]),
           id: z.string(),
         })

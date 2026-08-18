@@ -593,6 +593,10 @@ export const UnifiedFilterDropdown = (
     if (!view) return [];
     const viewCategories = VIEW_FILTER_CATEGORIES[view] ?? [];
 
+    // The Folders tab only lists folders, so document-type refinements are
+    // inapplicable there.
+    if (view === 'documents' && activeTab() === 'folders') return [];
+
     if (view !== 'inbox') return viewCategories;
 
     return filterInboxGithubPrOption(
@@ -825,7 +829,66 @@ export const UnifiedFilterDropdown = (
   };
 
   const isTasksView = () => currentView() === 'tasks';
+  const isDocumentsView = () => currentView() === 'documents';
+  const isCreatedByFilterView = () => {
+    const view = currentView();
+    return view === 'documents' || view === 'tasks';
+  };
+  const showCreatedByFilter = () =>
+    isCreatedByFilterView() && !(isDocumentsView() && activeTab() === 'owned');
   const isCompaniesView = () => currentView() === 'companies';
+
+  // The Files "Owned" tab has a creator constraint as part of its base
+  // preset. Keep that constraint when a user clears an explicit Created by
+  // selection, rather than accidentally broadening the tab to every file.
+  const baseCreatedByIds = createMemo(() => {
+    const view = currentView();
+    if (view !== 'documents' && view !== 'tasks') return [];
+    return (
+      getViewPreset(view, activeTab(), {
+        userId: userId(),
+        isTeamAdmin: false,
+      })?.filters.include?.documentOwnerId ?? []
+    );
+  });
+  const createdByIds = createMemo(
+    () => queryFilters.state.include.documentOwnerId ?? []
+  );
+
+  const createdByOptions = createMemo((): SearchableOption[] => {
+    const currentUserId = userId();
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [...(meOption ? [meOption] : []), ...otherContactOptions];
+  });
+
+  const handleCreatedByChange = (ids: string[]) => {
+    const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
+    queryFilters.set({
+      include: {
+        documentOwnerId: nextIds.length > 0 ? nextIds : undefined,
+      },
+    });
+  };
 
   const tagFilter = useTagFilter();
   const showTagsFilter = () => {
@@ -904,7 +967,7 @@ export const UnifiedFilterDropdown = (
           </Switch>
         </Show>
 
-        <Dropdown.Content class="shadow-menu">
+        <Dropdown.Content class={cn('shadow-menu min-w-32')}>
           <Dropdown.Group>
             <Show when={isNewInbox()}>
               <ReadStatusSubmenu
@@ -915,12 +978,23 @@ export const UnifiedFilterDropdown = (
             <Show
               when={
                 categories().length === 1 &&
+                !isDocumentsView() &&
                 !isTasksView() &&
                 !isCompaniesView() &&
                 !isNewInbox()
               }
               fallback={
                 <>
+                  <Show when={isDocumentsView() && showTagsFilter()}>
+                    <SearchableFilterSubmenu
+                      label="Tags"
+                      options={tagFilter.options}
+                      activeIds={tagFilter.activeIds}
+                      onChange={tagFilter.onChange}
+                      placeholder="Filter by tag..."
+                    />
+                  </Show>
+
                   <For each={categories()}>
                     {(category) => (
                       <Dropdown.Sub>
@@ -978,6 +1052,16 @@ export const UnifiedFilterDropdown = (
                     />
                   </Show>
 
+                  <Show when={showCreatedByFilter()}>
+                    <SearchableFilterSubmenu
+                      label="Created by"
+                      options={createdByOptions}
+                      activeIds={createdByIds}
+                      onChange={handleCreatedByChange}
+                      placeholder="Search creators..."
+                    />
+                  </Show>
+
                   {/* Stage + Owner filters for the Customers view */}
                   <Show when={isCompaniesView()}>
                     <SearchableFilterSubmenu
@@ -1032,7 +1116,7 @@ export const UnifiedFilterDropdown = (
               </For>
             </Show>
 
-            <Show when={showTagsFilter()}>
+            <Show when={!isDocumentsView() && showTagsFilter()}>
               <SearchableFilterSubmenu
                 label="Tags"
                 options={tagFilter.options}

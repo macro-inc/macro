@@ -1,6 +1,8 @@
 //! DeleteReminder tool for removing one of the current user's reminders.
 
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
@@ -30,6 +32,10 @@ pub struct DeleteReminder {
     /// The reminder to delete.
     #[schemars(description = "The id of the reminder to delete.")]
     pub reminder_id: Uuid,
+}
+
+impl ToolAnnotated for DeleteReminder {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delete reminder");
 }
 
 /// Response from the DeleteReminder tool.

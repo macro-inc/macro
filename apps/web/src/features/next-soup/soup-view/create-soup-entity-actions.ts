@@ -24,6 +24,7 @@ import {
   makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
+  makeMarkNotificationsReadAction,
   makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
@@ -110,6 +111,9 @@ export function createSoupEntityActions(): {
 
   const markRead = makeMarkReadAction();
   const markUnread = makeMarkUnreadAction();
+  const markNotificationsRead = makeMarkNotificationsReadAction({
+    notificationSource: () => notificationSource,
+  });
 
   const deleteAction = makeDeleteAction({
     userId: () => userId(),
@@ -178,9 +182,9 @@ export function createSoupEntityActions(): {
       }
     }
 
-    // Read-state toggle for email selections: a fully-read selection gets
-    // Mark Unread; anything with an unread thread gets Mark Read (which
-    // skips the already-read ones).
+    // Email selections keep their thread read-state toggle. Other entities
+    // can mark their attached notifications read; that action skips entities
+    // and notifications that are already read.
     if (canExecuteAll(markUnread.canExecute)) {
       topItems.push({
         id: 'mark-unread',
@@ -197,6 +201,15 @@ export function createSoupEntityActions(): {
         label: 'Mark Read',
         hotkeyToken: TOKENS.entity.action.markRead,
         onClick: handle(markRead.executeWithSoup),
+      });
+    } else if (
+      entities.every((entity) => entity.type !== 'email') &&
+      entities.some(markNotificationsRead.canExecute)
+    ) {
+      topItems.push({
+        id: 'mark-notifications-read',
+        label: 'Mark Read',
+        onClick: handle(markNotificationsRead.executeWithSoup),
       });
     }
 

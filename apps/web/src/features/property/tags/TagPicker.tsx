@@ -74,6 +74,11 @@ type TagPickerProps = {
   triggerLabel: string;
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Prevent the click that dismisses the picker from activating the element
+   * behind it. This matches inline property editors rendered in soup rows.
+   */
+  withClickBlock?: boolean;
 } & (
   | { docTags: DocTags; createDocTags?: never }
   | { docTags?: never; createDocTags: () => DocTags }
@@ -159,6 +164,7 @@ export function TagPicker(props: TagPickerProps) {
             setCreateSuccessHandler(undefined);
             restoreFocusToTrigger();
           }}
+          withClickBlock={props.withClickBlock ?? false}
         />
       </Show>
     </Popover>
@@ -181,6 +187,7 @@ function TagPickerBodyOwner(props: {
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
   createSuccessHandler: () => CreateTagSuccessHandler | undefined;
   onEditorClose: () => void;
+  withClickBlock: boolean;
 }) {
   // The factory is invoked under this conditionally-mounted component owner,
   // so row-level query/mutation hooks do not exist until the picker opens.
@@ -198,6 +205,7 @@ function TagPickerBodyOwner(props: {
           onOpenEditEditor={props.onOpenEditEditor}
           registerSave={props.registerSave}
           suppressInitialOutsideEvents={false}
+          withClickBlock={props.withClickBlock}
         />
       </Show>
       <Show when={props.editorMode()}>
@@ -303,6 +311,7 @@ function TagPickerBody(props: {
   ) => void;
   registerSave: (handler: (() => Promise<void>) | undefined) => void;
   suppressInitialOutsideEvents: boolean;
+  withClickBlock?: boolean;
 }) {
   const [search, setSearch] = createSignal('');
   const [saved, setSaved] = createSignal(false);
@@ -323,6 +332,30 @@ function TagPickerBody(props: {
     createSignal(true);
   const shouldIgnoreOutsideEvent = () =>
     props.suppressInitialOutsideEvents && initialOutsideEventGuard();
+
+  const blockDismissalClick = () => {
+    if (!props.withClickBlock) return;
+
+    // Kobalte closes popovers on an outside interaction but leaves the
+    // following click to bubble through to the row beneath it.
+    const swallow = (clickEvent: PointerEvent) => {
+      clickEvent.stopPropagation();
+      clickEvent.preventDefault();
+    };
+    window.addEventListener('click', swallow, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        window.removeEventListener('click', swallow, {
+          capture: true,
+        });
+      },
+      { capture: true, once: true }
+    );
+  };
 
   const initialAppliedTags = createMemo(() => props.docTags.appliedTags());
   const initialAppliedIds = createMemo(
@@ -662,7 +695,11 @@ function TagPickerBody(props: {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();
           }}
           onInteractOutside={(event) => {
-            if (shouldIgnoreOutsideEvent()) event.preventDefault();
+            if (shouldIgnoreOutsideEvent()) {
+              event.preventDefault();
+              return;
+            }
+            blockDismissalClick();
           }}
         >
           <Show

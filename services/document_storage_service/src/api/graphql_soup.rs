@@ -186,4 +186,10 @@ fn insert_graphql_context_data(
         macro_user_id,
         state.graphql_notification_reader.clone(),
     ));
+    // The feed resolver reads the reader directly; the edge goes through
+    // the request's DataLoader.
+    data.insert(state.activity_reader.clone());
+    data.insert(complete_graph::entity_activity_loader(
+        state.activity_reader.clone(),
+    ));
 }

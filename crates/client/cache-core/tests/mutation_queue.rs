@@ -55,6 +55,64 @@ fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
 }
 
 #[test]
+fn queue_diagnostics_are_payload_free_and_track_oldest() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 0,
+                oldest_created_at_ms: None,
+            }
+        );
+        let first = storage
+            .enqueue_mutation(queued("secret-a", 42))
+            .await
+            .unwrap();
+        storage
+            .enqueue_mutation(queued("secret-b", 21))
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 2,
+                oldest_created_at_ms: Some(21),
+            }
+        );
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 100,
+                lease_expires_at_ms: 200,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        storage
+            .discard_mutation(
+                first,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.queue_diagnostics().await.unwrap(),
+            cache_core::store::QueueDiagnostics {
+                availability: cache_core::store::QueueDiagnosticsAvailability::Available,
+                depth: 1,
+                oldest_created_at_ms: Some(21),
+            }
+        );
+    });
+}
+
+#[test]
 fn queue_claim_retry_and_settlement_are_ordered() {
     block_on(async {
         let mut storage = InMemoryStorage::new();

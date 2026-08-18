@@ -351,9 +351,10 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(Some(
-                    FileType::Pdf,
-                )),
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Pdf),
+                    None,
+                ),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
@@ -380,9 +381,10 @@ mod tests {
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(Some(
-                    FileType::Docx,
-                )),
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Docx),
+                    None,
+                ),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
@@ -421,9 +423,10 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: Some("project-one"),
                 project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(Some(
-                    FileType::Pdf,
-                )),
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Pdf),
+                    None,
+                ),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
@@ -453,9 +456,10 @@ mod tests {
                 file_type: Some(FileType::Docx),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(Some(
-                    FileType::Docx,
-                )),
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Docx),
+                    None,
+                ),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
@@ -487,9 +491,10 @@ mod tests {
                 file_type: Some(FileType::Pdf),
                 project_id: None,
                 project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(Some(
-                    FileType::Pdf,
-                )),
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Pdf),
+                    None,
+                ),
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,

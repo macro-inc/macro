@@ -51,6 +51,8 @@ macro_event_broker = { path = "../macro_event_broker" }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
+mcp_select = { path = "../mcp_select" }
+pipedream_mcp = { path = "../pipedream_mcp" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }

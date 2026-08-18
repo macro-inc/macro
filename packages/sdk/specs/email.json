@@ -423,7 +423,37 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -841,6 +871,36 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -1747,6 +1807,16 @@
               }
             }
           },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -1843,7 +1913,37 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "",
             "content": {
               "application/json": {
@@ -1989,7 +2089,7 @@
     "/email/links/health-check": {
       "post": {
         "tags": ["Links"],
-        "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.",
+        "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by the email service token source.",
         "description": "Probes run in the background and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
         "operationId": "health_check_links",
         "responses": {
@@ -2032,6 +2132,78 @@
         "summary": "Removes a linked inbox.",
         "description": "For an inbox the caller owns this enqueues a full cascade teardown\n(`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it\nonly drops the `macro_user_links` edge, leaving the owner's data intact.",
         "operationId": "delete_link",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "Inbox link ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/{link_id}/calendar": {
+      "delete": {
+        "tags": ["Links"],
+        "summary": "Turns calendar off for a connected inbox.",
+        "description": "Removes the inbox's calendar data, drops the calendar scopes from its\nrecorded Google grant, and closes its push channels, so the inbox reads as\ncalendar-less until the user runs the calendar consent flow again. Gmail\nsync is untouched.\n\nOnly the inbox's owner may do this: a delegate can see the owner's calendar\nbut must not be able to delete the owner's data.",
+        "operationId": "disable_link_calendar",
         "parameters": [
           {
             "name": "link_id",
@@ -3391,7 +3563,7 @@
           },
           "body_html": {
             "type": ["string", "null"],
-            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded)."
+            "description": "HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage."
           },
           "body_macro": {
             "type": ["string", "null"],
@@ -4363,6 +4535,17 @@
             "format": "uuid",
             "description": "Calendar the canonical source belongs to, when known. Absent only in\nprojections stored before calendars were attributed."
           },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Which conferencing system backs `conference_url`. `None` whenever no\nconference is attached."
+              }
+            ]
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct join URL when known."
@@ -4494,6 +4677,16 @@
           }
         }
       },
+      "ConferenceChange": {
+        "type": "string",
+        "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
+        "enum": ["google_meet", "none"]
+      },
+      "ConferenceProvider": {
+        "type": "string",
+        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
+        "enum": ["google_meet", "other"]
+      },
       "Contact": {
         "type": "object",
         "required": ["id", "link_id"],
@@ -4586,6 +4779,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Exact calendar to create the event on; takes precedence over the\ninbox default."
+          },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference to attach to the new event; omit to create it without one."
+              }
+            ]
           },
           "description": {
             "type": ["string", "null"],
@@ -5019,12 +5223,18 @@
           "sync_status",
           "needs_reauth",
           "needs_calendar_permission",
+          "calendar_disabled",
+          "has_calendar_data",
           "settings",
           "is_primary",
           "created_at",
           "updated_at"
         ],
         "properties": {
+          "calendar_disabled": {
+            "type": "boolean",
+            "description": "Whether the user turned calendar off for this inbox, which also removed\nits calendar data. `needs_calendar_permission` is true either way, so\nthis is what separates \"never granted\" from \"deliberately off\" —\nunprompted calendar nags must stay quiet for the latter."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -5034,6 +5244,10 @@
           },
           "fusionauth_user_id": {
             "type": "string"
+          },
+          "has_calendar_data": {
+            "type": "boolean",
+            "description": "Whether Macro holds calendar data for this inbox. Drives the turn-off\ncontrol on its own, so removing that data never depends on the recorded\nscopes still matching the set Macro requests today — a set that changes\nas the integration narrows, stranding data behind a capability check\nthat no longer recognizes an older grant."
           },
           "id": {
             "type": "string",
@@ -5926,6 +6140,17 @@
               "$ref": "#/components/schemas/CalendarAttendeeInputBody"
             },
             "description": "Replacement attendee list."
+          },
+          "conference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceChange",
+                "description": "Conference change: `google_meet` attaches a freshly generated Meet,\n`none` detaches the current conference, and omitting it leaves the\nconference untouched.\n\nA third-party conference is replaced or detached like any other, since\nthe request is explicit. Omit the field to leave it alone."
+              }
+            ]
           },
           "description": {
             "type": ["string", "null"],

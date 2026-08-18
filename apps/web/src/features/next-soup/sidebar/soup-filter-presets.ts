@@ -1,5 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
+import { getMyTasksQuery } from '@app/features/next-soup/filters/configs/my-tasks';
 import {
   defineQueryFilters,
   NIL_UUID,
@@ -352,46 +353,24 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     },
   },
   tasks: {
-    default: 'assigned-to-me',
+    default: 'my-tasks',
     tabs: {
-      'assigned-to-me': (ctx) => {
+      'my-tasks': (ctx) => {
         if (!ctx.userId) return undefined;
+        const myTasksQuery = getMyTasksQuery(ctx.userId);
         return {
           filters: defineQueryFilters({
+            ...myTasksQuery,
             include: {
-              subType: ['task'],
-              properties: [
-                {
-                  propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-                  type: 'entity',
-                  value: ctx.userId,
-                },
-                ...OPEN_TASK_STATUS_INCLUDE_PROPS,
-              ],
-            },
-          }),
-          clientFilters: {
-            and: ['task', 'assigned-to'],
-            or: [...OPEN_TASK_STATUS_FILTER_IDS],
-          },
-          groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
-        };
-      },
-      'created-by-me': (ctx) => {
-        if (!ctx.userId) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: {
-              subType: ['task'],
-              documentOwnerId: [ctx.userId],
+              ...myTasksQuery.include,
               properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
             },
           }),
           clientFilters: {
-            and: ['task', 'owned-entity'],
+            and: ['task', 'my-tasks'],
             or: [...OPEN_TASK_STATUS_FILTER_IDS],
           },
-          groupBy: `property:${SYSTEM_PROPERTY_IDS.STATUS}`,
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
         };
       },
       all: () => ({
@@ -399,7 +378,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: { subType: ['task'] },
         }),
         clientFilters: { and: ['task'] },
-        groupBy: `property:${SYSTEM_PROPERTY_IDS.ASSIGNEES}`,
       }),
     },
   },

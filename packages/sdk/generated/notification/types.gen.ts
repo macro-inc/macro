@@ -265,56 +265,12 @@ export type CommonChannelMetadata = {
 };
 
 /**
- * the value of the inner payload inside [ConnGatewayNotification]
- */
-export type ConnGatewayInnerNotifValue = Entity & {
-    /**
-     * When the notification was created.
-     */
-    created_at: string;
-    /**
-     * When the notification was deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
-    /**
-     * The notification event type string (e.g. "channel_mention").
-     * TODO make this a new type
-     */
-    notification_event_type: string;
-    /**
-     * The notification ID.
-     */
-    notification_id: string;
-    /**
-     * Deserialized notification metadata.
-     */
-    notification_metadata: TaggedContentValue;
-    sender_id?: null | MacroUserIdStr;
-    /**
-     * Whether the notification has been sent.
-     */
-    sent: boolean;
-    /**
-     * When the notification was last updated.
-     */
-    updated_at: string;
-    /**
-     * When the notification was viewed/seen.
-     */
-    viewed_at?: string | null;
-};
-
-/**
- * Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+ * Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.
  *
  * Used for OpenAPI schema generation — serializes identically to
- * `ConnGatewayInnerNotif<serde_json::Value>`.
+ * `RealtimeNotif<serde_json::Value>`.
  */
-export type ConnGatewayNotificationPayload = ConnGatewayInnerNotifValue;
+export type ConnGatewayNotificationPayload = RealtimeNotifTaggedContentValue;
 
 export type CreateNotification = Entity & {
     /**
@@ -957,6 +913,53 @@ export type PushNotificationData = {
 };
 
 /**
+ * the value of the inner payload inside [ConnGatewayNotification]
+ */
+export type RealtimeNotifTaggedContentValue = Entity & {
+    /**
+     * When the notification was created.
+     */
+    created_at: string;
+    /**
+     * When the notification was deleted.
+     */
+    deleted_at?: string | null;
+    /**
+     * Whether the notification is marked as done.
+     */
+    done: boolean;
+    /**
+     * The notification event type string (e.g. "channel_mention").
+     * TODO make this a new type
+     */
+    notification_event_type: string;
+    /**
+     * The notification ID.
+     */
+    notification_id: string;
+    /**
+     * A notification metadata value tagged with the notification event type.
+     */
+    notification_metadata: {
+        content: unknown;
+        tag: NotificationTypeName;
+    };
+    sender_id?: null | MacroUserIdStr;
+    /**
+     * Whether the notification has been sent.
+     */
+    sent: boolean;
+    /**
+     * When the notification was last updated.
+     */
+    updated_at: string;
+    /**
+     * When the notification was viewed/seen.
+     */
+    viewed_at?: string | null;
+};
+
+/**
  * Metadata for a reminder the user set for themselves coming due.
  *
  * There is no sender: a reminder is self-set, so the dispatcher sends it with
@@ -1009,14 +1012,6 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * the thread id
      */
     threadId: number;
-};
-
-/**
- * A notification metadata value tagged with the notification event type.
- */
-export type TaggedContentValue = {
-    content: unknown;
-    tag: NotificationTypeName;
 };
 
 /**

@@ -1199,6 +1199,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 property_definition_id: PROPERTY_DEFINITION_ID,
                 actor_user_id: actor_user_id.clone(),
                 value: None,
+                previous_value: None,
                 updated_at: Utc::now(),
             }),
             PropertyEventDescription {

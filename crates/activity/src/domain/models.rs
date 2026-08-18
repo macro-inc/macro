@@ -97,8 +97,14 @@ pub struct CallStart {
 /// fields must tolerate absence on old rows. The stored tag is derived
 /// from the variant name (strum, snake_case), so **renaming a variant is a
 /// storage migration** — the pinned codec test exists to make that loud.
-#[derive(Debug, Clone, PartialEq, strum::IntoStaticStr)]
+#[derive(Debug, Clone, PartialEq, strum::IntoStaticStr, strum::EnumDiscriminants)]
 #[strum(serialize_all = "snake_case")]
+#[strum_discriminants(
+    name(ActionTag),
+    vis(pub(crate)),
+    derive(strum::EnumString),
+    strum(serialize_all = "snake_case")
+)]
 pub enum Action {
     /// The entity was created.
     Created,
@@ -169,6 +175,126 @@ impl Action {
         };
         (tag, payload)
     }
+
+    /// Inverse of [`Action::to_columns`]: rebuilds the action from its stored
+    /// `(action, action_payload)` column values.
+    ///
+    /// A payload on a payload-free tag is ignored — a newer writer may have
+    /// started attaching one, and old readers must keep decoding the tag they
+    /// know. The tag vocabulary is the same strum derivation `to_columns`
+    /// writes with (the crate-private `ActionTag` discriminant enum, derived
+    /// from the variant names), and the match below is exhaustive on it — a
+    /// new variant fails compilation here until its decode is written.
+    pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
+        // Deserializing from `&Value` borrows; no payload clone on the read
+        // hot path.
+        fn parsed<T: for<'de> Deserialize<'de>>(
+            payload: Option<&Value>,
+        ) -> Result<T, ActionDecodeError> {
+            let value = payload.ok_or(ActionDecodeError::MissingPayload)?;
+            T::deserialize(value).map_err(ActionDecodeError::InvalidPayload)
+        }
+
+        let tag = tag
+            .parse::<ActionTag>()
+            .map_err(|_| ActionDecodeError::UnknownTag)?;
+        match tag {
+            ActionTag::Created => Ok(Action::Created),
+            ActionTag::Edited => Ok(Action::Edited),
+            ActionTag::Opened => Ok(Action::Opened),
+            ActionTag::Deleted => Ok(Action::Deleted),
+            ActionTag::Messaged => Ok(Action::Messaged),
+            ActionTag::Sent => Ok(Action::Sent),
+            ActionTag::PropertyChanged => Ok(Action::PropertyChanged(parsed(payload)?)),
+            ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
+            ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
+            ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
+        }
+    }
+}
+
+/// Why one stored `(action, action_payload)` pair failed to decode.
+#[derive(Debug)]
+pub enum ActionDecodeError {
+    /// The tag is not in this reader's vocabulary (row written by a newer
+    /// deployment).
+    UnknownTag,
+    /// The tag requires a payload but the column is NULL.
+    MissingPayload,
+    /// The payload column doesn't deserialize into the tag's payload shape.
+    InvalidPayload(serde_json::Error),
+}
+
+impl std::fmt::Display for ActionDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ActionDecodeError::UnknownTag => write!(f, "unknown action tag"),
+            ActionDecodeError::MissingPayload => write!(f, "action payload missing"),
+            ActionDecodeError::InvalidPayload(e) => write!(f, "invalid action payload: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ActionDecodeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ActionDecodeError::InvalidPayload(e) => Some(e),
+            ActionDecodeError::UnknownTag | ActionDecodeError::MissingPayload => None,
+        }
+    }
+}
+
+/// A stored action as a reader sees it: decoded into the closed [`Action`]
+/// vocabulary, or preserved raw when this reader can't decode it (a row
+/// written by a newer deployment, or a corrupt payload). [`Action`] itself
+/// stays closed — forward tolerance is a read-side concern.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordedAction {
+    /// An action in this reader's vocabulary.
+    Known(Action),
+    /// An action this reader can't decode, carried through raw.
+    Unknown {
+        /// The stored tag.
+        tag: String,
+        /// The stored payload, verbatim.
+        payload: Option<Value>,
+    },
+}
+
+impl RecordedAction {
+    /// Total decode of the stored column pair: falls back to
+    /// [`RecordedAction::Unknown`] instead of failing. The error is handed
+    /// back so callers with a logging dependency can distinguish a new
+    /// vocabulary word ([`ActionDecodeError::UnknownTag`], expected during
+    /// rollouts) from a known tag with an undecodable payload (corruption —
+    /// worth a warning). This module stays dependency-free on purpose.
+    pub fn from_columns(tag: String, payload: Option<Value>) -> (Self, Option<ActionDecodeError>) {
+        match Action::from_columns(&tag, payload.as_ref()) {
+            Ok(action) => (RecordedAction::Known(action), None),
+            Err(error) => (RecordedAction::Unknown { tag, payload }, Some(error)),
+        }
+    }
+}
+
+/// One activity as read back from storage — the read-side projection of an
+/// `activity_events` row. Plain fields: unlike [`Activity`] there are no
+/// construction invariants to seal; the row already exists.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityRecord {
+    /// The stored activity id.
+    pub id: Uuid,
+    /// Who mechanically acted.
+    pub actor: Actor<'static>,
+    /// Whose activity this is (a principal string: `macro|…` or `bot|…`).
+    pub subject_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: EntityType,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// What they did, decoded forward-tolerantly.
+    pub action: RecordedAction,
+    /// When it happened.
+    pub occurred_at: DateTime<Utc>,
 }
 
 /// The capability a domain implements to feed activity: given one of its

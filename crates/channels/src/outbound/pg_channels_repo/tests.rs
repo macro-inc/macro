@@ -1,8 +1,8 @@
 use crate::domain::models::{
     AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
-    CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams, GetChannelsRequest,
-    GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters, ParticipantRole,
-    PatchChannelRequest,
+    ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams,
+    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters,
+    ParticipantRole, PatchChannelRequest,
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -35,6 +35,7 @@ const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
+const CH3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c03);
 const TEAM_A: Uuid = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
 const TEAM_A_AUTO_ACTIVE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c11);
 const TEAM_A_AUTO_LEFT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c12);
@@ -103,6 +104,20 @@ fn channels_params(user_id: &str, filter: LiteralTree<ChannelLiteral>) -> GetCha
 
 fn channel_filter(literal: ChannelLiteral) -> LiteralTree<ChannelLiteral> {
     Some(Arc::new(Expr::val(literal)))
+}
+
+fn participant_roles(channel: &ChannelWithParticipants) -> Vec<(String, ParticipantRole)> {
+    let mut participants = channel
+        .participants
+        .iter()
+        .map(|participant| {
+            assert_eq!(participant.channel_id, channel.channel.id);
+            assert!(participant.left_at.is_none());
+            (participant.user_id.clone(), participant.role)
+        })
+        .collect::<Vec<_>>();
+    participants.sort_by(|a, b| a.0.cmp(&b.0));
+    participants
 }
 
 #[sqlx::test(
@@ -238,6 +253,105 @@ async fn is_participant_filter_inside_not_widens_candidates(pool: Pool<Postgres>
     let ids: Vec<Uuid> = channels.iter().map(|c| c.channel.id).collect();
     assert_eq!(ids, vec![TEAM_A_AUTO_LEFT]);
     assert!(!channels[0].is_participant);
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_pagination")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    for (sort, expected_ids) in [
+        (SimpleSortMethod::CreatedAt, vec![CH3, CH1]),
+        (SimpleSortMethod::UpdatedAt, vec![CH1, CH3]),
+    ] {
+        let unpaginated = repo
+            .get_user_channels_with_participants(
+                GetChannelsRequest {
+                    macro_id: macro_user_id(USER_A),
+                    limit: Some(50),
+                    include_frecency: false,
+                    query: Query::Sort(sort, None),
+                }
+                .into_params(),
+            )
+            .await
+            .unwrap();
+        let unpaginated_ids = unpaginated
+            .iter()
+            .map(|channel| channel.channel.id)
+            .collect::<Vec<_>>();
+        assert_eq!(unpaginated_ids, expected_ids);
+
+        let mut query = Query::Sort(sort, None);
+        let mut paginated = Vec::new();
+        loop {
+            let page = repo
+                .get_user_channels_with_participants(
+                    GetChannelsRequest {
+                        macro_id: macro_user_id(USER_A),
+                        limit: Some(1),
+                        include_frecency: false,
+                        query,
+                    }
+                    .into_params(),
+                )
+                .await
+                .unwrap();
+            let Some(last) = page.last() else {
+                break;
+            };
+            assert_eq!(page.len(), 1);
+
+            query = Query::Cursor(Cursor {
+                id: last.channel.id,
+                limit: 1,
+                val: CursorVal {
+                    sort_type: sort,
+                    last_val: match sort {
+                        SimpleSortMethod::CreatedAt => last.channel.created_at,
+                        SimpleSortMethod::UpdatedAt => last.channel.updated_at,
+                        _ => unreachable!("channel list test only uses supported sort methods"),
+                    },
+                },
+                filter: None,
+            });
+            paginated.extend(page);
+            assert!(
+                paginated.len() <= unpaginated.len(),
+                "cursor pagination returned duplicate rows"
+            );
+        }
+
+        let paginated_ids = paginated
+            .iter()
+            .map(|channel| channel.channel.id)
+            .collect::<Vec<_>>();
+        assert_eq!(paginated_ids, unpaginated_ids);
+        assert_eq!(paginated.len(), unpaginated.len());
+
+        for (expected, actual) in unpaginated.iter().zip(&paginated) {
+            assert_eq!(actual.channel.id, expected.channel.id);
+            assert_eq!(actual.is_participant, expected.is_participant);
+            assert_eq!(participant_roles(actual), participant_roles(expected));
+            assert!(actual.is_participant);
+
+            let expected_participants = match actual.channel.id {
+                CH1 => vec![
+                    (USER_A.to_string(), ParticipantRole::Owner),
+                    (USER_B.to_string(), ParticipantRole::Admin),
+                    (USER_C.to_string(), ParticipantRole::Member),
+                ],
+                CH3 => vec![(USER_A.to_string(), ParticipantRole::Owner)],
+                id => panic!("unexpected channel {id}"),
+            };
+            assert_eq!(participant_roles(actual), expected_participants);
+        }
+    }
 }
 
 #[sqlx::test(

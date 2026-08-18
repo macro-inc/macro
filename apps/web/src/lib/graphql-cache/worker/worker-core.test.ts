@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -10,6 +10,10 @@ import { CacheWorkerCore } from './worker-core';
 describe('CacheWorkerCore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('dispatches read-records to the wasm engine', async () => {
@@ -315,8 +319,8 @@ describe('CacheWorkerCore', () => {
       'read:client:group-soup',
       'read:client:child',
     ]);
-    // Two read RPCs for the same active operation require one wasm call, so
-    // the full denormalization and its IndexedDB get_batch work run once.
+    // Two read RPCs for the same active operation require one WASM call, so
+    // the full denormalization and its storage batch read run once.
     expect(
       readQuery.mock.calls.filter(([opId]) => opId === 'client:group-soup')
     ).toHaveLength(1);
@@ -585,5 +589,572 @@ describe('CacheWorkerCore', () => {
     });
 
     expect(messages).toContainEqual({ kind: 'cache-changed' });
+  });
+
+  it('drains earlier request responses before consuming close and rejects later admission', async () => {
+    const order: string[] = [];
+    let releaseRead!: () => void;
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    const blocker = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const readQuery = vi.fn(async () => {
+      order.push('read:start');
+      markReadStarted();
+      await blocker;
+      order.push('read:done');
+      return { kind: 'miss' as const };
+    });
+    const close = vi.fn(async () => {
+      order.push('close');
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery, close }),
+    });
+    const messages: unknown[] = [];
+    const port = {
+      postMessage: (message: unknown) => {
+        messages.push(message);
+        if ((message as { id?: number }).id === 2) order.push('response');
+      },
+    };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const read = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Read { value }',
+    });
+    await readStarted;
+    const drain = core.drain();
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'clear',
+    });
+    expect(messages).toContainEqual({
+      id: 3,
+      ok: false,
+      error: 'cache engine is draining',
+    });
+    expect(close).not.toHaveBeenCalled();
+
+    releaseRead();
+    await Promise.all([read, drain]);
+    expect(order).toEqual(['read:start', 'read:done', 'response', 'close']);
+  });
+
+  it('uses atomic recovery-open instead of opening before a reset', async () => {
+    const openCache = vi.fn();
+    const openCacheForRecovery = vi.fn().mockResolvedValue({});
+    loadCacheWasmMock.mockResolvedValue({
+      openCache,
+      openCacheForRecovery,
+    });
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ recoveryOpen: true });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1', hotCapacity: 17 }
+    );
+
+    expect(openCache).not.toHaveBeenCalled();
+    expect(openCacheForRecovery).toHaveBeenCalledWith('scope-1', 17);
+    expect(messages).toEqual([{ id: 1, ok: true, result: null }]);
+  });
+
+  it('rejects repeated init scope and exact optional capacity mismatches', async () => {
+    const openCache = vi.fn().mockResolvedValue({});
+    loadCacheWasmMock.mockResolvedValue({ openCache });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'init',
+      scope: 'scope-2',
+    });
+    await core.handleRequest(port, {
+      id: 4,
+      kind: 'init',
+      scope: 'scope-1',
+      hotCapacity: 1,
+    });
+
+    expect(openCache).toHaveBeenCalledOnce();
+    expect(messages).toEqual([
+      { id: 1, ok: true, result: null },
+      { id: 2, ok: true, result: null },
+      {
+        id: 3,
+        ok: false,
+        error:
+          'cache worker already initialized for scope scope-1, got scope-2',
+      },
+      {
+        id: 4,
+        ok: false,
+        error:
+          'cache worker already initialized with hot capacity undefined, got 1',
+      },
+    ]);
+
+    const capacityMessages: unknown[] = [];
+    const capacityCore = new CacheWorkerCore();
+    await capacityCore.handleRequest(
+      { postMessage: (message: unknown) => capacityMessages.push(message) },
+      { id: 5, kind: 'init', scope: 'scope-1', hotCapacity: 2 }
+    );
+    await capacityCore.handleRequest(
+      { postMessage: (message: unknown) => capacityMessages.push(message) },
+      { id: 6, kind: 'init', scope: 'scope-1' }
+    );
+    expect(capacityMessages.at(-1)).toEqual({
+      id: 6,
+      ok: false,
+      error:
+        'cache worker already initialized with hot capacity 2, got undefined',
+    });
+  });
+
+  it('refreshes queue diagnostics only at bounded checkpoints and recalculates cached age on heartbeat/drain', async () => {
+    let monotonicNow = 0;
+    let wallClockNow = 1_000;
+    const queueDiagnostics = vi.fn().mockResolvedValue({
+      availability: 'available',
+      depth: '2',
+      oldestCreatedAtMs: '900',
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+    const writeQuery = vi.fn().mockResolvedValue({
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn().mockResolvedValue({
+        engine: { queueDiagnostics, close, writeQuery },
+        outcome: 'opened-new',
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      wallClockNow: () => wallClockNow,
+      queueDiagnosticsIntervalMs: 60_000,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    monotonicNow = 1;
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await Promise.resolve();
+    expect(queueDiagnostics).toHaveBeenCalledTimes(1);
+
+    wallClockNow = 1_500;
+    core.recordCachedQueueDiagnostics();
+    expect(queueDiagnostics).toHaveBeenCalledTimes(1);
+    monotonicNow = 60_001;
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: false },
+    });
+    await vi.waitFor(() =>
+      expect(
+        observations.filter(
+          (observation) =>
+            observation.name === 'graphql_cache.queue_diagnostics' &&
+            observation.outcome === 'success'
+        )
+      ).toHaveLength(3)
+    );
+    wallClockNow = 2_000;
+    await core.drain();
+    expect(queueDiagnostics).toHaveBeenCalledTimes(2);
+    expect(
+      observations
+        .filter(
+          (observation) =>
+            observation.name === 'graphql_cache.queue_diagnostics' &&
+            observation.outcome === 'success'
+        )
+        .map(({ queueDepth, oldestAgeMs, queueDiagnosticsAvailability }) => ({
+          queueDepth,
+          oldestAgeMs,
+          queueDiagnosticsAvailability,
+        }))
+    ).toEqual([
+      {
+        queueDepth: 2,
+        oldestAgeMs: 100,
+        queueDiagnosticsAvailability: 'available',
+      },
+      {
+        queueDepth: 2,
+        oldestAgeMs: 600,
+        queueDiagnosticsAvailability: 'available',
+      },
+      {
+        queueDepth: 2,
+        oldestAgeMs: 600,
+        queueDiagnosticsAvailability: 'available',
+      },
+      {
+        queueDepth: 2,
+        oldestAgeMs: 1_100,
+        queueDiagnosticsAvailability: 'available',
+      },
+    ]);
+  });
+
+  it('marks compatibility diagnostics unavailable instead of authoritative empty', async () => {
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ close: vi.fn() }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'compatibility' }
+    );
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.queue_diagnostics',
+        outcome: 'success',
+        queueDiagnosticsAvailability: 'unavailable',
+      })
+    );
+    expect(observations).not.toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.queue_diagnostics',
+        queueDepth: 0,
+      })
+    );
+  });
+
+  it('serializes a hanging refresh away from correctness and bounds it without changing results', async () => {
+    vi.useFakeTimers();
+    let monotonicNow = 0;
+    const queueDiagnostics = vi
+      .fn()
+      .mockResolvedValueOnce({
+        availability: 'available',
+        depth: '1',
+        oldestCreatedAtMs: '10',
+      })
+      .mockImplementation(() => new Promise(() => {}));
+    const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
+    const writeQuery = vi.fn().mockResolvedValue({
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        queueDiagnostics,
+        readQuery,
+        writeQuery,
+        close: vi.fn(),
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      queueDiagnosticsIntervalMs: 0,
+      queueDiagnosticsTimeoutMs: 20,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope' });
+    monotonicNow = 1;
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() => expect(queueDiagnostics).toHaveBeenCalledTimes(2));
+    const read = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      query: 'query Read { value }',
+    });
+    expect(readQuery).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(20);
+    await read;
+    expect(readQuery).toHaveBeenCalledOnce();
+    expect(port.postMessage).toHaveBeenCalledWith({
+      id: 3,
+      ok: true,
+      result: { kind: 'miss' },
+    });
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.queue_diagnostics',
+        outcome: 'error',
+        errorCode: 'timeout',
+      })
+    );
+  });
+
+  it('keeps the latest snapshot after diagnostic errors and cancels hangs before drain', async () => {
+    const resetError = Object.assign(new Error('diagnostic reset marker'), {
+      cacheStorageResetRequired: true as const,
+    });
+    const queueDiagnostics = vi
+      .fn()
+      .mockResolvedValueOnce({
+        availability: 'available',
+        depth: '3',
+        oldestCreatedAtMs: '100',
+      })
+      .mockRejectedValueOnce(resetError)
+      .mockImplementation(() => new Promise(() => {}));
+    const writeQuery = vi.fn().mockResolvedValue({
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        queueDiagnostics,
+        writeQuery,
+        close,
+      }),
+    });
+    const onStorageResetRequired = vi.fn();
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      queueDiagnosticsIntervalMs: 0,
+      queueDiagnosticsTimeoutMs: 30_000,
+      wallClockNow: () => 200,
+      onStorageResetRequired,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() =>
+      expect(observations).toContainEqual(
+        expect.objectContaining({
+          name: 'graphql_cache.queue_diagnostics',
+          outcome: 'error',
+        })
+      )
+    );
+    core.recordCachedQueueDiagnostics();
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.queue_diagnostics',
+        outcome: 'error',
+      })
+    );
+    expect(observations.at(-1)).toMatchObject({
+      name: 'graphql_cache.queue_diagnostics',
+      outcome: 'success',
+      queueDiagnosticsAvailability: 'available',
+      queueDepth: 3,
+      oldestAgeMs: 100,
+    });
+
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: false },
+    });
+    await vi.waitFor(() => expect(queueDiagnostics).toHaveBeenCalledTimes(3));
+    await expect(core.drain()).resolves.toBeUndefined();
+    expect(close).toHaveBeenCalledOnce();
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+  });
+
+  it('reports the initialization outcome but leaves every reset phase to the coordinator', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn().mockResolvedValue({
+        engine: {
+          queueDiagnostics: vi.fn().mockResolvedValue({
+            availability: 'available',
+            depth: '0',
+            oldestCreatedAtMs: null,
+          }),
+        },
+        outcome: 'reset-corrupt',
+      }),
+    });
+    const onInitializationOutcome = vi.fn();
+    const core = new CacheWorkerCore({
+      onInitializationOutcome,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onInitializationOutcome).toHaveBeenCalledOnce();
+    expect(onInitializationOutcome).toHaveBeenCalledWith('reset-corrupt');
+    expect(
+      observations.filter((observation) =>
+        [
+          'graphql_cache.storage_reset_required',
+          'graphql_cache.logical_reset',
+          'graphql_cache.reset_wipe',
+        ].includes(String(observation.name))
+      )
+    ).toEqual([]);
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.schema_init',
+        openOutcome: 'reset-corrupt',
+      })
+    );
+  });
+
+  it('leaves recovery-open wipe authority with the coordinator', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+        engine: {
+          queueDiagnostics: vi.fn().mockResolvedValue({
+            availability: 'available',
+            depth: '0',
+            oldestCreatedAtMs: null,
+          }),
+        },
+        outcome: 'reset-storage-uncertain',
+      }),
+    });
+    const onInitializationOutcome = vi.fn();
+    const core = new CacheWorkerCore({
+      recoveryOpen: true,
+      onInitializationOutcome,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    expect(onInitializationOutcome).toHaveBeenCalledWith(
+      'reset-storage-uncertain'
+    );
+    expect(
+      observations.filter((observation) =>
+        [
+          'graphql_cache.storage_reset_required',
+          'graphql_cache.logical_reset',
+          'graphql_cache.reset_wipe',
+        ].includes(String(observation.name))
+      )
+    ).toEqual([]);
+  });
+
+  it('reports a latched storage-reset marker once before returning failures', async () => {
+    const resetError = Object.assign(
+      new Error('cache storage reset required'),
+      {
+        cacheStorageResetRequired: true as const,
+      }
+    );
+    const readQuery = vi.fn().mockRejectedValue(resetError);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery }),
+    });
+    const onStorageResetRequired = vi.fn();
+    const observations: Array<Record<string, unknown>> = [];
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore({
+      onStorageResetRequired,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Read { value }',
+    });
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      query: 'query ReadAgain { value }',
+    });
+
+    expect(onStorageResetRequired).toHaveBeenCalledTimes(1);
+    expect(onStorageResetRequired).toHaveBeenCalledWith(resetError);
+    expect(
+      observations.filter((observation) =>
+        [
+          'graphql_cache.storage_reset_required',
+          'graphql_cache.reset_wipe',
+        ].includes(String(observation.name))
+      )
+    ).toEqual([]);
+    expect(messages.slice(-2)).toEqual([
+      { id: 2, ok: false, error: 'cache storage reset required' },
+      { id: 3, ok: false, error: 'cache storage reset required' },
+    ]);
   });
 });

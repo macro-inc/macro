@@ -47,6 +47,7 @@ import {
 import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
+import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -237,10 +238,6 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/calendar',
     component: LAYOUT_ROUTE.component,
   },
   {
@@ -571,6 +568,7 @@ export function Root() {
                 <EmailLinksContextProvider>
                   <BrowserNotificationModal />
                   <IosPushNotificationModal />
+                  <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
                   <QuerySyncProviderWithUserId />
                   <UserInfoSideEffects />

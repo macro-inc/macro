@@ -61,6 +61,7 @@ outbound = [
   "dep:base64",
   "dep:entity_access_db_utils",
   "dep:hex",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "ports",
 ]
@@ -133,6 +134,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }

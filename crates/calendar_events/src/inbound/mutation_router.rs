@@ -25,8 +25,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, EventReminders, EventTime, EventTransparency, EventVisibility,
-        VisibleCalendar,
+        CalendarEventPatch, ConferenceChange, EventReminders, EventTime, EventTransparency,
+        EventVisibility, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
@@ -138,6 +138,8 @@ pub struct CreateCalendarEventRequest {
     pub transparency: Option<EventTransparency>,
     /// Reminder configuration; omit to keep the calendar defaults.
     pub reminders: Option<EventReminders>,
+    /// Conference to attach to the new event; omit to create it without one.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// Request body patching an event; omitted fields are left untouched.
@@ -162,6 +164,13 @@ pub struct UpdateCalendarEventRequest {
     pub transparency: Option<EventTransparency>,
     /// Replacement reminder configuration.
     pub reminders: Option<EventReminders>,
+    /// Conference change: `google_meet` attaches a freshly generated Meet,
+    /// `none` detaches the current conference, and omitting it leaves the
+    /// conference untouched.
+    ///
+    /// A third-party conference is replaced or detached like any other, since
+    /// the request is explicit. Omit the field to leave it alone.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// How much of a recurring series a deletion removes.
@@ -365,6 +374,7 @@ where
         visibility: request.visibility,
         transparency: request.transparency,
         reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service
@@ -453,6 +463,7 @@ where
         visibility: request.visibility,
         transparency: request.transparency,
         reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service

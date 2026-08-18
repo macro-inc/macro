@@ -60,6 +60,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+models_permissions = { path = "../models_permissions" }
 non_empty = { path = "../non_empty" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
   "ports",

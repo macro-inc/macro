@@ -67,8 +67,8 @@ fn expected_matrix_covers_owner_team_channel_public_edges() {
     assert_eq!(level(&rows, "document:design-doc", "carol"), None);
     assert_eq!(level(&rows, "document:design-doc", "eve"), None);
 
-    // Public document is visible to everyone.
-    for user in ["alice", "bob", "carol", "dave", "eve"] {
+    // PUBLIC link sharing makes the document visible to everyone.
+    for user in ["alice", "bob", "carol", "dave", "erin", "eve"] {
         assert!(level(&rows, "document:handbook", user).is_some(), "{user}");
     }
     assert_eq!(
@@ -76,12 +76,19 @@ fn expected_matrix_covers_owner_team_channel_public_edges() {
         Some(AccessLevel::View)
     );
 
-    // Unshared document stays private.
+    // TEAM link sharing applies to the owner's team and not to outsiders.
     assert_eq!(
         level(&rows, "document:bob-notes", "bob"),
         Some(AccessLevel::Owner)
     );
-    for user in ["alice", "carol", "dave", "eve"] {
+    for user in ["alice", "carol", "erin"] {
+        assert_eq!(
+            level(&rows, "document:bob-notes", user),
+            Some(AccessLevel::View),
+            "{user}"
+        );
+    }
+    for user in ["dave", "eve"] {
         assert_eq!(level(&rows, "document:bob-notes", user), None, "{user}");
     }
 
@@ -189,6 +196,35 @@ fn mentions_grant_channel_view_to_projects_and_calls() {
 
     // `peer` isn't in `room`, so the mention grants them nothing.
     assert_eq!(level(&rows, "project:plans", "peer"), None);
+}
+
+#[test]
+fn team_link_share_fails_closed_when_owner_has_no_team() {
+    let spec = ScenarioSpec::parse(
+        &serde_json::json!({
+            "scenario": "team-link-without-owner-team",
+            "users": {
+                "owner": { "email": "owner@x.local" },
+                "other": { "email": "other@x.local" }
+            },
+            "documents": {
+                "doc": {
+                    "owner": "owner",
+                    "link_share": "TEAM",
+                    "link_share_access_level": "comment"
+                }
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let rows = expected_matrix(&spec);
+
+    assert_eq!(
+        level(&rows, "document:doc", "owner"),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(level(&rows, "document:doc", "other"), None);
 }
 
 #[test]

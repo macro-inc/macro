@@ -161,6 +161,7 @@ fn topic_events(
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
                 actor_user_id: actor_user_id.clone(),
                 value: Some(PropertyValue::SelectOption(vec![uuid(OPTION_ID)])),
+                previous_value: None,
                 updated_at: timestamp(UPDATED_AT),
             }),
             json!({
@@ -175,6 +176,7 @@ fn topic_events(
                         "type": "SelectOption",
                         "value": [OPTION_ID]
                     },
+                    "previous_value": null,
                     "updated_at": UPDATED_AT
                 }
             }),

@@ -507,14 +507,32 @@
       };
       tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
       tauriDesktopDmgAppleLd = pkgs.writeShellScriptBin "ld" ''
-        appleLd=$(/usr/bin/xcrun --sdk macosx --find ld)
+        appleDeveloperDir=$(
+          unset DEVELOPER_DIR
+          /usr/bin/xcode-select --print-path
+        )
+        appleLd="$appleDeveloperDir/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
         if [ ! -x "$appleLd" ]; then
-          echo "xcrun did not return an executable Apple linker: $appleLd" >&2
+          appleLd=$(
+            export DEVELOPER_DIR="$appleDeveloperDir"
+            export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+            unset SDKROOT TOOLCHAINS
+            /usr/bin/xcrun --sdk macosx --find ld
+          )
+        fi
+        if [ ! -x "$appleLd" ]; then
+          echo "could not locate an executable Apple linker: $appleLd" >&2
           exit 1
         fi
+        case "$appleDeveloperDir" in
+          /nix/store/*)
+            echo "xcode-select unexpectedly selected Nix: $appleDeveloperDir" >&2
+            exit 1
+            ;;
+        esac
         case "$appleLd" in
           /nix/store/*)
-            echo "xcrun unexpectedly selected a Nix linker: $appleLd" >&2
+            echo "Apple linker selection unexpectedly resolved to Nix for $appleDeveloperDir: $appleLd" >&2
             exit 1
             ;;
         esac

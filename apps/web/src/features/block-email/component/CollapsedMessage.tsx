@@ -62,8 +62,8 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           class={cn(
             'relative flex flex-col gap-2 p-4 rounded-lg min-w-0 border',
             props.isFocused
-              ? 'bg-active/60 border-edge'
-              : 'bg-ink-muted/2.5 hover:bg-active/40 hover:border-edge border-transparent'
+              ? 'bg-active border-edge'
+              : 'bg-hover hover:bg-active hover:border-edge border-transparent'
           )}
           style={{
             '--user-icon-width': '1rem',

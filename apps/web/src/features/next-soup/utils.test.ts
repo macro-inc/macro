@@ -17,6 +17,10 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: toastAlert },
 }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  ENABLE_CALENDAR_UI: () => true,
+}));
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
@@ -159,6 +163,60 @@ describe('preview duplicate navigation', () => {
       false
     );
     expect(toastAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe('calendar block navigation', () => {
+  it('opens and targets the singleton calendar block', async () => {
+    const openWithSplit = vi.fn();
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'calendar_event',
+        id: 'event-1',
+        notifications: () => [
+          {
+            notification_metadata: {
+              tag: 'calendar_event_reminder',
+              content: {
+                eventId: 'event-1',
+                occurrenceKey: 'instance-1',
+                startDate: '2026-01-27',
+              },
+            },
+          } as UnifiedNotification,
+        ],
+      } as unknown as EntityData,
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'calendar',
+        id: 'view',
+        params: expect.objectContaining({
+          eventId: 'event-1',
+          occurrenceKey: 'instance-1',
+          range: expect.objectContaining({
+            startDate: '2026-01-27',
+            endDate: '2026-01-28',
+          }),
+        }),
+      }),
+      expect.any(Object)
+    );
+    expect(getBlockHandle).toHaveBeenCalledWith('view', 'calendar');
+    expect(goToLocationFromParams).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 'event-1' })
+    );
   });
 });
 

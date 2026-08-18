@@ -5,6 +5,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -86,6 +87,11 @@ pub enum SendEmailResponse {
     UserEdited,
 }
 
+impl ToolAnnotated for SendEmail {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Send email").with_open_world();
+}
+
 #[async_trait]
 impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for SendEmail
 where
@@ -107,9 +113,8 @@ where
     ) -> ToolResult<Self::Output> {
         println!("CALL SEND EMAIL {:?}", request_context);
 
-        let link = service_context
-            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
-            .await?;
+        let acting_user = MacroUserIdStr((*request_context.user_id).clone());
+        let link = service_context.resolve_link(acting_user.clone()).await?;
 
         let input = CreateDraftInput {
             db_id: None,
@@ -129,6 +134,7 @@ where
             // Composer override when present; otherwise None lets the backend
             // apply the default signature policy.
             include_signature: self.include_signature,
+            actor: Some(acting_user),
         };
 
         let sent = service_context

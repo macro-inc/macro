@@ -1,0 +1,8 @@
+{
+  "history": [
+    {"id":"101","messagesAdded":[{"message":{"id":"added","threadId":"thread-1"}}]},
+    {"id":"101","messagesDeleted":[{"message":{"id":"deleted","threadId":"thread-2"}}]}
+  ],
+  "nextPageToken":"next-page",
+  "historyId":"101"
+}

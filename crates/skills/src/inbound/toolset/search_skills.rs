@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -71,6 +72,10 @@ pub struct SkillSearchResult {
 pub struct SearchSkillsResponse {
     /// The matched skills, most recently updated first.
     pub results: Vec<SkillSearchResult>,
+}
+
+impl ToolAnnotated for SearchSkills {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search skills");
 }
 
 #[async_trait]

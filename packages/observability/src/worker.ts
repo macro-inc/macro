@@ -8,8 +8,9 @@ import {
 	OTLPExporter,
 	type TraceConfig,
 } from "@microlabs/otel-cf-workers";
-import type { Span } from "@opentelemetry/api";
+import type { Context, Span } from "@opentelemetry/api";
 import { ATTR_DEPLOYMENT_ENVIRONMENT, ATTR_USER_ID } from "./constants";
+import { userIdSuppressed } from "./privacy";
 
 export type { TraceConfig };
 export { instrument, instrumentDO };
@@ -46,8 +47,9 @@ export function createWorkerTraceConfig(
 		service: { name: options.serviceName },
 		spanProcessors: [
 			{
-				onStart: (span: Span) => {
+				onStart: (span: Span, parentContext: Context) => {
 					span.setAttribute(ATTR_DEPLOYMENT_ENVIRONMENT, options.environment);
+					if (userIdSuppressed(parentContext)) return;
 					const userId = options.getUserId?.();
 					if (userId !== undefined) span.setAttribute(ATTR_USER_ID, userId);
 				},

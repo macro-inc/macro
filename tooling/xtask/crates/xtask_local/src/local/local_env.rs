@@ -1,16 +1,18 @@
 //! The typed, code-owned local-stack environment — the replacement for the
 //! checked-in `infra/local/defaults.env`.
 //!
-//! Local mode is fully code-defined: it does NOT pull Doppler. Every value here
-//! is deterministic and local-only — docker-network hostnames, LocalStack dummy
-//! creds, fixed queue/bucket names, the fixed FusionAuth kickstart identity, and
-//! per-instance internal secrets. Anything that needs a *real* secret or a real
-//! integration (Gmail, Stripe, …) is intentionally absent: that's a `run_dev`
-//! concern (Doppler), not a local one.
+//! Every value here is deterministic and local-only — docker-network hostnames,
+//! LocalStack dummy creds, fixed queue/bucket names, the fixed FusionAuth
+//! kickstart identity, and per-instance internal secrets. Anything that needs a
+//! *real* secret or a real integration (Gmail, Stripe, …) comes from Doppler or
+//! `--env-file`; [`BootStubEnv`] only supplies placeholder fallbacks so a
+//! `--no-doppler` stack's config loaders don't crash at startup.
 //!
-//! [`LocalEnv::for_instance`] builds the struct; [`LocalEnv::to_env`] is the one
-//! boundary that flattens it to the env map. Grouping makes additions land in a
-//! named, testable place instead of a free-form dotenv file that quietly rots.
+//! [`LocalEnv::for_instance`] builds the struct. Two boundaries flatten it to
+//! env maps: [`LocalEnv::to_env`] (authoritative, layered above Doppler) and
+//! [`LocalEnv::boot_stub_env`] (fallback, layered below Doppler). Grouping makes
+//! additions land in a named, testable place instead of a free-form dotenv file
+//! that quietly rots.
 
 use std::collections::BTreeMap;
 
@@ -33,6 +35,7 @@ pub struct LocalEnv {
     mail: MailEnv,
     service_auth: ServiceAuthEnv,
     fusionauth: FusionAuthEnv,
+    boot_stubs: BootStubEnv,
 }
 
 impl LocalEnv {
@@ -55,6 +58,7 @@ impl LocalEnv {
             mail: MailEnv::local(),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
+            boot_stubs: BootStubEnv,
         }
     }
 
@@ -75,6 +79,16 @@ impl LocalEnv {
         self.mail.write(&mut env);
         self.service_auth.write(&mut env);
         self.fusionauth.write(&mut env);
+        env
+    }
+
+    /// The boot-stub fallback layer (see [`BootStubEnv`]), kept separate from
+    /// [`Self::to_env`] on purpose: the resolver layers these BELOW Doppler so
+    /// real integration values win over the stubs, while `to_env`'s local
+    /// plumbing is layered ABOVE Doppler and wins.
+    pub fn boot_stub_env(&self) -> BTreeMap<String, String> {
+        let mut env = BTreeMap::new();
+        self.boot_stubs.write(&mut env);
         env
     }
 }
@@ -332,6 +346,193 @@ impl FusionAuthEnv {
         env.insert("AUDIENCE".into(), identity::APPLICATION_ID.into());
         env.insert("ISSUER".into(), identity::ISSUER.into());
         env.insert("JWT_SECRET_KEY".into(), identity::JWT_SECRET.into());
+    }
+}
+
+/// Values the services' `macro_config` loaders require but that only exist in
+/// Doppler's `lcl_personal` config. Without these a `--no-doppler` stack's
+/// containers crash at startup ("missing required value") before any of the
+/// integration the value backs is ever exercised. Each entry is a deterministic
+/// local stub: good enough to boot, never a real secret, and only meaningful
+/// for the specific integration it names (which won't work locally anyway —
+/// that's what `--env-file` / `run_dev` are for).
+///
+/// Unlike the rest of [`LocalEnv`], these are a FALLBACK layer: the resolver
+/// applies them below Doppler (see `env_layer::resolve`), so a developer with
+/// Doppler access keeps every real integration value. A key here must never
+/// also appear in [`LocalEnv::to_env`] — that would make precedence ambiguous
+/// (a test enforces this).
+struct BootStubEnv;
+
+impl BootStubEnv {
+    fn write(&self, env: &mut BTreeMap<String, String>) {
+        // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
+        // hostname — see `redis::Client::open`).
+        env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
+        // email_service / connection_gateway open their own Postgres pool.
+        env.insert(
+            "MACRO_DB_URL".into(),
+            "postgres://user:password@postgres:5432/macrodb".into(),
+        );
+        // services validating the shared internal auth header.
+        env.insert(
+            "INTERNAL_API_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        // document_cognition_service's soup client (internal HMAC).
+        env.insert(
+            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        // search_processing_service; the local cluster has the security plugin
+        // disabled so these are accepted but ignored (same as opensearch.rs).
+        env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
+        env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
+        // document_storage_service's presigned-URL config. Locally the
+        // `is_local_aws()` branch skips CloudFront signing entirely, so only a
+        // well-formed base URL is needed.
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
+            "http://localhost:8100".into(),
+        );
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID".into(),
+            "local-cloudfront-signer".into(),
+        );
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY".into(),
+            "local".into(),
+        );
+        // The `ai_tools` tool-context env (document_storage_service builds one
+        // at boot) reads this as a separate secret-name var.
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
+            "local-cloudfront-signer-private-key".into(),
+        );
+        // authentication_service's third-party OAuth/Stripe config. The FusionAuth
+        // kickstart only creates the Google/GitHub IdPs when real creds are
+        // present (see kickstart.rs), so these stubs just satisfy the loader.
+        env.insert("GOOGLE_CLIENT_ID".into(), "local-google-client".into());
+        env.insert(
+            "GOOGLE_CLIENT_SECRET_KEY".into(),
+            "local-google-client-secret".into(),
+        );
+        env.insert("GITHUB_CLIENT_ID".into(), "local-github-client".into());
+        env.insert(
+            "GITHUB_CLIENT_SECRET".into(),
+            "local-github-client-secret".into(),
+        );
+        env.insert(
+            "GITHUB_IDP_ID".into(),
+            "99999999-9999-4999-8999-999999999999".into(),
+        );
+        env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
+        env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
+        env.insert(
+            "STRIPE_WEBHOOK_SECRET_KEY".into(),
+            "local-stripe-webhook-secret".into(),
+        );
+        // macro_auth's `JwtValidationArgs` (used by every service that mounts
+        // the auth middleware) reads these at boot. The keys are only parsed
+        // when a Macro API token is actually validated — normal local auth
+        // uses FusionAuth JWTs — so dummies are fine.
+        env.insert("MACRO_API_TOKEN_ISSUER".into(), "local".into());
+        env.insert(
+            "MACRO_API_TOKEN_PUBLIC_KEY".into(),
+            "local-macro-api-token-public-key".into(),
+        );
+        env.insert(
+            "MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(),
+            "local-macro-api-token-private-key".into(),
+        );
+        env.insert("MACRO_API_TOKEN_EXPIRY_SECONDS".into(), "3600".into());
+        // email_service's GCP pubsub queue (gmail watch notifications) and
+        // its own CloudFront signer for attachment presigned URLs.
+        env.insert("GMAIL_GCP_QUEUE".into(), "gmail-gcp-queue-local".into());
+        env.insert("APOLLO_API_KEY".into(), "local".into());
+        env.insert(
+            "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
+            "http://localhost:8100".into(),
+        );
+        env.insert(
+            "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY".into(),
+            "local".into(),
+        );
+        env.insert(
+            "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID".into(),
+            "local-cloudfront-signer".into(),
+        );
+        // notification_service's APNS/FCM push config — push won't work
+        // locally, but the loader requires the keys.
+        env.insert("APPLE_BUNDLE_ID".into(), "com.macro.local".into());
+        env.insert(
+            "SNS_APNS_PLATFORM_ARN".into(),
+            "arn:aws:sns:us-east-1:000000000000:app/APNS/macro-local".into(),
+        );
+        env.insert(
+            "SNS_FCM_PLATFORM_ARN".into(),
+            "arn:aws:sns:us-east-1:000000000000:app/GCM/macro-local".into(),
+        );
+        // document_cognition_service's MCP credentials encryption key — must be
+        // a base64-encoded 32-byte AES key (`AesKey::try_from`).
+        env.insert(
+            "MCP_CREDENTIALS_KEY_SECRET_NAME".into(),
+            "VrOPM+uhQKuas1vO8FpyWDc/ZRhLAXYW5lRz8s0yyA4=".into(),
+        );
+        // document_cognition_service reads `ANTHROPIC_API_KEY` at boot
+        // (`anthropic::Config::dangrously_try_from_env`); a dummy satisfies the
+        // loader, real model calls just fail.
+        env.insert("ANTHROPIC_API_KEY".into(), "local-anthropic-key".into());
+        // document_cognition_service's MCP provider registry requires the
+        // pre-registered OAuth creds (Slack + GitHub) at boot.
+        env.insert(
+            "SLACK_MCP_CLIENT_ID".into(),
+            "local-slack-mcp-client".into(),
+        );
+        env.insert(
+            "SLACK_MCP_CLIENT_SECRET".into(),
+            "local-slack-mcp-secret".into(),
+        );
+        // document_storage_service's GitHub sync + LiveKit + LLM + Cal config.
+        // All boot-required; the integrations they back are inert locally.
+        env.insert("GITHUB_SYNC_APP_URL".into(), "http://localhost:8080".into());
+        env.insert(
+            "GITHUB_SYNC_APP_CLIENT_ID".into(),
+            "local-github-sync-client".into(),
+        );
+        env.insert(
+            "GITHUB_SYNC_APP_CLIENT_SECRET".into(),
+            "local-github-sync-secret".into(),
+        );
+        env.insert(
+            "GITHUB_INSTALLATION_STATE_SECRET".into(),
+            "local-github-installation-state".into(),
+        );
+        env.insert(
+            "GITHUB_WEBHOOK_SECRET_KEY".into(),
+            "local-github-webhook-secret".into(),
+        );
+        env.insert(
+            "GITHUB_SYNC_APP_PEM_SECRET_KEY".into(),
+            "local-github-sync-pem".into(),
+        );
+        env.insert("LIVEKIT_SERVER_URL".into(), "http://localhost:7880".into());
+        env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
+        env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
+        env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
+        env.insert(
+            "CAL_WEBHOOK_SECRET_KEY".into(),
+            "local-cal-webhook-secret".into(),
+        );
+        env.insert(
+            "CAL_EVENT_TYPE_CONTENT_NAMES_KEY".into(),
+            r#"{"1":{"content_name":"local","value":0}}"#.into(),
+        );
+        // Meta (Facebook) tracking pixel config. Required by the config loader;
+        // the pixel is inert locally.
+        env.insert("META_PIXEL_ID".into(), "local-meta-pixel".into());
+        env.insert("META_ACCESS_TOKEN".into(), "local-meta-access-token".into());
     }
 }
 

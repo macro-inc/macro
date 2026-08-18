@@ -805,7 +805,7 @@ where
     {
         let entity_filter = req.filters().clone();
         let req = req.into_ast()?;
-        let limit = req.limit.clamp(20, 500);
+        let limit = req.limit.clamp(1, 500);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
         // companies) requires a team receipt. Without this check the CRM

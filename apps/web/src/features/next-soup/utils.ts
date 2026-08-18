@@ -1,5 +1,10 @@
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { createCalendarBlockRange } from '@block-calendar/calendar-range';
+import {
+  CALENDAR_BLOCK_ID,
+  type CalendarBlockProps,
+} from '@block-calendar/types';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -80,9 +85,8 @@ import {
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
-import { isAfter, parseISO } from 'date-fns';
+import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
-import { requestCalendarFocus } from '../calendar/calendar-focus-intent';
 import { withPreviewSourceEntityId } from './preview-history';
 
 const mergeSearchEntities = <T extends EntityData>(
@@ -226,7 +230,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'document') {
+  if (entity.type === 'calendar_event') {
+    entityPath = `/app/calendar/${CALENDAR_BLOCK_ID}`;
+  } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
@@ -611,17 +617,20 @@ export const openEntityInSplitFromUnifiedList = async (
   // A standalone reminder points at nothing, so there is nothing to open.
   if (entity.type === 'reminder' && !entity.referencedEntity) return;
 
-  // A calendar event opens the calendar split focused on the alarmed
-  // occurrence — the same deep link its notification uses.
+  // Calendar is a singleton block. Event opens retarget that one instance
+  // with a locator range, including repeat clicks on an already-open split.
   if (entity.type === 'calendar_event') {
     if (!ENABLE_CALENDAR_UI()) return;
-    requestCalendarFocusForEntity(entity);
-    const existing = splitManager.getSplitByContent('component', 'calendar');
+    const params = calendarBlockParamsForEntity(entity);
+    const existing = splitManager.getSplitByContent(
+      'calendar',
+      CALENDAR_BLOCK_ID
+    );
     if (existing) {
       existing.activate();
     } else {
       splitManager.openWithSplit(
-        { type: 'component', id: 'calendar' },
+        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
         {
           activate: true,
           referredFrom: null,
@@ -630,6 +639,11 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       );
     }
+    const calendarHandle = await blockOrchestrator.getBlockHandle(
+      CALENDAR_BLOCK_ID,
+      'calendar'
+    );
+    await calendarHandle?.goToLocationFromParams(params);
     return;
   }
 
@@ -739,15 +753,10 @@ export function markReminderSeenOnOpen(
   });
 }
 
-/**
- * File the calendar deep-link focus for an alarmed event row. The row is the
- * master event; the alarmed occurrence and its start ride on the driving
- * notification's metadata. Without one, the master's own start still pages
- * the calendar to the right date.
- */
-function requestCalendarFocusForEntity(
+/** Build the singleton block params for an event row's target occurrence. */
+function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
-) {
+): CalendarBlockProps {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
     : [];
@@ -756,23 +765,21 @@ function requestCalendarFocusForEntity(
     .find((candidate) => candidate?.tag === 'calendar_event_reminder');
   const content =
     metadata?.tag === 'calendar_event_reminder' ? metadata.content : undefined;
-  const start =
-    content?.startsAt ??
-    (entity.time?.kind === 'timed' ? entity.time.startsAt : undefined);
-  const startDate =
-    content?.startDate ??
-    (entity.time?.kind === 'allDay' ? entity.time.startDate : undefined);
-  const date = start
-    ? new Date(start)
-    : startDate
-      ? parseISO(startDate)
-      : undefined;
-  if (!date || !Number.isFinite(date.getTime())) return;
-  requestCalendarFocus({
-    eventId: entity.id,
-    occurrenceKey: content?.occurrenceKey ?? '',
-    date,
-  });
+  const time = content?.startsAt
+    ? {
+        kind: 'timed' as const,
+        startsAt: content.startsAt,
+        endsAt: content.endsAt ?? undefined,
+      }
+    : content?.startDate
+      ? { kind: 'allDay' as const, startDate: content.startDate }
+      : entity.time;
+
+  return {
+    eventId: content?.eventId ?? entity.id,
+    occurrenceKey: content?.occurrenceKey,
+    range: time ? createCalendarBlockRange(time) : undefined,
+  };
 }
 
 /**
@@ -827,10 +834,10 @@ function getEntitySplitContent(entity: EntityData) {
           }
         );
       })
-      // Calendar events open the calendar component split; the open path
+      // Calendar events open the singleton calendar block; the open path
       // branches before reaching here, so this only serves duplicate checks.
       .with({ type: 'calendar_event' }, () => {
-        return { type: 'component' as const, id: 'calendar' };
+        return { type: 'calendar' as const, id: CALENDAR_BLOCK_ID };
       })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };

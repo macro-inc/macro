@@ -27,6 +27,23 @@ env_vars!(
 
 maybe_env_vars!(
     pub struct DocumentBatchLimit;
+    /// OAuth client ID for the Pipedream API (Pipedream project settings).
+    /// When unset (along with the other Pipedream credentials), the
+    /// Pipedream MCP endpoints answer 501 and its toolsets come up empty.
+    pub struct PipedreamClientId;
+    /// OAuth client secret for the Pipedream API.
+    pub struct PipedreamClientSecret;
+    /// The Pipedream Connect project ID (`proj_...`).
+    pub struct PipedreamProjectId;
+    /// The Pipedream project environment (`development` or `production`).
+    /// Defaults by deploy environment: production in prd, development
+    /// elsewhere.
+    pub struct PipedreamEnvironment;
+    /// Base URL of the Pipedream API. Defaults to `https://api.pipedream.com`.
+    pub struct PipedreamApiUrl;
+    /// URL of Pipedream's remote MCP server. Defaults to
+    /// `https://remote.mcp.pipedream.net`.
+    pub struct PipedreamMcpUrl;
 );
 
 /// The configuration parameters for the application.
@@ -66,6 +83,18 @@ pub struct Config {
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
     /// MCP credentials encryption key (base64-encoded, secret name or value)
     pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
+    /// OAuth client ID for the Pipedream API.
+    pub pipedream_client_id: PipedreamClientId,
+    /// OAuth client secret for the Pipedream API.
+    pub pipedream_client_secret: PipedreamClientSecret,
+    /// The Pipedream Connect project ID.
+    pub pipedream_project_id: PipedreamProjectId,
+    /// The Pipedream project environment.
+    pub pipedream_environment: PipedreamEnvironment,
+    /// Base URL of the Pipedream API.
+    pub pipedream_api_url: PipedreamApiUrl,
+    /// URL of Pipedream's remote MCP server.
+    pub pipedream_mcp_url: PipedreamMcpUrl,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -120,6 +149,12 @@ impl Config {
             mcp_credentials_key_secret_name: LocalOrRemoteSecret::Local(
                 McpCredentialsKeySecretName::Comptime("MCP_CREDENTIALS_KEY_SECRET_NAME"),
             ),
+            pipedream_client_id: PipedreamClientId::Unset,
+            pipedream_client_secret: PipedreamClientSecret::Unset,
+            pipedream_project_id: PipedreamProjectId::Unset,
+            pipedream_environment: PipedreamEnvironment::Unset,
+            pipedream_api_url: PipedreamApiUrl::Unset,
+            pipedream_mcp_url: PipedreamMcpUrl::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

@@ -36,6 +36,9 @@ env_vars! {
 maybe_env_vars! {
     /// Browser-reachable FusionAuth origin used for OAuth authorization redirects.
     pub struct FusionAuthPublicUrl;
+    pub struct MicrosoftClientId;
+    pub struct MicrosoftClientSecret;
+    pub struct MicrosoftTenantId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -79,6 +82,12 @@ pub struct Config {
     pub google_client_id: GoogleClientId,
     /// Google client secret key
     pub google_client_secret_key: GoogleClientSecretKey,
+    /// Microsoft OAuth client ID.
+    pub microsoft_client_id: MicrosoftClientId,
+    /// Microsoft OAuth client secret.
+    pub microsoft_client_secret: MicrosoftClientSecret,
+    /// Microsoft Entra tenant ID.
+    pub microsoft_tenant_id: MicrosoftTenantId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -125,9 +134,54 @@ pub struct Config {
     pub calendar_scope_enabled: bool,
 }
 
+/// Complete Microsoft OAuth credentials used to enable Outlook account linking.
+pub(crate) struct MicrosoftCredentials {
+    pub(crate) client_id: String,
+    pub(crate) client_secret: String,
+    pub(crate) tenant_id: String,
+}
+
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()
             .context("failed to load authentication service config")
     }
+
+    /// Resolves Microsoft credentials, enforcing that all values are configured together.
+    pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
+        resolve_microsoft_credentials(
+            &self.microsoft_client_id,
+            &self.microsoft_client_secret,
+            &self.microsoft_tenant_id,
+        )
+    }
 }
+
+fn resolve_microsoft_credentials(
+    client_id: &MicrosoftClientId,
+    client_secret: &MicrosoftClientSecret,
+    tenant_id: &MicrosoftTenantId,
+) -> anyhow::Result<Option<MicrosoftCredentials>> {
+    let client_id = nonblank_value(client_id.value());
+    let client_secret = nonblank_value(client_secret.value());
+    let tenant_id = nonblank_value(tenant_id.value());
+
+    match (client_id, client_secret, tenant_id) {
+        (None, None, None) => Ok(None),
+        (Some(client_id), Some(client_secret), Some(tenant_id)) => Ok(Some(MicrosoftCredentials {
+            client_id: client_id.to_owned(),
+            client_secret: client_secret.to_owned(),
+            tenant_id: tenant_id.to_owned(),
+        })),
+        _ => anyhow::bail!(
+            "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID must all be set to nonblank values or all be unset"
+        ),
+    }
+}
+
+fn nonblank_value(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| !value.trim().is_empty())
+}
+
+#[cfg(test)]
+mod test;

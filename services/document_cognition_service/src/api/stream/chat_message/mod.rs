@@ -30,7 +30,6 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::dcs::create_chat;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
 use memory::domain::MemoryService;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::SharePermissionV2;
@@ -366,7 +365,20 @@ async fn create_new_chat(
     model: &str,
     stream_id: &str,
 ) -> Result<(crate::model::chats::ChatResponse, String), ChatMessageError> {
-    let share_permission = SharePermissionV2::new_chat_share_permission();
+    // The owner's team default link-share preference decides the initial
+    // share permission; without a team the chat default (public/view) applies.
+    let team_default =
+        share_permission_db_utils::get_team_default_link_share(&ctx.db, (**user_id).as_ref())
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "failed to resolve team default link share");
+                ChatMessageError {
+                    error: "Failed to create chat".to_string(),
+                    stream_id: Some(stream_id.to_string()),
+                    status: None,
+                }
+            })?;
+    let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
     let new_chat_id = create_chat::create_chat_v2(
         &ctx.db,
         (**user_id).clone(),
@@ -493,7 +505,7 @@ fn stream_and_save_message(
     tracing::trace!(request=?request, "streaming chat request");
     let tool_context = ctx.tool_service_context.clone();
     let static_tools = ctx.all_tools.clone();
-    let mcp_store = ctx.mcp_state.store();
+    let mcp_selector = ctx.mcp_selector.clone();
 
     let ctx_outer = ctx.clone();
     // Pull the token out so the select below can reference it without moving
@@ -520,15 +532,12 @@ fn stream_and_save_message(
             yield json;
         }
 
-        let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-            mcp_client::domain::service::CombinedToolSet::new(
-                static_tools,
-                &mcp_records,
-                mcp_store.clone(),
-            )
-            .await,
-        );
+        let mcp_tools = {
+            use mcp_select::ConnectorSelect;
+            mcp_selector.user_toolset(&user_id).await
+        };
+        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
+            Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
         let agent_loop =
             AgentLoop::new(tool_context.recorder.clone()).with_model(&model);
 

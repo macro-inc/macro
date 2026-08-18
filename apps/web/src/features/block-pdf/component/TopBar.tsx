@@ -242,8 +242,8 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
-        <div class="-order-1 mobile:hidden">
+        {/* Hidden on mobile/tablet: no floating-island treatment for live avatars yet. */}
+        <div class="-order-1 touch:hidden">
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>

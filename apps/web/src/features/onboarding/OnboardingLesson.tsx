@@ -176,7 +176,7 @@ export function OnboardingDemoFallback() {
 
 export function OnboardingDemoPanel(props: LessonStyleProps) {
   return (
-    <div class="flex-1 min-w-0 flex items-center justify-center bg-surface-secondary/30 overflow-hidden">
+    <div class="flex-1 min-w-0 flex items-center justify-center bg-panel overflow-hidden">
       <div style={props.bodyStyle()} class="size-full">
         <Show
           when={props.lesson.definition.demo}

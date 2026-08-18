@@ -15,7 +15,7 @@ consumer = [
   "macro_event_broker/outbound",
 ]
 default = ["consumer", "outbound"]
-outbound = ["dep:sqlx"]
+outbound = ["dep:sqlx", "dep:tracing"]
 
 [dependencies]
 channel_sender = { path = "../channel_sender" }

@@ -362,7 +362,7 @@ function GithubPullRequestChecksPopover(props: {
                         </span>
                       )}
                     </Show>
-                    <Layer depth={5}>
+                    <Layer depth={4}>
                       <span
                         class={cn(
                           'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md border border-edge-muted bg-active text-ink-extra-muted opacity-0 shadow-sm',

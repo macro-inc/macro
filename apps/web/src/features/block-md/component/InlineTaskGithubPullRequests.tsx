@@ -53,7 +53,7 @@ function InlineTaskGithubPullRequestsSkeleton(): JSX.Element {
         class={cn(PILL_CLASS, 'pointer-events-none select-none')}
       >
         <GithubIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-ink/10" />
+        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
       </div>
     </Layer>
   );

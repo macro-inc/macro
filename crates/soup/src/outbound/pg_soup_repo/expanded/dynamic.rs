@@ -448,6 +448,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'organizerEmail', event.organizer_email,
                 'organizerName', event.organizer_name,
                 'conferenceUrl', event.conference_url,
+                'conferenceProvider', event.conference_provider,
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,

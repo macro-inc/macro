@@ -128,6 +128,84 @@ function parseGmailSignature(htmlElement: Element) {
   };
 }
 
+/** Elements that can execute or embed active content, and are never legitimate
+ * email body markup. `svg` and `math` are here because their subtrees can
+ * mutate an attribute after we validate it (`<animate attributeName="href">`),
+ * so a per-attribute check is not enough — matches the backend allowlist,
+ * which drops both. */
+const ACTIVE_ELEMENTS =
+  'script,iframe,frame,frameset,object,embed,applet,base,meta,link,noscript,template,svg,math';
+
+/** Attributes carrying a URL that must be scheme-checked. */
+const URL_ATTRIBUTES = ['href', 'src', 'action', 'background', 'poster'];
+
+/** Schemes the backend sanitizer allows; anything else is dropped. */
+const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'cid:', 'tel:', 'sms:'];
+
+function isSafeUrl(value: string): boolean {
+  // Strip the whitespace and control characters browsers tolerate inside URLs
+  // ("java\nscript:") before looking for a scheme.
+  const trimmed = Array.from(value)
+    .filter((char) => char.charCodeAt(0) > 0x20)
+    .join('');
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(trimmed)?.[0]?.toLowerCase();
+  // No scheme means relative, anchor, or protocol-relative — all inert.
+  if (!scheme) return true;
+  // Inline images are inert as an <img> source; other data: URLs are not.
+  if (trimmed.toLowerCase().startsWith('data:image/')) return true;
+  return SAFE_SCHEMES.includes(scheme);
+}
+
+/**
+ * Removes script-capable markup from a freshly parsed, still-inert document.
+ *
+ * Defence in depth for the `innerHTML` render path: the backend sanitizes every
+ * body it writes today, but rows stored before that landed — and anything a
+ * future write path forgets — would otherwise execute in the reader's page.
+ * Must run on a `DOMParser` document, which neither executes scripts nor loads
+ * resources; scrubbing after an `innerHTML` assignment is already too late
+ * because `<img onerror>` fires on a detached element.
+ */
+export function scrubActiveContent(doc: Document) {
+  for (const element of Array.from(doc.querySelectorAll(ACTIVE_ELEMENTS))) {
+    element.remove();
+  }
+
+  for (const element of Array.from(doc.querySelectorAll('*'))) {
+    for (const name of element.getAttributeNames()) {
+      const lowered = name.toLowerCase();
+      if (
+        lowered.startsWith('on') ||
+        lowered === 'srcdoc' ||
+        lowered === 'formaction' ||
+        lowered.endsWith(':href')
+      ) {
+        element.removeAttribute(name);
+        continue;
+      }
+      if (
+        URL_ATTRIBUTES.includes(lowered) &&
+        !isSafeUrl(element.getAttribute(name) ?? '')
+      ) {
+        element.removeAttribute(name);
+      }
+    }
+  }
+}
+
+/**
+ * Parses `html`, scrubs it with {@link scrubActiveContent}, and re-serializes.
+ *
+ * For the paths that hand a stored body straight to another renderer (the
+ * composer's quoted reply, the html-render node) rather than going through
+ * {@link parseEmailContent}.
+ */
+export function sanitizeEmailHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  scrubActiveContent(doc);
+  return doc.documentElement.innerHTML;
+}
+
 interface ParsedEmailContent {
   mainContent: string;
   signature: string | null;
@@ -141,6 +219,10 @@ export function parseEmailContent(
 ): ParsedEmailContent {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
+
+  // Scrub while the document is still inert — everything below round-trips
+  // through innerHTML on the live document.
+  scrubActiveContent(doc);
 
   const hasTable = Boolean(doc.querySelector('table'));
 

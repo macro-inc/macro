@@ -1,10 +1,8 @@
 use crate::hook::*;
 use crate::stream::StreamPart;
 use ai_toolset::SearchableTool;
-use rig_core::agent::{
-    HookAction, InvalidToolCallContext, InvalidToolCallHookAction, PromptHook, ToolCallHookAction,
-};
-use rig_core::providers::anthropic::completion::CompletionModel as AnthropicModel;
+use rig_agent::agent::{InvalidToolCallAction, ToolCallAction};
+use rig_agent::tool::ToolOutput;
 use schemars::Schema;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -46,17 +44,16 @@ async fn on_tool_result_drains_buffer_and_registers_loaded_tools() {
     let (bridge, _rx) =
         StreamBridge::channel(routing, buffer.clone(), register, Arc::new(vec![]), token);
 
-    let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_result(
-        &bridge,
-        "SearchTools",
-        None,
-        "call-1",
-        "{}",
-        "{\"loaded\":[]}",
-    )
-    .await;
+    bridge
+        .handle_tool_result(
+            "SearchTools",
+            None,
+            "call-1",
+            &ToolOutput::json(serde_json::json!({"loaded": []})),
+            true,
+        )
+        .await;
 
-    assert!(matches!(action, HookAction::Continue));
     // Buffer drained and both pending tools handed to the registrar.
     assert!(buffer.lock().unwrap().is_empty());
     let mut got = registered.lock().unwrap().clone();
@@ -78,21 +75,21 @@ async fn on_tool_result_registers_nothing_when_buffer_empty() {
     let token = CancellationToken::new();
     let (bridge, _rx) = StreamBridge::channel(routing, buffer, register, Arc::new(vec![]), token);
 
-    let _ = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_result(
-        &bridge,
-        "WebSearch",
-        None,
-        "call-2",
-        "{}",
-        "{}",
-    )
-    .await;
+    bridge
+        .handle_tool_result(
+            "WebSearch",
+            None,
+            "call-2",
+            &ToolOutput::json(serde_json::json!({})),
+            true,
+        )
+        .await;
 
     assert!(registered.lock().unwrap().is_empty());
 }
 
 /// A bare bridge with no routing, no loaded-tool buffer, and an empty
-/// searchable catalog, for exercising [`StreamBridge::on_tool_call`] in
+/// searchable catalog, for exercising [`StreamBridge::handle_tool_call`] in
 /// isolation.
 fn bare_bridge() -> (
     StreamBridge,
@@ -112,16 +109,9 @@ fn bare_bridge() -> (
 async fn on_tool_call_parses_object_args() {
     let (bridge, mut rx) = bare_bridge();
 
-    let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_call(
-        &bridge,
-        "Search",
-        None,
-        "call-1",
-        "{\"query\":\"cats\"}",
-    )
-    .await;
+    let action = bridge.handle_tool_call("Search", None, "call-1", "{\"query\":\"cats\"}");
 
-    assert!(matches!(action, ToolCallHookAction::Continue));
+    assert!(matches!(action, ToolCallAction::Run));
     let Ok(StreamPart::ToolCall(tool_call)) = rx.try_recv().unwrap() else {
         panic!("expected a tool call");
     };
@@ -137,16 +127,9 @@ async fn on_tool_call_coerces_non_object_args_to_empty_object() {
     for args in ["", "null", "\"oops\"", "[1,2,3]", "not json at all"] {
         let (bridge, mut rx) = bare_bridge();
 
-        let action = <StreamBridge as PromptHook<AnthropicModel>>::on_tool_call(
-            &bridge,
-            "ListSkills",
-            None,
-            "call-1",
-            args,
-        )
-        .await;
+        let action = bridge.handle_tool_call("ListSkills", None, "call-1", args);
 
-        assert!(matches!(action, ToolCallHookAction::Continue));
+        assert!(matches!(action, ToolCallAction::Run));
         let Ok(StreamPart::ToolCall(tool_call)) = rx.try_recv().unwrap() else {
             panic!("expected a tool call for args {args:?}");
         };
@@ -156,21 +139,6 @@ async fn on_tool_call_coerces_non_object_args_to_empty_object() {
             "args {args:?} must coerce to an empty object, not {:?}",
             tool_call.json
         );
-    }
-}
-
-/// An [`InvalidToolCallContext`] for a model-emitted call to `tool_name`.
-fn invalid_call(tool_name: &str) -> InvalidToolCallContext {
-    InvalidToolCallContext {
-        tool_name: tool_name.to_string(),
-        tool_call_id: Some("call-1".to_string()),
-        internal_call_id: Some("internal-1".to_string()),
-        args: Some("{}".to_string()),
-        available_tools: vec!["SearchTools".to_string()],
-        allowed_tools: vec!["SearchTools".to_string()],
-        tool_choice: None,
-        chat_history: vec![],
-        is_streaming: true,
     }
 }
 
@@ -187,15 +155,13 @@ async fn invalid_call_to_searchable_tool_loads_it_and_retries() {
         CancellationToken::new(),
     );
 
-    let action = <StreamBridge as PromptHook<AnthropicModel>>::on_invalid_tool_call(
-        &bridge,
-        &invalid_call("mcp__linear__create_issue"),
-    )
-    .await;
+    let action = bridge
+        .handle_invalid_tool_call("mcp__linear__create_issue")
+        .await;
 
     // The unloaded-but-searchable tool was registered and the turn retries.
     assert_eq!(&*registered.lock().unwrap(), &["mcp__linear__create_issue"]);
-    let InvalidToolCallHookAction::Retry { feedback } = action else {
+    let Some(InvalidToolCallAction::Retry { feedback }) = action else {
         panic!("expected retry, got {action:?}");
     };
     assert!(feedback.contains("mcp__linear__create_issue"));
@@ -214,16 +180,14 @@ async fn invalid_call_to_unknown_tool_retries_with_feedback_without_loading() {
         CancellationToken::new(),
     );
 
-    let action = <StreamBridge as PromptHook<AnthropicModel>>::on_invalid_tool_call(
-        &bridge,
-        &invalid_call("mcp__nope__hallucinated"),
-    )
-    .await;
+    let action = bridge
+        .handle_invalid_tool_call("mcp__nope__hallucinated")
+        .await;
 
     // Nothing exists to load; the model gets corrective feedback instead of
     // the stream failing.
     assert!(registered.lock().unwrap().is_empty());
-    let InvalidToolCallHookAction::Retry { feedback } = action else {
+    let Some(InvalidToolCallAction::Retry { feedback }) = action else {
         panic!("expected retry, got {action:?}");
     };
     assert!(feedback.contains("mcp__nope__hallucinated"));

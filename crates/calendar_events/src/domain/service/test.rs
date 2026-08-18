@@ -4,10 +4,11 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
-        CalendarSyncStatus, EventReminders, EventStatus, EventTime, EventTransparency,
-        EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
-        GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
-        GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
+        CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders, EventStatus, EventTime,
+        EventTransparency, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES,
+        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleEventSource,
+        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
+        StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -28,7 +29,16 @@ impl CalendarRepository for FakeRepo {
         &self,
         _email_link_id: Uuid,
         _scopes: GoogleScopeSet,
+        _intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
+        unreachable!()
+    }
+
+    async fn disconnect_google_calendar(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Option<DisconnectedGoogleCalendar>, Report> {
         unreachable!()
     }
 
@@ -176,6 +186,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: true,
             attendees: vec![CalendarAttendee {
@@ -234,12 +245,44 @@ fn rejects_invalid_occurrence_time() {
 }
 
 #[test]
-fn complete_scope_capability_requires_top_level_scope() {
+fn complete_scope_capability_requires_every_requested_scope() {
     let complete = GoogleScopeSet::parse(&GOOGLE_CALENDAR_SCOPES.join(" "));
     assert!(complete.has_calendar_capability());
 
-    let partial = GoogleScopeSet::parse("https://www.googleapis.com/auth/calendar.events");
-    assert!(!partial.has_calendar_capability());
+    for scope in GOOGLE_CALENDAR_SCOPES {
+        let partial = GoogleScopeSet::parse(scope);
+        assert!(
+            !partial.has_calendar_capability(),
+            "{scope} alone must not read as the complete capability"
+        );
+    }
+}
+
+/// An inbox connected before Macro narrowed its request reports only the broad
+/// scope. It deliberately does not read as the capability — the user re-grants
+/// through the normal prompt, which records the scopes Macro asks for today.
+#[test]
+fn broad_calendar_grant_no_longer_reads_as_the_capability() {
+    let broad = GoogleScopeSet::parse(GOOGLE_CALENDAR_FULL_SCOPE);
+
+    assert!(!broad.has_calendar_capability());
+}
+
+/// Google re-issues an earlier broad grant alongside the narrow scopes it now
+/// grants, so turning calendar off has to strip the broad one too or the
+/// capability survives its own removal.
+#[test]
+fn turning_calendar_off_strips_a_re_issued_broad_scope() {
+    let reissued = GoogleScopeSet::parse(&format!(
+        "https://www.googleapis.com/auth/gmail.modify {GOOGLE_CALENDAR_FULL_SCOPE} {}",
+        GOOGLE_CALENDAR_SCOPES.join(" ")
+    ));
+    assert!(reissued.has_calendar_capability());
+
+    let stripped = reissued.without_calendar();
+    assert!(!stripped.has_calendar_capability());
+    assert!(!stripped.contains(GOOGLE_CALENDAR_FULL_SCOPE));
+    assert!(stripped.contains("https://www.googleapis.com/auth/gmail.modify"));
 }
 
 #[derive(Clone)]

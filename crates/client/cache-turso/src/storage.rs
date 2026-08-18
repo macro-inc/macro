@@ -1,0 +1,2141 @@
+use crate::driver;
+use crate::key::RecordKey;
+use crate::{PhysicalResetReason, TursoStorageError};
+use cache_core::codec::{
+    cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
+};
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
+    NewQueuedMutation, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
+};
+use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
+use cache_core::value::{EntityKey, Record};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
+use turso_core::{Connection, Numeric, Value};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Mutex;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::atomic::AtomicU64;
+#[cfg(not(target_arch = "wasm32"))]
+use turso_core::{Database, IO, MemoryIO, OpenOptions, SqliteDialect};
+#[cfg(target_arch = "wasm32")]
+use turso_opfs::{
+    CloseFailure, ClosedSession, ConnectedOpfsSession, OpenDisposition, OpfsError, OpfsOwner,
+    ResetFailure,
+};
+
+/// Frozen browser-storage schema version, independent of cache postcard versions.
+pub const BROWSER_STORAGE_SCHEMA_VERSION: u32 = 2;
+
+/// Coarse outcome of validating an OPFS Turso session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TursoStorageOpenOutcome {
+    /// Existing compatible storage was validated and preserved.
+    OpenedExisting,
+    /// A fresh physical database was initialized.
+    OpenedNew,
+}
+
+const CREATE_SCHEMA: [&str; 5] = [
+    "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
+    "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
+    "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
+    "CREATE TABLE optimistic_layers (mutation_id INTEGER PRIMARY KEY, optimistic_data_json TEXT NOT NULL, normalized_updates BLOB NOT NULL, FOREIGN KEY (mutation_id) REFERENCES mutation_queue(id) ON DELETE CASCADE)",
+];
+const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
+const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
+const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
+const QUEUE_INSERT: &str = "INSERT INTO mutation_queue (query, operation_name, variables_json, identity, attempt_count, next_attempt_at_ms, lease_owner, lease_generation, lease_expires_at_ms, last_error, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)";
+const LAYER_INSERT: &str = "INSERT INTO optimistic_layers (mutation_id, optimistic_data_json, normalized_updates) VALUES (?1, ?2, ?3)";
+const QUEUE_SELECT: &str = "SELECT m.id, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id ORDER BY m.id ASC";
+const QUEUE_HEAD_SELECT: &str = "SELECT m.id, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id ORDER BY m.id ASC LIMIT 1";
+const ORPHAN_LAYER_SELECT: &str = "SELECT o.mutation_id FROM optimistic_layers AS o LEFT JOIN mutation_queue AS m ON m.id = o.mutation_id WHERE m.id IS NULL LIMIT 1";
+const ANY_LAYER_SELECT: &str = "SELECT mutation_id FROM optimistic_layers LIMIT 1";
+const CLAIM_SELECT: &str = "SELECT lease_owner, lease_generation FROM mutation_queue WHERE id = ?1";
+const REQUIRE_LAYER_SELECT: &str = "SELECT 1 FROM optimistic_layers WHERE mutation_id = ?1";
+const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM mutation_queue";
+
+/// Turso-backed implementation of [`Storage`].
+///
+/// On `wasm32` this value owns the consuming
+/// `turso_opfs::ConnectedOpfsSession` capability. It must be consumed with
+/// [`Self::try_close`] before OPFS preservation or reset.
+/// Native builds own a Turso `MemoryIO` database solely for conformance tests.
+pub struct TursoStorage {
+    health: AtomicU8,
+    #[cfg(target_arch = "wasm32")]
+    session: ConnectedOpfsSession,
+    #[cfg(not(target_arch = "wasm32"))]
+    database: Arc<Database>,
+    #[cfg(not(target_arch = "wasm32"))]
+    connection: Arc<Connection>,
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    fault: Mutex<Option<TestFault>>,
+}
+
+impl std::fmt::Debug for TursoStorage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TursoStorage")
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl TursoStorage {
+    /// Validates or initializes an already connected, OPFS-owned Turso session.
+    ///
+    /// Initialization failure exposes only a consuming physical-reset
+    /// transition. It never exposes the connected or closed OPFS capability,
+    /// so incompatible files cannot be preserved accidentally.
+    pub fn from_opfs_session(
+        session: ConnectedOpfsSession,
+        scope: &str,
+    ) -> Result<Self, TursoStorageOpenFailure> {
+        Self::from_opfs_session_with_outcome(session, scope).map(|(storage, _)| storage)
+    }
+
+    /// Validates or initializes an OPFS session and returns its coarse outcome.
+    pub fn from_opfs_session_with_outcome(
+        session: ConnectedOpfsSession,
+        scope: &str,
+    ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
+        let fresh = session.disposition() == OpenDisposition::Fresh;
+        let connection = session.connection();
+        let result = initialize(&connection, scope, fresh);
+        drop(connection);
+        match result {
+            Ok(()) => Ok((
+                Self {
+                    health: AtomicU8::new(0),
+                    session,
+                },
+                if fresh {
+                    TursoStorageOpenOutcome::OpenedNew
+                } else {
+                    TursoStorageOpenOutcome::OpenedExisting
+                },
+            )),
+            Err(error) => Err(TursoStorageOpenFailure { error, session }),
+        }
+    }
+
+    /// Browser-test-artifact-only helper used by the storage-control worker.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_make_namespace_incompatible(&mut self) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        self.latch_result(driver::write_transaction(&connection, || {
+            require_changed(
+                driver::execute(
+                    &connection,
+                    "UPDATE meta SET value = 'browser-test-incompatible' WHERE key = 'namespace'",
+                    Vec::new(),
+                )?,
+                1,
+            )
+        }))
+    }
+
+    /// Browser-test-artifact-only helper that writes an invalid queue payload.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_corrupt_queue_payload(&mut self) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        self.latch_result(driver::write_transaction(&connection, || {
+            require_changed(
+                driver::execute(
+                    &connection,
+                    QUEUE_INSERT,
+                    vec![
+                        text("mutation BrowserTestCorrupt { __typename }"),
+                        Value::Null,
+                        text("{}"),
+                        Value::Null,
+                        Value::from_i64(0),
+                        Value::Null,
+                        Value::Null,
+                        Value::from_i64(0),
+                        Value::Null,
+                        Value::Null,
+                        Value::from_i64(1),
+                    ],
+                )?,
+                1,
+            )?;
+            let id = mutation_id_from_row(connection.last_insert_rowid())?;
+            require_changed(
+                driver::execute(
+                    &connection,
+                    LAYER_INSERT,
+                    vec![
+                        Value::from_i64(mutation_id_to_sql(id)?),
+                        text("{}"),
+                        Value::from_blob(vec![0xff]),
+                    ],
+                )?,
+                1,
+            )
+        }))
+    }
+
+    /// Consumes storage and closes Turso into a health-typed OPFS capability.
+    ///
+    /// Healthy storage may subsequently be preserved or reset. A latched
+    /// reset-required storage returns a capability that exposes reset only.
+    /// Close failure exposes no recoverable session and requires replacing the
+    /// worker before a recovery wipe.
+    pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
+        let reason = self.latched_reason();
+        let closed = self
+            .session
+            .try_close()
+            .map_err(TursoStorageCloseFailure::new)?;
+        Ok(match reason {
+            Some(reason) => {
+                TursoStorageCloseOutcome::ResetRequired(ResetRequiredTursoStorageClosed {
+                    reason,
+                    closed,
+                })
+            }
+            None => TursoStorageCloseOutcome::Healthy(HealthyTursoStorageClosed { closed }),
+        })
+    }
+
+    fn connection(&self) -> Arc<Connection> {
+        self.session.connection()
+    }
+}
+
+/// Result of consuming and gracefully closing a browser Turso storage.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+pub enum TursoStorageCloseOutcome {
+    /// The database remained healthy and may be preserved or reset.
+    Healthy(HealthyTursoStorageClosed),
+    /// A reset-required reason was latched, so preservation is unavailable.
+    ResetRequired(ResetRequiredTursoStorageClosed),
+}
+
+/// Closed healthy browser storage that may be preserved or reset.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+pub struct HealthyTursoStorageClosed {
+    closed: ClosedSession,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl HealthyTursoStorageClosed {
+    /// Preserves the healthy main/WAL pair and returns its still-locked owner.
+    pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
+        self.closed.preserve()
+    }
+
+    /// Physically resets the healthy main/WAL pair.
+    pub async fn reset(self) -> Result<OpfsOwner, TursoStorageResetFailure> {
+        self.closed
+            .reset()
+            .await
+            .map_err(TursoStorageResetFailure::from_reset)
+    }
+}
+
+/// Closed reset-required browser storage that cannot be preserved.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+pub struct ResetRequiredTursoStorageClosed {
+    reason: PhysicalResetReason,
+    closed: ClosedSession,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl ResetRequiredTursoStorageClosed {
+    /// Returns the first reset-required reason latched by this storage.
+    pub fn reason(&self) -> PhysicalResetReason {
+        self.reason
+    }
+
+    /// Physically resets the unhealthy main/WAL pair.
+    pub async fn reset(self) -> Result<OpfsOwner, TursoStorageResetFailure> {
+        self.closed
+            .reset()
+            .await
+            .map_err(TursoStorageResetFailure::from_reset)
+    }
+}
+
+/// A browser close failure that exposes no reusable session capability.
+///
+/// The worker-local OPFS owner is either already poisoned or becomes poisoned
+/// when the retained internal session is dropped. Recovery requires worker
+/// replacement followed by the owner's recovery wipe.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+pub struct TursoStorageCloseFailure {
+    failure: CloseFailure,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl TursoStorageCloseFailure {
+    fn new(failure: CloseFailure) -> Self {
+        Self { failure }
+    }
+
+    /// Returns the payload-free OPFS error classification.
+    pub fn error(&self) -> &OpfsError {
+        self.failure.error()
+    }
+
+    /// Returns that recovery requires replacing the poisoned worker.
+    pub const fn requires_worker_replacement(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Display for TursoStorageCloseFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.failure.fmt(formatter)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::error::Error for TursoStorageCloseFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.failure)
+    }
+}
+
+/// A browser reset transition failure that requires worker replacement.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+pub struct TursoStorageResetFailure {
+    failure: TursoStorageResetFailureInner,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+enum TursoStorageResetFailureInner {
+    Close(CloseFailure),
+    Reset(ResetFailure),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl TursoStorageResetFailure {
+    fn from_close(failure: CloseFailure) -> Self {
+        Self {
+            failure: TursoStorageResetFailureInner::Close(failure),
+        }
+    }
+
+    fn from_reset(failure: ResetFailure) -> Self {
+        Self {
+            failure: TursoStorageResetFailureInner::Reset(failure),
+        }
+    }
+
+    /// Returns the payload-free OPFS error classification.
+    pub fn error(&self) -> &OpfsError {
+        match &self.failure {
+            TursoStorageResetFailureInner::Close(failure) => failure.error(),
+            TursoStorageResetFailureInner::Reset(failure) => failure.error(),
+        }
+    }
+
+    /// Returns that recovery requires replacing the poisoned worker.
+    pub const fn requires_worker_replacement(&self) -> bool {
+        true
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Display for TursoStorageResetFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.failure {
+            TursoStorageResetFailureInner::Close(failure) => failure.fmt(formatter),
+            TursoStorageResetFailureInner::Reset(failure) => failure.fmt(formatter),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::error::Error for TursoStorageResetFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.failure {
+            TursoStorageResetFailureInner::Close(failure) => Some(failure),
+            TursoStorageResetFailureInner::Reset(failure) => Some(failure),
+        }
+    }
+}
+
+/// A WASM initialization failure that permits only physical reset.
+#[cfg(target_arch = "wasm32")]
+pub struct TursoStorageOpenFailure {
+    error: TursoStorageError,
+    session: ConnectedOpfsSession,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl TursoStorageOpenFailure {
+    /// Returns the payload-free storage classification.
+    pub fn error(&self) -> TursoStorageError {
+        self.error
+    }
+
+    /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
+    ///
+    /// This accessor must only be used when [`Self::error`] does not require a
+    /// physical reset. A close failure poisons the worker-local owner.
+    pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
+        let closed = self
+            .session
+            .try_close()
+            .map_err(|failure| failure.error().clone())?;
+        closed.preserve()
+    }
+
+    /// Consumes the failure, closes Turso, and physically resets main and WAL.
+    ///
+    /// Neither the connected nor closed session is exposed. Close/reset failure
+    /// requires worker replacement before recovery.
+    pub async fn reset(self) -> Result<OpfsOwner, TursoStorageResetFailure> {
+        let closed = self
+            .session
+            .try_close()
+            .map_err(TursoStorageResetFailure::from_close)?;
+        closed
+            .reset()
+            .await
+            .map_err(TursoStorageResetFailure::from_reset)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Debug for TursoStorageOpenFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TursoStorageOpenFailure")
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Display for TursoStorageOpenFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(formatter)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::error::Error for TursoStorageOpenFailure {}
+
+/// Reopenable Turso `MemoryIO` database used by native conformance tests.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct TursoMemoryDatabase {
+    path: String,
+    state: Mutex<MemoryDatabaseState>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct MemoryDatabaseState {
+    io: Arc<MemoryIO>,
+    initialized: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl TursoMemoryDatabase {
+    /// Creates an isolated, initially fresh in-memory physical database.
+    pub fn new(database_path: impl Into<String>) -> Self {
+        Self {
+            path: database_path.into(),
+            state: Mutex::new(MemoryDatabaseState {
+                io: Arc::new(MemoryIO::new()),
+                initialized: false,
+            }),
+        }
+    }
+
+    /// Opens and initializes or validates this in-memory database for `scope`.
+    pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
+        let (io, fresh) = {
+            let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            (state.io.clone(), !state.initialized)
+        };
+        let io_trait: Arc<dyn IO> = io;
+        let database = Database::open(
+            io_trait,
+            &self.path,
+            OpenOptions::new(Arc::new(SqliteDialect)),
+        )
+        .map_err(TursoStorageError::turso)
+        .map_err(|error| if fresh { error } else { error.initialization() })?;
+        let connection = database
+            .connect()
+            .map_err(TursoStorageError::turso)
+            .map_err(|error| if fresh { error } else { error.initialization() })?;
+        if let Err(error) = initialize(&connection, scope, fresh) {
+            if connection.close().is_err() {
+                return Err(TursoStorageError::reset(
+                    PhysicalResetReason::TransactionOutcomeUncertain,
+                ));
+            }
+            return Err(error);
+        }
+        if fresh {
+            self.state
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .initialized = true;
+        }
+        Ok(TursoStorage {
+            health: AtomicU8::new(0),
+            database,
+            connection,
+            #[cfg(all(test, not(target_arch = "wasm32")))]
+            fault: Mutex::new(None),
+        })
+    }
+
+    /// Replaces the complete in-memory main/WAL store with a fresh one.
+    ///
+    /// Callers must first consume and close every storage opened from this
+    /// database. This models the owner-level physical reset used by OPFS.
+    pub fn physical_reset(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.io = Arc::new(MemoryIO::new());
+        state.initialized = false;
+    }
+}
+
+/// Health-typed result of consuming a native conformance-test storage.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TursoStorageCloseOutcome {
+    /// The native test database remained healthy.
+    Healthy,
+    /// The native test database must be physically replaced before reopening.
+    ResetRequired(PhysicalResetReason),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl TursoStorage {
+    /// Opens a one-use isolated Turso `MemoryIO` database.
+    pub fn open_in_memory(scope: &str) -> Result<Self, TursoStorageError> {
+        static NEXT_MEMORY_DATABASE: AtomicU64 = AtomicU64::new(1);
+        let id = NEXT_MEMORY_DATABASE.fetch_add(1, Ordering::Relaxed);
+        TursoMemoryDatabase::new(format!("cache-turso-memory-{id}.db")).open(scope)
+    }
+
+    /// Consumes and explicitly closes the native Turso connection.
+    pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
+        let reason = self.latched_reason();
+        self.connection.close().map_err(|_| {
+            TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
+        })?;
+        drop(self.connection);
+        drop(self.database);
+        Ok(match reason {
+            Some(reason) => TursoStorageCloseOutcome::ResetRequired(reason),
+            None => TursoStorageCloseOutcome::Healthy,
+        })
+    }
+
+    fn connection(&self) -> Arc<Connection> {
+        self.connection.clone()
+    }
+}
+
+impl TursoStorage {
+    fn latched_reason(&self) -> Option<PhysicalResetReason> {
+        let code = self.health.load(Ordering::Acquire);
+        PhysicalResetReason::from_latch_code(code)
+            .or_else(|| (code != 0).then_some(PhysicalResetReason::TransactionOutcomeUncertain))
+    }
+
+    fn require_healthy(&self) -> Result<(), TursoStorageError> {
+        self.latched_reason()
+            .map_or(Ok(()), |reason| Err(TursoStorageError::reset(reason)))
+    }
+
+    fn latch_result<T>(
+        &self,
+        result: Result<T, TursoStorageError>,
+    ) -> Result<T, TursoStorageError> {
+        match result {
+            Err(TursoStorageError::PhysicalResetRequired(reason)) => {
+                let _ = self.health.compare_exchange(
+                    0,
+                    reason.latch_code(),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
+                Err(TursoStorageError::reset(reason))
+            }
+            result => result,
+        }
+    }
+}
+
+impl Storage for TursoStorage {
+    type Error = TursoStorageError;
+
+    async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let keys = keys
+                .iter()
+                .map(RecordKey::from_entity)
+                .collect::<Result<Vec<_>, _>>()?;
+            if keys.is_empty() {
+                return Ok(Vec::new());
+            }
+            let connection = self.connection();
+            driver::read_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_GET)?;
+                let mut records = Vec::with_capacity(keys.len());
+                for key in &keys {
+                    let rows = driver::query_prepared(
+                        &mut statement,
+                        vec![text(&key.typename), text(&key.id)],
+                    )?;
+                    match rows.as_slice() {
+                        [] => records.push(None),
+                        [row] => {
+                            records.push(Some(decode_record(&required_blob(row, 0)?).map_err(
+                                |_| TursoStorageError::reset(PhysicalResetReason::Codec),
+                            )?))
+                        }
+                        _ => return Err(invariant()),
+                    }
+                }
+                Ok(records)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn put_batch(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let entries = prepare_records(entries)?;
+            if entries.is_empty() {
+                return Ok(());
+            }
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter().enumerate() {
+                    let changed = driver::execute_prepared(
+                        &mut statement,
+                        vec![
+                            text(&entry.key.typename),
+                            text(&entry.key.id),
+                            Value::from_blob(entry.value.clone()),
+                        ],
+                    )?;
+                    require_changed(changed, 1)?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                Ok(())
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let keys = keys
+                .iter()
+                .map(RecordKey::from_entity)
+                .collect::<Result<Vec<_>, _>>()?;
+            if keys.is_empty() {
+                return Ok(());
+            }
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_DELETE)?;
+                for (index, key) in keys.iter().enumerate() {
+                    let changed = driver::execute_prepared(
+                        &mut statement,
+                        vec![text(&key.typename), text(&key.id)],
+                    )?;
+                    if !(0..=1).contains(&changed) {
+                        return Err(invariant());
+                    }
+                    self.fault_after(TestFaultSite::Delete, index)?;
+                }
+                Ok(())
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn scan_records(
+        &self,
+        type_names: &[String],
+        after: Option<&EntityKey<'static>>,
+        limit: usize,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            if type_names.is_empty() || limit == 0 {
+                return Ok(Vec::new());
+            }
+            let mut type_names = type_names.to_vec();
+            type_names.sort();
+            type_names.dedup();
+            let after = after
+                .map(|key| RecordKey::from_entity(key).map(|_| key.as_ref().to_owned()))
+                .transpose()?;
+            let limit = i64::try_from(limit).map_err(|_| TursoStorageError::InvalidInput)?;
+
+            let mut sql =
+                String::from("SELECT __typename, id, value FROM records WHERE __typename IN (");
+            for index in 0..type_names.len() {
+                if index != 0 {
+                    sql.push_str(", ");
+                }
+                sql.push('?');
+                sql.push_str(&(index + 1).to_string());
+            }
+            sql.push_str(") AND NOT (__typename = 'ROOT_QUERY' AND id = '')");
+            let mut values = type_names
+                .iter()
+                .map(|value| text(value))
+                .collect::<Vec<_>>();
+            if let Some(after) = after {
+                let cursor_index = values.len() + 1;
+                sql.push_str(" AND ((__typename || ':' || id) COLLATE BINARY) > ?");
+                sql.push_str(&cursor_index.to_string());
+                values.push(text(&after));
+            }
+            let limit_index = values.len() + 1;
+            sql.push_str(" ORDER BY (__typename || ':' || id) COLLATE BINARY ASC LIMIT ?");
+            sql.push_str(&limit_index.to_string());
+            values.push(Value::from_i64(limit));
+
+            let connection = self.connection();
+            let rows = driver::query(&connection, &sql, values)?;
+            rows.into_iter()
+                .map(|row| {
+                    let key = RecordKey {
+                        typename: required_text(&row, 0)?,
+                        id: required_text(&row, 1)?,
+                    }
+                    .into_entity()?;
+                    let record = decode_record(&required_blob(&row, 2)?)
+                        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+                    Ok((key, record))
+                })
+                .collect()
+        })();
+        self.latch_result(result)
+    }
+
+    async fn enqueue_mutation(
+        &mut self,
+        entry: NewQueuedMutation,
+    ) -> Result<MutationId, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mutation_values = mutation_values(&entry.mutation)?;
+            let updates = encode_record_updates(&entry.optimistic.normalized_updates);
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                require_changed(
+                    driver::execute(&connection, QUEUE_INSERT, mutation_values)?,
+                    1,
+                )?;
+                self.fault_after(TestFaultSite::Enqueue, 0)?;
+                let id = mutation_id_from_row(connection.last_insert_rowid())?;
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        LAYER_INSERT,
+                        vec![
+                            Value::from_i64(mutation_id_to_sql(id)?),
+                            text(&entry.optimistic.optimistic_data_json),
+                            Value::from_blob(updates),
+                        ],
+                    )?,
+                    1,
+                )?;
+                Ok(id)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.require_healthy()?;
+        let result = {
+            let connection = self.connection();
+            driver::read_transaction(&connection, || {
+                let rows = driver::query(&connection, QUEUE_SELECT, Vec::new())?;
+                let mut queue = Vec::with_capacity(rows.len());
+                for row in rows {
+                    let parsed = parse_queue_row(&row)?;
+                    let optimistic = parsed.optimistic.ok_or_else(invariant)?;
+                    queue.push(QueuedMutation {
+                        id: parsed.id,
+                        mutation: parsed.mutation,
+                        optimistic,
+                    });
+                }
+                if !driver::query(&connection, ORPHAN_LAYER_SELECT, Vec::new())?.is_empty() {
+                    return Err(invariant());
+                }
+                Ok(queue)
+            })
+        };
+        self.latch_result(result)
+    }
+
+    async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, Self::Error> {
+        self.require_healthy()?;
+        // Diagnostics are deliberately outside a transaction and outside the
+        // health latch. A failed observation must never alter cache recovery.
+        self.fault_after(TestFaultSite::Diagnostics, 0)?;
+        let connection = self.connection();
+        let rows = driver::query(&connection, QUEUE_DIAGNOSTICS_SELECT, Vec::new())?;
+        let [row] = rows.as_slice() else {
+            return Err(invariant());
+        };
+        if row.len() != 2 {
+            return Err(invariant());
+        }
+        let depth = u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())?;
+        let oldest_created_at_ms = nullable_i64(row, 1)?;
+        if (depth == 0) != oldest_created_at_ms.is_none() {
+            return Err(invariant());
+        }
+        Ok(QueueDiagnostics {
+            availability: QueueDiagnosticsAvailability::Available,
+            depth,
+            oldest_created_at_ms,
+        })
+    }
+
+    async fn claim_next_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, Self::Error> {
+        self.require_healthy()?;
+        let result = {
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let rows = driver::query(&connection, QUEUE_HEAD_SELECT, Vec::new())?;
+                let Some(row) = rows.first() else {
+                    if !driver::query(&connection, ANY_LAYER_SELECT, Vec::new())?.is_empty() {
+                        return Err(invariant());
+                    }
+                    return Ok(None);
+                };
+                if rows.len() != 1 {
+                    return Err(invariant());
+                }
+                let mut parsed = parse_queue_row(row)?;
+                let optimistic = parsed.optimistic.take().ok_or_else(invariant)?;
+                if parsed
+                    .mutation
+                    .next_attempt_at_ms
+                    .is_some_and(|next| next > request.now_ms)
+                    || parsed
+                        .mutation
+                        .lease_expires_at_ms
+                        .is_some_and(|expiry| expiry > request.now_ms)
+                {
+                    return Ok(None);
+                }
+
+                parsed.mutation.attempt_count = parsed.mutation.attempt_count.saturating_add(1);
+                parsed.mutation.lease_generation =
+                    parsed.mutation.lease_generation.saturating_add(1);
+                let generation =
+                    generation_to_sql(parsed.mutation.lease_generation).map_err(|_| invariant())?;
+                parsed.mutation.next_attempt_at_ms = None;
+                parsed.mutation.lease_owner = Some(request.owner.clone());
+                parsed.mutation.lease_expires_at_ms = Some(request.lease_expires_at_ms);
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        "UPDATE mutation_queue SET attempt_count = ?2, next_attempt_at_ms = NULL, lease_owner = ?3, lease_generation = ?4, lease_expires_at_ms = ?5 WHERE id = ?1",
+                        vec![
+                            Value::from_i64(mutation_id_to_sql(parsed.id)?),
+                            Value::from_i64(i64::from(parsed.mutation.attempt_count)),
+                            text(&request.owner),
+                            Value::from_i64(generation),
+                            Value::from_i64(request.lease_expires_at_ms),
+                        ],
+                    )?,
+                    1,
+                )?;
+                Ok(Some(ClaimedMutation {
+                    queued: QueuedMutation {
+                        id: parsed.id,
+                        mutation: parsed.mutation,
+                        optimistic,
+                    },
+                    lease_generation: u64::try_from(generation).map_err(|_| invariant())?,
+                }))
+            })
+        };
+        self.latch_result(result)
+    }
+
+    async fn defer_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        next_attempt_at_ms: i64,
+        error: String,
+    ) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let id = mutation_id_to_sql(id)?;
+            let generation = generation_to_sql(claim.generation)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let changed = driver::execute(
+                    &connection,
+                    "UPDATE mutation_queue SET next_attempt_at_ms = ?4, lease_owner = NULL, lease_expires_at_ms = NULL, last_error = ?5 WHERE id = ?1 AND lease_owner = ?2 AND lease_generation = ?3",
+                    vec![
+                        Value::from_i64(id),
+                        text(&claim.owner),
+                        Value::from_i64(generation),
+                        Value::from_i64(next_attempt_at_ms),
+                        text(&error),
+                    ],
+                )?;
+                changed_to_bool(changed)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn complete_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+    ) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let sql_id = mutation_id_to_sql(id)?;
+            generation_to_sql(claim.generation)?;
+            let entries = prepare_records(entries)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                if !claim_is_current(&connection, sql_id, &claim)? {
+                    return Ok(false);
+                }
+                require_layer(&connection, sql_id)?;
+                {
+                    let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                    for (index, entry) in entries.iter().enumerate() {
+                        require_changed(
+                            driver::execute_prepared(
+                                &mut statement,
+                                vec![
+                                    text(&entry.key.typename),
+                                    text(&entry.key.id),
+                                    Value::from_blob(entry.value.clone()),
+                                ],
+                            )?,
+                            1,
+                        )?;
+                        self.fault_after(TestFaultSite::Complete, index)?;
+                    }
+                }
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        "DELETE FROM mutation_queue WHERE id = ?1",
+                        vec![Value::from_i64(sql_id)],
+                    )?,
+                    1,
+                )?;
+                Ok(true)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn discard_mutation(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+    ) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let sql_id = mutation_id_to_sql(id)?;
+            generation_to_sql(claim.generation)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                if !claim_is_current(&connection, sql_id, &claim)? {
+                    return Ok(false);
+                }
+                require_layer(&connection, sql_id)?;
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        "DELETE FROM mutation_queue WHERE id = ?1",
+                        vec![Value::from_i64(sql_id)],
+                    )?,
+                    1,
+                )?;
+                self.fault_after(TestFaultSite::Discard, 0)?;
+                Ok(true)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn clear(&mut self) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let result = {
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
+                self.fault_after(TestFaultSite::Clear, 0)?;
+                driver::execute(&connection, "DELETE FROM mutation_queue", Vec::new())?;
+                self.fault_after(TestFaultSite::Clear, 1)?;
+                driver::execute(&connection, "DELETE FROM records", Vec::new())?;
+                self.fault_after(TestFaultSite::Clear, 2)?;
+                Ok(())
+            })
+        };
+        self.latch_result(result)
+    }
+}
+
+fn initialize(
+    connection: &Arc<Connection>,
+    scope: &str,
+    fresh: bool,
+) -> Result<(), TursoStorageError> {
+    enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
+    if fresh {
+        driver::write_transaction(connection, || {
+            for sql in CREATE_SCHEMA {
+                driver::execute(connection, sql, Vec::new())?;
+            }
+            driver::execute(
+                connection,
+                "INSERT INTO meta (key, value) VALUES ('scope', ?1)",
+                vec![text(scope)],
+            )?;
+            driver::execute(
+                connection,
+                "INSERT INTO meta (key, value) VALUES ('namespace', ?1)",
+                vec![text(&cache_namespace(scope))],
+            )?;
+            driver::execute(
+                connection,
+                "INSERT INTO meta (key, value) VALUES ('storage_schema_version', ?1)",
+                vec![text(&BROWSER_STORAGE_SCHEMA_VERSION.to_string())],
+            )?;
+            Ok(())
+        })
+        .map_err(TursoStorageError::initialization)?;
+        enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
+        validate_frozen_schema(connection)?;
+        return Ok(());
+    }
+
+    validate_quick_check(connection)?;
+    validate_frozen_schema(connection)?;
+    let metadata = driver::query(
+        connection,
+        "SELECT key, value FROM meta WHERE key IN ('scope', 'namespace', 'storage_schema_version') ORDER BY key ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let expected = [
+        ("namespace", cache_namespace(scope)),
+        ("scope", scope.to_owned()),
+        (
+            "storage_schema_version",
+            BROWSER_STORAGE_SCHEMA_VERSION.to_string(),
+        ),
+    ];
+    if metadata.len() != expected.len() {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+    }
+    for (row, (expected_key, expected_value)) in metadata.iter().zip(expected) {
+        let key = required_text(row, 0)
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Compatibility))?;
+        let value = required_text(row, 1)
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Compatibility))?;
+        if key != expected_key || value != expected_value {
+            return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+        }
+    }
+    for sql in [
+        RECORD_GET,
+        RECORD_UPSERT,
+        RECORD_DELETE,
+        QUEUE_INSERT,
+        LAYER_INSERT,
+        QUEUE_SELECT,
+        QUEUE_HEAD_SELECT,
+        ORPHAN_LAYER_SELECT,
+        CLAIM_SELECT,
+        REQUIRE_LAYER_SELECT,
+        QUEUE_DIAGNOSTICS_SELECT,
+    ] {
+        driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
+    }
+    validate_queue_consistency(connection)
+}
+
+fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    driver::execute(connection, "PRAGMA foreign_keys = ON", Vec::new())?;
+    let rows = driver::query(connection, "PRAGMA foreign_keys", Vec::new())?;
+    if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
+        Ok(())
+    } else {
+        Err(TursoStorageError::reset(PhysicalResetReason::Invariant))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ColumnSpec {
+    name: &'static str,
+    declared_type: &'static str,
+    not_null: bool,
+    default_zero: bool,
+    primary_key_position: i64,
+}
+
+const META_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "key",
+        declared_type: "TEXT",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "value",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+const RECORD_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "__typename",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "id",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 2,
+    },
+    ColumnSpec {
+        name: "value",
+        declared_type: "BLOB",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+const MUTATION_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "id",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "query",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "operation_name",
+        declared_type: "TEXT",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "variables_json",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "identity",
+        declared_type: "TEXT",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "attempt_count",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: true,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "next_attempt_at_ms",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "lease_owner",
+        declared_type: "TEXT",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "lease_generation",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: true,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "lease_expires_at_ms",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "last_error",
+        declared_type: "TEXT",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "created_at_ms",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+const OPTIMISTIC_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "mutation_id",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "optimistic_data_json",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "normalized_updates",
+        declared_type: "BLOB",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    validate_allowed_schema_objects(connection)?;
+    validate_table_columns(connection, "meta", META_COLUMNS)?;
+    validate_table_columns(connection, "records", RECORD_COLUMNS)?;
+    validate_table_columns(connection, "mutation_queue", MUTATION_COLUMNS)?;
+    validate_table_columns(connection, "optimistic_layers", OPTIMISTIC_COLUMNS)?;
+    validate_table_indexes(connection, "meta", &[(0, "key")])?;
+    validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
+    validate_mutation_queue_indexes(connection)?;
+    validate_table_indexes(connection, "optimistic_layers", &[])?;
+    validate_table_constraints(connection, "meta", false)?;
+    validate_table_constraints(connection, "records", false)?;
+    validate_table_constraints(connection, "mutation_queue", true)?;
+    validate_table_constraints(connection, "optimistic_layers", false)?;
+    validate_no_foreign_keys(connection, "meta")?;
+    validate_no_foreign_keys(connection, "records")?;
+    validate_no_foreign_keys(connection, "mutation_queue")?;
+    validate_optimistic_foreign_key(connection)
+}
+
+const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
+const TURSO_AUTOINCREMENT_TABLE: &str =
+    "__turso_internal_seq___turso_internal_autoincrement_mutation_queue";
+
+fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT type, name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let expected = ["meta", "mutation_queue", "optimistic_layers", "records"];
+    let support = [SQLITE_SEQUENCE_TABLE, TURSO_AUTOINCREMENT_TABLE];
+    let mut seen = [false; 4];
+    let mut diagnostics_index_seen = false;
+    let mut support_seen = [false; 2];
+    for row in rows {
+        if row.len() != 3 {
+            return Err(compatibility());
+        }
+        let object_type = required_text(&row, 0).map_err(|_| compatibility())?;
+        let name = required_text(&row, 1).map_err(|_| compatibility())?;
+        if let Some(position) = expected.iter().position(|expected| *expected == name) {
+            if object_type != "table"
+                || !matches!(row.get(2), Some(Value::Text(_)))
+                || seen[position]
+            {
+                return Err(compatibility());
+            }
+            seen[position] = true;
+            continue;
+        }
+        if object_type == "index" && matches!(row.get(2), Some(Value::Null)) {
+            continue;
+        }
+        if name == "mutation_queue_created_at_ms_idx" {
+            if object_type != "index"
+                || required_text(&row, 2).ok().as_deref()
+                    != Some(
+                        "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue (created_at_ms)",
+                    )
+                || diagnostics_index_seen
+            {
+                return Err(compatibility());
+            }
+            diagnostics_index_seen = true;
+            continue;
+        }
+        if let Some(position) = support.iter().position(|expected| *expected == name) {
+            if object_type != "table"
+                || !matches!(row.get(2), Some(Value::Text(_)))
+                || support_seen[position]
+            {
+                return Err(compatibility());
+            }
+            validate_support_table(connection, &name, position)?;
+            support_seen[position] = true;
+            continue;
+        }
+        return Err(compatibility());
+    }
+    if seen.into_iter().all(|present| present)
+        && diagnostics_index_seen
+        && support_seen.into_iter().all(|present| present)
+    {
+        Ok(())
+    } else {
+        Err(compatibility())
+    }
+}
+
+fn validate_support_table(
+    connection: &Arc<Connection>,
+    table: &str,
+    support_position: usize,
+) -> Result<(), TursoStorageError> {
+    let escaped = table.replace('\'', "''");
+    let rows = driver::query(
+        connection,
+        &format!("PRAGMA table_xinfo('{escaped}')"),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let sqlite_sequence = [("name", "", 0, 0), ("seq", "", 0, 0)];
+    let turso_autoincrement = [
+        ("value", "INTEGER", 0, 1),
+        ("is_called", "INTEGER", 0, 0),
+        ("start", "INTEGER", 0, 0),
+        ("inc", "INTEGER", 0, 0),
+        ("min", "INTEGER", 0, 0),
+        ("max", "INTEGER", 0, 0),
+        ("cycle", "INTEGER", 0, 0),
+    ];
+    let expected: &[_] = match support_position {
+        0 => &sqlite_sequence,
+        1 => &turso_autoincrement,
+        _ => return Err(compatibility()),
+    };
+    if rows.len() != expected.len() {
+        return Err(compatibility());
+    }
+    for (position, (row, (expected_name, expected_type, expected_not_null, expected_pk))) in
+        rows.iter().zip(expected).enumerate()
+    {
+        if row.len() != 7
+            || required_i64(row, 0).ok() != i64::try_from(position).ok()
+            || required_text(row, 1).ok().as_deref() != Some(*expected_name)
+            || required_text(row, 2).ok().as_deref() != Some(*expected_type)
+            || required_i64(row, 3).ok() != Some(*expected_not_null)
+            || !matches!(row.get(4), Some(Value::Null))
+            || required_i64(row, 5).ok() != Some(*expected_pk)
+            || required_i64(row, 6).ok() != Some(0)
+        {
+            return Err(compatibility());
+        }
+    }
+    if !driver::query(
+        connection,
+        &format!("PRAGMA index_list('{escaped}')"),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?
+    .is_empty()
+        || !driver::query(
+            connection,
+            &format!("PRAGMA foreign_key_list('{escaped}')"),
+            Vec::new(),
+        )
+        .map_err(TursoStorageError::initialization)?
+        .is_empty()
+    {
+        return Err(compatibility());
+    }
+    Ok(())
+}
+
+fn validate_table_columns(
+    connection: &Arc<Connection>,
+    table: &str,
+    expected: &[ColumnSpec],
+) -> Result<(), TursoStorageError> {
+    let sql = format!("PRAGMA table_xinfo('{table}')");
+    let rows =
+        driver::query(connection, &sql, Vec::new()).map_err(TursoStorageError::initialization)?;
+    if rows.len() != expected.len() {
+        return Err(compatibility());
+    }
+    for (position, (row, expected)) in rows.iter().zip(expected).enumerate() {
+        if row.len() != 7
+            || required_i64(row, 0).ok() != i64::try_from(position).ok()
+            || required_text(row, 1).ok().as_deref() != Some(expected.name)
+            || required_text(row, 2)
+                .ok()
+                .is_none_or(|value| value.trim().to_ascii_uppercase() != expected.declared_type)
+            || required_i64(row, 3).ok() != Some(i64::from(expected.not_null))
+            || !default_matches(row.get(4), expected.default_zero)
+            || required_i64(row, 5).ok() != Some(expected.primary_key_position)
+            || required_i64(row, 6).ok() != Some(0)
+        {
+            return Err(compatibility());
+        }
+    }
+    Ok(())
+}
+
+fn default_matches(value: Option<&Value>, expected_zero: bool) -> bool {
+    match (value, expected_zero) {
+        (Some(Value::Null), false) => true,
+        (Some(Value::Text(value)), true) => {
+            value.as_str().chars().all(|character| {
+                character == '0'
+                    || character == '('
+                    || character == ')'
+                    || character.is_whitespace()
+            }) && value.as_str().contains('0')
+        }
+        (Some(Value::Numeric(Numeric::Integer(0))), true) => true,
+        _ => false,
+    }
+}
+
+fn validate_mutation_queue_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "PRAGMA index_list('mutation_queue')",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [row] = rows.as_slice() else {
+        return Err(compatibility());
+    };
+    if row.len() != 5
+        || required_i64(row, 0).ok() != Some(0)
+        || required_text(row, 1).ok().as_deref() != Some("mutation_queue_created_at_ms_idx")
+        || required_i64(row, 2).ok() != Some(0)
+        || required_text(row, 3).ok().as_deref() != Some("c")
+        || required_i64(row, 4).ok() != Some(0)
+    {
+        return Err(compatibility());
+    }
+    let index_rows = driver::query(
+        connection,
+        "PRAGMA index_xinfo('mutation_queue_created_at_ms_idx')",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [created_at, rowid] = index_rows.as_slice() else {
+        return Err(compatibility());
+    };
+    if created_at.len() != 6
+        || required_i64(created_at, 0).ok() != Some(0)
+        || required_i64(created_at, 1).ok() != Some(11)
+        || required_text(created_at, 2).ok().as_deref() != Some("created_at_ms")
+        || required_i64(created_at, 3).ok() != Some(0)
+        || required_text(created_at, 4).ok().as_deref() != Some("BINARY")
+        || required_i64(created_at, 5).ok() != Some(1)
+        || rowid.len() != 6
+        || required_i64(rowid, 0).ok() != Some(1)
+        || required_i64(rowid, 1).ok() != Some(-1)
+        || !rowid.get(2).is_some_and(|value| {
+            matches!(value, Value::Null)
+                || matches!(value, Value::Text(text) if text.as_str().is_empty())
+        })
+        || required_i64(rowid, 3).ok() != Some(0)
+        || required_text(rowid, 4).ok().as_deref() != Some("BINARY")
+        || required_i64(rowid, 5).ok() != Some(0)
+    {
+        return Err(compatibility());
+    }
+    Ok(())
+}
+
+fn validate_table_indexes(
+    connection: &Arc<Connection>,
+    table: &str,
+    expected_key_columns: &[(i64, &str)],
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        &format!("PRAGMA index_list('{}')", table.replace('\'', "''")),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let expected_index_count = usize::from(!expected_key_columns.is_empty());
+    if rows.len() != expected_index_count {
+        return Err(compatibility());
+    }
+    let Some(row) = rows.first() else {
+        return Ok(());
+    };
+    if row.len() != 5
+        || required_i64(row, 0).ok() != Some(0)
+        || required_i64(row, 2).ok() != Some(1)
+        || required_text(row, 3).ok().as_deref() != Some("pk")
+        || required_i64(row, 4).ok() != Some(0)
+    {
+        return Err(compatibility());
+    }
+    let index_name = required_text(row, 1).map_err(|_| compatibility())?;
+    let index_rows = driver::query(
+        connection,
+        &format!("PRAGMA index_xinfo('{}')", index_name.replace('\'', "''")),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    if index_rows.len() != expected_key_columns.len() + 1 {
+        return Err(compatibility());
+    }
+    for (sequence, (row, (expected_column_id, expected_name))) in
+        index_rows.iter().zip(expected_key_columns).enumerate()
+    {
+        if row.len() != 6
+            || required_i64(row, 0).ok() != i64::try_from(sequence).ok()
+            || required_i64(row, 1).ok() != Some(*expected_column_id)
+            || required_text(row, 2).ok().as_deref() != Some(*expected_name)
+            || required_i64(row, 3).ok() != Some(0)
+            || required_text(row, 4).ok().as_deref() != Some("BINARY")
+            || required_i64(row, 5).ok() != Some(1)
+        {
+            return Err(compatibility());
+        }
+    }
+    let Some(rowid) = index_rows.last() else {
+        return Err(compatibility());
+    };
+    if rowid.len() != 6
+        || required_i64(rowid, 0).ok() != i64::try_from(expected_key_columns.len()).ok()
+        || required_i64(rowid, 1).ok() != Some(-1)
+        || !rowid.get(2).is_some_and(|value| {
+            matches!(value, Value::Null)
+                || matches!(value, Value::Text(text) if text.as_str().is_empty())
+        })
+        || required_i64(rowid, 3).ok() != Some(0)
+        || required_text(rowid, 4).ok().as_deref() != Some("BINARY")
+        || required_i64(rowid, 5).ok() != Some(0)
+    {
+        return Err(compatibility());
+    }
+    Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SchemaToken {
+    Word(String),
+    QuotedIdentifier,
+    StringLiteral,
+    Symbol,
+}
+
+impl SchemaToken {
+    fn is_keyword(&self, expected: &str) -> bool {
+        matches!(self, Self::Word(word) if word == expected)
+    }
+}
+
+fn validate_table_constraints(
+    connection: &Arc<Connection>,
+    table: &str,
+    expects_autoincrement: bool,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+        vec![text(table)],
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [row] = rows.as_slice() else {
+        return Err(compatibility());
+    };
+    if row.len() != 1 {
+        return Err(compatibility());
+    }
+    let sql = required_text(row, 0).map_err(|_| compatibility())?;
+    let tokens = lex_schema(&sql)?;
+    if has_forbidden_table_syntax(&tokens) {
+        return Err(compatibility());
+    }
+    let autoincrement_count = tokens
+        .iter()
+        .filter(|token| token.is_keyword("autoincrement"))
+        .count();
+    if !expects_autoincrement {
+        return (autoincrement_count == 0)
+            .then_some(())
+            .ok_or_else(compatibility);
+    }
+    let declaration_count = tokens
+        .windows(4)
+        .filter(|window| {
+            window[0].is_keyword("integer")
+                && window[1].is_keyword("primary")
+                && window[2].is_keyword("key")
+                && window[3].is_keyword("autoincrement")
+        })
+        .count();
+    if autoincrement_count == 1 && declaration_count == 1 {
+        Ok(())
+    } else {
+        Err(compatibility())
+    }
+}
+
+fn has_forbidden_table_syntax(tokens: &[SchemaToken]) -> bool {
+    ["as", "check", "collate", "generated", "unique"]
+        .into_iter()
+        .any(|keyword| tokens.iter().any(|token| token.is_keyword(keyword)))
+}
+
+fn lex_schema(sql: &str) -> Result<Vec<SchemaToken>, TursoStorageError> {
+    let characters = sql.chars().collect::<Vec<_>>();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < characters.len() {
+        let character = characters[index];
+        if character.is_whitespace() {
+            index += 1;
+            continue;
+        }
+        if character == '-' && characters.get(index + 1) == Some(&'-') {
+            index += 2;
+            while index < characters.len() && !matches!(characters[index], '\n' | '\r') {
+                index += 1;
+            }
+            continue;
+        }
+        if character == '/' && characters.get(index + 1) == Some(&'*') {
+            index += 2;
+            let mut closed = false;
+            while index + 1 < characters.len() {
+                if characters[index] == '*' && characters[index + 1] == '/' {
+                    index += 2;
+                    closed = true;
+                    break;
+                }
+                index += 1;
+            }
+            if !closed {
+                return Err(compatibility());
+            }
+            continue;
+        }
+        if character == '\'' {
+            index = scan_quoted(&characters, index + 1, '\'')?;
+            tokens.push(SchemaToken::StringLiteral);
+            continue;
+        }
+        if matches!(character, '"' | '`') {
+            index = scan_quoted(&characters, index + 1, character)?;
+            tokens.push(SchemaToken::QuotedIdentifier);
+            continue;
+        }
+        if character == '[' {
+            index += 1;
+            while index < characters.len() && characters[index] != ']' {
+                index += 1;
+            }
+            if index == characters.len() {
+                return Err(compatibility());
+            }
+            index += 1;
+            tokens.push(SchemaToken::QuotedIdentifier);
+            continue;
+        }
+        if character.is_alphabetic() || character == '_' {
+            let start = index;
+            index += 1;
+            while index < characters.len()
+                && (characters[index].is_alphanumeric() || matches!(characters[index], '_' | '$'))
+            {
+                index += 1;
+            }
+            tokens.push(SchemaToken::Word(
+                characters[start..index]
+                    .iter()
+                    .collect::<String>()
+                    .to_lowercase(),
+            ));
+            continue;
+        }
+        tokens.push(SchemaToken::Symbol);
+        index += 1;
+    }
+    Ok(tokens)
+}
+
+fn scan_quoted(
+    characters: &[char],
+    mut index: usize,
+    delimiter: char,
+) -> Result<usize, TursoStorageError> {
+    while index < characters.len() {
+        if characters[index] == delimiter {
+            if characters.get(index + 1) == Some(&delimiter) {
+                index += 2;
+                continue;
+            }
+            return Ok(index + 1);
+        }
+        index += 1;
+    }
+    Err(compatibility())
+}
+
+fn validate_no_foreign_keys(
+    connection: &Arc<Connection>,
+    table: &str,
+) -> Result<(), TursoStorageError> {
+    let escaped = table.replace('\'', "''");
+    if driver::query(
+        connection,
+        &format!("PRAGMA foreign_key_list('{escaped}')"),
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?
+    .is_empty()
+    {
+        Ok(())
+    } else {
+        Err(compatibility())
+    }
+}
+
+fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "PRAGMA foreign_key_list('optimistic_layers')",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [row] = rows.as_slice() else {
+        return Err(compatibility());
+    };
+    if row.len() != 8
+        || required_i64(row, 0).ok() != Some(0)
+        || required_i64(row, 1).ok() != Some(0)
+        || required_text(row, 2).ok().as_deref() != Some("mutation_queue")
+        || required_text(row, 3).ok().as_deref() != Some("mutation_id")
+        || required_text(row, 4).ok().as_deref() != Some("id")
+        || required_text(row, 5).ok().as_deref() != Some("NO ACTION")
+        || required_text(row, 6).ok().as_deref() != Some("CASCADE")
+        || required_text(row, 7).ok().as_deref() != Some("NONE")
+    {
+        return Err(compatibility());
+    }
+    Ok(())
+}
+
+fn compatibility() -> TursoStorageError {
+    TursoStorageError::reset(PhysicalResetReason::Compatibility)
+}
+
+fn validate_quick_check(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let rows = driver::query(connection, "PRAGMA quick_check", Vec::new())
+        .map_err(TursoStorageError::initialization)?;
+    validate_quick_check_rows(&rows)
+}
+
+fn validate_quick_check_rows(rows: &[Vec<Value>]) -> Result<(), TursoStorageError> {
+    if rows.len() == 1
+        && rows[0].len() == 1
+        && required_text(&rows[0], 0).ok().as_deref() == Some("ok")
+    {
+        Ok(())
+    } else {
+        Err(TursoStorageError::reset(PhysicalResetReason::Integrity))
+    }
+}
+
+fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
+        .map_err(TursoStorageError::initialization)?;
+    for row in queue {
+        if parse_queue_row(&row)?.optimistic.is_none() {
+            return Err(invariant());
+        }
+    }
+    if driver::query(connection, ORPHAN_LAYER_SELECT, Vec::new())
+        .map_err(TursoStorageError::initialization)?
+        .is_empty()
+    {
+        Ok(())
+    } else {
+        Err(invariant())
+    }
+}
+
+struct EncodedRecord {
+    key: RecordKey,
+    value: Vec<u8>,
+}
+
+fn prepare_records(
+    entries: Vec<(EntityKey<'static>, Record)>,
+) -> Result<Vec<EncodedRecord>, TursoStorageError> {
+    entries
+        .into_iter()
+        .map(|(key, record)| {
+            Ok(EncodedRecord {
+                key: RecordKey::from_entity(&key)?,
+                value: encode_record(&record),
+            })
+        })
+        .collect()
+}
+
+fn mutation_values(mutation: &StoredMutation) -> Result<Vec<Value>, TursoStorageError> {
+    Ok(vec![
+        text(&mutation.request.query),
+        optional_text(mutation.request.operation_name.as_deref()),
+        text(&mutation.request.variables_json),
+        optional_text(mutation.request.identity.as_deref()),
+        Value::from_i64(i64::from(mutation.attempt_count)),
+        optional_i64(mutation.next_attempt_at_ms),
+        optional_text(mutation.lease_owner.as_deref()),
+        Value::from_i64(generation_to_sql(mutation.lease_generation)?),
+        optional_i64(mutation.lease_expires_at_ms),
+        optional_text(mutation.last_error.as_deref()),
+        Value::from_i64(mutation.created_at_ms),
+    ])
+}
+
+struct ParsedQueueRow {
+    id: MutationId,
+    mutation: StoredMutation,
+    optimistic: Option<PersistedOptimisticLayer>,
+}
+
+fn parse_queue_row(row: &[Value]) -> Result<ParsedQueueRow, TursoStorageError> {
+    if row.len() != 14 {
+        return Err(invariant());
+    }
+    let optimistic = match (&row[12], &row[13]) {
+        (Value::Null, Value::Null) => None,
+        (Value::Null, _) | (_, Value::Null) => return Err(invariant()),
+        _ => Some(PersistedOptimisticLayer {
+            optimistic_data_json: required_text(row, 12)?,
+            normalized_updates: decode_record_updates(&required_blob(row, 13)?)
+                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?,
+        }),
+    };
+    Ok(ParsedQueueRow {
+        id: mutation_id_from_row(required_i64(row, 0)?)?,
+        mutation: StoredMutation {
+            request: MutationRequest {
+                query: required_text(row, 1)?,
+                operation_name: nullable_text(row, 2)?,
+                variables_json: required_text(row, 3)?,
+                identity: nullable_text(row, 4)?,
+            },
+            attempt_count: u32::try_from(required_i64(row, 5)?).map_err(|_| invariant())?,
+            next_attempt_at_ms: nullable_i64(row, 6)?,
+            lease_owner: nullable_text(row, 7)?,
+            lease_generation: u64::try_from(required_i64(row, 8)?).map_err(|_| invariant())?,
+            lease_expires_at_ms: nullable_i64(row, 9)?,
+            last_error: nullable_text(row, 10)?,
+            created_at_ms: required_i64(row, 11)?,
+        },
+        optimistic,
+    })
+}
+
+fn claim_is_current(
+    connection: &Arc<Connection>,
+    id: i64,
+    claim: &MutationClaimToken,
+) -> Result<bool, TursoStorageError> {
+    let rows = driver::query(connection, CLAIM_SELECT, vec![Value::from_i64(id)])?;
+    match rows.as_slice() {
+        [] => Ok(false),
+        [row] => Ok(
+            nullable_text(row, 0)?.as_deref() == Some(claim.owner.as_str())
+                && u64::try_from(required_i64(row, 1)?).map_err(|_| invariant())?
+                    == claim.generation,
+        ),
+        _ => Err(invariant()),
+    }
+}
+
+fn require_layer(connection: &Arc<Connection>, id: i64) -> Result<(), TursoStorageError> {
+    let rows = driver::query(connection, REQUIRE_LAYER_SELECT, vec![Value::from_i64(id)])?;
+    if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
+        Ok(())
+    } else {
+        Err(invariant())
+    }
+}
+
+fn mutation_id_from_row(value: i64) -> Result<MutationId, TursoStorageError> {
+    if value <= 0 {
+        Err(invariant())
+    } else {
+        u64::try_from(value).map_err(|_| invariant())
+    }
+}
+
+fn mutation_id_to_sql(value: MutationId) -> Result<i64, TursoStorageError> {
+    let value = i64::try_from(value).map_err(|_| TursoStorageError::InvalidInput)?;
+    if value > 0 {
+        Ok(value)
+    } else {
+        Err(TursoStorageError::InvalidInput)
+    }
+}
+
+fn generation_to_sql(value: u64) -> Result<i64, TursoStorageError> {
+    i64::try_from(value).map_err(|_| TursoStorageError::InvalidInput)
+}
+
+fn text(value: &str) -> Value {
+    Value::from_text(value.to_owned())
+}
+
+fn optional_text(value: Option<&str>) -> Value {
+    value.map_or(Value::Null, text)
+}
+
+fn optional_i64(value: Option<i64>) -> Value {
+    value.map_or(Value::Null, Value::from_i64)
+}
+
+fn required_value(row: &[Value], index: usize) -> Result<&Value, TursoStorageError> {
+    row.get(index)
+        .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))
+}
+
+fn required_text(row: &[Value], index: usize) -> Result<String, TursoStorageError> {
+    match required_value(row, index)? {
+        Value::Text(value) => Ok(value.as_str().to_owned()),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn nullable_text(row: &[Value], index: usize) -> Result<Option<String>, TursoStorageError> {
+    match required_value(row, index)? {
+        Value::Null => Ok(None),
+        Value::Text(value) => Ok(Some(value.as_str().to_owned())),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn required_blob(row: &[Value], index: usize) -> Result<Vec<u8>, TursoStorageError> {
+    match required_value(row, index)? {
+        Value::Blob(value) => Ok(value.to_vec()),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn required_i64(row: &[Value], index: usize) -> Result<i64, TursoStorageError> {
+    match required_value(row, index)? {
+        Value::Numeric(Numeric::Integer(value)) => Ok(*value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn nullable_i64(row: &[Value], index: usize) -> Result<Option<i64>, TursoStorageError> {
+    match required_value(row, index)? {
+        Value::Null => Ok(None),
+        Value::Numeric(Numeric::Integer(value)) => Ok(Some(*value)),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn require_changed(changed: i64, expected: i64) -> Result<(), TursoStorageError> {
+    if changed == expected {
+        Ok(())
+    } else {
+        Err(invariant())
+    }
+}
+
+fn changed_to_bool(changed: i64) -> Result<bool, TursoStorageError> {
+    match changed {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(invariant()),
+    }
+}
+
+fn invariant() -> TursoStorageError {
+    TursoStorageError::reset(PhysicalResetReason::Invariant)
+}
+
+#[derive(Clone, Copy)]
+enum TestFaultSite {
+    Diagnostics,
+    Put,
+    Delete,
+    Enqueue,
+    Complete,
+    Discard,
+    Clear,
+}
+
+impl TursoStorage {
+    fn fault_after(&self, site: TestFaultSite, index: usize) -> Result<(), TursoStorageError> {
+        #[cfg(all(test, not(target_arch = "wasm32")))]
+        {
+            let mut fault = self.fault.lock().unwrap_or_else(|error| error.into_inner());
+            if let Some((fault_state, fault_code)) = fault
+                .as_ref()
+                .and_then(|fault| fault.rollback_io_step_at(site, index))
+            {
+                fault_state.store(fault_code, Ordering::SeqCst);
+                *fault = None;
+                // This pinned Turso rollback emits no File completion after
+                // this operation failure. Force its IO::step polling boundary
+                // instead; no successful or unrelated completion is repurposed.
+                driver::arm_rollback_control_io();
+                return Err(TursoStorageError::Database);
+            }
+            if let Some(error) = fault.as_ref().and_then(|fault| fault.error_at(site, index)) {
+                *fault = None;
+                return Err(error);
+            }
+        }
+        #[cfg(any(not(test), target_arch = "wasm32"))]
+        let _ = (site, index);
+        Ok(())
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Clone)]
+enum TestFault {
+    After {
+        site: TestFaultSite,
+        index: usize,
+    },
+    ResetAfter {
+        site: TestFaultSite,
+        index: usize,
+        reason: PhysicalResetReason,
+    },
+    RollbackIoStepAfter {
+        site: TestFaultSite,
+        index: usize,
+        fault_state: Arc<AtomicU8>,
+        fault_code: u8,
+    },
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl TestFault {
+    fn error_at(&self, site: TestFaultSite, index: usize) -> Option<TursoStorageError> {
+        let (expected_site, expected_index, error) = match self {
+            Self::After { site, index } => (site, index, TursoStorageError::Database),
+            Self::ResetAfter {
+                site,
+                index,
+                reason,
+            } => (site, index, TursoStorageError::reset(*reason)),
+            Self::RollbackIoStepAfter { .. } => return None,
+        };
+        (std::mem::discriminant(expected_site) == std::mem::discriminant(&site)
+            && *expected_index == index)
+            .then_some(error)
+    }
+
+    fn rollback_io_step_at(
+        &self,
+        site: TestFaultSite,
+        index: usize,
+    ) -> Option<(Arc<AtomicU8>, u8)> {
+        let Self::RollbackIoStepAfter {
+            site: expected_site,
+            index: expected_index,
+            fault_state,
+            fault_code,
+        } = self
+        else {
+            return None;
+        };
+        (std::mem::discriminant(expected_site) == std::mem::discriminant(&site)
+            && *expected_index == index)
+            .then(|| (fault_state.clone(), *fault_code))
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl TursoStorage {
+    fn arm_fault(&self, fault: TestFault) {
+        *self.fault.lock().unwrap_or_else(|error| error.into_inner()) = Some(fault);
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod browser_test;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod test;

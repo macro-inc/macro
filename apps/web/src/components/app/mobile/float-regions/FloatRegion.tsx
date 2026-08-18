@@ -1,13 +1,14 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onCleanup, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { type FloatRegionName, FloatRegions } from './float-region-state';
 
 export type FloatRegionProps = ParentProps<{
   region: FloatRegionName;
-  /** Higher wins; ties go to the most recently mounted contributor. Default 0. */
-  priority?: number;
+  /** Higher wins; ties go to the most recently mounted contributor. Default 0.
+   *  Pass an accessor to change priority reactively without remounting. */
+  priority?: number | (() => number);
   /** Extra reactive gate, e.g. `() => !virtualKeyboardVisible()`. */
   active?: () => boolean;
 }>;
@@ -32,7 +33,7 @@ export function FloatRegion(props: FloatRegionProps) {
     region: props.region,
     priority: props.priority ?? 0,
     isActive: () =>
-      isMobile() &&
+      isTouchDevice() &&
       (panel?.isPanelActive() ?? true) &&
       (props.active?.() ?? true),
   });
@@ -52,7 +53,7 @@ export function FloatRegion(props: FloatRegionProps) {
  */
 export function FloatRegionOrInline(props: FloatRegionProps) {
   return (
-    <Show when={isMobile()} fallback={props.children}>
+    <Show when={isTouchDevice()} fallback={props.children}>
       <FloatRegion {...props} />
     </Show>
   );

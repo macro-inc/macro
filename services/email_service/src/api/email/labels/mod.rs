@@ -14,13 +14,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     >();
 
     Router::new()
-        .route(
-            "/",
-            post(create::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                crate::api::middleware::gmail_token::attach_gmail_token,
-            )),
-        )
+        .route("/", post(create::handler))
         .route("/{id}", delete(delete::handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

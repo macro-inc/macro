@@ -28,8 +28,8 @@ VALUES
     ('macro|viewer@test.com', '10000000-0000-0000-0000-000000000006', 'project'),
     ('macro|viewer@test.com', '10000000-0000-0000-0000-000000000009', 'project');
 
-INSERT INTO public."SharePermission" (id, "isPublic", "publicAccessLevel")
-VALUES ('share-root', true, 'edit');
+INSERT INTO public."SharePermission" (id, "linkShare", "linkShareAccessLevel")
+VALUES ('share-root', 'PUBLIC', 'edit');
 INSERT INTO public."ProjectPermission" ("projectId", "sharePermissionId")
 VALUES ('10000000-0000-0000-0000-000000000001', 'share-root');
 INSERT INTO public."ChannelSharePermission" (share_permission_id, channel_id, access_level)

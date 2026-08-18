@@ -4,8 +4,9 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
  * RPC from the design doc, apps/web/docs/graphql-normalized-cache-plan.md §4).
  *
- * The browser topology is one SharedWorker engine serving many page ports.
- * Platforms without SharedWorker support use a storage-free no-op host.
+ * The browser topology routes page ports through a SharedWorker coordinator
+ * to one elected DedicatedWorker engine. Platforms missing the required
+ * coordinator capabilities use a storage-free no-op host.
  *
  * Operation ids are strings of the form `"{clientId}:{urqlOperationKey}"` so
  * one shared engine can track operations from many tabs without collisions.
@@ -282,23 +283,27 @@ export type CacheRequest = { id: number } & (
   | { kind: 'clear' }
 );
 
+/** Stable machine-readable cache RPC rejection codes. */
+export type CacheResponseErrorCode =
+  | 'owner-epoch-lost'
+  | 'admitted-enqueue-uncertain';
+
+/** Old-owner work was rejected after fenced engine loss and was not replayed. */
+export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
+  'owner-epoch-lost';
+
+/** An enqueue send was admitted before its unfenced transport became uncertain. */
+export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
+  'admitted-enqueue-uncertain';
+
 export type CacheResponse =
   | { id: number; ok: true; result: unknown }
-  | { id: number; ok: false; error: string };
-
-/**
- * Fire-and-forget notice from a client to the worker (no id/response).
- * `disconnect` lets a SharedWorker drop the sender's port — there is no
- * platform event for client disconnection, so hosts send this on dispose
- * and pagehide.
- */
-export type CacheNotice = { kind: 'disconnect' };
-
-export function isCacheNotice(
-  msg: CacheRequest | CacheNotice
-): msg is CacheNotice {
-  return msg.kind === 'disconnect';
-}
+  | {
+      id: number;
+      ok: false;
+      error: string;
+      errorCode?: CacheResponseErrorCode;
+    };
 
 /**
  * Pushed (not request/response) messages from worker to its client(s):
@@ -317,6 +322,100 @@ export type CachePush =
 
 export type WorkerMessage = CacheResponse | CachePush;
 
-export function isCachePush(msg: WorkerMessage): msg is CachePush {
-  return 'kind' in msg;
+type UnknownWireRecord = Record<string, unknown>;
+
+const isWireRecord = (value: unknown): value is UnknownWireRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const hasOnlyWireKeys = (
+  value: UnknownWireRecord,
+  keys: readonly string[]
+): boolean => Object.keys(value).every((key) => keys.includes(key));
+
+const isWireStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/** Strictly validates a machine-readable cache response error code. */
+export const isCacheResponseErrorCode = (
+  value: unknown
+): value is CacheResponseErrorCode =>
+  value === OWNER_EPOCH_LOST_ERROR_CODE ||
+  value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
+
+/** Identifies a coordinator-fenced rejection from a lost owner epoch. */
+export const isOwnerEpochLostError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-epoch-lost' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
+
+/** Identifies the host-only uncertainty result for an admitted enqueue send. */
+export const isAdmittedEnqueueUncertainError = (
+  value: unknown
+): value is Error & { errorCode: 'admitted-enqueue-uncertain' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
+
+/** Strictly validates a cache response received across a host boundary. */
+export function isCacheResponse(value: unknown): value is CacheResponse {
+  if (
+    !isWireRecord(value) ||
+    !Number.isSafeInteger(value.id) ||
+    (value.id as number) < 0
+  ) {
+    return false;
+  }
+  if (value.ok === true) {
+    return (
+      hasOnlyWireKeys(value, ['id', 'ok', 'result']) &&
+      Object.hasOwn(value, 'result')
+    );
+  }
+  return (
+    value.ok === false &&
+    hasOnlyWireKeys(value, ['id', 'ok', 'error', 'errorCode']) &&
+    typeof value.error === 'string' &&
+    (value.errorCode === undefined || isCacheResponseErrorCode(value.errorCode))
+  );
 }
+
+/** Strictly validates a pushed cache notification. */
+export function isCachePush(value: unknown): value is CachePush {
+  if (!isWireRecord(value)) return false;
+  switch (value.kind) {
+    case 'ops-affected':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys']) &&
+        isWireStringArray(value.opIds) &&
+        isWireStringArray(value.keys)
+      );
+    case 'cache-changed':
+      return hasOnlyWireKeys(value, ['kind']);
+    case 'mutation-settled': {
+      const settlement = value.settlement;
+      if (
+        !hasOnlyWireKeys(value, ['kind', 'settlement']) ||
+        !isWireRecord(settlement) ||
+        typeof settlement.transactionId !== 'string'
+      ) {
+        return false;
+      }
+      if (settlement.status === 'committed') {
+        return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+      }
+      return (
+        settlement.status === 'permanently-failed' &&
+        hasOnlyWireKeys(settlement, ['transactionId', 'status', 'error']) &&
+        typeof settlement.error === 'string'
+      );
+    }
+    default:
+      return false;
+  }
+}
+
+/** Strictly validates any response or push delivered to a cache host. */
+export const isWorkerMessage = (value: unknown): value is WorkerMessage =>
+  isCacheResponse(value) || isCachePush(value);

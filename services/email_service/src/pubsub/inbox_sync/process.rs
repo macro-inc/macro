@@ -4,15 +4,11 @@ use crate::pubsub::inbox_sync::operations::delete_message::delete_message;
 use crate::pubsub::inbox_sync::operations::gmail_message::gmail_message;
 use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
 use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
-use crate::util::redis::rate_limit::RateLimitArgs;
 use anyhow::{Context, Result, anyhow};
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
-use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use std::result;
-use uuid::Uuid;
 
 /// Processes a message from the gmail inbox sync queue.
 pub async fn process_message(
@@ -123,79 +119,4 @@ fn extract_inbox_sync_message(
         .context("Failed to deserialize message body to InboxSyncOperation")?;
 
     Ok(backfill_message)
-}
-
-pub async fn fetch_pubsub_gmail_token(
-    ctx: &PubSubContext,
-    link: &Link,
-) -> result::Result<String, ProcessingError> {
-    let gmail_access_token = crate::util::gmail::auth::fetch_token_or_mark_reauth(
-        link,
-        &ctx.db,
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-        &ctx.sqs_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch gmail access token".to_string()),
-        })
-    })?;
-    Ok(gmail_access_token)
-}
-
-/// Checks Gmail API rate limits and routes processing accordingly.
-///
-/// Uses a two-tier inbox sync system to prevent rate limit backpressure:
-/// - **Primary worker**: If rate limited, enqueues to retry queue and returns non-retryable error
-/// - **Retry worker**: If rate limited, returns retryable error so it gets tried again later
-///
-/// This design keeps the primary queue flowing by offloading rate-limited operations to a
-/// separate retry queue, preventing head-of-line blocking.
-pub async fn check_gmail_rate_limit_inbox_sync(
-    ctx: &PubSubContext,
-    link_id: Uuid,
-    operation: GmailApiOperation,
-    sync_operation: InboxSyncOperation,
-) -> result::Result<(), ProcessingError> {
-    if !ctx
-        .redis_client
-        .is_rate_limited(RateLimitArgs {
-            user_id: link_id,
-            operation,
-            is_backfill: false,
-        })
-        .await
-    {
-        // Not rate limited, continue processing
-        return Ok(());
-    }
-
-    if !ctx.retry_worker {
-        ctx.sqs_client
-            .enqueue_gmail_retry_inbox_sync_notification(InboxSyncPubsubMessage {
-                link_id,
-                operation: sync_operation,
-            })
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue retry message"),
-                })
-            })?;
-        Err(ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiRateLimited,
-            source: anyhow::Error::msg(
-                "Gmail API rate limit exceeded, enqueued message on retry queue",
-            ),
-        }))
-    } else {
-        Err(ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::GmailApiRateLimited,
-            source: anyhow::Error::msg("Gmail API rate limit exceeded in retry worker"),
-        }))
-    }
 }

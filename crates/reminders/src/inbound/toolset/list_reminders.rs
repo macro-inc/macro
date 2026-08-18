@@ -1,6 +1,8 @@
 //! ListReminders tool for reading the current user's reminders.
 
-use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use entity_access::domain::ports::EntityAccessService;
@@ -100,6 +102,10 @@ pub struct ListReminders {
     )]
     #[serde(default)]
     pub limit: Option<u32>,
+}
+
+impl ToolAnnotated for ListReminders {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List reminders");
 }
 
 /// Response from the ListReminders tool.

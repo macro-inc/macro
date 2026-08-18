@@ -96,6 +96,13 @@ fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
 }
 
 #[test]
+fn consuming_engine_returns_exclusively_owned_storage() {
+    let engine = Engine::new(InMemoryStorage::new());
+    let storage: InMemoryStorage = engine.into_storage();
+    assert!(storage.is_empty());
+}
+
+#[test]
 fn miss_then_write_then_hit() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
@@ -219,7 +226,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                         "__typename": "GraphqlSoupChannel",
                         "id": "channel-1",
                         "notifications": [{
-                            "__typename": "GraphqlSoupNotification",
+                            "__typename": "GraphqlNotification",
                             "id": "notification-1",
                             "seen": false,
                             "viewedAt": null
@@ -298,7 +305,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                 &notification_variables,
                 &json!({
                     "updateNotifications": [{
-                        "__typename": "GraphqlSoupNotification",
+                        "__typename": "GraphqlNotification",
                         "id": "notification-1",
                         "seen": true,
                         "viewedAt": "2025-01-01T00:00:02Z"

@@ -111,6 +111,9 @@ describe('GithubReauthenticationPrompt', () => {
     const cleanup = renderPrompt();
     await flushPromises();
     await getReconnectAction().onClick();
+    // The action fires the OAuth kickoff without awaiting it; let the
+    // redirect land before asserting on it.
+    await flushPromises();
 
     const options = mocks.toastCustom.mock.calls[0]?.[1] as ToastOptions;
 

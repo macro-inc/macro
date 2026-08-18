@@ -17,6 +17,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "inbound",
 ] }
 entity_mutation = { path = "../entity_mutation" }
+graphql_activity = { path = "../graphql_activity" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
 graphql_email = { path = "../graphql_email" }
@@ -32,6 +33,8 @@ macro_authorization = { path = "../macro_authorization", features = [
 ] }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+notification = { path = "../notification" }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = [
   "ports",
@@ -40,7 +43,9 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+activity = { path = "../activity", default-features = false }
 apollo-compiler = { workspace = true }
+chrono = { workspace = true }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }

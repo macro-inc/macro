@@ -23,7 +23,7 @@ jobs:
         diff: |-
           cloud-storage: ./Cargo.toml ./Cargo.lock ./Cross.toml ./clippy.toml ./deny.toml ./rust-toolchain.toml ./.cargo/** ./.config/** ./.sqlx/** ./crates/** ./services/** ./tooling/xtask/** ./tooling/just/** ./tooling/scripts/** ./static_assets/** ./docker/** ./nix/** ./nix-support/** ./infra/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_all_services.yml ./.github/actions/deploy-cloud-storage-pulumi/** ./.github/actions/setup-nix/** ./.github/actions/teardown-nix/** ./.github/actions/migrate-cloud-storage-db/** ./.github/scripts/build-cloud-storage-lambdas-nix.sh ./.github/services-config.json ./.github/workspace-dep-closures.json ./flake.nix ./flake.lock
           sync-service: ./services/sync-service/** ./crates/macro_sync_service_jwt/** ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_sync_service.yml
-          web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml ./package.json ./bun.lock ./apps/web/** ./packages/** ./crates/client/cache-core/** ./crates/client/cache-idb/** ./crates/client/cache-wasm/** ./static_assets/schema.graphql ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml
+          web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml ./package.json ./bun.lock ./apps/web/** ./packages/** ./crates/client/cache-core/** ./crates/client/cache-turso/** ./crates/client/cache-wasm/** ./crates/client/turso-opfs/** ./static_assets/schema.graphql ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml
   deploy-cloud-storage:
     needs:
     - check-to-deploy

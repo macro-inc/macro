@@ -140,6 +140,7 @@ fn timed_upsert(
             organizer_email: Some("organizer@example.com".to_string()),
             organizer_name: Some("Organizer".to_string()),
             conference_url: None,
+            conference_provider: None,
             sequence,
             is_read_only: true,
             attendees: vec![CalendarAttendee {
@@ -213,7 +214,11 @@ async fn applying_grant_recreates_missing_side_table_state_from_version_zero(poo
     .unwrap();
 
     let grant = PgCalendarRepository::new(pool.clone())
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     assert!(grant.changed);
@@ -252,6 +257,7 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
         .apply_google_grant(
             link_id,
             GoogleScopeSet::parse("https://www.googleapis.com/auth/gmail.modify"),
+            CalendarGrantIntent::CalendarRequested,
         )
         .await
         .unwrap();
@@ -259,14 +265,22 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
     assert!(partial.jobs.is_empty());
 
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     assert!(enabled.changed);
     assert_eq!(enabled.jobs.len(), 1);
 
     let duplicate = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     assert!(!duplicate.changed);
@@ -289,7 +303,11 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
     .unwrap();
 
     let retried = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     assert!(!retried.changed);
@@ -320,7 +338,11 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let google_job = enabled
@@ -388,6 +410,7 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
         .apply_google_grant(
             link_id,
             GoogleScopeSet::parse("https://www.googleapis.com/auth/gmail.modify"),
+            CalendarGrantIntent::CalendarRequested,
         )
         .await
         .unwrap();
@@ -427,7 +450,11 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
     ));
 
     let reenabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     assert_eq!(reenabled.jobs.len(), 1);
@@ -449,7 +476,11 @@ async fn completed_google_job_is_rearmed_and_reuses_calendar_sync_state(pool: Pg
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let google_job = enabled
@@ -606,9 +637,13 @@ async fn canonical_precedence_uses_the_selected_source_clock(pool: PgPool) {
     let later_clock = source_clock + Duration::hours(3);
     let winning_clock = source_clock + Duration::hours(2);
 
-    repo.apply_google_grant(link_id, complete_grant())
-        .await
-        .unwrap();
+    repo.apply_google_grant(
+        link_id,
+        complete_grant(),
+        CalendarGrantIntent::CalendarRequested,
+    )
+    .await
+    .unwrap();
     let provider = provider_ids(&repo, link_id).await;
 
     let mut first = timed_upsert(
@@ -657,7 +692,11 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
@@ -781,7 +820,11 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
@@ -928,7 +971,11 @@ async fn google_snapshot_deletion_removes_an_event_without_a_surviving_source(po
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
@@ -1004,7 +1051,11 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
@@ -1362,7 +1413,11 @@ async fn watch_channels_round_trip_from_recording_to_targeted_rearm(pool: PgPool
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
@@ -1494,9 +1549,13 @@ async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
     );
 
     let link_id = insert_link(&pool, owner_id).await;
-    repo.apply_google_grant(link_id, complete_grant())
-        .await
-        .unwrap();
+    repo.apply_google_grant(
+        link_id,
+        complete_grant(),
+        CalendarGrantIntent::CalendarRequested,
+    )
+    .await
+    .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
     assert_eq!(
         repo.sync_status(owner_id).await.unwrap(),
@@ -1521,9 +1580,13 @@ async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
     let owner_id = "macro|calendar-idempotent@example.com";
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
-    repo.apply_google_grant(link_id, complete_grant())
-        .await
-        .unwrap();
+    repo.apply_google_grant(
+        link_id,
+        complete_grant(),
+        CalendarGrantIntent::CalendarRequested,
+    )
+    .await
+    .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
     let calendar_id = repo
         .upsert_calendar_fixture(
@@ -1775,7 +1838,11 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let account_id = repo.upsert_google_account(link_id).await.unwrap();
@@ -2036,7 +2103,11 @@ async fn calendar_permission_failure_does_not_mark_the_gmail_link_for_reauth(poo
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let enabled = repo
-        .apply_google_grant(link_id, complete_grant())
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
         .await
         .unwrap();
     let job = enabled
@@ -2141,9 +2212,13 @@ async fn unclaimed_permanent_google_failure_marks_account_error(pool: PgPool) {
 }
 
 async fn grant_and_provider_ids(repo: &PgCalendarRepository, link_id: Uuid) -> (Uuid, Uuid) {
-    repo.apply_google_grant(link_id, complete_grant())
-        .await
-        .unwrap();
+    repo.apply_google_grant(
+        link_id,
+        complete_grant(),
+        CalendarGrantIntent::CalendarRequested,
+    )
+    .await
+    .unwrap();
     provider_ids(repo, link_id).await
 }
 
@@ -2469,6 +2544,7 @@ fn reminder_upsert(
             organizer_email: None,
             organizer_name: None,
             conference_url: None,
+            conference_provider: None,
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
@@ -2870,4 +2946,342 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(past, Vec::new());
+}
+
+/// The provider classification has to survive the write and come back on the
+/// read path: it is what tells the product a conference is one Macro may
+/// detach, so losing it in persistence would put a third-party conference at
+/// risk of being destroyed by an edit.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
+    let owner_id = "macro|calendar-conference@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = grant_and_provider_ids(&repo, link_id).await;
+
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "conference@example.com",
+        "Meeting with a Meet",
+        1,
+    );
+    upsert.event.conference_url = Some("https://meet.google.com/abc-defg-hij".to_string());
+    upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
+    repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
+        .await
+        .unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = starts_at + Duration::days(2);
+    let occurrences = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    let (event, _) = occurrences.first().expect("the event is in range");
+    assert_eq!(
+        event.conference_url.as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(
+        event.conference_provider,
+        Some(ConferenceProvider::GoogleMeet)
+    );
+}
+
+/// A grant that also carries Gmail, so a disconnect can be shown to take the
+/// calendar scopes and nothing else.
+fn gmail_and_calendar_grant() -> GoogleScopeSet {
+    GoogleScopeSet::parse(&format!(
+        "https://www.googleapis.com/auth/gmail.modify {}",
+        GOOGLE_CALENDAR_SCOPES.join(" ")
+    ))
+}
+
+/// Bring one inbox's calendar fully to life: account, calendar, open push
+/// channel, and a synced event with an outstanding reminder delivery claim.
+async fn connected_calendar(
+    pool: &PgPool,
+    repo: &PgCalendarRepository,
+    owner_id: &str,
+    link_id: Uuid,
+) -> (Uuid, Uuid, Uuid, Uuid) {
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            gmail_and_calendar_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job = enabled
+        .jobs
+        .iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(
+            key,
+            lease_token,
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+    let channel_id = Uuid::new_v4();
+    repo.record_watch_channel(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        GoogleWatchChannel {
+            channel_id,
+            resource_id: "resource-1".to_string(),
+            expires_at: (Utc::now() + Duration::days(6)).trunc_subsecs(6),
+        },
+    )
+    .await
+    .unwrap();
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::GoogleBackfill {
+            key,
+            lease_token,
+            upsert: timed_upsert(
+                owner_id,
+                link_id,
+                (account_id, calendar_id),
+                "disconnect@example.com",
+                "Removed by disconnect",
+                1,
+            ),
+        })
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_event_reminder_deliveries (
+            id, event_id, occurrence_key, minutes_before, fire_at
+        )
+        VALUES ($1, $2, 'key', 10, now())
+        "#,
+        Uuid::now_v7(),
+        event_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    (account_id, calendar_id, event_id, channel_id)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn disconnecting_calendar_removes_the_data_and_records_the_opt_out(pool: PgPool) {
+    let owner_id = "macro|calendar-disconnect@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _calendar_id, event_id, channel_id) =
+        connected_calendar(&pool, &repo, owner_id, link_id).await;
+
+    let disconnected = repo
+        .disconnect_google_calendar(owner_id, link_id)
+        .await
+        .unwrap()
+        .expect("the owner's inbox is disconnectable");
+
+    assert_eq!(
+        disconnected.watch_channels,
+        vec![CalendarWatchRelease {
+            channel_id: channel_id.to_string(),
+            resource_id: "resource-1".to_string(),
+        }]
+    );
+    assert_eq!(disconnected.token_identity.fusionauth_user_id, owner_id);
+    assert_eq!(disconnected.token_identity.provider, "GMAIL");
+
+    let remaining = sqlx::query!(
+        r#"
+        SELECT
+            (SELECT count(*) FROM calendar_accounts WHERE email_link_id = $1) AS "accounts!",
+            (SELECT count(*) FROM calendars WHERE account_id = $2) AS "calendars!",
+            (SELECT count(*) FROM calendar_events WHERE source_link_id = $1) AS "events!",
+            (SELECT count(*) FROM calendar_event_sources WHERE source_link_id = $1) AS "sources!",
+            (SELECT count(*) FROM calendar_event_occurrences WHERE event_id = $3) AS "occurrences!",
+            (SELECT count(*) FROM calendar_event_reminder_deliveries WHERE event_id = $3) AS "deliveries!",
+            (SELECT count(*) FROM calendar_backfill_jobs WHERE email_link_id = $1) AS "jobs!"
+        "#,
+        link_id,
+        account_id,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(remaining.accounts, 0);
+    assert_eq!(remaining.calendars, 0);
+    assert_eq!(remaining.events, 0);
+    assert_eq!(remaining.sources, 0);
+    assert_eq!(remaining.occurrences, 0);
+    assert_eq!(remaining.deliveries, 0);
+    assert_eq!(remaining.jobs, 0);
+
+    // A notification for the closed channel no longer resolves to the inbox.
+    assert_eq!(
+        repo.find_watch_target(&channel_id.to_string(), "resource-1")
+            .await
+            .unwrap(),
+        None
+    );
+
+    let grant = sqlx::query!(
+        r#"
+        SELECT
+            granted_scopes,
+            grant_version,
+            (calendar_disabled_at IS NOT NULL) AS "opted_out!"
+        FROM email_link_google_scopes
+        WHERE link_id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        GoogleScopeSet::from_scopes(grant.granted_scopes),
+        GoogleScopeSet::parse("https://www.googleapis.com/auth/gmail.modify"),
+        "Gmail keeps working; only the calendar scopes leave the grant"
+    );
+    assert_eq!(grant.grant_version, 2);
+    assert!(grant.opted_out);
+}
+
+/// Consent requests carry `include_granted_scopes=true`, so a later Gmail-only
+/// connect reports the calendar scopes Google still holds. That must not
+/// resurrect calendar; only a flow that asked for calendar turns it back on.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reissued_grant_keeps_calendar_off_until_it_is_requested_again(pool: PgPool) {
+    let owner_id = "macro|calendar-reissued@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    connected_calendar(&pool, &repo, owner_id, link_id).await;
+    repo.disconnect_google_calendar(owner_id, link_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let incidental = repo
+        .apply_google_grant(
+            link_id,
+            gmail_and_calendar_grant(),
+            CalendarGrantIntent::Incidental,
+        )
+        .await
+        .unwrap();
+    assert!(!incidental.changed);
+    assert!(incidental.jobs.is_empty());
+    let held = sqlx::query!(
+        r#"
+        SELECT granted_scopes, (calendar_disabled_at IS NOT NULL) AS "opted_out!"
+        FROM email_link_google_scopes WHERE link_id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !GoogleScopeSet::from_scopes(held.granted_scopes).has_calendar_capability(),
+        "a scope that merely rode along must not be recorded"
+    );
+    assert!(held.opted_out);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) AS \"count!\" FROM calendar_accounts WHERE email_link_id = $1",
+            link_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+
+    let requested = repo
+        .apply_google_grant(
+            link_id,
+            gmail_and_calendar_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    assert!(requested.changed);
+    assert_eq!(requested.jobs.len(), 1);
+    let restored = sqlx::query!(
+        r#"
+        SELECT granted_scopes, (calendar_disabled_at IS NOT NULL) AS "opted_out!"
+        FROM email_link_google_scopes WHERE link_id = $1
+        "#,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(GoogleScopeSet::from_scopes(restored.granted_scopes).has_calendar_capability());
+    assert!(!restored.opted_out);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_owner_can_disconnect_an_inbox_calendar(pool: PgPool) {
+    let owner_id = "macro|calendar-owner@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    connected_calendar(&pool, &repo, owner_id, link_id).await;
+
+    assert!(
+        repo.disconnect_google_calendar("macro|delegate@example.com", link_id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) AS \"count!\" FROM calendar_accounts WHERE email_link_id = $1",
+            link_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1
+    );
 }

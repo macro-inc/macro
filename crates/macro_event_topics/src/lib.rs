@@ -69,6 +69,8 @@ topics! {
     MacroWebhooksTopic => "macro.webhooks",
     /// Entity mention events (created / deleted) across channels and docs.
     MacroMentionsTopic => "macro.mentions",
+    /// Notifications awaiting delivery through WebSocket connections.
+    MacroNotificationsTopic => "macro.notifications",
     /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
 }

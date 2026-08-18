@@ -45,7 +45,6 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { createMarkdownFile } from '@core/util/create';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -76,6 +75,7 @@ import { Button, Layer } from '@ui';
 import { $getRoot, COMMAND_PRIORITY_HIGH, type RangeSelection } from 'lexical';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -172,20 +172,6 @@ export function MarkdownPopup(props: {
   const { replaceOrInsertSplit } = useSplitLayout();
   let markdownRootRef!: HTMLDivElement;
 
-  const blockElem = blockElementSignal.get;
-  const [blockRect, setBlockRect] = createSignal<DOMRect>();
-
-  createEffect(() => {
-    const block = blockElem();
-    if (!block) return;
-    setBlockRect(block.getBoundingClientRect());
-    const { observe } = makeResizeObserver(() => {
-      setBlockRect(block.getBoundingClientRect());
-      editor.dispatchCommand(RECOMPUTE_SELECTION_RECT, undefined);
-    });
-    observe(block);
-  });
-
   const _selectedText = () => selection()?.text ?? undefined;
   const _selectedNodesText = () => selection()?.nodeText ?? undefined;
   const _selectionType = () => selection()?.type ?? undefined;
@@ -212,24 +198,36 @@ export function MarkdownPopup(props: {
   // kind of abstraction to encapsulate this.
   const [scrollYOffset, setScrollYOffset] = createSignal(0);
   const [contentTopOffset, setContentTopOffset] = createSignal(0);
+  const [portalScopeRect, setPortalScopeRect] = createSignal<DOMRect>();
 
   autoRegister(
     editor.registerRootListener((root) => {
       if (root) {
         const blockContent = root.closest('[data-block-content]');
+        const portalScope = root.closest<HTMLElement>('.portal-scope');
+
+        const updateGeometry = () => {
+          setContentTopOffset(blockContent?.getBoundingClientRect().top ?? 0);
+          setPortalScopeRect(portalScope?.getBoundingClientRect());
+          editor.dispatchCommand(RECOMPUTE_SELECTION_RECT, undefined);
+        };
+
         if (blockContent) {
-          const { observe } = makeResizeObserver(() => {
-            const top = blockContent?.getBoundingClientRect().top ?? 0;
-            setContentTopOffset(top);
-          });
+          const { observe } = makeResizeObserver(updateGeometry);
           observe(blockContent);
         }
+        if (portalScope && portalScope !== blockContent) {
+          const { observe } = makeResizeObserver(updateGeometry);
+          observe(portalScope);
+        }
+        updateGeometry();
 
         const scrollParent = getScrollParentElement(root);
         if (scrollParent) {
           const updateScrollY = () => {
             setScrollYOffset(scrollParent.scrollTop);
           };
+          updateScrollY();
           scrollParent.addEventListener('scroll', updateScrollY, {
             passive: true,
           });
@@ -792,9 +790,8 @@ export function MarkdownPopup(props: {
 
   const anchorRefPosition = () => {
     const sel = selection();
-    if (!showPopup()) return { left: 0, top: 0, width: 0, height: 0 };
-    const currentBlockRect = blockRect();
-    if (!currentBlockRect) return { left: 0, top: 0, width: 0, height: 0 };
+    const currentPortalScopeRect = portalScopeRect();
+    if (!showPopup() || !currentPortalScopeRect) return undefined;
 
     // if their is a highlight location then we have a rewrite in progress
     // and should pin to that.
@@ -802,36 +799,42 @@ export function MarkdownPopup(props: {
     const hlRect = highlightRect();
     if (hlLocation && hlRect) {
       return {
-        left: hlRect.left - currentBlockRect.left,
+        left: hlRect.left - currentPortalScopeRect.left,
         top: hlRect.top - contentTopOffset() + untrack(scrollYOffset),
         width: hlRect.width,
         height: hlRect.height,
       };
     }
 
-    if (!sel) return { left: 0, top: 0, width: 0, height: 0 };
+    if (!sel) return undefined;
     return {
-      left: sel.rect.left - currentBlockRect.left,
+      left: sel.rect.left - currentPortalScopeRect.left,
       top: sel.rect.top - contentTopOffset() + untrack(scrollYOffset),
       width: sel.rect.width,
       height: sel.rect.height,
     };
   };
 
+  const anchorPosition = createMemo(anchorRefPosition);
+
   return (
     <>
-      <ScopedPortal scope="local">
-        <div
-          ref={setAnchorRef}
-          class="absolute pointer-events-none"
-          style={{
-            left: `${anchorRefPosition().left}px`,
-            top: `${anchorRefPosition().top}px`,
-            width: `${anchorRefPosition().width}px`,
-            height: `${anchorRefPosition().height}px`,
-          }}
-        />
-      </ScopedPortal>
+      <Show when={anchorPosition()}>
+        {(position) => (
+          <ScopedPortal scope="local">
+            <div
+              ref={setAnchorRef}
+              class="absolute pointer-events-none"
+              style={{
+                left: `${position().left}px`,
+                top: `${position().top}px`,
+                width: `${position().width}px`,
+                height: `${position().height}px`,
+              }}
+            />
+          </ScopedPortal>
+        )}
+      </Show>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
           <Layer depth={2}>
