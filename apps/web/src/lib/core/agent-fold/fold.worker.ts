@@ -16,6 +16,7 @@
  */
 
 import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
+import { match } from 'ts-pattern';
 import type { FoldRequest, FoldResponse } from './protocol';
 import { type FoldStream, loadAgentFoldWasm } from './wasm-module';
 
@@ -37,51 +38,46 @@ let queue: Promise<void> = Promise.resolve();
 
 async function serve(request: FoldRequest): Promise<FoldResponse> {
   const wasm = await loadAgentFoldWasm();
-  const { id, kind, sessionId } = request;
 
-  switch (kind) {
-    case 'once':
-      return {
-        id,
-        kind,
-        ok: true,
-        messages: wasm.fold_session(sessionId, request.entries),
-      };
-
-    case 'open': {
+  return match(request)
+    .with({ kind: 'once' }, ({ id, kind, sessionId, entries }) => ({
+      id,
+      kind,
+      ok: true as const,
+      messages: wasm.fold_session(sessionId, entries),
+    }))
+    .with({ kind: 'open' }, ({ id, kind, sessionId, entries }) => {
       // A fresh machine even when one is already open: the entries are a
       // snapshot from the top of the log, so replaying them into a machine
       // that has already seen them would duplicate every message.
       streams.get(sessionId)?.free();
       const stream = new wasm.FoldStream(sessionId);
       streams.set(sessionId, stream);
-      return { id, kind, ok: true, messages: stream.extend(request.entries) };
-    }
-
-    case 'push': {
+      return { id, kind, ok: true as const, messages: stream.extend(entries) };
+    })
+    .with({ kind: 'push' }, ({ id, kind, sessionId, entries }) => {
       const stream = streams.get(sessionId);
       // Refusing rather than opening one: a machine seeded from the middle of
       // a log folds a session that never happened, and a caller that has lost
       // its machine needs to refetch, not to keep pushing.
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
       const changes: FoldedStreamEvent[] = [];
-      for (const entry of request.entries) {
+      for (const entry of entries) {
         changes.push(...stream.push(entry));
       }
-      return { id, kind, ok: true, changes };
-    }
-
-    case 'messages': {
+      return { id, kind, ok: true as const, changes };
+    })
+    .with({ kind: 'messages' }, ({ id, kind, sessionId }) => {
       const stream = streams.get(sessionId);
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
-      return { id, kind, ok: true, messages: stream.messages() };
-    }
-
-    case 'close':
+      return { id, kind, ok: true as const, messages: stream.messages() };
+    })
+    .with({ kind: 'close' }, ({ id, kind, sessionId }) => {
       streams.get(sessionId)?.free();
       streams.delete(sessionId);
-      return { id, kind, ok: true };
-  }
+      return { id, kind, ok: true as const };
+    })
+    .exhaustive();
 }
 
 scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {

@@ -59,6 +59,7 @@
       "crates/authentication_service_client",
       "crates/bot_id",
       "crates/bots",
+      "crates/broadcast",
       "crates/call",
       "crates/channel_sender",
       "crates/channels",
@@ -137,6 +138,7 @@
       "crates/authentication_service_client",
       "crates/bot_id",
       "crates/bots",
+      "crates/broadcast",
       "crates/call",
       "crates/channel_sender",
       "crates/channels",
@@ -210,7 +212,8 @@
       "services/agent_harness_service"
     ],
     "agent_runtime_protocol": [
-      "crates/agent_runtime_protocol"
+      "crates/agent_runtime_protocol",
+      "crates/macro_uuid"
     ],
     "agent_session": [
       "crates/activity",
@@ -223,6 +226,7 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bots",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
       "crates/connection_gateway_client",
@@ -280,6 +284,7 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bots",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
       "crates/connection_gateway_client",
@@ -337,6 +342,7 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bots",
+      "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
       "crates/connection_gateway_client",
@@ -889,8 +895,6 @@
     "bots": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -1007,8 +1011,6 @@
     "call": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -1198,8 +1200,6 @@
     "channels": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -1293,8 +1293,6 @@
     "comms_db_client": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -2001,7 +1999,6 @@
       "crates/agent",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",
-      "crates/agent_session",
       "crates/ai_tools",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -3257,8 +3254,6 @@
     "graphql_channel": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4736,8 +4731,6 @@
     "models_search": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4818,8 +4811,6 @@
     "models_soup": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4891,8 +4882,6 @@
     "name_search": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -5847,8 +5836,6 @@
     "search_service": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -5932,8 +5919,6 @@
     "search_service_client": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6164,8 +6149,6 @@
     "skills": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6249,8 +6232,6 @@
     "soup": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6686,8 +6667,6 @@
     "teams": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_fold",
-      "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/analytics_client",

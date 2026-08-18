@@ -25,6 +25,7 @@ import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
 export const agentProxyExcluded = [
   'agentProxyHealth',
+  'connectAgentRuntime',
 ] as const satisfies readonly (keyof AgentProxySdk)[];
 
 export const agentProxyBacklog =
@@ -258,8 +259,6 @@ export const storageExcluded = [
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
   'excludeDefaultViewHandler',
-  'getAgentSession',
-  'getAgentSessionLog',
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',

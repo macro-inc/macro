@@ -42,80 +42,11 @@ export type ToolPropertyTargetEntityType =
   | 'user'
   | 'company';
 /**
-<<<<<<<<<< conflict 1 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-  * Viewer-relative attendance status for a call record.
-  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
-  */
- export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
- /**
-  * Type of channel timeline window to read.
-  */
- export type ChannelMessagesWindowType =
-   | 'latest'
-   | 'timeRange'
-   | 'aroundMessage'
-   | 'page'
-   | 'messages';
- /**
-  * Which part of a thread to read.
-  */
- export type ChannelThreadWindowType = 'allIfSmall' | 'latest' | 'aroundReply';
- /**
-+ * A requested change to an event's video conference.
-+ */
-+export type ConferenceChangeInput = 'google_meet' | 'remove';
-+/**
-  * The content of the document
-  */
- export type Content =
-   | {
-       text: string;
-     }
-   | {
-       markdown: MarkdownNode[];
-     };
- /**
-  * A single node of a markdown document as seen by the AI.
-  */
- export type MarkdownNode =
-   | {
-       /**
-        * Human readable content
-        */
-       content: string;
-       /**
-        * The node id
-        */
-       nodeId: string;
-       /**
-        * The style on the node, h1, paragraph, code, etc.
-        */
-       tag: string;
-       type: 'generic';
-     }
-   | {
-       type: 'staticImage';
-       /**
-        * URL the image can be fetched from.
-        */
-       url: string;
-     }
-   | {
-       /**
-        * The DSS id of the image. Use the read tool with this id to read it.
-        */
-       id: string;
-       type: 'dssImage';
-     };
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
  * How search tools match query terms. Restricted to partial/exact — the
  * backend also supports regexp and an internal query mode, but those are not
  * offered to the model.
  */
 export type SearchMatchType = 'partial' | 'exact';
->>>>>>>>>> conflict 1 of 9 ends
 export type UnifiedSearchIndex =
   | 'documents'
   | 'chats'
@@ -181,31 +112,31 @@ export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
 export type EventTimeInput =
   | {
       /**
-       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
-       */
-      endsAt: string;
-      kind: 'timed';
-      /**
        * Inclusive start instant, RFC 3339 UTC (e.g. 2026-08-20T17:00:00Z).
        */
       startsAt: string;
+      /**
+       * Exclusive end instant, RFC 3339 UTC. Must be after the start.
+       */
+      endsAt: string;
       /**
        * IANA time zone the event was scheduled in (e.g.
        * America/New_York). Recurring events expand in this zone.
        */
       timeZone?: string | null;
+      kind: 'timed';
     }
   | {
+      /**
+       * Inclusive local start date (YYYY-MM-DD).
+       */
+      startDate: string;
       /**
        * Exclusive local end date (YYYY-MM-DD); the day after the last
        * covered day, so a one-day event ends the next date.
        */
       endDate: string;
       kind: 'allDay';
-      /**
-       * Inclusive local start date (YYYY-MM-DD).
-       */
-      startDate: string;
     };
 /**
  * External systems items can be imported from.
@@ -251,31 +182,10 @@ export type TagColor =
   | 'pink'
   | 'gray';
 /**
-<<<<<<<<<< conflict 2 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-+ * How much of a recurring series a deletion removes.
-+ */
-+export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
-+/**
-  * Where document content is, or is expected to be, read from.
-  */
- export type DocumentContentLocation =
-   | 'object_storage'
-   | 'sync_service'
-   | 'docx_bom_parts'
-   | 'converted_pdf'
-   | 'unknown';
- /**
-  * API-visible content lifecycle state derived from current document metadata.
-  */
- export type DocumentContentState = 'unknown' | 'pending' | 'ready';
- /**
-  * The document sub type enum represents all values of document sub types.
-  * These values should match the `document_sub_type_value` table in macrodb.
-  */
- export type DocumentSubType = 'task' | 'snippet' | 'skill';
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
+ * How much of a recurring series a deletion removes.
+ */
+export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
+/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -295,7 +205,6 @@ export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
   | 'recently_created';
->>>>>>>>>> conflict 2 of 9 ends
 export type EmailPreset = 'signal';
 /**
  * Item returned by the list entities AI tool.
@@ -303,23 +212,6 @@ export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       /**
-<<<<<<<<<< conflict 3 of 9
-++++++++++ przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-       * Which conferencing system backs the join URL.
-       */
-      conferenceProvider?: string | null;
-      /**
-       * Optional conference join URL.
-       */
-      conferenceUrl?: string | null;
-      /**
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
--       * Optional conference join URL.
--       */
--      conferenceUrl?: string | null;
--      /**
->>>>>>>>>> conflict 3 of 9 ends
        * Calendar event id.
        */
       id: string;
@@ -339,6 +231,10 @@ export type EntityItem =
        * Optional conference join URL.
        */
       conferenceUrl?: string | null;
+      /**
+       * Which conferencing system backs the join URL.
+       */
+      conferenceProvider?: string | null;
       /**
        * Canonical timed or all-day span.
        */
@@ -503,27 +399,20 @@ export type EntityItem =
       type: 'foreignEntity';
     };
 /**
-<<<<<<<<<< conflict 4 of 9
-++++++++++ przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
- * Entity types that can be returned by the list entities AI tool.
+ * User-facing notification categories used for list filtering.
  */
-export type ItemType =
-  | 'calendar_event'
-  | 'document'
-  | 'ai_chat'
-  | 'project'
+export type NotificationCategory =
   | 'email'
+  | 'message'
   | 'channel'
-  | 'channel_thread'
+  | 'document'
+  | 'project'
+  | 'chat'
   | 'call'
-  | 'foreign_entity';
-/**
- * Sort order for the list entities AI tool.
- */
-export type SortBy =
-  | 'recently_viewed'
-  | 'recently_updated'
-  | 'recently_created';
+  | 'task'
+  | 'github'
+  | 'reminder'
+  | 'calendar';
 /**
  * Canonical entity types accepted by the notification-listing tool.
  *
@@ -547,44 +436,6 @@ export type NotificationEntityType =
   | 'crm_contact'
   | 'reminder'
   | 'skill';
-/**
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
-- * Entity types that can be returned by the list entities AI tool.
-- */
--export type ItemType =
--  | 'calendar_event'
--  | 'document'
--  | 'ai_chat'
--  | 'project'
--  | 'email'
--  | 'channel'
--  | 'channel_thread'
--  | 'call'
--  | 'foreign_entity';
--/**
-- * Sort order for the list entities AI tool.
-- */
--export type SortBy =
--  | 'recently_viewed'
--  | 'recently_updated'
--  | 'recently_created';
--/**
->>>>>>>>>> conflict 4 of 9 ends
- * User-facing notification categories used for list filtering.
- */
-export type NotificationCategory =
-  | 'email'
-  | 'message'
-  | 'channel'
-  | 'document'
-  | 'project'
-  | 'chat'
-  | 'call'
-  | 'task'
-  | 'github'
-  | 'reminder'
-  | 'calendar';
 /**
  * The kind of entity to move.
  */
@@ -744,6 +595,10 @@ export type TextEditorCodeExecutionContent =
       type: 'text_editor_code_execution_tool_result_error';
     });
 /**
+ * A requested change to an event's video conference.
+ */
+export type ConferenceChangeInput = 'google_meet' | 'remove';
+/**
  * Content of a web fetch response - either a successful result or an error
  */
 export type WebFetchContent =
@@ -815,19 +670,6 @@ export type ReadThreadReadContent =
       type: 'itemPreviews';
     };
 
-/**
- * An attendee supplied to a calendar tool.
- */
-export interface AttendeeInput {
-  /**
-   * The attendee's email address.
-   */
-  email: string;
-  /**
-   * Whether attendance is optional for this attendee. Defaults to required.
-   */
-  isOptional?: boolean;
-}
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
  */
@@ -950,131 +792,6 @@ export interface BulkSetEntityPropertyOptionsResult {
    * A human-readable reason, present only when the status is failed.
    */
   error?: string | null;
-<<<<<<<<<< conflict 5 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-   /**
-    * One of: applied, skipped_no_permission, failed.
-    */
-   status: string;
- }
-+/**
-+ * One calendar event occurrence in the requested window.
-+ */
-+export interface CalendarEventListItem {
-+  /**
-+   * Total number of attendees.
-+   */
-+  attendeeCount: number;
-+  /**
-+   * Attendees, capped at 20; `attendee_count` has the full number.
-+   */
-+  attendees: ToolEventAttendee[];
-+  /**
-+   * Calendar the event belongs to, when known.
-+   */
-+  calendarId?: string | null;
-+  /**
-+   * Conference join URL, when a conference is attached.
-+   */
-+  conferenceUrl?: string | null;
-+  /**
-+   * Event body, truncated for brevity.
-+   */
-+  description?: string | null;
-+  /**
-+   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
-+   * all-day events.
-+   */
-+  end: string;
-+  /**
-+   * Macro calendar event id, used by UpdateCalendarEvent and
-+   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
-+   */
-+  eventId: string;
-+  /**
-+   * Whether the event covers whole days.
-+   */
-+  isAllDay: boolean;
-+  /**
-+   * Whether the user's calendar prohibits modifying this event.
-+   */
-+  isReadOnly: boolean;
-+  /**
-+   * Whether this occurrence belongs to a recurring series.
-+   */
-+  isRecurring: boolean;
-+  /**
-+   * Location label, when set.
-+   */
-+  location?: string | null;
-+  /**
-+   * The user's own RSVP on this event, when they are an attendee.
-+   */
-+  myResponse?: string | null;
-+  /**
-+   * Organizer email address, when known.
-+   */
-+  organizerEmail?: string | null;
-+  /**
-+   * Occurrence key identifying this instance within its recurring series;
-+   * pass as `recurrenceId` for occurrence-scoped deletion.
-+   */
-+  recurrenceId?: string | null;
-+  /**
-+   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
-+   * events.
-+   */
-+  start: string;
-+  /**
-+   * Event status: confirmed or tentative.
-+   */
-+  status: string;
-+  /**
-+   * IANA time zone the event was scheduled in, when known.
-+   */
-+  timeZone?: string | null;
-+  /**
-+   * Display title.
-+   */
-+  title: string;
-+}
-+/**
-+ * An attendee of a calendar event, as returned by calendar tools.
-+ */
-+export interface ToolEventAttendee {
-+  /**
-+   * Attendee email address.
-+   */
-+  email: string;
-+  /**
-+   * Whether attendance is optional.
-+   */
-+  isOptional: boolean;
-+  /**
-+   * Whether this attendee organized the event.
-+   */
-+  isOrganizer: boolean;
-+  /**
-+   * RSVP state: needs_action, accepted, declined, or tentative.
-+   */
-+  responseStatus: string;
-+}
- export interface CallRecordMetadata {
-   attended: boolean;
-   channel_name?: string | null;
-   created_by: string;
-   duration_ms: number;
-   ended_at: string;
-   started_at: string;
-   status: CallStatus;
-   updated_at: string;
- }
- export interface CallRecordSearchResponseItemWithMetadata {
-   call_id: string;
-   call_search_results: CallRecordSearchResult[];
-   channel_id: string;
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
@@ -1140,7 +857,6 @@ export interface DocumentSearchResponseItemWithMetadata {
    * These field names are being aligned across all item types
    * for consistency in our data model.
    */
->>>>>>>>>> conflict 5 of 9 ends
   id: string;
   name: string;
   owner_id: string;
@@ -1630,17 +1346,10 @@ export interface CrmCompanySearchDomain {
  */
 export interface CreateCalendarEvent {
   /**
-   * Attach a freshly generated Google Meet video conference to the event.
+   * The event title.
    */
-  addGoogleMeet?: boolean;
-  /**
-   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
-   */
-  attendees?: AttendeeInput[];
-  /**
-   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
-   */
-  calendarId?: string | null;
+  title: string;
+  time: EventTimeInput;
   /**
    * Optional event body/description.
    */
@@ -1650,14 +1359,130 @@ export interface CreateCalendarEvent {
    */
   location?: string | null;
   /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
    * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
    */
   recurrenceLines?: string[];
-  time: EventTimeInput;
   /**
-   * The event title.
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+}
+/**
+ * An attendee supplied to a calendar tool.
+ */
+export interface AttendeeInput {
+  /**
+   * The attendee's email address.
+   */
+  email: string;
+  /**
+   * Whether attendance is optional for this attendee. Defaults to required.
+   */
+  isOptional?: boolean;
+}
+/**
+ * A calendar event as returned by the create and update tools.
+ */
+export interface ToolCalendarEvent {
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent.
+   */
+  eventId: string;
+  /**
+   * Display title.
    */
   title: string;
+  /**
+   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
+   */
+  start: string;
+  /**
+   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  end: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Event status: confirmed, tentative, or cancelled.
+   */
+  status: string;
+  /**
+   * Whether the event recurs.
+   */
+  isRecurring: boolean;
+  /**
+   * Raw RFC 5545 recurrence properties, when the event recurs.
+   */
+  recurrenceLines: string[];
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
+}
+/**
+ * An attendee of a calendar event, as returned by calendar tools.
+ */
+export interface ToolEventAttendee {
+  /**
+   * Attendee email address.
+   */
+  email: string;
+  /**
+   * RSVP state: needs_action, accepted, declined, or tentative.
+   */
+  responseStatus: string;
+  /**
+   * Whether this attendee organized the event.
+   */
+  isOrganizer: boolean;
+  /**
+   * Whether attendance is optional.
+   */
+  isOptional: boolean;
 }
 /**
  * Create a plaintext document.
@@ -1825,17 +1650,67 @@ export interface CreateReminder {
    */
   description: string;
   /**
-   * Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType.
+   * When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description.
    */
-  entityId?: string | null;
+  remindAt: string;
   /**
    * Type of the thing the reminder is about — one of document, ai_chat, project, email, channel, call, calendar_event. Requires entityId; omit both for a standalone reminder.
    */
   entityType?: ReminderEntityType | null;
   /**
-   * When to fire, as an RFC 3339 timestamp in UTC (e.g. "2026-08-08T14:00:00Z"). Must be in the future. Seconds are dropped, so a reminder fires on the minute. Convert from the user's local timezone before sending — see "Times are UTC" in the tool description.
+   * Id of the thing the reminder is about, as a UUID. Must be the id of an entity of entityType — for a channel_thread row that means its channelId, not its own id. Requires entityType.
    */
-  remindAt: string;
+  entityId?: string | null;
+}
+/**
+ * A reminder as the model sees it.
+ */
+export interface ToolReminder {
+  /**
+   * The reminder's id. Pass this to UpdateReminder or DeleteReminder.
+   */
+  id: string;
+  /**
+   * What the user wanted to be reminded about.
+   */
+  description: string;
+  /**
+   * When the reminder fires next, RFC 3339 in UTC. The user thinks in their
+   * own timezone — convert before quoting this back to them.
+   */
+  nextRunAt: string;
+  /**
+   * Whether `nextRunAt` has already passed, evaluated against the server
+   * clock. An overdue reminder is one the user has been notified about and
+   * has not dealt with yet.
+   */
+  overdue: boolean;
+  /**
+   * For a repeating reminder, its cron expression and timezone. Absent on a
+   * one-shot, which is everything this toolset can create.
+   */
+  recurrence?: string | null;
+  /**
+   * The type of thing the reminder is about, when it is about something and
+   * that type is one these tools name. The app can attach a reminder to
+   * kinds of thing this list does not cover, so `entityId` may be present
+   * with no `entityType` beside it — the reminder is about something, but
+   * not something these tools can name or filter on.
+   */
+  entityType?: ReminderEntityType | null;
+  /**
+   * The id of the thing the reminder is about.
+   */
+  entityId?: string | null;
+  /**
+   * Whether the user has marked the reminder as dealt with.
+   */
+  completed: boolean;
+  /**
+   * Whether the reminder will fire at all. A disabled reminder keeps its
+   * schedule but is skipped by the dispatcher.
+   */
+  enabled: boolean;
 }
 /**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
@@ -1875,103 +1750,35 @@ export interface CreateTagResponse {
   summary: string;
 }
 /**
-<<<<<<<<<< conflict 6 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-  * A CRM domain attached to a company in search results.
-  */
- export interface CrmCompanySearchDomain {
-   /**
-    * The id of the company the domain belongs to.
-    */
-   companyId: string;
-   /**
-    * When the domain record was created.
-    */
-   createdAt: string;
-   /**
-    * The domain (lowercased, e.g. "acme.com").
-    */
-   domain: string;
-   /**
-    * The id of the domain record.
-    */
-   id: string;
- }
- /**
-  * A CRM company match in unified search results. Carries the display
-  * metadata resolved from the primary domain plus the highlighted name.
-  */
- export interface CrmCompanySearchResponseItem {
-   /**
-    * When the company was created.
-    */
-   createdAt: string;
-   /**
-    * Display description from the primary domain's directory entry.
-    */
-   description?: string | null;
-   /**
-    * Domains associated with this company, primary first.
-    */
-   domains: CrmCompanySearchDomain[];
-   /**
-    * Whether the company is hidden from CRM listings.
-    */
-   hidden: boolean;
-   /**
-    * The id of the company.
-    */
-   id: string;
-   /**
-    * Display name from the primary domain's directory entry.
-    */
-   name?: string | null;
-   /**
-    * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
-    */
-   nameHighlighted?: string | null;
-   /**
-    * The id of the team that owns this company record.
-    */
-   teamId: string;
-   /**
-    * When the company was last updated (the sort key).
-    */
-   updatedAt: string;
- }
- /**
-+ * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
-+ *
-+ * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
-+ */
-+export interface DeleteCalendarEvent {
-+  /**
-+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
-+   */
-+  eventId: string;
-+  /**
-+   * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
-+   */
-+  recurrenceId?: string | null;
-+  scope?: DeletionScopeInput;
-+}
-+/**
-+ * Response from the DeleteCalendarEvent tool.
-+ */
-+export interface DeleteCalendarEventResponse {
-+  /**
-+   * The id of the deleted event.
-+   */
-+  eventId: string;
-+  /**
-+   * A human-readable confirmation of what was removed.
-+   */
-+  summary: string;
-+}
-+/**
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
->>>>>>>>>> conflict 6 of 9 ends
+ * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
+ *
+ * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
+ */
+export interface DeleteCalendarEvent {
+  /**
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
+   */
+  eventId: string;
+  scope?: DeletionScopeInput;
+  /**
+   * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
+   */
+  recurrenceId?: string | null;
+}
+/**
+ * Response from the DeleteCalendarEvent tool.
+ */
+export interface DeleteCalendarEventResponse {
+  /**
+   * The id of the deleted event.
+   */
+  eventId: string;
+  /**
+   * A human-readable confirmation of what was removed.
+   */
+  summary: string;
+}
+/**
  * Decline a staged import candidate on the user's behalf. The item is remembered as declined so it won't be proposed again; only the user's own staged items can be declined.
  */
 export interface DeleteImportEntity {
@@ -2486,13 +2293,13 @@ export interface ImportNotionPageResponse {
  */
 export interface ListCalendarEvents {
   /**
-   * Exclusive window end, RFC 3339 UTC. Must be after start.
-   */
-  end: string;
-  /**
    * Inclusive window start, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z).
    */
   start: string;
+  /**
+   * Exclusive window end, RFC 3339 UTC. Must be after start.
+   */
+  end: string;
 }
 /**
  * Response from the ListCalendarEvents tool.
@@ -2503,19 +2310,100 @@ export interface ListCalendarEventsResponse {
    */
   events: CalendarEventListItem[];
   /**
-   * A human-readable summary of the result.
+   * Whether the window held more occurrences than were returned; narrow
+   * the window to see the rest.
    */
-  summary: string;
+  truncated: boolean;
   /**
    * `syncing` while any connected calendar is still ingesting — results
    * may be incomplete — or `ready`.
    */
   syncStatus: string;
   /**
-   * Whether the window held more occurrences than were returned; narrow
-   * the window to see the rest.
+   * A human-readable summary of the result.
    */
-  truncated: boolean;
+  summary: string;
+}
+/**
+ * One calendar event occurrence in the requested window.
+ */
+export interface CalendarEventListItem {
+  /**
+   * Macro calendar event id, used by UpdateCalendarEvent and
+   * DeleteCalendarEvent. Recurring events repeat it across occurrences.
+   */
+  eventId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Occurrence start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
+   * events.
+   */
+  start: string;
+  /**
+   * Exclusive occurrence end: RFC 3339 UTC instant, or YYYY-MM-DD for
+   * all-day events.
+   */
+  end: string;
+  /**
+   * Whether the event covers whole days.
+   */
+  isAllDay: boolean;
+  /**
+   * IANA time zone the event was scheduled in, when known.
+   */
+  timeZone?: string | null;
+  /**
+   * Location label, when set.
+   */
+  location?: string | null;
+  /**
+   * Event body, truncated for brevity.
+   */
+  description?: string | null;
+  /**
+   * Event status: confirmed or tentative.
+   */
+  status: string;
+  /**
+   * Whether this occurrence belongs to a recurring series.
+   */
+  isRecurring: boolean;
+  /**
+   * Occurrence key identifying this instance within its recurring series;
+   * pass as `recurrenceId` for occurrence-scoped deletion.
+   */
+  recurrenceId?: string | null;
+  /**
+   * Attendees, capped at 20; `attendee_count` has the full number.
+   */
+  attendees: ToolEventAttendee[];
+  /**
+   * Total number of attendees.
+   */
+  attendeeCount: number;
+  /**
+   * The user's own RSVP on this event, when they are an attendee.
+   */
+  myResponse?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  organizerEmail?: string | null;
+  /**
+   * Conference join URL, when a conference is attached.
+   */
+  conferenceUrl?: string | null;
+  /**
+   * Whether the user's calendar prohibits modifying this event.
+   */
+  isReadOnly: boolean;
+  /**
+   * Calendar the event belongs to, when known.
+   */
+  calendarId?: string | null;
 }
 /**
  * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
@@ -2546,6 +2434,10 @@ export interface ToolCalendar {
    */
   calendarId: string;
   /**
+   * Provider display name.
+   */
+  name: string;
+  /**
    * Connected inbox address the calendar belongs to.
    */
   emailAddress: string;
@@ -2558,10 +2450,6 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
-  /**
-   * Provider display name.
-   */
-  name: string;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
@@ -2874,44 +2762,17 @@ export interface ListNotifications {
    */
   done?: boolean | null;
   /**
-<<<<<<<<<< conflict 7 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
--   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
-+   * Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread.
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
    * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
    */
   seen?: boolean | null;
   /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
-  includeTypes?: NotificationItemType[] | null;
+  includeTypes?: NotificationCategory[] | null;
   /**
-   * Filter to notifications for specific entities. Pair each id with entityType to avoid ambiguity. Example: [{"entityType":"email","id":"..."}] returns notifications for one email thread.
->>>>>>>>>> conflict 7 of 9 ends
+   * Filter to notifications for specific entities. Pair each id with its canonical entityType to avoid ambiguity. Example: [{"entityType":"email_thread","id":"..."}] returns notifications for one email thread.
    */
-<<<<<<<<<< conflict 8 of 9
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
--  entities?: NotificationEntityRef[] | null;
-+  entities?: NotificationEntityFilter[] | null;
-   /**
-    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
-    */
--  includeTypes?: NotificationItemType[] | null;
-+  includeTypes?: NotificationCategory[] | null;
-   /**
-    * Maximum number of notifications to return. Defaults to 20, max 50.
-    */
-   limit?: number | null;
-   /**
-    * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
-    */
-   seen?: boolean | null;
-++++++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
-  entities?: NotificationEntityRef[] | null;
->>>>>>>>>> conflict 8 of 9 ends
+  entities?: NotificationEntityFilter[] | null;
 }
 /**
  * User-facing reference to one specific entity to filter notifications by.
@@ -2995,29 +2856,29 @@ export interface NotificationItem {
  */
 export interface ListReminders {
   /**
-   * Filter on whether the user has marked the reminder done. Defaults to false — only reminders still outstanding. Set true for ones already dealt with.
+   * Return only these reminders, by id. Use this to re-read a reminder you already know the id of. Omit to list all of them.
    */
-  completed?: boolean | null;
-  /**
-   * Return only reminders attached to the thing with this id. Requires entityType.
-   */
-  entityId?: string | null;
+  reminderIds?: string[] | null;
   /**
    * Return only reminders attached to a thing of this type. Requires entityId.
    */
   entityType?: ReminderEntityType | null;
   /**
-   * Maximum number of reminders to return. Defaults to 20, capped at 100.
+   * Return only reminders attached to the thing with this id. Requires entityType.
    */
-  limit?: number | null;
+  entityId?: string | null;
+  /**
+   * Filter on whether the user has marked the reminder done. Defaults to false — only reminders still outstanding. Set true for ones already dealt with.
+   */
+  completed?: boolean | null;
   /**
    * Filter on whether the reminder has already fired. True returns only reminders past their time, false only ones still upcoming. Omit for both.
    */
   overdue?: boolean | null;
   /**
-   * Return only these reminders, by id. Use this to re-read a reminder you already know the id of. Omit to list all of them.
+   * Maximum number of reminders to return. Defaults to 20, capped at 100.
    */
-  reminderIds?: string[] | null;
+  limit?: number | null;
 }
 /**
  * Response from the ListReminders tool.
@@ -3031,56 +2892,6 @@ export interface ListRemindersResponse {
    * A human-readable summary of what came back.
    */
   summary: string;
-}
-/**
- * A reminder as the model sees it.
- */
-export interface ToolReminder {
-  /**
-   * Whether the user has marked the reminder as dealt with.
-   */
-  completed: boolean;
-  /**
-   * What the user wanted to be reminded about.
-   */
-  description: string;
-  /**
-   * Whether the reminder will fire at all. A disabled reminder keeps its
-   * schedule but is skipped by the dispatcher.
-   */
-  enabled: boolean;
-  /**
-   * The id of the thing the reminder is about.
-   */
-  entityId?: string | null;
-  /**
-   * The type of thing the reminder is about, when it is about something and
-   * that type is one these tools name. The app can attach a reminder to
-   * kinds of thing this list does not cover, so `entityId` may be present
-   * with no `entityType` beside it — the reminder is about something, but
-   * not something these tools can name or filter on.
-   */
-  entityType?: ReminderEntityType | null;
-  /**
-   * The reminder's id. Pass this to UpdateReminder or DeleteReminder.
-   */
-  id: string;
-  /**
-   * When the reminder fires next, RFC 3339 in UTC. The user thinks in their
-   * own timezone — convert before quoting this back to them.
-   */
-  nextRunAt: string;
-  /**
-   * Whether `nextRunAt` has already passed, evaluated against the server
-   * clock. An overdue reminder is one the user has been notified about and
-   * has not dealt with yet.
-   */
-  overdue: boolean;
-  /**
-   * For a repeating reminder, its cron expression and timezone. Absent on a
-   * one-shot, which is everything this toolset can create.
-   */
-  recurrence?: string | null;
 }
 /**
  * List the skills the user can access, most recently updated first. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadContent using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name, prefer SearchSkills.
@@ -4544,127 +4355,43 @@ export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
 }
 /**
-<<<<<<<<<< conflict 9 of 9
-++++++++++ przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
- * Response from text_editor_code_execution tool
- */
-export interface TextEditorCodeExecutionResponse {
-  content: TextEditorCodeExecutionContent;
-  tool_use_id: string;
-}
-/**
- * A calendar event as returned by the create and update tools.
- */
-export interface ToolCalendarEvent {
-  /**
-   * Total number of attendees.
-   */
-  attendeeCount: number;
-  /**
-   * Attendees, capped at 20; `attendee_count` has the full number.
-   */
-  attendees: ToolEventAttendee[];
-  /**
-   * Calendar the event belongs to, when known.
-   */
-  calendarId?: string | null;
-  /**
-   * Conference join URL, when a conference is attached.
-   */
-  conferenceUrl?: string | null;
-  /**
-   * Event body, truncated for brevity.
-   */
-  description?: string | null;
-  /**
-   * Exclusive event end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day
-   * events.
-   */
-  end: string;
-  /**
-   * Macro calendar event id, used by UpdateCalendarEvent and
-   * DeleteCalendarEvent.
-   */
-  eventId: string;
-  /**
-   * Whether the event covers whole days.
-   */
-  isAllDay: boolean;
-  /**
-   * Whether the user's calendar prohibits modifying this event.
-   */
-  isReadOnly: boolean;
-  /**
-   * Whether the event recurs.
-   */
-  isRecurring: boolean;
-  /**
-   * Location label, when set.
-   */
-  location?: string | null;
-  /**
-   * Organizer email address, when known.
-   */
-  organizerEmail?: string | null;
-  /**
-   * Raw RFC 5545 recurrence properties, when the event recurs.
-   */
-  recurrenceLines: string[];
-  /**
-   * Event start: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
-   */
-  start: string;
-  /**
-   * Event status: confirmed, tentative, or cancelled.
-   */
-  status: string;
-  /**
-   * IANA time zone the event was scheduled in, when known.
-   */
-  timeZone?: string | null;
-  /**
-   * Display title.
-   */
-  title: string;
-}
-/**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
  *
  * Passing `attendees` replaces the full attendee list — include everyone who should remain, not just additions. An empty string for `description` or `location` clears it. Updating a recurring event changes the whole series. Fails on events from calendars the user cannot edit.
  */
 export interface UpdateCalendarEvent {
   /**
-   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
+   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
    */
-  attendees?: AttendeeInput[] | null;
+  eventId: string;
   /**
-   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   * Replacement title. Omit to keep the current title.
    */
-  conference?: ConferenceChangeInput | null;
+  title?: string | null;
   /**
    * Replacement event body/description. An empty string clears it; omit to keep the current one.
    */
   description?: string | null;
   /**
-   * The event's id, from ListCalendarEvents or CreateCalendarEvent.
-   */
-  eventId: string;
-  /**
    * Replacement location label. An empty string clears it; omit to keep the current one.
    */
   location?: string | null;
-  /**
-   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence.
-   */
-  recurrenceLines?: string[] | null;
   /**
    * Replacement time: a timed span with `kind` "timed" (startsAt, endsAt, optional timeZone) or whole days with `kind` "allDay" (startDate, exclusive endDate). Omit to keep the current time.
    */
   time?: EventTimeInput | null;
   /**
-   * Replacement title. Omit to keep the current title.
+   * Replacement attendee list — replaces all current attendees, so include everyone who should remain. Omit to leave attendees unchanged.
    */
-  title?: string | null;
+  attendees?: AttendeeInput[] | null;
+  /**
+   * Replacement RFC 5545 recurrence lines. An empty list makes the event one-off; omit to keep the current recurrence.
+   */
+  recurrenceLines?: string[] | null;
+  /**
+   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   */
+  conference?: ConferenceChangeInput | null;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.
@@ -4691,9 +4418,9 @@ export interface UpdateCalendarEvent {
  */
 export interface UpdateReminder {
   /**
-   * Mark the reminder as dealt with (true) or put it back on the active list (false).
+   * The id of the reminder to change.
    */
-  completed?: boolean | null;
+  reminderId: string;
   /**
    * Replacement reminder text. Max 2000 characters.
    */
@@ -4703,21 +4430,11 @@ export interface UpdateReminder {
    */
   remindAt?: string | null;
   /**
-   * The id of the reminder to change.
+   * Mark the reminder as dealt with (true) or put it back on the active list (false).
    */
-  reminderId: string;
+  completed?: boolean | null;
 }
 /**
-%%%%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\\\\        to: pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
-- * Response from text_editor_code_execution tool
-- */
--export interface TextEditorCodeExecutionResponse {
--  content: TextEditorCodeExecutionContent;
--  tool_use_id: string;
--}
--/**
->>>>>>>>>> conflict 9 of 9 ends
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
  *
  * Workflow: call ListLabels first to discover the UUID `id` for the label name you need, then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` (apply) or `add=false` (remove). Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.

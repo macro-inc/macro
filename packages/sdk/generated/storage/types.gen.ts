@@ -9,12 +9,6 @@ export type ClientOptions = {
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
-export type Activity = {
-    Document: BasicDocument;
-} | {
-    Chat: Chat;
-};
-
 /**
  * The kind of activity a user performs in a channel.
  */
@@ -53,116 +47,6 @@ export type AddPinRequest = {
      * The type of the pin
      */
     pinType: string;
-};
-
-/**
- * One entry of a session's protocol log.
- *
- * Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
- * frame's own two fields, flattened in beside the attribution, which is the
- * same shape a recorded session's JSONL carries. A reader can deserialize the
- * `direction`/`content` pair straight back into the fold's own log type
- * rather than through a transport vocabulary of its own.
- *
- * `agentSessionId` is not repeated per entry: every entry in a response
- * belongs to the session named once at the top.
- *
- * `Deserialize` is for the wire-contract tests only - nothing server-side
- * decodes its own response type.
- */
-export type AgentSessionLogEntryDto = LogFrameDto & {
-    /**
-     * When the log recorded the frame.
-     *
-     * The frame itself carries no time, so this comes from the log row. It is
-     * what a reader has to order these against anything else it is showing
-     * beside them - the fold derives an order among the messages of one
-     * session and nothing more.
-     */
-    createdAt: string;
-    /**
-     * The user whose action produced the frame, absent when no user did.
-     *
-     * Only prompts carry one, and only when the frame was attributed at the
-     * time - a replayed or recorded session's are anonymous.
-     */
-    userId?: string | null;
-};
-
-/**
- * Response body for one session's raw protocol log.
- *
- * A wrapper rather than a bare array so that anything which is about the
- * response rather than about a frame has somewhere to go later without
- * breaking every client.
- */
-export type AgentSessionLogResponse = {
-    /**
-     * The agent whose messages the log derives.
-     *
-     * Here because a client renders those messages and cannot otherwise work
-     * out who sent them: the sender of an agent message is this session's
-     * bot, and nothing else names it.
-     */
-    bot: SessionBot;
-    /**
-     * Every logged frame, oldest first. Folding depends on this order.
-     */
-    entries: Array<AgentSessionLogEntryDto>;
-};
-
-/**
- * Response body describing an agent session.
- */
-export type AgentSessionResponse = {
-    /**
-     * The ACP session id, if one exists.
-     */
-    acpSessionId?: string | null;
-    /**
-     * The bot running the agent.
-     */
-    botId: string;
-    /**
-     * When the session was created.
-     */
-    createdAt: string;
-    /**
-     * Harness slug.
-     */
-    harness: string;
-    /**
-     * The session id.
-     */
-    id: string;
-    /**
-     * Model slug.
-     */
-    model: string;
-    /**
-     * When the session was last modified.
-     */
-    modifiedAt: string;
-    /**
-     * The exact message that invoked the bot, if any.
-     */
-    originatingMessageId?: string | null;
-    /**
-     * The user who created and owns the session.
-     */
-    ownerId: string;
-    /**
-     * The repository the session works with.
-     */
-    repoUrl: string;
-    /**
-     * The session's status.
-     */
-    status: SessionStatusDto;
-    /**
-     * The root message of the thread the session was created from, if any.
-     */
-    threadId?: string | null;
 };
 
 export type Anchor = PdfAnchor;
@@ -1323,6 +1207,7 @@ export type CalendarEvent = {
      * projections stored before calendars were attributed.
      */
     calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
     /**
      * Direct join URL when known.
      */
@@ -2648,6 +2533,22 @@ export type CommentThread = {
 };
 
 /**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
  * Query parameters for the copy document endpoint.
  */
 export type CopyDocumentQueryParams = {
@@ -3184,6 +3085,10 @@ export type CreateTaskResponse = {
      * Metadata for the created document
      */
     documentMetadata: DocumentResponseMetadata;
+    /**
+     * Base64-encoded canonical Loro snapshot used to initialize the task.
+     */
+    initialSnapshot: string;
     /**
      * The team this task number is scoped to.
      */
@@ -4977,17 +4882,6 @@ export type GenericSuccessResponse = {
 };
 
 /**
- * @deprecated
- */
-export type GetActivitiesResponse = {
-    data?: null | UserActivitiesResponse;
-    /**
-     * Indicates if an error occurred
-     */
-    error: boolean;
-};
-
-/**
  * Response from the attachment-references endpoint.
  */
 export type GetAttachmentReferencesResponse = {
@@ -5606,6 +5500,11 @@ export type LeaveCallResponse = {
 };
 
 /**
+ * Defines who can access an item through its share link.
+ */
+export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
  * Webhooks visible to the caller across their personal and team workspaces.
  */
 export type ListWebhooksResponse = {
@@ -5668,34 +5567,6 @@ export type LocationResponseV3 = {
      */
     metadata: DocumentBasic;
     type: 'syncServiceContent';
-};
-
-/**
- * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
- */
-export type LogDirectionDto = 'to_server' | 'to_runtime';
-
-/**
- * The two fields [`AgentSessionLogEntryDto`] flattens in.
- *
- * Schema only. Nothing constructs one: the entry serializes through
- * [`Message`], and this exists so the generated clients see `direction` and
- * `content` as named fields instead of an open map. A hand-built copy could
- * drift from the fold's wire format, and the point of the endpoint is that it
- * cannot - so this describes that format without being able to produce it.
- */
-export type LogFrameDto = {
-    /**
-     * The protocol envelope, verbatim. Opaque here: it is Agent Runtime
-     * Protocol, whose shape belongs to the fold rather than this endpoint.
-     */
-    content: {
-        [key: string]: unknown;
-    };
-    /**
-     * Which way the frame travelled.
-     */
-    direction: LogDirectionDto;
 };
 
 export type MacroUserIdStr = string;
@@ -6625,40 +6496,6 @@ export type SaveDocumentResponseData = {
 };
 
 /**
- * The agent behind a session, as much of it as rendering a message needs.
- */
-export type SessionBot = {
-    /**
-     * Avatar, when it has one.
-     */
-    avatarUrl?: string | null;
-    /**
-     * The bot's id. A message it sent has `"bot|{id}"` as its sender.
-     */
-    id: BotId;
-    /**
-     * Display name.
-     */
-    name: string;
-};
-
-/**
- * Transport representation of a session's status, mirroring
- * [`SessionStatus`].
- */
-export type SessionStatusDto = {
-    kind: 'no_messages';
-} | {
-    /**
-     * The wire name of the system event, e.g. `acp_ready`.
-     */
-    event: string;
-    kind: 'event';
-} | {
-    kind: 'disconnected';
-};
-
-/**
  * Request body for `PUT /companies/{company_id}/hidden`.
  */
 export type SetCompanyHiddenRequest = {
@@ -6781,15 +6618,12 @@ export type SharePermissionV2 = {
      * The share permission id
      */
     id: string;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic: boolean;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
     /**
      * The owner of the item
      */
     owner: string;
-    publicAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6917,6 +6751,10 @@ export type SoupCalendarEventTime = {
  * A canonical calendar event entity in Soup.
  */
 export type SoupCalendarEventSoupPropertiesField = {
+    /**
+     * Which conferencing system backs `conference_url`.
+     */
+    conferenceProvider?: string | null;
     /**
      * Direct conference join URL.
      */
@@ -8217,11 +8055,8 @@ export type UpdateSharePermissionRequestV2 = {
      * Any channel share permissions to be created/updated/removed
      */
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
-    /**
-     * If the item is publicly accessible
-     */
-    isPublic?: boolean | null;
-    publicAccessLevel?: null | AccessLevel;
+    linkShare?: null | LinkShare;
+    linkShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -8258,24 +8093,6 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
-};
-
-/**
- * @deprecated
- */
-export type UserActivitiesResponse = {
-    /**
-     * The next offset to be used if there is one
-     */
-    next_offset?: number | null;
-    /**
-     * The activities returned from the query
-     */
-    recent: Array<Activity>;
-    /**
-     * The total number of activities the user has
-     */
-    total: number;
 };
 
 /**
@@ -8518,88 +8335,6 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
-
-export type GetRecentActivityHandlerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * The maximum number of items to retreive. Default 10, max 100.
-         */
-        limit: number;
-        /**
-         * The offset to start from. Default 0.
-         */
-        offset: number;
-    };
-    url: '/activity';
-};
-
-export type GetRecentActivityHandlerErrors = {
-    400: GenericErrorResponse;
-    401: GenericErrorResponse;
-    500: GenericErrorResponse;
-};
-
-export type GetRecentActivityHandlerError = GetRecentActivityHandlerErrors[keyof GetRecentActivityHandlerErrors];
-
-export type GetRecentActivityHandlerResponses = {
-    200: GetActivitiesResponse;
-};
-
-export type GetRecentActivityHandlerResponse = GetRecentActivityHandlerResponses[keyof GetRecentActivityHandlerResponses];
-
-export type GetAgentSessionData = {
-    body?: never;
-    path: {
-        /**
-         * ID of the agent session
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/agent-sessions/{session_id}';
-};
-
-export type GetAgentSessionErrors = {
-    401: string;
-    403: string;
-    500: string;
-};
-
-export type GetAgentSessionError = GetAgentSessionErrors[keyof GetAgentSessionErrors];
-
-export type GetAgentSessionResponses = {
-    200: AgentSessionResponse;
-};
-
-export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
-
-export type GetAgentSessionLogData = {
-    body?: never;
-    path: {
-        /**
-         * ID of the agent session
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/agent-sessions/{session_id}/log';
-};
-
-export type GetAgentSessionLogErrors = {
-    401: string;
-    403: string;
-    500: string;
-};
-
-export type GetAgentSessionLogError = GetAgentSessionLogErrors[keyof GetAgentSessionLogErrors];
-
-export type GetAgentSessionLogResponses = {
-    200: AgentSessionLogResponse;
-};
-
-export type GetAgentSessionLogResponse = GetAgentSessionLogResponses[keyof GetAgentSessionLogResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -10874,6 +10609,10 @@ export type CreateTaskHandlerResponses = {
          * Metadata for the created document
          */
         documentMetadata: DocumentResponseMetadata;
+        /**
+         * Base64-encoded canonical Loro snapshot used to initialize the task.
+         */
+        initialSnapshot: string;
         /**
          * The team this task number is scoped to.
          */

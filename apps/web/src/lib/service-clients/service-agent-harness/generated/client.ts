@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentActionId,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
@@ -137,7 +138,7 @@ export const deleteAgentSession = async (
  * @summary Perform a control operation on a live agent session.
  */
 export type controlAgentSessionResponse200 = {
-  data: void;
+  data: AgentActionId;
   status: 200;
 };
 

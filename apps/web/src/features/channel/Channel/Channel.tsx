@@ -399,7 +399,7 @@ export function Channel(props: ChannelProps) {
     const beforeSnapshot = state.replyInputState();
     const nextSnapshot: InputSnapshot = {
       value: buildQuoteReplyValue({
-        quotedContent: message.content ?? '',
+        quotedContent: message.content,
         existingValue: beforeSnapshot?.value,
       }),
       mentions: beforeSnapshot?.mentions ?? [],
@@ -443,11 +443,11 @@ export function Channel(props: ChannelProps) {
       messageEditor.start(message);
     },
     onCreateTask: (ctx) => {
-      const trimmedMarkdown = trimEdgeUserMentions(ctx.message.content ?? '');
+      const trimmedMarkdown = trimEdgeUserMentions(ctx.message.content);
       const plainText = markdownToPlainText(trimmedMarkdown).trim();
       const title =
         plainText.length > 70 ? `${plainText.slice(0, 70)}...` : plainText;
-      const mentionedUserIds = extractUserMentions(ctx.message.content ?? '');
+      const mentionedUserIds = extractUserMentions(ctx.message.content);
       popoverSplit({
         type: 'component',
         id: 'task-compose',

@@ -4,6 +4,7 @@ import { deriveMagicChipPresentation } from './presentation';
 
 const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   agentSessionId: 'session',
+  requestId: null,
   turn: 0,
   author: { kind: 'agent' },
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],

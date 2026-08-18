@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentProxyHealthData, AgentProxyHealthResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, DeleteAgentData, DeleteAgentErrors, DeleteAgentResponses, GetAgentData, GetAgentErrors, GetAgentResponses, PatchAgentData, PatchAgentErrors, PatchAgentResponses, PermanentlyDeleteAgentData, PermanentlyDeleteAgentErrors, PermanentlyDeleteAgentResponses, PostAcpMessageData, PostAcpMessageErrors, PostAcpMessageResponses } from './types.gen';
+import type { AgentProxyHealthData, AgentProxyHealthResponses, ConnectAgentRuntimeData, ConnectAgentRuntimeErrors, CreateAgentData, CreateAgentErrors, CreateAgentResponses, DeleteAgentData, DeleteAgentErrors, DeleteAgentResponses, GetAgentData, GetAgentErrors, GetAgentResponses, PatchAgentData, PatchAgentErrors, PatchAgentResponses, PermanentlyDeleteAgentData, PermanentlyDeleteAgentErrors, PermanentlyDeleteAgentResponses, PostAcpMessageData, PostAcpMessageErrors, PostAcpMessageResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -111,6 +111,21 @@ export class Sdk extends HeyApiClient {
      */
     public agentProxyHealth<ThrowOnError extends boolean = false>(options?: Options<AgentProxyHealthData, ThrowOnError>): RequestResult<AgentProxyHealthResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<AgentProxyHealthResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+    
+    /**
+     * Accept one agent runtime's WebSocket connection.
+     *
+     * One endpoint serves every session, disambiguated by `?id=` rather than a
+     * listener per session. `agent_runtime_protocol` deliberately carries no
+     * session identifier on the wire - a connection hosts exactly one agent
+     * execution, so the wire protocol has no routing table - which makes this
+     * handler the place that identifier actually lives: matched against the
+     * query parameter the runtime dialed with, then handed on the same way for
+     * every session.
+     */
+    public connectAgentRuntime<ThrowOnError extends boolean = false>(options: Options<ConnectAgentRuntimeData, ThrowOnError>): RequestResult<unknown, ConnectAgentRuntimeErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<unknown, ConnectAgentRuntimeErrors, ThrowOnError>({ url: '/runtime', ...options });
     }
     
     /**

@@ -261,7 +261,7 @@ async fn open_announces_while_the_container_is_still_booting() {
 
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
-    let (service, repo, containers, announcer) = harness();
+    let (service, _repo, containers, announcer) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));

@@ -647,26 +647,19 @@ export const SearchToolResponse = z.object({
 });
 
 export const CreateCalendarEvent = z.object({
-  addGoogleMeet: z.boolean().optional(),
-  attendees: z
-    .array(z.object({ email: z.string(), isOptional: z.boolean().optional() }))
-    .optional(),
-  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
-  description: z.union([z.string(), z.null()]).optional(),
-  location: z.union([z.string(), z.null()]).optional(),
-  recurrenceLines: z.array(z.string()).optional(),
+  title: z.string(),
   time: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.object({
-        endsAt: z.string().datetime({ offset: true }),
-        kind: z.literal('timed'),
         startsAt: z.string().datetime({ offset: true }),
+        endsAt: z.string().datetime({ offset: true }),
         timeZone: z.union([z.string(), z.null()]).optional(),
+        kind: z.literal('timed'),
       }),
       z.object({
+        startDate: z.string().date(),
         endDate: z.string().date(),
         kind: z.literal('allDay'),
-        startDate: z.string().date(),
       }),
     ];
     const errors = schemas.reduce<z.ZodError[]>(
@@ -685,34 +678,41 @@ export const CreateCalendarEvent = z.object({
       });
     }
   }),
-  title: z.string(),
+  description: z.union([z.string(), z.null()]).optional(),
+  location: z.union([z.string(), z.null()]).optional(),
+  attendees: z
+    .array(z.object({ email: z.string(), isOptional: z.boolean().optional() }))
+    .optional(),
+  recurrenceLines: z.array(z.string()).optional(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+  addGoogleMeet: z.boolean().optional(),
 });
 
 export const ToolCalendarEvent = z.object({
-  attendeeCount: z.number().int().gte(0),
+  eventId: z.string().uuid(),
+  title: z.string(),
+  start: z.string(),
+  end: z.string(),
+  isAllDay: z.boolean(),
+  timeZone: z.union([z.string(), z.null()]).optional(),
+  location: z.union([z.string(), z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  status: z.string(),
+  isRecurring: z.boolean(),
+  recurrenceLines: z.array(z.string()),
   attendees: z.array(
     z.object({
       email: z.string(),
-      isOptional: z.boolean(),
-      isOrganizer: z.boolean(),
       responseStatus: z.string(),
+      isOrganizer: z.boolean(),
+      isOptional: z.boolean(),
     })
   ),
-  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
-  conferenceUrl: z.union([z.string(), z.null()]).optional(),
-  description: z.union([z.string(), z.null()]).optional(),
-  end: z.string(),
-  eventId: z.string().uuid(),
-  isAllDay: z.boolean(),
-  isReadOnly: z.boolean(),
-  isRecurring: z.boolean(),
-  location: z.union([z.string(), z.null()]).optional(),
+  attendeeCount: z.number().int().gte(0),
   organizerEmail: z.union([z.string(), z.null()]).optional(),
-  recurrenceLines: z.array(z.string()),
-  start: z.string(),
-  status: z.string(),
-  timeZone: z.union([z.string(), z.null()]).optional(),
-  title: z.string(),
+  conferenceUrl: z.union([z.string(), z.null()]).optional(),
+  isReadOnly: z.boolean(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const CreateDocument = z.object({
@@ -843,7 +843,7 @@ export const CreateProjectResponse = z.object({
 
 export const CreateReminder = z.object({
   description: z.string(),
-  entityId: z.union([z.string().uuid(), z.null()]).optional(),
+  remindAt: z.string().datetime({ offset: true }),
   entityType: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -875,14 +875,15 @@ export const CreateReminder = z.object({
       z.null(),
     ])
     .optional(),
-  remindAt: z.string().datetime({ offset: true }),
+  entityId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const ToolReminder = z.object({
-  completed: z.boolean(),
+  id: z.string().uuid(),
   description: z.string(),
-  enabled: z.boolean(),
-  entityId: z.union([z.string(), z.null()]).optional(),
+  nextRunAt: z.string().datetime({ offset: true }),
+  overdue: z.boolean(),
+  recurrence: z.union([z.string(), z.null()]).optional(),
   entityType: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -914,10 +915,9 @@ export const ToolReminder = z.object({
       z.null(),
     ])
     .optional(),
-  id: z.string().uuid(),
-  nextRunAt: z.string().datetime({ offset: true }),
-  overdue: z.boolean(),
-  recurrence: z.union([z.string(), z.null()]).optional(),
+  entityId: z.union([z.string(), z.null()]).optional(),
+  completed: z.boolean(),
+  enabled: z.boolean(),
 });
 
 export const CreateTag = z.object({
@@ -1006,7 +1006,6 @@ export const CreateTagResponse = z.object({
 
 export const DeleteCalendarEvent = z.object({
   eventId: z.string().uuid(),
-  recurrenceId: z.union([z.string(), z.null()]).optional(),
   scope: z
     .any()
     .superRefine((x, ctx) => {
@@ -1032,6 +1031,7 @@ export const DeleteCalendarEvent = z.object({
       }
     })
     .optional(),
+  recurrenceId: z.union([z.string(), z.null()]).optional(),
 });
 
 export const DeleteCalendarEventResponse = z.object({
@@ -1335,43 +1335,43 @@ export const ImportNotionPageResponse = z.object({
 });
 
 export const ListCalendarEvents = z.object({
-  end: z.string().datetime({ offset: true }),
   start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
 });
 
 export const ListCalendarEventsResponse = z.object({
   events: z.array(
     z.object({
-      attendeeCount: z.number().int().gte(0),
+      eventId: z.string().uuid(),
+      title: z.string(),
+      start: z.string(),
+      end: z.string(),
+      isAllDay: z.boolean(),
+      timeZone: z.union([z.string(), z.null()]).optional(),
+      location: z.union([z.string(), z.null()]).optional(),
+      description: z.union([z.string(), z.null()]).optional(),
+      status: z.string(),
+      isRecurring: z.boolean(),
+      recurrenceId: z.union([z.string(), z.null()]).optional(),
       attendees: z.array(
         z.object({
           email: z.string(),
-          isOptional: z.boolean(),
-          isOrganizer: z.boolean(),
           responseStatus: z.string(),
+          isOrganizer: z.boolean(),
+          isOptional: z.boolean(),
         })
       ),
-      calendarId: z.union([z.string().uuid(), z.null()]).optional(),
-      conferenceUrl: z.union([z.string(), z.null()]).optional(),
-      description: z.union([z.string(), z.null()]).optional(),
-      end: z.string(),
-      eventId: z.string().uuid(),
-      isAllDay: z.boolean(),
-      isReadOnly: z.boolean(),
-      isRecurring: z.boolean(),
-      location: z.union([z.string(), z.null()]).optional(),
+      attendeeCount: z.number().int().gte(0),
       myResponse: z.union([z.string(), z.null()]).optional(),
       organizerEmail: z.union([z.string(), z.null()]).optional(),
-      recurrenceId: z.union([z.string(), z.null()]).optional(),
-      start: z.string(),
-      status: z.string(),
-      timeZone: z.union([z.string(), z.null()]).optional(),
-      title: z.string(),
+      conferenceUrl: z.union([z.string(), z.null()]).optional(),
+      isReadOnly: z.boolean(),
+      calendarId: z.union([z.string().uuid(), z.null()]).optional(),
     })
   ),
-  summary: z.string(),
-  syncStatus: z.string(),
   truncated: z.boolean(),
+  syncStatus: z.string(),
+  summary: z.string(),
 });
 
 export const ListCalendars = z.record(z.any());
@@ -1380,10 +1380,10 @@ export const ListCalendarsToolResponse = z.object({
   calendars: z.array(
     z.object({
       calendarId: z.string().uuid(),
+      name: z.string(),
       emailAddress: z.string(),
       isPrimary: z.boolean(),
       isWritable: z.boolean(),
-      name: z.string(),
     })
   ),
   summary: z.string(),
@@ -1554,17 +1554,12 @@ export const ListEntitiesResponse = z.object({
     z.any().superRefine((x, ctx) => {
       const schemas = [
         z.object({
-<<<<<<< conflict 1 of 1
-%%%%%%% diff from: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (parents of rebased revision)
-\\\\\\\        to: przwxuwv 3140b323 "feat: fold-viewer (#5452)" (rebased revision)
-+          conferenceProvider: z.union([z.string(), z.null()]).optional(),
-+++++++ pkynqytq 08257113 "feat: system agent harness bot (#5372)" (rebased revision)
           id: z.string().uuid(),
           title: z.string(),
           status: z.string(),
           location: z.union([z.string(), z.null()]).optional(),
->>>>>>> conflict 1 of 1 ends
           conferenceUrl: z.union([z.string(), z.null()]).optional(),
+          conferenceProvider: z.union([z.string(), z.null()]).optional(),
           time: z.any(),
           tags: z
             .array(
@@ -1954,6 +1949,7 @@ export const ListNotifications = z.object({
           'task',
           'github',
           'reminder',
+          'calendar',
         ])
       ),
       z.null(),
@@ -2007,8 +2003,7 @@ export const ListNotificationsResponse = z.object({
 });
 
 export const ListReminders = z.object({
-  completed: z.union([z.boolean(), z.null()]).optional(),
-  entityId: z.union([z.string().uuid(), z.null()]).optional(),
+  reminderIds: z.union([z.array(z.string().uuid()), z.null()]).optional(),
   entityType: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -2040,18 +2035,20 @@ export const ListReminders = z.object({
       z.null(),
     ])
     .optional(),
-  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
+  entityId: z.union([z.string().uuid(), z.null()]).optional(),
+  completed: z.union([z.boolean(), z.null()]).optional(),
   overdue: z.union([z.boolean(), z.null()]).optional(),
-  reminderIds: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  limit: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
 export const ListRemindersResponse = z.object({
   reminders: z.array(
     z.object({
-      completed: z.boolean(),
+      id: z.string().uuid(),
       description: z.string(),
-      enabled: z.boolean(),
-      entityId: z.union([z.string(), z.null()]).optional(),
+      nextRunAt: z.string().datetime({ offset: true }),
+      overdue: z.boolean(),
+      recurrence: z.union([z.string(), z.null()]).optional(),
       entityType: z
         .union([
           z.any().superRefine((x, ctx) => {
@@ -2084,10 +2081,9 @@ export const ListRemindersResponse = z.object({
           z.null(),
         ])
         .optional(),
-      id: z.string().uuid(),
-      nextRunAt: z.string().datetime({ offset: true }),
-      overdue: z.boolean(),
-      recurrence: z.union([z.string(), z.null()]).optional(),
+      entityId: z.union([z.string(), z.null()]).optional(),
+      completed: z.boolean(),
+      enabled: z.boolean(),
     })
   ),
   summary: z.string(),
@@ -3745,6 +3741,45 @@ export const TextEditorCodeExecutionResponse = z.object({
 });
 
 export const UpdateCalendarEvent = z.object({
+  eventId: z.string().uuid(),
+  title: z.union([z.string(), z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  location: z.union([z.string(), z.null()]).optional(),
+  time: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({
+            startsAt: z.string().datetime({ offset: true }),
+            endsAt: z.string().datetime({ offset: true }),
+            timeZone: z.union([z.string(), z.null()]).optional(),
+            kind: z.literal('timed'),
+          }),
+          z.object({
+            startDate: z.string().date(),
+            endDate: z.string().date(),
+            kind: z.literal('allDay'),
+          }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
   attendees: z
     .union([
       z.array(
@@ -3753,6 +3788,7 @@ export const UpdateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
+  recurrenceLines: z.union([z.array(z.string()), z.null()]).optional(),
   conference: z
     .union([
       z.any().superRefine((x, ctx) => {
@@ -3776,55 +3812,15 @@ export const UpdateCalendarEvent = z.object({
       z.null(),
     ])
     .optional(),
-  description: z.union([z.string(), z.null()]).optional(),
-  eventId: z.string().uuid(),
-  location: z.union([z.string(), z.null()]).optional(),
-  recurrenceLines: z.union([z.array(z.string()), z.null()]).optional(),
-  time: z
-    .union([
-      z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.object({
-            endsAt: z.string().datetime({ offset: true }),
-            kind: z.literal('timed'),
-            startsAt: z.string().datetime({ offset: true }),
-            timeZone: z.union([z.string(), z.null()]).optional(),
-          }),
-          z.object({
-            endDate: z.string().date(),
-            kind: z.literal('allDay'),
-            startDate: z.string().date(),
-          }),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-      z.null(),
-    ])
-    .optional(),
-  title: z.union([z.string(), z.null()]).optional(),
 });
 
 export const UpdateReminder = z.object({
-  completed: z.union([z.boolean(), z.null()]).optional(),
+  reminderId: z.string().uuid(),
   description: z.union([z.string(), z.null()]).optional(),
   remindAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
-  reminderId: z.string().uuid(),
+  completed: z.union([z.boolean(), z.null()]).optional(),
 });
 
 export const UpdateThreadLabels = z.object({

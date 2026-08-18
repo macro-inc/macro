@@ -4,7 +4,7 @@ import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMes
 
 export type MessageData = {
   id: string;
-  content?: string | null;
+  content: string;
   sender_id: string;
   /** Structured sender identity; carries bot name/avatar for bot senders. */
   sender?: ApiMessageSender;

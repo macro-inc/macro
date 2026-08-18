@@ -6,6 +6,7 @@
  */
 
 export * from './agentAction';
+export * from './agentActionId';
 export * from './agentActionOneOf';
 export * from './agentActionOneOfAllOf';
 export * from './agentActionOneOfAllOfType';

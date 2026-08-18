@@ -538,6 +538,7 @@ async fn create_resolves_share_permission_from_team_default() {
         .create(
             owner(),
             CreateChatArgs {
+                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },
@@ -567,6 +568,7 @@ async fn create_uses_chat_default_without_team() {
         .create(
             owner(),
             CreateChatArgs {
+                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },
@@ -598,6 +600,7 @@ async fn create_disables_link_share_when_team_turned_it_off() {
         .create(
             owner(),
             CreateChatArgs {
+                kind: Default::default(),
                 name: "New Chat".to_string(),
                 project_id: None,
             },

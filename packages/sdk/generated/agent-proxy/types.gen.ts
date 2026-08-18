@@ -205,7 +205,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact';
 
 /**
  * An agent with its full chat data, mirroring the DCS get-chat response
@@ -388,6 +388,25 @@ export type AgentProxyHealthResponses = {
 };
 
 export type AgentProxyHealthResponse = AgentProxyHealthResponses[keyof AgentProxyHealthResponses];
+
+export type ConnectAgentRuntimeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * ID of the agent session (chat) this runtime hosts
+         */
+        id: string;
+    };
+    url: '/runtime';
+};
+
+export type ConnectAgentRuntimeErrors = {
+    /**
+     * missing or malformed session id
+     */
+    400: unknown;
+};
 
 export type PostAcpMessageData = {
     body: unknown;

@@ -13,6 +13,7 @@ vi.mock('@queries/agent-session/session-fold', () => sessionFold);
 import { createMagicChipModel } from './create-magic-chip-model';
 
 const prompt: FoldedMessage = {
+  requestId: null,
   agentSessionId: 'session',
   turn: 0,
   author: { kind: 'user', userId: 'macro|wolf@macro.com' },
@@ -21,6 +22,7 @@ const prompt: FoldedMessage = {
 };
 
 const response: FoldedMessage = {
+  requestId: null,
   agentSessionId: 'session',
   turn: 0,
   author: { kind: 'agent' },

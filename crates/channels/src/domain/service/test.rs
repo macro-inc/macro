@@ -683,7 +683,7 @@ impl ChannelRepo for FakeMutationRepo {
         state.message.channel_id = channel_id;
         state.message.sender_id = sender_id.into_owned();
         state.message.triggered_by = triggered_by_user_id;
-        state.message.content = Some(content);
+        state.message.content = content;
         state.message.thread_id = thread_id;
         Ok(state.message.clone())
     }
@@ -796,7 +796,7 @@ impl ChannelRepo for FakeMutationRepo {
     ) -> Result<MutatedMessage, Self::Err> {
         let mut state = self.state.lock().unwrap();
         state.patched_content = Some(content.clone());
-        state.message.content = Some(content);
+        state.message.content = content;
         state.message.edited_at = Some(Utc::now());
         Ok(state.message.clone())
     }
