@@ -4,7 +4,15 @@ import {
   type CacheResponse,
   isCachePush,
   isCacheResponse,
+  isValidCacheSearchBucket,
+  isValidCacheSearchCursor,
+  isValidCacheSearchLimit,
+  isValidCacheSearchNowMs,
+  isValidCacheSearchProfile,
+  isValidCacheSearchQuery,
+  isValidNormalizedRecordKey,
   isWorkerMessage,
+  MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
 } from '../protocol';
 
@@ -300,7 +308,6 @@ const isEntityResolvers = (value: unknown): boolean =>
 
 const isSearchRequest = (value: unknown): boolean => {
   if (!isRecord(value)) return false;
-  const cursor = value.cursor;
   return (
     hasOnlyKeys(value, [
       'profile',
@@ -310,16 +317,13 @@ const isSearchRequest = (value: unknown): boolean => {
       'limit',
       'nowMs',
     ]) &&
-    value.profile === 'quick-access-v1' &&
-    isStringArray(value.buckets) &&
-    isString(value.query) &&
-    isPositiveInteger(value.limit) &&
-    isSafeNonNegativeInteger(value.nowMs) &&
-    (cursor === undefined ||
-      (isRecord(cursor) &&
-        hasOnlyKeys(cursor, ['timestampMs', 'recordKey']) &&
-        isSafeInteger(cursor.timestampMs) &&
-        isString(cursor.recordKey)))
+    isValidCacheSearchProfile(value.profile) &&
+    Array.isArray(value.buckets) &&
+    value.buckets.every(isValidCacheSearchBucket) &&
+    isValidCacheSearchQuery(value.query) &&
+    isValidCacheSearchLimit(value.limit) &&
+    isValidCacheSearchNowMs(value.nowMs) &&
+    (value.cursor === undefined || isValidCacheSearchCursor(value.cursor))
   );
 };
 
@@ -481,8 +485,9 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         ]) &&
         isString(value.document) &&
         isString(value.fragmentName) &&
-        isStringArray(value.keys) &&
-        value.keys.length <= 500
+        Array.isArray(value.keys) &&
+        value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
+        value.keys.every(isValidNormalizedRecordKey)
       );
     case 'search':
       return (

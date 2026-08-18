@@ -67,6 +67,69 @@ export type SelectedRecordByKeyWire = {
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
 export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
+export const MAX_NORMALIZED_RECORD_KEY_LENGTH = 1024;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Non-throwing canonical normalized-record key validation for wire ingress. */
+export function isValidNormalizedRecordKey(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_NORMALIZED_RECORD_KEY_LENGTH &&
+    /^[A-Za-z_][A-Za-z0-9_]*:/.test(value)
+  );
+}
+
+/** Non-throwing cache-search profile validation for wire ingress. */
+export function isValidCacheSearchProfile(
+  value: unknown
+): value is SearchProfile {
+  return value === 'quick-access-v1';
+}
+
+/** Non-throwing cache-search limit validation for wire ingress. */
+export function isValidCacheSearchLimit(value: unknown): value is number {
+  return (
+    Number.isSafeInteger(value) &&
+    (value as number) >= 1 &&
+    (value as number) <= MAX_RECORD_SELECTION_PAGE_SIZE
+  );
+}
+
+/** Non-throwing cache-search query validation for wire ingress. */
+export function isValidCacheSearchQuery(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    new TextEncoder().encode(value).length <= MAX_CACHE_SEARCH_QUERY_BYTES
+  );
+}
+
+/** Non-throwing cache-search bucket validation for wire ingress. */
+export function isValidCacheSearchBucket(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z_]{1,64}$/.test(value);
+}
+
+/** Non-throwing cache-search clock validation for wire ingress. */
+export function isValidCacheSearchNowMs(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+/** Non-throwing cache-search cursor validation for wire ingress. */
+export function isValidCacheSearchCursor(
+  value: unknown
+): value is SearchCursor {
+  return (
+    isRecord(value) &&
+    Object.keys(value).every(
+      (key) => key === 'timestampMs' || key === 'recordKey'
+    ) &&
+    Object.hasOwn(value, 'timestampMs') &&
+    Object.hasOwn(value, 'recordKey') &&
+    Number.isSafeInteger(value.timestampMs) &&
+    isValidNormalizedRecordKey(value.recordKey)
+  );
+}
 
 export function validateRecordSelectionKeys(keys: string[]): string[] {
   if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
@@ -74,14 +137,7 @@ export function validateRecordSelectionKeys(keys: string[]): string[] {
       `record selection accepts at most ${MAX_RECORD_SELECTION_PAGE_SIZE} keys`
     );
   }
-  if (
-    keys.some(
-      (key) =>
-        typeof key !== 'string' ||
-        key.length > 1024 ||
-        !/^[A-Za-z_][A-Za-z0-9_]*:/.test(key)
-    )
-  ) {
+  if (keys.some((key) => !isValidNormalizedRecordKey(key))) {
     throw new RangeError('invalid normalized record key');
   }
   return keys;
@@ -90,27 +146,37 @@ export function validateRecordSelectionKeys(keys: string[]): string[] {
 export function validateCacheSearchArgs(
   args: SearchCacheArgs
 ): SearchCacheArgs & { nowMs: number } {
-  if (
-    !Number.isSafeInteger(args.limit) ||
-    args.limit < 1 ||
-    args.limit > MAX_RECORD_SELECTION_PAGE_SIZE
-  ) {
+  if (!isValidCacheSearchProfile(args.profile)) {
+    throw new RangeError('invalid cache search profile');
+  }
+  if (!isValidCacheSearchLimit(args.limit)) {
     throw new RangeError(
       `cache search limit must be an integer between 1 and ${MAX_RECORD_SELECTION_PAGE_SIZE}`
     );
   }
-  const query = args.query ?? '';
-  if (new TextEncoder().encode(query).length > MAX_CACHE_SEARCH_QUERY_BYTES) {
+  const query = args.query === undefined ? '' : args.query;
+  if (!isValidCacheSearchQuery(query)) {
     throw new RangeError('cache search query is too long');
   }
-  if (args.buckets?.some((bucket) => !/^[a-z_]{1,64}$/.test(bucket))) {
+  const buckets = args.buckets === undefined ? [] : args.buckets;
+  if (
+    !Array.isArray(buckets) ||
+    buckets.some((bucket) => !isValidCacheSearchBucket(bucket))
+  ) {
     throw new RangeError('invalid cache search bucket');
+  }
+  const nowMs = args.nowMs === undefined ? Date.now() : args.nowMs;
+  if (!isValidCacheSearchNowMs(nowMs)) {
+    throw new RangeError('invalid cache search nowMs');
+  }
+  if (args.cursor !== undefined && !isValidCacheSearchCursor(args.cursor)) {
+    throw new RangeError('invalid cache search cursor');
   }
   return {
     ...args,
     query,
-    buckets: args.buckets ?? [],
-    nowMs: args.nowMs ?? Date.now(),
+    buckets,
+    nowMs,
   };
 }
 

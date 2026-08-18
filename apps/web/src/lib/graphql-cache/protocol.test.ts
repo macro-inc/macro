@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SearchCacheArgs } from './protocol';
 import {
   isCachePush,
   isCacheResponse,
@@ -20,6 +21,9 @@ describe('validateRecordSelectionKeys', () => {
     expect(() => validateRecordSelectionKeys(['ROOT_QUERY'])).toThrow(
       'invalid normalized record key'
     );
+    expect(() =>
+      validateRecordSelectionKeys([`Thing:${'x'.repeat(1024)}`])
+    ).toThrow('invalid normalized record key');
     expect(() =>
       validateRecordSelectionKeys(
         Array.from(
@@ -59,6 +63,13 @@ describe('validateCacheSearchArgs', () => {
     expect(() =>
       validateCacheSearchArgs({
         profile: 'quick-access-v1',
+        query: 'é'.repeat(257),
+        limit: 25,
+      })
+    ).toThrow('query is too long');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
         buckets: ['Document; DROP TABLE records'],
         limit: 25,
       })
@@ -66,6 +77,36 @@ describe('validateCacheSearchArgs', () => {
     expect(() =>
       validateCacheSearchArgs({ profile: 'quick-access-v1', limit: 501 })
     ).toThrow('cache search limit');
+  });
+
+  it('rejects invalid profiles, clocks and cursors at the public ingress', () => {
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'future-profile',
+        limit: 25,
+      } as unknown as SearchCacheArgs)
+    ).toThrow('invalid cache search profile');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        nowMs: -1,
+      })
+    ).toThrow('invalid cache search nowMs');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        cursor: { timestampMs: 1.5, recordKey: 'Thing:one' },
+      })
+    ).toThrow('invalid cache search cursor');
+    expect(() =>
+      validateCacheSearchArgs({
+        profile: 'quick-access-v1',
+        limit: 25,
+        cursor: { timestampMs: 1, recordKey: 'ROOT_QUERY' },
+      })
+    ).toThrow('invalid cache search cursor');
   });
 });
 

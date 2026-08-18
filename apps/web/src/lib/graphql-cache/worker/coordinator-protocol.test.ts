@@ -88,6 +88,42 @@ describe('coordinator runtime protocol', () => {
     ).toBe(true);
   });
 
+  it('enforces search and record-key bounds at coordinator ingress', () => {
+    const validSearch = {
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: 'plan',
+      limit: 20,
+      nowMs: 123,
+    };
+    const acceptsSearch = (request: Record<string, unknown>) =>
+      isCacheRequest({ id: 2, kind: 'search', request });
+
+    expect(acceptsSearch({ ...validSearch, limit: 501 })).toBe(false);
+    expect(acceptsSearch({ ...validSearch, query: 'é'.repeat(257) })).toBe(
+      false
+    );
+    expect(acceptsSearch({ ...validSearch, buckets: ['Invalid'] })).toBe(false);
+    expect(acceptsSearch({ ...validSearch, nowMs: -1 })).toBe(false);
+    expect(
+      acceptsSearch({
+        ...validSearch,
+        cursor: { timestampMs: 1, recordKey: 'ROOT_QUERY' },
+      })
+    ).toBe(false);
+
+    const selectionRequest = (keys: string[]) =>
+      isCacheRequest({
+        id: 2,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { name }',
+        fragmentName: 'Item',
+        keys,
+      });
+    expect(selectionRequest(['ROOT_QUERY'])).toBe(false);
+    expect(selectionRequest([`Thing:${'x'.repeat(1024)}`])).toBe(false);
+  });
+
   it.each([
     {
       ...version,
