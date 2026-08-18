@@ -27,7 +27,6 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
-import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
@@ -559,7 +558,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       );
       props.onCreateStart?.({ title: taskTitle, content: taskContent });
 
-      const documentId = await createTaskWithProperties(
+      const createdTask = await createTaskWithProperties(
         taskTitle,
         taskContent,
         properties,
@@ -569,7 +568,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
       setIsCreating(false);
 
-      if (!documentId) {
+      if (!createdTask) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
@@ -577,11 +576,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
 
-      const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
+      const { documentId, initialSnapshot } = createdTask;
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
-        showTaskCreatedToast(documentId, optimisticSnapshot);
+        showTaskCreatedToast(documentId, initialSnapshot);
       }
       props.onCreateTask?.(taskTitle, taskContent);
       return;
@@ -590,7 +589,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     resetTitleAndBody();
     setIsCreating(false);
 
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -598,17 +597,17 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    if (!documentId) {
+    if (!createdTask) {
       return;
     }
 
     // Success: clear draft and notify
     clearTaskComposerDraft();
-    const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
+    const { documentId, initialSnapshot } = createdTask;
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      showTaskCreatedToast(documentId, optimisticSnapshot);
+      showTaskCreatedToast(documentId, initialSnapshot);
     }
     props.onCreateTask?.(taskTitle, taskContent);
   };
@@ -638,7 +637,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       { referredFrom: 'launcher', preferNewSplit: true }
     );
 
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -648,16 +647,19 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     setIsCreating(false);
 
-    if (!documentId) {
+    if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
       popoverSplit({ type: 'component', id: 'task-compose' });
       return;
     }
 
-    const optimisticSnapshot = await markdownToLoroSnapshot(taskContent);
-    const snapshotParams = optimisticSnapshot
-      ? { params: { optimisticSnapshot }, preserveParams: true as const }
+    const { documentId, initialSnapshot } = createdTask;
+    const snapshotParams = initialSnapshot
+      ? {
+          params: { optimisticSnapshot: initialSnapshot },
+          preserveParams: true as const,
+        }
       : {};
 
     if (split) {

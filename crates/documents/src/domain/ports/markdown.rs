@@ -6,12 +6,12 @@ use crate::domain::models::DocumentError;
 
 /// Initializes markdown document content in the collaborative editor backend.
 pub trait MarkdownInitializationPort: Send + Sync {
-    /// Initialize an already-created markdown document from markdown text.
+    /// Initialize an already-created markdown document and return the canonical snapshot.
     fn initialize_existing_markdown(
         &self,
         document_id: &str,
         markdown: &str,
-    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+    ) -> impl Future<Output = Result<Vec<u8>, DocumentError>> + Send;
 }
 
 /// Utilities from the lexical service
