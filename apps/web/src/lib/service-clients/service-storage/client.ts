@@ -69,6 +69,7 @@ import type { CreateEntityMentionResponse } from './generated/schemas/createEnti
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
+import type { CreatePersonaRequest } from './generated/schemas/createPersonaRequest';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
 import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
 import type { CreateSkillHandler200 } from './generated/schemas/createSkillHandler200';
@@ -127,8 +128,11 @@ import type { Item } from './generated/schemas/item';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { MentionableBot } from './generated/schemas/mentionableBot';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
+import type { PatchPersonaRequest } from './generated/schemas/patchPersonaRequest';
+import type { Persona } from './generated/schemas/persona';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -615,6 +619,55 @@ export const storageServiceClient = {
 
   async deleteBot(args: WithBotId) {
     return await dssFetch(`/bots/${args.bot_id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getMentionableBots() {
+    return (
+      await dssFetch<MentionableBot[]>(`/bots/mentionable`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getPersonas() {
+    return (
+      await dssFetch<Persona[]>(`/personas`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createPersona(args: CreatePersonaRequest) {
+    return (
+      await dssFetch<Persona>(`/personas`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async getPersona(args: WithBotId) {
+    return (
+      await dssFetch<Persona>(`/personas/${args.bot_id}`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async patchPersona(args: WithBotId & PatchPersonaRequest) {
+    const { bot_id, ...request } = args;
+    return (
+      await dssFetch<Persona>(`/personas/${bot_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async deletePersona(args: WithBotId) {
+    return await dssFetch(`/personas/${args.bot_id}`, {
       method: 'DELETE',
     });
   },

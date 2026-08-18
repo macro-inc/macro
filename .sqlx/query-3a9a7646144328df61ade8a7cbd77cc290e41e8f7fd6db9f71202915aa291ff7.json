@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            b.id,\n            b.team_id,\n            b.name,\n            b.handle,\n            b.description,\n            b.avatar_url,\n            b.created_by,\n            b.created_at,\n            b.updated_at,\n            c.harness,\n            c.model,\n            c.system_prompt,\n            c.repo_url\n        FROM bots b\n        JOIN bot_agent_config c ON c.bot_id = b.id\n        WHERE b.kind = 'system'\n          AND b.deleted_at IS NULL\n          AND b.team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)\n        ORDER BY b.created_at ASC, b.id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "avatar_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "system_prompt",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "repo_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3a9a7646144328df61ade8a7cbd77cc290e41e8f7fd6db9f71202915aa291ff7"
+}

@@ -40,6 +40,7 @@ export type SettingsTab =
   | 'Mobile App'
   | 'Agent'
   | 'Bots'
+  | 'Personas'
   | 'Team'
   | 'Tags'
   | 'CRM'

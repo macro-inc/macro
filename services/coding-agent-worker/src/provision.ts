@@ -11,6 +11,11 @@ import type { CommandRunner } from './interfaces';
 const REPO_ENV_FILE = '/env/repo-dev-env.sh';
 const SIDECAR_LOG = '/tmp/acp-sidecar.log';
 
+/** Where the persona's instructions land. Named by the baked opencode.json's
+ * `instructions` array, so it has to exist on every boot even when the persona
+ * has no prompt. */
+const PERSONA_PROMPT_FILE = '/etc/macro-agent/PERSONA.md';
+
 export const WORKSPACE_DIR = '/workspace';
 
 /** Clone + sidecar start; the dev env is prebaked so nothing builds here. */
@@ -32,17 +37,27 @@ export function assertSafeRepoUrl(url: string): void {
  * skips itself when already done, so this is safe to run on first boot,
  * reconnect, or after a machine restart.
  *
- * Reads REPO_URL and GITHUB_TOKEN from the sandbox environment (set at
- * creation) rather than interpolating them into the script.
+ * Reads REPO_URL, GITHUB_TOKEN and MACRO_PERSONA_PROMPT from the sandbox
+ * environment (set at creation) rather than interpolating them into the
+ * script.
  *
- * Stages: configure GitHub credentials, clone the repo, then start the sidecar
- * with the baked repo dev shell first on PATH and the base tools (opencode,
- * gh, github-mcp-server) still reachable. */
+ * Stages: configure GitHub credentials, write the persona's instructions,
+ * clone the repo if the persona named one, then start the sidecar with the
+ * baked repo dev shell first on PATH and the base tools (opencode, gh,
+ * github-mcp-server) still reachable.
+ *
+ * The clone is skipped entirely when REPO_URL is unset: a persona without a
+ * repository runs in an empty workspace, and there is no default to fall back
+ * to. The mkdir is what makes that workspace exist at all - the clone used to
+ * be what created it, and without it the harness starts in a missing
+ * directory and the session hangs rather than failing. */
 export function ensureReadyCommand(): string {
   return (
     `bash -c 'set -e; ` +
     `gh auth setup-git --hostname github.com --force; ` +
-    `if [ ! -d ${WORKSPACE_DIR}/.git ]; then ` +
+    `printf %s "$MACRO_PERSONA_PROMPT" > ${PERSONA_PROMPT_FILE}; ` +
+    `mkdir -p ${WORKSPACE_DIR}; ` +
+    `if [ -n "$REPO_URL" ] && [ ! -d ${WORKSPACE_DIR}/.git ]; then ` +
     `git clone --depth 1 "$REPO_URL" ${WORKSPACE_DIR}; ` +
     `fi; ` +
     `if ! curl -sf localhost:8700/ping >/dev/null 2>&1; then ` +

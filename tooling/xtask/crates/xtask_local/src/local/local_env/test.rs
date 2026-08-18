@@ -92,7 +92,6 @@ fn emits_required_keys() {
         "LOCAL_CONTAINER_IMAGE",
         "LOCAL_CONTAINER_NETWORK",
         "DAYTONA_API_KEY",
-        "HARNESS_BOT_ID",
     ] {
         assert!(
             env.contains_key(key),

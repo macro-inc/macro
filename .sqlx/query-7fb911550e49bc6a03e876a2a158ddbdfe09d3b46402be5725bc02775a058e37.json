@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE bot_agent_config\n            SET harness = $2,\n                model = $3,\n                system_prompt = $4,\n                repo_url = $5,\n                updated_at = now()\n            WHERE bot_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7fb911550e49bc6a03e876a2a158ddbdfe09d3b46402be5725bc02775a058e37"
+}

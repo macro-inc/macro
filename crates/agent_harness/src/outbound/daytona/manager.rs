@@ -238,10 +238,7 @@ impl ContainerManager for DaytonaContainerManager {
 
     #[tracing::instrument(err, skip(self))]
     async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
-        let SpawnContainer {
-            session_id,
-            repo_url,
-        } = command;
+        let session_id = command.session_id;
         // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
         // server. It is also the env var opencode's `github-copilot` provider
         // activates on, so its mere presence makes opencode advertise every
@@ -249,13 +246,9 @@ impl ContainerManager for DaytonaContainerManager {
         // one fails at prompt time with "Authorization header is badly
         // formatted". `container/opencode.json` pins `enabled_providers` to
         // keep that list honest; do not drop that pin while this var is set.
-        let env = Env::from(HashMap::from([
-            ("REPO_URL".to_owned(), repo_url),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                self.github_token.expose().to_owned(),
-            ),
-        ]));
+        let env = Env::from(HashMap::from_iter(
+            crate::outbound::session_env::session_env(&command, self.github_token.expose()),
+        ));
         let labels = Labels::from(HashMap::from([(
             SESSION_LABEL.to_owned(),
             session_id.to_string(),

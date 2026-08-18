@@ -24,6 +24,7 @@ import {
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import {
   createHotkeyGroup,
@@ -427,7 +428,7 @@ export function runCreateAction(
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
       openWithSplit(
-        { type: 'agent', id: startPendingSession() },
+        { type: 'agent', id: startPendingSession(MACRO_CODER_BOT_ID) },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
       );
       return;

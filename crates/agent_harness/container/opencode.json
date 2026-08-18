@@ -5,7 +5,8 @@
   ],
   "model": "opencode/big-pickle",
   "instructions": [
-    "/etc/macro-agent/SYSTEM.md"
+    "/etc/macro-agent/SYSTEM.md",
+    "/etc/macro-agent/PERSONA.md"
   ],
   "permission": {
     "*": "allow",

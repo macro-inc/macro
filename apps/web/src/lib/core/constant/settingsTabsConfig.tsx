@@ -7,6 +7,7 @@ import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
@@ -68,6 +69,12 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
+    ],
+  },
+  {
+    label: 'Plugins',
+    items: [
+      { tab: 'Personas', label: 'Personas', icon: SparkleIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
   },
@@ -99,6 +106,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
   Bots: 'bots',
+  Personas: 'personas',
   Team: 'team',
   Tags: 'tags',
   CRM: 'crm',
@@ -172,6 +180,7 @@ export const useSettingsTabAvailable = () => {
       case 'Agent':
         return !isNativeMobilePlatform();
       case 'Bots':
+      case 'Personas':
         return botManagementFlag().enabled;
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;

@@ -4,6 +4,7 @@ use agent_runtime_protocol::domain::action::ActionError;
 use agent_runtime_protocol::domain::ports::TransportError;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::AgentSessionId;
+use bot_id::BotId;
 
 /// A `Result` whose error is a [`HarnessError`].
 pub type Result<T, E = HarnessError> = std::result::Result<T, E>;
@@ -39,4 +40,11 @@ pub enum HarnessError {
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),
+    /// The mentioned bot has no persona configuration, so there is nothing to
+    /// launch. Every agent-backed bot is expected to have one.
+    #[error("bot {0} has no agent configuration")]
+    NoAgentConfig(BotId),
+    /// The persona configuration could not be read.
+    #[error("failed to read the persona configuration: {0}")]
+    PersonaConfig(rootcause::Report),
 }

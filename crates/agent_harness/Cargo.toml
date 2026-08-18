@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+bots = { path = "../bots" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }

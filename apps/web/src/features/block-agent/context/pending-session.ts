@@ -40,17 +40,19 @@ export function isPlaceholderSessionId(id: string): boolean {
 }
 
 /**
- * Start creating a managed session and return the placeholder to open a block
- * against right now. The POST runs unattended; nothing awaits it.
+ * Start creating a managed session as `botId`'s persona and return the
+ * placeholder to open a block against right now. The POST runs unattended;
+ * nothing awaits it. Which persona to run is the caller's — every persona is
+ * its own bot, and the backend refuses a create that does not name one.
  */
-export function startPendingSession(): string {
+export function startPendingSession(botId: string): string {
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   pending.set(placeholder, { sessionId, failed });
 
   void agentHarnessServiceClient
-    .create({})
+    .create({ botId })
     .then((result) => {
       if (result.isErr()) {
         setFailed(true);

@@ -677,9 +677,10 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. Bot callers may omit it (their own identity
-    /// is used) and must not name another bot; user callers must supply a
-    /// bot they own. External sessions only: a managed session runs as the
-    /// bot its deployment is configured for.
+    /// is used) and must not name another bot; user callers must supply one.
+    /// For an external session that bot must be the caller's own; for a
+    /// managed one it names the persona the session runs as, which the
+    /// caller must own, share a team with, or which is globally available.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -766,6 +767,8 @@ pub enum CreateSessionApiError {
     NotAnAgentBot,
     /// The bot's sessions are opened by the trigger pipeline, not this route.
     ManagedBot,
+    /// The bot's runtime is self-hosted, so only the external shape opens it.
+    ExternalBot,
     /// The caller identified no user to own the session.
     OwnerRequired,
     /// The owner is not a parseable user id.
@@ -809,6 +812,11 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot's sessions are opened by the trigger pipeline".to_owned(),
             ),
+            Self::ExternalBot => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "this bot's runtime is self-hosted; name a workspace to open an external session"
+                    .to_owned(),
+            ),
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
@@ -820,8 +828,8 @@ impl IntoResponse for CreateSessionApiError {
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a managed session takes only a prompt; naming a workspace, bot, repo, \
-                 owner or thread asks for an external one"
+                "a managed session takes only a bot and a prompt; naming a workspace, \
+                 repo, owner or thread asks for an external one"
                     .to_owned(),
             ),
             Self::ThreadSessionExists { session_id } => {
@@ -942,23 +950,50 @@ pub async fn create_agent_session_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
-    // No workspace means the managed shape. It shares this route but not its
-    // authorization: nothing about which bot runs the session is the caller's
-    // to say, so the bot-ownership checks below have nothing to check and are
-    // skipped. That is only sound while the request carries none of the
-    // external fields, which is what this refuses.
+    // No workspace means the managed shape. The bot is the caller's to name —
+    // a persona is an ordinary `bots` row, not deployment configuration — so
+    // unlike before, naming one here is not the external shape leaking in.
+    // The runtime-describing fields still are: a managed sandbox's repository
+    // and workspace come off the persona, never the request.
     let Some(workspace) = request.workspace else {
-        if request.bot_id.is_some()
-            || request.repo_url.is_some()
-            || request.thread.is_some()
-            || request.owner.is_some()
-        {
+        if request.repo_url.is_some() || request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
+        }
+        let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
+        let BotFacts {
+            has_agent,
+            is_managed,
+            owner_user_id,
+            team_id,
+        } = state
+            .bots
+            .bot_facts(bot_id)
+            .await?
+            .ok_or(CreateSessionApiError::UnknownBot)?;
+        if !has_agent {
+            return Err(CreateSessionApiError::NotAnAgentBot);
+        }
+        if !is_managed {
+            return Err(CreateSessionApiError::ExternalBot);
+        }
+        // Who may run a managed persona is who could mention it: its owner,
+        // its team, or anyone when it is a global first-party persona. A bot
+        // caller got past resolve_bot only by naming itself.
+        if let UserOrBotAuthorization::User(user) = &caller.authorization {
+            let allowed = match (&owner_user_id, team_id) {
+                (Some(owner), _) => owner == &user.macro_user_id,
+                (None, Some(team)) => state.bots.user_in_team(&user.macro_user_id, team).await?,
+                (None, None) => true,
+            };
+            if !allowed {
+                return Err(CreateSessionApiError::NotYourBot);
+            }
         }
         let owner = resolve_owner(&caller.authorization, None)?;
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                bot_id,
                 owner,
                 prompt: request.prompt,
             })
@@ -982,6 +1017,9 @@ pub async fn create_agent_session_handler<
         has_agent,
         is_managed,
         owner_user_id,
+        // Membership is checked on the managed shape; the external one keeps
+        // refusing user tokens for team bots until its trust model grows.
+        team_id: _,
     } = state
         .bots
         .bot_facts(bot_id)

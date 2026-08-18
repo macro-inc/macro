@@ -571,7 +571,7 @@
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
+            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply one.\nFor an external session that bot must be the caller's own; for a\nmanaged one it names the persona the session runs as, which the\ncaller must own, share a team with, or which is globally available."
           },
           "owner": {
             "type": ["string", "null"],

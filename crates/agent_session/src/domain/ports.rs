@@ -24,18 +24,29 @@ impl<T> AgentConnector for T where
 pub struct BotFacts {
     /// Whether mentioning the bot runs a coding agent.
     pub has_agent: bool,
-    /// Whether this deployment provisions the bot's runtime itself. Managed
-    /// bots' sessions are opened by the trigger pipeline, never over HTTP,
-    /// and nothing may dial in for them.
+    /// Whether this deployment provisions the bot's runtime itself. Only
+    /// managed bots may be opened through the managed create shape, and
+    /// nothing may dial in for them.
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// The team the bot belongs to, when it is team-scoped. A persona with
+    /// neither an owner nor a team is a global first-party bot.
+    pub team_id: Option<Uuid>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
 pub trait BotDirectory: Send + Sync + 'static {
     /// Fetch a bot's facts; `None` when no such bot exists.
     fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
+
+    /// Whether `user` belongs to `team`. What gates a user opening a managed
+    /// session as a team persona: the same people who can mention it.
+    fn user_in_team(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        team: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// The mention that triggered a session, when one did.
@@ -78,11 +89,15 @@ pub struct OpenExternalAgentSession {
 /// Everything needed to open a session the server hosts itself.
 ///
 /// Deliberately thin: a managed session runs in a sandbox this deployment
-/// provisions from its own configuration, so the bot, the repository and the
-/// workspace are not the caller's to choose. There is no originating mention
-/// and nothing to announce.
+/// provisions, so the repository and the workspace are not the caller's to
+/// choose — they come off the persona the named bot is configured with.
+/// There is no originating mention and nothing to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// The persona the session runs as. Every persona is an ordinary `bots`
+    /// row, so which one is the caller's to say — gated by the ownership
+    /// checks in the create route, not fixed by deployment configuration.
+    pub bot_id: BotId,
     /// The user who owns the session and is credited for its messages.
     pub owner: MacroUserIdStr<'static>,
     /// First prompt to deliver once the sandbox is attached. `None` opens an

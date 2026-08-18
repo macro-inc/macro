@@ -14,6 +14,12 @@ use macro_uuid::Uuid;
 
 use super::*;
 use crate::domain::model::HarnessCommand;
+use bot_id::BotId;
+
+/// This deployment provisions the bot's sandbox.
+const MANAGED: bool = true;
+/// The bot's own runtime does.
+const EXTERNAL: bool = false;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
@@ -52,12 +58,12 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
 }
 
 #[test]
-fn a_mention_for_our_bot_opens_a_session() {
+fn a_mention_for_a_managed_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-        BotId::TEST_A,
+        MANAGED,
     )
-    .expect("a mention for our bot should yield work");
+    .expect("a mention for a bot we manage should yield work");
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
         panic!("a new-session event should open");
@@ -68,6 +74,23 @@ fn a_mention_for_our_bot_opens_a_session() {
     assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
     assert_eq!(open.origin.sender, user());
     assert_eq!(open.origin.content, "@claude fix the tests");
+}
+
+/// One deployment serves every persona, so the bot id is carried by the
+/// command rather than matched against a configured one: any managed bot's
+/// mention opens, not just a single blessed id.
+#[test]
+fn any_managed_bots_mention_opens_a_session() {
+    let routed = route_agent_trigger(
+        mentioned(BotId::TEST_B, ChannelSender::new_from_user(user())),
+        MANAGED,
+    )
+    .expect("a mention for any managed bot should yield work");
+
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_B);
 }
 
 #[test]
@@ -83,29 +106,23 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, BotId::TEST_A).expect("the mention should yield work")
+        route_agent_trigger(event, MANAGED).expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
     };
     assert_eq!(open.origin.thread_id, thread);
 }
 
+/// An external bot's runtime opens its own sessions over the API, so a
+/// mention of one is not ours to act on.
 #[test]
-fn a_foreign_bots_open_is_skipped() {
+fn an_external_bots_open_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-            BotId::TEST_B,
+            EXTERNAL,
         )
         .unwrap_err(),
-        Skipped::ForeignBot
-    );
-}
-
-#[test]
-fn another_deployments_managed_traffic_is_skipped() {
-    assert_eq!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), BotId::TEST_B).unwrap_err(),
         Skipped::ForeignBot
     );
 }
@@ -115,7 +132,7 @@ fn a_bot_authored_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
-            BotId::TEST_A,
+            MANAGED,
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -129,7 +146,7 @@ fn a_non_staff_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
-            BotId::TEST_A,
+            MANAGED,
         )
         .unwrap_err(),
         Skipped::NotMacroStaff
@@ -138,8 +155,8 @@ fn a_non_staff_mention_is_skipped() {
 
 #[test]
 fn a_managed_channel_message_forwards_to_its_session() {
-    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), MACRO_CODER_BOT_ID)
-        .expect("a channel event for our bot should yield work");
+    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), MANAGED)
+        .expect("a channel event for a bot we manage should yield work");
 
     let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) = routed else {
         panic!("a managed existing-session event should deliver");
@@ -161,8 +178,8 @@ fn a_managed_channel_message_forwards_to_its_session() {
 #[test]
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
-    // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), MACRO_CODER_BOT_ID)
+    // only posts the chip.
+    let routed = route_agent_trigger(channel_message(BotId::TEST_A), EXTERNAL)
         .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
@@ -186,7 +203,24 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, MACRO_CODER_BOT_ID).unwrap_err(),
+        route_agent_trigger(event, EXTERNAL).unwrap_err(),
         Skipped::NotFromUser
+    );
+}
+
+/// The consumer loop reads the bot off the event to look up whether we manage
+/// it, so every routable shape has to name one.
+#[test]
+fn every_routable_event_names_its_bot() {
+    assert_eq!(
+        trigger_bot_id(&mentioned(
+            BotId::TEST_A,
+            ChannelSender::new_from_user(user())
+        )),
+        Some(BotId::TEST_A)
+    );
+    assert_eq!(
+        trigger_bot_id(&channel_message(BotId::TEST_B)),
+        Some(BotId::TEST_B)
     );
 }

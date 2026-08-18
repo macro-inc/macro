@@ -20,9 +20,9 @@ use tokio::sync::{mpsc, oneshot};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, OpenSession,
-    SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
+    SessionAnnouncement, SpawnContainer, is_managed_bot,
 };
-use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
+use crate::domain::ports::{ContainerManager, PersonaConfig, RuntimeConnections, SessionAnnouncer};
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -31,27 +31,28 @@ struct QueuedCommand {
     completed: oneshot::Sender<Result<()>>,
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
+struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
-    defaults: SessionDefaults,
+    personas: Personas,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
-pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes> {
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas> {
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>>,
     workers: Arc<SessionWorkers>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaConfig,
 {
     /// Build the orchestrator from its ports.
     pub fn new(
@@ -59,7 +60,7 @@ where
         containers: Containers,
         announcer: Announcer,
         runtimes: Runtimes,
-        defaults: SessionDefaults,
+        personas: Personas,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -67,7 +68,7 @@ where
                 containers,
                 announcer,
                 runtimes,
-                defaults,
+                personas,
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -173,13 +174,14 @@ where
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes> AgentSessionNotificationRecipient
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas> AgentSessionNotificationRecipient
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaConfig,
 {
     async fn session_deleted(
         &self,
@@ -213,18 +215,33 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::SessionOpener
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    agent_session::domain::ports::SessionOpener
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaConfig,
 {
     async fn open_external_session(
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        // The persona is the only source for what a session runs, external or
+        // not: a self-hosted runtime still answers as one particular bot, and
+        // there is no deployment-wide default standing behind it. The
+        // workspace and repository stay the caller's, since it is the one
+        // hosting them.
+        let persona = self
+            .inner
+            .personas
+            .get(request.bot_id)
+            .await
+            .and_then(|config| config.ok_or(HarnessError::NoAgentConfig(request.bot_id)))
+            .map_err(into_session_error)?;
+
         let session = self
             .inner
             .sessions
@@ -234,8 +251,8 @@ where
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: self.inner.defaults.model.clone(),
-                harness: self.inner.defaults.harness.clone(),
+                model: persona.model.as_str().to_owned(),
+                harness: persona.harness.as_str().to_owned(),
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 // The thread linkage is the caller's claim, not an observed
@@ -276,19 +293,29 @@ where
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        let defaults = &self.inner.defaults;
+        // The persona is the only source for what this session runs, same as
+        // the trigger and external paths: which bot was asked for came with
+        // the request, and there is no deployment-wide default behind it.
+        let persona = self
+            .inner
+            .personas
+            .get(request.bot_id)
+            .await
+            .and_then(|config| config.ok_or(HarnessError::NoAgentConfig(request.bot_id)))
+            .map_err(into_session_error)?;
+
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
                 id: AgentSessionId::new(),
                 owner_id: request.owner.clone(),
-                bot_id: defaults.bot_id,
+                bot_id: request.bot_id,
                 thread_id: None,
                 originating_message_id: None,
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
-                repo_url: Some(defaults.repo_url.clone()),
+                model: persona.model.as_str().to_owned(),
+                harness: persona.harness.as_str().to_owned(),
+                repo_url: persona.repo_url.clone(),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
             })
@@ -299,7 +326,8 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
-                repo_url: defaults.repo_url.clone(),
+                repo_url: persona.repo_url,
+                system_prompt: persona.system_prompt,
             })
             .await
         {
@@ -373,13 +401,14 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaConfig,
 {
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match command {
@@ -410,7 +439,15 @@ where
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
-        let repo_url = self.defaults.repo_url.clone();
+
+        // The persona is the only source for what this session runs. A bot
+        // that reached the harness without one is a mention we cannot serve,
+        // and failing here is better than silently booting some default.
+        let persona = self
+            .personas
+            .get(bot_id)
+            .await?
+            .ok_or(HarnessError::NoAgentConfig(bot_id))?;
 
         self.sessions
             .create_session(CreateAgentSessionParams {
@@ -419,9 +456,9 @@ where
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
-                model: self.defaults.model.clone(),
-                harness: self.defaults.harness.clone(),
-                repo_url: Some(repo_url.clone()),
+                model: persona.model.as_str().to_owned(),
+                harness: persona.harness.as_str().to_owned(),
+                repo_url: persona.repo_url.clone(),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 // This open came from the trigger pipeline seeing the mention.
@@ -444,7 +481,8 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                repo_url,
+                repo_url: persona.repo_url,
+                system_prompt: persona.system_prompt,
             })
             .await
         {
@@ -560,13 +598,13 @@ where
             return Ok(None);
         };
 
-        // The announcement posts as the session's own bot, which only the
-        // row remembers.
-        let session = self.sessions.get_session(session_id).await?;
+        // Post as the session's own bot: which persona is answering is a fact
+        // of the session, and this deployment serves all of them.
+        let bot_id = self.sessions.get_session(session_id).await?.bot_id;
 
         Ok(Some(SessionAnnouncement {
             session_id,
-            bot_id: session.bot_id,
+            bot_id,
             origin_channel_id: origin.channel_id,
             origin_thread_id: origin.thread_id,
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
@@ -576,15 +614,16 @@ where
     }
 }
 
-async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
+async fn run_session_worker<Sessions, Containers, Announcer, Runtimes, Personas>(
     session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaConfig,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand { command, completed } = queued;

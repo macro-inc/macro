@@ -46,7 +46,9 @@ describe('a block id that is already a session', () => {
 
 describe('a placeholder', () => {
   it('has no session until the create lands, then has that one', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession(
+      '00000000-0000-0000-0000-00000000a9e7'
+    );
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       expect(resolved.sessionId()).toBeUndefined();
@@ -63,7 +65,9 @@ describe('a placeholder', () => {
   });
 
   it('fails when the create fails', async () => {
-    const placeholder = startPendingSession();
+    const placeholder = startPendingSession(
+      '00000000-0000-0000-0000-00000000a9e7'
+    );
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       create.reject?.();

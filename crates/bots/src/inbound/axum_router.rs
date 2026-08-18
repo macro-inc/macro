@@ -6,7 +6,8 @@ mod tests;
 use crate::domain::{
     models::{
         AddChannelBotRequest, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
-        CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreatePersonaRequest,
+        MentionableBot, PatchBotRequest, PatchPersonaRequest, Persona,
     },
     ports::{BotError, BotService},
 };
@@ -130,6 +131,24 @@ where
         .route("/bots", get(list_bots_handler::<S, Svc, Auth>))
         .route("/bots", post(create_bot_handler::<S, Svc, Auth>))
         .route("/bots/me", get(get_self_bot_handler::<S, Svc, Auth>))
+        .route(
+            "/bots/mentionable",
+            get(list_mentionable_bots_handler::<S, Svc, Auth>),
+        )
+        .route("/personas", get(list_personas_handler::<S, Svc, Auth>))
+        .route("/personas", post(create_persona_handler::<S, Svc, Auth>))
+        .route(
+            "/personas/{bot_id}",
+            get(get_persona_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/personas/{bot_id}",
+            patch(patch_persona_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/personas/{bot_id}",
+            delete(delete_persona_handler::<S, Svc, Auth>),
+        )
         .route("/bots/{bot_id}", get(get_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", patch(patch_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", delete(delete_bot_handler::<S, Svc, Auth>))
@@ -502,4 +521,193 @@ impl IntoResponse for BotsHandlerErr {
         )
             .into_response()
     }
+}
+
+/// Handler for `GET /bots/mentionable`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_mentionable_bots",
+    path = "/bots/mentionable",
+    responses(
+        (status = 200, body = Vec<MentionableBot>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_mentionable_bots_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<MentionableBot>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_mentionable_bots(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `GET /personas`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_personas",
+    path = "/personas",
+    responses(
+        (status = 200, body = Vec<Persona>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_personas_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<Persona>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_personas(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `POST /personas`.
+#[utoipa::path(
+    post,
+    tag = "bots",
+    operation_id = "create_persona",
+    path = "/personas",
+    request_body = CreatePersonaRequest,
+    responses(
+        (status = 201, body = Persona),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn create_persona_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<CreatePersonaRequest>,
+) -> Result<(StatusCode, Json<Persona>), BotsHandlerErr> {
+    let persona = state
+        .service
+        .create_persona(authorization.authorization.user.macro_user_id, req)
+        .await?;
+    Ok((StatusCode::CREATED, Json(persona)))
+}
+
+/// Handler for `GET /personas/{bot_id}`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "get_persona",
+    path = "/personas/{bot_id}",
+    params(("bot_id" = Uuid, Path, description = "Persona bot id")),
+    responses(
+        (status = 200, body = Persona),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_persona_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<BotPath>,
+) -> Result<Json<Persona>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .get_persona(authorization.authorization.user.macro_user_id, path.bot_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PATCH /personas/{bot_id}`.
+#[utoipa::path(
+    patch,
+    tag = "bots",
+    operation_id = "patch_persona",
+    path = "/personas/{bot_id}",
+    params(("bot_id" = Uuid, Path, description = "Persona bot id")),
+    request_body = PatchPersonaRequest,
+    responses(
+        (status = 200, body = Persona),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_persona_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<BotPath>,
+    Json(req): Json<PatchPersonaRequest>,
+) -> Result<Json<Persona>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_persona(
+                authorization.authorization.user.macro_user_id,
+                path.bot_id,
+                req,
+            )
+            .await?,
+    ))
+}
+
+/// Handler for `DELETE /personas/{bot_id}`.
+#[utoipa::path(
+    delete,
+    tag = "bots",
+    operation_id = "delete_persona",
+    path = "/personas/{bot_id}",
+    params(("bot_id" = Uuid, Path, description = "Persona bot id")),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn delete_persona_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<BotPath>,
+) -> Result<StatusCode, BotsHandlerErr> {
+    state
+        .service
+        .delete_persona(authorization.authorization.user.macro_user_id, path.bot_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

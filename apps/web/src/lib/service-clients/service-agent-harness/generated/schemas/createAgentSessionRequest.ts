@@ -27,9 +27,10 @@ Clients serialize this, so both derives are used.
  */
 export interface CreateAgentSessionRequest {
   /** Bot the session runs for. Bot callers may omit it (their own identity
-is used) and must not name another bot; user callers must supply a
-bot they own. External sessions only: a managed session runs as the
-bot its deployment is configured for. */
+is used) and must not name another bot; user callers must supply one.
+For an external session that bot must be the caller's own; for a
+managed one it names the persona the session runs as, which the
+caller must own, share a team with, or which is globally available. */
   botId?: CreateAgentSessionRequestBotId;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions; required for bot callers without verified

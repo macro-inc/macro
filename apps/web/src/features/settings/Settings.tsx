@@ -1,5 +1,6 @@
 import { Billing } from '@app/features/settings/Billing';
 import { Bots } from '@app/features/settings/Bots';
+import { Personas } from '@app/features/settings/Personas';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -429,6 +430,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Bots')}>
                   <Suspense>
                     <Bots />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Personas')}>
+                  <Suspense>
+                    <Personas />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Admin')}>

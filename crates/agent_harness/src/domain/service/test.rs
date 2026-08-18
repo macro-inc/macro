@@ -30,14 +30,14 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults,
-    SpawnContainer,
+    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
+use crate::testing::helpers::personas::PersonaConfigMock;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::ports::{OpenExternalAgentSession, SessionOpener as _};
 
@@ -82,6 +82,7 @@ type TestHarness = AgentHarnessService<
     MockContainerManager,
     AnnouncerMock,
     Arc<RuntimeRegistry<ContainerSender>>,
+    PersonaConfigMock,
 >;
 
 fn harness() -> (
@@ -104,12 +105,7 @@ fn harness() -> (
         containers.clone(),
         announcer.clone(),
         Arc::clone(&runtimes),
-        SessionDefaults {
-            bot_id: BotId::TEST_A,
-            model: "claude".to_owned(),
-            harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
-        },
+        PersonaConfigMock::new(),
     );
     (service, repo, containers, announcer, runtimes)
 }
@@ -185,7 +181,8 @@ async fn disconnected_session(
     containers
         .spawn(SpawnContainer {
             session_id: id,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
+            system_prompt: None,
         })
         .await
         .expect("the original sandbox should exist");

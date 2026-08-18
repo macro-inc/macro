@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, name, handle, avatar_url\n        FROM bots\n        WHERE kind = 'system'\n          AND deleted_at IS NULL\n          AND (\n            team_id IS NULL\n            OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)\n          )\n        ORDER BY name ASC, id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "avatar_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8057c6b32ece2bd489eabad620aa713288bd9b87503b19c89b3841e0d1824766"
+}

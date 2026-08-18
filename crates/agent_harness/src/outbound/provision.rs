@@ -1,5 +1,8 @@
 //! Shared container-image readiness recipe used by sandbox providers.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 /// Clone and sidecar startup timeout.

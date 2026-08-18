@@ -24,8 +24,33 @@ test.each([
 
 test('every stage guards itself so the script is idempotent', () => {
   const cmd = ensureReadyCommand();
-  expect(cmd).toContain('if [ ! -d /workspace/.git ]');
+  expect(cmd).toContain('[ ! -d /workspace/.git ]');
   expect(cmd).toContain('if ! curl -sf localhost:8700/ping');
+});
+
+test('the workspace exists even when there is no repo to clone', () => {
+  // The clone used to be what created /workspace; a repo-less persona would
+  // otherwise start its harness in a directory that does not exist.
+  const cmd = ensureReadyCommand();
+  expect(cmd).toContain('mkdir -p /workspace');
+  expect(cmd.indexOf('mkdir -p /workspace')).toBeLessThan(
+    cmd.indexOf('git clone')
+  );
+});
+
+test('the clone is skipped when the persona named no repository', () => {
+  // A persona without a repo runs in an empty workspace; there is no default
+  // repository to fall back to, so an unset REPO_URL must not reach git.
+  expect(ensureReadyCommand()).toContain('if [ -n "$REPO_URL" ]');
+});
+
+test("the persona's instructions are written on every boot", () => {
+  const cmd = ensureReadyCommand();
+  // Always written, empty included: the baked opencode.json names this file in
+  // `instructions`, and the persona may have been edited since last boot.
+  expect(cmd).toContain(
+    'printf %s "$MACRO_PERSONA_PROMPT" > /etc/macro-agent/PERSONA.md'
+  );
 });
 
 test('secrets come from the environment, not interpolation', () => {

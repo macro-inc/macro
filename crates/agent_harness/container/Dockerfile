@@ -80,5 +80,9 @@ ENV PATH=/nix/var/nix/profiles/default/bin:$PATH \
 COPY --from=sidecar-build /build/target/release/acp-sidecar /opt/acp-sidecar
 COPY opencode.json /root/.config/opencode/opencode.json
 COPY SYSTEM.md /etc/macro-agent/SYSTEM.md
+# The per-session persona instructions, rewritten on every boot by
+# ensureReadyCommand. Baked empty so opencode's `instructions` never names a
+# file that does not exist.
+RUN touch /etc/macro-agent/PERSONA.md
 
 CMD ["bash"]

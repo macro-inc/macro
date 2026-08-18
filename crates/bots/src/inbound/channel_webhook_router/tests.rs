@@ -311,6 +311,60 @@ impl BotService for TestBotService {
             _ => Err(BotError::Unauthorized),
         }
     }
+
+    async fn create_persona(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: crate::domain::models::CreatePersonaRequest,
+    ) -> Result<crate::domain::models::Persona, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_personas(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<crate::domain::models::Persona>, BotError> {
+        unimplemented!()
+    }
+
+    async fn get_persona(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<crate::domain::models::Persona, BotError> {
+        unimplemented!()
+    }
+
+    async fn patch_persona(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: crate::domain::models::PatchPersonaRequest,
+    ) -> Result<crate::domain::models::Persona, BotError> {
+        unimplemented!()
+    }
+
+    async fn delete_persona(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn agent_config(
+        &self,
+        _bot_id: BotId,
+    ) -> Result<Option<crate::domain::models::AgentConfig>, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_mentionable_bots(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<crate::domain::models::MentionableBot>, BotError> {
+        unimplemented!()
+    }
 }
 
 #[derive(Clone, Copy)]

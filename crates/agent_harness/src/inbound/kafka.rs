@@ -2,9 +2,13 @@
 //!
 //! The trigger service already did the hard part - watching the channel
 //! firehose, matching mentions to sessions, dropping the bot's own messages -
-//! so this adapter only routes: is this event for our bot, and is it an open
-//! or a forward? Pure translation, no IO; the consumer loop lives in the
-//! service binary.
+//! so this adapter only routes: is this an open or a forward? Pure
+//! translation, no IO; the consumer loop lives in the service binary.
+//!
+//! Every agent-backed bot is served by this one deployment. It used to filter
+//! events down to a single configured bot id, which personas made untenable:
+//! a team can mint any number of them, and each would otherwise need its own
+//! deployment to be answered at all.
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
@@ -15,7 +19,6 @@ use macro_user_id::email::ReadEmailParts;
 
 use crate::domain::model::{
     AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, MentionOrigin, OpenSession,
-    is_managed_bot,
 };
 
 #[cfg(test)]
@@ -35,7 +38,8 @@ pub enum RoutedTrigger {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skipped {
     /// The event is another deployment's to act on: an open for a bot whose
-    /// runtime opens its own sessions, or managed traffic that is not ours.
+    /// own runtime opens its sessions, rather than one we hold a persona
+    /// config for and provision a sandbox for.
     ForeignBot,
     /// The sender is not a user, so there is nobody to own the session.
     NotFromUser,
@@ -47,17 +51,41 @@ pub enum Skipped {
     NotMacroStaff,
 }
 
+/// The bot an event concerns, when its shape names one.
+///
+/// The consumer loop needs this before routing, to ask the bots directory
+/// whether this deployment provisions that bot's sandbox - the `managed`
+/// argument to [`route_agent_trigger`].
+#[must_use]
+pub fn trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
+    match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+            Some(mentioned.bot_id)
+        }
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
+            Some(metadata.bot_id)
+        }
+        _ => None,
+    }
+}
+
 /// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
 ///
-/// Opens are only ours when the mentioned bot is `our_bot` - external bots'
-/// runtimes open their own sessions over the API. Events for sessions that
-/// already exist always carry work: a prompt to deliver when the session is
-/// managed here, or just its announcement when the bot's own runtime
+/// `managed` says whether this deployment provisions the bot's sandbox - it
+/// holds a persona config for it. Opens are only ours when it does; external
+/// bots' runtimes open their own sessions over the API. Events for sessions
+/// that already exist always carry work: a prompt to deliver when the session
+/// is managed here, or just its announcement when the bot's own runtime
 /// delivers the prompt.
+///
+/// Passed in rather than looked up so this stays pure translation: the
+/// consumer loop already has the bots directory to answer it. It used to be a
+/// single configured bot id, which personas made untenable - a team can mint
+/// any number of them, and each would otherwise need its own deployment.
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
-    our_bot: BotId,
+    managed: bool,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
@@ -72,7 +100,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::NotMacroStaff);
             }
 
-            if mentioned.bot_id != our_bot {
+            if !managed {
                 return Err(Skipped::ForeignBot);
             }
             let message = mentioned.message;
@@ -108,13 +136,9 @@ pub fn route_agent_trigger(
                 channel_id: message.channel_id,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
             };
-            if is_managed_bot(bot_id) {
-                // A managed session's prompt is delivered (and announced)
-                // by the deployment that manages it; anyone else stays out
-                // of the way entirely.
-                if bot_id != our_bot {
-                    return Err(Skipped::ForeignBot);
-                }
+            if managed {
+                // A managed session's prompt is delivered (and announced) by
+                // the deployment that provisions its sandbox - this one.
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction::prompt(
