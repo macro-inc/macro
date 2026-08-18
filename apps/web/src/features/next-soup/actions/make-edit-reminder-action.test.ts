@@ -89,6 +89,23 @@ describe('makeEditReminderAction', () => {
   // The composer diffs the edit against this, so a recurring reminder has to
   // arrive as its cron rather than as its next firing — otherwise opening one
   // and saving it would quietly flatten the series into a single date.
+  // The row and the editor both rebuild the schedule from a soup row, and each
+  // inventing its own substitution for an absent zone would describe the same
+  // reminder two ways — with the editor's diff then reading the substitution as
+  // a change and re-sending it, moving when the reminder fires. UTC is the
+  // shared fallback because it does not depend on who is looking.
+  it('falls back to UTC for a recurring reminder with no timezone', () => {
+    makeEditReminderAction().execute([
+      reminder({ scheduleType: 'recurring', cron: '0 0 9 * * *' }),
+    ]);
+
+    expect(mocks.openReminderEditor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: { type: 'recurring', cron: '0 0 9 * * *', timezone: 'UTC' },
+      })
+    );
+  });
+
   it('passes a recurring reminder its cron, not its next firing', () => {
     makeEditReminderAction().execute([
       reminder({
