@@ -4,7 +4,8 @@ export interface MultiDayDisplayRange {
   end: string;
 }
 
-function formatLocalDate(date: Date) {
+/** Formats a Date as a local calendar date without UTC conversion. */
+export function formatLocalDate(date: Date) {
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
@@ -12,7 +13,8 @@ function formatLocalDate(date: Date) {
   ].join('-');
 }
 
-function isSameLocalDate(first: Date, second: Date) {
+/** Whether two dates fall on the same local calendar day. */
+export function isSameLocalDate(first: Date, second: Date) {
   return (
     first.getFullYear() === second.getFullYear() &&
     first.getMonth() === second.getMonth() &&

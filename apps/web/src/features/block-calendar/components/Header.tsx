@@ -1,4 +1,3 @@
-import { calendarPeriodLabel } from '@app/features/calendar/calendar-label';
 import { CalendarMonthDrawer } from '@app/features/calendar/components/CalendarMonthDrawer';
 import {
   type CalendarPageId,
@@ -8,6 +7,7 @@ import { CalendarPeriodSelector } from '@app/features/calendar/components/Calend
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
+import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {

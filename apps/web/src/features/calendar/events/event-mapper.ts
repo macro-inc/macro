@@ -1,6 +1,6 @@
 import type { EventInput } from '@fullcalendar/core';
+import { multiDayTimedDisplayRange } from '../utils/calendar-date';
 import { canEditCalendarEventTime } from './event-interaction';
-import { multiDayTimedDisplayRange } from './multi-day-rendering';
 import type { CalendarEvent } from './types';
 
 /** Maps calendar-owned event data into FullCalendar's rendering contract. */

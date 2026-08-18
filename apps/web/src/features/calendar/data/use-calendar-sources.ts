@@ -1,8 +1,11 @@
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { createMemo } from 'solid-js';
-import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
 import { DEFAULT_CALENDAR_SOURCE } from '../events/calendar-occurrence-mapper';
 import type { CalendarSource } from '../events/types';
+import {
+  calendarDisplayLabel,
+  spansMultipleInboxes,
+} from '../utils/calendar-label';
 
 /** Query-backed calendar sources with presentation labels and colors. */
 export function useCalendarSources() {

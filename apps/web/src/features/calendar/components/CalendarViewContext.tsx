@@ -9,7 +9,7 @@ import type {
   CalendarTimeFormat,
   CalendarWeekStart,
 } from '../events/types';
-import { getDefaultCalendarTimeFormat } from '../time-format';
+import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 
 interface CalendarEventState {
   readonly visibleSourceIds: string[];

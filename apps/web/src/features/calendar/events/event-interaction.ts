@@ -1,19 +1,12 @@
 import type { EventApi } from '@fullcalendar/core';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import { formatLocalDate } from '../utils/calendar-date';
 import type { CalendarEvent } from './types';
 
 interface FullCalendarEventRange {
   allDay: boolean;
   end: Date | null;
   start: Date | null;
-}
-
-function formatLocalDate(date: Date) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
 }
 
 /** Resolves the occurrence id retained in FullCalendar's interaction copies. */

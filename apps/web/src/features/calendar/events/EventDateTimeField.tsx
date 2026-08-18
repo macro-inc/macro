@@ -8,6 +8,7 @@ import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, createUniqueId } from 'solid-js';
+import { formatLocalDate } from '../utils/calendar-date';
 
 export interface EventTimeOption {
   value: string;
@@ -63,10 +64,6 @@ export function parseLocalDate(value: string) {
     return undefined;
   }
   return date;
-}
-
-export function formatLocalDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function parseDateInput(value: string) {

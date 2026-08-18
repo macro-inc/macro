@@ -33,10 +33,11 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { isSameLocalDate } from '../utils/calendar-date';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
-} from '../time-format';
+} from '../utils/time-format';
 import {
   formatReminderOffset,
   REMINDER_METHOD_POPUP,
@@ -287,11 +288,6 @@ function parseCalendarDate(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
 }
-
-const isSameLocalDate = (first: Date, second: Date) =>
-  first.getFullYear() === second.getFullYear() &&
-  first.getMonth() === second.getMonth() &&
-  first.getDate() === second.getDate();
 
 function formatEventSchedule(
   event: CalendarEvent,

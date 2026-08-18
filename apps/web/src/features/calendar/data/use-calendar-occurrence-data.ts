@@ -6,9 +6,9 @@ import {
 } from '@queries/calendar/occurrences';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { type Accessor, createMemo } from 'solid-js';
-import { isCalendarRangeSupported } from '../calendar-supported-range';
 import { mapCalendarOccurrence } from '../events/calendar-occurrence-mapper';
 import type { CalendarEvent, CalendarSource } from '../events/types';
+import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 
 export interface CalendarOccurrenceData {
   range: Accessor<CalendarOccurrenceQueryRange | undefined>;

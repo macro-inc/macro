@@ -8,7 +8,7 @@ import type {
   ViewProps,
   ViewPropsTransformer,
 } from '@fullcalendar/core/internal';
-import { multiDayTimedDisplayRange } from './multi-day-rendering';
+import { multiDayTimedDisplayRange } from '../utils/calendar-date';
 
 const PREVIEW_DEF_ID = '__calendar-multi-day-selection-preview-def__';
 const PREVIEW_INSTANCE_ID = '__calendar-multi-day-selection-preview-instance__';

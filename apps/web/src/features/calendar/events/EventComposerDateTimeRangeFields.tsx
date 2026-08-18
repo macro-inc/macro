@@ -7,10 +7,10 @@ import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
+import { formatLocalDate } from '../utils/calendar-date';
 import {
   dateLabelFormatter,
   EventTimeInput,
-  formatLocalDate,
   parseLocalDate,
   splitLocalDateTime,
   timeLabelFormatter,

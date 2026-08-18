@@ -35,11 +35,12 @@ import type {
   CalendarTimeFormat,
   CalendarWeekStart,
 } from '../events/types';
+import { isSameLocalDate } from '../utils/calendar-date';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
   formatCompactCalendarTime,
-} from '../time-format';
+} from '../utils/time-format';
 import '../calendar.css';
 
 const formatWeekdayHeader = {
@@ -54,11 +55,6 @@ const formatWeekdayHeader = {
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
-
-const isSameLocalDate = (first: Date, second: Date) =>
-  first.getFullYear() === second.getFullYear() &&
-  first.getMonth() === second.getMonth() &&
-  first.getDate() === second.getDate();
 
 function CurrentTimeAxisIndicator(props: {
   date: Date;

@@ -1,4 +1,3 @@
-import { isCalendarRangeSupported } from '@app/features/calendar/calendar-supported-range';
 import {
   type CalendarPageId,
   useCalendarPager,
@@ -21,6 +20,7 @@ import {
   type CalendarGridHandle,
 } from '@app/features/calendar/grid/CalendarGrid';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
+import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';

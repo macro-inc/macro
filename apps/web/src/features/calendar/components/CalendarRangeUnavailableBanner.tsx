@@ -2,7 +2,7 @@ import InfoIcon from '@phosphor/info.svg';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { isCalendarRangeSupported } from '../calendar-supported-range';
+import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 import { useCalendarPager } from './CalendarPagerContext';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */

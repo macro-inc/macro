@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCompactCalendarTime,
   formatCompactCalendarTimeRange,
-} from '../time-format';
+} from '../utils/time-format';
 import { CalendarEventContent } from './EventContent';
 import type { CalendarEvent } from './types';
 

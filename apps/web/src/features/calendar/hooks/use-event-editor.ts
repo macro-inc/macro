@@ -6,7 +6,6 @@ import {
   useUpdateCalendarEventMutation,
 } from '@queries/calendar/mutations';
 import { type Accessor, createMemo } from 'solid-js';
-import { calendarDisplayLabel, spansMultipleInboxes } from '../calendar-label';
 import { DEFAULT_CALENDAR_SOURCE } from '../events/calendar-occurrence-mapper';
 import {
   calendarEventToEditorInitialValues,
@@ -14,6 +13,10 @@ import {
   type EventEditorSubmitValues,
 } from '../events/event-form-model';
 import type { CalendarEvent } from '../events/types';
+import {
+  calendarDisplayLabel,
+  spansMultipleInboxes,
+} from '../utils/calendar-label';
 
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
