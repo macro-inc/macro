@@ -7,10 +7,10 @@ import CheckIcon from '@phosphor/check.svg';
 import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useCalendarPager } from './CalendarPagerContext';
-import { useCalendarView } from './CalendarViewContext';
-import { calendarPeriodLabel } from './calendar-label';
-import type { CalendarPeriodView } from './events/types';
+import { useCalendarPager } from '../CalendarPagerContext';
+import { useCalendarView } from '../CalendarViewContext';
+import { calendarPeriodLabel } from '../calendar-label';
+import type { CalendarPeriodView } from '../events/types';
 
 const CALENDAR_VIEWS = [
   {

@@ -5,9 +5,9 @@ import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { useCalendarView } from '../CalendarViewContext';
+import type { CalendarTimeFormat, CalendarWeekStart } from '../events/types';
 import { MobileCalendarPeriodControls } from './CalendarPeriodSelector';
-import { useCalendarView } from './CalendarViewContext';
-import type { CalendarTimeFormat, CalendarWeekStart } from './events/types';
 
 const WEEK_START_OPTIONS: Array<{
   value: CalendarWeekStart;

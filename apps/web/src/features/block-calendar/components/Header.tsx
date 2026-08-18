@@ -1,12 +1,12 @@
-import { CalendarMonthDrawer } from '@app/features/calendar/CalendarMonthDrawer';
 import {
   type CalendarPageId,
   useCalendarPager,
 } from '@app/features/calendar/CalendarPagerContext';
-import { CalendarPeriodSelector } from '@app/features/calendar/CalendarPeriodSelector';
-import { CalendarSettingsDropdown } from '@app/features/calendar/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
 import { calendarPeriodLabel } from '@app/features/calendar/calendar-label';
+import { CalendarMonthDrawer } from '@app/features/calendar/components/CalendarMonthDrawer';
+import { CalendarPeriodSelector } from '@app/features/calendar/components/CalendarPeriodSelector';
+import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarHotkeys } from '@app/features/calendar/use-calendar-hotkeys';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';

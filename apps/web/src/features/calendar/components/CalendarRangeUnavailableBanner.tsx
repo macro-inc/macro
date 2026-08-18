@@ -2,8 +2,8 @@ import InfoIcon from '@phosphor/info.svg';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';
-import { useCalendarPager } from './CalendarPagerContext';
-import { isCalendarRangeSupported } from './calendar-supported-range';
+import { useCalendarPager } from '../CalendarPagerContext';
+import { isCalendarRangeSupported } from '../calendar-supported-range';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */
 export function CalendarRangeUnavailableBanner(props: {

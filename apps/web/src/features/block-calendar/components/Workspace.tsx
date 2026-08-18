@@ -3,8 +3,8 @@ import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '@app/features/calendar/CalendarPagerContext';
-import { CalendarRangeUnavailableBanner } from '@app/features/calendar/CalendarRangeUnavailableBanner';
 import { useCalendarView } from '@app/features/calendar/CalendarViewContext';
+import { CalendarRangeUnavailableBanner } from '@app/features/calendar/components/CalendarRangeUnavailableBanner';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
