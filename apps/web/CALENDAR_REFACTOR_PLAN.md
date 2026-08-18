@@ -148,56 +148,43 @@ src/features/block-calendar/
 
 src/features/calendar/
 ├── calendar.css
-├── data/
-│   ├── use-calendar-occurrence-data.ts
-│   └── use-calendar-sources.ts
-├── domain/
-│   ├── calendar-date.ts
-│   ├── calendar-types.ts
-│   ├── calendar-supported-range.ts
-│   └── time-format.ts
-├── grid/
+├── components/
 │   ├── CalendarGrid.tsx
-│   ├── CalendarEventContent.tsx
-│   ├── CalendarRangeStatus.tsx
-│   ├── calendar-event-mapper.ts
-│   └── fullcalendar-dom.ts
-├── agenda/
-│   ├── CalendarAgenda.tsx
-│   ├── CalendarEventSummary.tsx
-│   └── calendar-agenda-model.ts
-├── pager/
 │   ├── CalendarPagerContext.tsx
-│   ├── CalendarPages.tsx
-│   ├── CalendarPageHost.tsx
-│   └── calendar-pager-controller.ts
-├── controls/
-│   ├── CalendarMonthPicker.tsx
+│   ├── CalendarViewContext.tsx
+│   ├── CalendarMonthDrawer.tsx
 │   ├── CalendarPeriodSelector.tsx
-│   ├── CalendarSettingsControls.tsx
-│   └── CalendarSourceControls.tsx
-├── events/
+│   ├── CalendarRangeUnavailableBanner.tsx
+│   ├── CalendarSettingsDropdown.tsx
+│   ├── CalendarSourceControls.tsx
 │   ├── composer/
 │   │   ├── CalendarEventForm.tsx
-│   │   ├── CalendarEventComposerForm.tsx
+│   │   ├── CalendarEventDateTimeField.tsx
+│   │   ├── CalendarEventDateTimeRangeFields.tsx
+│   │   ├── CalendarEventPropertyPills.tsx
+│   │   ├── CalendarRecurrenceBuilder.tsx
 │   │   ├── create-calendar-event-form-controller.ts
-│   │   ├── event-form-model.ts
-│   │   ├── EventDateField.tsx
-│   │   ├── EventDateTimeField.tsx
-│   │   ├── EventTimeInput.tsx
-│   │   └── property-pills/
-│   ├── details/
-│   │   ├── EventDetails.tsx
-│   │   ├── EventAttendeeList.tsx
-│   │   └── event-details-model.ts
-│   ├── recurrence/
-│   ├── calendar-occurrence-mapper.ts
-│   ├── event-interaction.ts
-│   ├── event-reminders.ts
-│   └── types.ts
-└── hooks/
-    ├── use-calendar-time-grid-hover-indicator.ts
-    └── use-calendar-ui-flag.ts
+│   │   └── event-form-model.ts
+│   └── events/
+│       ├── CalendarEventContent.tsx
+│       ├── CalendarEventDetails.tsx
+│       └── types.ts
+├── hooks/
+│   ├── use-calendar-hotkeys.ts
+│   ├── use-calendar-occurrence-data.ts
+│   ├── use-calendar-sources.ts
+│   ├── use-calendar-time-grid-hover-indicator.ts
+│   ├── use-calendar-ui-flag.ts
+│   └── use-event-editor.ts
+└── utils/
+    ├── calendar-date.ts
+    ├── calendar-label.ts
+    ├── calendar-supported-range.ts
+    ├── event-interaction.ts
+    ├── event-reminders.ts
+    ├── fullcalendar-multi-day-selection.ts
+    ├── recurrence.ts
+    └── time-format.ts
 
 src/lib/fullcalendar-solid/
 ├── FullCalendar.tsx
