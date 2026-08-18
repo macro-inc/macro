@@ -190,7 +190,11 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
             .join(" | ")
             .as_str(),
     );
-    if search_text.is_empty() {
+    if search_text.is_empty()
+        && !text_fields
+            .iter()
+            .any(|field| record.fields.contains_key(*field))
+    {
         return None;
     }
 

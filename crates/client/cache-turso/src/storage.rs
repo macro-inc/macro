@@ -28,7 +28,7 @@ use turso_opfs::{
 };
 
 /// Frozen browser-storage schema version, independent of cache postcard versions.
-pub const BROWSER_STORAGE_SCHEMA_VERSION: u32 = 5;
+pub const BROWSER_STORAGE_SCHEMA_VERSION: u32 = 6;
 
 /// Coarse outcome of validating an OPFS Turso session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

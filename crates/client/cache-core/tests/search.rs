@@ -152,6 +152,54 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
 }
 
 #[test]
+fn unnamed_notes_are_browsable_without_matching_ui_fallback_text() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let entries = ["note-1", "note-2"].map(|id| {
+            let mut record = Record::default();
+            record.fields.insert(
+                "__typename".into(),
+                CacheValue::String("GraphqlSoupDocument".into()),
+            );
+            record
+                .fields
+                .insert("name".into(), CacheValue::String(String::new()));
+            record
+                .fields
+                .insert("fileType".into(), CacheValue::String("md".into()));
+            (EntityKey::entity("GraphqlSoupDocument", &[id]), record)
+        });
+        storage.put_batch(entries.into()).await.unwrap();
+        let mut engine = Engine::new(storage);
+        let mut browse = request("", 20);
+        browse.buckets = vec!["note".into()];
+
+        let page = engine.search(&browse).await.unwrap();
+        assert_eq!(
+            page.documents
+                .iter()
+                .map(|document| (document.record_key.as_ref(), document.search_text.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("GraphqlSoupDocument:note-1", ""),
+                ("GraphqlSoupDocument:note-2", "")
+            ]
+        );
+
+        let mut text_search = request("new note", 20);
+        text_search.buckets = vec!["note".into()];
+        assert!(
+            engine
+                .search(&text_search)
+                .await
+                .unwrap()
+                .documents
+                .is_empty()
+        );
+    });
+}
+
+#[test]
 fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

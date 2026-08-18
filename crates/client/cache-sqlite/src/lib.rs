@@ -29,7 +29,7 @@ use std::sync::{Mutex, MutexGuard};
 use thiserror::Error;
 
 /// Version of the disposable native search projection schema.
-const NATIVE_SEARCH_SCHEMA_VERSION: u32 = 3;
+const NATIVE_SEARCH_SCHEMA_VERSION: u32 = 4;
 
 /// Errors produced by the SQLite storage backend.
 #[derive(Debug, Error)]
