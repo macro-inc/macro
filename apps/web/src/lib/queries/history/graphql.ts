@@ -2,26 +2,36 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 import {
   type CacheHost,
   MAX_RECORD_SELECTION_PAGE_SIZE,
+  type RecordSelection,
   readRecords,
   selectRecords,
 } from '@graphql-cache/index';
 import {
-  type GraphqlHistoryItemFieldsFragment,
-  GraphqlHistoryItemFieldsFragmentDoc,
+  type GraphqlChatHistoryFieldsFragment,
+  GraphqlChatHistoryFieldsFragmentDoc,
+  type GraphqlDocumentHistoryFieldsFragment,
+  GraphqlDocumentHistoryFieldsFragmentDoc,
+  type GraphqlProjectHistoryFieldsFragment,
+  GraphqlProjectHistoryFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { DocumentHistoryItem, HistoryItem } from './types';
 
-const graphqlHistorySelection = selectRecords(
-  GraphqlHistoryItemFieldsFragmentDoc
+const graphqlDocumentHistorySelection = selectRecords(
+  GraphqlDocumentHistoryFieldsFragmentDoc
+);
+const graphqlChatHistorySelection = selectRecords(
+  GraphqlChatHistoryFieldsFragmentDoc
+);
+const graphqlProjectHistorySelection = selectRecords(
+  GraphqlProjectHistoryFieldsFragmentDoc
 );
 
-type GraphqlHistoryRecord = GraphqlHistoryItemFieldsFragment;
-type GraphqlHistoryEntity = GraphqlHistoryRecord;
-type GraphqlDocumentHistoryEntity = Extract<
-  GraphqlHistoryEntity,
-  { __typename: 'GraphqlSoupDocument' }
->;
+type GraphqlHistoryRecord =
+  | GraphqlDocumentHistoryFieldsFragment
+  | GraphqlChatHistoryFieldsFragment
+  | GraphqlProjectHistoryFieldsFragment;
+type GraphqlDocumentHistoryEntity = GraphqlDocumentHistoryFieldsFragment;
 
 function transformDocumentSubType(
   subType: GraphqlDocumentHistoryEntity['subType']
@@ -114,19 +124,16 @@ function getSortTimestamp(record: GraphqlHistoryRecord): number {
   }
 }
 
-/**
- * Reads complete Soup item projections and maps document, chat, and project
- * entities to the history shape.
- */
-export async function readCachedGraphqlHistoryItems(
-  cacheHost: Pick<CacheHost, 'readRecords'>
-): Promise<HistoryItem[]> {
-  const records: GraphqlHistoryRecord[] = [];
+async function readAllCachedRecords<TResult>(
+  cacheHost: Pick<CacheHost, 'readRecords'>,
+  selection: RecordSelection<TResult>
+): Promise<TResult[]> {
+  const records: TResult[] = [];
   let cursor: string | undefined;
   const seenCursors = new Set<string>();
 
   do {
-    const page = await readRecords(cacheHost, graphqlHistorySelection, {
+    const page = await readRecords(cacheHost, selection, {
       cursor,
       limit: MAX_RECORD_SELECTION_PAGE_SIZE,
     });
@@ -139,6 +146,23 @@ export async function readCachedGraphqlHistoryItems(
       seenCursors.add(cursor);
     }
   } while (cursor);
+
+  return records;
+}
+
+/**
+ * Reads minimal concrete document, chat, and project projections and maps them
+ * to the history shape.
+ */
+export async function readCachedGraphqlHistoryItems(
+  cacheHost: Pick<CacheHost, 'readRecords'>
+): Promise<HistoryItem[]> {
+  const [documents, chats, projects] = await Promise.all([
+    readAllCachedRecords(cacheHost, graphqlDocumentHistorySelection),
+    readAllCachedRecords(cacheHost, graphqlChatHistorySelection),
+    readAllCachedRecords(cacheHost, graphqlProjectHistorySelection),
+  ]);
+  const records: GraphqlHistoryRecord[] = [...documents, ...chats, ...projects];
 
   return records
     .flatMap((record) => {
