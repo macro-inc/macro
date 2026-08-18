@@ -152,14 +152,14 @@ pub async fn set_document_version(
 }
 
 /// Sets share permission for the document
-#[tracing::instrument(skip(transaction), err)]
+///
+/// The permission is resolved by the domain layer; this function persists it verbatim.
+#[tracing::instrument(skip(transaction, share_permission), err)]
 pub async fn set_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &uuid::Uuid,
-    file_type: Option<FileType>,
-) -> Result<SharePermissionV2, sqlx::Error> {
-    // Create share permission
-    let share_permission = SharePermissionV2::new_document_share_permission(file_type);
+    share_permission: &SharePermissionV2,
+) -> Result<(), sqlx::Error> {
     let link_share = share_permission.link_share.map(|value| value.to_string());
     let link_share_access_level = share_permission.link_share_access_level;
 
@@ -192,7 +192,7 @@ pub async fn set_share_permission(
     .execute(transaction.as_mut())
     .await?;
 
-    Ok(share_permission)
+    Ok(())
 }
 
 /// Set user history

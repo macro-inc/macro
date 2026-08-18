@@ -3,7 +3,41 @@
 use anyhow::Context;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{Executor, PgPool, Postgres};
+
+#[cfg(test)]
+mod test;
+
+/// Look up the link-share preference of the user's team.
+///
+/// Returns `None` if the user is not on a team; otherwise the team's preference, where an inner
+/// `None` means the team turned link sharing off by default. If a user somehow belongs to
+/// multiple teams the strongest membership wins (`team_role` orders `member < admin < owner`),
+/// mirroring `entity_access`'s `get_user_team`.
+pub async fn get_team_default_link_share<'e, E>(
+    executor: E,
+    user_id: &str,
+) -> Result<Option<TeamLinkShareDefault>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let row = sqlx::query!(
+        r#"
+        SELECT t.default_link_share as "default_link_share: LinkShare"
+        FROM team_user tu
+        JOIN team t ON t.id = tu.team_id
+        WHERE tu.user_id = $1
+        ORDER BY tu.team_role DESC
+        LIMIT 1
+        "#,
+        user_id,
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|r| TeamLinkShareDefault(r.default_link_share)))
+}
 
 /// The result of attempting to insert a channel share permission row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,6 +160,10 @@ where
 }
 
 /// Ensure a thread has a share permission and owner entity-access row.
+///
+/// Threads are synced email, not user-created items, so the team default
+/// link-share preference intentionally does not apply: link sharing is always
+/// off initially (the insert below writes NULL link-share columns).
 pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> anyhow::Result<()> {
     let existing_share_permission_id = sqlx::query_scalar!(
         r#"

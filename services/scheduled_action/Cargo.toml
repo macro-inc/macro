@@ -48,6 +48,8 @@ ai_toolset = { path = "../../crates/ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 chat = { path = "../../crates/chat" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
+models_permissions = { path = "../../crates/models_permissions" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }

@@ -14,6 +14,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -131,10 +132,21 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// Handles: Document row, version (DocumentInstance or DocumentBom),
     /// document_sub_type, SharePermission, DocumentPermission, UserHistory,
     /// ItemLastAccessed, UserItemAccess, and document_email.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission — the
+    /// repository persists it verbatim and carries no share-policy of its own.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Get the link-share preference of the user's team, or `None` when the
+    /// user is not on a team.
+    fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
     /// Update an upload job to associate it with a document.
     fn update_upload_job(
@@ -250,9 +262,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
     ///
     /// Creates: Document row, version (DocumentBom or DocumentInstance),
     /// SharePermission, DocumentPermission, UserItemAccess, and user history.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission for the
+    /// copy — the repository persists it verbatim.
     fn copy_document(
         &self,
         args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
 
     /// Copy PDF-specific data (DocumentText, DocumentProcessResult) for a copied document.
